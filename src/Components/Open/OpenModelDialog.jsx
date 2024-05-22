@@ -1,20 +1,21 @@
-import React, {ReactElement, useState} from 'react'
-import Box from '@mui/material/Box'
+import React, {ReactElement} from 'react'
 import Button from '@mui/material/Button'
+import Box from '@mui/material/Box'
+import Divider from '@mui/material/Divider'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {checkOPFSAvailability} from '../../OPFS/utils'
-import {getFiles} from '../../net/github/Files'
+import GitHubFileBrowser from './GitHubFileBrowser'
+import PleaseLogin from './PleaseLogin'
+import SampleModels from './SampleModels'
+import Dialog from '../Dialog'
+import Tabs from '../Tabs'
 import useStore from '../../store/useStore'
-import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
+import {checkOPFSAvailability} from '../../OPFS/utils'
 import {handleBeforeUnload} from '../../utils/event'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
-import Dialog from '../Dialog'
-import PleaseLogin from './PleaseLogin'
-import SampleModelFileSelector from './SampleModelFileSelector'
-import Selector from './Selector'
-import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {useIsMobile} from '../Hooks'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 
 /**
@@ -30,19 +31,14 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
+  const tabLabels = ['Samples', 'Projects']
   const {isAuthenticated, user} = useAuth0()
-  const [selectedOrgName, setSelectedOrgName] = useState('')
-  const [selectedRepoName, setSelectedRepoName] = useState('')
-  const [selectedFileName, setSelectedFileName] = useState('')
-  const [repoNamesArr, setRepoNamesArr] = useState([''])
-  const [filesArr, setFilesArr] = useState([''])
-  const accessToken = useStore((state) => state.accessToken)
-  const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
-  const orgName = orgNamesArr[selectedOrgName]
-  const repoName = repoNamesArr[selectedRepoName]
-  const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
+  const setCurrentTab = useStore((state) => state.setCurrentTab)
+  const currentTab = useStore((state) => state.currentTab)
   const isOpfsAvailable = checkOPFSAvailability()
+  const isMobile = useIsMobile()
+
 
   const openFile = () => {
     if (isOpfsAvailable) {
@@ -53,108 +49,44 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
-  const selectOrg = async (org) => {
-    setSelectedOrgName(org)
-    let repos
-    if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(accessToken)
-    } else {
-      repos = await getRepositories(orgNamesArr[org], accessToken)
-    }
-    const repoNames = Object.keys(repos).map((key) => repos[key].name)
-    setRepoNamesArr(repoNames)
-  }
-
-  const selectRepo = async (repo) => {
-    setSelectedRepoName(repo)
-    const owner = orgNamesArr[selectedOrgName]
-    const files = await getFiles(owner, repoNamesArr[repo], accessToken)
-    const fileNames = Object.keys(files).map((key) => files[key].name)
-    setFilesArr(fileNames)
-  }
-
-  const navigateToFile = () => {
-    setIsDialogDisplayed(false)
-    if (filesArr[selectedFileName].includes('.ifc')) {
-      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
-    }
-  }
-
   return (
     <Dialog
-      headerIcon={<CreateNewFolderIcon className='icon-share'/>}
+      headerIcon={<FolderOpenIcon className='icon-share'/>}
       headerText='Open'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle='Open model'
-      actionCb={openFile}
     >
-      <Stack
-        spacing={1}
-        direction='column'
-        justifyContent='center'
-        alignItems='center'
-      >
-        <>
-          <Typography
-            variant='overline'
-            sx={{marginBottom: '6px'}}
-          >
-            Browse sample models
-          </Typography>
-          <SampleModelFileSelector
+      <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
+      { currentTab === 0 &&
+        <Stack
+          justifyContent='center'
+          sx={{marginTop: '1em', paddingBottom: '1em', width: '17.5em'}}
+        >
+          <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}
           />
-        </>
-        {!isAuthenticated ?
-
-         <PleaseLogin/> :
-
-         <Stack alignItems='center'>
-           <Typography
-             variant='overline'
-             sx={{marginBottom: '6px'}}
-           >
-             Browse your GitHub projects
-           </Typography>
-           <Selector
-             label='Organization'
-             list={orgNamesArrWithAt}
-             selected={selectedOrgName}
-             setSelected={selectOrg}
-             data-testid='openOrganization'
-           />
-           <Selector
-             label='Repository'
-             list={repoNamesArr}
-             selected={selectedRepoName}
-             setSelected={selectRepo}
-             data-testid='openRepository'
-           />
-           <Selector
-             label='File'
-             list={filesArr}
-             selected={selectedFileName}
-             setSelected={setSelectedFileName}
-             data-testid='openFile'
-           />
-           {selectedFileName !== '' &&
-            <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-              <Button onClick={navigateToFile}>
-                Load file
-              </Button>
-            </Box>
-           }
-         </Stack>
-        }
-        <Typography
-          variant='overline'
-          sx={{marginBottom: '6px'}}
+        </Stack> }
+      { currentTab === 1 &&
+        <Stack
+          spacing={1}
+          direction='column'
+          justifyContent='center'
+          alignItems='center'
+          sx={{marginTop: '.5em', paddingBottom: '1em', width: '17.5em'}}
         >
-          Open local model
-        </Typography>
-      </Stack>
+          <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
+            <Button onClick={openFile} variant='contained' data-testid={'Open_file'}>
+              Open File
+            </Button>
+          {!isMobile && <Typography variant='caption'> Drag and drop to open files</Typography>}
+          {isAuthenticated && !isMobile && <Divider sx={{paddingBottom: '.2em'}}/>}
+          {isAuthenticated && isMobile && <Divider sx={{paddingTop: '.5em'}}/>}
+          </Stack>
+          {isAuthenticated && <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user}/>}
+          {!isAuthenticated && <Box sx={{width: '92%'}}><PleaseLogin/></Box>}
+        </Stack>
+      }
     </Dialog>
   )
 }

@@ -20,10 +20,13 @@ describe('Open 100: Open Sample Model', () => {
     })
 
     context('Select OpenModelControl > Sample Models', () => {
-      beforeEach(() => {
-        cy.get('[data-testid="control-button-open"]').click()
-        cy.get('[data-testid="textfield-sample-projects"]').click()
-      })
+      cy.get('[data-testid="control-button-open"]').click()
+    })
+
+    it('Sample project list appears, including Momentum etc. - Screen', () => {
+      cy.get(':nth-child(1) > [data-testid="sample-model-chip"]').contains('Momentum')
+      cy.percySnapshot()
+    })
 
       it('Sample project list appears, including Momentum etc. - Screen', () => {
         cy.percySnapshot()
@@ -87,4 +90,4 @@ describe('Open 100: Open Sample Model', () => {
       })
     })
   })
-})
+
