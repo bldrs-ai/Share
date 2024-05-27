@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useEffect, useState} from 'react'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
@@ -29,11 +30,13 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
+  console.log('comments', comments)
 
   const [hasError, setHasError] = useState(false)
 
   const {user} = useAuth0()
   const isMobile = useIsMobile()
+  console.log('user', user)
 
   const selectedNote =
         (notes && selectedNoteId) ?
