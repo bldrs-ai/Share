@@ -65,6 +65,11 @@ export default function NoteFooter({
       '_blank')
   }
 
+  /** Delete issue comment */
+  function closeComment() {
+    deleteComment(repository, id, accessToken )
+  }
+
   return (
     <CardActions>
       {isNote &&
@@ -180,7 +185,7 @@ export default function NoteFooter({
                   title='Delete'
                   placement='top'
                   icon={<DeleteIcon className='icon-share'/>}
-                  onClick={() => deleteComment(repository, accessToken, id)}
+                  onClick={closeComment}
               />
             </>
         </Box>

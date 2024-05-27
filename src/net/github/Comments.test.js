@@ -14,7 +14,7 @@ describe('net/github/Comments', () => {
   })
 
   it('successfully delete comment', async () => {
-    const res = await deleteComment({orgName: 'bldrs-ai', name: 'Share'}, 1)
+    const res = await deleteComment({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
     expect(res.status).toEqual(httpOK)
   })
 })
