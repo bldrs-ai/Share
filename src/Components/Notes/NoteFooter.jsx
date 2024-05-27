@@ -163,29 +163,28 @@ export default function NoteFooter({
             icon={<ForumOutlinedIcon className='icon-share'/>}
           />
          }
-         {!selected && numberOfComments}
-         {editMode &&
-          <TooltipIconButton
-            title='Save'
-            placement='left'
-            icon={<CheckIcon className='icon-share'/>}
-            onClick={() => submitUpdate(repository, accessToken, id)}
-          />
-        }
        </Box>
       }
       {!isNote && user && username === user.nickname &&
         <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-            <>
               <TooltipIconButton
                   title='Delete'
                   placement='top'
                   icon={<DeleteIcon className='icon-share'/>}
                   onClick={() => deleteComment(id)}
               />
-            </>
         </Box>
       }
+      {editMode &&
+          <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+              <TooltipIconButton
+                title='Save'
+                placement='left'
+                icon={<CheckIcon className='icon-share'/>}
+                onClick={() => submitUpdate(repository, accessToken, id)}
+              />
+          </Box>
+        }
     </CardActions>
   )
 }
