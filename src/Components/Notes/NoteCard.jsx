@@ -9,6 +9,10 @@ import {
   updateIssue,
   // TODO(pablo): deleteComment as deleteCommentGitHub,
 } from '../../net/github/Issues'
+import {
+  deleteComment,
+  // TODO(pablo): deleteComment as deleteCommentGitHub,
+} from '../../net/github/Comments'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
@@ -227,6 +231,7 @@ export default function NoteCard({
         selectCard={selectCard}
         selected={selected}
         submitUpdate={submitUpdate}
+        deleteComment={deleteComment}
         synched={synched}
         username={username}
       />

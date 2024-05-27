@@ -11,6 +11,7 @@ import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import DeleteIcon from '@mui/icons-material/Delete'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
@@ -23,6 +24,7 @@ import ShareIcon from '../../assets/icons/Share.svg'
  */
 export default function NoteFooter({
   accessToken,
+  deleteComment,
   editMode,
   embeddedCameras,
   id,
@@ -138,15 +140,6 @@ export default function NoteFooter({
        />
       }
 
-      {editMode &&
-       <TooltipIconButton
-         title='Save'
-         placement='left'
-         icon={<CheckIcon className='icon-share'/>}
-         onClick={() => submitUpdate(repository, accessToken, id)}
-       />
-      }
-
       {isNote && !selected &&
        <TooltipIconButton
          title='Add Comment'
@@ -170,7 +163,27 @@ export default function NoteFooter({
           />
          }
          {!selected && numberOfComments}
+         {editMode &&
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
        </Box>
+      }
+      {!isNote &&
+        <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+            <>
+              <TooltipIconButton
+                  title='Delete'
+                  placement='top'
+                  icon={<DeleteIcon className='icon-share'/>}
+                  onClick={() => deleteComment(repository, accessToken, id)}
+              />
+            </>
+        </Box>
       }
     </CardActions>
   )
