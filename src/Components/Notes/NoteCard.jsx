@@ -7,11 +7,9 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {
   closeIssue,
   updateIssue,
-  // TODO(pablo): deleteComment as deleteCommentGitHub,
 } from '../../net/github/Issues'
 import {
   deleteComment,
-  // TODO(pablo): deleteComment as deleteCommentGitHub,
 } from '../../net/github/Comments'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -65,9 +63,8 @@ export default function NoteCard({
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  // TODO(pablo)
-  // const comments = useStore((state) => state.comments)
-  // const setComments = useStore((state) => state.setComments)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
@@ -162,16 +159,11 @@ export default function NoteCard({
    * @param {string} accessToken
    * @param {number} commentId
    */
-  // TODO(pablo)
-  /* async function deleteComment(commentId) {
-    // TODO(pablo): handle response
-    await deleteCommentGitHub(repository, commentId, accessToken)
-    const newComments = comments.map((comment) => ({
-      ...comment,
-      synched: (comment.id !== commentId) && comment.synched,
-    }))
+  async function deleteCommentGithub(commentId) {
+    await deleteComment(repository, commentId, accessToken)
+    const newComments = comments.filter((comment) => comment.id !== commentId)
     setComments(newComments)
-  } */
+  }
 
 
   /** Update issue on GH, set read-only */
@@ -231,7 +223,7 @@ export default function NoteCard({
         selectCard={selectCard}
         selected={selected}
         submitUpdate={submitUpdate}
-        deleteComment={deleteComment}
+        deleteComment={deleteCommentGithub}
         synched={synched}
         username={username}
       />

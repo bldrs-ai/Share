@@ -65,10 +65,6 @@ export default function NoteFooter({
       '_blank')
   }
 
-  /** Delete issue comment */
-  function closeComment() {
-    deleteComment(repository, id, accessToken )
-  }
 
   return (
     <CardActions>
@@ -178,14 +174,14 @@ export default function NoteFooter({
         }
        </Box>
       }
-      {!isNote &&
+      {!isNote && user && username === user.nickname &&
         <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
             <>
               <TooltipIconButton
                   title='Delete'
                   placement='top'
                   icon={<DeleteIcon className='icon-share'/>}
-                  onClick={closeComment}
+                  onClick={() => deleteComment(id)}
               />
             </>
         </Box>
