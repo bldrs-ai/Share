@@ -17,15 +17,14 @@ describe('Open 100: Open Sample Model', () => {
       homepageSetup()
       setIsReturningUser()
       visitHomepageWaitForModel()
-      cy.get('[data-testid="control-button-open"]').click()
     })
 
-    it('Sample project list appears, including Momentum etc. - Screen', () => {
-      cy.get(':nth-child(1) > [data-testid="sample-model-chip"]').contains('Momentum')
-      cy.percySnapshot()
-    })
+    context('Select OpenModelControl > Sample Models', () => {
+      beforeEach(() => {
+        cy.get('[data-testid="control-button-open"]').click()
+        cy.get('[data-testid="textfield-sample-projects"]').click()
+      })
 
-    context('Choose one of the projects from the list', () => {
       it('Sample project list appears, including Momentum etc. - Screen', () => {
         cy.percySnapshot()
       })
@@ -78,6 +77,7 @@ describe('Open 100: Open Sample Model', () => {
           interceptModelLoadTag,
         )
         cy.get('[data-testid="control-button-open"]').click()
+        cy.get('[data-testid="textfield-sample-projects"]').click()
         cy.findByText('Momentum').click()
         waitForModelReady(interceptModelLoadTag)
       })
