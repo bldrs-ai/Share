@@ -37,7 +37,7 @@ export default function NoteCardCreate({
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
+  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState(null)
 
@@ -53,8 +53,9 @@ export default function NoteCardCreate({
       title,
       body: body || '',
     }
+
     await createIssue(repository, issuePayload, accessToken)
-    toggleIsCreateNoteVisible()
+    toggleIsCreateNoteActive()
   }
 
   const fetchComments = async () => {
@@ -162,24 +163,14 @@ export default function NoteCardCreate({
           direction='row'
           sx={{width: '100%'}}
         >
-          {isNote ?
           <TooltipIconButton
             title='Submit'
-            onClick={createNote}
-            icon={<CheckIcon/>}
-            enabled={submitEnabled}
-            size='small'
-            placement='bottom'
-          /> :
-          <TooltipIconButton
-            title='Submit'
-            onClick={createNewComment}
+            onClick={isNote ? createNote : createNewComment}
             icon={<CheckIcon/>}
             enabled={submitEnabled}
             size='small'
             placement='bottom'
           />
-          }
         </Stack>
       </CardActions>
     </Card>
