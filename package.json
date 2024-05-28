@@ -113,7 +113,6 @@
   },
   "devDependencies": {
     "@alex_neo/jest-expect-message": "1.0.5",
-    "@million/lint": "^1.0.0-rc.1",
     "@mui/types": "7.2.3",
     "@pablo-mayrgundter/cookies.js": "1.1.0",
     "@percy/cli": "^1.28.2",
