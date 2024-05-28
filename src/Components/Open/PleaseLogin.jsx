@@ -1,25 +1,24 @@
 import React, {ReactElement} from 'react'
+import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 
 
 /** @return {ReactElement} */
 export default function PleaseLogin() {
   return (
-    <Paper sx={{padding: '10px'}} data-testid={'Please_login'}>
-      <Typography variant={'caption'}>
-        Host your IFC models on GitHub and log in to BLDRS with your GitHub credentials to access and share your projects.
-        <br/>
-         Visit our{' '}
+    <Box sx={{padding: '0px 10px'}} elevation={0}>
+      <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+        Please login to GitHub to get access to your projects.
+        Visit our {' '}
         <Link
-          href='https://github.com/bldrs-ai/Share/wiki'
+          href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
           color='inherit'
-          variant='caption'
+          variant='body1'
         >
           wiki
-        </Link> to learn more about GitHub.
+        </Link> to learn more about GitHub hosting.
       </Typography>
-    </Paper>
+    </Box>
   )
 }

@@ -31,8 +31,10 @@ export function getComponentOverrides(palette, typography) {
       variants: [{
         props: {variant: 'rectangular'},
         style: {
-          border: `1px solid ${palette.primary.main}`,
-
+          width: '180px',
+          height: '40px',
+          borderRadius: '10px',
+          border: 'none',
         },
       }],
     },
@@ -96,24 +98,6 @@ export function getComponentOverrides(palette, typography) {
           'fontSize': '1rem',
           'lineHeight': 1.5,
         },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        filled: ({theme}) => ({
-          'border': `1px solid ${theme.palette.primary.main}`,
-          'backgroundColor': theme.palette.primary.main,
-          '&:hover': {
-            backgroundColor: theme.palette.secondary.main,
-          },
-        }),
-        outlined: ({theme}) => ({
-          'borderColor': theme.palette.primary.main,
-          'color': theme.palette.primary.contrastText,
-          '&&:hover': {
-            backgroundColor: theme.palette.primary.main,
-          },
-        }),
       },
     },
     MuiDialog: {
@@ -222,15 +206,6 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         track: {
           border: `solid 1px ${palette.secondary.contrastText}`,
-        },
-      },
-    },
-    MuiTab: {
-      styleOverrides: {
-        root: {
-          '&.Mui-selected, &.Mui-selected:hover': {
-            color: palette.secondary.contrastText,
-          },
         },
       },
     },
