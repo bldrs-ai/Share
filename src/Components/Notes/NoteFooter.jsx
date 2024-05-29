@@ -11,7 +11,7 @@ import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import DeleteIcon from '@mui/icons-material/Delete'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
@@ -151,6 +151,16 @@ export default function NoteFooter({
          icon={<AddCommentOutlinedIcon className='icon-share'/>}
        />
       }
+      {editMode &&
+          <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+              <TooltipIconButton
+                title='Save'
+                placement='left'
+                icon={<CheckIcon className='icon-share'/>}
+                onClick={() => submitUpdate(repository, accessToken, id)}
+              />
+          </Box>
+      }
 
       {numberOfComments > 0 && !editMode &&
        <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
@@ -163,28 +173,19 @@ export default function NoteFooter({
             icon={<ForumOutlinedIcon className='icon-share'/>}
           />
          }
+          {!selected && numberOfComments}
        </Box>
       }
       {!isNote && user && username === user.nickname &&
-        <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-              <TooltipIconButton
-                  title='Delete'
-                  placement='top'
-                  icon={<DeleteIcon className='icon-share'/>}
-                  onClick={() => deleteComment(id)}
-              />
+        <Box sx={{marginLeft: 'auto', padding: '0 0 0 0.5em'}}>
+          <TooltipIconButton
+              title='Delete'
+              placement='top'
+              icon={<DeleteOutlineIcon className='icon-share'/>}
+              onClick={() => deleteComment(id)}
+          />
         </Box>
       }
-      {editMode &&
-          <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-              <TooltipIconButton
-                title='Save'
-                placement='left'
-                icon={<CheckIcon className='icon-share'/>}
-                onClick={() => submitUpdate(repository, accessToken, id)}
-              />
-          </Box>
-        }
     </CardActions>
   )
 }
