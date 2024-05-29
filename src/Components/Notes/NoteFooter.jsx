@@ -72,7 +72,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Open in Github'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={openGithubIssue}
          icon={<GitHubIcon className='icon-share'/>}
          aboutInfo={false}
@@ -83,7 +83,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Show the camera view'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={onClickCamera}
          icon={<CameraIcon className='icon-share'/>}
          aboutInfo={false}
@@ -93,7 +93,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Share'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={() => {
            onClickShare()
            setShareIssue(!shareIssue)
@@ -116,7 +116,7 @@ export default function NoteFooter({
          <TooltipIconButton
            title='Place Mark'
            size='small'
-           placement='bottom'
+           placement='top'
            onClick={() => {
              togglePlaceMarkActive(id)
            }}
@@ -133,7 +133,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Take Screenshot'
          size='small'
-         placement='bottom'
+         placement='top'
          onClick={() => {
            setScreenshotUri(viewer.takeScreenshot())
          }}
@@ -145,7 +145,7 @@ export default function NoteFooter({
        <TooltipIconButton
          title='Add Comment'
          size='small'
-         placement='bottom'
+         placement='top'
          selected={showCreateComment}
          onClick={selectCard}
          icon={<AddCommentOutlinedIcon className='icon-share'/>}
@@ -155,7 +155,7 @@ export default function NoteFooter({
           <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
               <TooltipIconButton
                 title='Save'
-                placement='left'
+                placement='top'
                 icon={<CheckIcon className='icon-share'/>}
                 onClick={() => submitUpdate(repository, accessToken, id)}
               />
@@ -168,7 +168,7 @@ export default function NoteFooter({
           <TooltipIconButton
             title='Discussion'
             size='small'
-            placement='bottom'
+            placement='top'
             onClick={selectCard}
             icon={<ForumOutlinedIcon className='icon-share'/>}
           />
@@ -181,6 +181,7 @@ export default function NoteFooter({
           <TooltipIconButton
               title='Delete'
               placement='top'
+              buttonTestId='deleteComment'
               icon={<DeleteOutlineIcon className='icon-share'/>}
               onClick={() => deleteComment(id)}
           />
