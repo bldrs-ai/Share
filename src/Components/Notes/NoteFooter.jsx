@@ -12,6 +12,7 @@ import CheckIcon from '@mui/icons-material/Check'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
@@ -38,6 +39,8 @@ export default function NoteFooter({
   submitUpdate,
   synched,
   username,
+  updateComment,
+  setEditMode,
 }) {
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
@@ -138,13 +141,26 @@ export default function NoteFooter({
        />
       }
 
-      {editMode &&
-       <TooltipIconButton
-         title='Save'
-         placement='left'
-         icon={<CheckIcon className='icon-share'/>}
-         onClick={() => submitUpdate(repository, accessToken, id)}
-       />
+      {editMode && isNote &&
+      <Box sx={{marginLeft: 'auto', padding: '0 0 0 0.5em'}}>
+        <TooltipIconButton
+          title='Save'
+          placement='left'
+          icon={<CheckIcon className='icon-share'/>}
+          onClick={() => submitUpdate(repository, accessToken, id)}
+        />
+      </Box>
+      }
+
+      {editMode && !isNote &&
+      <Box sx={{marginLeft: 'auto', padding: '0 0 0 0.5em'}}>
+        <TooltipIconButton
+          title='Save'
+          placement='left'
+          icon={<CheckIcon className='icon-share'/>}
+          onClick={() => setEditMode(false)}
+        />
+      </Box>
       }
 
       {isNote && !selected &&
@@ -171,6 +187,17 @@ export default function NoteFooter({
          }
          {!selected && numberOfComments}
        </Box>
+      }
+      {!isNote && !editMode && user && username === user.nickname &&
+        <Box sx={{marginLeft: 'auto', padding: '0 0 0 0.5em'}}>
+          <TooltipIconButton
+              title='Delete'
+              placement='top'
+              buttonTestId='deleteComment'
+              icon={<EditOutlinedIcon className='icon-share'/>}
+              onClick={() => setEditMode(true)}
+          />
+        </Box>
       }
     </CardActions>
   )

@@ -11,7 +11,7 @@ export const MOCK_COMMENTS = {
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       number: 1,
       user: {
-        login: 'OlegMoshkovich',
+        login: 'cypresstester',
         id: 3433607,
         node_id: 'MDQ6VXNlcjM0MzM2MDY=',
         avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
@@ -56,7 +56,7 @@ export const MOCK_COMMENTS = {
       number: 2,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       user: {
-        login: 'OlegMoshkovich',
+        login: 'cypresstester',
         id: 3433606,
         node_id: 'MDQ6VXNlcjM0MzM2MDY=',
         avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',

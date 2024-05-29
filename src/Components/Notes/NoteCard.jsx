@@ -9,6 +9,7 @@ import {
   updateIssue,
   // TODO(pablo): deleteComment as deleteCommentGitHub,
 } from '../../net/github/Issues'
+import {updateComment} from '../../net/github/Comments'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
@@ -62,8 +63,8 @@ export default function NoteCard({
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   // TODO(pablo)
-  // const comments = useStore((state) => state.comments)
-  // const setComments = useStore((state) => state.setComments)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
@@ -170,6 +171,20 @@ export default function NoteCard({
   } */
 
 
+  /**
+   * Delete comment from repo and remove from UI
+   *
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} commentId
+   */
+    async function updateCommentGithub(commentId) {
+      await updateComment(repository, commentId, accessToken)
+      const newComments = comments.filter((comment) => comment.id !== commentId)
+      setComments(newComments)
+    }
+
+
   /** Update issue on GH, set read-only */
   async function submitUpdate() {
     const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
@@ -203,7 +218,7 @@ export default function NoteCard({
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}
-      {!isNote && <NoteContent markdownContent={editBody}/>}
+      {!isNote && !editMode && <NoteContent markdownContent={editBody}/>}
       {editMode &&
        <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
@@ -229,6 +244,8 @@ export default function NoteCard({
         submitUpdate={submitUpdate}
         synched={synched}
         username={username}
+        updateComment={updateCommentGithub}
+        setEditMode={setEditMode}
       />
     </Card>
   )

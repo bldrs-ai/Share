@@ -1,5 +1,5 @@
 import {assertDefined} from '../../utils/assert'
-import {getGitHub, postGitHub, deleteGitHub} from './Http'
+import {getGitHub, patchGitHub, postGitHub, deleteGitHub} from './Http'
 
 
 /**
@@ -44,6 +44,23 @@ export async function getComments(repository, accessToken = '') {
   assertDefined(...arguments)
   const res = await getGitHub(repository, 'issues/comments', {}, accessToken)
   return res.data
+}
+
+/**
+ * @param {object} repository - Repository object containing orgName and name.
+ * @param {number} commentId - ID of the comment to be updated.
+ * @param {string} body - New body of the comment.
+ * @param {string} accessToken - GitHub access token.
+ * @return {object} response from GitHub.
+ */
+export async function updateComment(repository, commentId, body, accessToken) {
+  assertDefined(...arguments)
+
+  const args = {
+    body,
+  }
+
+  return await patchGitHub(repository, `issues/comments/${commentId}`, args, accessToken)
 }
 
 
