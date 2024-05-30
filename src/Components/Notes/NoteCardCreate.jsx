@@ -160,9 +160,9 @@ export default function NoteCardCreate({
           justifyContent='flex-end'
           alignContent='flex-end'
           direction='row'
-          sx={{width: '100%'}}
+          sx={{width: '100%', padding: '0 0.5em'}}
         >
-          {isNote ?
+        {isNote ?
           <TooltipIconButton
             title='Submit'
             onClick={createNote}
