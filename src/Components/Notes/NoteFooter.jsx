@@ -33,12 +33,10 @@ export default function NoteFooter({
   onClickShare,
   selectCard,
   selected,
-  setShowCreateComment,
   showCreateComment,
-  submitUpdate,
-  synched,
+  submitNoteUpdate,
   username,
-  updateComment,
+  submitCommentUpdate,
   setEditMode,
 }) {
   const existPlaceMarkInFeature = useExistInFeature('placemark')
@@ -151,22 +149,13 @@ export default function NoteFooter({
         {editMode && isNote && (
           <TooltipIconButton
             title="Save"
-            placement="left"
-            icon={<CheckIcon className="icon-share"/>}
-            onClick={() => submitUpdate(repository, accessToken, id)}
-          />
-        )}
-
-        {editMode && !isNote && (
-          <TooltipIconButton
-            title="Save"
             placement="top"
             icon={<CheckIcon className="icon-share"/>}
-            onClick={() => setEditMode(false)}
+            onClick={() => submitNoteUpdate(id)}
           />
         )}
 
-        {!editMode && !selected && numberOfComments > 0 && (
+        {!editMode && isNote && !selected && numberOfComments > 0 && (
           <>
             <TooltipIconButton
               title="Discussion"
@@ -186,6 +175,15 @@ export default function NoteFooter({
             buttonTestId="editComment"
             icon={<EditOutlinedIcon className="icon-share"/>}
             onClick={() => setEditMode(true)}
+          />
+        )}
+
+        {editMode && !isNote && (
+          <TooltipIconButton
+            title="Save"
+            placement="top"
+            icon={<CheckIcon className="icon-share"/>}
+            onClick={() => submitCommentUpdate(id)}
           />
         )}
       </Box>

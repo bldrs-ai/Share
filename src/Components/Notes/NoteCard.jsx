@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useState, useEffect} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
@@ -63,15 +64,14 @@ export default function NoteCard({
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   // TODO(pablo)
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const [showCreateComment, setShowCreateComment] = useState(false)
-
 
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
@@ -97,13 +97,11 @@ export default function NoteCard({
     setEditBody(body)
   }, [selectedNoteId, body])
 
-
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
     }
   }, [selected, firstCamera, cameraControls])
-
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
@@ -120,7 +118,6 @@ export default function NoteCard({
     setHashParams(window.location, HASH_PREFIX_NOTES, {id: id})
   }
 
-
   /** Moves the camera to the position specified in the url attached to the issue/comment */
   function showCameraView() {
     setCameraFromParams(firstCamera, cameraControls)
@@ -136,7 +133,6 @@ export default function NoteCard({
     setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
-
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
    *
@@ -150,7 +146,6 @@ export default function NoteCard({
     setSelectedNoteId(null)
     return res
   }
-
 
   /**
    * Delete comment from repo and remove from UI
@@ -170,6 +165,14 @@ export default function NoteCard({
     setComments(newComments)
   } */
 
+  /** Update issue on GH, set read-only */
+  async function updateIssueGithub() {
+    const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
+    const editedNote = notes.find((note) => note.id === id)
+    editedNote.body = res.data.body
+    setNotes(notes)
+    setEditMode(false)
+  }
 
   /**
    * Delete comment from repo and remove from UI
@@ -179,20 +182,10 @@ export default function NoteCard({
    * @param {number} commentId
    */
     async function updateCommentGithub(commentId) {
-      await updateComment(repository, commentId, accessToken)
-      const newComments = comments.filter((comment) => comment.id !== commentId)
-      setComments(newComments)
+      const updatedComment = await updateComment(repository, commentId, accessToken)
+      console.log('updated comment', updatedComment)
+      setEditMode(false)
     }
-
-
-  /** Update issue on GH, set read-only */
-  async function submitUpdate() {
-    const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
-    const editedNote = notes.find((note) => note.id === id)
-    editedNote.body = res.data.body
-    setNotes(notes)
-    setEditMode(false)
-  }
 
 
   return (
@@ -241,11 +234,10 @@ export default function NoteCard({
         onClickShare={shareIssue}
         selectCard={selectCard}
         selected={selected}
-        submitUpdate={submitUpdate}
-        synched={synched}
-        username={username}
-        updateComment={updateCommentGithub}
         setEditMode={setEditMode}
+        submitNoteUpdate={updateIssueGithub}
+        submitCommentUpdate={updateCommentGithub}
+        username={username}
       />
     </Card>
   )
