@@ -182,7 +182,7 @@ export default function NoteCard({
    * @param {number} commentId
    */
     async function updateCommentGithub(commentId) {
-      const updatedComment = await updateComment(repository, commentId, accessToken)
+      const updatedComment = await updateComment(repository, commentId, editBody, accessToken)
       console.log('updated comment', updatedComment)
       setEditMode(false)
     }
