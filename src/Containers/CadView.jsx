@@ -259,31 +259,33 @@ export default function CadView({
 
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
-    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ?
+    const ifcUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
                    filepath : await getFinalUrl(filepath, accessToken)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
+
+    const onProgress = (progressEvent) => {
+      if (Number.isFinite(progressEvent.loaded)) {
+        const loadedBytes = progressEvent.loaded
+        // eslint-disable-next-line no-magic-numbers
+        const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+        setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+        debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+      }
+    }
 
     let loadedModel
     if (!isOpfsAvailable) {
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !isCamHashSet,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
+        ifcUrl,
+        !isCamHashSet,
+        onProgress,
+        (error) => {
+          debug().log('CadView#loadIfc$onError: ', error)
+          setIsModelLoading(false)
+          setSnackMessage('')
+        }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
@@ -301,26 +303,18 @@ export default function CadView({
           }, customViewSettings)
       // TODO(nickcastel50): need a more permanent way to
       // prevent redirect here for bundled ifc files
-    } else if (ifcURL === '/index.ifc') {
+    } else if (ifcUrl === '/index.ifc') {
       const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          'index.ifc',
-          'bldrs-ai',
-          'BldrsLocalStorage',
-          'V1',
-          'Projects',
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
+        navigate,
+        appPrefix,
+        handleBeforeUnload,
+        ifcUrl,
+        'index.ifc',
+        'bldrs-ai',
+        'BldrsLocalStorage',
+        'V1',
+        'Projects',
+        onProgress)
 
       if (file instanceof File) {
         setOpfsFile(file)
@@ -356,21 +350,13 @@ export default function CadView({
         navigate,
         appPrefix,
         handleBeforeUnload,
-        ifcURL,
+        ifcUrl,
         filePath,
         commitHash,
         owner,
         repo,
         branch,
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.receivedLength)) {
-            const loadedBytes = progressEvent.receivedLength
-            // eslint-disable-next-line no-magic-numbers
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        })
+        onProgress)
 
       if (file instanceof File) {
         setOpfsFile(file)
@@ -399,7 +385,7 @@ export default function CadView({
       // always be 0.
       loadedModel.modelID = 0
       setModel(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcURL)
+      updateLoadedFileInfo(uploadedFile, ifcUrl)
 
       await viewer.isolator.setModel(loadedModel)
 

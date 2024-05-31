@@ -190,11 +190,15 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
       receivedLength += value.length
 
       if (onProgress) {
+        // Variable names reflect MDN ProgressEvent field names
+        // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
         self.postMessage({
-          progressEvent: onProgress,
+          progressEvent: onProgress, // REVIEW: should this really be a function
+                                     // value for an event varname, and tests
+                                     // pass it a boolean?
           lengthComputable: contentLength !== 0,
-          contentLength: contentLength,
-          receivedLength: receivedLength,
+          total: contentLength,
+          loaded: receivedLength,
         })
       }
     }
