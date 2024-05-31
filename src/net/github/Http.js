@@ -1,6 +1,7 @@
 import {Octokit} from '@octokit/rest'
 import {assertDefined} from '../../utils/assert'
 import PkgJson from '../../../package.json'
+import {checkCache, updateCache} from './Cache'
 
 
 /**
@@ -19,12 +20,45 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
     }
+  } else {
+    args.headers = {}
   }
-  return await requestWithTimeout(octokit.request(`GET /repos/{org}/{repo}/${path}`, {
-    org: repository.orgName,
-    repo: repository.name,
-    ...args,
-  }))
+
+  const cacheKey = `${repository.orgName}/${repository.name}/${path}`
+  const cached = await checkCache(cacheKey)
+
+  // If we have a cached ETag, add If-None-Match header
+  if (cached && cached.headers && cached.headers.etag) {
+    args.headers['If-None-Match'] = cached.headers.etag
+  } else {
+    args.headers['If-None-Match'] = ''
+  }
+
+  // we must use a try catch here because octokit throws an error on any status !== 200
+  try {
+    const response = await requestWithTimeout(octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+      org: repository.orgName,
+      repo: repository.name,
+      ...args,
+    }))
+
+    // Update cache with new data and ETag
+    await updateCache(cacheKey, response)
+
+    return response
+  } catch (error) {
+    const NOTMODIFIED = 304
+    if (error.status === NOTMODIFIED) {
+      // Handle 304 Not Modified
+      // Return cached data if available
+      if (cached) {
+        return cached
+      }
+    }
+
+    // Re-throw the error if it's not a 304
+    throw error
+  }
 }
 
 

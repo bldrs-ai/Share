@@ -1,5 +1,6 @@
 import {assertDefined} from '../../utils/assert'
 import {getGitHub, octokit} from './Http' // TODO(pablo): don't use octokit directly
+import {checkCache, updateCache} from './Cache'
 
 
 /**
@@ -44,36 +45,80 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
     authorization: `Bearer ${accessToken}`,
   }
 
-  // 1. Get the SHA of the latest commit on the branch
-  const {data: refData} = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${branch}`,
-    headers,
-  })
+  let cacheKey = `${owner}/${repo}/${path}/getRef`
+  let cached = checkCache(cacheKey)
+
+  // If we have a cached ETag, add If-None-Match header
+  if (cached && cached.headers && cached.headers.etag) {
+    headers['If-None-Match'] = cached.headers.get('etag')
+  } else {
+    headers['If-None-Match'] = ''
+  }
+
+  let refData
+  try {
+    const response = await octokit.rest.git.getRef({
+      owner,
+      repo,
+      ref: `heads/${branch}`,
+      headers,
+    })
+    refData = response.data
+    await updateCache(cacheKey, response)
+  } catch (error) {
+    const NOTMODIFIED = 304
+    if (error.status === NOTMODIFIED && cached) {
+      refData = cached
+    } else {
+      throw error
+    }
+  }
+
   const parentSha = refData.object.sha
 
-  // 2. Get the SHA of the tree associated with the latest commit
-  const {data: commitData} = await octokit.rest.git.getCommit({
-    owner,
-    repo,
-    commit_sha: parentSha,
-    headers,
-  })
+  cacheKey = `${owner}/${repo}/${path}/getCommit`
+  cached = await checkCache(cacheKey)
+
+  if (cached && cached.headers && cached.headers.etag) {
+    headers['If-None-Match'] = cached.headers.get('etag')
+  } else {
+    headers['If-None-Match'] = ''
+  }
+
+  let commitData
+  try {
+    // 2. Get the SHA of the tree associated with the latest commit
+    const response = await octokit.rest.git.getCommit({
+      owner,
+      repo,
+      commit_sha: parentSha,
+      headers,
+    })
+    commitData = response.data
+    await updateCache(cacheKey, response)
+  } catch (error) {
+    const NOTMODIFIED = 304
+    if (error.status === NOTMODIFIED && cached) {
+      commitData = cached
+    } else {
+      throw error
+    }
+  }
+
   const treeSha = commitData.tree.sha
 
   // 3. Create a blob with your file content
-  const {data: blobData} = await octokit.rest.git.createBlob({
+  const blobData = await octokit.rest.git.createBlob({
     owner,
     repo,
     content,
     encoding: 'base64',
     headers,
   })
-  const blobSha = blobData.sha
+  const blobSha = blobData.data.sha
 
   // 4. Create a new tree with the base tree and the blob
-  const {data: treeData} = await octokit.rest.git.createTree({
+  const treeData = await octokit.rest.git.createTree({
     owner,
     repo,
     base_tree: treeSha,
@@ -87,10 +132,10 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
     ],
     headers,
   })
-  const newTreeSha = treeData.sha
+  const newTreeSha = treeData.data.sha
 
   // 5. Create a new commit
-  const {data: newCommitData} = await octokit.rest.git.createCommit({
+  const newCommitData = await octokit.rest.git.createCommit({
     owner,
     repo,
     message,
@@ -98,7 +143,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
     parents: [parentSha],
     headers,
   })
-  const newCommitSha = newCommitData.sha
+  const newCommitSha = newCommitData.data.sha
 
   // 6. Update the reference of your branch to point to the new commit
   await octokit.rest.git.updateRef({
@@ -211,15 +256,8 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
     path: path,
     ref: ref,
   }
-  if (accessToken) {
-    args.headers = {
-      'authorization': `Bearer ${accessToken}`,
-      'if-modified-since': '',
-      'if-none-match': '',
-      ...args.headers,
-    }
-  }
-  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args)
+
+  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args, accessToken)
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
   }
