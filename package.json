@@ -2,7 +2,7 @@
   "name": "bldrs",
   "version": "1.0.1038",
   "main": "src/index.jsx",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
