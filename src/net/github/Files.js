@@ -87,6 +87,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
 
   let commitData
   try {
+    // 2. Get the SHA of the tree associated with the latest commit
     const response = await octokit.rest.git.getCommit({
       owner,
       repo,

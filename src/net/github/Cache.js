@@ -36,19 +36,19 @@ const httpCacheApiAvailable = ('caches' in window)
    */
   async function convertToOctokitResponse(cachedResponse) {
     if (!cachedResponse) {
-        return null // or handle this case as needed
+        return null
     }
 
-    const data = await cachedResponse.json() // assuming the response was stored as JSON
+    const data = await cachedResponse.json()
     const headers = cachedResponse.headers
     const status = cachedResponse.status
 
     // Create a structure that mimics an Octokit response
     const octokitResponse = {
-        data: data, // the JSON payload
-        status: status, // HTTP status code
-        headers: {}, // reconstruct headers into an object
-        url: cachedResponse.url, // includes the request URL
+        data: data,
+        status: status,
+        headers: {},
+        url: cachedResponse.url,
     }
 
     // Iterate over headers and add them to the response object
