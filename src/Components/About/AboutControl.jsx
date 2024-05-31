@@ -4,6 +4,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {LogoB} from '../Logo/Logo'
 import AboutDialog from './AboutDialog'
+import {HASH_PREFIX_ABOUT} from './hashState'
 import PkgJson from '../../../package.json'
 
 
@@ -29,19 +30,17 @@ export default function AboutControl() {
     <ControlButtonWithHashState
       title={`Bldrs: ${PkgJson.version}`}
       icon={<LogoB/>}
-      isDialogDisplayed={isFirst() || isAboutVisible}
+      isDialogDisplayed={isAboutVisible}
       setIsDialogDisplayed={setIsAboutVisible}
-      hashPrefix={ABOUT_PREFIX}
+      hashPrefix={HASH_PREFIX_ABOUT}
       placement='right'
       buttonTestId='control-button-about'
     >
       <AboutDialog
-        isDialogDisplayed={isFirst() || isAboutVisible}
+        isDialogDisplayed={isAboutVisible}
         setIsDialogDisplayed={setIsAboutVisible}
         onClose={handleDialogClose}
       />
     </ControlButtonWithHashState>
   )
 }
-
-const ABOUT_PREFIX = 'about'

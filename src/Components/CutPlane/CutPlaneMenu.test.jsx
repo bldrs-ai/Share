@@ -1,11 +1,12 @@
 import React from 'react'
 import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
-import ShareMock from '../ShareMock'
-import useStore from '../store/useStore'
-import model from '../__mocks__/MockModel.js'
-import ShareControl from './ShareControl'
-import CutPlaneMenu, {getPlanes, VIEW_PLANE_PREFIX} from './CutPlaneMenu'
+import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
+import model from '../../__mocks__/MockModel.js'
+import ShareControl from '../Share/ShareControl'
+import CutPlaneMenu, {getPlanes} from './CutPlaneMenu'
+import {HASH_PREFIX_CUT_PLANE} from './hashState'
 
 
 jest.mock('three')
@@ -50,7 +51,7 @@ describe('CutPlaneMenu', () => {
   it('X Section in URL', async () => {
     render(
         <ShareMock
-          initialEntries={[`/v/p/index.ifc#${VIEW_PLANE_PREFIX}:x`]}
+          initialEntries={[`/v/p/index.ifc#${HASH_PREFIX_CUT_PLANE}:x`]}
         >
           <CutPlaneMenu/>
         </ShareMock>)
@@ -96,7 +97,7 @@ describe('CutPlaneMenu', () => {
       result.current.setViewer(viewer)
       result.current.setModel(model)
     })
-    const urlSuffix = `/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34;${VIEW_PLANE_PREFIX}:y=14`
+    const urlSuffix = `/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34;${HASH_PREFIX_CUT_PLANE}:y=14`
     render(
         <ShareMock
           initialEntries={[
@@ -122,7 +123,7 @@ describe('CutPlaneMenu', () => {
       }
     }
 
-    const pfx = VIEW_PLANE_PREFIX
+    const pfx = HASH_PREFIX_CUT_PLANE
     /* eslint-disable no-magic-numbers */
     check(getPlanes(''), [])
     check(getPlanes(`${pfx}:x=1`), [['x', 1]])

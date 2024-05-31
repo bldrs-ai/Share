@@ -30,7 +30,7 @@ describe('Filetype', () => {
       expect(extension).toStrictEqual(`.${ext}`)
     }
     expect(() => {
-      splitAroundExtension(`asdf.obj/blah`)
+      splitAroundExtension(`asdf.com/blah`)
     }).toThrow(FilenameParseError)
   })
 })

@@ -6,45 +6,13 @@ import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
-import {ControlButtonWithHashState, RectangularButton} from './Buttons'
-import Dialog from './Dialog'
-import Loader from './Loader'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
+import useStore from '../../store/useStore'
+import debug from '../../utils/debug'
+import {RectangularButton} from '../Buttons'
+import Dialog from '../Dialog'
+import Loader from '../Loader'
 import ClearIcon from '@mui/icons-material/Clear'
-import BotIcon from '../assets/icons/Bot2.svg'
-
-
-/**
- * This button hosts the ImagineDialog component and toggles it open and
- * closed.
- *
- * @return {ReactElement}
- */
-export default function ImagineControl() {
-  const isImagineVisible = useStore((state) => state.isImagineVisible)
-  const setIsImagineVisible = useStore((state) => state.setIsImagineVisible)
-  return (
-    <ControlButtonWithHashState
-      title='Rendering'
-      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
-      isDialogDisplayed={isImagineVisible}
-      setIsDialogDisplayed={setIsImagineVisible}
-      hashPrefix={IMAGINE_PREFIX}
-      placement='left'
-    >
-      <ImagineDialog
-        isDialogDisplayed={isImagineVisible}
-        setIsDialogDisplayed={setIsImagineVisible}
-      />
-    </ControlButtonWithHashState>
-  )
-}
-
-
-/** The prefix to use for the imagine state token */
-export const IMAGINE_PREFIX = 'imagine'
+import BotIcon from '../../assets/icons/Bot2.svg'
 
 
 /**
@@ -52,13 +20,14 @@ export const IMAGINE_PREFIX = 'imagine'
  *
  * @property {boolean} isDialogDisplayed Passed to dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to dialog to be controlled
- * @return {React.Component}
+ * @return {ReactElement}
  */
-function ImagineDialog({
+export default function ImagineDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
 }) {
   const viewer = useStore((state) => state.viewer)
+  const isModelReady = useStore((state) => state.isModelReady)
 
   const [prompt, setPrompt] = useState('')
   const [screenshot, setScreenshot] = useState(null)
@@ -69,7 +38,7 @@ function ImagineDialog({
   const [finalPrompt, setFinalPrompt] = useState(null)
 
   useEffect(() => {
-    if (viewer && isDialogDisplayed) {
+    if (viewer && isDialogDisplayed && isModelReady) {
       // Clear out possible prior state
       setPrompt('')
       setFinalPrompt(null)
@@ -78,7 +47,7 @@ function ImagineDialog({
       setScreenshot(ss)
       setImage(ss)
     }
-  }, [isDialogDisplayed, viewer])
+  }, [isDialogDisplayed, viewer, isModelReady])
 
 
   const onCreateClick = () => {
@@ -222,4 +191,3 @@ function downloadImaginePng(dataUrl) {
   downloadLink.download = 'imagine.png'
   downloadLink.click()
 }
-

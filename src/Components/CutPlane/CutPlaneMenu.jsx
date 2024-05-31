@@ -4,16 +4,17 @@ import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
-import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
-import {floatStrTrim, isNumeric} from '../utils/strings'
-import {TooltipIconButton} from './Buttons'
+import useStore from '../../store/useStore'
+import debug from '../../utils/debug'
+import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
+import {floatStrTrim, isNumeric} from '../../utils/strings'
+import {TooltipIconButton} from '../Buttons'
+import {HASH_PREFIX_CUT_PLANE} from './hashState'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import ElevationIcon from '../assets/icons/Elevation.svg'
-import PlanIcon from '../assets/icons/Plan.svg'
-import SectionIcon from '../assets/icons/Section.svg'
+import ElevationIcon from '../../assets/icons/Elevation.svg'
+import PlanIcon from '../../assets/icons/Plan.svg'
+import SectionIcon from '../../assets/icons/Section.svg'
 
 
 /**
@@ -47,7 +48,7 @@ export default function CutPlaneMenu() {
   }
 
   useEffect(() => {
-    const planeHash = getHashParams(location, VIEW_PLANE_PREFIX)
+    const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
     if (planeHash && model && viewer) {
       const planes = getPlanes(planeHash)
@@ -74,7 +75,7 @@ export default function CutPlaneMenu() {
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
       debug().log('CutPlaneMenu#togglePlane: found: ', true)
-      removeHashParams(window.location, VIEW_PLANE_PREFIX, [direction])
+      removeParams(HASH_PREFIX_CUT_PLANE, [direction])
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
@@ -87,7 +88,7 @@ export default function CutPlaneMenu() {
       }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, VIEW_PLANE_PREFIX, {[direction]: offset}, true)
+      addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
       setIsCutPlaneActive(true)
@@ -141,11 +142,8 @@ export default function CutPlaneMenu() {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            setCutPlaneDirections([])
-            removePlanes(viewer)
             setAnchorEl(null)
-            setIsCutPlaneActive(false)
-            removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
+            resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
           }}
           data-testid='menu-item-clear-all'
         >
@@ -155,6 +153,24 @@ export default function CutPlaneMenu() {
       </Menu>
     </>
   )
+}
+
+
+/**
+ * Called by this component and CadView for consistent reset
+ *
+ * @param {object} viewer
+ * @param {Function} setCutPlaneDirections
+ * @param {Function} setIsCutPlaneActive
+ */
+export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
+  // These aren't setup when CadView inits
+  if (viewer && setCutPlaneDirections && setIsCutPlaneActive) {
+    removePlanes(viewer)
+    removePlanesFromHashState()
+    setCutPlaneDirections([])
+    setIsCutPlaneActive(false)
+  }
 }
 
 
@@ -215,7 +231,7 @@ export function addPlanesToHashState(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
-    addHashParams(window.location, VIEW_PLANE_PREFIX, planeInfo, true)
+    addHashParams(window.location, HASH_PREFIX_CUT_PLANE, planeInfo, true)
   }
 }
 
@@ -231,7 +247,7 @@ export function getPlanes(planeHash) {
     return []
   }
   const parts = planeHash.split(':')
-  if (parts[0] !== VIEW_PLANE_PREFIX || !parts[1]) {
+  if (parts[0] !== HASH_PREFIX_CUT_PLANE || !parts[1]) {
     return []
   }
   const planeObjectParams = getObjectParams(planeHash)
@@ -249,11 +265,17 @@ export function getPlanes(planeHash) {
       })
     }
     if (removableParamKeys.length) {
-      removeHashParams(window.location, VIEW_PLANE_PREFIX, removableParamKeys)
+      removeParams(HASH_PREFIX_CUT_PLANE, removableParamKeys)
     }
   })
   debug().log('CutPlaneMenu#getPlanes: planes: ', planes)
   return planes
+}
+
+
+/** Removes cut plane params from hash state */
+export function removePlanesFromHashState() {
+  removeParams(HASH_PREFIX_CUT_PLANE)
 }
 
 
@@ -297,12 +319,3 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
           modelCenter.z + planeOffsetZ)
   return {normal, modelCenterOffset}
 }
-
-
-/** Removes cut plane params from hash state */
-export function removePlanesFromHashState() {
-  removeHashParams(window.location, VIEW_PLANE_PREFIX)
-}
-
-
-export const VIEW_PLANE_PREFIX = 'vp'

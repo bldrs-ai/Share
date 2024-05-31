@@ -3,7 +3,7 @@ import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
-import {CAMERA_PREFIX} from './Components/CameraControl'
+import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
 import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
@@ -26,6 +26,7 @@ import Styles from './Styles'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
   const urlParams = useParams()
+  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
@@ -33,8 +34,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
 
   useMemo(() => {
-    new WidgetApi(navigation.current, searchIndex)
-  }, [navigation, searchIndex])
+    if (isAppsEnabled) {
+      new WidgetApi(navigation.current, searchIndex)
+    }
+  }, [isAppsEnabled, navigation, searchIndex])
 
 
   /**
@@ -99,9 +102,13 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 /** @return {ReactElement} */
 function ModelTitle({repository, modelPath}) {
   const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+
+  // Check if repository is available and construct the title accordingly
+  const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
+
   return (
     <Helmet>
-      <title>{modelName} - {repository.name}/{repository.orgName}</title>
+      <title>{title}</title>
     </Helmet>
   )
 }
@@ -119,8 +126,8 @@ export function navToDefault(navigate, appPrefix) {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-        `#${CAMERA_PREFIX}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-        `#${CAMERA_PREFIX}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
+        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
   navWith(navigate, defaultPath, {
     search: location.search,
     hash: cameraHash,

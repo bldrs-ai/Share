@@ -1,8 +1,8 @@
 import React from 'react'
 import {fireEvent, render, renderHook, waitFor} from '@testing-library/react'
+import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
+import useStore from '../../store/useStore'
 import ShareControl from './ShareControl'
-import {HelmetStoreRouteThemeCtx} from '../Share.fixture'
-import useStore from '../store/useStore'
 
 
 describe('ShareControl', () => {

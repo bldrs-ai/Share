@@ -74,6 +74,9 @@ const impl = {
     deleteAllPlanes: jest.fn(() => {
       return 'cutPlane'
     }),
+    context: {
+      clippingPlanes: [],
+    },
     createFromNormalAndCoplanarPoint: jest.fn(() => {
       return 'createFromNormalAndCoplanarPoint'
     }),

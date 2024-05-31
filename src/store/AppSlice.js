@@ -1,3 +1,4 @@
+const isAppsEnabled = process.env.APPS_IS_ENABLED
 const isOpfsEnabled = process.env.OPFS_IS_ENABLED
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
@@ -13,6 +14,8 @@ export default function createAppSlice(set, get) {
   return {
     appPrefix: null,
     setAppPrefix: (prefix) => set(() => ({appPrefix: prefix})),
+
+    isAppsEnabled: isAppsEnabled,
 
     isAppStoreOpen: false,
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),

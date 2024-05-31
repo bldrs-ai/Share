@@ -1,6 +1,6 @@
 import React from 'react'
 import {render, fireEvent} from '@testing-library/react'
-import {StoreRouteThemeCtx} from '../Share.fixture'
+import {StoreRouteThemeCtx} from '../../Share.fixture'
 import HelpControl from './HelpControl'
 
 

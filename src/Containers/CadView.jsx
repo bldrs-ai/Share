@@ -4,11 +4,13 @@ import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
+import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
-import {onHash} from '../Components/CameraControl'
+import {onHash} from '../Components/Camera/CameraControl'
+import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import ElementGroup from '../Components/ElementGroup'
-import HelpControl from '../Components/HelpControl'
+import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
@@ -61,6 +63,9 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
+  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
+  const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
@@ -95,6 +100,7 @@ export default function CadView({
 
   // UISlice
   const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   // Begin useState //
@@ -126,7 +132,6 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    setIsSearchBarVisible(false)
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
@@ -134,6 +139,10 @@ export default function CadView({
         pathPrefix,
         assertDefined(themeArg.palette.primary.sceneBackground))
       setViewer(initializedViewer)
+    }
+    // Don't call first time since component states get set from permalinks
+    if (isModelReady) {
+      resetState()
     }
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
@@ -501,9 +510,15 @@ export default function CadView({
 
   /** Reset global state */
   function resetState() {
-    resetSelection()
-    setCutPlaneDirections([])
+    // TODO(pablo): use or remove level code
     setLevelInstance(null)
+
+    resetSelection()
+    resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
+    setIsSearchBarVisible(false)
+    setIsNavTreeVisible(false)
+    setIsPropertiesVisible(false)
+    setIsNotesVisible(false)
   }
 
 
@@ -533,7 +548,7 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
-      // Sets the url to the last selected element path.
+      // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
@@ -543,9 +558,7 @@ export default function CadView({
           navigate,
           `${pathPrefix}${repoFilePath}/${path}`,
           {
-            // TODO(pablo): unclear if search should be carried
             search: '',
-            // TODO(pablo): necessary to preserve UI state
             hash: window.location.hash,
           })
       }
@@ -564,8 +577,11 @@ export default function CadView({
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
   function selectElementBasedOnFilepath(filepath) {
+    if (filepath.startsWith('/')) {
+      filepath = filepath.substring(1)
+    }
     const parts = filepath.split(/\//)
-    if (parts.length > 0) {
+    if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
       const selectedInViewer = viewer.getSelectedIds()
@@ -658,9 +674,9 @@ export default function CadView({
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
     if (rootElement) {
-      const parts = location.pathname.split(/\.ifc/i)
+      const parts = location.pathname.split(filetypeRegex)
       const expectedPartCount = 2
-      if (parts.length === expectedPartCount) {
+      if (parts.length === expectedPartCount && parts[1] !== '') {
         selectElementBasedOnFilepath(parts[1])
       }
     }

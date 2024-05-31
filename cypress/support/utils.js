@@ -26,7 +26,8 @@ export function interceptIndex() {
 export function interceptBounce() {
   cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
   // For view-100/synchronized-view-and-navtree.cy.js
-  cy.intercept('GET', '/share/v/p/index.ifc/621', {fixture: '404.html'}).as('bounceEltSelect')
+  cy.intercept('GET', '/share/v/p/index.ifc/*', {fixture: '404.html'}).as('bounceEltSelect')
+  cy.intercept('GET', '/share/v/p/index.ifc?*', {fixture: '404.html'}).as('bounceSearch')
 }
 
 

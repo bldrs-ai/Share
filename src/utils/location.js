@@ -30,6 +30,19 @@ export function addHashListener(name, onHashCb) {
 
 
 /**
+ * Passhtru to addHashParams, with window.location
+ *
+ * @param {string} name A unique name for the params
+ * @param {Object<string, any>} params The parameters to encode
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
+ */
+export function addParams(name, params, includeNames = false) {
+  addHashParams(window.location, name, params, includeNames)
+}
+
+
+/**
  * Serialize the given paramObj and add it to the current
  * location.hash
  *
@@ -155,6 +168,17 @@ export function getObjectParams(hashParams) {
 
 
 /**
+ * Passthru to getHashParams, with window.location
+ *
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
+ */
+export function getParams(name) {
+  return getHashParams(window.location, name)
+}
+
+
+/**
  * @param {Location} location
  * @param {string} name prefix of the params to fetch
  * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
@@ -195,6 +219,39 @@ export function getHashParamsFromHashStr(hashStr, name) {
     }
   }
   return undefined
+}
+
+
+/**
+ * Passthru to hasHashParams, with window.location
+ *
+ * @param {string} name prefix of the params to fetch
+ * @return {boolean} True if and only if getHashParams(location, name) !== undefined
+ */
+export function hasParams(name) {
+  return hasHashParams(window.location, name)
+}
+
+
+/**
+ * @param {Location} location
+ * @param {string} name prefix of the params to fetch
+ * @return {boolean} True if and only if getHashParams(location, name) !== undefined
+ */
+export function hasHashParams(location, name) {
+  return getHashParams(location, name) !== undefined
+}
+
+
+/**
+ * Passthru to removeHashParams, with window.location
+ *
+ * @param {string} name prefix of the params to fetch
+ * @param {Array<string>} paramKeys param keys to remove from hash
+ *     params. if empty, then remove all params
+ */
+export function removeParams(name, paramKeys = []) {
+  removeHashParams(window.location, name, paramKeys)
 }
 
 
@@ -244,6 +301,19 @@ export function removeHashParams(location, name, paramKeys = []) {
     history.pushState(
         '', document.title, window.location.pathname + window.location.search)
   }
+}
+
+
+/**
+ * Passthru to setHashParams, with window.location
+ *
+ * @param {string} name A unique name for the params
+ * @param {Object<string, any>} params The parameters to encode
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
+ */
+export function setParams(name, params, includeNames = false) {
+  setHashParams(window.location, name, params, includeNames)
 }
 
 

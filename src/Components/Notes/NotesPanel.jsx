@@ -7,11 +7,10 @@ import NotesNavBar from './NotesNavBar'
 
 /** @return {ReactElement} */
 export default function NotesPanel() {
-  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-
   let title = selectedNoteId ? 'NOTE' : 'NOTES'
-  if (isCreateNoteActive) {
+  if (isCreateNoteVisible) {
     title = 'ADD A NOTE'
   }
 
