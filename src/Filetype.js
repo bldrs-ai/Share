@@ -1,12 +1,18 @@
-export const supportedTypes = ['ifc']
+import {assertDefined} from './utils/assert.js'
+
+
+// TODO: 3dm, glb
+export const supportedTypes = ['ifc', 'stp', 'step']
+
+export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
 
 /** Make a non-capturing group of a choice of filetypes. */
-const typeRegexStr = `(?:${supportedTypes.join('|')})`
+export const typeRegexStr = `(?:${supportedTypes.join('|')})`
 
 
 /** */
-const filetypeRegex = new RegExp(typeRegexStr, 'i')
+export const filetypeRegex = new RegExp(typeRegexStr, 'i')
 
 
 /** Prepend it with a '.' to make a file suffix*/
@@ -40,9 +46,10 @@ export function pathSuffixSupported(pathWithSuffix) {
  * @return {{parts: Array.<string>, extension: string}}
  */
 export function splitAroundExtension(filepath) {
+  assertDefined(filepath)
   const match = fileSuffixRegex.exec(filepath)
   if (!match) {
-    throw new FilenameParseError(`Filepath must contain ".${typeRegexStr}" (case-insensitive)`)
+    throw new FilenameParseError(`Filepath(${filepath}) must contain ".${typeRegexStr}" (case-insensitive)`)
   }
   const parts = filepath.split(fileSuffixRegex)
   return {parts, extension: match[0]}

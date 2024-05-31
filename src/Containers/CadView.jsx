@@ -4,6 +4,7 @@ import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
+import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -673,7 +674,7 @@ export default function CadView({
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
     if (rootElement) {
-      const parts = location.pathname.split(/\.ifc/i)
+      const parts = location.pathname.split(filetypeRegex)
       const expectedPartCount = 2
       if (parts.length === expectedPartCount && parts[1] !== '') {
         selectElementBasedOnFilepath(parts[1])
