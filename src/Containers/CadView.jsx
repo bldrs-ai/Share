@@ -274,106 +274,78 @@ export default function CadView({
       }
     }
 
-    let loadedModel
-    if (!isOpfsAvailable) {
-      // fallback to loadIfcUrl
-      loadedModel = await viewer.loadIfcUrl(
-        ifcUrl,
-        !isCamHashSet,
-        onProgress,
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          setIsModelLoading(false)
-          setSnackMessage('')
-        }, customViewSettings)
-    } else if (uploadedFile) {
-      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          true, // ignore current camera for new load
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-      // TODO(nickcastel50): need a more permanent way to
-      // prevent redirect here for bundled ifc files
-    } else if (ifcUrl === '/index.ifc') {
-      const file = await downloadToOPFS(
-        navigate,
-        appPrefix,
-        handleBeforeUnload,
-        ifcUrl,
-        'index.ifc',
-        'bldrs-ai',
-        'BldrsLocalStorage',
-        'V1',
-        'Projects',
-        onProgress)
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !isCamHashSet,
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
-    } else {
-      // TODO(pablo): probably already available in this scope, or use
-      // parseGitHubRepositoryURL instead.
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-      const commitHash = isPublic ?
-            await getLatestCommitHash(owner, repo, filePath, '', branch) :
-            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
-
-      if (commitHash === null) {
-        // downloadToOpfs below will error out as well.
-        debug().error(
-          `Error obtaining commit hash for: ` +
-            `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
-            `accessToken (present?):${accessToken ? 'true' : 'false'}`)
-      }
-
-      const file = await downloadToOPFS(
-        navigate,
-        appPrefix,
-        handleBeforeUnload,
-        ifcUrl,
-        filePath,
-        commitHash,
-        owner,
-        repo,
-        branch,
-        onProgress)
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-        file,
-        !isCamHashSet,
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsModelLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
-        }, customViewSettings)
+    const onError = (error) => {
+      debug().log('CadView#loadIfc$onError: ', error)
+      setIsModelLoading(false)
+      setSnackMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
     }
+
+    let file
+    let fitToFrame = !isCamHashSet
+    let loadedModel
+    if (isOpfsAvailable) {
+      if (uploadedFile) {
+        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
+        // There's never a camera URL param for an uploadedFile to always fitToFrame
+        fitToFrame = true
+      } else if (ifcUrl === '/index.ifc') {
+        // TODO(nickcastel50): need a more permanent way to
+        // prevent redirect here for bundled ifc files
+        file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcUrl,
+          'index.ifc',
+          'bldrs-ai',
+          'BldrsLocalStorage',
+          'V1',
+          'Projects',
+          onProgress)
+      } else {
+        // TODO(pablo): probably already available in this scope, or use
+        // parseGitHubRepositoryURL instead.
+        const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
+        const commitHash = isPublic ?
+              await getLatestCommitHash(owner, repo, filePath, '', branch) :
+              await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
+
+        if (commitHash === null) {
+          // downloadToOpfs below will error out as well.
+          debug().error(
+            `Error obtaining commit hash for: ` +
+              `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
+              `accessToken (present?):${accessToken ? 'true' : 'false'}`)
+        }
+
+        file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcUrl,
+          filePath,
+          commitHash,
+          owner,
+          repo,
+          branch,
+          onProgress)
+      }
+    }
+
+    if (file) {
+      if (file instanceof File) {
+        setOpfsFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+      loadedModel = await viewer.loadIfcFile(file, fitToFrame, onError, customViewSettings)
+    } else {
+      // Fallback to load from origin if not found locally
+      loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
+    }
+
+    // This may not have been called by onError yet.
+    setIsModelLoading(false)
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
