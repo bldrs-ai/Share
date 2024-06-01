@@ -36,6 +36,10 @@ import {elementSelection} from './selection'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
+import {load} from '../loader/Loader'
+// import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
+import {BufferAttribute} from 'three'
+
 
 let count = 0
 
@@ -189,8 +193,9 @@ export default function CadView({
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
-      tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
+      tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
+      debug().error('Error loading model: ', e)
       tmpModelRef = undefined
       setSnackMessage(null)
     }
@@ -243,13 +248,13 @@ export default function CadView({
    * @param {string} filepath
    * @param {string} gitpath to use for constructing API endpoints
    */
-  async function loadIfc(filepath, gitpath) {
-    debug().log(`CadView#loadIfc: `, filepath)
+  async function loadModel(filepath, gitpath) {
+    debug().log(`CadView#loadModel: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
 
     if (uploadedFile) {
       filepath = getUploadedBlobPath(filepath)
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
+      debug().log('CadView#loadModel: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
@@ -270,20 +275,20 @@ export default function CadView({
         // eslint-disable-next-line no-magic-numbers
         const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
         setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-        debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+        debug().log(`CadView#loadModel$onProgress, ${loadedBytes} bytes`)
       }
     }
 
     const onError = (error) => {
-      debug().log('CadView#loadIfc$onError: ', error)
+      debug().log('CadView#loadModel$onError: ', error)
       setIsModelLoading(false)
-      setSnackMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+      setSnackMessage(`Could not load model: ${filepath}. Please try logging in if the repository is private.`)
     }
 
     let file
     let fitToFrame = !isCamHashSet
     let loadedModel
-    if (isOpfsAvailable) {
+    if (isOpfsAvailable && ifcUrl.endsWith('.ifc')) {
       if (uploadedFile) {
         file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
         // There's never a camera URL param for an uploadedFile to always fitToFrame
@@ -339,9 +344,33 @@ export default function CadView({
         debug().error('Retrieved object is not of type File.')
       }
       loadedModel = await viewer.loadIfcFile(file, fitToFrame, onError, customViewSettings)
-    } else {
-      // Fallback to load from origin if not found locally
+    } else if (ifcUrl.endsWith('.ifc')) {
       loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
+    } else {
+      loadedModel = await load(new URL(ifcUrl))
+      // loadedModel = loadedModel.children[0]
+
+      // Turn the mesh into a model
+      const ids = new Int8Array(1)
+      ids[0] = 123
+      loadedModel.geometry = loadedModel.children[0].geometry || {attributes: {}}
+      loadedModel.geometry.attributes.expressID = new BufferAttribute(ids, 1)
+
+      loadedModel.ifcManager = {
+        getSpatialStructure: (modelId, flatten) => {
+          return {
+            expressID: 123,
+            children: [],
+            type: 'IFCPROJECT',
+          }
+        },
+      }
+
+      loadedModel.getIfcType = (eltType) => {
+        return 'IFCPROJECT'
+      }
+
+      viewer.context.scene.add(loadedModel)
     }
 
     // This may not have been called by onError yet.
@@ -368,7 +397,7 @@ export default function CadView({
       return loadedModel
     }
 
-    debug().error('CadView#loadIfc: Model load failed!')
+    debug().error('CadView#loadModel: Model load failed!')
     return null
   }
 
