@@ -2,7 +2,7 @@ import {assertDefined} from './utils/assert.js'
 
 
 // TODO: 3dm, glb
-export const supportedTypes = ['ifc', 'stp', 'step']
+export const supportedTypes = ['bld', 'fbx', 'glb', 'ifc', 'obj', 'pdb']
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
