@@ -119,7 +119,7 @@ describe('OPFS Test Suite', () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
-            handler({data: {progressEvent: true, contentLength: 100, receivedLength: 50}}) // Simulate a progress update
+            handler({data: {progressEvent: true, total: 100, loaded: 50}}) // Simulate a progress update
             handler({data: {completed: true, event: 'download', file: new Blob(['content'])}}) // Then complete
           })
         }),
@@ -145,8 +145,8 @@ describe('OPFS Test Suite', () => {
 
       expect(onProgressMock).toHaveBeenCalledWith({
         lengthComputable: true,
-        contentLength: 100,
-        receivedLength: 50,
+        total: 100,
+        loaded: 50,
       })
     })
   })

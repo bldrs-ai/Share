@@ -152,6 +152,19 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.highlighter.addToHighlighting(targetMesh)
   }
 
+
+  /** @param {Mesh} mesh */
+  addToHighlighting(mesh) {
+    this.highlighter.addToHighlighting(mesh)
+  }
+
+
+  /** @param {Array<Mesh>} meshes */
+  setHighlighted(meshes) {
+    this.highlighter.setHighlighted(meshes)
+  }
+
+
   /**
    *
    * Highlights the item pointed by the cursor.

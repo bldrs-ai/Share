@@ -124,8 +124,8 @@ export function downloadToOPFS(
           if (onProgress) {
             onProgress({
               lengthComputable: event.data.contentLength !== 0,
-              contentLength: event.data.contentLength,
-              receivedLength: event.data.receivedLength,
+              total: event.data.total,
+              loaded: event.data.loaded,
             }) // Custom progress event
           }
         } else if (event.data.completed) {
