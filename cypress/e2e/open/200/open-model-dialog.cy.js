@@ -11,7 +11,7 @@ import {
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1159}*/
-describe('Open 100: Open model dialog', () => {
+describe('Open 200: Open model dialog', () => {
   beforeEach(homepageSetup)
   context('First time user visits homepage not logged in ', () => {
     beforeEach(() => {

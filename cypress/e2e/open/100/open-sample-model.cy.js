@@ -28,10 +28,6 @@ describe('Open 100: Open Sample Model', () => {
       cy.percySnapshot()
     })
 
-      it('Sample project list appears, including Momentum etc. - Screen', () => {
-        cy.percySnapshot()
-      })
-
       context('Choose one of the projects from the list', () => {
         beforeEach(() => {
           const interceptTag = 'ghModelLoad'
@@ -80,7 +76,6 @@ describe('Open 100: Open Sample Model', () => {
           interceptModelLoadTag,
         )
         cy.get('[data-testid="control-button-open"]').click()
-        cy.get('[data-testid="textfield-sample-projects"]').click()
         cy.findByText('Momentum').click()
         waitForModelReady(interceptModelLoadTag)
       })

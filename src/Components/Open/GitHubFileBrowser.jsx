@@ -13,11 +13,13 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 /**
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Array<string>} orgNamesArr List of org names for the current user.
+ * @property {Function} setIsDialogDisplayed callback
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
   navigate,
   orgNamesArr,
+  setIsDialogDisplayed,
 }) {
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
@@ -106,6 +108,7 @@ export default function GitHubFileBrowser({
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
       navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main${currentPath}/${fileName}`})
+      setIsDialogDisplayed(false)
     }
   }
   return (

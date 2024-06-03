@@ -6,6 +6,9 @@ import Eisvogel from '../../assets/icons/Eisvogel.svg'
 import Seestrasse from '../../assets/icons/Seestrasse.svg'
 import Sheenstock from '../../assets/icons/Sheenstock.svg'
 import Placeholder from '../../assets/icons/Placeholder.svg'
+import Gear from '../../assets/icons/Gear.svg'
+import Bplaza from '../../assets/icons/Bplaza.svg'
+import Schependomlaan from '../../assets/icons/Schependomlaan.svg'
 
 
 /**
@@ -23,18 +26,19 @@ function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
     Schependomlaan: '/share/v/gh/bldrs-ai/test-models/main/ifc/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
     Structural_detail: '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/171210AISC_Sculpture_param.ifc',
     Bldrs_plaza: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
-    Bldrs: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
+    Gear: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
   }
+
 
   const modelIcon = {
     Momentum: <Momentum style={{height: '1.5em'}}/>,
     Schneestock: <Sheenstock style={{height: '1.5em'}}/>,
     Eisvogel: <Eisvogel style={{height: '1.5em'}}/>,
     Seestrasse: <Seestrasse style={{height: '1.5em'}}/>,
-    Schependomlaan: <Placeholder style={{height: '1.5em'}}/>,
+    Schependomlaan: <Schependomlaan style={{height: '1.5em'}}/>,
     Structural_detail: <Placeholder style={{height: '1.5em'}}/>,
-    Bldrs_plaza: <Placeholder style={{height: '1.5em'}}/>,
-    Bldrs: <Placeholder style={{height: '1.5em'}}/>,
+    Bldrs_plaza: <Bplaza style={{height: '1.5em'}}/>,
+    Gear: <Gear style={{height: '1.5em'}}/>,
   }
 
   const handleSelect = (modelName, closeDialog) => {
