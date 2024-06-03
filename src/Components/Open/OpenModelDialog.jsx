@@ -31,7 +31,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = ['Samples', 'Projects']
+  const tabLabels = ['Project', 'Samples']
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -57,7 +57,7 @@ export default function OpenModelDialog({
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
       <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
-      { currentTab === 0 &&
+      { currentTab === 1 &&
         <Stack
           justifyContent='center'
           sx={{marginTop: '1em', paddingBottom: '1em', width: '17.5em'}}
@@ -67,7 +67,7 @@ export default function OpenModelDialog({
             setIsDialogDisplayed={setIsDialogDisplayed}
           />
         </Stack> }
-      { currentTab === 1 &&
+      { currentTab === 0 &&
         <Stack
           spacing={1}
           direction='column'
@@ -76,16 +76,16 @@ export default function OpenModelDialog({
           sx={{marginTop: '.5em', paddingBottom: '1em', width: '17.5em'}}
         >
           <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
-            <Button onClick={openFile} variant='contained' data-testid={'Open_file'}>
+            <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
               Open File
             </Button>
-          {!isMobile && <Typography variant='caption'> Drag and drop to open files</Typography>}
+          {!isMobile && <Typography variant='caption'> Files can be opened by dragging and dropping them into the viewport</Typography>}
           {isAuthenticated && !isMobile && <Divider sx={{paddingBottom: '.2em'}}/>}
           {isAuthenticated && isMobile && <Divider sx={{paddingTop: '.5em'}}/>}
           </Stack>
           {isAuthenticated &&
           <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-          {!isAuthenticated && <Box sx={{width: '92%'}}><PleaseLogin/></Box>}
+          {!isAuthenticated && <Box sx={{width: '92%', textAlign: 'left'}}><PleaseLogin/></Box>}
         </Stack>
       }
     </Dialog>

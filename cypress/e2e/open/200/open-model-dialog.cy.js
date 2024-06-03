@@ -24,8 +24,8 @@ describe('Open 200: Open model dialog', () => {
       cy.percySnapshot()
     })
     it('Open button is visible', () => {
-      cy.get('[data-testid="Projects"]').click()
-      cy.get('[data-testid="Open_file"]')
+      cy.get('[data-testid="Project"]').click()
+      cy.get('[data-testid="button_open_file"]')
       cy.get('[data-testid="Please_login"]').contains('GitHub')
       cy.percySnapshot()
     })
@@ -41,13 +41,13 @@ describe('Open 200: Open model dialog', () => {
       cy.get('[data-testid="control-button-open"]').click()
     })
     it('GitHub controls are visible', () => {
-      cy.get('[data-testid="Projects"]').click()
+      cy.get('[data-testid="Project"]').click()
       cy.percySnapshot()
     })
     const interceptTag = 'ghOpenModelLoad'
     it('Choose the path to the model on GitHub -> model is loaded into the scene', () => {
-      cy.get('[data-testid="Projects"]').click()
-      cy.findByText('Projects').click()
+      cy.get('[data-testid="Project"]').click()
+      cy.findByText('Project').click()
       cy.findByLabelText('Organization', {timeout: 5000}).click()
       cy.contains('@cypresstester').click()
       cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()

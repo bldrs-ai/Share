@@ -14,10 +14,10 @@ describe('Open Model Dialog', () => {
     const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
     const openControlButton = getByTestId('control-button-open')
     fireEvent.click(openControlButton)
-    const projectsTab = getByText('Projects')
-    fireEvent.click(projectsTab)
+    const ProjectTab = getByText('Project')
+    fireEvent.click(ProjectTab)
     const loginTextMatcher = (content, node) => {
-      const hasText = (_node) => _node.textContent.includes('Host your IFC models on GitHub and log in to BLDRS')
+      const hasText = (_node) => _node.textContent.includes('Host your IFC models on GitHub and log in to Share')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
           (child) => !hasText(child),
@@ -35,8 +35,8 @@ describe('Open Model Dialog', () => {
     const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
     const openControlButton = getByTestId('control-button-open')
     fireEvent.click(openControlButton)
-    const projectsTab = getByText('Projects')
-    fireEvent.click(projectsTab)
+    const ProjectTab = getByText('Project')
+    fireEvent.click(ProjectTab)
     const File = getByTestId('openFile')
     const Repository = await getByTestId('openRepository')
     expect(File).toBeInTheDocument()

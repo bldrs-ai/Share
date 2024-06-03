@@ -16,8 +16,9 @@ import Schependomlaan from '../../assets/icons/Schependomlaan.svg'
  * @property {Function} navigate Callback from OpenModelDialog to change page url
  * @return {ReactElement}
  */
-function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
+export default function SampleModels({navigate, setIsDialogDisplayed}) {
   const [, setSelected] = useState('')
+  const iconsStyle = {height: '1.6em'}
   const modelPath = {
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
@@ -29,16 +30,15 @@ function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
     Gear: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
   }
 
-
   const modelIcon = {
-    Momentum: <Momentum style={{height: '1.5em'}}/>,
-    Schneestock: <Sheenstock style={{height: '1.5em'}}/>,
-    Eisvogel: <Eisvogel style={{height: '1.5em'}}/>,
-    Seestrasse: <Seestrasse style={{height: '1.5em'}}/>,
-    Schependomlaan: <Schependomlaan style={{height: '1.5em'}}/>,
-    Structural_detail: <Placeholder style={{height: '1.5em'}}/>,
-    Bldrs_plaza: <Bplaza style={{height: '1.5em'}}/>,
-    Gear: <Gear style={{height: '1.5em'}}/>,
+    Momentum: <Momentum style={iconsStyle}/>,
+    Schneestock: <Sheenstock style={iconsStyle}/>,
+    Eisvogel: <Eisvogel style={iconsStyle}/>,
+    Seestrasse: <Seestrasse style={iconsStyle}/>,
+    Schependomlaan: <Schependomlaan style={iconsStyle}/>,
+    Structural_detail: <Placeholder style={iconsStyle}/>,
+    Bldrs_plaza: <Bplaza style={iconsStyle}/>,
+    Gear: <Gear style={iconsStyle}/>,
   }
 
   const handleSelect = (modelName, closeDialog) => {
@@ -58,24 +58,13 @@ function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
       {Object.keys(modelPath).map((model, i) => (
         <Grid item xs={6} key={i}>
           <Chip
-            sx={{
-              'width': '10em',
-              'height': '6em',
-              'display': 'flex',
-              'justifyContent': 'center',
-              '& .MuiChip-label': {
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-              },
-            }}
             label={
               <>
                 {modelIcon[model]}
                 <Typography variant="caption" sx={{marginTop: '.5em'}}>{model}</Typography>
               </>
             }
-            variant="outlined"
+            variant="sampleModel"
             data-testid='sample-model-chip'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
             color="primary"
@@ -86,5 +75,3 @@ function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
   )
 }
 
-
-export default SampleModelFileSelector

@@ -114,6 +114,23 @@ export function getComponentOverrides(palette, typography) {
             backgroundColor: theme.palette.primary.main,
           },
         }),
+        sampleModel: ({theme}) => ({
+          'borderColor': theme.palette.primary.main,
+          'backgroundColor': theme.palette.secondary.main,
+          'color': theme.palette.primary.contrastText,
+          'width': '10em',
+          'height': '6em',
+          'display': 'flex',
+          'justifyContent': 'center',
+          '&&:hover': {
+            backgroundColor: theme.palette.primary.main,
+          },
+          '& .MuiChip-label': {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          },
+        }),
       },
     },
     MuiDialog: {
