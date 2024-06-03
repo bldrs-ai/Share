@@ -76,6 +76,7 @@ describe('Open 100: Open Sample Model', () => {
           interceptModelLoadTag,
         )
         cy.get('[data-testid="control-button-open"]').click()
+        cy.get('[data-testid="Samples"]').click()
         cy.findByText('Momentum').click()
         waitForModelReady(interceptModelLoadTag)
       })

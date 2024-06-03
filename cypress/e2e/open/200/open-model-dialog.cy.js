@@ -20,6 +20,7 @@ describe('Open 200: Open model dialog', () => {
     })
 
     it('Sample tab to be selected and Momentum sample model chip to be visible', () => {
+      cy.get('[data-testid="Samples"]').click()
       cy.get(':nth-child(1) > [data-testid="sample-model-chip"] > .MuiChip-label').contains('Momentum')
       cy.percySnapshot()
     })
