@@ -2,9 +2,9 @@ import React, {ReactElement, useState} from 'react'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import useStore from '../../store/useStore'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
-import useStore from '../../store/useStore'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
@@ -52,6 +52,7 @@ export default function GitHubFileBrowser({
     setSelectedFileName('')
     setSelectedRepoName('')
   }
+
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo)
     const owner = orgNamesArr[selectedOrgName]
@@ -88,11 +89,9 @@ export default function GitHubFileBrowser({
     }
 
     setSelectedFolderName('none')
-
     setCurrentPath(newPath)
 
     const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
-
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
 
@@ -105,6 +104,7 @@ export default function GitHubFileBrowser({
     ]
     setFoldersArr(foldersArrWithSeparator)
   }
+
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
       navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main${currentPath}/${fileName}`})
@@ -112,7 +112,7 @@ export default function GitHubFileBrowser({
     }
   }
   return (
-    <Stack data-testid={'GitHub_access_controls'}>
+    <Stack data-testid={'stack_gitHub_access_controls'}>
       <Stack>
           <Typography variant='overline'>
             Open file from Github
