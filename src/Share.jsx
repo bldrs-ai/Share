@@ -58,7 +58,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       }
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
-          (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
+          (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
+          (!modelPath.gitpath && mp.gitpath)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
