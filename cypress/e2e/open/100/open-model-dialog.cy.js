@@ -27,7 +27,7 @@ describe('Open 100: Open model dialog', () => {
     it('Open button is visible', () => {
       cy.get('[data-testid="Project"]').click()
       cy.get('[data-testid="button_open_file"]')
-      cy.get('[data-testid="Please_login"]').contains('GitHub')
+      cy.get('[data-testid="container_please_login"]').contains('GitHub')
       cy.percySnapshot()
     })
   })
