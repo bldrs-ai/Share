@@ -36,9 +36,9 @@ import {elementSelection} from './selection'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
+import {Mesh} from 'three'
 import {load} from '../loader/Loader'
-// import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
-import {BufferAttribute} from 'three'
+import Picker from '../view/Picker'
 
 
 let count = 0
@@ -196,6 +196,9 @@ export default function CadView({
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
       debug().error('Error loading model: ', e)
+      // TODO(pablo): want this for new viewer
+      // eslint-disable-next-line no-console
+      console.error('Load error:', e)
       tmpModelRef = undefined
       setSnackMessage(null)
     }
@@ -347,29 +350,7 @@ export default function CadView({
     } else if (ifcUrl.endsWith('.ifc')) {
       loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
     } else {
-      loadedModel = await load(new URL(ifcUrl))
-      // loadedModel = loadedModel.children[0]
-
-      // Turn the mesh into a model
-      const ids = new Int8Array(1)
-      ids[0] = 123
-      loadedModel.geometry = loadedModel.children[0].geometry || {attributes: {}}
-      loadedModel.geometry.attributes.expressID = new BufferAttribute(ids, 1)
-
-      loadedModel.ifcManager = {
-        getSpatialStructure: (modelId, flatten) => {
-          return {
-            expressID: 123,
-            children: [],
-            type: 'IFCPROJECT',
-          }
-        },
-      }
-
-      loadedModel.getIfcType = (eltType) => {
-        return 'IFCPROJECT'
-      }
-
+      loadedModel = await load(new URL(ifcUrl), viewer, onProgress, onError, onError)
       viewer.context.scene.add(loadedModel)
     }
 
@@ -419,7 +400,8 @@ export default function CadView({
     window.ondblclick = canvasDoubleClickHandler
     setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
-    const rootProps = await viewer.getProperties(0, rootElt.expressID) || {Name: 'Model', LongName: 'Model'}
+    const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
@@ -428,15 +410,44 @@ export default function CadView({
 
 
   /** Handle double click event on canvas. */
-  async function canvasDoubleClickHandler(event) {
+  function canvasDoubleClickHandler(event) {
     if (!event.target || event.target.tagName !== 'CANVAS') {
       return
     }
-    const item = await viewer.castRayToIfcScene()
-    if (!item) {
+
+    const ctx = viewer.context
+    const picker = new Picker(ctx)
+    const pickedAll = picker.castRay(ctx.scene.scene.children)
+    if (!pickedAll || pickedAll.length === 0) {
       return
     }
-    elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, item.id)
+    const picked = pickedAll[0]
+    if (picked.object.expressID !== undefined) {
+      // TODO(pablo): in ifc there's faces within mesh.. should add support for
+      // similar in all formats loaders
+      const mesh = picked.object
+      viewer.setHighlighted([mesh])
+      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
+    } else {
+      const eid = getExpressId(picked.object.geometry, picked.faceIndex)
+      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+    }
+  }
+
+
+  // TODO(pablo): move
+  /**
+   * @param {Mesh} geometry
+   * @param {number} faceIndex
+   * @return {number} expressId
+   */
+  function getExpressId(geometry, faceIndex) {
+    if (!geometry.index) {
+      throw new Error('Geometry does not have index information.')
+    }
+    const geoIndex = geometry.index.array
+    const IdAttrName = 'expressID'
+    return geometry.attributes[IdAttrName].getX(geoIndex[3 * faceIndex])
   }
 
 

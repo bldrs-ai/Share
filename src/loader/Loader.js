@@ -1,4 +1,5 @@
 import axios from 'axios'
+import {BufferAttribute, Mesh, Object3D} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
@@ -22,6 +23,7 @@ import xyzToThree from './xyz'
  */
 export async function load(
   url,
+  viewer,
   onProgress = (progressEvent) => debug().log('Loaders#load: progress: ', progressEvent),
   onUnknownType = (errEvent) => debug().error(errEvent),
   onError = (errEvent) => debug().error('Loaders#load: error: ', errEvent),
@@ -52,8 +54,58 @@ export async function load(
   let model = await readModel(loader, modelData, basePath, isLoaderAsync)
 
   if (fixupCb) {
-    model = fixupCb(model)
+    model = fixupCb(model, viewer)
   }
+
+  convertToShareModel(model, viewer)
+  return model
+}
+
+
+/**
+ * TODO(pablo): this is a temporary harness to add some stubs to the loaded mesh
+ * to have it not crash helpers for the main viewer.
+ *
+ * @param {Mesh} model
+ * @return {Mesh}
+ */
+function convertToShareModel(model, viewer) {
+  let objIdSerial = 0
+
+  /**
+   * Recursively visit the model and its children to add `expressID` and
+   * `type` properties to each.
+   *
+   * @param {Object3D} model
+   */
+  function recursiveDecorate(obj3d) {
+    obj3d.type = obj3d.type || 'IFCOBJECT'
+    obj3d.Name = obj3d.Name || {value: 'Object'}
+    obj3d.LongName = obj3d.LongName || {value: 'Object'}
+    const id = objIdSerial++
+    obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
+    const ids = new Int8Array(1)
+    ids[0] = id
+    obj3d.geometry = obj3d.geometry || {attributes: {}}
+    obj3d.geometry.attributes.expressID = new BufferAttribute(ids, 1)
+    if (obj3d.children && obj3d.children.length > 0) {
+      obj3d.children.forEach((m) => recursiveDecorate(m))
+    }
+  }
+  recursiveDecorate(model)
+
+  // Override for root
+  model.type = model.type || 'IFCPROJECT'
+  model.Name = model.Name || {value: 'Model'}
+  model.LongName = model.LongName || {value: 'Model'}
+
+  model.ifcManager = {
+    getSpatialStructure: (modelId, flatten) => {
+      return model
+    },
+  }
+
+  model.getIfcType = (eltType) => eltType
 
   return model
 }
