@@ -1,32 +1,36 @@
 import React from 'react'
 import GlobalStyles from '@mui/material/GlobalStyles'
 
-
 /**
- * @property {object} theme To set link, icon and scollbar colors.
+ * @property {object} theme To set link, icon and scrollbar colors.
  * @return {React.Component}
  */
 export default function Styles({theme}) {
   return (
     <GlobalStyles
       styles={{
-        'html': {
-          height: '100%',
-          maxHeight: '100%',
-          overflow: 'hidden',
-          overscrollBehavior: 'none',
-        },
         'body': {
           overscrollBehavior: 'none',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: 0,
           overflow: 'hidden',
           padding: 0,
           height: '100%',
           maxHeight: '100%',
+        },
+        '@media (max-width: 768px)': {
+          html: {
+            height: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
+            overscrollBehavior: 'none',
+          },
+          body: {
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            maxHeight: '100%',
+          },
         },
         'a': {
           color: theme.palette.primary.main,
@@ -44,7 +48,7 @@ export default function Styles({theme}) {
           top: 0,
           right: 0,
           margin: '0.5em',
-          opacity: .5,
+          opacity: 0.5,
         },
         '.MuiDialogActions-root': {
           textAlign: 'center',
