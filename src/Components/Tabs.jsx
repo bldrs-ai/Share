@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, ReactElement} from 'react'
 import MuiTabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import {assertDefined} from '../utils/assert'
