@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {ReactElement, useEffect, useState} from 'react'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
