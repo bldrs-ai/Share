@@ -93,9 +93,7 @@ export default function SearchBar() {
     <form onSubmit={onSubmit}>
       <Autocomplete
         freeSolo
-        sx={{
-          width: '360px',
-        }}
+        sx={{width: '103%'}}
         options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
