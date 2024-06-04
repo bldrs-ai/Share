@@ -22,7 +22,7 @@ describe('Notes 100: Comment edit', () => {
         cy.get('[data-testid="Save"]')
         cy.percySnapshot()
       })
-      it('Comment display updated body', () => {
+      it('Comment displays updated body', () => {
         auth0Login()
         cy.get(`[data-testid="list-notes"] > :nth-child(3)
         > [data-testid="note-card"] > .MuiCardActions-root > .MuiBox-root > [data-testid="editComment"]`).click()
