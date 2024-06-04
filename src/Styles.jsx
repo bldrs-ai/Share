@@ -13,14 +13,14 @@ export default function Styles({theme}) {
         'html': {
           height: '100%',
           maxHeight: '100%',
-          overflow:'hidden',
+          overflow: 'hidden',
           overscrollBehavior: 'none',
         },
         'body': {
           overscrollBehavior: 'none',
           position: 'fixed',
           left: 0,
-          top: 0, 
+          top: 0,
           right: 0,
           bottom: 0,
           overflow: 'hidden',
