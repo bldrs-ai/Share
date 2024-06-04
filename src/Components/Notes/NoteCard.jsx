@@ -175,10 +175,8 @@ export default function NoteCard({
   }
 
   /**
-   * Delete comment from repo and remove from UI
+   * Update comment in github
    *
-   * @param {string} repository
-   * @param {string} accessToken
    * @param {number} commentId
    */
     async function updateCommentGithub(commentId) {
