@@ -151,33 +151,29 @@ export default function NoteFooter({
          icon={<AddCommentOutlinedIcon className='icon-share'/>}
        />
       }
-      {editMode &&
-          <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-              <TooltipIconButton
-                title='Save'
-                placement='top'
-                icon={<CheckIcon className='icon-share'/>}
-                onClick={() => submitUpdate(repository, accessToken, id)}
-              />
-          </Box>
-      }
 
-      {numberOfComments > 0 && !editMode &&
-       <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-         {!selected &&
+      <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+        {editMode &&
           <TooltipIconButton
-            title='Discussion'
-            size='small'
+            title='Save'
             placement='top'
-            onClick={selectCard}
-            icon={<ForumOutlinedIcon className='icon-share'/>}
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
           />
-         }
-          {!selected && numberOfComments}
-       </Box>
-      }
-      {!isNote && user && username === user.nickname &&
-        <Box sx={{marginLeft: 'auto', padding: '0 0 0 0.5em'}}>
+        }
+        {!selected && numberOfComments > 0 && !editMode &&
+          <>
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='top'
+              onClick={selectCard}
+              icon={<ForumOutlinedIcon className='icon-share'/>}
+            />
+            {numberOfComments}
+          </>
+        }
+        {!isNote && user && username === user.nickname &&
           <TooltipIconButton
               title='Delete'
               placement='top'
@@ -185,8 +181,8 @@ export default function NoteFooter({
               icon={<DeleteOutlineIcon className='icon-share'/>}
               onClick={() => deleteComment(id)}
           />
-        </Box>
-      }
+        }
+      </Box>
     </CardActions>
   )
 }

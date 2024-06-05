@@ -235,7 +235,7 @@ function githubHandlers(githubStore) {
     rest.delete(`${GH_BASE}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       const {org, repo, commentId} = req.params
 
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !commentId) {
+      if (org !== 'cypresstester' || repo !== 'Share' || !commentId) {
         return res(ctx.status(httpNotFound))
       }
 
