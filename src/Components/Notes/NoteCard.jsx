@@ -160,7 +160,8 @@ export default function NoteCard({
    * @param {number} commentId
    */
   async function deleteCommentGithub(commentId) {
-    await deleteComment(repository, commentId, accessToken)
+    // eslint-disable-next-line no-unused-vars
+    const res = await deleteComment(repository, commentId, accessToken)
     const newComments = comments.filter((comment) => comment.id !== commentId)
     setComments(newComments)
   }
