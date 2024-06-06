@@ -21,6 +21,7 @@ export default function EditCardBody({handleTextUpdate, value = ''}) {
         alignItems="flex-end"
       >
         <InputBase
+          variant='edit'
           value={value}
           onChange={handleTextUpdate}
           fullWidth

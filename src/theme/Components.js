@@ -73,6 +73,18 @@ export function getComponentOverrides(palette, typography) {
         root: StandardButton, // Same as MuiToggleButton
       },
     },
+    MuiInputBase: {
+      variants: [
+        {
+          props: {variant: 'edit'},
+          style: ({theme}) => ({
+            border: `1px solid ${theme.palette.primary.main}`,
+            padding: '.5em',
+            borderRadius: '10px',
+          }),
+        },
+      ],
+    },
     MuiCard: {
       styleOverrides: {
         root: {
