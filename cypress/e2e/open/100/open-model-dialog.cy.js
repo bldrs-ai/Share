@@ -13,7 +13,7 @@ import {
 /** {@link https://github.com/bldrs-ai/Share/issues/1159}*/
 describe('Open 100: Open model dialog', () => {
   beforeEach(homepageSetup)
-  context('First time user visits homepage not logged in ', () => {
+  context('First time user visits homepage not logged in', () => {
     beforeEach(() => {
       returningUserVisitsHomepageWaitForModel()
         cy.get('[data-testid="control-button-open"]').click()
