@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {ReactElement, useState, useEffect} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
@@ -180,8 +179,7 @@ export default function NoteCard({
    * @param {number} commentId
    */
     async function updateCommentGithub(commentId) {
-      const updatedComment = await updateComment(repository, commentId, editBody, accessToken)
-      console.log('updated comment', updatedComment.data)
+      await updateComment(repository, commentId, editBody, accessToken)
       setEditMode(false)
     }
 
