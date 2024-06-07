@@ -60,7 +60,7 @@ export default function OpenModelDialog({
       { currentTab === 1 &&
         <Stack
           justifyContent='center'
-          sx={{marginTop: '1em', paddingBottom: '1em', width: '17.5em'}}
+          sx={{marginTop: '1em', paddingBottom: '1em', maxWidth: '17.5em'}}
         >
           <SampleModels
             navigate={navigate}
@@ -73,7 +73,7 @@ export default function OpenModelDialog({
           direction='column'
           justifyContent='center'
           alignItems='center'
-          sx={{marginTop: '.5em', paddingBottom: '1em', width: '17.5em'}}
+          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '17.5em'}}
         >
           <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
             <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
