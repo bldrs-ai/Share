@@ -36,7 +36,6 @@ import {elementSelection} from './selection'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
-import {Mesh} from 'three'
 import {load} from '../loader/Loader'
 import Picker from '../view/Picker'
 
@@ -265,6 +264,7 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
+    console.log(`filepath: ${filepath}`)
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
     const ifcUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
@@ -350,7 +350,8 @@ export default function CadView({
     } else if (ifcUrl.endsWith('.ifc')) {
       loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
     } else {
-      loadedModel = await load(new URL(ifcUrl), viewer, onProgress, onError, onError)
+      loadedModel = await load(ifcUrl, viewer, onProgress, onError, onError)
+      // loadedModel = await load(new URL(ifcUrl), viewer, onProgress, onError, onError)
       viewer.context.scene.add(loadedModel)
     }
 
@@ -415,39 +416,27 @@ export default function CadView({
       return
     }
 
-    const ctx = viewer.context
-    const picker = new Picker(ctx)
-    const pickedAll = picker.castRay(ctx.scene.scene.children)
-    if (!pickedAll || pickedAll.length === 0) {
+    const picker = new Picker(viewer.context)
+    const pickedAll = picker.castRay(viewer.context.scene.scene.children)
+    if (pickedAll.length === 0) {
       return
     }
     const picked = pickedAll[0]
-    if (picked.object.expressID !== undefined) {
-      // TODO(pablo): in ifc there's faces within mesh.. should add support for
-      // similar in all formats loaders
-      const mesh = picked.object
-      viewer.setHighlighted([mesh])
+    const mesh = picked.object
+    // viewer.setHighlighted([mesh])
+    console.log('picked', picked, typeof mesh)
+    if (mesh.expressID !== undefined) {
       elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
     } else {
-      const eid = getExpressId(picked.object.geometry, picked.faceIndex)
+      const geom = mesh.geometry
+      if (!geom.index) {
+        throw new Error('Geometry does not have index information.')
+      }
+      const geoIndex = geom.index.array
+      const IdAttrName = 'expressID'
+      const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
       elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
     }
-  }
-
-
-  // TODO(pablo): move
-  /**
-   * @param {Mesh} geometry
-   * @param {number} faceIndex
-   * @return {number} expressId
-   */
-  function getExpressId(geometry, faceIndex) {
-    if (!geometry.index) {
-      throw new Error('Geometry does not have index information.')
-    }
-    const geoIndex = geometry.index.array
-    const IdAttrName = 'expressID'
-    return geometry.attributes[IdAttrName].getX(geoIndex[3 * faceIndex])
   }
 
 

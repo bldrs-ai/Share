@@ -18,22 +18,23 @@ import xyzToThree from './xyz'
 
 
 /**
- * @param {URL} url
+ * @param {string} path Either a url or filepath
  * @return {object|undefined} The model or undefined
  */
 export async function load(
-  url,
+  path,
   viewer,
   onProgress = (progressEvent) => debug().log('Loaders#load: progress: ', progressEvent),
   onUnknownType = (errEvent) => debug().error(errEvent),
   onError = (errEvent) => debug().error('Loaders#load: error: ', errEvent),
 ) {
-  assertDefined(url, onProgress, onUnknownType, onError)
-  assert(url instanceof URL)
+  assertDefined(path, onProgress, onUnknownType, onError)
+  // TODO(pablo): path feels a little underconstrained here.  axios works a
+  // little magic here, as either a url string or /foo.pdb work fine
 
-  const [loader, isLoaderAsync, isFormatText, fixupCb] = findLoader(url.pathname)
+  const [loader, isLoaderAsync, isFormatText, fixupCb] = findLoader(path)
   debug().log(
-    `Loader#load, pathname=${url.pathname} loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText}`)
+    `Loader#load, path=${path} loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText}`)
 
   if (loader === undefined) {
     onUnknownType()
@@ -41,7 +42,7 @@ export async function load(
   }
 
   const modelData = (await axios.get(
-    url.toString(),
+    path,
     {
       responseType:
       isFormatText ? 'text' : 'arraybuffer',
@@ -50,7 +51,7 @@ export async function load(
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
-  const basePath = url.href.substring(0, url.href.lastIndexOf('/') + 1)
+  const basePath = path.substring(0, path.lastIndexOf('/') + 1)
   let model = await readModel(loader, modelData, basePath, isLoaderAsync)
 
   if (fixupCb) {
@@ -87,7 +88,17 @@ function convertToShareModel(model, viewer) {
     const ids = new Int8Array(1)
     ids[0] = id
     obj3d.geometry = obj3d.geometry || {attributes: {}}
-    obj3d.geometry.attributes.expressID = new BufferAttribute(ids, 1)
+    // obj3d.geometry.attributes = new BufferAttribute(ids, 1)
+    const expressIdAttr = new BufferAttribute(ids, 1)
+    obj3d.geometry.attributes.expressID = expressIdAttr
+    expressIdAttr.onUpload(() => {})
+    console.log('obj3d', obj3d)
+    const geomIndex = new Array(5000)
+    for (let i = 0; i < 5000; i++) {
+      geomIndex[i] = obj3d.expressID
+    }
+    // throw new Error('obj3d')
+    // obj3d.geometry.index = {array: geomIndex}
     if (obj3d.children && obj3d.children.length > 0) {
       obj3d.children.forEach((m) => recursiveDecorate(m))
     }

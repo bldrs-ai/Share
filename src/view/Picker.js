@@ -25,7 +25,7 @@ export default class Picker {
    * subgraphs.
    *
    * @param {Array<Object3D>} items
-   * @return {Array<Object3D>}
+   * @return {Array<Object3D>|null}
    */
   castRay(items) {
     const camera = this.context.getCamera()
