@@ -90,7 +90,7 @@ export default function ProfileControl() {
         </MenuItem>
         <MenuItem onClick={() => window.open(`https://github.com/bldrs-ai/Share/wiki`, '_blank')} data-testid='login-with-github'>
           <InfoOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>BLDRS Wiki</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Bldrs Wiki</Typography>
         </MenuItem>
         <Divider/>
         <MenuItem
