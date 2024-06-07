@@ -80,7 +80,7 @@ function AboutContent() {
           />
         </Stack>
         <Stack align='left' >
-          <Typography variant='overline' sx={{lineHeight: '2em'}}>
+          <Typography variant='overline' sx={{lineHeight: '1.9em'}}>
             Welcome to Share, we aim to make sharing IFCs an absolute delight.
             Share is built on top of Bldrs Engine and tightly integrates with GitHub for collaboration and versioning.
             <br/>
@@ -88,7 +88,7 @@ function AboutContent() {
             <br/>
             Open Dialog contains projects to sample.
             <br/>
-            <Typography variant='overline' sx={{fontWeight: 'bold'}}>Try magic wand for Ai rendering.</Typography>
+            <Typography variant='overline' sx={{ineHeight: '1.9em', fontWeight: 'bold'}}>Try magic wand for Ai rendering.</Typography>
           </Typography>
         </Stack>
       </Stack>
