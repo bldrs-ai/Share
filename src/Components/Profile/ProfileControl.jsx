@@ -31,6 +31,7 @@ export default function ProfileControl() {
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
 
   const onLoginClick = async () => {
+    onCloseClick()
     await loginWithPopup({
       appState: {
         returnTo: window.location.pathname,
@@ -39,6 +40,7 @@ export default function ProfileControl() {
   }
   const onLogoutClick = () => {
     logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
+    onCloseClick()
   }
   const onCloseClick = () => setAnchorEl(null)
 
