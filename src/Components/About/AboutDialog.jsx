@@ -82,7 +82,8 @@ function AboutContent() {
         <Stack align='left' >
           <Typography variant='overline' sx={{lineHeight: '2em'}}>
             Welcome to Share, we aim to make sharing IFCs an absolute delight.
-            Share is built on top of Bldrs Engine and tightly integrate with GitHub for collaboration and versioning.
+            Share is built on top of Bldrs Engine and tightly integrates with GitHub for collaboration and versioning.
+            <br/>
             We can open IFC and STEP files.
             <br/>
             Open Dialog contains projects to sample.
