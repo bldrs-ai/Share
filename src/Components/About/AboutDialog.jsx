@@ -8,9 +8,7 @@ import Dialog from '../Dialog'
 import {LogoBWithDomain} from '../Logo/Logo'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
-import LinkedInIcon from '@mui/icons-material/LinkedIn'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import TwitterIcon from '@mui/icons-material/Twitter'
 import DiscordIcon from '../../assets/icons/Discord.svg'
 
 
@@ -61,25 +59,11 @@ function AboutContent() {
         justifyContent='center'
         alignItems='center'
       >
-        <Stack spacing={2} direction='row'>
+        <Stack spacing={0} direction='row'>
           <TooltipIconButton
             title='Discord'
             onClick={() => window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')}
             icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
-            placement='bottom'
-            variant='noBackground'
-          />
-          <TooltipIconButton
-            title='Twitter'
-            onClick={() => window.open(`https://twitter.com/bldrs_ai`, '_blank')}
-            icon={<TwitterIcon className='icon-share'/>}
-            placement='bottom'
-            variant='noBackground'
-          />
-          <TooltipIconButton
-            title='LinkedIn'
-            onClick={() => window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')}
-            icon={<LinkedInIcon className='icon-share'/>}
             placement='bottom'
             variant='noBackground'
           />
