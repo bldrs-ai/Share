@@ -1,4 +1,5 @@
 import React, {ReactElement} from 'react'
+import Box from '@mui/material/Box'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
@@ -29,7 +30,7 @@ export default function AboutControl() {
   return (
     <ControlButtonWithHashState
       title={`Bldrs: ${PkgJson.version}`}
-      icon={<LogoB/>}
+      icon={<Box sx={{marginTop: '10px'}}><LogoB/></Box>}
       isDialogDisplayed={isAboutVisible}
       setIsDialogDisplayed={setIsAboutVisible}
       hashPrefix={HASH_PREFIX_ABOUT}
