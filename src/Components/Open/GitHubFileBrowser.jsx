@@ -3,11 +3,11 @@ import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useStore from '../../store/useStore'
-import Selector from './Selector'
-import SelectorSeparator from './SelectorSeparator'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
+import Selector from './Selector'
+import SelectorSeparator from './SelectorSeparator'
 
 
 /**
@@ -115,7 +115,7 @@ export default function GitHubFileBrowser({
     <Stack data-testid={'stack_gitHub_access_controls'}>
       <Stack>
           <Typography variant='overline'>
-            Open file from Github
+            Browse files on Github
           </Typography>
           <Selector
             label='Organization'

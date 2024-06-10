@@ -10,7 +10,7 @@ describe('GitHubFileBrowser', () => {
 
   it('renders all the UI elements', () => {
     render(<GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user}/>)
-    expect(screen.getByText(/Open file from Github/i)).toBeInTheDocument()
+    expect(screen.getByText(/Browse files on Github/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Organization/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Repository/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Folder/i)).toBeInTheDocument()

@@ -1,6 +1,5 @@
 import React, {ReactElement, useState} from 'react'
 import {Grid, Chip, Typography} from '@mui/material'
-import {handleBeforeUnload} from '../../utils/event'
 import Momentum from '../../assets/icons/Momentum.svg'
 import Eisvogel from '../../assets/icons/Eisvogel.svg'
 import Seestrasse from '../../assets/icons/Seestrasse.svg'
@@ -43,7 +42,6 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
 
   const handleSelect = (modelName, closeDialog) => {
     setSelected(modelName)
-    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[modelName]})
     closeDialog()
   }

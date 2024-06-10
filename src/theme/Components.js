@@ -118,7 +118,7 @@ export function getComponentOverrides(palette, typography) {
           'borderColor': theme.palette.primary.main,
           'backgroundColor': theme.palette.secondary.main,
           'color': theme.palette.primary.contrastText,
-          'width': '10em',
+          'width': '11em',
           'height': '6em',
           'display': 'flex',
           'justifyContent': 'center',

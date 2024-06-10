@@ -1,20 +1,19 @@
 import React, {ReactElement} from 'react'
-import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
-import Divider from '@mui/material/Divider'
+import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {checkOPFSAvailability} from '../../OPFS/utils'
+import useStore from '../../store/useStore'
+import {handleBeforeUnload} from '../../utils/event'
+import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import Dialog from '../Dialog'
+import {useIsMobile} from '../Hooks'
+import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import Dialog from '../Dialog'
-import Tabs from '../Tabs'
-import useStore from '../../store/useStore'
-import {checkOPFSAvailability} from '../../OPFS/utils'
-import {handleBeforeUnload} from '../../utils/event'
-import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {useIsMobile} from '../Hooks'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 
@@ -31,7 +30,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = ['Project', 'Samples']
+  const tabLabels = ['Local', 'Github', 'Samples']
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -57,10 +56,10 @@ export default function OpenModelDialog({
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
       <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
-      { currentTab === 1 &&
+      { currentTab === 2 &&
         <Stack
           justifyContent='center'
-          sx={{marginTop: '1em', paddingBottom: '1em', maxWidth: '17.5em'}}
+          sx={{marginTop: '1em', paddingBottom: '1em', maxWidth: '18.5em'}}
         >
           <SampleModels
             navigate={navigate}
@@ -73,19 +72,29 @@ export default function OpenModelDialog({
           direction='column'
           justifyContent='center'
           alignItems='center'
-          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '17.5em'}}
+          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '18.5em'}}
         >
           <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
             <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
-              Open File
+              Browse files...
             </Button>
-          {!isMobile && <Typography variant='caption'> Files can be opened by dragging and dropping them into the viewport</Typography>}
-          {isAuthenticated && !isMobile && <Divider sx={{paddingBottom: '.2em'}}/>}
-          {isAuthenticated && isMobile && <Divider sx={{paddingTop: '.5em'}}/>}
+            {!isMobile && <Typography variant='caption'> Files can be opened by dragging and dropping them into the viewport</Typography>}
           </Stack>
+        </Stack>
+      }
+      { currentTab === 1 &&
+        <Stack
+          spacing={1}
+          direction='column'
+          justifyContent='center'
+          alignItems='center'
+          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '18.5em'}}
+        >
+          <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
           {isAuthenticated &&
           <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-          {!isAuthenticated && <Box sx={{width: '92%', textAlign: 'left'}}><PleaseLogin/></Box>}
+          {!isAuthenticated && <Box sx={{width: '100%', textAlign: 'left'}}><PleaseLogin/></Box>}
+          </Stack>
         </Stack>
       }
     </Dialog>
