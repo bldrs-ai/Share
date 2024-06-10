@@ -27,7 +27,7 @@ describe('Open 100: Open model from GH via UI', () => {
     const interceptTag = 'ghOpenModelLoad'
     it('Opens a model from Github via the UI - Screen', () => {
       cy.get('[data-testid="control-button-open"]').click()
-      cy.findByText('Project').click()
+      cy.findByText('Github').click()
       cy.findByLabelText('Organization', {timeout: 5000}).click()
       cy.contains('@cypresstester').click()
       cy.findByLabelText('Repository').eq(0).click()
