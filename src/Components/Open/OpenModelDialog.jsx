@@ -75,9 +75,9 @@ export default function OpenModelDialog({
         { currentTab === 1 &&
           <>
             <SearchBar placeholder='Model URL'/>
-              {isAuthenticated &&
-              <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-              {!isAuthenticated && <Box sx={{width: '94%', textAlign: 'left'}}><PleaseLogin/></Box>}
+            {isAuthenticated &&
+            <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
+            {!isAuthenticated && <Box sx={{width: '94%', textAlign: 'left'}}><PleaseLogin/></Box>}
           </>
         }
         { currentTab === 2 &&
