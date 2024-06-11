@@ -70,7 +70,10 @@ export default function AlertAndSnackbar() {
         message={
             <Typography
               variant='body2'
-              sx={{maxWidth: '19em'}}
+              sx={{
+                maxWidth: '19em',
+                overflowWrap: 'break-word',
+              }}
             >
               {text}
             </Typography>
