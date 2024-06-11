@@ -8,6 +8,7 @@ import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
 import CloseIcon from '@mui/icons-material/Close'
+import {Typography} from '@mui/material'
 
 
 /** @return {ReactElement} */
@@ -17,7 +18,7 @@ export default function AlertAndSnackbar() {
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
-  const [isSnackOpen, setIsSnackOpen] = useState(false)
+  const [isSnackOpen, setIsSnackOpen] = useState(true)
   const [text, setText] = useState(null)
   const [duration, setDuration] = useState(null)
 
@@ -26,7 +27,7 @@ export default function AlertAndSnackbar() {
 
   useEffect(() => {
     if (snackMessage === null) {
-      setIsSnackOpen(false)
+      setIsSnackOpen(true)
       return
     }
     if (typeof snackMessage === 'string') {
@@ -58,10 +59,23 @@ export default function AlertAndSnackbar() {
         autoHideDuration={duration}
         open={isSnackOpen}
         onClose={(event, reason) => setIsSnackOpen(false)}
+        action={
+            <IconButton
+              onClick={() => setIsSnackOpen(false)}
+              size='small'
+              sx={{marginRight: '-.7em'}}
+            >
+                <CloseIcon color='primary' fontSize="inherit"/>
+            </IconButton>
+          }
         message={
-          <Stack direction='row'>
-            {text}
-            <IconButton onClick={() => setIsSnackOpen(false)}><CloseIcon className='icon-share'/></IconButton>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography>{text}</Typography>
           </Stack>
         }
         data-testid='snackbar'

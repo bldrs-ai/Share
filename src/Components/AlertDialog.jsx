@@ -3,9 +3,8 @@ import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import IconButton from '@mui/material/IconButton'
+import Button from '@mui/material/IconButton'
 import useStore from '../store/useStore'
-import CheckIcon from '@mui/icons-material/Check'
 
 
 /** @return {ReactElement} */
@@ -28,7 +27,7 @@ export default function AlertDialog({onClose, children}) {
         {alertMessage}
       </DialogContent>
       <DialogActions>
-        <IconButton onClick={onCloseInner}><CheckIcon/></IconButton>
+        <Button onClick={onCloseInner}>ok</Button>
       </DialogActions>
     </Dialog>
   )
