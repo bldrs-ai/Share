@@ -12,9 +12,10 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
+ * @property {sting} placeholder
  * @return {ReactElement}
  */
-export default function SearchBar() {
+export default function SearchBar({placeholder}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -84,7 +85,7 @@ export default function SearchBar() {
     <form onSubmit={onSubmit} style={{width: '100%'}}>
       <Autocomplete
         freeSolo
-        options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
+        options={[]}
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
@@ -96,7 +97,7 @@ export default function SearchBar() {
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder='Search'
+            placeholder={placeholder}
             variant='outlined'
             sx={{
               width: '100%',

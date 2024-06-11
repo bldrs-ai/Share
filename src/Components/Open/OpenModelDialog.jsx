@@ -8,6 +8,7 @@ import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
 import {handleBeforeUnload} from '../../utils/event'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import SearchBar from '../Search/SearchBar'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
@@ -56,47 +57,36 @@ export default function OpenModelDialog({
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
       <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
-      { currentTab === 2 &&
-        <Stack
-          justifyContent='center'
-          sx={{marginTop: '1em', paddingBottom: '1em', maxWidth: '18.5em'}}
-        >
-          <SampleModels
-            navigate={navigate}
-            setIsDialogDisplayed={setIsDialogDisplayed}
-          />
-        </Stack> }
-      { currentTab === 0 &&
         <Stack
           spacing={1}
           direction='column'
           justifyContent='center'
           alignItems='center'
-          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '18.5em'}}
+          sx={{padding: '1em 0em', maxWidth: '18.5em'}}
         >
-          <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
+        { currentTab === 0 &&
+          <Stack spacing={1} sx={{width: '92%'}}>
             <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
               Browse files...
             </Button>
             {!isMobile && <Typography variant='caption'> Files can be opened by dragging and dropping them into the viewport</Typography>}
           </Stack>
+        }
+        { currentTab === 1 &&
+          <>
+            <SearchBar placeholder='Model URL'/>
+              {isAuthenticated &&
+              <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
+              {!isAuthenticated && <Box sx={{width: '94%', textAlign: 'left'}}><PleaseLogin/></Box>}
+          </>
+        }
+        { currentTab === 2 &&
+          <SampleModels
+          navigate={navigate}
+          setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        }
         </Stack>
-      }
-      { currentTab === 1 &&
-        <Stack
-          spacing={1}
-          direction='column'
-          justifyContent='center'
-          alignItems='center'
-          sx={{marginTop: '.5em', paddingBottom: '1em', maxWidth: '18.5em'}}
-        >
-          <Stack spacing={1} sx={{marginTop: '.5em', width: '92%'}}>
-          {isAuthenticated &&
-          <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-          {!isAuthenticated && <Box sx={{width: '100%', textAlign: 'left'}}><PleaseLogin/></Box>}
-          </Stack>
-        </Stack>
-      }
     </Dialog>
   )
 }
