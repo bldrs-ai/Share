@@ -2,7 +2,6 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
-import Stack from '@mui/material/Stack'
 import AlertDialog from '../Components/AlertDialog'
 import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
@@ -18,7 +17,7 @@ export default function AlertAndSnackbar() {
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
-  const [isSnackOpen, setIsSnackOpen] = useState(true)
+  const [isSnackOpen, setIsSnackOpen] = useState(false)
   const [text, setText] = useState(null)
   const [duration, setDuration] = useState(null)
 
@@ -27,7 +26,7 @@ export default function AlertAndSnackbar() {
 
   useEffect(() => {
     if (snackMessage === null) {
-      setIsSnackOpen(true)
+      setIsSnackOpen(false)
       return
     }
     if (typeof snackMessage === 'string') {
@@ -45,7 +44,6 @@ export default function AlertAndSnackbar() {
     setIsSnackOpen(true)
   }, [snackMessage, setIsSnackOpen])
 
-
   return (
     <>
       <AlertDialog
@@ -57,6 +55,7 @@ export default function AlertAndSnackbar() {
       <Snackbar
         anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
         autoHideDuration={duration}
+        sx={{marginBottom: '-.5em'}}
         open={isSnackOpen}
         onClose={(event, reason) => setIsSnackOpen(false)}
         action={
@@ -69,14 +68,12 @@ export default function AlertAndSnackbar() {
             </IconButton>
           }
         message={
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="space-between"
-          >
-            <Typography>{text}</Typography>
-          </Stack>
+            <Typography
+              variant='body2'
+              sx={{maxWidth: '19em'}}
+            >
+              {text}
+            </Typography>
         }
         data-testid='snackbar'
       />

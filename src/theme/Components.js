@@ -185,10 +185,17 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiLink: {
+      styleOverrides: {
+        root: {
+          color: palette.primary.contrastText,
+          textDecoration: 'underline',
+        },
+      },
+    },
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          // backgroundColor: palette.primary.main,
           borderRadius: '10px',
         },
       },
@@ -212,9 +219,7 @@ export function getComponentOverrides(palette, typography) {
     MuiTextField: {
       styleOverrides: {
         root: {
-          // backgroundColor: palette.primary.main,
           borderRadius: '10px',
-          // opacity: .9,
         },
       },
     },
