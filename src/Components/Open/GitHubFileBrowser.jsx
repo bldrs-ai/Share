@@ -1,11 +1,14 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useState} from 'react'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import useStore from '../../store/useStore'
+import {navigateBaseOnModelPath} from '../../utils/location'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
+import useStore from '../../store/useStore'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
@@ -27,14 +30,14 @@ export default function GitHubFileBrowser({
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFolderName, setSelectedFolderName] = useState('')
-  const [selectedFileName, setSelectedFileName] = useState('')
+  const [selectedFileIndex, setSelectedFileIndex] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  const fileName = filesArr[selectedFileName]
+  const fileName = filesArr[selectedFileIndex]
 
   const selectOrg = async (org) => {
     setSelectedOrgName(org)
@@ -49,7 +52,7 @@ export default function GitHubFileBrowser({
     setCurrentPath('')
     setFoldersArr([''])
     setSelectedFolderName('')
-    setSelectedFileName('')
+    setSelectedFileIndex('')
     setSelectedRepoName('')
   }
 
@@ -68,7 +71,7 @@ export default function GitHubFileBrowser({
     setFoldersArr([...foldersArrWithSeparator])
     setCurrentPath('')
     setSelectedFolderName('')
-    setSelectedFileName('')
+    setSelectedFileIndex('')
   }
 
   const selectFolder = async (folderIndex) => {
@@ -106,8 +109,9 @@ export default function GitHubFileBrowser({
   }
 
   const navigateToFile = () => {
-    if (filesArr[selectedFileName].includes('.ifc')) {
-      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main${currentPath}/${fileName}`})
+    if (pathSuffixSupported(fileName)) {
+      // TODO(oleg): https://github.com/bldrs-ai/Share/issues/1215
+      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', fileName)})
       setIsDialogDisplayed(false)
     }
   }
@@ -142,14 +146,14 @@ export default function GitHubFileBrowser({
           <Selector
             label='File'
             list={filesArr}
-            selected={selectedFileName}
-            setSelected={setSelectedFileName}
+            selected={selectedFileIndex}
+            setSelected={setSelectedFileIndex}
             data-testid='openFile'
           />
       </Stack>
       <Button
         onClick={navigateToFile}
-        disabled={selectedFileName === ''}
+        disabled={selectedFileIndex === ''}
         variant='contained'
         data-testid='button-openfromgithub'
       >

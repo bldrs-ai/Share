@@ -1,5 +1,4 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -77,7 +76,7 @@ export default function OpenModelDialog({
             <SearchBar placeholder='Model URL'/>
             {isAuthenticated &&
             <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-            {!isAuthenticated && <Box sx={{width: '94%', textAlign: 'left'}}><PleaseLogin/></Box>}
+            {!isAuthenticated && <PleaseLogin/>}
           </>
         }
         { currentTab === 2 &&

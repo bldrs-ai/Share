@@ -1,13 +1,24 @@
 import React, {ReactElement} from 'react'
+import Paper from '@mui/material/Box'
 import Link from '@mui/material/Link'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 
 
 /** @return {ReactElement} */
 export default function PleaseLogin() {
+  const theme = useTheme()
   return (
-    <Paper sx={{padding: '10px'}} data-testid={'container-please-login'}>
+    <Paper
+    data-testid={'container-please-login'}
+    sx={{
+      width: '94%',
+      textAlign: 'left',
+      borderRadius: '10px',
+      backgroundColor: theme.palette.secondary.main,
+      padding: '10px',
+    }}
+    >
       <Typography variant={'caption'}>
         Host your model on GitHub and log in to Share with your GitHub credentials to access and share your projects.
         <br/>
