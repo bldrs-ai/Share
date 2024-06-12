@@ -1,4 +1,5 @@
 import React, {ReactElement} from 'react'
+import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
@@ -20,8 +21,8 @@ export default function PleaseLogin() {
     }}
     >
       <Typography variant={'caption'}>
-        Host your model on GitHub and log in to Share with your GitHub credentials to access and share your projects.
-        <br/>
+        Host your model on GitHub and log in to Share with your GitHub credentials to access and share your projects
+        <Divider sx={{margin: '.5em 0em'}}/>
          Visit our{' '}
         <Link
           href='https://github.com/bldrs-ai/Share/wiki'
@@ -29,7 +30,7 @@ export default function PleaseLogin() {
           variant='caption'
         >
           wiki
-        </Link> to learn more about GitHub.
+        </Link> to learn more about GitHub
       </Typography>
     </Paper>
   )
