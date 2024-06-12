@@ -25,7 +25,7 @@ describe('Open 100: Open model dialog', () => {
       cy.percySnapshot()
     })
     it('Open button is visible', () => {
-      cy.get('[data-testid="Local"]').click()
+      cy.get('[data-testid="tab-local"]').click()
       cy.get('[data-testid="button_open_file"]').contains('Browse files...')
       cy.percySnapshot()
     })
