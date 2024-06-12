@@ -1,13 +1,13 @@
 import React, {ReactElement, useState} from 'react'
 import {Grid, Chip, Typography} from '@mui/material'
-import Momentum from '../../assets/icons/Momentum.svg'
+import Bplaza from '../../assets/icons/Bplaza.svg'
 import Eisvogel from '../../assets/icons/Eisvogel.svg'
+import Gear from '../../assets/icons/Gear.svg'
+import Momentum from '../../assets/icons/Momentum.svg'
+import Placeholder from '../../assets/icons/Placeholder.svg'
+import Schependomlaan from '../../assets/icons/Schependomlaan.svg'
 import Seestrasse from '../../assets/icons/Seestrasse.svg'
 import Sheenstock from '../../assets/icons/Sheenstock.svg'
-import Placeholder from '../../assets/icons/Placeholder.svg'
-import Gear from '../../assets/icons/Gear.svg'
-import Bplaza from '../../assets/icons/Bplaza.svg'
-import Schependomlaan from '../../assets/icons/Schependomlaan.svg'
 
 
 /**

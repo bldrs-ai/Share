@@ -17,7 +17,7 @@ describe('Open Model Dialog', () => {
     const GithubTab = getByText('Github')
     fireEvent.click(GithubTab)
     const loginTextMatcher = (content, node) => {
-      const hasText = (_node) => _node.textContent.includes('Host your IFC models on GitHub and log in to Share')
+      const hasText = (_node) => _node.textContent.includes('Host your model on GitHub and log in to Share')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
           (child) => !hasText(child),

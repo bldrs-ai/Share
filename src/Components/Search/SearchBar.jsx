@@ -12,7 +12,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
- * @property {Sting} placeholder Text to display from search bar is inactive
+ * @property {sting} placeholder Text to display from search bar is inactive
  * @return {ReactElement}
  */
 export default function SearchBar({placeholder}) {

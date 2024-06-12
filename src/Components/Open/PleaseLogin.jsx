@@ -7,9 +7,9 @@ import Typography from '@mui/material/Typography'
 /** @return {ReactElement} */
 export default function PleaseLogin() {
   return (
-    <Paper sx={{padding: '10px'}} data-testid={'container_please_login'}>
+    <Paper sx={{padding: '10px'}} data-testid={'container-please-login'}>
       <Typography variant={'caption'}>
-        Host your IFC models on GitHub and log in to Share with your GitHub credentials to access and share your projects.
+        Host your model on GitHub and log in to Share with your GitHub credentials to access and share your projects.
         <br/>
          Visit our{' '}
         <Link
