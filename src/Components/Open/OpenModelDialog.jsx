@@ -68,12 +68,22 @@ export default function OpenModelDialog({
             <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
               Browse files...
             </Button>
-            {!isMobile && <Typography variant='caption'> Files can be opened by dragging and dropping them into the viewport</Typography>}
+            {!isMobile &&
+              <Typography
+                variant='caption'
+                sx={{textAlign: 'left'}}
+              >
+                Drag and Drop files into viewport to open.
+              </Typography>}
           </Stack>
         }
         { currentTab === 1 &&
           <>
-            <SearchBar placeholder='Model URL'/>
+            <>
+              <SearchBar placeholder='Model URL'
+                helperText='Paste GitHub model link to open.'
+              />
+            </>
             {isAuthenticated &&
             <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
             {!isAuthenticated && <PleaseLogin/>}

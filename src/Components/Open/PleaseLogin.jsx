@@ -14,9 +14,9 @@ export default function PleaseLogin() {
     sx={{
       width: '94%',
       textAlign: 'left',
-      borderRadius: '10px',
+      borderRadius: '.5em',
       backgroundColor: theme.palette.secondary.main,
-      padding: '10px',
+      padding: '.5em 1em',
     }}
     >
       <Typography variant={'caption'}>

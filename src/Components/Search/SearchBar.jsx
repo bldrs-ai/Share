@@ -12,10 +12,11 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
- * @property {string} placeholder Text to display from search bar is inactive
+ * @property {string} placeholder Text to display when search bar is inactive
+ * @property {string} helperText Text to display under the TextField
  * @return {ReactElement}
  */
-export default function SearchBar({placeholder}) {
+export default function SearchBar({placeholder, helperText}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -99,6 +100,7 @@ export default function SearchBar({placeholder}) {
             error={!!error.length}
             placeholder={placeholder}
             variant='outlined'
+            helperText={helperText}
             sx={{
               width: '100%',
             }}
