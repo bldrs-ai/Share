@@ -151,7 +151,7 @@ export default function GitHubFileBrowser({
         onClick={navigateToFile}
         disabled={selectedFileName === ''}
         variant='contained'
-        data-testid='openFromGithub'
+        data-testid='button-openfromgithub'
       >
         Open from Github
       </Button>

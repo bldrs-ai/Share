@@ -19,7 +19,7 @@ export default function Tabs({tabLabels, currentTab, actionCb, isScrollable = fa
   }
   return (
     <MuiTabs value={value} onChange={handleChange} centered variant={isScrollable ? 'scrollable' : 'fullWidth'}>
-      {tabLabels.map((tab) => <Tab key={tab} label={tab} data-testid={tab}/>)}
+      {tabLabels.map((tab) => <Tab key={tab} label={tab} data-testid={`tab-${tab.toLowerCase()}`}/>)}
     </MuiTabs>
   )
 }

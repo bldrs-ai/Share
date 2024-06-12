@@ -34,7 +34,7 @@ describe('Open 100: Open model from GH via UI', () => {
       cy.contains('test-repo').click()
       cy.findByLabelText('File').eq(0).click()
       cy.contains('window.ifc').click()
-      cy.get('[data-testid="openFromGithub"]').click()
+      cy.get('[data-testid="button-openfromgithub"]').click()
       waitForModelReady(interceptTag)
       cy.get('body').find('[data-testid="mui-dialog"]').should('not.exist')
       cy.percySnapshot()
