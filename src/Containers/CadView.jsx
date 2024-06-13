@@ -2,13 +2,11 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import Link from '@mui/material/Link'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
+import AlertMessage from '../Components/Help/AlertMessage'
 import {onHash} from '../Components/Camera/CameraControl'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import ElementGroup from '../Components/ElementGroup'
@@ -199,46 +197,7 @@ export default function CadView({
     debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(
-        <Stack spacing={2} sx={{padding: '1em 1em'}}>
-          <Stack spacing={1}>
-          <Typography variant='overline' sx={{fontWeight: 'bold', lineHeight: '1.5em'}}>
-            Could not load the model
-          </Typography>
-          <Typography variant='overline' sx={{lineHeight: '1.5em'}}>
-          - Please check the model path
-          </Typography>
-          <Typography variant='overline' sx={{lineHeight: '1.5em'}}>
-          - Login to access private models
-          </Typography>
-          <Typography variant='overline' sx={{lineHeight: '1.5em'}}>
-          - Visit our{' '}
-          <Link
-              variant='caption'
-              sx={{
-                width: '360px',
-                letterSpacing: '.2em',
-              }}
-              href={pathToLoad}
-          >
-            wiki
-          </Link>
-          {' '}to learn more
-          </Typography>
-          </Stack>
-          <Stack spacing={0}>
-            <Typography variant='overline'sx={{fontWeight: 'bold'}}>Model Path:</Typography>
-            <Link
-              variant='caption'
-              sx={{
-                maxWidth: '320px',
-              }}
-              href={pathToLoad.split('/').slice(0, -2).join('/')}
-            >
-              {pathToLoad.split('/').slice(0, -2).join('/')}
-            </Link>
-          </Stack>
-        </Stack>)
+      setAlertMessage(<AlertMessage pathToLoad={pathToLoad}/>)
       return
     }
     // Leave snack message until here so alert box handler can clear
