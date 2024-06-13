@@ -73,7 +73,7 @@ export default function OpenModelDialog({
                 variant='caption'
                 sx={{textAlign: 'left'}}
               >
-                Drag and Drop files into viewport to open.
+                Drag and Drop files into viewport to open
               </Typography>}
           </Stack>
         }
