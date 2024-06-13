@@ -88,7 +88,7 @@ function AboutContent() {
             <br/>
             Open Dialog contains projects to sample.
             <br/>
-            <Typography variant='overline' sx={{ineHeight: '1.4em'}}>Try magic wand for Ai rendering.</Typography>
+            Try magic wand for Ai rendering.
           </Typography>
         </Stack>
       </Stack>
