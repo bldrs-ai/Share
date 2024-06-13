@@ -2,11 +2,11 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
-import AlertMessage from '../Components/Help/AlertMessage'
 import {onHash} from '../Components/Camera/CameraControl'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import ElementGroup from '../Components/ElementGroup'
@@ -197,7 +197,11 @@ export default function CadView({
     debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(<AlertMessage pathToLoad={pathToLoad}/>)
+      setAlertMessage(
+        <>
+          <Typography variant=''>Could not load model</Typography>
+          <Typography>{pathToLoad}</Typography>
+        </>)
       return
     }
     // Leave snack message until here so alert box handler can clear
