@@ -21,7 +21,7 @@ export default function PleaseLogin() {
     }}
     >
       <Typography variant={'caption'}>
-        Host your model on GitHub and log in to Share with your GitHub credentials to access and share your library projects
+        Host your model on GitHub and log in to Share with your GitHub credentials to access and share your library of projects
         <Divider sx={{margin: '.5em 0em'}}/>
          Visit our{' '}
         <Link
