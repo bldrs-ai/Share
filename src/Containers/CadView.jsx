@@ -2,6 +2,8 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
+import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
@@ -198,10 +200,45 @@ export default function CadView({
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
-        <>
-          <Typography variant=''>Could not load model</Typography>
-          <Typography>{pathToLoad}</Typography>
-        </>)
+        <Stack spacing={2} sx={{padding: '1em 1em'}}>
+          <Stack spacing={0}>
+          <Typography variant='overline' sx={{fontWeight: 'bold'}}>
+            Could not load the model
+          </Typography>
+          <Typography variant='overline'>
+          - Please check the model path
+          </Typography>
+          <Typography variant='overline'>
+          - Login to access private models
+          </Typography>
+          <Typography variant='overline'>
+          - Visit our{' '}
+          <Link
+              variant='caption'
+              sx={{
+                width: '360px',
+                letterSpacing: '.2em',
+              }}
+              href={pathToLoad}
+          >
+            wiki
+          </Link>
+          {' '}to learn more
+          </Typography>
+          </Stack>
+          <Stack spacing={0}>
+            <Typography variant='overline'>Repo:</Typography>
+            <Link
+              variant='caption'
+              sx={{
+                maxWidth: '320px',
+              }}
+              href={pathToLoad.split('/').slice(0, -2).join('/')}
+            >
+              {pathToLoad.split('/').slice(0, -2).join('/')}
+            </Link>
+          </Stack>
+        </Stack>)
       return
     }
     // Leave snack message until here so alert box handler can clear
