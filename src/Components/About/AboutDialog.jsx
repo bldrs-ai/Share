@@ -3,7 +3,6 @@ import {Helmet} from 'react-helmet-async'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
 import {LogoBWithDomain} from '../Logo/Logo'
@@ -53,7 +52,6 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
 
 /** @return {ReactElement} */
 function AboutContent() {
-  const theme = useTheme()
   return (
     <>
       <Helmet>
@@ -69,14 +67,14 @@ function AboutContent() {
           <TooltipIconButton
             title='Discord'
             onClick={() => window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')}
-            icon={<DiscordIcon className='icon-share' style={{width: '100px', color: theme.palette.primary.sceneHighlight}}/>}
+            icon={<DiscordIcon className='icon-share' style={{width: '100px', color: 'grey'}}/>}
             placement='bottom'
             variant='noBackground'
           />
           <TooltipIconButton
             title='GitHub'
             onClick={() => window.open(`https://github.com/bldrs-ai/Share`, '_blank')}
-            icon={<GitHubIcon className='icon-share' style={{color: theme.palette.primary.sceneHighlight}}/>}
+            icon={<GitHubIcon className='icon-share' style={{color: 'grey'}}/>}
             placement='bottom'
             variant='noBackground'
           />
