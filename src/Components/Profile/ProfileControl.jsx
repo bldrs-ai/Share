@@ -97,7 +97,6 @@ export default function ProfileControl() {
         <Divider/>
         <MenuItem
           onClick={() => {
-            onCloseClick()
             theme.toggleColorMode()
           }}
           data-testid={`change-theme-to-${isDay ? 'night' : 'day'}`}
