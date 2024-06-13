@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+
 import React, {ReactElement, useState} from 'react'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
@@ -111,7 +111,7 @@ export default function GitHubFileBrowser({
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
       // TODO(oleg): https://github.com/bldrs-ai/Share/issues/1215
-      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', fileName)})
+      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', `/${fileName}`)})
       setIsDialogDisplayed(false)
     }
   }
