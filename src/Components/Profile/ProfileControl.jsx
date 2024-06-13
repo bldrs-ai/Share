@@ -86,11 +86,11 @@ export default function ProfileControl() {
           </>
            }
         </MenuItem>
-        <MenuItem onClick={() => window.open(`https://github.com/signup`, '_blank')} data-testid='login-with-github'>
+        <MenuItem onClick={() => window.open(`https://github.com/signup`, '_blank')} data-testid='link-join-github'>
           <GitHubIcon/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Join GitHub</Typography>
         </MenuItem>
-        <MenuItem onClick={() => window.open(`https://github.com/bldrs-ai/Share/wiki`, '_blank')} data-testid='login-with-github'>
+        <MenuItem onClick={() => window.open(`https://github.com/bldrs-ai/Share/wiki`, '_blank')} data-testid='link-bldrs-wiki'>
           <InfoOutlinedIcon/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Bldrs Wiki</Typography>
         </MenuItem>
