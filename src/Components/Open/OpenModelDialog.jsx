@@ -71,7 +71,6 @@ export default function OpenModelDialog({
             {!isMobile &&
               <Typography
                 variant='caption'
-                sx={{textAlign: 'left'}}
               >
                 Drag and Drop files into viewport to open
               </Typography>}
