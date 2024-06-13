@@ -117,16 +117,13 @@ export default function SearchBar() {
                   <IconButton
                     aria-label="clear search"
                     onClick={() => setInputText('')}
-                    edge="end"
-                    sx={{
-                      'height': '2.2em',
-                      'width': '2.2em',
-                      '&:hover': {
-                        backgroundColor: 'transparent',
-                      },
-                    }}
+                    sx={{height: '2em', width: '2em'}}
                   >
-                    <CloseIcon className="icon-share"/>
+                    <CloseIcon
+                      className="icon-share"
+                      color='primary'
+                      fontSize="small"
+                    />
                   </IconButton>
                 </InputAdornment>
               ),
