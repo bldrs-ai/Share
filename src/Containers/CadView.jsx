@@ -202,11 +202,12 @@ export default function CadView({
       setAlertMessage(
           <Stack spacing={0}>
             <Typography variant='overline'>Could not load the model</Typography>
-            <Typography variant='overline'>Repo:</Typography>
+            <Typography variant='overline'>Check the file path:</Typography>
             <Link
               variant='caption'
               sx={{
                 maxWidth: '320px',
+                overflowWrap: 'break-word',
               }}
               href={pathToLoad.split('/').slice(0, -2).join('/')}
             >
@@ -398,7 +399,14 @@ export default function CadView({
             <Stack spacing={0}>
               <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
               <Typography variant='overline'>Check the file path:</Typography>
-              <Link variant='caption' href={filepath}>
+              <Link
+                variant='caption'
+                href={filepath}
+                sx={{
+                  maxWidth: '320px',
+                  overflowWrap: 'break-word',
+                }}
+              >
                 {filepath}
               </Link>
               <Typography variant='overline'>Log in if repository is private</Typography>
