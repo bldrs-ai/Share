@@ -4,6 +4,7 @@ import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import Link from '@mui/material/Link'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -60,8 +61,19 @@ export default function AlertDialog({onClose, children}) {
               <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
               <Typography variant='overline'>Log in if repository is private</Typography>
               <Typography variant='overline'>Check the file path:</Typography>
-              <Typography variant='body2' sx={{maxWidth: '360px', overflowWrap: 'break-word'}}>
+              <Typography variant='body2'
+                sx={{
+                  maxWidth: '360px',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                  whiteSpace: 'normal',
+                }}
+              >
                 {alertMessage}
+              </Typography>
+              <Typography variant='overline'>
+              Contact us on our{' '}
+              <Link href={'https://discord.gg/9SxguBkFfQ'}>discord</Link>
               </Typography>
             </Stack>
         </Stack>
