@@ -1,6 +1,8 @@
 import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {handleBeforeUnload} from '../../utils/event'
@@ -77,13 +79,20 @@ export default function SearchBar({placeholder, helperText}) {
     searchInputRef.current.blur()
   }
 
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      onSubmit(event)
+    }
+  }
+
 
   // The container and paper are set to 100% width to fill the
   // container SearchBar shares with NavTreePanel.  This is an easier
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{width: '100%'}}>
+    <form onSubmit={onSubmit}>
       <Autocomplete
         freeSolo
         options={[]}
@@ -104,7 +113,26 @@ export default function SearchBar({placeholder, helperText}) {
             sx={{
               width: '100%',
             }}
+            multiline
+            onKeyDown={handleKeyDown}
             data-testid='textfield-search-query'
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="clear search"
+                    onClick={() => setInputText('')}
+                    sx={{height: '2em', width: '2em'}}
+                  >
+                    <CloseIcon
+                      className="icon-share"
+                      color='primary'
+                      fontSize="small"
+                    />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
         )}
       />

@@ -167,9 +167,16 @@ export function getComponentOverrides(palette, typography) {
     MuiListItem: {
       styleOverrides: {
         root: {
-          padding: '0.5em 0',
+          padding: '.5em 0',
         },
       },
+      variants: [{
+        // Used in HelpControl to indicate activity state
+        props: {variant: 'alert'},
+        style: {
+          padding: '.2em 0',
+        },
+      }],
     },
     MuiMenuItem: {
       styleOverrides: {
@@ -218,10 +225,17 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiLink: {
+      styleOverrides: {
+        root: {
+          color: palette.primary.contrastText,
+          textDecoration: 'underline',
+        },
+      },
+    },
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          // backgroundColor: palette.primary.main,
           borderRadius: '10px',
         },
       },
@@ -254,9 +268,7 @@ export function getComponentOverrides(palette, typography) {
     MuiTextField: {
       styleOverrides: {
         root: {
-          // backgroundColor: palette.primary.main,
           borderRadius: '10px',
-          // opacity: .9,
         },
       },
     },
