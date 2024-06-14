@@ -200,33 +200,8 @@ export default function CadView({
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
-        <Stack spacing={2} sx={{padding: '1em 1em'}}>
           <Stack spacing={0}>
-          <Typography variant='overline' sx={{fontWeight: 'bold'}}>
-            Could not load the model
-          </Typography>
-          <Typography variant='overline'>
-          - Please check the model path
-          </Typography>
-          <Typography variant='overline'>
-          - Login to access private models
-          </Typography>
-          <Typography variant='overline'>
-          - Visit our{' '}
-          <Link
-              variant='caption'
-              sx={{
-                width: '360px',
-                letterSpacing: '.2em',
-              }}
-              href={pathToLoad}
-          >
-            wiki
-          </Link>
-          {' '}to learn more
-          </Typography>
-          </Stack>
-          <Stack spacing={0}>
+            <Typography variant='overline'>Could not load the model</Typography>
             <Typography variant='overline'>Repo:</Typography>
             <Link
               variant='caption'
@@ -237,14 +212,20 @@ export default function CadView({
             >
               {pathToLoad.split('/').slice(0, -2).join('/')}
             </Link>
-          </Stack>
-        </Stack>)
+          </Stack>)
       return
     }
+      setAlertMessage(
+          <Stack spacing={0}>
+            <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
+            <Typography variant='overline'>Check the file path:</Typography>
+            <Link variant='caption' href={pathToLoad.split('/').slice(0, -2).join('/')}>
+              {pathToLoad.split('/').slice(0, -2).join('/')}
+            </Link>
+          </Stack>)
     // Leave snack message until here so alert box handler can clear
     // it after user says OK.
     setSnackMessage(null)
-
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
