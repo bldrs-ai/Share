@@ -5,9 +5,6 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
 import {RectangularButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
@@ -55,16 +52,8 @@ export default function AlertDialog({onClose, children}) {
           </Paper>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{width: '340px', textAlign: 'left'}}>
-        <Stack spacing={0} sx={{padding: '1em 1em'}}>
+      <DialogContent sx={{textAlign: 'left'}}>
           {alertMessage}
-          <br/>
-          <Typography variant='overline'>
-            Contact us on our{' '}
-            <Link href={'https://discord.gg/9SxguBkFfQ'}>discord</Link>
-            {' '}for help
-          </Typography>
-        </Stack>
       </DialogContent>
       <DialogActions >
         <RectangularButton onClick={onCloseInner} variant='outline' title='Reset'/>

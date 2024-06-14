@@ -200,21 +200,23 @@ export default function CadView({
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
+        <Stack spacing={0} sx={{padding: '1em 1em'}}>
           <Stack spacing={0}>
             <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
             <Typography variant='overline'>Log in if repository is private</Typography>
             <Typography variant='overline'>Check the file path:</Typography>
             <Link
-              variant='caption'
+              variant='body2'
               sx={{
-                maxWidth: '320px',
+                maxWidth: '300px',
                 overflowWrap: 'break-word',
               }}
               href={pathToLoad.split('/').slice(0, -2).join('/')}
             >
               {pathToLoad.split('/').slice(0, -2).join('/')}
             </Link>
-          </Stack>)
+          </Stack>
+        </Stack>)
       return
     }
     // Leave snack message until here so alert box handler can clear
@@ -397,21 +399,23 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsModelLoading(false)
           setAlertMessage(
+          <Stack spacing={0} sx={{padding: '1em 1em'}}>
             <Stack spacing={0}>
               <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
               <Typography variant='overline'>Log in if repository is private</Typography>
               <Typography variant='overline'>Check the file path:</Typography>
               <Link
-                variant='caption'
-                href={filepath}
+                variant='body2'
                 sx={{
-                  maxWidth: '320px',
+                  maxWidth: '300px',
                   overflowWrap: 'break-word',
                 }}
+                href={filepath}
               >
                 {filepath}
               </Link>
-            </Stack>)
+            </Stack>
+          </Stack>)
         }, customViewSettings)
     }
 
