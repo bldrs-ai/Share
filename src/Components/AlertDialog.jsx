@@ -1,10 +1,12 @@
 import React, {ReactElement} from 'react'
+import Box from '@mui/material/Box'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Paper from '@mui/material/Paper'
-import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
+import Typography from '@mui/material/Typography'
 import {RectangularButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
@@ -53,7 +55,14 @@ export default function AlertDialog({onClose, children}) {
         </Box>
       </DialogTitle>
       <DialogContent sx={{textAlign: 'left'}}>
-          {alertMessage}
+        <Stack spacing={0} sx={{padding: '1em'}}>
+            <Stack spacing={0}>
+              <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
+              <Typography variant='overline'>Log in if repository is private</Typography>
+              <Typography variant='overline'>Check the file path:</Typography>
+              {alertMessage}
+            </Stack>
+        </Stack>
       </DialogContent>
       <DialogActions >
         <RectangularButton onClick={onCloseInner} variant='outline' title='Reset'/>

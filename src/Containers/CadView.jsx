@@ -2,8 +2,6 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
@@ -200,23 +198,7 @@ export default function CadView({
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
-        <Stack spacing={0} sx={{padding: '1em 1em'}}>
-          <Stack spacing={0}>
-            <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
-            <Typography variant='overline'>Log in if repository is private</Typography>
-            <Typography variant='overline'>Check the file path:</Typography>
-            <Link
-              variant='body2'
-              sx={{
-                maxWidth: '300px',
-                overflowWrap: 'break-word',
-              }}
-              href={pathToLoad.split('/').slice(0, -2).join('/')}
-            >
-              {pathToLoad.split('/').slice(0, -2).join('/')}
-            </Link>
-          </Stack>
-        </Stack>)
+        <Typography variant='caption'>{pathToLoad}</Typography>)
       return
     }
     // Leave snack message until here so alert box handler can clear
@@ -399,23 +381,7 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsModelLoading(false)
           setAlertMessage(
-          <Stack spacing={0} sx={{padding: '1em 1em'}}>
-            <Stack spacing={0}>
-              <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
-              <Typography variant='overline'>Log in if repository is private</Typography>
-              <Typography variant='overline'>Check the file path:</Typography>
-              <Link
-                variant='body2'
-                sx={{
-                  maxWidth: '300px',
-                  overflowWrap: 'break-word',
-                }}
-                href={filepath}
-              >
-                {filepath}
-              </Link>
-            </Stack>
-          </Stack>)
+            <Typography variant='caption'>{filePath}</Typography>)
         }, customViewSettings)
     }
 
