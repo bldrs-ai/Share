@@ -55,7 +55,7 @@ export default function AlertAndSnackbar() {
       <Snackbar
         anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
         autoHideDuration={duration}
-        sx={{marginBottom: '-.5em'}}
+        sx={{marginBottom: '-.3em'}}
         open={isSnackOpen}
         onClose={(event, reason) => setIsSnackOpen(false)}
         action={
