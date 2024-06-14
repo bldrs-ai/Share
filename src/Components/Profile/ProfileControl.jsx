@@ -98,6 +98,7 @@ export default function ProfileControl() {
         <MenuItem
           onClick={() => {
             theme.toggleColorMode()
+            onCloseClick()
           }}
           data-testid={`change-theme-to-${isDay ? 'night' : 'day'}`}
         >
