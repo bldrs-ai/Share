@@ -2,7 +2,6 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
@@ -99,7 +98,7 @@ export default function CadView({
   const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
-  const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const setErrorPath = useStore((state) => state.setErrorPath)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
@@ -185,7 +184,6 @@ export default function CadView({
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
-
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
@@ -198,17 +196,12 @@ export default function CadView({
     debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(
-        <>
-          <Typography variant=''>Could not load model</Typography>
-          <Typography>{pathToLoad}</Typography>
-        </>)
+      setErrorPath(pathToLoad)
       return
     }
     // Leave snack message until here so alert box handler can clear
     // it after user says OK.
     setSnackMessage(null)
-
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -385,7 +378,7 @@ export default function CadView({
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
           setIsModelLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+          setErrorPath(filePath)
         }, customViewSettings)
     }
 
