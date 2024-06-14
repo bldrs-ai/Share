@@ -25,7 +25,8 @@ export default function AlertDialog({onClose, children}) {
   }
   return (
     <Dialog
-      open={alertMessage !== null}
+      // open={alertMessage !== null}
+      open={true}
       onClose={onCloseInner}
       aria-labelledby='alert-dialog-title'
       aria-describedby='alert-dialog-description'

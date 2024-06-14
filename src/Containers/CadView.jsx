@@ -222,6 +222,7 @@ export default function CadView({
             <Link variant='caption' href={pathToLoad.split('/').slice(0, -2).join('/')}>
               {pathToLoad.split('/').slice(0, -2).join('/')}
             </Link>
+            <Typography variant='overline'>Log in if repository is private</Typography>
           </Stack>)
     // Leave snack message until here so alert box handler can clear
     // it after user says OK.
@@ -403,6 +404,15 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsModelLoading(false)
           setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+          setAlertMessage(
+            <Stack spacing={0}>
+              <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
+              <Typography variant='overline'>Check the file path:</Typography>
+              <Link variant='caption' href={filepath}>
+                {filepath}
+              </Link>
+              <Typography variant='overline'>Log in if repository is private</Typography>
+            </Stack>)
         }, customViewSettings)
     }
 
