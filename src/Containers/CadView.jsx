@@ -98,7 +98,7 @@ export default function CadView({
   const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
-  const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const setErrorPath = useStore((state) => state.setErrorPath)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
@@ -196,7 +196,7 @@ export default function CadView({
     debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(pathToLoad)
+      setErrorPath(pathToLoad)
       return
     }
     // Leave snack message until here so alert box handler can clear
@@ -378,7 +378,7 @@ export default function CadView({
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
           setIsModelLoading(false)
-          setAlertMessage(filePath)
+          setErrorPath(filePath)
         }, customViewSettings)
     }
 

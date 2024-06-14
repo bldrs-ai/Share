@@ -19,16 +19,16 @@ import useTheme from '@mui/styles/useTheme'
 
 /** @return {ReactElement} */
 export default function AlertDialog({onClose, children}) {
-  const alertMessage = useStore((state) => state.alertMessage)
-  const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const errorPath = useStore((state) => state.errorPath)
+  const setErrorPath = useStore((state) => state.setErrorPath)
   const theme = useTheme()
   const onCloseInner = () => {
-    setAlertMessage(null)
+    setErrorPath(null)
     onClose()
   }
   return (
     <Dialog
-      open={alertMessage !== null}
+      open={errorPath !== null}
       onClose={onCloseInner}
       aria-labelledby='alert-dialog-title'
       aria-describedby='alert-dialog-description'
@@ -94,7 +94,7 @@ export default function AlertDialog({onClose, children}) {
                 >
                   Check the file path:
                   <br/>
-                  {alertMessage}
+                  {errorPath}
                 </Typography>
               }
             />
