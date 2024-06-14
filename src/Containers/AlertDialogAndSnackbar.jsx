@@ -62,7 +62,7 @@ export default function AlertAndSnackbar() {
             <IconButton
               onClick={() => setIsSnackOpen(false)}
               size='small'
-              sx={{marginRight: '-.7em'}}
+              sx={{marginRight: '-.5em'}}
             >
                 <CloseIcon color='primary' fontSize="inherit"/>
             </IconButton>
