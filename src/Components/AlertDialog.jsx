@@ -60,7 +60,7 @@ export default function AlertDialog({onClose, children}) {
               <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
               <Typography variant='overline'>Log in if repository is private</Typography>
               <Typography variant='overline'>Check the file path:</Typography>
-              <Typography variant='body2' sx={{maxWidth: '360px', overflowWrap: 'break-word'}}>{alertMessage}</Typography>)
+              <Typography variant='body2' sx={{maxWidth: '360px', overflowWrap: 'break-word'}}>{alertMessage}</Typography>
             </Stack>
         </Stack>
       </DialogContent>
