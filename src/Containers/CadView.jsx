@@ -201,7 +201,7 @@ export default function CadView({
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
           <Stack spacing={0}>
-            <Typography variant='overline'>Could not load the model</Typography>
+            <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
             <Typography variant='overline'>Check the file path:</Typography>
             <Link
               variant='caption'
@@ -213,6 +213,7 @@ export default function CadView({
             >
               {pathToLoad.split('/').slice(0, -2).join('/')}
             </Link>
+            <Typography variant='overline'>Log in if repository is private</Typography>
           </Stack>)
       return
     }
