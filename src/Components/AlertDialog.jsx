@@ -58,6 +58,7 @@ export default function AlertDialog({onClose, children}) {
       <DialogContent sx={{width: '340px', textAlign: 'left'}}>
         <Stack spacing={0} sx={{padding: '1em 1em'}}>
           {alertMessage}
+          <br/>
           <Typography variant='overline'>
             Contact us on our{' '}
             <Link href={'https://discord.gg/9SxguBkFfQ'}>discord</Link>

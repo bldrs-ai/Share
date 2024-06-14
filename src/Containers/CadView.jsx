@@ -202,6 +202,7 @@ export default function CadView({
       setAlertMessage(
           <Stack spacing={0}>
             <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
+            <Typography variant='overline'>Log in if repository is private</Typography>
             <Typography variant='overline'>Check the file path:</Typography>
             <Link
               variant='caption'
@@ -213,7 +214,6 @@ export default function CadView({
             >
               {pathToLoad.split('/').slice(0, -2).join('/')}
             </Link>
-            <Typography variant='overline'>Log in if repository is private</Typography>
           </Stack>)
       return
     }
@@ -399,6 +399,7 @@ export default function CadView({
           setAlertMessage(
             <Stack spacing={0}>
               <Typography variant='overline' sx={{fontWeight: 'bold'}}>Could not load the model</Typography>
+              <Typography variant='overline'>Log in if repository is private</Typography>
               <Typography variant='overline'>Check the file path:</Typography>
               <Link
                 variant='caption'
@@ -410,7 +411,6 @@ export default function CadView({
               >
                 {filepath}
               </Link>
-              <Typography variant='overline'>Log in if repository is private</Typography>
             </Stack>)
         }, customViewSettings)
     }
