@@ -6,14 +6,18 @@ import LoginMenu from './ProfileControl'
 
 
 describe('ProfileControl', () => {
-  it('renders the login button when not logged in', async () => {
+  it('renders the login button when not logged in, and other links', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
     const LoginWithGithub = await findByText('Log in with Github')
+    const JoinGithub = await findByText('Join GitHub')
+    const BldrsWiki = await findByText('Bldrs Wiki')
     expect(LoginWithGithub).toBeInTheDocument()
+    expect(JoinGithub).toBeInTheDocument()
+    expect(BldrsWiki).toBeInTheDocument()
   })
 
   it('renders the user avatar when logged in', async () => {
