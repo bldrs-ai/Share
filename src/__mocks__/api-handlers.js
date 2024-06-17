@@ -244,6 +244,12 @@ function githubHandlers(githubStore) {
       )
     }),
 
+    rest.patch(`${GH_BASE}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
+      return res(
+          ctx.status(httpOk),
+      )
+    }),
+
     rest.get(`${GH_BASE}/user/orgs`, (req, res, ctx) => {
       const authHeader = req.headers.get('authorization')
 
