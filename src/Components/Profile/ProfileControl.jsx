@@ -1,5 +1,6 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import Avatar from '@mui/material/Avatar'
+import Divider from '@mui/material/Divider'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
@@ -9,6 +10,9 @@ import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined'
+import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 
 
@@ -27,6 +31,7 @@ export default function ProfileControl() {
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
 
   const onLoginClick = async () => {
+    onCloseClick()
     await loginWithPopup({
       appState: {
         returnTo: window.location.pathname,
@@ -35,6 +40,7 @@ export default function ProfileControl() {
   }
   const onLogoutClick = () => {
     logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
+    onCloseClick()
   }
   const onCloseClick = () => setAnchorEl(null)
 
@@ -64,17 +70,35 @@ export default function ProfileControl() {
         onClose={onCloseClick}
         anchorOrigin={{vertical: 'top', horizontal: 'left'}}
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
+        sx={{transform: 'translateX(-1em)'}}
+
       >
         <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
-          <GitHubIcon/>
+
           {isAuthenticated ?
-           <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography> :
-           <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>}
+          <>
+            <LogoutOutlinedIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography>
+          </> :
+          <>
+            <LoginOutlinedIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>
+          </>
+           }
         </MenuItem>
+        <MenuItem onClick={() => window.open(`https://github.com/signup`, '_blank')} data-testid='link-join-github'>
+          <GitHubIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Join GitHub</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => window.open(`https://github.com/bldrs-ai/Share/wiki`, '_blank')} data-testid='link-bldrs-wiki'>
+          <InfoOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Bldrs Wiki</Typography>
+        </MenuItem>
+        <Divider/>
         <MenuItem
           onClick={() => {
-            onCloseClick()
             theme.toggleColorMode()
+            onCloseClick()
           }}
           data-testid={`change-theme-to-${isDay ? 'night' : 'day'}`}
         >
