@@ -208,7 +208,7 @@ function githubHandlers(githubStore) {
     rest.post(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
 
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
+      if (org !== 'cypresstester' || repo !== 'Share' || !issueNumber) {
         return res(ctx.status(httpNotFound))
       }
       return res(
