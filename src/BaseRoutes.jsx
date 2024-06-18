@@ -1,7 +1,7 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
-import {checkOPFSAvailability} from './OPFS/utils'
+import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import useStore from './store/useStore'
@@ -46,6 +46,10 @@ export default function BaseRoutes({testElt = null}) {
   useEffect(() => {
     const checkAvailability = async () => {
       const available = await checkOPFSAvailability()
+
+      if (available) {
+        setUpGlobalDebugFunctions()
+      }
 
       setIsOpfsAvailable(available)
     }
