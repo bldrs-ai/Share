@@ -66,7 +66,7 @@ function githubHandlers(githubStore) {
 
     rest.get(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
-
+      // TODO(oleg) replace org with cypresstester https://github.com/bldrs-ai/Share/issues/1218
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return res(ctx.status(httpNotFound))
       }
@@ -218,6 +218,7 @@ function githubHandlers(githubStore) {
 
     rest.patch(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber`, (req, res, ctx) => {
       const {org, repo} = req.params
+      // TODO(oleg) add org cypresstester condition https://github.com/bldrs-ai/Share/issues/1218
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return res(
             ctx.status(httpNotFound),
@@ -234,7 +235,7 @@ function githubHandlers(githubStore) {
 
     rest.delete(`${GH_BASE}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       const {repo, commentId} = req.params
-
+      // TODO(oleg) add org cypresstester condition https://github.com/bldrs-ai/Share/issues/1218
       if (repo !== 'Share' || !commentId) {
         return res(ctx.status(httpNotFound))
       }
