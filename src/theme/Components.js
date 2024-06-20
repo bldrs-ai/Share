@@ -229,7 +229,9 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           color: palette.primary.contrastText,
-          textDecoration: 'underline',
+          textDecoration: 'none',
+          borderBottom: `1px solid ${palette.primary.main}`,
+          cursor: 'pointer',
         },
       },
     },

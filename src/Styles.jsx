@@ -62,6 +62,11 @@ export default function Styles({theme}) {
           height: '20px',
           fill: theme.palette.primary.contrastText,
         },
+        '.icon-social': {
+          width: '20px',
+          height: '20px',
+          fill: theme.palette.primary.main,
+        },
         '.icon-small': {
           width: '15px',
           height: '15px',

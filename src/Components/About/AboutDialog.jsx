@@ -30,7 +30,9 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
             <Link href='/'>
               <LogoBWithDomain/>
             </Link>
-            Build every thing together
+            <Typography variant={'body1'}>
+              Build every thing together
+            </Typography>
           </>
         )
       }
@@ -54,37 +56,42 @@ function AboutContent() {
         <title>About — bldrs.ai</title>
       </Helmet>
       <Stack
-        spacing={3}
+        spacing={2}
         direction='column'
         justifyContent='center'
         alignItems='center'
+        sx={{maxWidth: '22em'}}
       >
         <Stack spacing={0} direction='row'>
           <TooltipIconButton
             title='Discord'
             onClick={() => window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')}
-            icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
+            icon={<DiscordIcon className='icon-social' style={{width: '50px'}}/>}
             placement='bottom'
             variant='noBackground'
           />
           <TooltipIconButton
             title='GitHub'
             onClick={() => window.open(`https://github.com/bldrs-ai/Share`, '_blank')}
-            icon={<GitHubIcon className='icon-share'/>}
+            icon={<GitHubIcon className='icon-social' color='primary'/>}
             placement='bottom'
             variant='noBackground'
           />
         </Stack>
-        <Stack align='left'>
+        <Stack align='left' sx={{padding: '0 1em 1em 1em'}}>
           <Typography variant='body1'>
-            Upload your IFC model, position the camera, select elements,
-            crop the model using section planes and add notes; then share
-            the exact view using the generated link. Everyone has access
-            to the same context in model space.
-          </Typography>
-          <Typography variant='body1'>
-            &nbsp;<br/>
-            And try the magic wand!
+           Welcome to Share.
+           <br/>
+           We aim to make <Link>sharing BIM models</Link> an absolute delight.
+           <br/>
+           Share is built on top of Bldrs engine and tightly integrates with{' '}
+           <Link>Github</Link> for <Link>collaboration</Link> and <Link>versioning</Link>.
+           <br/>
+           We support IFC and STEP files.
+           <br/>
+           The <Link>open dialog</Link> contains projects to sample.
+           <br/>
+           Try <Link>magic wand</Link> for AI rendering.
           </Typography>
         </Stack>
       </Stack>
