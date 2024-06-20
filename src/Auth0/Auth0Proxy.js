@@ -85,7 +85,6 @@ export const MockAuth0Context = React.createContext({
  */
 export const useAuth0 = () => {
   const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
-
   if (useMock) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useContext(MockAuth0Context)
