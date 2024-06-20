@@ -36,7 +36,7 @@ export default function Selector({
       label={label}
       select
       size='small'
-      sx={{maxWidth: '260px', marginBottom: '.5em'}}
+      sx={{maxWidth: '260px'}}
       {...props}
     >
       {list.map((listMember, i) => {

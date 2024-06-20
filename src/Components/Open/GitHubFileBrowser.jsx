@@ -1,6 +1,6 @@
-
 import React, {ReactElement, useState} from 'react'
 import Button from '@mui/material/Button'
+import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import {navigateBaseOnModelPath} from '../../utils/location'
@@ -11,7 +11,6 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 import useStore from '../../store/useStore'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
-
 
 /**
  * @property {Function} navigate Callback from CadView to change page url
@@ -91,7 +90,7 @@ export default function GitHubFileBrowser({
       newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/')
     }
 
-    setSelectedFolderName('none')
+    setSelectedFolderName(foldersArr[folderIndex])
     setCurrentPath(newPath)
 
     const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
@@ -110,55 +109,68 @@ export default function GitHubFileBrowser({
 
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
-      // TODO(oleg): https://github.com/bldrs-ai/Share/issues/1215
+      // TODO: https://github.com/bldrs-ai/Share/issues/1215
       navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', `${currentPath}/${fileName}`)})
       setIsDialogDisplayed(false)
     }
   }
+
   return (
-    <Stack data-testid={'stack_gitHub_access_controls'}>
-      <Stack>
-          <Typography variant='overline'>
-            Browse files on Github
-          </Typography>
-          <Selector
-            label='Organization'
-            list={orgNamesArrWithAt}
-            selected={selectedOrgName}
-            setSelected={selectOrg}
-            data-testid='openOrganization'
-          />
-          <Selector
-            label='Repository'
-            list={repoNamesArr}
-            selected={selectedRepoName}
-            setSelected={selectRepo}
-            data-testid='openRepository'
-          />
-          <SelectorSeparator
-            label={(currentPath === '') ? 'Folder' :
-                    `Folder: ${currentPath}`}
-            list={foldersArr}
-            selected={selectedFolderName}
-            setSelected={selectFolder}
-            data-testid='saveFolder'
-          />
-          <Selector
-            label='File'
-            list={filesArr}
-            selected={selectedFileIndex}
-            setSelected={setSelectedFileIndex}
-            data-testid='openFile'
-          />
-      </Stack>
-      <Button
-        onClick={navigateToFile}
-        disabled={selectedFileIndex === ''}
-        variant='contained'
-        data-testid='button-openfromgithub'
-      >
-        Open from Github
-      </Button>
+    <Stack
+      spacing={1}
+      data-testid={'stack_gitHub_access_controls'}
+    >
+        <Typography variant='overline'>
+          Browse files on Github
+        </Typography>
+        <Selector
+          label='Organization'
+          list={orgNamesArrWithAt}
+          selected={selectedOrgName}
+          setSelected={selectOrg}
+          data-testid='openOrganization'
+        />
+        <Selector
+          label='Repository'
+          list={repoNamesArr}
+          selected={selectedRepoName}
+          setSelected={selectRepo}
+          data-testid='openRepository'
+        />
+        <Breadcrumbs
+          maxItems={2}
+          aria-label="breadcrumb"
+          sx={{width: '260px', paddingLeft: '.5em'}}
+        >
+          <Typography color="primary" variant='body2'>Main</Typography>
+          {currentPath.split('/').filter(Boolean).map((segment, index) => (
+            <Typography key={index} color="text.primary" variant='body2'>
+              {segment}
+            </Typography>
+          ))}
+        </Breadcrumbs>
+        <SelectorSeparator
+          label='Folder'
+          list={foldersArr}
+          selected={foldersArr[selectedFolderName]}
+          setSelected={selectFolder}
+          data-testid='saveFolder'
+        />
+        <Selector
+          label='File'
+          list={filesArr}
+          selected={selectedFileIndex}
+          setSelected={setSelectedFileIndex}
+          data-testid='openFile'
+        />
+        <Button
+          onClick={navigateToFile}
+          disabled={selectedFileIndex === ''}
+          variant='contained'
+          data-testid='button-openfromgithub'
+        >
+          Open from Github
+        </Button>
     </Stack>
   )
 }

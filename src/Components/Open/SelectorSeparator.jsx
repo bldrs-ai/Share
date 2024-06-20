@@ -28,7 +28,7 @@ export default function SelectorSeparator({
   }
   return (
     <TextField
-      sx={{width: '260px', marginBottom: '.5em'}}
+      sx={{width: '260px'}}
       value={selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
