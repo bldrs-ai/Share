@@ -15,6 +15,7 @@ import {handleBeforeUnload} from '../../utils/event'
  * @return {ReactElement}
  */
 export default function Selector({
+  disabled = false,
   setIsDialogDisplayed,
   label,
   selected,
@@ -37,6 +38,7 @@ export default function Selector({
       select
       size='small'
       sx={{maxWidth: '260px'}}
+      disabled={disabled}
       {...props}
     >
       {list.map((listMember, i) => {

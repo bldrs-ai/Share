@@ -38,6 +38,7 @@ export default function GitHubFileBrowser({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileIndex]
 
+
   const selectOrg = async (org) => {
     setSelectedOrgName(org)
     let repos
@@ -69,7 +70,7 @@ export default function GitHubFileBrowser({
     ]
     setFoldersArr([...foldersArrWithSeparator])
     setCurrentPath('')
-    setSelectedFolderName('')
+    // setSelectedFolderName('')
     setSelectedFileIndex('')
   }
 
@@ -136,15 +137,17 @@ export default function GitHubFileBrowser({
           selected={selectedRepoName}
           setSelected={selectRepo}
           data-testid='openRepository'
+          disabled={selectedOrgName.length === 0}
         />
         <Breadcrumbs
-          maxItems={2}
+          maxItems={4}
           aria-label="breadcrumb"
+          color='primary'
           sx={{width: '260px', paddingLeft: '.5em'}}
         >
           <Typography color="primary" variant='body2'>Main</Typography>
           {currentPath.split('/').filter(Boolean).map((segment, index) => (
-            <Typography key={index} color="text.primary" variant='body2'>
+            <Typography key={index} color="primary" variant='body2'>
               {segment}
             </Typography>
           ))}
@@ -152,9 +155,10 @@ export default function GitHubFileBrowser({
         <SelectorSeparator
           label='Folder'
           list={foldersArr}
-          selected={foldersArr[selectedFolderName]}
+          selected={selectedFolderName}
           setSelected={selectFolder}
           data-testid='saveFolder'
+          disabled={selectedRepoName.length === 0 && foldersArr.length === 1}
         />
         <Selector
           label='File'
@@ -162,6 +166,7 @@ export default function GitHubFileBrowser({
           selected={selectedFileIndex}
           setSelected={setSelectedFileIndex}
           data-testid='openFile'
+          disabled={selectedRepoName.length === 0}
         />
         <Button
           onClick={navigateToFile}
