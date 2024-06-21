@@ -32,6 +32,7 @@ export default function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed
   const [createFolderName, setCreateFolderName] = useState('')
   const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
+  const [selectedFileIndex, setSelectedFileIndex] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   // eslint-disable-next-line no-unused-vars
   const [filesArr, setFilesArr] = useState([''])
@@ -171,7 +172,7 @@ export default function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed
       headerText='Save'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle='Save model'
+      actionTitle={currentTab === 0 ? 'Save model' : 'Save version'}
       actionCb={saveFile}
     >
       <Stack
@@ -226,15 +227,26 @@ export default function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed
                </IconButton>
              </div>
            )}
-           <TextField
-             label='Enter file name'
-             variant='outlined'
-             size='small'
-             onChange={(e) => setSelectedFileName(e.target.value)}
-             onKeyDown={(e) => e.stopPropagation()}
-             sx={{marginBottom: '.5em'}}
-             data-testid='CreateFileId'
-           />
+          { currentTab === 0 &&
+            <TextField
+              label='Enter file name'
+              variant='outlined'
+              size='small'
+              onChange={(e) => setSelectedFileName(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              sx={{marginBottom: '.5em'}}
+              data-testid='CreateFileId'
+            />
+          }
+          { currentTab === 1 &&
+            <Selector
+              label='File'
+              list={filesArr}
+              selected={selectedFileIndex}
+              setSelected={setSelectedFileIndex}
+              data-testid='openFile'
+            />
+          }
          </Stack>
         </>
         }
