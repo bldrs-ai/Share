@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import Button from '@mui/material/Button'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Stack from '@mui/material/Stack'
@@ -32,15 +32,25 @@ export default function GitHubFileBrowser({
   const [selectedFileIndex, setSelectedFileIndex] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
+  const [loadingOrgs, setLoadingOrgs] = useState(true)
+  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(false)
+  const [loadingFiles, setLoadingFiles] = useState(false)
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileIndex]
 
+  useEffect(() => {
+    if (orgNamesArr.length > 0) {
+      setLoadingOrgs(false)
+    }
+  }, [orgNamesArr])
 
   const selectOrg = async (org) => {
     setSelectedOrgName(org)
+    setLoadingRepos(true)
     let repos
     if (orgNamesArr[org] === user.nickname) {
       repos = await getUserRepositories(accessToken)
@@ -54,10 +64,12 @@ export default function GitHubFileBrowser({
     setSelectedFolderName('')
     setSelectedFileIndex('')
     setSelectedRepoName('')
+    setLoadingRepos(false)
   }
 
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo)
+    setLoadingFolders(true)
     const owner = orgNamesArr[selectedOrgName]
     const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
 
@@ -70,47 +82,40 @@ export default function GitHubFileBrowser({
     ]
     setFoldersArr([...foldersArrWithSeparator])
     setCurrentPath('')
-    // setSelectedFolderName('')
     setSelectedFileIndex('')
+    setLoadingFolders(false)
   }
 
   const selectFolder = async (folderIndex) => {
     const owner = orgNamesArr[selectedOrgName]
-
-    // Get the selected folder name using the index
     const selectedFolderName_ = foldersArr[folderIndex]
-
     let newPath
     if (selectedFolderName_ === '[Parent Directory]') {
-      // Move one directory up
       const pathSegments = currentPath.split('/').filter(Boolean)
       pathSegments.pop()
       newPath = pathSegments.join('/')
     } else {
-      // Navigate into a subfolder or stay at the root
       newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/')
     }
 
     setSelectedFolderName(foldersArr[folderIndex])
     setCurrentPath(newPath)
-
+    setLoadingFiles(true)
     const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
-
-    // Adjust navigation options based on the current level
     const navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
 
     setFilesArr(fileNames)
     const foldersArrWithSeparator = [
-      ...navigationOptions, // All the folders
+      ...navigationOptions,
     ]
     setFoldersArr(foldersArrWithSeparator)
+    setLoadingFiles(false)
   }
 
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
-      // TODO: https://github.com/bldrs-ai/Share/issues/1215
       navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', `${currentPath}/${fileName}`)})
       setIsDialogDisplayed(false)
     }
@@ -121,61 +126,65 @@ export default function GitHubFileBrowser({
       spacing={1}
       data-testid={'stack_gitHub_access_controls'}
     >
-        <Typography variant='overline'>
-          Browse files on Github
-        </Typography>
-        <Selector
-          label='Organization'
-          list={orgNamesArrWithAt}
-          selected={selectedOrgName}
-          setSelected={selectOrg}
-          data-testid='openOrganization'
-        />
-        <Selector
-          label='Repository'
-          list={repoNamesArr}
-          selected={selectedRepoName}
-          setSelected={selectRepo}
-          data-testid='openRepository'
-          disabled={selectedOrgName.length === 0}
-        />
-        <Breadcrumbs
-          maxItems={4}
-          aria-label="breadcrumb"
-          color='primary'
-          sx={{width: '260px', paddingLeft: '.5em'}}
-        >
-          <Typography color="primary" variant='body2'>Main</Typography>
-          {currentPath.split('/').filter(Boolean).map((segment, index) => (
-            <Typography key={index} color="primary" variant='body2'>
-              {segment}
-            </Typography>
-          ))}
-        </Breadcrumbs>
-        <SelectorSeparator
-          label='Folder'
-          list={foldersArr}
-          selected={selectedFolderName}
-          setSelected={selectFolder}
-          data-testid='saveFolder'
-          disabled={selectedRepoName.length === 0 && foldersArr.length === 1}
-        />
-        <Selector
-          label='File'
-          list={filesArr}
-          selected={selectedFileIndex}
-          setSelected={setSelectedFileIndex}
-          data-testid='openFile'
-          disabled={selectedRepoName.length === 0}
-        />
-        <Button
-          onClick={navigateToFile}
-          disabled={selectedFileIndex === ''}
-          variant='contained'
-          data-testid='button-openfromgithub'
-        >
-          Open from Github
-        </Button>
+      <Typography variant='overline'>
+        Browse files on Github
+      </Typography>
+      <Selector
+        label='Organization'
+        list={orgNamesArrWithAt}
+        selected={selectedOrgName}
+        setSelected={selectOrg}
+        loading={loadingOrgs || undefined}
+        data-testid='openOrganization'
+      />
+      <Selector
+        label='Repository'
+        list={repoNamesArr}
+        loading={loadingRepos || undefined}
+        selected={selectedRepoName}
+        setSelected={selectRepo}
+        data-testid='openRepository'
+        disabled={selectedOrgName.length === 0}
+      />
+      <Breadcrumbs
+        maxItems={4}
+        aria-label="breadcrumb"
+        color='primary'
+        sx={{width: '260px', paddingLeft: '.5em'}}
+      >
+        <Typography color="primary" variant='body2'>Path:</Typography>
+        {currentPath.split('/').filter(Boolean).map((segment, index) => (
+          <Typography key={index} color="primary" variant='body2'>
+            {segment}
+          </Typography>
+        ))}
+      </Breadcrumbs>
+      <SelectorSeparator
+        label='Folder'
+        list={foldersArr}
+        selected={selectedFolderName}
+        setSelected={selectFolder}
+        loading={loadingFolders || undefined}
+        data-testid='saveFolder'
+        disabled={selectedRepoName.length === 0 && foldersArr.length === 1}
+      />
+      <Selector
+        label='File'
+        list={filesArr}
+        selected={selectedFileIndex}
+        setSelected={setSelectedFileIndex}
+        loading={loadingFiles || undefined}
+        data-testid='openFile'
+        disabled={selectedRepoName.length === 0}
+      />
+      <Button
+        onClick={navigateToFile}
+        disabled={selectedFileIndex === ''}
+        variant='contained'
+        data-testid='button-openfromgithub'
+      >
+        Open from Github
+      </Button>
     </Stack>
   )
 }
