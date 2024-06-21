@@ -139,8 +139,8 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
         color: 0xff0000,
         depthTest: true,
       })
-      new Selection(this.context, this.IFC.loader, preselectMat).pick(picked)
-      // await this.IFC.selector.preselection.pick(picked)
+      // new Selection(this.context, this.IFC.loader, preselectMat).pick(picked)
+      await this.IFC.selector.preselection.pick(picked)
       this.highlightPreselection()
     }
   }

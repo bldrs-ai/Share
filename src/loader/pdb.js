@@ -51,6 +51,7 @@ export default function pdbToThree(pdb, viewer) {
 
     atomMesh.type = 'IFCOBJECT'
     atomMesh.expressID = i
+    atomMesh.modelID = 0
     const json = pdb.json
     const name = lookupName(json, i)
     // Verify format of json entry for this atom before trying to get name

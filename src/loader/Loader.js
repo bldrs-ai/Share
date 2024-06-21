@@ -85,20 +85,29 @@ function convertToShareModel(model, viewer) {
     obj3d.LongName = obj3d.LongName || {value: 'Object'}
     const id = objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
-    const ids = new Int8Array(1)
-    ids[0] = id
-    obj3d.geometry = obj3d.geometry || {attributes: {}}
-    // obj3d.geometry.attributes = new BufferAttribute(ids, 1)
-    const expressIdAttr = new BufferAttribute(ids, 1)
-    obj3d.geometry.attributes.expressID = expressIdAttr
-    expressIdAttr.onUpload(() => {})
-    console.log('obj3d', obj3d)
-    const geomIndex = new Array(5000)
-    for (let i = 0; i < 5000; i++) {
-      geomIndex[i] = obj3d.expressID
+    if (obj3d.geometry) {
+      const ids = new Int8Array(1)
+      ids[0] = id
+      // obj3d.geometry = obj3d.geometry || {attributes: {}}
+
+      //const ba = new BufferAttribute(ids, 1)
+      //ba.onUpload(() => {})
+
+      //obj3d.geometry.attributes = ba
+
+      const expressIdAttr = new BufferAttribute(ids, 1)
+      expressIdAttr.onUpload(() => {})
+
+      obj3d.geometry.attributes.expressID = expressIdAttr
+
+      // console.log('obj3d', obj3d)
+      const geomIndex = new Array(5000)
+      for (let i = 0; i < 5000; i++) {
+        geomIndex[i] = obj3d.expressID
+      }
+      // throw new Error('obj3d')
+      // obj3d.geometry.attributes.index = {array: geomIndex}
     }
-    // throw new Error('obj3d')
-    // obj3d.geometry.index = {array: geomIndex}
     if (obj3d.children && obj3d.children.length > 0) {
       obj3d.children.forEach((m) => recursiveDecorate(m))
     }
@@ -110,10 +119,10 @@ function convertToShareModel(model, viewer) {
   model.Name = model.Name || {value: 'Model'}
   model.LongName = model.LongName || {value: 'Model'}
 
-  model.ifcManager = {
-    getSpatialStructure: (modelId, flatten) => {
-      return model
-    },
+  console.log('viewer', viewer)
+  model.ifcManager = viewer.IFC
+  model.ifcManager.getSpatialStructure = (modelId, flatten) => {
+    return model
   }
 
   model.getIfcType = (eltType) => eltType
