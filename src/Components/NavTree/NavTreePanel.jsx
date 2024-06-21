@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import TreeView from '@mui/lab/TreeView'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -34,15 +34,16 @@ export default function NavTreePanel({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const expandedElements = useStore((state) => state.expandedElements)
   const expandedTypes = useStore((state) => state.expandedTypes)
+  const navigationMode = useStore((state) => state.navigationMode)
 
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
 
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
+  const setNavigationMode = useStore((state) => state.setNavigationMode)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
-  const [navigationMode, setNavigationMode] = useState('spatial-tree')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const idToRef = {}
 

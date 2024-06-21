@@ -30,6 +30,9 @@ export default function createNavTreeSlice(set, get) {
     toggleIsNavTreeVisible: () =>
       set((state) => ({isNavTreeVisible: !state.isNavTreeVisible})),
 
+    navigationMode: 'element-types',
+    setNavigationMode: (navMode) => set(() => ({navigationMode: navMode})),
+
     selectedElement: null,
     setSelectedElement: (elt) => set(() => ({selectedElement: elt})),
 
