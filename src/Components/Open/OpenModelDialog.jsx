@@ -1,20 +1,20 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useState} from 'react'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
+import {getFiles} from '../../net/github/Files'
 import useStore from '../../store/useStore'
+import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {handleBeforeUnload} from '../../utils/event'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
-import SearchBar from '../Search/SearchBar'
 import Dialog from '../Dialog'
-import {useIsMobile} from '../Hooks'
-import Tabs from '../Tabs'
-import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
-import SampleModels from './SampleModels'
-import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import SampleModelFileSelector from './SampleModelFileSelector'
+import Selector from './Selector'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
 /**
@@ -30,14 +30,19 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = ['Local', 'Github', 'Samples']
   const {isAuthenticated, user} = useAuth0()
+  const [selectedOrgName, setSelectedOrgName] = useState('')
+  const [selectedRepoName, setSelectedRepoName] = useState('')
+  const [selectedFileName, setSelectedFileName] = useState('')
+  const [repoNamesArr, setRepoNamesArr] = useState([''])
+  const [filesArr, setFilesArr] = useState([''])
+  const accessToken = useStore((state) => state.accessToken)
+  const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
+  const orgName = orgNamesArr[selectedOrgName]
+  const repoName = repoNamesArr[selectedRepoName]
+  const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
-  const setCurrentTab = useStore((state) => state.setCurrentTab)
-  const currentTab = useStore((state) => state.currentTab)
   const isOpfsAvailable = checkOPFSAvailability()
-  const isMobile = useIsMobile()
-
 
   const openFile = () => {
     if (isOpfsAvailable) {
@@ -48,53 +53,108 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
+  const selectOrg = async (org) => {
+    setSelectedOrgName(org)
+    let repos
+    if (orgNamesArr[org] === user.nickname) {
+      repos = await getUserRepositories(accessToken)
+    } else {
+      repos = await getRepositories(orgNamesArr[org], accessToken)
+    }
+    const repoNames = Object.keys(repos).map((key) => repos[key].name)
+    setRepoNamesArr(repoNames)
+  }
+
+  const selectRepo = async (repo) => {
+    setSelectedRepoName(repo)
+    const owner = orgNamesArr[selectedOrgName]
+    const files = await getFiles(owner, repoNamesArr[repo], accessToken)
+    const fileNames = Object.keys(files).map((key) => files[key].name)
+    setFilesArr(fileNames)
+  }
+
+  const navigateToFile = () => {
+    setIsDialogDisplayed(false)
+    if (filesArr[selectedFileName].includes('.ifc')) {
+      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
+    }
+  }
+
   return (
     <Dialog
-      headerIcon={<FolderOpenIcon className='icon-share'/>}
+      headerIcon={<CreateNewFolderIcon className='icon-share'/>}
       headerText='Open'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle='Open model'
+      actionCb={openFile}
     >
-      <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
-        <Stack
-          spacing={1}
-          direction='column'
-          justifyContent='center'
-          alignItems='center'
-          sx={{padding: '1em 0em', maxWidth: '18.5em'}}
-        >
-        { currentTab === 0 &&
-          <Stack spacing={1} sx={{width: '92%'}}>
-            <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
-              Browse files...
-            </Button>
-            {!isMobile &&
-              <Typography
-                variant='caption'
-              >
-                Drag and Drop files into viewport to open
-              </Typography>}
-          </Stack>
-        }
-        { currentTab === 1 &&
-          <>
-            <>
-              <SearchBar placeholder='Model URL'
-                helperText='Paste GitHub file link to open the model'
-              />
-            </>
-            {isAuthenticated &&
-            <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
-            {!isAuthenticated && <PleaseLogin/>}
-          </>
-        }
-        { currentTab === 2 &&
-          <SampleModels
-          navigate={navigate}
-          setIsDialogDisplayed={setIsDialogDisplayed}
+      <Stack
+        spacing={1}
+        direction='column'
+        justifyContent='center'
+        alignItems='center'
+      >
+        <>
+          <Typography
+            variant='overline'
+            sx={{marginBottom: '6px'}}
+          >
+            Browse sample models
+          </Typography>
+          <SampleModelFileSelector
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
           />
+        </>
+        {!isAuthenticated ?
+
+         <PleaseLogin/> :
+
+         <Stack alignItems='center'>
+           <Typography
+             variant='overline'
+             sx={{marginBottom: '6px'}}
+           >
+             Browse your GitHub projects
+           </Typography>
+           <Selector
+             label='Organization'
+             list={orgNamesArrWithAt}
+             selected={selectedOrgName}
+             setSelected={selectOrg}
+             data-testid='openOrganization'
+           />
+           <Selector
+             label='Repository'
+             list={repoNamesArr}
+             selected={selectedRepoName}
+             setSelected={selectRepo}
+             data-testid='openRepository'
+           />
+           <Selector
+             label='File'
+             list={filesArr}
+             selected={selectedFileName}
+             setSelected={setSelectedFileName}
+             data-testid='openFile'
+           />
+           {selectedFileName !== '' &&
+            <Box sx={{textAlign: 'center', marginTop: '4px'}}>
+              <Button onClick={navigateToFile}>
+                Load file
+              </Button>
+            </Box>
+           }
+         </Stack>
         }
-        </Stack>
+        <Typography
+          variant='overline'
+          sx={{marginBottom: '6px'}}
+        >
+          Open local model
+        </Typography>
+      </Stack>
     </Dialog>
   )
 }

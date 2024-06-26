@@ -15,7 +15,7 @@ describe('Save Model Dialog', () => {
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
     const loginTextMatcher = (content, node) => {
-      const hasText = (_node) => _node.textContent.includes('log in to Share with your GitHub credentials')
+      const hasText = (_node) => _node.textContent.includes('Please login to GitHub')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
           (child) => !hasText(child),

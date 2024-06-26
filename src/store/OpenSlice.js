@@ -9,7 +9,5 @@ export default function createOpenSlice(set, get) {
   return {
     isOpenEnabled: true,
     setIsOpenEnabled: (is) => set(() => ({isOpenEnabled: is})),
-    currentTab: 1,
-    setCurrentTab: (currentTab) => set(() => ({currentTab: currentTab})),
   }
 }
