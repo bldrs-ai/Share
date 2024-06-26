@@ -53,7 +53,7 @@ export const night = {
 
   // The 3d canvas and ControlButtons on it.
   primary: {
-    main: colors.grey.mediumdark,
+    main: colors.grey.dark,
     light: colors.grey.mediumdark,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,

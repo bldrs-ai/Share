@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -17,13 +17,8 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import useTheme from '@mui/styles/useTheme'
 
 
-/**
- * Alert Dialog is presented when a model cannot be loaded
- *
- * @property {Function} onClose trigger close of the dialog
- * @return {object} React component
- */
-export default function AlertDialog({onClose}) {
+/** @return {ReactElement} */
+export default function AlertDialog({onClose, children}) {
   const errorPath = useStore((state) => state.errorPath)
   const setErrorPath = useStore((state) => state.setErrorPath)
   const theme = useTheme()
@@ -31,17 +26,6 @@ export default function AlertDialog({onClose}) {
     setErrorPath(null)
     onClose()
   }
-
-  /**
-   * Insert the spaces after / _ character to make sure the string breaks correctly
-   *
-   * @property {string} str error path, usually a long string
-   * @return {string} formatted string
-   */
-  const insertZeroWidthSpaces = (str) => {
-    return str.replace(/([/_-])/g, '$1\u200B')
-  }
-
   return (
     <Dialog
       open={errorPath !== null}
@@ -108,10 +92,9 @@ export default function AlertDialog({onClose}) {
                     whiteSpace: 'normal',
                   }}
                 >
-                <Typography variant='body1' sx={{fontWeight: 'bold'}}>
                   Check the file path:
-                </Typography>
-                  {errorPath && insertZeroWidthSpaces(errorPath)}
+                  <br/>
+                  {errorPath}
                 </Typography>
               }
             />

@@ -22,7 +22,7 @@ describe('Open 100: Open Sample Model', () => {
     context('Select OpenModelControl > Sample Models', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-open"]').click()
-        cy.get('[data-testid="tab-samples"]').click()
+        cy.get('[data-testid="textfield-sample-projects"]').click()
       })
 
       it('Sample project list appears, including Momentum etc. - Screen', () => {
@@ -77,7 +77,7 @@ describe('Open 100: Open Sample Model', () => {
           interceptModelLoadTag,
         )
         cy.get('[data-testid="control-button-open"]').click()
-        cy.get('[data-testid="tab-samples"]').click()
+        cy.get('[data-testid="textfield-sample-projects"]').click()
         cy.findByText('Momentum').click()
         waitForModelReady(interceptModelLoadTag)
       })
