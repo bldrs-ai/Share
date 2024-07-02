@@ -31,49 +31,51 @@ export default function NotesControl() {
 
   // Fetch issues/notes
   useEffect(() => {
-    // TODO(pablo): NotesControl loads onViewer, bc viewer for non-logged in
-    // session is valid.  But!  When the model is private, there's a delayed
-    // load until after auth succeeds.  If we don't check model here, then Notes
-    // initially fails during an unauthenticated load via oauthproxy, which gets
-    // a 302 DIY, and somehow seems to keep that state in Octokit.
-    //
-    // We detect we're in a delayed load state here by checking model first,
-    // which then doesn't touch octokit until later when auth is available.
-    if (!model) {
-      return
-    }
-    (async () => {
-      toggleIsLoadingNotes()
-      try {
-        const newNotes = []
-        let issueIndex = 0
-        const issueArr = await getIssues(repository, accessToken)
-        debug().log('Notes#useEffect: issueArr: ', issueArr)
-
-        issueArr.reverse().map((issue, index) => {
-          newNotes.push({
-            index: issueIndex++,
-            id: issue.id,
-            number: issue.number,
-            title: issue.title || '',
-            body: issue.body || '',
-            date: issue.created_at,
-            username: issue.user.login,
-            avatarUrl: issue.user.avatar_url,
-            numberOfComments: issue.comments,
-            locked: issue.locked,
-            synched: true,
-          })
-        })
-        setNotes(newNotes)
-        toggleIsLoadingNotes()
-      } catch (e) {
-        setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
+    if (isNotesVisible) {
+      // TODO(pablo): NotesControl loads onViewer, bc viewer for non-logged in
+      // session is valid.  But!  When the model is private, there's a delayed
+      // load until after auth succeeds.  If we don't check model here, then Notes
+      // initially fails during an unauthenticated load via oauthproxy, which gets
+      // a 302 DIY, and somehow seems to keep that state in Octokit.
+      //
+      // We detect we're in a delayed load state here by checking model first,
+      // which then doesn't touch octokit until later when auth is available.
+      if (!model) {
+        return
       }
-    })()
+      (async () => {
+        toggleIsLoadingNotes()
+        try {
+          const newNotes = []
+          let issueIndex = 0
+          const issueArr = await getIssues(repository, accessToken)
+          debug().log('Notes#useEffect: issueArr: ', issueArr)
+
+          issueArr.reverse().map((issue, index) => {
+            newNotes.push({
+              index: issueIndex++,
+              id: issue.id,
+              number: issue.number,
+              title: issue.title || '',
+              body: issue.body || '',
+              date: issue.created_at,
+              username: issue.user.login,
+              avatarUrl: issue.user.avatar_url,
+              numberOfComments: issue.comments,
+              locked: issue.locked,
+              synched: true,
+            })
+          })
+          setNotes(newNotes)
+          toggleIsLoadingNotes()
+        } catch (e) {
+          setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
+        }
+      })()
+    }
     // TODO(pablo):
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, isCreateNoteVisible])
+  }, [isNotesVisible, model, isCreateNoteVisible])
 
 
   // TODO(pablo): hack, move into helper
