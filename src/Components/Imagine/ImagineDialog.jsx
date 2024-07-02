@@ -11,8 +11,9 @@ import debug from '../../utils/debug'
 import {RectangularButton} from '../Buttons'
 import Dialog from '../Dialog'
 import Loader from '../Loader'
-import ClearIcon from '@mui/icons-material/Clear'
-import BotIcon from '../../assets/icons/Bot2.svg'
+import CloseIcon from '@mui/icons-material/Close'
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
+// import BotIcon from '../../assets/icons/Bot2.svg'
 
 
 /**
@@ -71,14 +72,20 @@ export default function ImagineDialog({
 
   return (
     <Dialog
-      headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}
+      headerIcon={<AutoFixHighOutlinedIcon className='icon-share'/>}
       headerText={'Imagine'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
       <Helmet><title>{finalPrompt ? `Imagine: ${finalPrompt}` : 'Imagine'}</title></Helmet>
       <Stack
-        sx={{minHeight: '390px'}}
+        sx={{
+          'minHeight': '390px',
+          'minWidth': '25em',
+          '@media (max-width: 900px)': {
+            minWidth: '10em',
+          },
+        }}
       >
         <Box
           sx={{
@@ -96,10 +103,17 @@ export default function ImagineDialog({
              alt='Imagine'
              height='390px'
              data-testid='img-rendered'
+             style={{borderRadius: '10px'}}
            />}
         </Box>
-
-        <Stack>
+        <Stack
+          sx={{
+            padding: '1em 0em',
+          }}
+          direction='column'
+          spacing={2}
+          justifyContent='center'
+        >
           <TextField
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
@@ -110,27 +124,31 @@ export default function ImagineDialog({
             data-testid='text-field-render-description'
             InputProps={{
               endAdornment: (
-                <InputAdornment position='end'>
-                  {prompt && (
-                    <IconButton
-                      aria-label='clear text'
-                      onClick={onClearClick}
-                      edge='end'
-                      size='small'
-                    >
-                      <ClearIcon size='inherit'/>
-                    </IconButton>
-                  )}
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="clear search"
+                    onClick={() => onClearClick()}
+                    sx={{marginRight: '-.4em', height: '2em', width: '2em'}}
+                  >
+                    <CloseIcon
+                      className="icon-share"
+                      color='primary'
+                      fontSize="small"
+                    />
+                  </IconButton>
                 </InputAdornment>
               ),
             }}
           />
           <Stack direction='row' spacing={1} justifyContent='center'>
+          <Box>
             <RectangularButton
               title='Create'
               onClick={onCreateClick}
               disabled={prompt.length === 0}
             />
+          </Box>
+
             <RectangularButton
               title='Download'
               onClick={() => downloadImaginePng(imagine)}
