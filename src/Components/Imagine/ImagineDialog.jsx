@@ -81,7 +81,7 @@ export default function ImagineDialog({
       <Stack
         sx={{
           'minHeight': '390px',
-          'minWidth': '25em',
+          'minWidth': '35em',
           '@media (max-width: 900px)': {
             minWidth: '10em',
           },
