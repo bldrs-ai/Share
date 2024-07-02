@@ -60,7 +60,7 @@ function AboutContent() {
         direction='column'
         justifyContent='center'
         alignItems='center'
-        sx={{maxWidth: '22em'}}
+        sx={{maxWidth: '24em'}}
       >
         <Stack spacing={0} direction='row'>
           <TooltipIconButton
@@ -79,19 +79,32 @@ function AboutContent() {
           />
         </Stack>
         <Stack align='left' sx={{padding: '0 1em 1em 1em'}}>
-          <Typography variant='body1'>
-           Welcome to Share.
+          <Typography variant='body2'>
+           <b>Welcome</b>
            <br/>
-           We aim to make <Link>sharing BIM models</Link> an absolute delight.
+           We are a small team of technologists,<br/> building an <Link>open source</Link> ecosystem in AEC.
            <br/>
-           Share is built on top of Bldrs engine and tightly integrates with{' '}
-           <Link>Github</Link> for <Link>collaboration</Link> and <Link>versioning</Link>.
            <br/>
-           We support IFC and STEP files.
+           <b>Bldrs Conway</b> is a high performance graphics engine designed to service IFC and STEP files.
            <br/>
-           The <Link>open dialog</Link> contains projects to sample.
            <br/>
-           Try <Link>magic wand</Link> for AI rendering.
+           <b>Bldrs Share</b> is a workspace built on top of Conway engine and tightly integrates with{' '}
+           Github for collaboration and versioning.
+           <br/>
+           <br/>
+           <b>Bldrs Bot</b> creates text to image model based renderings in Share based on IFC models.
+           <br/>
+           <br/>
+           <b>
+            <Link
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;open:'
+            target="_blank"
+            >
+            {' '}Open dialog{' '}
+            </Link>
+            contains models to sample.
+           </b>
+           <br/>
           </Typography>
         </Stack>
       </Stack>
