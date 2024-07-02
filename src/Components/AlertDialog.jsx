@@ -80,27 +80,41 @@ export default function AlertDialog({onClose}) {
           <ListItem variant='alert'>
             <ListItemText
               primary={
-                <Typography
-                  variant='body1'
-                  sx={{fontWeight: 'bold'}}
-                >
-                  Could not load the model
-                </Typography>
+                <>
+                  <Typography
+                    variant='body2'
+                    sx={{fontWeight: 'bold'}}
+                  >
+                    Could not load the model
+                  </Typography>
+                  <Typography
+                    variant='body2'
+                  >
+                    - Log in and try again
+                    <br/>
+                    - Check the file path
+                    <br/>
+                    - Check the console for errors
+                  </Typography>
+                  <Typography
+                    variant='body2'
+                  >
+                    - Contact us on our{' '}
+                  <Link href='https://discord.gg/9SxguBkFfQ' target="_blank" rel="noopener noreferrer">
+                    Discord
+                  </Link>{' '}
+                  for help
+                  </Typography>
+                </>
               }
-              primaryTypographyProps={{variant: 'body1'}}
-            />
-          </ListItem>
-          <ListItem variant='alert'>
-            <ListItemText
-              primary="Log in if repository is private"
-              primaryTypographyProps={{variant: 'body1'}}
+              primaryTypographyProps={{variant: 'body2'}}
             />
           </ListItem>
           <ListItem variant='alert'>
             <ListItemText
               primary={
                 <Typography
-                  variant='body1'
+                  variant='body2'
                   sx={{
                     maxWidth: '300px',
                     wordWrap: 'break-word',
@@ -108,23 +122,10 @@ export default function AlertDialog({onClose}) {
                     whiteSpace: 'normal',
                   }}
                 >
-                <Typography variant='body1' sx={{fontWeight: 'bold'}}>
-                  Check the file path:
+                <Typography variant='body2' sx={{fontWeight: 'bold'}}>
+                  File path
                 </Typography>
                   {errorPath && insertZeroWidthSpaces(errorPath)}
-                </Typography>
-              }
-            />
-          </ListItem>
-          <ListItem variant='alert'>
-            <ListItemText
-              primary={
-                <Typography variant='body1'>
-                  Contact us on our{' '}
-                  <Link href='https://discord.gg/9SxguBkFfQ' target="_blank" rel="noopener noreferrer">
-                    Discord
-                  </Link>{' '}
-                  for help
                 </Typography>
               }
             />
