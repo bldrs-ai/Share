@@ -82,7 +82,13 @@ function AboutContent() {
           <Typography variant='body2'>
            <b>Welcome</b>
            <br/>
-           We are a small team of technologists,<br/> building an <Link>open source</Link> ecosystem in AEC.
+           We are a small team of technologists,<br/> building an{' '}
+           <Link
+            href='https://github.com/bldrs-ai'
+            target="_blank"
+           >
+           open - source
+           </Link> ecosystem in AEC.
            <br/>
            <br/>
            <b>Bldrs Conway</b> is a high performance graphics engine designed to service IFC and STEP files.
@@ -92,7 +98,13 @@ function AboutContent() {
            Github for collaboration and versioning.
            <br/>
            <br/>
-           <b>Bldrs Bot</b> creates text to image model based renderings in Share based on IFC models.
+           <Link
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;imagine:'
+            target="_blank"
+           >
+            <b>Bldrs Bot</b>
+           </Link>
+           {' '}creates text to image model based renderings in Share based on 3D models.
            <br/>
            <br/>
            <b>
