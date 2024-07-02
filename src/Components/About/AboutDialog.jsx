@@ -87,7 +87,7 @@ function AboutContent() {
             href='https://github.com/bldrs-ai'
             target="_blank"
            >
-           open - source
+           open source
            </Link> ecosystem in AEC.
            <br/>
            <br/>
