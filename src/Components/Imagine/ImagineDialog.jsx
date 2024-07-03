@@ -103,7 +103,7 @@ export default function ImagineDialog({
              alt='Imagine'
              height='390px'
              data-testid='img-rendered'
-             style={{borderRadius: '10px'}}
+             style={{borderRadius: '1em'}}
            />}
         </Box>
         <Stack
@@ -141,14 +141,11 @@ export default function ImagineDialog({
             }}
           />
           <Stack direction='row' spacing={1} justifyContent='center'>
-          <Box>
             <RectangularButton
               title='Create'
               onClick={onCreateClick}
               disabled={prompt.length === 0}
             />
-          </Box>
-
             <RectangularButton
               title='Download'
               onClick={() => downloadImaginePng(imagine)}
