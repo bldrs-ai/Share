@@ -20,6 +20,7 @@ describe('View 100: Synchronized View and NavTree', () => {
     beforeEach(() => {
       visitHomepageWaitForModel()
       cy.get('[data-testid="control-button-navigation"]').click()
+      cy.get('[value="spatial-tree"]').click()
       cy.findByText('Bldrs').should('be.visible').click()
       cy.findByText('Build').should('be.visible').click()
       cy.findByText('Every').should('be.visible').click()
@@ -48,6 +49,19 @@ describe('View 100: Synchronized View and NavTree', () => {
 
     it('Item highlighted in tree and scene - Screen', () => {
       cy.percySnapshot()
+    })
+  })
+
+  context('Persist navigation mode when the navigation panel is closed and reopened', () => {
+    it('Item highlighted in tree and scene - Screen', () => {
+      visitHomepageWaitForModel()
+      cy.get('[data-testid="control-button-navigation"]').click()
+      cy.get('[value="spatial-tree"]').click()
+      cy.findByText('Bldrs').should('be.visible').click()
+      cy.get('[data-testid="ListIcon"]').click()
+      cy.get('[data-testid="control-button-navigation"]').click()
+      cy.get('[data-testid="control-button-navigation"]').click()
+      cy.findByText('Project').should('be.visible').click()
     })
   })
 })
