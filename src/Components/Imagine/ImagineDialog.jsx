@@ -107,9 +107,7 @@ export default function ImagineDialog({
            />}
         </Box>
         <Stack
-          sx={{
-            padding: '1em 0em',
-          }}
+          sx={{padding: '1em 0em'}}
           direction='column'
           spacing={2}
           justifyContent='center'
