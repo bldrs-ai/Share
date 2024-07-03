@@ -27,7 +27,7 @@ export default function NavTreeControl() {
 
   return (
     <ControlButtonWithHashState
-      title='Navigation'
+      title='Nav'
       icon={<TreeIcon className='icon-share'/>}
       isDialogDisplayed={isNavTreeVisible}
       setIsDialogDisplayed={setIsNavTreeVisible}
