@@ -13,9 +13,9 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import CloseIcon from '@mui/icons-material/Close'
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
@@ -129,7 +129,7 @@ const HelpList = ({pageIndex}) => {
       <ListItemText primary='Multi-select' secondary='Hold shift to select multiple elements'/>
     </ListItem>,
     <ListItem key='3'>
-      <ListItemIcon><CreateNewFolderOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemIcon><FolderOpenIcon className='icon-share'/></ListItemIcon>
       <ListItemText primary='Open' secondary='Open IFC models from GitHub or local drive'/>
     </ListItem>,
     <ListItem key='4'>
