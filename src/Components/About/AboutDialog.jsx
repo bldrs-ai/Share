@@ -82,7 +82,6 @@ function AboutContent() {
           <Typography variant='body2'>
            <b>Welcome,</b>
            <br/>
-           <br/>
            We are a small team of technologists,<br/> building an{' '}
            <Link
             href='https://github.com/bldrs-ai'
@@ -103,7 +102,6 @@ function AboutContent() {
             <b>Bldrs Bot</b>
            </Link>
            {' '}creates text to image model based renderings in Share based on 3D models.
-           <br/>
            <br/>
            <b>
             <Link
