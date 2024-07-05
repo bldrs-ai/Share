@@ -6,7 +6,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import OpenModelDialog from './OpenModelDialog'
 import {HASH_PREFIX_OPEN_MODEL} from './hashState'
-import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
+import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 
 /**
@@ -35,16 +35,16 @@ export default function OpenModelControl() {
       setOrgNamesArray(orgNames)
     }
 
-    if (accessToken) {
+    if (isOpenModelVisible && accessToken) {
       fetchOrganizations()
     }
-  }, [accessToken, user])
+  }, [isOpenModelVisible, accessToken, user])
 
 
   return (
     <ControlButtonWithHashState
       title='Open'
-      icon={<CreateNewFolderIcon className='icon-share'/>}
+      icon={<FolderOpenIcon className='icon-share'/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={HASH_PREFIX_OPEN_MODEL}

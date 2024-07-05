@@ -59,6 +59,9 @@ export default function createUISlice(set, get) {
     isOpenModelVisible: openModelIsVisibleInitially(),
     setIsOpenModelVisible: (is) => set(() => ({isOpenModelVisible: is})),
 
+    isSaveModelVisible: false,
+    setIsSaveModelVisible: (is) => set(() => ({isSaveModelVisible: is})),
+
     isShareVisible: shareIsVisibleInitially(),
     setIsShareVisible: (is) => set(() => ({isShareVisible: is})),
 

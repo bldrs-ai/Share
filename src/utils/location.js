@@ -343,6 +343,7 @@ export function setHashParams(location, name, params, includeNames = false) {
  * @return {string} path to the model
  */
 export function navigateBaseOnModelPath(org, repo, branchName, filePath) {
+  // TODO(oleg):remove leading slash from filepath requirement
   return `/share/v/gh/${org}/${repo}/${branchName}${filePath}`
 }
 

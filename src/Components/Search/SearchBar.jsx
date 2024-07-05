@@ -14,9 +14,11 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
+ * @property {string} placeholder Text to display when search bar is inactive
+ * @property {string} helperText Text to display under the TextField
  * @return {ReactElement}
  */
-export default function SearchBar() {
+export default function SearchBar({placeholder, helperText}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -93,8 +95,7 @@ export default function SearchBar() {
     <form onSubmit={onSubmit}>
       <Autocomplete
         freeSolo
-        sx={{width: '103%'}}
-        options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
+        options={[]}
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
@@ -106,8 +107,12 @@ export default function SearchBar() {
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder='Search'
+            placeholder={placeholder}
             variant='outlined'
+            helperText={helperText}
+            sx={{
+              width: '100%',
+            }}
             multiline
             onKeyDown={handleKeyDown}
             data-testid='textfield-search-query'

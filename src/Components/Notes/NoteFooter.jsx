@@ -33,7 +33,6 @@ export default function NoteFooter({
   onClickShare,
   selectCard,
   selected,
-  setShowCreateComment,
   showCreateComment,
   submitUpdate,
   synched,
