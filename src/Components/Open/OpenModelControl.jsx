@@ -35,10 +35,10 @@ export default function OpenModelControl() {
       setOrgNamesArray(orgNames)
     }
 
-    if (accessToken) {
+    if (isOpenModelVisible && accessToken) {
       fetchOrganizations()
     }
-  }, [accessToken, user])
+  }, [isOpenModelVisible, accessToken, user])
 
 
   return (
