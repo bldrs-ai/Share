@@ -56,11 +56,11 @@ function AboutContent() {
         <title>About — bldrs.ai</title>
       </Helmet>
       <Stack
-        spacing={2}
+        spacing={0}
         direction='column'
         justifyContent='center'
         alignItems='center'
-        sx={{maxWidth: '24em'}}
+        sx={{maxWidth: '24em', marginTop: '-.5em'}}
       >
         <Stack spacing={0} direction='row'>
           <TooltipIconButton
