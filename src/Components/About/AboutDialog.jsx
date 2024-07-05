@@ -80,7 +80,7 @@ function AboutContent() {
         </Stack>
         <Stack align='left' sx={{padding: '0 1em 1em 1em'}}>
           <Typography variant='body2'>
-           <b>Welcome</b>
+           <b>Welcome,</b>
            <br/>
            We are a small team of technologists,<br/> building an{' '}
            <Link
@@ -94,7 +94,7 @@ function AboutContent() {
            <b>Bldrs Conway</b> is a high performance graphics engine designed to service IFC and STEP files.
            <br/>
            <br/>
-           <b>Bldrs Share</b> is a workspace built on top of Conway engine and tightly integrates with{' '}
+           <b>Bldrs Share</b> is a workspace built on top of Conway engine and provides integration with{' '}
            Github for collaboration and versioning.
            <br/>
            <br/>
