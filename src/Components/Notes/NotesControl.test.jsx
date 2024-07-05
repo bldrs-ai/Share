@@ -15,7 +15,7 @@ describe('NotesControl', () => {
       result.current.setModel(model)
       result.current.setRepository('pablo-mayrgundter', 'Share')
     })
-    act(() => {
+    await act(async () => {
       render(<ShareMock><NotesControl/></ShareMock>)
     })
     expect(result.current.notes).toBeNull()
