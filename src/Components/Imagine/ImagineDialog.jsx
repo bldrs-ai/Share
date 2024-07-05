@@ -6,6 +6,7 @@ import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
+import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {RectangularButton} from '../Buttons'
@@ -13,7 +14,6 @@ import Dialog from '../Dialog'
 import Loader from '../Loader'
 import CloseIcon from '@mui/icons-material/Close'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
-// import BotIcon from '../../assets/icons/Bot2.svg'
 
 
 /**
@@ -37,6 +37,7 @@ export default function ImagineDialog({
   const [image, setImage] = useState(null)
 
   const [finalPrompt, setFinalPrompt] = useState(null)
+  const imageDimensions = useIsMobile() ? '280px' : '390px'
 
   useEffect(() => {
     if (viewer && isDialogDisplayed && isModelReady) {
@@ -80,7 +81,7 @@ export default function ImagineDialog({
       <Helmet><title>{finalPrompt ? `Imagine: ${finalPrompt}` : 'Imagine'}</title></Helmet>
       <Stack
         sx={{
-          'minHeight': '390px',
+          'minHeight': imageDimensions,
           'minWidth': '35em',
           '@media (max-width: 900px)': {
             minWidth: '10em',
@@ -89,7 +90,7 @@ export default function ImagineDialog({
       >
         <Box
           sx={{
-            minHeight: '390px',
+            minHeight: imageDimensions,
             borderRadius: '10px',
             display: 'flex',
             justifyContent: 'center',
@@ -101,7 +102,7 @@ export default function ImagineDialog({
            <img
              src={image}
              alt='Imagine'
-             height='390px'
+             height={imageDimensions}
              data-testid='img-rendered'
              style={{borderRadius: '1em'}}
            />}
