@@ -21,15 +21,17 @@ import {navigateBaseOnModelPath} from '../../utils/location'
 
 
 /**
- * Displays model open dialog
+ * Displays model save dialog
  *
  * @return {ReactElement}
  */
 export default function SaveModelControl() {
+  const isSaveModelVisible = useStore((state) => state.isSaveModelVisible)
+  const setIsSaveModelVisible = useStore((state) => state.setIsSaveModelVisible)
+
   const {user} = useAuth0()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
 
 
@@ -43,23 +45,23 @@ export default function SaveModelControl() {
       return orgs
     }
 
-    if (accessToken) {
+    if (isSaveModelVisible && accessToken) {
       fetchOrganizations()
     }
-  }, [accessToken, user])
+  }, [isSaveModelVisible, accessToken, user])
 
 
   return (
     <ControlButton
       title='Save'
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
+      isDialogDisplayed={isSaveModelVisible}
+      setIsDialogDisplayed={setIsSaveModelVisible}
       icon={<SaveOutlinedIcon className='icon-share'/>}
       placement='bottom'
     >
       <SaveModelDialog
-        isDialogDisplayed={isDialogDisplayed}
-        setIsDialogDisplayed={setIsDialogDisplayed}
+        isDialogDisplayed={isSaveModelVisible}
+        setIsDialogDisplayed={setIsSaveModelVisible}
         navigate={navigate}
         orgNamesArr={orgNamesArr}
       />
