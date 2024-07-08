@@ -101,7 +101,7 @@ function AboutContent() {
            >
             <b>Bldrs Bot</b>
            </Link>
-           {' '}creates text to image model based renderings in Share based on 3D models.
+           {' '}creates text to image renderings in Share based on 3D models.
            <br/>
            <b>
             <Link
