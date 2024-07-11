@@ -18,7 +18,7 @@ const isThemeEnabled = process.env.THEME_IS_ENABLED
  */
 export default function createUISlice(set, get) {
   return {
-    errorPath: null,
+    errorPath: 'https://github.com/bldrs-ai/test-models/blob/main/ifc/bldrs/b.ifc',
     setErrorPath: (path) => set(() => ({errorPath: path})),
 
     appStoreSidebarWidth: MOBILE_WIDTH,

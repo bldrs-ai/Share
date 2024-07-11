@@ -75,7 +75,7 @@ export default function AlertDialog({onClose}) {
         </Box>
       </DialogTitle>
       <DialogContent sx={{textAlign: 'left'}}>
-      <Stack spacing={1} sx={{padding: '0em 1em'}}>
+      <Stack spacing={1} sx={{padding: '0em 1em', width: '20em'}}>
         <List>
           <ListItem variant='alert'>
             <ListItemText
@@ -90,44 +90,60 @@ export default function AlertDialog({onClose}) {
                   <Typography
                     variant='body2'
                   >
-                    - Log in and try again
+                    Try accessing the model again
                     <br/>
-                    - Check the file path
                     <br/>
-                    - Check the console for errors
-                  </Typography>
-                  <Typography
-                    variant='body2'
-                  >
-                    - Contact us on our{' '}
-                  <Link href='https://discord.gg/9SxguBkFfQ' target="_blank" rel="noopener noreferrer">
-                    Discord
-                  </Link>{' '}
-                  for help
+                    <b>
+                      If you are not logged in and trying to access a file hosted on GitHub,
+                      you are subject to
+                    {' '}
+                    <Link
+                      href='https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2022-11-28'
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      GitHub REST API rate limits
+                    </Link>{' '}
+                    </b>
+                    <br/>
+                    - Log into Share using a Github credentials
+                    <br/>
+                    - Access the file again
+                    <br/>
+                    - Check console for errors
+                    <br/>
+                    <br/>
+                    <b>
+                      Check the file path, it might contain inconsistencies that prevent the model load
+                    </b>
+                    <br/>
+                    <Typography
+                      variant='body2'
+                      sx={{
+                        maxWidth: '300px',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
+                        whiteSpace: 'normal',
+                      }}
+                    >
+                      {errorPath && insertZeroWidthSpaces(errorPath)}
+                    </Typography>
+                    <br/>
+                    <b>Check the console for errors</b>
+                    <br/>Contact us on
+                    {' '}
+                    <Link href='https://discord.gg/9SxguBkFfQ' target="_blank" rel="noopener noreferrer">
+                      Discord
+                    </Link>{' '}
+                    or
+                    {' '}
+                    <Link href='https://discord.gg/9SxguBkFfQ' target="_blank" rel="noopener noreferrer">
+                      GitHub
+                    </Link>{' '}
                   </Typography>
                 </>
               }
               primaryTypographyProps={{variant: 'body2'}}
-            />
-          </ListItem>
-          <ListItem variant='alert'>
-            <ListItemText
-              primary={
-                <Typography
-                  variant='body2'
-                  sx={{
-                    maxWidth: '300px',
-                    wordWrap: 'break-word',
-                    overflowWrap: 'break-word',
-                    whiteSpace: 'normal',
-                  }}
-                >
-                <Typography variant='body2' sx={{fontWeight: 'bold'}}>
-                  File path
-                </Typography>
-                  {errorPath && insertZeroWidthSpaces(errorPath)}
-                </Typography>
-              }
             />
           </ListItem>
         </List>
