@@ -32,27 +32,29 @@ export default function VersionsPanel({filePath, currentRef}) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const fetchCommits = async () => {
-      try {
-        const commits = await getCommitsForFile(repository, filePath, accessToken)
-        if (commits) {
-          const versionsInfo = commits.map((entry) => {
-            const extractedData = {
-              authorName: entry.commit.author.name,
-              commitMessage: entry.commit.message,
-              commitDate: entry.commit.author.date,
-              sha: entry.sha,
-            }
-            return extractedData
-          })
-          setCommitData(versionsInfo)
+    if (setIsVersionsVisible) {
+      const fetchCommits = async () => {
+        try {
+          const commits = await getCommitsForFile(repository, filePath, accessToken)
+          if (commits) {
+            const versionsInfo = commits.map((entry) => {
+              const extractedData = {
+                authorName: entry.commit.author.name,
+                commitMessage: entry.commit.message,
+                commitDate: entry.commit.author.date,
+                sha: entry.sha,
+              }
+              return extractedData
+            })
+            setCommitData(versionsInfo)
+          }
+        } catch (error) {
+          debug().log(error)
         }
-      } catch (error) {
-        debug().log(error)
       }
+      fetchCommits()
     }
-    fetchCommits()
-  }, [repository, filePath, accessToken])
+  }, [accessToken, filePath, setIsVersionsVisible, repository])
 
 
   /**
