@@ -86,7 +86,7 @@ export default function BaseRoutes({testElt = null}) {
       isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
 
   return (
-//    <SentryRoutes>
+    <Routes>
       <Route path={basePath} element={<Outlet/>}>
         <Route
           path="share/*"
@@ -99,6 +99,6 @@ export default function BaseRoutes({testElt = null}) {
           }
         />
       </Route>
-//    </SentryRoutes>
+    </Routes>
   )
 }
