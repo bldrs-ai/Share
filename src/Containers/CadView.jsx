@@ -189,6 +189,8 @@ export default function CadView({
     try {
       tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
     } catch (e) {
+      // eslint-disable-next-line no-console
+      console.trace('CadView#onViewer, error: ', e)
       tmpModelRef = undefined
       setSnackMessage(null)
     }
