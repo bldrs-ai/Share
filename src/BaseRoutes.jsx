@@ -5,11 +5,11 @@ import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import useStore from './store/useStore'
-import * as Sentry from '@sentry/react'
+// import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 
 
-const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+// const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -86,7 +86,7 @@ export default function BaseRoutes({testElt = null}) {
       isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
 
   return (
-    <SentryRoutes>
+//    <SentryRoutes>
       <Route path={basePath} element={<Outlet/>}>
         <Route
           path="share/*"
@@ -99,6 +99,6 @@ export default function BaseRoutes({testElt = null}) {
           }
         />
       </Route>
-    </SentryRoutes>
+//    </SentryRoutes>
   )
 }

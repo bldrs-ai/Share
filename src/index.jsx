@@ -10,15 +10,15 @@ import {
   createRoutesFromChildren,
   matchRoutes,
 } from 'react-router-dom'
-import * as Sentry from '@sentry/react'
-import {BrowserTracing} from '@sentry/tracing'
+// import * as Sentry from '@sentry/react'
+// import {BrowserTracing} from '@sentry/tracing'
 import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
 
 
-Sentry.init({
+/*Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT,
   integrations: [
@@ -38,6 +38,7 @@ Sentry.init({
     'https://*.bldrs.dev',
   ],
 })
+*/
 
 if (process.env.MSW_IS_ENABLED) {
   const {worker} = require('./__mocks__/browser')
@@ -54,7 +55,7 @@ if (process.env.MSW_IS_ENABLED) {
 const root = createRoot(document.getElementById('root'))
 
 root.render(
-    <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
+//    <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
       <FlagsProvider value={flags}>
         <HelmetProvider>
           <Helmet>
@@ -68,5 +69,5 @@ root.render(
           </BrowserRouter>
         </HelmetProvider>
       </FlagsProvider>
-    </Sentry.ErrorBoundary>,
+//    </Sentry.ErrorBoundary>,
 )
