@@ -8,7 +8,7 @@ import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
-import {assert, assertDefined} from '../utils/assert'
+import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import BLDLoader from './BLDLoader'
 import glbToThree from './glb'
@@ -19,6 +19,7 @@ import xyzToThree from './xyz'
 
 /**
  * @param {string} path Either a url or filepath
+ * @param {object} viewer WebIfcViewer
  * @return {object|undefined} The model or undefined
  */
 export async function load(
@@ -28,7 +29,7 @@ export async function load(
   onUnknownType = (errEvent) => debug().error(errEvent),
   onError = (errEvent) => debug().error('Loaders#load: error: ', errEvent),
 ) {
-  assertDefined(path, onProgress, onUnknownType, onError)
+  assertDefined(path, viewer, onProgress, onUnknownType, onError)
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
 
@@ -119,7 +120,6 @@ function convertToShareModel(model, viewer) {
   model.Name = model.Name || {value: 'Model'}
   model.LongName = model.LongName || {value: 'Model'}
 
-  console.log('viewer', viewer)
   model.ifcManager = viewer.IFC
   model.ifcManager.getSpatialStructure = (modelId, flatten) => {
     return model
@@ -172,52 +172,70 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
  * @return {Function|undefined}
  */
 function findLoader(pathname) {
-  const {extension} = Filetype.splitAroundExtension(pathname)
+  let extension
+  try {
+    extension = Filetype.getValidExtension(pathname)
+  } catch (e) {
+    console.log('peaking with axios')
+    // TODO(pablo): need to think thru a better way to do content sniffing
+
+    if (e instanceof Filetype.FilenameParseError) {
+      (async () => {
+        extension = await Filetype.guessType(pathname)
+      })()
+      if (extension === null) {
+        throw new Error(`Could not guess filetype for ${pathname}`)
+      }
+      console.log('after axios', extension)
+    } else {
+      throw e
+    }
+  }
   let loader
   let isLoaderAsync = false
   let isFormatText = false
   let fixupCb
   switch (extension) {
-    case '.bld': {
+    case 'bld': {
       loader = new BLDLoader()
       isFormatText = true
       break
     }
-    case '.fbx': {
+    case 'fbx': {
       loader = new FBXLoader()
       break
     }
-    case '.obj': {
+    case 'obj': {
       loader = new OBJLoader
       isFormatText = true
       break
     }
-    case '.pdb': {
+    case 'pdb': {
       loader = new PDBLoader
       fixupCb = pdbToThree
       isFormatText = true
       break
     }
-    case '.stl': {
+    case 'stl': {
       loader = new STLLoader
       fixupCb = stlToThree
       isFormatText = false
       break
     }
-    case '.xyz': {
+    case 'xyz': {
       loader = new XYZLoader
       fixupCb = xyzToThree
       isFormatText = true
       break
     }
-    case '.glb': {
+    case 'glb': {
       loader = newGltfLoader()
       fixupCb = glbToThree
       isLoaderAsync = false
       break
     }
     /*
-    case '.3dm': {
+    case '3dm': {
       isLoaderAsync = true
       loader = {
         parse: async function(data, path, onLoad, onError) {

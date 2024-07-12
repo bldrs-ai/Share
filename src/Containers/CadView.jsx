@@ -264,7 +264,6 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
-    console.log(`filepath: ${filepath}`)
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
     const ifcUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
