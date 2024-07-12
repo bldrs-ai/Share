@@ -151,7 +151,11 @@ function requestWithTimeout(octokitRequest, timeout = 5000) { // Default timeout
   return Promise.race([
     octokitRequest,
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timed out')), timeout),
+      setTimeout(() => {
+        // eslint-disable-next-line no-console
+        console.error('requestWithTimeout timed out.  Request: ', octokitRequest)
+        reject(new Error('Request timed out'))
+      }, timeout),
     ),
   ])
 }
