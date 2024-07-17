@@ -19,9 +19,6 @@ export default function NavTreeControl() {
 
   // Open NavTree on selection
   useEffect(() => {
-    if (lastNumSelected === 0 && selectedElements.length > 0) {
-      setIsNavTreeVisible(true)
-    }
     setLastNumSelected(selectedElements.length)
   }, [lastNumSelected, setLastNumSelected, selectedElements, setIsNavTreeVisible])
 
