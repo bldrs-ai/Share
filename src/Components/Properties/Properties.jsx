@@ -72,7 +72,6 @@ export default function Properties() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: `solid 1px ${theme.palette.secondary.contrastText}`,
           }}
           >
             Property Sets
