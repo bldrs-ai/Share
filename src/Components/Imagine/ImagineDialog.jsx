@@ -125,15 +125,13 @@ export default function ImagineDialog({
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    aria-label="clear search"
-                    onClick={() => onClearClick()}
+                    aria-label="clear text"
+                    onClick={onClearClick}
+                    edge='end'
+                    size='small'
                     sx={{marginRight: '-.4em', height: '2em', width: '2em'}}
                   >
-                    <CloseIcon
-                      className="icon-share"
-                      color='primary'
-                      fontSize="small"
-                    />
+                    <CloseIcon fontSize="small"/>
                   </IconButton>
                 </InputAdornment>
               ),
