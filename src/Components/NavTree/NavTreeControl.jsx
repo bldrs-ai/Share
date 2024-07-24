@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_NAV_TREE} from './hashState'
@@ -13,14 +13,6 @@ import TreeIcon from '../../assets/icons/Tree.svg'
 export default function NavTreeControl() {
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
-  const selectedElements = useStore((state) => state.selectedElements)
-
-  const [lastNumSelected, setLastNumSelected] = useState(0)
-
-  // Open NavTree on selection
-  useEffect(() => {
-    setLastNumSelected(selectedElements.length)
-  }, [lastNumSelected, setLastNumSelected, selectedElements, setIsNavTreeVisible])
 
   return (
     <ControlButtonWithHashState
