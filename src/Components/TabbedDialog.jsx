@@ -50,7 +50,7 @@ export default function TabbedDialog({
         {headerLabels[currentTab]}
       </DialogTitle>
       <DialogContent>
-        <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={setCurrentTab} isScrollable={isTabsScrollable}/>
+        <Tabs tabLabels={tabLabels} actionCb={setCurrentTab} isScrollable={isTabsScrollable}/>
       </DialogContent>
       <DialogContent>
         {contentComponents[currentTab]}
