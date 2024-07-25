@@ -25,6 +25,7 @@ describe('View 100: Access elements property', () => {
 
     it('Side drawer containing properties shall be visible', () => {
       cy.get('[data-testid="control-button-properties"]').should('be.visible')
+      cy.get('[data-testid="panelTitle"]').contains('PROPERTIES')
       cy.percySnapshot()
     })
   })
