@@ -7,6 +7,7 @@ import {navWith} from './utils/navigate'
 import useStore from './store/useStore'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
+import {initializeOctoKit} from './net/github/OctokitExport'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -75,6 +76,11 @@ export default function BaseRoutes({testElt = null}) {
           scope: 'openid profile email offline_access repo',
         },
       }).then((token) => {
+        if (token !== '') {
+          initializeOctoKit(true)
+        } else {
+          initializeOctoKit(false)
+        }
         setAccessToken(token)
       }).catch((err) => {
         if (err.error !== 'login_required') {
