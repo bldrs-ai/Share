@@ -147,7 +147,7 @@ export async function patchGitHub(repository, path, args = {}, accessToken = '')
  *   Rejects with an error if the request is aborted due to a timeout or if the Octokit request fails for any other reason.
  * @throws {Error} Throws a "Request timed out" error if the request does not complete within the specified timeout period.
  */
-function requestWithTimeout(octokitRequest, timeout = 5000) { // Default timeout is 5000 ms
+function requestWithTimeout(octokitRequest, timeout = 10000) { // Default timeout is 5000 ms
   return Promise.race([
     octokitRequest,
     new Promise((_, reject) =>
