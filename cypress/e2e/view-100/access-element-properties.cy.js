@@ -16,10 +16,11 @@ describe('View 100: Access elements property', () => {
   })
 
   context('User visits permalink to selected element and clicks properties control', () => {
+    const interceptTag = 'ghModelLoad'
     beforeEach(() => {
       cy.intercept('GET', '/share/v/p/index.ifc/81/621', {fixture: '404.html'}).as('twoLevelSelect')
       cy.visit('/share/v/p/index.ifc/81/621')
-      waitForModelReady('twoLevelSelect')
+      waitForModelReady(interceptTag)
       cy.get('[data-testid="control-button-properties"]').click()
     })
 
