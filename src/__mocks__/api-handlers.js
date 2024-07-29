@@ -9,7 +9,8 @@ import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositorie
 import testEnvVars from '../../tools/jest/testEnvVars'
 
 
-const GH_BASE = testEnvVars.GITHUB_BASE_URL
+const GH_BASE_AUTHED = testEnvVars.GITHUB_BASE_URL
+const GH_BASE_UNAUTHED = testEnvVars.GITHUB_BASE_URL_UNAUTHENTICATED
 
 const httpOk = 200
 const httpCreated = 201
@@ -25,7 +26,8 @@ const httpNotFound = 404
 export function initHandlers() {
   const handlers = []
   handlers.push(...gaHandlers())
-  handlers.push(...githubHandlers())
+  handlers.push(...githubHandlers(null, true))
+  handlers.push(...githubHandlers(null, false))
   return handlers
 }
 
@@ -53,9 +55,9 @@ function gaHandlers() {
  * @param {object} githubStore todo implementation
  * @return {Array<object>} handlers
  */
-function githubHandlers(githubStore) {
+function githubHandlers(githubStore, authed) {
   return [
-    rest.get(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
       const createdIssues = createMockIssues(org, repo, sampleIssues)
       return res(
@@ -64,7 +66,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.get(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
@@ -76,7 +78,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.get(`${GH_BASE}/repos/:org/:repo/contents/:path`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/contents/:path`, (req, res, ctx) => {
       const {org, repo, path} = req.params
       const ref = req.url.searchParams.get('ref')
 
@@ -142,9 +144,9 @@ function githubHandlers(githubStore) {
             path: 'README.md',
             sha: 'a5dd511780350dfbf2374196d8f069114a7d9205',
             size: 1359,
-            url: `${GH_BASE}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
+            url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
             html_url: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
-            git_url: `${GH_BASE}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
+            git_url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
             download_url: downloadURL,
             type: 'file',
             content: 'U2hhcmUgaXMgYSB3ZWItYmFzZWQgQklNICYgQ0FEIGludGVncmF0aW9uIGVu\n' +
@@ -180,15 +182,15 @@ function githubHandlers(githubStore) {
               'Oi1HdWlkZSkK\n',
             encoding: 'base64',
             links: {
-              self: `${GH_BASE}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
-              git: `${GH_BASE}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
+              self: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
+              git: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
               html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
             },
           }),
       )
     }),
 
-    rest.post(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
+    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
       if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
@@ -205,7 +207,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.post(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
+    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
@@ -216,7 +218,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.patch(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber`, (req, res, ctx) => {
+    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, (req, res, ctx) => {
       const {org, repo} = req.params
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return res(
@@ -232,7 +234,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.delete(`${GH_BASE}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
+    rest.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       const {org, repo, commentId} = req.params
 
       if (org !== 'bldrs-ai' || repo !== 'Share' || !commentId) {
@@ -244,7 +246,7 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.get(`${GH_BASE}/user/orgs`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/orgs`, (req, res, ctx) => {
       const authHeader = req.headers.get('authorization')
 
       if (!authHeader) {
@@ -263,14 +265,14 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.get(`${GH_BASE}/user/repos`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, (req, res, ctx) => {
       return res(
         ctx.status(httpOk),
         ctx.json(MOCK_USER_REPOSITORIES.data),
     )
     }),
 
-    rest.get(`${GH_BASE}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json({
@@ -279,14 +281,14 @@ function githubHandlers(githubStore) {
       )
     }),
 
-    rest.get(`${GH_BASE}/repos/:owner/:repo/contents`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json(MOCK_FILES),
       )
     }),
 
-    rest.get(`${GH_BASE}/repos/:owner/:repo/branches`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, (req, res, ctx) => {
       return res(
         ctx.status(httpOk),
         ctx.json(MOCK_BRANCHES),
@@ -294,7 +296,7 @@ function githubHandlers(githubStore) {
     }),
 
 
-    rest.get(`${GH_BASE}/repos/:owner/:repo/commits`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, (req, res, ctx) => {
       // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
       if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
         return res(
@@ -307,7 +309,31 @@ function githubHandlers(githubStore) {
           ctx.status(httpOk),
           ctx.json([]),
         )
+        // Handle unauthenticated case
+      } else if (req.params.owner === 'unauthedcaseowner' && req.params.repo === 'unauthedcaserepo' ) {
+       const requestUrl = req.url.toString()
+
+        if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
+        return res(
+          ctx.status(httpNotFound),
+          ctx.json({sha: 'error'}),
+        )
       }
+      } else if (req.params.owner === 'authedcaseowner' && req.params.repo === 'authedcaserepo' ) {
+        const requestUrl = req.url.toString()
+
+         if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
+         return res(
+           ctx.status(httpNotFound),
+           ctx.json({sha: 'error'}),
+         )
+       } else {
+        return res(
+          ctx.status(httpOk),
+          ctx.json(MOCK_COMMITS),
+        )
+       }
+       }
       // For all other cases, return a success response
       return res(
         ctx.status(httpOk),
@@ -321,7 +347,7 @@ function githubHandlers(githubStore) {
      * GH returns for the various cases. */
 
     // octokit.rest.git.getRef
-    rest.get(`${GH_BASE}/repos/:owner/:repo/git/ref/:ref`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json({object: {sha: 'parentSha'}}),
@@ -329,7 +355,7 @@ function githubHandlers(githubStore) {
     }),
 
     // octokit.rest.git.getCommit
-    rest.get(`${GH_BASE}/repos/:owner/:repo/git/commits/:commit_sha`, (req, res, ctx) => {
+    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, (req, res, ctx) => {
       return res(
         ctx.status(httpOk),
         ctx.json({tree: {sha: 'treeSha'}}),
@@ -337,7 +363,7 @@ function githubHandlers(githubStore) {
     }),
 
     // octokit.rest.git.createBlob
-    rest.post(`${GH_BASE}/repos/:owner/:repo/git/blobs`, async (req, res, ctx) => {
+    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/blobs`, async (req, res, ctx) => {
       const {content, encoding} = await req.body
       if (content === undefined || encoding === undefined) {
         const HTTP_BAD_REQUEST = 400
@@ -350,7 +376,7 @@ function githubHandlers(githubStore) {
     }),
 
     // octokit.rest.git.createTree
-    rest.post(`${GH_BASE}/repos/:owner/:repo/git/trees`, async (req, res, ctx) => {
+    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/trees`, async (req, res, ctx) => {
       // eslint-disable-next-line camelcase
       const {base_tree, tree} = await req.body
       // eslint-disable-next-line camelcase
@@ -365,7 +391,7 @@ function githubHandlers(githubStore) {
     }),
 
     // octokit.rest.git.createCommit
-    rest.post(`${GH_BASE}/repos/:owner/:repo/git/commits`, async (req, res, ctx) => {
+    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits`, async (req, res, ctx) => {
       const {message, tree, parents} = await req.body
       if (message === undefined || tree === undefined || parents === undefined) {
         const HTTP_BAD_REQUEST = 400
@@ -378,7 +404,7 @@ function githubHandlers(githubStore) {
     }),
 
     // octokit.rest.git.updateRef
-    rest.patch(`${GH_BASE}/repos/:owner/:repo/git/refs/:ref`, async (req, res, ctx) => {
+    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/refs/:ref`, async (req, res, ctx) => {
       const {sha} = await req.body
       if (sha === undefined) {
         const HTTP_BAD_REQUEST = 400

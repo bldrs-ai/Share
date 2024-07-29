@@ -3,27 +3,20 @@ import PkgJson from '../../../package.json'
 
 
 const GITHUB_BASE_URL_AUTHED = process.env.GITHUB_BASE_URL
+const GITHUB_BASE_URL_UNAUTHED = process.env.GITHUB_BASE_URL_UNAUTHENTICATED
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
 export let octokit
 
-initializeOctoKit(!!(process.env.OAUTH2_CLIENT_ID === 'testaudiencejest' ||
-    process.env.OAUTH2_CLIENT_ID === 'cypresstestaudience'))
+initializeOctoKit(false)
 
 
 /**
  * Initialize an instance of Octokit depending on auth status.
  */
 export function initializeOctoKit(authed) {
-    if (authed) {
-        octokit = new Octokit({
-        baseUrl: GITHUB_BASE_URL_AUTHED,
-        userAgent: `bldrs/${PkgJson.version}`,
-      })
-    } else {
-        octokit = new Octokit({
-            baseUrl: 'https://api.github.com',
-            userAgent: `bldrs/${PkgJson.version}`,
-        })
-    }
+    octokit = new Octokit({
+    baseUrl: authed ? GITHUB_BASE_URL_AUTHED : GITHUB_BASE_URL_UNAUTHED,
+    userAgent: `bldrs/${PkgJson.version}`,
+    })
 }

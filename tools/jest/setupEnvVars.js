@@ -10,6 +10,7 @@
 process.env.AUTH0_DOMAIN = 'https://bldrs.us.auth0.com.jest'
 process.env.OAUTH2_CLIENT_ID = 'testaudiencejest'
 process.env.GITHUB_BASE_URL = 'https://git.bldrs.dev.jest/p/gh'
+process.env.GITHUB_BASE_URL_UNAUTHENTICATED = 'https://api.github.com.jest',
 process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev.jest/r'
 
 // After this, they're exported by ./testEnvVars in this directory

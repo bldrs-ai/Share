@@ -2,8 +2,14 @@ import {
   getLatestCommitHash,
 } from './Commits'
 
+import {initializeOctoKit} from './OctokitExport'
+
 
 describe('net/github/Commits', () => {
+  beforeEach(() => {
+    initializeOctoKit(false) // Default to unauthenticated initialization
+  })
+
   it('get latest commit hash', async () => {
     const result = await getLatestCommitHash('testowner', 'testrepo', '', '', '')
     expect(result).toEqual('testsha1testsha1testsha1testsha1testsha1')
@@ -15,6 +21,31 @@ describe('net/github/Commits', () => {
       await expect(getLatestCommitHash('failurecaseowner', 'failurecaserepo', '', '', ''))
         .rejects
         .toThrow('Unknown error: {"sha":"error"}')
+    })
+  })
+
+  describe('Unauthenticated initialization', () => {
+    it('should throw an error on getLatestCommitHash with unauthedcaseowner and unauthedcaserepo', async () => {
+      await expect(getLatestCommitHash('unauthedcaseowner', 'unauthedcaserepo', '', '', ''))
+        .rejects
+        .toThrow('Unknown error: {"sha":"error"}')
+    })
+  })
+
+  describe('Authenticated initialization', () => {
+    beforeEach(() => {
+      // Authenticated initialization for this test
+      initializeOctoKit(true)
+    })
+
+    it('should NOT throw an error on getLatestCommitHash with authedcaseowner and authedcaserepo', async () => {
+      const result = await getLatestCommitHash('authedcaseowner', 'authedcaserepo', '', '', '')
+      expect(result).toEqual('testsha1testsha1testsha1testsha1testsha1')
+    })
+
+    afterEach(() => {
+      // Reset to unauthenticated for subsequent tests
+      initializeOctoKit(false)
     })
   })
 })

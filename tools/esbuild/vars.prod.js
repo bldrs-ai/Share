@@ -11,6 +11,7 @@ export default {
   // TODO(pablo): maybe remove? not using anymore
   GITHUB_API_TOKEN: null,
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
+  GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
   RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
 
   // Monitoring
