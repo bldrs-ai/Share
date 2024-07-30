@@ -8,15 +8,25 @@ const GITHUB_BASE_URL_UNAUTHED = process.env.GITHUB_BASE_URL_UNAUTHENTICATED
 // ensure we setup mocks for local use and unit testing.
 export let octokit
 
-initializeOctoKit(false)
+initializeOctoKitUnauthenticated()
 
 
 /**
- * Initialize an instance of Octokit depending on auth status.
+ * Initialize an instance of Octokit authenticated.
  */
-export function initializeOctoKit(authed) {
+export function initializeOctoKitAuthenticated() {
     octokit = new Octokit({
-    baseUrl: authed ? GITHUB_BASE_URL_AUTHED : GITHUB_BASE_URL_UNAUTHED,
+    baseUrl: GITHUB_BASE_URL_AUTHED,
+    userAgent: `bldrs/${PkgJson.version}`,
+    })
+}
+
+/**
+ * Initialize an instance of Octokit unauthenticated.
+ */
+export function initializeOctoKitUnauthenticated() {
+    octokit = new Octokit({
+    baseUrl: GITHUB_BASE_URL_UNAUTHED,
     userAgent: `bldrs/${PkgJson.version}`,
     })
 }

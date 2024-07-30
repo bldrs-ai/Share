@@ -2,12 +2,12 @@ import {
   getLatestCommitHash,
 } from './Commits'
 
-import {initializeOctoKit} from './OctokitExport'
+import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './OctokitExport'
 
 
 describe('net/github/Commits', () => {
   beforeEach(() => {
-    initializeOctoKit(false) // Default to unauthenticated initialization
+    initializeOctoKitUnauthenticated() // Default to unauthenticated initialization
   })
 
   it('get latest commit hash', async () => {
@@ -34,7 +34,7 @@ describe('net/github/Commits', () => {
   describe('Authenticated initialization', () => {
     beforeEach(() => {
       // Authenticated initialization for this test
-      initializeOctoKit(true)
+      initializeOctoKitAuthenticated()
     })
 
     it('should NOT throw an error on getLatestCommitHash with authedcaseowner and authedcaserepo', async () => {
@@ -44,7 +44,7 @@ describe('net/github/Commits', () => {
 
     afterEach(() => {
       // Reset to unauthenticated for subsequent tests
-      initializeOctoKit(false)
+      initializeOctoKitUnauthenticated()
     })
   })
 })

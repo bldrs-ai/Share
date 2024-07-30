@@ -7,7 +7,7 @@ import {navWith} from './utils/navigate'
 import useStore from './store/useStore'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
-import {initializeOctoKit} from './net/github/OctokitExport'
+import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -77,9 +77,9 @@ export default function BaseRoutes({testElt = null}) {
         },
       }).then((token) => {
         if (token !== '') {
-          initializeOctoKit(true)
+          initializeOctoKitAuthenticated()
         } else {
-          initializeOctoKit(false)
+          initializeOctoKitUnauthenticated()
         }
         setAccessToken(token)
       }).catch((err) => {
