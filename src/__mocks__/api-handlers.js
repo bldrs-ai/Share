@@ -313,12 +313,18 @@ function githubHandlers(githubStore, authed) {
       } else if (req.params.owner === 'unauthedcaseowner' && req.params.repo === 'unauthedcaserepo' ) {
        const requestUrl = req.url.toString()
 
-        if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
+       if ( requestUrl.includes(GH_BASE_AUTHED)) {
         return res(
           ctx.status(httpNotFound),
           ctx.json({sha: 'error'}),
         )
+      } else {
+       return res(
+         ctx.status(httpOk),
+         ctx.json(MOCK_COMMITS),
+       )
       }
+        // Handle authenticated case
       } else if (req.params.owner === 'authedcaseowner' && req.params.repo === 'authedcaserepo' ) {
         const requestUrl = req.url.toString()
 

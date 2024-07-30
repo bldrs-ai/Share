@@ -25,10 +25,9 @@ describe('net/github/Commits', () => {
   })
 
   describe('Unauthenticated initialization', () => {
-    it('should throw an error on getLatestCommitHash with unauthedcaseowner and unauthedcaserepo', async () => {
-      await expect(getLatestCommitHash('unauthedcaseowner', 'unauthedcaserepo', '', '', ''))
-        .rejects
-        .toThrow('Unknown error: {"sha":"error"}')
+    it('should NOT throw an error on getLatestCommitHash with unauthedcaseowner and unauthedcaserepo', async () => {
+      const result = await getLatestCommitHash('unauthedcaseowner', 'unauthedcaserepo', '', '', '')
+      expect(result).toEqual('testsha1testsha1testsha1testsha1testsha1')
     })
   })
 
