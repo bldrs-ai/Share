@@ -7,7 +7,7 @@ import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {handleBeforeUnload} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
-import CloseIcon from '@mui/icons-material/Close'
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 
 
 /**
@@ -18,7 +18,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * @property {string} helperText Text to display under the TextField
  * @return {ReactElement}
  */
-export default function SearchBar({placeholder, helperText}) {
+export default function SearchBar({placeholder, helperText, cb = {}, clearInput = false}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -26,6 +26,10 @@ export default function SearchBar({placeholder, helperText}) {
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
 
+  useEffect(() => {
+    setInputText('')
+    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+  }, [])
 
   useEffect(() => {
     if (location.search) {
@@ -59,6 +63,7 @@ export default function SearchBar({placeholder, helperText}) {
         const modelPath = githubUrlOrPathToSharePath(inputText)
         window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(modelPath, {replace: true})
+        cb()
       } catch (e) {
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
@@ -99,7 +104,6 @@ export default function SearchBar({placeholder, helperText}) {
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
-        clearIcon={<CloseIcon className='icon-share'/>}
         inputValue={inputText}
         renderInput={(params) => (
           <TextField
@@ -121,10 +125,10 @@ export default function SearchBar({placeholder, helperText}) {
                 <InputAdornment position="end">
                   <IconButton
                     aria-label="clear search"
-                    onClick={() => setInputText('')}
+                    onClick={onSubmit}
                     sx={{height: '2em', width: '2em'}}
                   >
-                    <CloseIcon
+                    <ArrowForwardIcon
                       className="icon-share"
                       color='primary'
                       fontSize="small"
