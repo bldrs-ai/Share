@@ -16,6 +16,8 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
  *
  * @property {string} placeholder Text to display when search bar is inactive
  * @property {string} helperText Text to display under the TextField
+ * @property {Function} cb callBack to be executed when the search is activated
+ * @property {boolean} clearInput Clear the search when the component is opened
  * @return {ReactElement}
  */
 export default function SearchBar({placeholder, helperText, cb = {}, clearInput = false}) {
@@ -25,13 +27,6 @@ export default function SearchBar({placeholder, helperText, cb = {}, clearInput 
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
-
-  useEffect(() => {
-    if (clearInput === true) {
-      setInputText('')
-      navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-    }
-  }, [navigate, location.pathname, clearInput])
 
   useEffect(() => {
     if (location.search) {
@@ -51,6 +46,12 @@ export default function SearchBar({placeholder, helperText, cb = {}, clearInput 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+  useEffect(() => {
+    if (clearInput === true) {
+      setInputText('')
+      navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+    }
+  }, [navigate, location.pathname, clearInput])
 
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
