@@ -16,7 +16,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
  *
  * @property {string} placeholder Text to display when search bar is inactive
  * @property {string} helperText Text to display under the TextField
- * @property {Function} cb callBack to be executed when the search is activated
+ * @property {Function} cb CallBack to be executed when the search is activated
  * @property {boolean} clearInput Clear the search when the component is opened
  * @return {ReactElement}
  */
