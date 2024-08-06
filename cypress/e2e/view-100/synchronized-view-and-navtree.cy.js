@@ -46,7 +46,8 @@ describe('View 100: Synchronized View and NavTree', () => {
       waitForModelReady('twoLevelSelect')
     })
 
-    it('Item highlighted in tree and scene - Screen', () => {
+    it('Item highlighted in scene - Screen', () => {
+      cy.get('[data-testid="nav-tree-root"]').should('not.exist')
       cy.percySnapshot()
     })
   })
