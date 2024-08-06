@@ -27,9 +27,11 @@ export default function SearchBar({placeholder, helperText, cb = {}, clearInput 
   const searchInputRef = useRef(null)
 
   useEffect(() => {
-    setInputText('')
-    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-  }, [])
+    if (clearInput === true) {
+      setInputText('')
+      navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+    }
+  }, [navigate, location.pathname, clearInput])
 
   useEffect(() => {
     if (location.search) {
