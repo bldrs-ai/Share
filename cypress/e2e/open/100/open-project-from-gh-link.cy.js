@@ -34,10 +34,9 @@ describe('Open 100: Open Project From GitHub Link', () => {
       cy.percySnapshot()
     })
 
-    it('Use open dialog to enter model URL - Model loads - Screen', () => {
+    it('Use open dialog to enter model URL - Model loads', () => {
       cy.get('[data-testid="control-button-open"]').click()
       cy.get('[data-testid="tab-github"]').click()
-      // Note this includes {enter} at end to simulate Enter keypress
       cy.get('[data-testid="textfield-search-query"]')
       .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc')
       cy.get('[data-testid="activate-search"]').click()
