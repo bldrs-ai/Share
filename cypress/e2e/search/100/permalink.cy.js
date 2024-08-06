@@ -24,6 +24,11 @@ describe('Search 100: Permalink', () => {
     it('Search box with query visible, "Together" items highlighted in tree and scene - Screen', () => {
       cy.percySnapshot()
     })
+    it.only('Clear search when the search component is closed and reopend', () => {
+      cy.get('[data-testid="control-button-search"]').click()
+      cy.get('[data-testid="control-button-search"]').click()
+      cy.get('[data-testid="textfield-search-query"]').should('have.value', '')
+    })
   })
 
   context('Returning user visits permalink to "together" search', () => {

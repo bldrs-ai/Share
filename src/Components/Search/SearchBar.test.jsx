@@ -62,8 +62,8 @@ describe( 'SearchBar', () => {
   })
 
   it('SeachBar', () => {
-    // eslint-disable-next-line no-empty-function
-    render(<SearchBar onClickMenuCb={() => {}} isOpen={true} placeholder={'Search'}/>, {wrapper: RouteThemeCtx})
+    render(<SearchBar placeholder={'Search'}/>, {wrapper: RouteThemeCtx})
     expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
+    expect(screen.getByTestId('activate-search')).toBeInTheDocument()
   })
 })
