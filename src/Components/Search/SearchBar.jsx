@@ -129,7 +129,7 @@ export default function SearchBar({placeholder, helperText, cb = {}, clearInput 
                   <IconButton
                     aria-label="clear search"
                     onClick={onSubmit}
-                    data-testid='activate-search'
+                    data-testid='button-search-activate'
                     sx={{height: '2em', width: '2em'}}
                   >
                     <ArrowForwardIcon

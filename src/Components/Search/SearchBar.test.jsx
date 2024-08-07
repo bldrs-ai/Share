@@ -64,6 +64,6 @@ describe( 'SearchBar', () => {
   it('SeachBar', () => {
     render(<SearchBar placeholder={'Search'}/>, {wrapper: RouteThemeCtx})
     expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
-    expect(screen.getByTestId('activate-search')).toBeInTheDocument()
+    expect(screen.getByTestId('button-search-activate')).toBeInTheDocument()
   })
 })

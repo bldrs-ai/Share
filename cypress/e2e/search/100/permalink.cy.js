@@ -14,14 +14,21 @@ describe('Search 100: Permalink', () => {
     setIsReturningUser()
   })
 
-  context('Returning user visits homepage, Open Search > Enters "together"', () => {
+  context('Returning user visits homepage', () => {
     beforeEach(() => {
       visitHomepageWaitForModel()
       cy.get('[data-testid="control-button-search"]').click()
-      cy.get('[data-testid="textfield-search-query"]').type('together{enter}')
     })
 
-    it('Search box with query visible, "Together" items highlighted in tree and scene - Screen', () => {
+    it(`Open Search > Enters "together" > Presses Enter >
+       Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
+      cy.get('[data-testid="textfield-search-query"]').type('together{enter}')
+      cy.percySnapshot()
+    })
+    it(`Open Search > Enters "together" > Presses Activate >
+      Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
+      cy.get('[data-testid="textfield-search-query"]').type('together')
+      cy.get('[data-testid="button-search-activate"]').type('together')
       cy.percySnapshot()
     })
   })

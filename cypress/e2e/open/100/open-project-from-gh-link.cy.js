@@ -39,7 +39,7 @@ describe('Open 100: Open Project From GitHub Link', () => {
       cy.get('[data-testid="tab-github"]').click()
       cy.get('[data-testid="textfield-search-query"]')
       .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc')
-      cy.get('[data-testid="activate-search"]').click()
+      cy.get('[data-testid="button-search-activate"]').click()
       waitForModelReady(interceptTag)
     })
   })
