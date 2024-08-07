@@ -20,15 +20,15 @@ describe('Search 100: Permalink', () => {
       cy.get('[data-testid="control-button-search"]').click()
     })
 
-    it(`Open Search > Enters "together" > Presses Enter >
+    it(`Open Search > Enter "together" > Press Enter >
        Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
       cy.get('[data-testid="textfield-search-query"]').type('together{enter}')
       cy.percySnapshot()
     })
-    it(`Open Search > Enters "together" > Presses Activate >
+    it(`Open Search > Enter "together" > Press Activate >
       Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
       cy.get('[data-testid="textfield-search-query"]').type('together')
-      cy.get('[data-testid="button-search-activate"]').type('together')
+      cy.get('[data-testid="button-search-activate"]').click()
       cy.percySnapshot()
     })
   })
