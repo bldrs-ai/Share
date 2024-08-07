@@ -200,7 +200,6 @@ export const createMockIssues = (org, repo, issuesInfo) => {
       login: 'cypresstester',
       id: 3433606,
       node_id: 'MDQ6VXNlcjM0MzM2MDY=',
-
       url: `https://api.github.com/users/user`,
       html_url: 'https://github.com/user',
     },

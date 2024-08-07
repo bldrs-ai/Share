@@ -20,7 +20,6 @@ export const MOCK_NOTES = [
     body: 'It is common for knowledge workers in the AEC industry to operate within information bubbles.2',
     date: '2022-06-01T22:10:49Z',
     username: 'TEST_ISSUE_USERNAME',
-    avatarUrl: '/avatarMock.png',
     numberOfComments: 2,
     imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
