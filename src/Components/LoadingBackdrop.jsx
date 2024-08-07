@@ -14,6 +14,6 @@ export default function LoadingBackdrop() {
       open={isModelLoading}
       sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
     >
-      <CircularProgress color='inherit'/>
+      <CircularProgress color='inherit' disableShrink thickness={5.0}/>
     </Backdrop>)
 }
