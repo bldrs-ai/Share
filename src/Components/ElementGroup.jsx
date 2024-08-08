@@ -38,7 +38,7 @@ export default function ElementGroup({deselectItems}) {
       alignItems='center'
       data-testid='element-group'
     >
-      <ButtonGroup orientation='horizontal' variant='controls'>
+      <ButtonGroup orientation='horizontal' variant='controls' >
         {!isIsolate && <CutPlaneMenu/>}
 
         {isSelected() && selectedElement !== null &&
