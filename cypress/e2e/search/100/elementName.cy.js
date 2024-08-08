@@ -20,12 +20,12 @@ describe('Search 100: Search model based on element name ', () => {
     })
 
     it(`Open Search > Enter "together" > Press Enter >
-       Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
+       Search box with query visible, "Together" items highlighted in tree and scene - Screen`, () => {
       cy.get('[data-testid="textfield-search-query"]').type('together{enter}')
       cy.percySnapshot()
     })
-    it(`Open Search > Enter "together" > Press Activate >
-      Search box with query visible, "Together" items highlighted in tree and scene  - Screen`, () => {
+    it(`Open Search > Enter "together" > Click Activate Button >
+      Search box with query visible, "Together" items highlighted in tree and scene - Screen`, () => {
       cy.get('[data-testid="textfield-search-query"]').type('together')
       cy.get('[data-testid="button-search-activate"]').click()
       cy.percySnapshot()
