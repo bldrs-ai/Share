@@ -82,7 +82,6 @@ export default function ControlsGroupAndDrawer({
         navigate={navigate}
         isRepoActive={modelPath.repo !== undefined}
       />
-
       <Box sx={{width: '100%'}}>
         {isSearchEnabled && isSearchBarVisible && <SearchBar placeholder='Search'/>}
         {isNavTreeEnabled &&

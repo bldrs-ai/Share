@@ -79,8 +79,11 @@ export default function OpenModelDialog({
         { currentTab === 1 &&
           <>
             <>
-              <SearchBar placeholder='Model URL'
+              <SearchBar
+                placeholder='Model URL'
                 helperText='Paste GitHub file link to open the model'
+                cb={() => setIsDialogDisplayed(false)}
+                clearInput={true}
               />
             </>
             {isAuthenticated &&

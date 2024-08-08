@@ -7,7 +7,7 @@ import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {handleBeforeUnload} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
-import CloseIcon from '@mui/icons-material/Close'
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 
 
 /**
@@ -16,16 +16,17 @@ import CloseIcon from '@mui/icons-material/Close'
  *
  * @property {string} placeholder Text to display when search bar is inactive
  * @property {string} helperText Text to display under the TextField
+ * @property {Function} cb CallBack to be executed when the search is activated
+ * @property {boolean} clearInput Clear the search when the component is opened
  * @return {ReactElement}
  */
-export default function SearchBar({placeholder, helperText}) {
+export default function SearchBar({placeholder, helperText, cb = {}, clearInput = false}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
-
 
   useEffect(() => {
     if (location.search) {
@@ -45,6 +46,12 @@ export default function SearchBar({placeholder, helperText}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+  useEffect(() => {
+    if (clearInput === true) {
+      setInputText('')
+      navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+    }
+  }, [navigate, location.pathname, clearInput])
 
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
@@ -59,6 +66,7 @@ export default function SearchBar({placeholder, helperText}) {
         const modelPath = githubUrlOrPathToSharePath(inputText)
         window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(modelPath, {replace: true})
+        cb()
       } catch (e) {
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
@@ -99,7 +107,6 @@ export default function SearchBar({placeholder, helperText}) {
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
-        clearIcon={<CloseIcon className='icon-share'/>}
         inputValue={inputText}
         renderInput={(params) => (
           <TextField
@@ -121,10 +128,11 @@ export default function SearchBar({placeholder, helperText}) {
                 <InputAdornment position="end">
                   <IconButton
                     aria-label="clear search"
-                    onClick={() => setInputText('')}
+                    onClick={onSubmit}
+                    data-testid='button-search-activate'
                     sx={{height: '2em', width: '2em'}}
                   >
-                    <CloseIcon
+                    <ArrowForwardIcon
                       className="icon-share"
                       color='primary'
                       fontSize="small"
