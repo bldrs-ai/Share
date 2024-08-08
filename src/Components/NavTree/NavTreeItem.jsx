@@ -80,19 +80,7 @@ export default function CustomContent(props, ref) {
             width: hasHideIcon ? 'calc(100% - 30px)' : '100%',
           }}
         >
-          <Typography
-          variant='tree'
-          sx={{
-                display: 'inlineBlock',
-                width: '20ch',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }
-          }
-          >
-            {label}
-          </Typography>
+          <Typography variant='tree'>{label}</Typography>
         </Box>
         {hasHideIcon &&
          <Box display='flex' sx={{display: 'contents', width: '30px'}}>
