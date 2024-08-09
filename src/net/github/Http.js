@@ -1,8 +1,6 @@
-import {Octokit} from '@octokit/rest'
 import {assertDefined} from '../../utils/assert'
-import PkgJson from '../../../package.json'
 import {checkCache, updateCache} from './Cache'
-
+import {octokit} from './OctokitExport'
 
 /**
  * Fetch the resource at the given path from GitHub, substituting in the given args
@@ -155,17 +153,3 @@ function requestWithTimeout(octokitRequest, timeout = 10000) { // Default timeou
     ),
   ])
 }
-
-
-const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL
-// All direct uses of octokit should be private to this file to
-// ensure we setup mocks for local use and unit testing.
-export const octokit = new Octokit({
-  baseUrl: GITHUB_BASE_URL,
-  userAgent: `bldrs/${PkgJson.version}`,
-  // This comment instructs GitHub to always use the latest response instead of using a cached version. Especially relevant for notee.
-  // https://github.com/octokit/octokit.js/issues/890#issuecomment-392193948 the source of the solution
-  headers: {
-    'If-None-Match': '',
-  },
-})
