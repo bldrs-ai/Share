@@ -12,11 +12,10 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
+import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {getLatestCommitHash} from '../net/github/Commits'
 // TODO(pablo): use ^^ instead of this
 import {parseGitHubPath} from '../utils/location'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -332,29 +331,20 @@ export default function CadView({
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
+      // eslint-disable-next-line no-unused-vars
       const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-      const commitHash = isPublic ?
-            await getLatestCommitHash(owner, repo, filePath, '', branch) :
-            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
-      if (commitHash === null) {
-        // downloadToOpfs below will error out as well.
-        debug().error(
-          `Error obtaining commit hash for: ` +
-            `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
-            `accessToken (present?):${accessToken ? 'true' : 'false'}`)
-      }
-
-      const file = await downloadToOPFS(
+      const file = await downloadModel(
         navigate,
         appPrefix,
         handleBeforeUnload,
         ifcURL,
         filePath,
-        commitHash,
+        accessToken,
         owner,
         repo,
         branch,
+        setOpfsFile,
         (progressEvent) => {
           if (Number.isFinite(progressEvent.receivedLength)) {
             const loadedBytes = progressEvent.receivedLength
@@ -365,21 +355,17 @@ export default function CadView({
           }
         })
 
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
+        if (file) {
+        loadedModel = await viewer.loadIfcFile(
+          file,
+          !isCamHashSet,
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setErrorPath(filePath)
+          }, customViewSettings)
       }
-
-      loadedModel = await viewer.loadIfcFile(
-        file,
-        !isCamHashSet,
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsModelLoading(false)
-          setErrorPath(filePath)
-        }, customViewSettings)
     }
 
     if (loadedModel) {

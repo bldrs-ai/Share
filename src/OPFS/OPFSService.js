@@ -207,6 +207,39 @@ export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owne
 }
 
 /**
+ * Downloads a file to the OPFS repository from a specified URL.
+ *
+ * Initiates a download process for a file from the provided URL to
+ * store it within the OPFS repository under a specific commit hash,
+ * original file path, and within the specified owner's repository and branch.
+ * The function also supports progress tracking through a callback function.
+ *
+ * @param {string} objectUrl The URL from which the file is to be downloaded
+ * @param {string} originalFilePath The path where the file will be stored in the repository
+ * @param {string} owner The owner of the repository
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file will be stored
+ * @param {string} accessToken GitHub access token
+ * @param {Function} onProgress A callback function to track the progress of the download
+ */
+export function opfsDownloadModel(objectUrl, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'downloadModel',
+    objectUrl: objectUrl,
+    originalFilePath: originalFilePath,
+    owner: owner,
+    repo: repo,
+    branch: branch,
+    accessToken: accessToken,
+    onProgress: onProgress,
+  })
+}
+
+/**
  * Reads a file from the OPFS storage.
  *
  * Sends a request to a worker to read a file specified by its name

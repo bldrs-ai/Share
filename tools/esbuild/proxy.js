@@ -1,6 +1,5 @@
 import http from 'node:http'
 
-
 /**
  * @param {string} proxiedHost The host to which traffic will be sent. E.g. localhost
  * @param {number} port The port to which traffic will be sent.  E.g. 8079
@@ -25,6 +24,11 @@ export function createProxyServer(host, port) {
         return
       }
 
+      // Set the correct Content-Type for .js files
+      if (req.url.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript')
+      }
+
       // Otherwise, forward the response from esbuild to the client
       res.writeHead(proxyResponse.statusCode, proxyResponse.headers)
       proxyResponse.pipe(res, {end: true})
@@ -35,10 +39,8 @@ export function createProxyServer(host, port) {
   })
 }
 
-
 const HTTP_FOUND = 200
 const HTTP_NOT_FOUND = 404
-
 
 /** Serve a 200 bounce page for missing resources. */
 const serveNotFound = ((res) => {
