@@ -13,7 +13,7 @@ export default {
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
   RAW_GIT_PROXY_URL: 'http://localhost:8083/model',
-  //RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
+  // RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
 
   // Monitoring
   SENTRY_DSN: null,
