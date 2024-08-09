@@ -6,7 +6,9 @@ import {
   downloadToOPFS,
   doesFileExistInOPFS,
   deleteFileFromOPFS,
-  checkOPFSAvailability} from './utils'
+  checkOPFSAvailability,
+  snapshotOPFS,
+  clearOPFSCache} from './utils'
 
 
 jest.mock('../OPFS/OPFSService.js')
@@ -293,6 +295,46 @@ describe('OPFS Test Suite', () => {
 
       const result = await checkOPFSAvailability()
       expect(result).toBe(false)
+    })
+  })
+
+  describe('snapshotOPFS', () => {
+    it('should resolve true if the snapshot was retrieved', async () => {
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          // Simulate successful file deletion
+          process.nextTick(() => handler({data: {completed: true, event: 'snapshot', directoryStructure: []}}))
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const result = await snapshotOPFS()
+
+      expect(result).toBe(true)
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(mockWorker.addEventListener).toHaveBeenCalled()
+      expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('clearOPFS', () => {
+    it('should resolve true if the OPFS cache was cleared', async () => {
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          // Simulate successful file deletion
+          process.nextTick(() => handler({data: {completed: true, event: 'clear'}}))
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const result = await clearOPFSCache()
+
+      expect(result).toBe(true)
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(mockWorker.addEventListener).toHaveBeenCalled()
+      expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
     })
   })
 })

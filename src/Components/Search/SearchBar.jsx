@@ -1,6 +1,8 @@
 import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {handleBeforeUnload} from '../../utils/event'
@@ -12,9 +14,11 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
+ * @property {string} placeholder Text to display when search bar is inactive
+ * @property {string} helperText Text to display under the TextField
  * @return {ReactElement}
  */
-export default function SearchBar() {
+export default function SearchBar({placeholder, helperText}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -75,16 +79,23 @@ export default function SearchBar() {
     searchInputRef.current.blur()
   }
 
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      onSubmit(event)
+    }
+  }
+
 
   // The container and paper are set to 100% width to fill the
   // container SearchBar shares with NavTreePanel.  This is an easier
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{width: '100%'}}>
+    <form onSubmit={onSubmit}>
       <Autocomplete
         freeSolo
-        options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
+        options={[]}
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
@@ -96,12 +107,32 @@ export default function SearchBar() {
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder='Search'
+            placeholder={placeholder}
             variant='outlined'
+            helperText={helperText}
             sx={{
               width: '100%',
             }}
+            multiline
+            onKeyDown={handleKeyDown}
             data-testid='textfield-search-query'
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="clear search"
+                    onClick={() => setInputText('')}
+                    sx={{height: '2em', width: '2em'}}
+                  >
+                    <CloseIcon
+                      className="icon-share"
+                      color='primary'
+                      fontSize="small"
+                    />
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
         )}
       />

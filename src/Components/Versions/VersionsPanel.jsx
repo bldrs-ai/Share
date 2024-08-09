@@ -93,6 +93,7 @@ export default function VersionsPanel({filePath, currentRef}) {
           size='small'
         />
       }
+      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
       onCloseClick={() => setIsVersionsVisible(false)}
       data-testid='Version Panel'
     >

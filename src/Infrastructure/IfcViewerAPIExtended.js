@@ -1,4 +1,3 @@
-import {MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
@@ -7,7 +6,6 @@ import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
 import Picker from '../view/Picker'
-import Selection from '../view/Selection'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -133,12 +131,12 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     // const id = this.getPickedItemId(picked)
     const id = picked.object.expressID
     if (this.isolator.canBePickedInScene(id)) {
-      const preselectMat = new MeshLambertMaterial({
+      /* const preselectMat = new MeshLambertMaterial({
         transparent: true,
         opacity: 0.5,
         color: 0xff0000,
         depthTest: true,
-      })
+      }) */
       // new Selection(this.context, this.IFC.loader, preselectMat).pick(picked)
       await this.IFC.selector.preselection.pick(picked)
       this.highlightPreselection()

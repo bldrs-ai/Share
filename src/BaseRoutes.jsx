@@ -1,12 +1,13 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
-import {checkOPFSAvailability} from './OPFS/utils'
+import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import useStore from './store/useStore'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
+import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -47,6 +48,10 @@ export default function BaseRoutes({testElt = null}) {
     const checkAvailability = async () => {
       const available = await checkOPFSAvailability()
 
+      if (available) {
+        setUpGlobalDebugFunctions()
+      }
+
       setIsOpfsAvailable(available)
     }
 
@@ -71,6 +76,11 @@ export default function BaseRoutes({testElt = null}) {
           scope: 'openid profile email offline_access repo',
         },
       }).then((token) => {
+        if (token !== '') {
+          initializeOctoKitAuthenticated()
+        } else {
+          initializeOctoKitUnauthenticated()
+        }
         setAccessToken(token)
       }).catch((err) => {
         if (err.error !== 'login_required') {

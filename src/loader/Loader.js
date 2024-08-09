@@ -33,7 +33,7 @@ export async function load(
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
 
-  const [loader, isLoaderAsync, isFormatText, fixupCb] = findLoader(path)
+  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path)
   debug().log(
     `Loader#load, path=${path} loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText}`)
 
@@ -91,10 +91,10 @@ function convertToShareModel(model, viewer) {
       ids[0] = id
       // obj3d.geometry = obj3d.geometry || {attributes: {}}
 
-      //const ba = new BufferAttribute(ids, 1)
-      //ba.onUpload(() => {})
+      // const ba = new BufferAttribute(ids, 1)
+      // ba.onUpload(() => {})
 
-      //obj3d.geometry.attributes = ba
+      // obj3d.geometry.attributes = ba
 
       const expressIdAttr = new BufferAttribute(ids, 1)
       expressIdAttr.onUpload(() => {})
@@ -171,7 +171,7 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
  * @param {string} pathname
  * @return {Function|undefined}
  */
-function findLoader(pathname) {
+async function findLoader(pathname) {
   let extension
   try {
     extension = Filetype.getValidExtension(pathname)
@@ -180,9 +180,8 @@ function findLoader(pathname) {
     // TODO(pablo): need to think thru a better way to do content sniffing
 
     if (e instanceof Filetype.FilenameParseError) {
-      (async () => {
-        extension = await Filetype.guessType(pathname)
-      })()
+      extension = await Filetype.guessType(pathname)
+      console.log('got extension:', extension)
       if (extension === null) {
         throw new Error(`Could not guess filetype for ${pathname}`)
       }
@@ -228,7 +227,8 @@ function findLoader(pathname) {
       isFormatText = true
       break
     }
-    case 'glb': {
+    case 'glb':
+    case 'gltf': {
       loader = newGltfLoader()
       fixupCb = glbToThree
       isLoaderAsync = false

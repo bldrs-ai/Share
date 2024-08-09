@@ -47,7 +47,7 @@ export default function ExpansionPanel({summary, detail, expandState}) {
         id="panel1a-header"
       >
         <Typography sx={{
-          'maxWidth': '320px',
+          'maxWidth': '260px',
           'whiteSpace': 'nowrap',
           'overflow': 'hidden',
           'textOverflow': 'ellipsis',

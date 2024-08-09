@@ -64,24 +64,61 @@ export function getValidExtension(pathOrExt) {
 }
 
 
+/**
+ * @param {string} path
+ * @param {string} type
+ */
 export async function guessType(path) {
   console.log('guessType for path: ', path)
 
   const response = await axios.get(path, {
     headers: {
-      Range: 'bytes=0-1023', // Requesting the first 1024 bytes
+      Range: 'bytes=0-1024', // Requesting the first 1024 bytes
     },
     responseType: 'arraybuffer',
   })
 
   // Extracting the Content-Type header
   const contentType = response.headers['content-type']
+  console.log('content-type:', contentType)
 
   const initialContent = response.data
   console.log(`Initial Content Bytes:`, new Uint8Array(initialContent))
 
   console.log('guessType result..', response, contentType)
-  return null
+
+  const decoder = new TextDecoder('utf-8')
+  const initialContentString = decoder.decode(initialContent)
+  console.log(`Initial Content String:`, initialContentString)
+
+  return analyzeHeader(initialContentString)
+}
+
+
+/**
+ * @param {string} header
+ * @return {string} type
+ */
+export function analyzeHeader(header) {
+  if (header.includes('"metadata"')) {
+    return 'bld'
+  } else if (header.includes('FBX')) {
+    return 'fbx'
+  } else if (header.startsWith('glTF')) {
+    return 'gltf'
+  } else if (header.match(/(^\s*#.*$)?(^\s*$)*^\s*v(\s+-?\d+(\.\d+)?){3}\s*$/m)) {
+    return 'obj'
+  } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) {
+    return 'pdb'
+  } else if (header.startsWith('solid')) {
+    // TODO(pablo): binary STL is an arbitrary 80 byte header, followed by an
+    // int for number of triangles, and then triangle data, 50 bytes per
+    return 'stl'
+  } else if (header.match(/(^\s*(#.*|\s*)$)*(\s*-?\d+(\.\d+)?){3}\s*$/m)) {
+    return 'xyz'
+  } else {
+    return null
+  }
 }
 
 

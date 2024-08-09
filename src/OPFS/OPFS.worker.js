@@ -40,11 +40,68 @@ self.addEventListener('message', async (event) => {
               ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
       await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch)
+    } else if (event.data.command === 'clearCache') {
+      await clearCache()
+    } else if (event.data.command === 'snapshotCache') {
+      await snapshotCache()
     }
   } catch (error) {
     self.postMessage({error: error.message})
   }
 })
+
+/**
+ * Return directory snapshot of OPFS cache
+ */
+async function snapshotCache() {
+  const opfsRoot = await navigator.storage.getDirectory()
+
+  const directoryStructure = await traverseDirectory(opfsRoot)
+
+  // Send the directory structure as a message to the main thread
+  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure})
+}
+
+/**
+ * Given a directory handle, traverse the directory
+ */
+async function traverseDirectory(dirHandle, path = '') {
+  let entries = ''
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'directory') {
+      entries += `${path}/${name}/\n`
+      entries += await traverseDirectory(handle, `${path}/${name}`)
+    } else if (handle.kind === 'file') {
+      entries += `${path}/${name}\n`
+    }
+  }
+  return entries
+}
+
+/**
+ * Clear OPFS cache
+ */
+async function clearCache() {
+  const opfsRoot = await navigator.storage.getDirectory()
+  await deleteAllEntries(opfsRoot)
+
+  // Send the directory structure as a message to the main thread
+  self.postMessage({completed: true, event: 'clear'})
+}
+
+/**
+ * Delete all entries for a given directory handle
+ */
+async function deleteAllEntries(dirHandle) {
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === 'directory') {
+      await deleteAllEntries(handle)
+      await dirHandle.removeEntry(name, {recursive: true})
+    } else if (handle.kind === 'file') {
+      await dirHandle.removeEntry(name)
+    }
+  }
+}
 
 /**
  *

@@ -37,7 +37,7 @@ export default function AppBar({isRepoActive}) {
           sx={{width: '100%'}}
         >
           <ControlsGroup isRepoActive={isRepoActive}/>
-          <SearchBar/>
+          <SearchBar placeholder='Search'/>
           <LoginMenu/>
         </Stack>
       </Toolbar>

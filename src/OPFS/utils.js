@@ -6,6 +6,8 @@ import {
   opfsWriteModelFileHandle,
   opfsDoesFileExist,
   opfsDeleteModel,
+  opfsSnapshotCache,
+  opfsClearCache,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
@@ -186,6 +188,16 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
             resolve(false) // Resolve the promise with false
           } else if (event.data.event === eventStatus) {
             workerRef.removeEventListener('message', listener) // Remove the event listener
+
+            if (event.data.event === 'clear') {
+              // eslint-disable-next-line no-console
+              console.log('OPFS cache cleared.')
+            }
+
+            if (event.data.directoryStructure) {
+              // eslint-disable-next-line no-console
+              console.log(`OPFS Directory Structure:\n${ event.data.directoryStructure}`)
+            }
             resolve(true) // Resolve the promise with true
           }
         }
@@ -218,6 +230,24 @@ export function doesFileExistInOPFS(
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
+}
+
+/**
+ * Prints a snapshot of the OPFS directory structure
+ *
+ * @return {boolean}
+ */
+export function snapshotOPFS() {
+  return makePromise(opfsSnapshotCache, null, null, null, null, null, 'snapshot')
+}
+
+/**
+ * Deletes entirety of OPFS cache
+ *
+ * @return {boolean}
+ */
+export function clearOPFSCache() {
+  return makePromise(opfsClearCache, null, null, null, null, null, 'clear')
 }
 
 /**
@@ -316,4 +346,12 @@ export async function checkOPFSAvailability() {
   } else {
     return false
   }
+}
+
+/**
+ *
+ */
+export function setUpGlobalDebugFunctions() {
+  window.snapshotOPFS = snapshotOPFS
+  window.clearOPFSCache = clearOPFSCache
 }

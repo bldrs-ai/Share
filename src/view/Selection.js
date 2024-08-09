@@ -3,6 +3,11 @@ import {Mesh} from 'three'
 
 /** Highlights selected elements */
 export default class Selection {
+  /**
+   * @param {object} context
+   * @param {object} loader
+   * @param {object} material
+   */
   constructor(context, loader, material) {
     this.context = context
     this.meshes = new Set()
@@ -18,6 +23,12 @@ export default class Selection {
     }
   }
 
+
+  /**
+   * @param {object} item
+   * @param {boolean} focusSelection
+   * @param {boolean} removePrevious
+   */
   async pick(item, focusSelection = false, removePrevious = true) {
     const mesh = item.object
     let tmp
@@ -27,7 +38,7 @@ export default class Selection {
       return null
     }
     const id = mesh.expressID === undefined ? this.loader.ifcManager.getExpressId(mesh.geometry, item.faceIndex) : mesh.expressID
-    console.log('faceIndex for lookup:', item.faceIndex)
+    console.log('faceIndex for lookup:', item.faceIndex, 'mesh.expressID type:', typeof mesh.expressID)
     // if (true) throw new Error('pause')
     // const id = this.loader.ifcManager.getExpressId(mesh.geometry, item.faceIndex)
     if (id === undefined) {
@@ -38,8 +49,7 @@ export default class Selection {
         this.toggleVisibility(false)
         this.modelIDs.clear()
         this.selectedFaces = {}
-      }
-      else {
+      } else {
         this.unpick()
       }
     }
@@ -60,6 +70,13 @@ export default class Selection {
     return {modelID: mesh.modelID, id}
   }
 
+
+  /**
+   * @param {number} modelID
+   * @param {object} ids
+   * @param {boolean} focusSelection
+   * @param {boolean} removePrevious
+   */
   async pickByID(modelID, ids, focusSelection = false, removePrevious = true) {
     const mesh = this.context.items.ifcModels.find((model) => model.modelID === modelID)
     if (!mesh) {
@@ -83,6 +100,10 @@ export default class Selection {
   /**
    * Create a selection subset for the given ids and add it to scene
    *
+   * @param {number} modelID
+   * @param {Set<number>} ids
+   * @param {boolean} focusSelection
+   * @param {boolean} removePrevious
    * @return {Mesh}
    */
   newSelection(modelID, ids, removePrevious) {
@@ -100,6 +121,7 @@ export default class Selection {
     return mesh
   }
 
+
   /** Detaches this geometry from parent, calls dispose on any sub-geometry and releases instance members */
   dispose() {
     this.meshes.forEach((mesh) => {
@@ -116,6 +138,7 @@ export default class Selection {
     this.context = null
   }
 
+
   /** Clear all selected subsets */
   unpick() {
     for (const modelID of this.modelIDs) {
@@ -126,10 +149,12 @@ export default class Selection {
     this.selectedFaces = {}
   }
 
+
   /** Toggles all referenced mesh to visibilities */
   toggleVisibility(visible) {
     this.meshes.forEach((mesh) => (mesh.visible = visible))
   }
+
 
   /** Target given mesh and apply postproduction to it if active */
   async focusSelection(mesh) {

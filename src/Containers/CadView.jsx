@@ -2,7 +2,6 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
@@ -102,7 +101,7 @@ export default function CadView({
   const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
-  const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const setErrorPath = useStore((state) => state.setErrorPath)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
@@ -188,7 +187,6 @@ export default function CadView({
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
-
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
@@ -205,17 +203,12 @@ export default function CadView({
     debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(
-        <>
-          <Typography variant=''>Could not load model</Typography>
-          <Typography>{pathToLoad}</Typography>
-        </>)
+      setErrorPath(pathToLoad)
       return
     }
     // Leave snack message until here so alert box handler can clear
     // it after user says OK.
     setSnackMessage(null)
-
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -251,7 +244,7 @@ export default function CadView({
    * @param {string} gitpath to use for constructing API endpoints
    */
   async function loadModel(filepath, gitpath) {
-    debug().log(`CadView#loadModel: `, filepath)
+    debug(true).log(`CadView#loadModel: filepath(${filepath}) gitpath(${gitpath})`)
     const uploadedFile = pathPrefix.endsWith('new')
 
     if (uploadedFile) {
@@ -266,7 +259,7 @@ export default function CadView({
 
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
-    const ifcUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
+    const modelUrl = (uploadedFile || filepath.indexOf('/') === 0) ?
                    filepath : await getFinalUrl(filepath, accessToken)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
@@ -290,19 +283,19 @@ export default function CadView({
     let file
     let fitToFrame = !isCamHashSet
     let loadedModel
-    if (isOpfsAvailable && ifcUrl.endsWith('.ifc')) {
+    if (isOpfsAvailable && modelUrl.endsWith('.ifc')) {
       if (uploadedFile) {
         file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
         // There's never a camera URL param for an uploadedFile to always fitToFrame
         fitToFrame = true
-      } else if (ifcUrl === '/index.ifc') {
+      } else if (modelUrl === '/index.ifc') {
         // TODO(nickcastel50): need a more permanent way to
         // prevent redirect here for bundled ifc files
         file = await downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
-          ifcUrl,
+          modelUrl,
           'index.ifc',
           'bldrs-ai',
           'BldrsLocalStorage',
@@ -329,7 +322,7 @@ export default function CadView({
           navigate,
           appPrefix,
           handleBeforeUnload,
-          ifcUrl,
+          modelUrl,
           filePath,
           commitHash,
           owner,
@@ -346,11 +339,12 @@ export default function CadView({
         debug().error('Retrieved object is not of type File.')
       }
       loadedModel = await viewer.loadIfcFile(file, fitToFrame, onError, customViewSettings)
-    } else if (ifcUrl.endsWith('.ifc')) {
-      loadedModel = await viewer.loadIfcUrl(ifcUrl, fitToFrame, onProgress, onError, customViewSettings)
+    } else if (modelUrl.endsWith('.ifc')) {
+      loadedModel = await viewer.loadIfcUrl(modelUrl, fitToFrame, onProgress, onError, customViewSettings)
     } else {
-      loadedModel = await load(ifcUrl, viewer, onProgress, onError, onError)
-      // loadedModel = await load(new URL(ifcUrl), viewer, onProgress, onError, onError)
+      // Invoke our multi-format Loader instead
+      loadedModel = await load(modelUrl, viewer, onProgress, onError, onError)
+      // loadedModel = await load(new URL(modelUrl), viewer, onProgress, onError, onError)
       viewer.context.scene.add(loadedModel)
     }
 
@@ -367,7 +361,7 @@ export default function CadView({
       // always be 0.
       loadedModel.modelID = 0
       setModel(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcUrl)
+      updateLoadedFileInfo(uploadedFile, modelUrl)
 
       await viewer.isolator.setModel(loadedModel)
 
@@ -581,21 +575,21 @@ export default function CadView({
   /**
    * handles updating the stored file meta data for all cases except local files.
    *
-   * @param {string} ifcUrl the final ifcUrl that was passed to the viewer
+   * @param {string} modelUrl the final modelUrl that was passed to the viewer
    */
-  function updateLoadedFileInfo(uploadedFile, ifcUrl) {
+  function updateLoadedFileInfo(uploadedFile, modelUrl) {
     if (uploadedFile) {
       return
     }
     const githubRegex = /(raw.githubusercontent|github.com)/gi
-    if (ifcUrl.indexOf('/') === 0) {
+    if (modelUrl.indexOf('/') === 0) {
       setLoadedFileInfo({
         source: 'share', info: {
-          url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
+          url: `${window.location.protocol}//${window.location.host}${modelUrl}`,
         },
       })
-    } else if (githubRegex.test(ifcUrl)) {
-      setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
+    } else if (githubRegex.test(modelUrl)) {
+      setLoadedFileInfo({source: 'github', info: {url: modelUrl}})
     }
   }
 

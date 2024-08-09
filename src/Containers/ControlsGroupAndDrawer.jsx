@@ -84,8 +84,7 @@ export default function ControlsGroupAndDrawer({
       />
 
       <Box sx={{width: '100%'}}>
-        {isSearchEnabled && isSearchBarVisible && <SearchBar/>}
-
+        {isSearchEnabled && isSearchBarVisible && <SearchBar placeholder='Search'/>}
         {isNavTreeEnabled &&
          isNavTreeVisible &&
          model &&

@@ -18,8 +18,8 @@ const isThemeEnabled = process.env.THEME_IS_ENABLED
  */
 export default function createUISlice(set, get) {
   return {
-    alertMessage: null,
-    setAlertMessage: (msg) => set(() => ({alertMessage: msg})),
+    errorPath: null,
+    setErrorPath: (path) => set(() => ({errorPath: path})),
 
     appStoreSidebarWidth: MOBILE_WIDTH,
     setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),
@@ -58,6 +58,9 @@ export default function createUISlice(set, get) {
 
     isOpenModelVisible: openModelIsVisibleInitially(),
     setIsOpenModelVisible: (is) => set(() => ({isOpenModelVisible: is})),
+
+    isSaveModelVisible: false,
+    setIsSaveModelVisible: (is) => set(() => ({isSaveModelVisible: is})),
 
     isShareVisible: shareIsVisibleInitially(),
     setIsShareVisible: (is) => set(() => ({isShareVisible: is})),

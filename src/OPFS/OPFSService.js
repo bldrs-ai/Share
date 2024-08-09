@@ -252,6 +252,34 @@ export function opfsReadModel(modelKey) {
 }
 
 /**
+ * Clears the OPFS cache
+ */
+export function opfsClearCache() {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+
+  workerRef.postMessage({
+    command: 'clearCache',
+  })
+}
+
+/**
+ * Retrives a directory snapshot of the opfs cache.
+ */
+export function opfsSnapshotCache() {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+
+  workerRef.postMessage({
+    command: 'snapshotCache',
+  })
+}
+
+/**
  * Sets a callback function to handle messages from the worker.
  *
  * Registers a callback function to be invoked whenever the worker

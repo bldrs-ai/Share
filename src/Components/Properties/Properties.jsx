@@ -64,15 +64,14 @@ export default function Properties() {
         >
           <Typography variant='body1' sx={{
             position: 'sticky',
-            padding: '0 1em',
             top: '0px',
             zIndex: 10,
             backgroundColor: theme.palette.secondary.main,
+            textTransform: 'uppercase',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: `solid 1px ${theme.palette.secondary.contrastText}`,
           }}
           >
             Property Sets

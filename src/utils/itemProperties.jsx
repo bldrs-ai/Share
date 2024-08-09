@@ -39,7 +39,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
     }
   }
   return (
-    <table key={`table-${serial++}`} >
+    <table key={`table-${serial++}`}>
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -175,7 +175,7 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
     }
     return (
       <tr key={`hasProps-${serial++}`}>
-        <td colSpan={2}>
+        <td colSpan={2} style={{borderBottom: 'none'}}>
           <table>
             <tbody>{rows}</tbody>
           </table>
