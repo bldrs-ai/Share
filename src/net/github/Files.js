@@ -1,5 +1,6 @@
 import {assertDefined} from '../../utils/assert'
-import {getGitHub, octokit} from './Http' // TODO(pablo): don't use octokit directly
+import {octokit} from './OctokitExport'
+import {getGitHub} from './Http' // TODO(pablo): don't use octokit directly
 import {checkCache, updateCache} from './Cache'
 
 

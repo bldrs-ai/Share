@@ -1,5 +1,5 @@
 import {assertDefined} from '../../utils/assert'
-import {octokit} from './Http' // TODO(pablo): don't use directly
+import {octokit} from './OctokitExport' // TODO(pablo): don't use directly
 
 
 /**

@@ -252,7 +252,6 @@ export function getComponentOverrides(palette, typography) {
     MuiSwitch: {
       styleOverrides: {
         track: {
-          border: `solid 1px ${palette.secondary.contrastText}`,
         },
       },
     },
