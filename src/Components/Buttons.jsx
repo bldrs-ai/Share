@@ -195,7 +195,7 @@ export function RectangularButton({
   return (
     icon ?
       <Button onClick={onClick} startIcon={icon} variant='contained'>{title}</Button> :
-      <Button onClick={onClick} variant='contained' disabled={disabled}>{title}</Button>
+      <Button onClick={onClick} variant='contained' disabled={disabled} sx={{minWidth: '10em'}}>{title}</Button>
   )
 }
 
