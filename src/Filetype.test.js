@@ -1,5 +1,6 @@
 import {
   FilenameParseError,
+  analyzeHeader,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -32,5 +33,44 @@ describe('Filetype', () => {
     expect(() => {
       splitAroundExtension(`asdf.com/blah`)
     }).toThrow(FilenameParseError)
+  })
+
+  context('analyzeHeader', () => {
+    it('matches bld header', () => {
+      const header = `{\n` +
+            `  "metadata": {`
+      expect(analyzeHeader(header)).toBe('bld')
+    })
+
+    it('matches gltf header', () => {
+      const header = `glTFasdfasdfasdf`
+      expect(analyzeHeader(header)).toBe('gltf')
+    })
+
+    it('matches obj header', () => {
+      const header = `# blah blah.\n` +
+            `\n\n` +
+            `v 0.061043 0.025284 0.034490\n` +
+            `v 0.011829 0.022302 0.083267\n` +
+            `v 0`
+      expect(analyzeHeader(header)).toBe('obj')
+    })
+
+    it('matches pdb header', () => {
+      expect(analyzeHeader(`COMPND  bucky.pdb`)).toBe('pdb')
+      expect(analyzeHeader(`HEADER    CSD ENTRY GLOBAL`)).toBe('pdb')
+      expect(analyzeHeader(`ORIGX1      1.000000  0.000000  0.000000        0.00000`)).toBe('pdb')
+    })
+
+    it('matches stl header', () => {
+      expect(analyzeHeader(`solid smth`)).toBe('stl')
+    })
+
+    it('matches xyz header', () => {
+      const header = `# header1 \n` +
+            `#  \n` +
+            `  0.3517846     -0.7869986      -2.873479`
+      expect(analyzeHeader(header)).toBe('xyz')
+    })
   })
 })

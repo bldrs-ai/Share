@@ -58,7 +58,11 @@ export default class IfcIsolator {
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
-    this.visualElementsIds = [...new Set(ifcModel.geometry.attributes.expressID.array)]
+    if (ifcModel.geometry && ifcModel.geometry.attributes) {
+      this.visualElementsIds = [...new Set(ifcModel.geometry.attributes.expressID.array)]
+    } else if (ifcModel.expressID) {
+      this.visualElementsIds = [...new Set(ifcModel.expressID)]
+    }
     const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
     this.collectSpatialElementsId(rootElement)
   }

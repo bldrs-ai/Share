@@ -5,6 +5,7 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
+import Picker from '../view/Picker'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -116,14 +117,28 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    *
    */
   async highlightIfcItem() {
-    const found = this.context.castRayIfc()
-    if (!found) {
+    const picker = new Picker(this.context)
+    const pickedAll = picker.castRay(this.context.scene.scene.children)
+    if (pickedAll.length === 0) {
+      return
+    }
+    // const picked = this.context.castRayIfc()
+    const picked = pickedAll[0]
+    if (!picked) {
       this.IFC.selector.preselection.toggleVisibility(false)
       return
     }
-    const id = this.getPickedItemId(found)
+    // const id = this.getPickedItemId(picked)
+    const id = picked.object.expressID
     if (this.isolator.canBePickedInScene(id)) {
-      await this.IFC.selector.preselection.pick(found)
+      /* const preselectMat = new MeshLambertMaterial({
+        transparent: true,
+        opacity: 0.5,
+        color: 0xff0000,
+        depthTest: true,
+      }) */
+      // new Selection(this.context, this.IFC.loader, preselectMat).pick(picked)
+      await this.IFC.selector.preselection.pick(picked)
       this.highlightPreselection()
     }
   }
@@ -151,6 +166,19 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const [targetMesh] = this.IFC.selector.preselection.meshes
     this.highlighter.addToHighlighting(targetMesh)
   }
+
+
+  /** @param {Mesh} mesh */
+  addToHighlighting(mesh) {
+    this.highlighter.addToHighlighting(mesh)
+  }
+
+
+  /** @param {Array<Mesh>} meshes */
+  setHighlighted(meshes) {
+    this.highlighter.setHighlighted(meshes)
+  }
+
 
   /**
    *
