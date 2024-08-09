@@ -1,4 +1,4 @@
-const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL
+const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL_UNAUTHENTICATED
 const RAW_GIT_PROXY_URL = process.env.RAW_GIT_PROXY_URL
 
 
