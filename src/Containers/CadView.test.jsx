@@ -49,7 +49,19 @@ jest.mock('../OPFS/utils', () => {
   return {
     ...actualUtils, // Preserve other exports from the module
     downloadToOPFS: jest.fn().mockImplementation(() => {
-      // Read the file content from disk (consider using async read in real use-cases)
+      // Read the file content from disk
+      const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
+
+      const uint8Array = new Uint8Array(fileContent)
+      const blob = new Blob([uint8Array])
+
+      // The lastModified property is optional, and can be omitted or set to Date.now() if needed
+      const file = new FileMock([blob], 'index.ifc', {type: 'text/plain', lastModified: Date.now()})
+      // Return the mocked File in a promise if it's an async function
+      return Promise.resolve(file)
+    }),
+    downloadModel: jest.fn().mockImplementation(() => {
+      // Read the file content from disk
       const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
 
       const uint8Array = new Uint8Array(fileContent)

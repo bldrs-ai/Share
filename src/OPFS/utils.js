@@ -172,6 +172,7 @@ export function downloadModel(
   appPrefix,
   handleBeforeUnload,
   objectUrl,
+  shaHash,
   originalFilePath,
   accessToken,
   owner,
@@ -184,6 +185,7 @@ assertDefined(
     appPrefix,
     handleBeforeUnload,
     objectUrl,
+    shaHash,
     originalFilePath,
     accessToken,
     owner,
@@ -232,7 +234,7 @@ return new Promise((resolve, reject) => {
     reject(new Error('Worker initialization failed'))
   }
 
-  opfsDownloadModel(objectUrl, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
+  opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
 })
 }
 

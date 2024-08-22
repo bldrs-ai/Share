@@ -31,7 +31,7 @@ import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
-import {getFinalUrl} from './urls'
+import {getFinalDownloadData} from './urls'
 import {initViewer} from './viewer'
 
 
@@ -251,8 +251,15 @@ export default function CadView({
 
     // NB: for LFS targets, this will now be media.githubusercontent.com, so
     // don't use for further API endpoint construction.
-    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ?
-                   filepath : await getFinalUrl(filepath, accessToken)
+    let ifcURL; let shaHash
+
+    if (uploadedFile || filepath.indexOf('/') === 0) {
+        ifcURL = filepath
+        shaHash = ''
+    } else {
+        [ifcURL, shaHash] = await getFinalDownloadData(filepath, accessToken, isOpfsAvailable)
+    }
+
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
 
@@ -339,6 +346,7 @@ export default function CadView({
         appPrefix,
         handleBeforeUnload,
         ifcURL,
+        shaHash,
         filePath,
         accessToken,
         owner,
