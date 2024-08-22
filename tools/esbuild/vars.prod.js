@@ -12,9 +12,10 @@ export default {
   GITHUB_API_TOKEN: null,
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
-  RAW_GIT_PROXY_URL: 'http://localhost:8083/model',
-  RAW_GIT_PROXY_URL_FALLBACK: 'http:localhost:8083/r',
-  // RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
+  // RAW_GIT_PROXY_URL: 'http://localhost:8083/model',
+  // RAW_GIT_PROXY_URL_FALLBACK: 'http:localhost:8083/r',
+  RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/model',
+  RAW_GIT_PROXY_URL_FALLBACK: 'https://rawgit.bldrs.dev/r',
 
   // Monitoring
   SENTRY_DSN: null,
