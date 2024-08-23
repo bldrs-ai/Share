@@ -33,8 +33,7 @@ describe('SaveModelControl', () => {
     expect(loginText).toBeInTheDocument()
   })
 
-  // TODO: reenable test
-  /* it('Renders file selector if the user is logged in', async () => {
+   it('Renders file selector if the user is logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {getByTestId} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
@@ -43,7 +42,7 @@ describe('SaveModelControl', () => {
     const Repository = await getByTestId('saveRepository')
     expect(File).toBeInTheDocument()
     expect(Repository).toBeInTheDocument()
-  })*/
+  })
 
   it('Does not fetch repo info on initial render when isSaveModelVisible=false in zustand', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
