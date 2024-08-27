@@ -10,8 +10,8 @@ export default {
   // GitHub
   GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com.msw',
-  RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/model',
-  RAW_GIT_PROXY_URL_FALLBACK: 'https://rawgit.bldrs.dev.msw/r',
+  RAW_GIT_PROXY_URL_NEW: 'https://rawgit.bldrs.dev.msw/model',
+  RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r',
 
   // Share
   OPFS_IS_ENABLED: false,

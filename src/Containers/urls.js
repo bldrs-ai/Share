@@ -12,7 +12,7 @@ export async function getFinalUrl(url, accessToken) {
   switch (u.host.toLowerCase()) {
     case 'github.com':
       if (!accessToken) {
-        const proxyUrl = new URL(process.env.RAW_GIT_PROXY_URL)
+        const proxyUrl = new URL(process.env.RAW_GIT_PROXY_URL_NEW)
 
         // Replace the protocol, host, and hostname in the target
         u.protocol = proxyUrl.protocol
@@ -48,7 +48,7 @@ export async function getFinalDownloadData(url, accessToken, isOpfsAvailable) {
   switch (u.host.toLowerCase()) {
     case 'github.com':
       if (!accessToken) {
-        const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL : process.env.RAW_GIT_PROXY_URL_FALLBACK)
+        const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL_NEW : process.env.RAW_GIT_PROXY_URL)
 
         // Replace the protocol, host, and hostname in the target
         u.protocol = proxyUrl.protocol
