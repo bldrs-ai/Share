@@ -22,11 +22,14 @@ export default {
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
   minify: (process.env.MINIFY || 'true') === 'true',
-  keepNames: true, // TODOD(pablo): have had breakage without this
+  keepNames: true, // TODO(pablo): have had breakage without this
   splitting: false,
   metafile: true,
   sourcemap: true,
   logLevel: 'info',
-  define: defines,
+  define: {
+    ...defines,
+    'process.env.PLATFORM': '"web"',
+  },
   plugins: plugins,
 }
