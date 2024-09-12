@@ -27,9 +27,6 @@ export default {
   metafile: true,
   sourcemap: true,
   logLevel: 'info',
-  define: {
-    ...defines,
-    'process.env.PLATFORM': '"web"',
-  },
+  define: defines,
   plugins: plugins,
 }
