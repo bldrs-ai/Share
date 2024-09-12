@@ -15,7 +15,7 @@ export default function makePlugins(root, buildDir) {
     setup(build) {
       build.onResolve({filter: /^web-ifc$/}, (args) => {
         return {
-          path: path.resolve(root, 'node_modules/@bldrs-ai/conway/compiled/web/src/shim/ifc_api.js'),
+          path: path.resolve(root, 'node_modules/@bldrs-ai/conway/compiled/src/shim/ifc_api.js'),
         }
       })
     },
