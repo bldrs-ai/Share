@@ -32,4 +32,5 @@ export default {
   // https://threejs.org/docs/#api/en/renderers/WebGLRenderer.preserveDrawingBuffer
   // https://stackoverflow.com/a/40098594
   THREE_PDB_IS_ENABLED: false,
+  PLATFORM: 'web',
 }

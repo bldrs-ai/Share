@@ -22,4 +22,5 @@ export default {
   // On to enable screenshot testing
   // https://www.browserstack.com/docs/percy/common-issue/canvas-elements-not-captured
   THREE_PDB_IS_ENABLED: true,
+  PLATFORM: 'web',
 }
