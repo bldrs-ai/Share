@@ -57,20 +57,18 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
     }
 
     // if url is typed into the search bar open the model
-    if (id === 'githubsearch') {
-      if (looksLikeLink(gitHubSearchText)) {
-        try {
-          const modelPath = githubUrlOrPathToSharePath(gitHubSearchText)
-          window.removeEventListener('beforeunload', handleBeforeUnload)
-          navigate(modelPath, {replace: true})
-          if (setIsDialogDisplayed) {
-            setIsDialogDisplayed(false)
-          }
-        } catch (e) {
-          setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
+    if (looksLikeLink(inputText)) {
+      try {
+        const modelPath = githubUrlOrPathToSharePath(inputText)
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        navigate(modelPath, {replace: true})
+        if (setIsDialogDisplayed) {
+          setIsDialogDisplayed(false)
         }
-        return
+      } catch (e) {
+        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
+      return
     }
 
     // Searches from SearchBar clear current URL's IFC path.
@@ -106,7 +104,8 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
         freeSolo
         options={[]}
         value={(id === 'githubsearch') ? gitHubSearchText : inputText}
-        onChange={(_, newValue) => (id === 'githubsearch') ? setGitHubSearchText(newValue || '') : setInputText(newValue || '')}
+        onChange={(_, newValue) =>
+          (id === 'githubsearch') ? setGitHubSearchText(newValue || '') : setInputText(newValue || '')}
         onInputChange={(_, newInputValue) =>
           (id === 'githubsearch') ? setGitHubSearchText(newInputValue || '') : setInputText(newInputValue || '')}
         clearIcon={<CloseIcon className='icon-share'/>}
