@@ -18,25 +18,28 @@ import CloseIcon from '@mui/icons-material/Close'
  * @property {string} helperText Text to display under the TextField
  * @return {ReactElement}
  */
-export default function SearchBar({placeholder, helperText}) {
+export default function SearchBar({placeholder, helperText, id, setIsDialogDisplayed}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
+  const [gitHubSearchText, setGitHubSearchText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
 
 
   useEffect(() => {
     if (location.search) {
-      if (validSearchQuery(searchParams)) {
-        const newInputText = searchParams.get(QUERY_PARAM)
-        if (inputText !== newInputText) {
-          setInputText(newInputText)
+      if (id !== 'githubsearch') {
+        if (validSearchQuery(searchParams)) {
+          const newInputText = searchParams.get(QUERY_PARAM)
+          if (inputText !== newInputText) {
+            setInputText(newInputText)
+          }
+        } else {
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
         }
-      } else {
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
       }
     } else {
       setInputText('')
@@ -54,15 +57,20 @@ export default function SearchBar({placeholder, helperText}) {
     }
 
     // if url is typed into the search bar open the model
-    if (looksLikeLink(inputText)) {
-      try {
-        const modelPath = githubUrlOrPathToSharePath(inputText)
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        navigate(modelPath, {replace: true})
-      } catch (e) {
-        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
+    if (id === 'githubsearch') {
+      if (looksLikeLink(gitHubSearchText)) {
+        try {
+          const modelPath = githubUrlOrPathToSharePath(gitHubSearchText)
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navigate(modelPath, {replace: true})
+          if (setIsDialogDisplayed) {
+            setIsDialogDisplayed(false)
+          }
+        } catch (e) {
+          setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
+        }
+        return
       }
-      return
     }
 
     // Searches from SearchBar clear current URL's IFC path.
@@ -75,6 +83,7 @@ export default function SearchBar({placeholder, helperText}) {
       })
     } else {
       setSearchParams({q: inputText})
+      setIsDialogDisplayed(true)
     }
     searchInputRef.current.blur()
   }
@@ -96,11 +105,12 @@ export default function SearchBar({placeholder, helperText}) {
       <Autocomplete
         freeSolo
         options={[]}
-        value={inputText}
-        onChange={(_, newValue) => setInputText(newValue || '')}
-        onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
+        value={(id === 'githubsearch') ? gitHubSearchText : inputText}
+        onChange={(_, newValue) => (id === 'githubsearch') ? setGitHubSearchText(newValue || '') : setInputText(newValue || '')}
+        onInputChange={(_, newInputValue) =>
+          (id === 'githubsearch') ? setGitHubSearchText(newInputValue || '') : setInputText(newInputValue || '')}
         clearIcon={<CloseIcon className='icon-share'/>}
-        inputValue={inputText}
+        inputValue={(id === 'githubsearch') ? gitHubSearchText : inputText}
         renderInput={(params) => (
           <TextField
             {...params}
@@ -121,7 +131,7 @@ export default function SearchBar({placeholder, helperText}) {
                 <InputAdornment position="end">
                   <IconButton
                     aria-label="clear search"
-                    onClick={() => setInputText('')}
+                    onClick={() => (id === 'githubsearch') ? setGitHubSearchText('') : setInputText('')}
                     sx={{height: '2em', width: '2em'}}
                   >
                     <CloseIcon
