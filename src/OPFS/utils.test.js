@@ -4,6 +4,7 @@ import {
   writeSavedGithubModelOPFS,
   getModelFromOPFS,
   downloadToOPFS,
+  downloadModel,
   doesFileExistInOPFS,
   deleteFileFromOPFS,
   checkOPFSAvailability,
@@ -142,6 +143,94 @@ describe('OPFS Test Suite', () => {
           'owner',
           'repo',
           'branch',
+          onProgressMock,
+      )
+
+      expect(onProgressMock).toHaveBeenCalledWith({
+        lengthComputable: true,
+        contentLength: 100,
+        receivedLength: 50,
+      })
+    })
+  })
+
+  describe('downloadModel', () => {
+    it('should resolve with file when download completes', async () => {
+      const mockFile = new Blob(['dummy content'], {type: 'application/octet-stream'})
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {completed: true, event: 'exists', file: mockFile}})
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const onProgressMock = jest.fn()
+      const setOPFSFile = jest.fn()
+      const result = await downloadModel(
+          // eslint-disable-next-line no-empty-function
+          () => {}, // navigate
+          'appPrefix',
+          // eslint-disable-next-line no-empty-function
+          () => {}, // handleBeforeUnload
+          'objectUrl',
+          'shaHash',
+          'originalFilePath',
+          'accessToken',
+          'owner',
+          'repo',
+          'branch',
+          setOPFSFile,
+          onProgressMock,
+      )
+
+      expect(result).toEqual(mockFile)
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsDownloadModel).toHaveBeenCalledWith(
+          'objectUrl',
+          'shaHash',
+          'originalFilePath',
+          'owner',
+          'repo',
+          'branch',
+          'accessToken',
+          true, // Since onProgress is provided
+      )
+      expect(mockWorker.addEventListener).toHaveBeenCalled()
+      expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
+    })
+
+    it('should call onProgress with progress data', async () => {
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {progressEvent: true, contentLength: 100, receivedLength: 50}}) // Simulate a progress update
+            handler({data: {completed: true, event: 'download', file: new Blob(['content'])}}) // Then download
+            handler({data: {completed: true, event: 'renamed', file: new Blob(['content'])}}) // Then complete
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const onProgressMock = jest.fn()
+      const setOPFSFile = jest.fn()
+      await downloadModel(
+          // eslint-disable-next-line no-empty-function
+          () => {}, // navigate
+          'appPrefix',
+          // eslint-disable-next-line no-empty-function
+          () => {}, // handleBeforeUnload
+          'objectUrl',
+          'shaHash',
+          'originalFilePath',
+          'accessToken',
+          'owner',
+          'repo',
+          'branch',
+          setOPFSFile,
           onProgressMock,
       )
 

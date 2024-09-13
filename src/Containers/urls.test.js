@@ -18,9 +18,9 @@ describe.only('With environment variables', () => {
 
 
   it.only('getFinalUrl', async () => {
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual(`${testEnvVars.RAW_GIT_PROXY_URL}/`)
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual(`${testEnvVars.RAW_GIT_PROXY_URL_NEW}/`)
 
-    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
+    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev.jest/model'
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev.jest/model/')
   })
 })

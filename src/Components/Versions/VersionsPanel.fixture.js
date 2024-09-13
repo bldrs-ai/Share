@@ -1,4 +1,4 @@
-const RAW_GIT_PROXY_URL = process.env.RAW_GIT_PROXY_URL
+const RAW_GIT_PROXY_URL_NEW = process.env.RAW_GIT_PROXY_URL_NEW
 
 
 export const MOCK_MODEL_PATH_GIT = {
@@ -7,5 +7,5 @@ export const MOCK_MODEL_PATH_GIT = {
   branch: 'main',
   filepath: '/ZGRAGGEN.ifc',
   eltPath: '',
-  gitpath: `${RAW_GIT_PROXY_URL}/user2/Schneestock-Public/main/ZGRAGGEN.ifc`,
+  gitpath: `${RAW_GIT_PROXY_URL_NEW}/user2/Schneestock-Public/main/ZGRAGGEN.ifc`,
 }

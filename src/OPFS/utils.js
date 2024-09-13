@@ -1,6 +1,7 @@
 import {
   initializeWorker,
   opfsDownloadToOPFS,
+  opfsDownloadModel,
   opfsReadModel,
   opfsWriteModel,
   opfsWriteModelFileHandle,
@@ -148,6 +149,93 @@ export function downloadToOPFS(
 
     opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
   })
+}
+
+/**
+ * Downloads a model, handles progress updates, and updates the OPFS file handle.
+ *
+ * @param {Function} navigate Function to navigate to a different route.
+ * @param {string} appPrefix The application prefix for routing.
+ * @param {Function} handleBeforeUnload Function to handle the beforeunload event.
+ * @param {string} objectUrl The URL of the object to be downloaded.
+ * @param {string} originalFilePath The original file path of the model.
+ * @param {string} accessToken Access token for authentication.
+ * @param {string} owner The owner of the repository.
+ * @param {string} repo The repository name.
+ * @param {string} branch The branch name.
+ * @param {Function} setOpfsFile Function to set the OPFS file in the state.
+ * @param {Function} [onProgress] Optional function to handle progress events.
+ * @return {Promise<File>} - A promise that resolves to the downloaded file.
+ */
+export function downloadModel(
+  navigate,
+  appPrefix,
+  handleBeforeUnload,
+  objectUrl,
+  shaHash,
+  originalFilePath,
+  accessToken,
+  owner,
+  repo,
+  branch,
+  setOpfsFile,
+  onProgress) {
+assertDefined(
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    objectUrl,
+    shaHash,
+    originalFilePath,
+    accessToken,
+    owner,
+    repo,
+    branch)
+
+return new Promise((resolve, reject) => {
+  const workerRef = initializeWorker()
+  if (workerRef !== null) {
+    // Listener for messages from the worker
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener) // Remove the event listener
+        reject(new Error(event.data.error))
+      } else if (event.data.progressEvent) {
+        if (onProgress) {
+          onProgress({
+            lengthComputable: event.data.contentLength !== 0,
+            contentLength: event.data.contentLength,
+            receivedLength: event.data.receivedLength,
+          }) // Custom progress event
+        }
+      } else if (event.data.completed) {
+        if (event.data.event === 'download') {
+          debug().warn('Worker finished downloading file')
+        } else if (event.data.event === 'exists') {
+          debug().warn('Commit exists in OPFS.')
+        }
+
+        const file = event.data.file
+        if (event.data.event === 'renamed' || event.data.event === 'exists') {
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          if (file instanceof File) {
+            setOpfsFile(file)
+          } else {
+            debug().error('Retrieved object is not of type File.')
+          }
+        }
+
+        resolve(file) // Resolve the promise with the file
+      }
+    }
+    workerRef.addEventListener('message', listener)
+  } else {
+    reject(new Error('Worker initialization failed'))
+  }
+
+  opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
+})
 }
 
 /**

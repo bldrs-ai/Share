@@ -232,63 +232,67 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         justifyContent='center'
         alignItems='center'
       >
-        {!isAuthenticated ?
-
-         <PleaseLogin/> :
-
-         <Stack>
-           <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-           <Selector label='Organization' list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}
-           data-testid='saveOrganization'
-           />
-           <Selector
-             label='Repository'
-             list={repoNamesArr}
-             selected={selectedRepoName}
-             setSelected={selectRepo}
-             data-testid='saveRepository'
-           />
-           <SelectorSeparator
-             label={(currentPath === '') ? 'Folder' :
-                    `Folder: ${currentPath}`}
-             list={foldersArr}
-             selected={selectedFolderName}
-             setSelected={selectFolder}
-             data-testid='saveFolder'
-           />
-           {requestCreateFolder && (
-             <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-               <TextField
-                 label='Enter folder name'
-                 variant='outlined'
-                 size='small'
-                 onChange={(e) => setCreateFolderName(e.target.value)}
-                 data-testid='CreateFolderId'
-                 sx={{flexGrow: 1}}
-                 onKeyDown={(e) => {
-                   // Stops the event from propagating up to parent elements
-                   e.stopPropagation()
-                 }}
-               />
-               <IconButton
-                 onClick={() => setRequestCreateFolder(false)}
-                 size='small'
-               >
-                 <ClearIcon className='icon-share'/>
-               </IconButton>
-             </div>
-           )}
-           <TextField
-             label='Enter file name'
-             variant='outlined'
-             size='small'
-             onChange={(e) => setSelectedFileName(e.target.value)}
-             onKeyDown={(e) => e.stopPropagation()}
-             sx={{marginBottom: '.5em'}}
-             data-testid='CreateFileId'
-           />
-         </Stack>
-        }
+        {!isAuthenticated ? (
+          <PleaseLogin/>
+        ) : (
+          file instanceof File && (
+            <Stack>
+              <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
+              <Selector
+                label='Organization'
+                list={orgNamesArrWithAt}
+                selected={selectedOrgName}
+                setSelected={selectOrg}
+                data-testid='saveOrganization'
+              />
+              <Selector
+                label='Repository'
+                list={repoNamesArr}
+                selected={selectedRepoName}
+                setSelected={selectRepo}
+                data-testid='saveRepository'
+              />
+              <SelectorSeparator
+                label={currentPath === '' ? 'Folder' : `Folder: ${currentPath}`}
+                list={foldersArr}
+                selected={selectedFolderName}
+                setSelected={selectFolder}
+                data-testid='saveFolder'
+              />
+              {requestCreateFolder && (
+                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                  <TextField
+                    label='Enter folder name'
+                    variant='outlined'
+                    size='small'
+                    onChange={(e) => setCreateFolderName(e.target.value)}
+                    data-testid='CreateFolderId'
+                    sx={{flexGrow: 1}}
+                    onKeyDown={(e) => {
+                      // Stops the event from propagating up to parent elements
+                      e.stopPropagation()
+                    }}
+                  />
+                  <IconButton
+                    onClick={() => setRequestCreateFolder(false)}
+                    size='small'
+                  >
+                    <ClearIcon className='icon-share'/>
+                  </IconButton>
+                </div>
+              )}
+              <TextField
+                label='Enter file name'
+                variant='outlined'
+                size='small'
+                onChange={(e) => setSelectedFileName(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+                sx={{marginBottom: '.5em'}}
+                data-testid='CreateFileId'
+              />
+            </Stack>
+          )
+        )}
       </Stack>
     </Dialog>
   )

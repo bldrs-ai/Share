@@ -262,7 +262,26 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
   }
+
   return contents.data.download_url
+}
+
+/**
+ *
+ */
+export async function getPathContents(repository, path, ref = '', accessToken = '') {
+  assertDefined(...arguments)
+  const args = {
+    path: path,
+    ref: ref,
+  }
+
+  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args, accessToken)
+  if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
+    throw new Error('No contents returned from github')
+  }
+
+  return [contents.data.download_url, contents.data.sha]
 }
 
 
