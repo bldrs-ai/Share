@@ -81,6 +81,8 @@ export default function OpenModelDialog({
             <>
               <SearchBar placeholder='Model URL'
                 helperText='Paste GitHub file link to open the model'
+                id='githubsearch'
+                setIsDialogDisplayed={setIsDialogDisplayed}
               />
             </>
             {isAuthenticated &&
