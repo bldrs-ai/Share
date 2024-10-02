@@ -5,6 +5,14 @@ import {load} from './Loader.js'
 /** Similar to https://github.com/mrdoob/three.js/wiki/JSON-Object-Scene-format-4 */
 export default class BLDLoader {
   /**
+   * @param {object} viewer
+   */
+  constructor(viewer) {
+    this.viewer = viewer
+  }
+
+
+  /**
    * @param {string|Buffer} data
    * @param {string} basePath
    * @param {Function} onLoad
@@ -19,7 +27,14 @@ export default class BLDLoader {
     }
 
     for (const objRef of model.objects) {
-      const subModel = await load(new URL(objRef.href, basePath))
+      if (basePath.startsWith('blob:')) {
+        basePath = basePath.substring('blob:'.length)
+        basePath = 'http://localhost:8081/'
+      }
+      console.log('objRef.href', objRef.href, basePath)
+      const subUrl = new URL(objRef.href, basePath)
+      console.log('subUrl', subUrl)
+      const subModel = await load(subUrl, this.viewer, () => {}, () => {}, () => {})
       root.add(subModel)
 
       if (objRef.pos) {

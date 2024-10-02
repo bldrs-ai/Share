@@ -11,6 +11,7 @@ import * as Filetype from '../Filetype'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import BLDLoader from './BLDLoader'
+import {IFCLoader} from './IFCLoader'
 import glbToThree from './glb'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
@@ -33,7 +34,7 @@ export async function load(
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
 
-  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path)
+  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load, path=${path} loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText}`)
 
@@ -158,6 +159,7 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
   } else if (isLoaderAsync) {
     model = await loader.parse(modelData, basePath)
   } else {
+    console.log('calling loader.parse with', loader)
     model = loader.parse(modelData, basePath)
   }
   if (!model) {
@@ -171,9 +173,11 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
  * @param {string} pathname
  * @return {Function|undefined}
  */
-async function findLoader(pathname) {
+async function findLoader(pathname, viewer) {
+  console.log('findLoader with:', pathname, viewer)
   let extension
   try {
+    console.log('calling Filetype.getValidExtension with:', pathname)
     extension = Filetype.getValidExtension(pathname)
   } catch (e) {
     console.log('peaking with axios')
@@ -191,17 +195,20 @@ async function findLoader(pathname) {
     }
   }
   let loader
-  let isLoaderAsync = false
   let isFormatText = false
   let fixupCb
   switch (extension) {
     case 'bld': {
-      loader = new BLDLoader()
+      loader = new BLDLoader(viewer)
       isFormatText = true
       break
     }
     case 'fbx': {
       loader = new FBXLoader()
+      break
+    }
+    case 'ifc': {
+      loader = await newIfcLoader()
       break
     }
     case 'obj': {
@@ -231,7 +238,6 @@ async function findLoader(pathname) {
     case 'gltf': {
       loader = newGltfLoader()
       fixupCb = glbToThree
-      isLoaderAsync = false
       break
     }
     /*
@@ -272,5 +278,33 @@ function newGltfLoader() {
   const dracoLoader = new DRACOLoader
   dracoLoader.setDecoderPath('./node_modules/three/examples/jsm/libs/draco/')
   loader.setDRACOLoader(dracoLoader)
+  return loader
+}
+
+
+/**
+ * Sets up the IFCLoader to use the wasm module and move the model to
+ * the origin on load.
+ */
+async function newIfcLoader() {
+  const loader = new IFCLoader()
+  // TODO(pablo): Now using Conway, it's working, but not sure how!
+  // loader.ifcManager.setWasmPath('./')
+  // loader.ifcManager.setWasmPath('../web-ifc/')
+  // loader.ifcManager.setWasmPath('../../../bldrs-conway/compiled/dependencies/conway-geom/Dist/')
+
+  // Setting COORDINATE_TO_ORIGIN is necessary to align the model as
+  // it is in Share.  USE_FAST_BOOLS is also used live, tho not sure
+  // what it does.
+  await loader.ifcManager.applyWebIfcConfig({
+    COORDINATE_TO_ORIGIN: true,
+    USE_FAST_BOOLS: true,
+  })
+
+  // TODO(pablo): maybe useful to print the coordination matrix from
+  // the normalized view for debug?  Will need to be called after
+  // model is loaded.
+  // const coordMatrix = loader.ifcManager.ifcAPI.GetCoordinationMatrix(0)
+
   return loader
 }

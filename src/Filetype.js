@@ -108,9 +108,11 @@ export function analyzeHeader(header) {
     return 'gltf'
   } else if (header.match(/(^\s*#.*$)?(^\s*$)*^\s*v(\s+-?\d+(\.\d+)?){3}\s*$/m)) {
     return 'obj'
-  } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) {
+  } else if (header.includes('ISO-10303-21')) {
+    return 'ifc'
+  } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) { // matches IFC & STEP, so put after
     return 'pdb'
-  } else if (header.startsWith('solid')) {
+  } else if (header.startsWith('solid') || header.includes('VCG')) {
     // TODO(pablo): binary STL is an arbitrary 80 byte header, followed by an
     // int for number of triangles, and then triangle data, 50 bytes per
     return 'stl'
