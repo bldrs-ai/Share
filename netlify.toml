@@ -3,11 +3,9 @@
   publish = "docs"
   environment = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
 
-[build.processing]
-  skip_processing = true
-
 [build.lifecycle]
-  onbuild = """
+  # This command runs before Netlify installs dependencies
+  onPreBuild = """
     echo "@bldrs-ai:registry=https://npm.pkg.github.com" > ~/.npmrc
     echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
   """
