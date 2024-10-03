@@ -2078,17 +2078,17 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.0.3.tgz":
-  version "0.0.1"
-  resolved "./bldrs-ai-conway-web-ifc-adapter-0.0.3.tgz#d47220d0e0dcd802b810b1dc6fe1199a95201c63"
+"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.1.2.tgz":
+  version "0.1.2"
+  resolved "./bldrs-ai-conway-web-ifc-adapter-0.1.2.tgz#25e6e8f576a66718cd7d81c8880d89ca624995e3"
   dependencies:
-    "@bldrs-ai/conway" "./bldrs-ai-conway-0.1.633.tgz"
-    "@types/node" "^22.5.5"
-    typescript "^5.6.2"
+    "@bldrs-ai/conway" "./bldrs-ai-conway-0.1.655.tgz"
+    "@types/node" "22.5.5"
+    typescript "5.6.2"
 
-"@bldrs-ai/conway@./bldrs-ai-conway-0.1.633.tgz":
-  version "0.1.632"
-  resolved "./bldrs-ai-conway-0.1.633.tgz#5dbc039cb085928bc341db265aca3c84a5e94d41"
+"@bldrs-ai/conway@./bldrs-ai-conway-0.1.655.tgz":
+  version "0.1.655"
+  resolved "./bldrs-ai-conway-0.1.655.tgz#069513d7388a774883b22b0a54819c413939d07c"
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
@@ -3785,7 +3785,7 @@
   resolved "https://registry.npmjs.org/@types/node/-/node-18.11.18.tgz"
   integrity sha512-DHQpWGjyQKSHj3ebjFI/wRKcqQcdR+MoFBygntYOZytCqNfkd2ZC4ARDJ2DQqhjH5p85Nnd3jhUJIXrszFX/JA==
 
-"@types/node@^22.5.5":
+"@types/node@22.5.5":
   version "22.5.5"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-22.5.5.tgz#52f939dd0f65fc552a4ad0b392f3c466cc5d7a44"
   integrity sha512-Xjs4y5UPO/CLdzpgR6GirZJx36yScjh73+2NlLlkFRSoQN8B0DpfXPdZGnvVmLRLOsqDpOfTNv7D9trgGhmOIA==
@@ -11025,7 +11025,7 @@ typescript@4.9.4:
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.4.tgz#a2a3d2756c079abda241d75f149df9d561091e78"
   integrity sha512-Uz+dTXYzxXXbsFpM86Wh3dKCxrQqUcVMxwU54orwlJjOpO3ao8L7j5lH+dWfTwgCwIuM9GQ2kvVotzYJMXTBZg==
 
-typescript@^5.6.2:
+typescript@5.6.2:
   version "5.6.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.6.2.tgz#d1de67b6bef77c41823f822df8f0b3bcff60a5a0"
   integrity sha512-NW8ByodCSNCwZeghjN3o+JX5OFH0Ojg6sadjEKY4huZ52TqbJTJnDo5+Tw98lSy63NZvi4n+ez5m2u5d4PkZyw==
