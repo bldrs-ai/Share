@@ -2078,17 +2078,18 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.0.3.tgz":
-  version "0.0.1"
-  resolved "./bldrs-ai-conway-web-ifc-adapter-0.0.3.tgz#d47220d0e0dcd802b810b1dc6fe1199a95201c63"
+"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.1.1.tgz":
+  version "0.1.1"
+  resolved "./bldrs-ai-conway-web-ifc-adapter-0.1.1.tgz#46d2c7c2afe9bab0c1cc1bc231164120f4a450bb"
   dependencies:
-    "@bldrs-ai/conway" "./bldrs-ai-conway-0.1.633.tgz"
-    "@types/node" "^22.5.5"
-    typescript "^5.6.2"
+    "@bldrs-ai/conway" "0.1.651"
+    "@types/node" "22.5.5"
+    typescript "5.6.2"
 
-"@bldrs-ai/conway@./bldrs-ai-conway-0.1.633.tgz":
-  version "0.1.632"
-  resolved "./bldrs-ai-conway-0.1.633.tgz#5dbc039cb085928bc341db265aca3c84a5e94d41"
+"@bldrs-ai/conway@0.1.651":
+  version "0.1.651"
+  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway/0.1.651/5ad68a71ad0d67651e3ea06543189a9fde230ce1#5ad68a71ad0d67651e3ea06543189a9fde230ce1"
+  integrity sha512-Oega1vLUFKxtYa5ZAgDHz+Qq3BSm0+qbQI9xzRtSPtLMjfG5NNkII3HX3DH9FobAOH7n+B47sUUmFWr3Gsg9Cw==
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
@@ -3785,10 +3786,10 @@
   resolved "https://registry.npmjs.org/@types/node/-/node-18.11.18.tgz"
   integrity sha512-DHQpWGjyQKSHj3ebjFI/wRKcqQcdR+MoFBygntYOZytCqNfkd2ZC4ARDJ2DQqhjH5p85Nnd3jhUJIXrszFX/JA==
 
-"@types/node@^22.5.5":
-  version "22.7.4"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.7.4.tgz#e35d6f48dca3255ce44256ddc05dee1c23353fcc"
-  integrity sha512-y+NPi1rFzDs1NdQHHToqeiX2TIS79SWEAw9GYhkkx8bD0ChpfqC+n2j5OXOCpzfojBEBt6DnEnnG9MY0zk1XLg==
+"@types/node@22.5.5":
+  version "22.5.5"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-22.5.5.tgz#52f939dd0f65fc552a4ad0b392f3c466cc5d7a44"
+  integrity sha512-Xjs4y5UPO/CLdzpgR6GirZJx36yScjh73+2NlLlkFRSoQN8B0DpfXPdZGnvVmLRLOsqDpOfTNv7D9trgGhmOIA==
   dependencies:
     undici-types "~6.19.2"
 
@@ -11025,7 +11026,7 @@ typescript@4.9.4:
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.4.tgz#a2a3d2756c079abda241d75f149df9d561091e78"
   integrity sha512-Uz+dTXYzxXXbsFpM86Wh3dKCxrQqUcVMxwU54orwlJjOpO3ao8L7j5lH+dWfTwgCwIuM9GQ2kvVotzYJMXTBZg==
 
-typescript@^5.6.2:
+typescript@5.6.2:
   version "5.6.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.6.2.tgz#d1de67b6bef77c41823f822df8f0b3bcff60a5a0"
   integrity sha512-NW8ByodCSNCwZeghjN3o+JX5OFH0Ojg6sadjEKY4huZ52TqbJTJnDo5+Tw98lSy63NZvi4n+ez5m2u5d4PkZyw==
