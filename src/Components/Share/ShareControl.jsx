@@ -2,7 +2,6 @@ import React, {ReactElement, createRef, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import Stack from '@mui/material/Stack'
@@ -15,8 +14,9 @@ import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/CutPl
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
 import {HASH_PREFIX_SHARE} from './hashState'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import ShareIcon from '@mui/icons-material/Share'
 import CopyIcon from '../../assets/icons/Copy.svg'
-import ShareIcon from '../../assets/icons/Share.svg'
 
 
 /**
