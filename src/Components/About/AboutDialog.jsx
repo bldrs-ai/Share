@@ -71,8 +71,8 @@ function AboutContent() {
               <li>Files hosted on GitHub</li>
               <li>Local files - <em>no data is uploaded to our servers</em></li>
             </ul>
-            <strong>Position</strong> the camera, <strong>Select</strong> elements, <strong>Crop</strong> using
-            section planes and add <strong>Notes</strong>; then <strong>Share</strong> the exact view using the
+            Position the camera, Select elements, Crop using
+            section planes and add Notes; then Share the exact view using the
             page URL or Share <ShareIcon className='icon-share' style={{height: '0.7em'}}/> dialog.
           </Typography>
           <Typography variant='body1'>
