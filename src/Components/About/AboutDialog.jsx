@@ -9,8 +9,6 @@ import {LogoBWithDomain} from '../Logo/Logo'
 // import PrivacyControl from './PrivacyControl'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import EmailIcon from '@mui/icons-material/Email'
-import FolderIcon from '@mui/icons-material/FolderOpen'
-import ShareIcon from '@mui/icons-material/Share'
 import DiscordIcon from '../../assets/icons/Discord.svg'
 
 
@@ -66,14 +64,16 @@ function AboutContent() {
             Welcome to Bldrs - Share!
           </Typography>
           <Typography variant='body1'>
-            Use the Open <FolderIcon className='icon-share'/> dialog to open IFC or STEP models from:
+            Use the Open dialog to open IFC or STEP models from:
             <ul>
-              <li>Files hosted on GitHub</li>
               <li>Local files - <em>no data is uploaded to our servers</em></li>
+              <li>Files hosted on GitHub, public or private</li>
             </ul>
-            Position the camera, Select elements, Crop using
-            section planes and add Notes; then Share the exact view using the
-            page URL or Share <ShareIcon className='icon-share' style={{height: '0.7em'}}/> dialog.
+          </Typography>
+          <Typography variant='body1'>
+            Position the camera, Select elements, Crop using section planes and
+            add Notes.  For files on GitHub Share the exact view using the page URL or
+            Share dialog.
           </Typography>
           <Typography variant='body1'>
             Comments and suggestions welcome!
