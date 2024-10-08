@@ -72,8 +72,8 @@ function AboutContent() {
           </Typography>
           <Typography variant='body1'>
             Position the camera, Select elements, Crop using section planes and
-            add Notes.  For files on GitHub Share the exact view using the page URL or
-            Share dialog.
+            Collaborate with your team via Notes.  For files on GitHub share the
+            exact view using the page URL or Share dialog.
           </Typography>
           <Typography variant='body1'>
             Comments and suggestions welcome!
