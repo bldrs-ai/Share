@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1128",
+  "version": "1.0.1133",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -10,6 +10,7 @@
   "scripts": {
     "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
+    "build-conway-debug":"yarn clean && yarn build-share-conway && yarn build-share-copy-wasm-conway-profile && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-cosmos": "shx mkdir -p docs ; shx rm -rf docs/cosmos; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
     "build-share": "yarn update-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js && shx cp src/OPFS/OPFS.worker.js docs/ && shx cp src/net/github/Cache.js docs/",
@@ -20,6 +21,7 @@
     "build-share-webifc:win32": "set USE_WEBIFC_SHIM=false&& yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-webifc:linux:darwin": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
+    "build-share-copy-wasm-conway-profile": "shx cp node_modules/@bldrs-ai/conway-web-ifc-adapter/node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
     "cy": "cypress run --browser chrome",
