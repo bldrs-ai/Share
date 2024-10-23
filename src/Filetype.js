@@ -69,8 +69,6 @@ export function getValidExtension(pathOrExt) {
  * @param {string} type
  */
 export async function guessType(path) {
-  console.log('guessType for path: ', path)
-
   const response = await axios.get(path, {
     headers: {
       Range: 'bytes=0-1024', // Requesting the first 1024 bytes
@@ -78,19 +76,9 @@ export async function guessType(path) {
     responseType: 'arraybuffer',
   })
 
-  // Extracting the Content-Type header
-  const contentType = response.headers['content-type']
-  console.log('content-type:', contentType)
-
   const initialContent = response.data
-  console.log(`Initial Content Bytes:`, new Uint8Array(initialContent))
-
-  console.log('guessType result..', response, contentType)
-
   const decoder = new TextDecoder('utf-8')
   const initialContentString = decoder.decode(initialContent)
-  console.log(`Initial Content String:`, initialContentString)
-
   return analyzeHeader(initialContentString)
 }
 

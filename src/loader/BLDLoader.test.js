@@ -2,7 +2,8 @@ import BLDLoader from './BLDLoader'
 
 
 describe('BLDLoader', () => {
-  it('parses', async () => {
+  // TODO(pablo)
+  it.skip('parses', async () => {
     const loader = new BLDLoader()
     const data = ```
 {
@@ -19,6 +20,11 @@ describe('BLDLoader', () => {
     }
 }
 ```
-//    await loader.parse(data, basePath, onLoad, onError) 
+    const basePath = undefined
+    const onLoad = jest.fn()
+    const onError = jest.fn()
+    await loader.parse(data, basePath, onLoad, onError)
+    expect(onLoad.mock.calls).toHaveLength(1)
+    expect(onError.mock.calls).toHaveLength(0)
   })
 })

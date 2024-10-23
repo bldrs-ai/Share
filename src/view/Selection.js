@@ -38,7 +38,8 @@ export default class Selection {
       return null
     }
     const id = mesh.expressID === undefined ? this.loader.ifcManager.getExpressId(mesh.geometry, item.faceIndex) : mesh.expressID
-    console.log('faceIndex for lookup:', item.faceIndex, 'mesh.expressID type:', typeof mesh.expressID)
+    // TODO(pablo)
+    // console.log('faceIndex for lookup:', item.faceIndex, 'mesh.expressID type:', typeof mesh.expressID)
     // if (true) throw new Error('pause')
     // const id = this.loader.ifcManager.getExpressId(mesh.geometry, item.faceIndex)
     if (id === undefined) {

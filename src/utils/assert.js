@@ -24,7 +24,7 @@ export function assertDefined(...args) {
   for (const ndx in args) {
     if (Object.prototype.hasOwnProperty.call(args, ndx)) {
       const arg = args[ndx]
-      assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`)
+      assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined: ${arg}`)
       if (Array.isArray(arg)) {
         for (let i = 0; i < arg.length; i++) {
           assertDefined(arg[i], `Arg ${ndx} is an array with undefined index ${i}`)

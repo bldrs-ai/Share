@@ -101,7 +101,7 @@ export default function CadView({
   const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
-  const setErrorPath = useStore((state) => state.setErrorPath)
+  const setAlert = useStore((state) => state.setAlert)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
@@ -187,27 +187,20 @@ export default function CadView({
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
+
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
-      debug().error('Error loading model: ', e)
-      // TODO(pablo): want this for new viewer
-      // eslint-disable-next-line no-console
-      console.error('Load error:', e)
-      tmpModelRef = undefined
+      setAlert(e)
       setSnackMessage(null)
-    }
-    setIsModelLoading(false)
-    debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
-
-    if (tmpModelRef === undefined || tmpModelRef === null) {
-      setErrorPath(pathToLoad)
       return
     }
-    // Leave snack message until here so alert box handler can clear
-    // it after user says OK.
+    setIsModelLoading(false)
+
+    debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
+
     setSnackMessage(null)
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
@@ -244,7 +237,7 @@ export default function CadView({
    * @param {string} gitpath to use for constructing API endpoints
    */
   async function loadModel(filepath, gitpath) {
-    debug(true).log(`CadView#loadModel: filepath(${filepath}) gitpath(${gitpath})`)
+    debug().log(`CadView#loadModel: filepath(${filepath}) gitpath(${gitpath})`)
     const uploadedFile = pathPrefix.endsWith('new')
 
     if (uploadedFile) {
@@ -417,7 +410,6 @@ export default function CadView({
     const picked = pickedAll[0]
     const mesh = picked.object
     // viewer.setHighlighted([mesh])
-    console.log('picked', picked, typeof mesh)
     if (mesh.expressID !== undefined) {
       elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
     } else {

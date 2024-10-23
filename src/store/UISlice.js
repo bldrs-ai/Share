@@ -18,8 +18,8 @@ const isThemeEnabled = process.env.THEME_IS_ENABLED
  */
 export default function createUISlice(set, get) {
   return {
-    errorPath: null,
-    setErrorPath: (path) => set(() => ({errorPath: path})),
+    alert: null,
+    setAlert: (a) => set(() => ({alert: a})),
 
     appStoreSidebarWidth: MOBILE_WIDTH,
     setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),

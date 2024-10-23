@@ -1,3 +1,5 @@
+// DO NOT EDIT - generated code
+/* eslint-disable */
 import * as WebIFC from 'web-ifc';
 import { IFCSPACE, IFCOPENINGELEMENT, IFCPRODUCTDEFINITIONSHAPE, IFCRELAGGREGATES, IFCRELCONTAINEDINSPATIALSTRUCTURE, IFCRELDEFINESBYPROPERTIES, IFCRELASSOCIATESMATERIAL, IFCRELDEFINESBYTYPE, IFCPROJECT, IFCBUILDING } from 'web-ifc';
 import { Mesh, Color, MeshLambertMaterial, DoubleSide, Matrix4, BufferGeometry, BufferAttribute, Loader, FileLoader } from 'three';

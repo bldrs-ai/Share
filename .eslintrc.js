@@ -61,7 +61,7 @@ module.exports = {
     'jsdoc/require-returns-description': 'off',
     'linebreak-style': ['error', 'unix'],
     'max-len': ['error', 140],
-    'no-console': 'error',
+    'no-console': ['error', {allow: ['warn', 'error']}],
     'no-debugger': 'error',
     'no-empty-function': 'error',
     'no-eq-null': 'error',

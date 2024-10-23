@@ -44,7 +44,6 @@ if (process.env.MSW_IS_ENABLED) {
   worker.start({
     onUnhandledRequest(req) {
       if (req.url.host === 'api.github.com') {
-        // eslint-disable-next-line no-console
         console.error(`Found an unhandled ${req.method} request to ${req.url}`)
       }
     },

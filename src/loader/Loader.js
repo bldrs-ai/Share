@@ -43,13 +43,31 @@ export async function load(
     return undefined
   }
 
-  const modelData = (await axios.get(
-    path,
-    {
-      responseType:
-      isFormatText ? 'text' : 'arraybuffer',
-    },
-  )).data
+  let modelData
+  try {
+    modelData = (await axios.get(
+      path,
+      {
+        responseType:
+        isFormatText ? 'text' : 'arraybuffer',
+      },
+    )).data
+  } catch (error) {
+    if (error.response) {
+      const httpNotFound = 404
+      console.warn('error.response.status:', error.response.status)
+      if (error.response.status === httpNotFound) {
+        throw new NotFoundError('File not found')
+      } else {
+        throw new Error(`Error response from server: status(${error.response.status}), message(${error.response.data})`)
+      }
+    } else if (error.request) {
+      throw new Error(`No response received from server: ${path}`)
+    }
+
+    // Optional: Re-throw the error or handle it in a way that suits your use case
+    throw new Error('Failed to fetch model data')
+  }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
@@ -90,6 +108,7 @@ function convertToShareModel(model, viewer) {
     if (obj3d.geometry) {
       const ids = new Int8Array(1)
       ids[0] = id
+      // TODO(pablo)
       // obj3d.geometry = obj3d.geometry || {attributes: {}}
 
       // const ba = new BufferAttribute(ids, 1)
@@ -98,13 +117,14 @@ function convertToShareModel(model, viewer) {
       // obj3d.geometry.attributes = ba
 
       const expressIdAttr = new BufferAttribute(ids, 1)
+      // eslint-disable-next-line no-empty-function
       expressIdAttr.onUpload(() => {})
 
       obj3d.geometry.attributes.expressID = expressIdAttr
 
-      // console.log('obj3d', obj3d)
-      const geomIndex = new Array(5000)
-      for (let i = 0; i < 5000; i++) {
+      const numQuickLookup = 5000 // TODO(pablo): rethink this approach
+      const geomIndex = new Array(numQuickLookup)
+      for (let i = 0; i < numQuickLookup; i++) {
         geomIndex[i] = obj3d.expressID
       }
       // throw new Error('obj3d')
@@ -159,7 +179,6 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
   } else if (isLoaderAsync) {
     model = await loader.parse(modelData, basePath)
   } else {
-    console.log('calling loader.parse with', loader)
     model = loader.parse(modelData, basePath)
   }
   if (!model) {
@@ -174,28 +193,24 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
  * @return {Function|undefined}
  */
 async function findLoader(pathname, viewer) {
-  console.log('findLoader with:', pathname, viewer)
   let extension
   try {
-    console.log('calling Filetype.getValidExtension with:', pathname)
     extension = Filetype.getValidExtension(pathname)
   } catch (e) {
-    console.log('peaking with axios')
     // TODO(pablo): need to think thru a better way to do content sniffing
 
     if (e instanceof Filetype.FilenameParseError) {
       extension = await Filetype.guessType(pathname)
-      console.log('got extension:', extension)
       if (extension === null) {
         throw new Error(`Could not guess filetype for ${pathname}`)
       }
-      console.log('after axios', extension)
     } else {
       throw e
     }
   }
-  let loader
+  const isLoaderAsync = false
   let isFormatText = false
+  let loader
   let fixupCb
   switch (extension) {
     case 'bld': {
@@ -307,4 +322,18 @@ async function newIfcLoader() {
   // const coordMatrix = loader.ifcManager.ifcAPI.GetCoordinationMatrix(0)
 
   return loader
+}
+
+/**
+ * For network or file resources that are not found.
+ */
+export class NotFoundError extends Error {
+  /** @param {string} message */
+  constructor(message) {
+    super(message)
+    this.name = 'NotFoundError'
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
+    }
+  }
 }

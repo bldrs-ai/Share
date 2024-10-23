@@ -22,19 +22,24 @@ export default class BLDLoader {
   async parse(data, basePath, onLoad, onError) {
     const model = JSON.parse(data)
     const root = new Object3D
+    // Model's base overrides system hint
+    if (model.base) {
+      basePath = model.base
+    }
     if (model.scale) {
       root.scale.setScalar(model.scale)
     }
 
     for (const objRef of model.objects) {
+      // TODO(pablo):
       if (basePath.startsWith('blob:')) {
         basePath = basePath.substring('blob:'.length)
         basePath = 'http://localhost:8081/'
       }
-      console.log('objRef.href', objRef.href, basePath)
       const subUrl = new URL(objRef.href, basePath)
-      console.log('subUrl', subUrl)
-      const subModel = await load(subUrl, this.viewer, () => {}, () => {}, () => {})
+      // TODO(pablo): error handling
+      // eslint-disable-next-line no-empty-function
+      const subModel = await load(subUrl.toString(), this.viewer, () => {}, () => {}, () => {})
       root.add(subModel)
 
       if (objRef.pos) {
