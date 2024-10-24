@@ -5,7 +5,7 @@ describe('BLDLoader', () => {
   // TODO(pablo)
   it.skip('parses', async () => {
     const loader = new BLDLoader()
-    const data = ```
+    const data = `
 {
   "metadata": {
     "version": 0.1,
@@ -15,16 +15,13 @@ describe('BLDLoader', () => {
   "objScale": 0.0005,
   "objects": [
     {
-      "href": "Al2O3.pdb",
+      "href": "file:///Al2O3.pdb",
       "pos": [0, 0, 0]
     }
+  ]
 }
-```
-    const basePath = undefined
-    const onLoad = jest.fn()
-    const onError = jest.fn()
-    await loader.parse(data, basePath, onLoad, onError)
-    expect(onLoad.mock.calls).toHaveLength(1)
-    expect(onError.mock.calls).toHaveLength(0)
+`
+    const model = await loader.parse(data)
+    expect(model).toBe(1)
   })
 })

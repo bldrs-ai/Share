@@ -1,5 +1,6 @@
 import {Object3D} from 'three'
-import {load} from './Loader.js'
+import {assertDefined} from '../utils/assert'
+import {load} from './Loader'
 
 
 /** Similar to https://github.com/mrdoob/three.js/wiki/JSON-Object-Scene-format-4 */
@@ -20,6 +21,7 @@ export default class BLDLoader {
    * @return {Object3D}
    */
   async parse(data, basePath, onLoad, onError) {
+    assertDefined(data)
     const model = JSON.parse(data)
     const root = new Object3D
     // Model's base overrides system hint
@@ -32,11 +34,10 @@ export default class BLDLoader {
 
     for (const objRef of model.objects) {
       // TODO(pablo):
-      if (basePath.startsWith('blob:')) {
+      if (basePath && basePath.startsWith('blob:')) {
         basePath = basePath.substring('blob:'.length)
-        basePath = 'http://localhost:8081/'
       }
-      const subUrl = new URL(objRef.href, basePath)
+      const subUrl = basePath ? new URL(objRef.href, basePath) : new URL(objRef.href)
       // TODO(pablo): error handling
       // eslint-disable-next-line no-empty-function
       const subModel = await load(subUrl.toString(), this.viewer, () => {}, () => {}, () => {})
