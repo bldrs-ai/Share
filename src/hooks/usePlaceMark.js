@@ -6,6 +6,7 @@ import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {
   addHashParams,
+  // eslint-disable-next-line no-unused-vars
   getAllHashParams,
   getHashParams,
   getHashParamsFromUrl,
@@ -17,9 +18,12 @@ import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {getIssueComments, getIssues} from '../net/github/Issues'
+// eslint-disable-next-line no-unused-vars
 import {createComment} from '../net/github/Comments'
+// eslint-disable-next-line no-unused-vars
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
+// eslint-disable-next-line no-unused-vars
 import {isDevMode} from '../utils/common'
 import {useExistInFeature} from './useExistInFeature'
 import debug from '../utils/debug'
@@ -43,6 +47,8 @@ export default function usePlaceMark() {
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const placeMarkMode = useStore((state) => state.placeMarkMode)
+  const setPlaceMarkMode = useStore((state) => state.setPlaceMarkMode)
 
 
   useEffect(() => {
@@ -94,6 +100,7 @@ export default function usePlaceMark() {
           const markArr = getObjectParams(activePlaceMarkHash)
           const svgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
@@ -109,6 +116,7 @@ export default function usePlaceMark() {
           const markArr = getObjectParams(hash)
           const newSvgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
           placeMarkGroupMap.set(hash, newSvgGroup)
@@ -117,14 +125,14 @@ export default function usePlaceMark() {
 
       await Promise.all(promises2)
 
-      if (!isDevMode()) {
+      /* if (!isDevMode()) {
         // Remove unnecessary place mark meshes
         const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
         const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
         deletedPlaceMarkHashes.forEach((hash) => {
           placeMark.disposePlaceMark(placeMarkGroupMap.get(hash))
         })
-      }
+      }*/
 
       resetPlaceMarkColors()
     })()
@@ -142,7 +150,7 @@ export default function usePlaceMark() {
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
     debug().log('usePlaceMark#onSceneDoubleTap')
-    if (!placeMark || !existPlaceMarkInFeature) {
+    if (!placeMark || !existPlaceMarkInFeature || !placeMarkMode) {
       return
     }
     const res = placeMark.onSceneDoubleClick(event)
@@ -176,8 +184,8 @@ export default function usePlaceMark() {
       case 0: // Main button (left button)
         if (event.shiftKey) {
           await savePlaceMark(res)
-        } else if (res.url) {
-          selectPlaceMark(res.url)
+        } else if (res.marker) {
+          selectPlaceMark(res)
         }
         break
       case 1: // Wheel button (middle button if present)
@@ -198,14 +206,16 @@ export default function usePlaceMark() {
   }
 
 
-  const savePlaceMark = async ({point, promiseGroup}) => {
+  const savePlaceMark = async ({point, normal, promiseGroup}) => {
     if (!existPlaceMarkInFeature) {
       return
     }
 
-    if (point && promiseGroup) {
+    if (point && normal && promiseGroup) {
       const svgGroup = await promiseGroup
-      const markArr = roundCoord(...point)
+      const positionData = roundCoord(...point)
+      const normalData = roundCoord(...normal)
+      const markArr = positionData.concat(normalData)
       addHashParams(window.location, HASH_PREFIX_PLACE_MARK, markArr)
       removeHashParams(window.location, HASH_PREFIX_CAMERA)
       addUserDataInGroup(svgGroup, {
@@ -216,6 +226,7 @@ export default function usePlaceMark() {
       setPlaceMarkStatus(svgGroup, true)
     }
 
+    setPlaceMarkMode(false)
     deactivatePlaceMark()
     if (!repository || !Array.isArray(notes)) {
       return
@@ -225,21 +236,37 @@ export default function usePlaceMark() {
     if (!placeMarkNote) {
       return
     }
+    // eslint-disable-next-line no-unused-vars
     const issueNumber = placeMarkNote.number
+    // eslint-disable-next-line no-unused-vars
     const newComment = {
       body: `[placemark](${window.location.href})`,
     }
-    await createComment(repository, issueNumber, newComment, accessToken)
+    // TODO: ennable createComment
+    // await createComment(repository, issueNumber, newComment, accessToken)
     toggleSynchSidebar()
   }
 
 
-  const selectPlaceMark = (url) => {
+  const selectPlaceMark = (res) => {
     if (!existPlaceMarkInFeature) {
       return
     }
-    assertDefined(url)
-    const hash = getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
+    assertDefined(res.marker)
+    let foundKey = null
+
+    for (const [key, value] of placeMarkGroupMap.entries()) {
+      if (value.uuid === res.marker.uuid) {
+        foundKey = key
+        break
+      }
+    }
+
+    if (foundKey !== null) {
+      window.location.hash = `#${foundKey}` // Change location hash
+    }
+
+    /* const hash = getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
     const svgGroup = placeMarkGroupMap.get(hash)
 
     if (svgGroup) {
@@ -247,7 +274,7 @@ export default function usePlaceMark() {
       if (!isDevMode()) {
         window.location.hash = `#${getAllHashParams(url)}` // Change location hash
       }
-    }
+    }*/
   }
 
 
@@ -256,6 +283,8 @@ export default function usePlaceMark() {
     if (!existPlaceMarkInFeature) {
       return
     }
+
+    setPlaceMarkMode(true)
 
     if (placeMark) {
       if (placeMarkId === id && placeMark.activated) {

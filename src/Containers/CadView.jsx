@@ -540,7 +540,9 @@ export default function CadView({
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-        const path = pathIds.join('/')
+        const enabledFeatures = searchParams.get('feature')
+        const pathIDsStr = pathIds.join('/')
+        const path = enabledFeatures ? `${pathIDsStr }?feature=${ enabledFeatures}` : pathIDsStr
         navWith(
           navigate,
           `${pathPrefix}${repoFilePath}/${path}`,
