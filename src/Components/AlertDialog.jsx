@@ -31,7 +31,7 @@ export default function AlertDialog({onClose}) {
       actionTitle='Reset'
     >
       <p>
-        {selectAlertReport(alert)}<br/>
+        {createAlertReport(alert)}<br/>
         For more helop contact us on our{' '}
         <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
           Discord
@@ -47,13 +47,14 @@ export default function AlertDialog({onClose}) {
  * @param {object} a
  * @return {ReactElement}
  */
-function selectAlertReport(a) {
+function createAlertReport(a) {
   if (typeof a === 'string') {
     return a
   } else if (typeof a === 'object') {
     if (a instanceof NotFoundError) {
       return displayPathAlert(a)
     } else if (a instanceof Error) {
+      console.error('General error:', a)
       return `${a}`
     }
   }

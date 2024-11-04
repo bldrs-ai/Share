@@ -12,6 +12,17 @@ export default {
   GITHUB_API_TOKEN: null,
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
+  // RAW_GIT_PROXY_URL_NEW: 'http://localhost:8083/model',
+  // RAW_GIT_PROXY_URL: 'http:localhost:8083/r',
+  /**
+   * RAW_GIT_PROXY_URL_NEW uses the /model endpoint for gitredir. This
+   * endpoint is passed a cached etag, and returns either a 304 (cached),
+   * or the GHUC download URL with the etag returned from GHUC server. If
+   * there is a new etag it is cached.
+   */
+  RAW_GIT_PROXY_URL_NEW: 'https://rawgit.bldrs.dev/model',
+  // This is the fallback if OPFS is not available, original gitredir
+  // functionality.
   RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
 
   // Monitoring
@@ -29,4 +40,5 @@ export default {
   // https://threejs.org/docs/#api/en/renderers/WebGLRenderer.preserveDrawingBuffer
   // https://stackoverflow.com/a/40098594
   THREE_PDB_IS_ENABLED: false,
+  PLATFORM: 'web',
 }

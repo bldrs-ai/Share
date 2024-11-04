@@ -1,4 +1,5 @@
 import debug from '../utils/debug'
+import {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} from '../net/github/OctokitExport'
 
 // TODO(pablo): probably don't need global state, can
 // pass worker refs as needed.
@@ -16,6 +17,12 @@ let workerRef = null
 export function initializeWorker() {
   if (workerRef === null) {
     workerRef = new Worker('/OPFS.Worker.js')
+
+    workerRef.postMessage({
+      command: 'initializeWorker',
+      GITHUB_BASE_URL_AUTHED: GITHUB_BASE_URL_AUTHED,
+      GITHUB_BASE_URL_UNAUTHED: GITHUB_BASE_URL_UNAUTHED,
+    })
   }
 
   return workerRef
@@ -202,6 +209,41 @@ export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owne
     owner: owner,
     repo: repo,
     branch: branch,
+    onProgress: onProgress,
+  })
+}
+
+/**
+ * Downloads a file to the OPFS repository from a specified URL.
+ *
+ * Initiates a download process for a file from the provided URL to
+ * store it within the OPFS repository under a specific commit hash,
+ * original file path, and within the specified owner's repository and branch.
+ * The function also supports progress tracking through a callback function.
+ *
+ * @param {string} objectUrl The URL from which the file is to be downloaded
+ * @param {string} shaHash The file hash for the object
+ * @param {string} originalFilePath The path where the file will be stored in the repository
+ * @param {string} owner The owner of the repository
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file will be stored
+ * @param {string} accessToken GitHub access token
+ * @param {Function} onProgress A callback function to track the progress of the download
+ */
+export function opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'downloadModel',
+    objectUrl: objectUrl,
+    shaHash: shaHash,
+    originalFilePath: originalFilePath,
+    owner: owner,
+    repo: repo,
+    branch: branch,
+    accessToken: accessToken,
     onProgress: onProgress,
   })
 }

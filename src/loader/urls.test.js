@@ -1,6 +1,7 @@
 import {
-  parseUrl,
   SOURCE_TYPE,
+  constructDownloadUrl,
+  parseUrl,
 } from './urls'
 
 
@@ -80,5 +81,37 @@ describe('parseUrl', () => {
           '': undefined,
         },
       })
+  })
+})
+
+
+describe('With environment variables', () => {
+  const OLD_ENV = process.env
+
+
+  beforeEach(() => {
+    jest.resetModules()
+    process.env = {...OLD_ENV}
+  })
+
+
+  afterAll(() => {
+    process.env = OLD_ENV
+  })
+
+
+  it('constructDownloadUrl', async () => {
+    const testProxy = 'https://a.b.com/'
+
+    // Used when isOpfsAvailable = false
+    process.env.RAW_GIT_PROXY_URL = `${testProxy}/foo`
+    // Used when isOpfsAvailable = true
+    process.env.RAW_GIT_PROXY_URL_NEW = `${testProxy}/bar`
+
+    let isOpfsAvailable = false
+    expect(await constructDownloadUrl('https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, ''])
+
+    isOpfsAvailable = true
+    expect(await constructDownloadUrl('https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, ''])
   })
 })

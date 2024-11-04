@@ -25,7 +25,8 @@ export default function createAppSlice(set, get) {
     // Depended on by CadView.  When enabled, null lets detection code set first time.
     isOpfsAvailable: isOpfsEnabled ? null : false,
     setIsOpfsAvailable: (is) => set(() => ({isOpfsAvailable: isOpfsEnabled ? is : false})),
-    opfsFile: OAUTH_2_CLIENT_ID === 'cypresstestaudience' ? new File([], 'mockFile.ifc') : null,
+    opfsFile: (OAUTH_2_CLIENT_ID === 'cypresstestaudience' ||
+      OAUTH_2_CLIENT_ID === 'testaudiencejest') ? new File([], 'mockFile.ifc') : null,
     setOpfsFile: (modelFile) => set(() => ({opfsFile: modelFile})),
   }
 }

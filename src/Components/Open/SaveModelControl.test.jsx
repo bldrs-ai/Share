@@ -33,7 +33,7 @@ describe('SaveModelControl', () => {
     expect(loginText).toBeInTheDocument()
   })
 
-  it('Renders file selector if the user is logged in', async () => {
+   it('Renders file selector if the user is logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {getByTestId} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')

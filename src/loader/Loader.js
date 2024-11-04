@@ -1,5 +1,6 @@
 import axios from 'axios'
 import {BufferAttribute, Mesh, Object3D} from 'three'
+import {IFCLoader} from 'web-ifc-three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
@@ -9,9 +10,11 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {assertDefined} from '../utils/assert'
+import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
+import {testUuid} from '../utils/strings'
+import {constructDownloadUrl} from './urls'
 import BLDLoader from './BLDLoader'
-import {IFCLoader} from './IFCLoader'
 import glbToThree from './glb'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
@@ -21,35 +24,115 @@ import xyzToThree from './xyz'
 /**
  * @param {string} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
- * @return {object|undefined} The model or undefined
+ * @param {Function} onProgress
+ * @param {boolean} setOpfsFile
+ * @param {Function} setOpfsFile
+ * @param {Function} setLoadedFileInfo
+ * @param {string} accessToken
+ * @return {object} The model or undefined
  */
 export async function load(
   path,
   viewer,
-  onProgress = (progressEvent) => debug().log('Loaders#load: progress: ', progressEvent),
-  onUnknownType = (errEvent) => debug().error(errEvent),
-  onError = (errEvent) => debug().error('Loaders#load: error: ', errEvent),
+  onProgress,
+  isOpfsAvailable,
+  setOpfsFile,
+  setLoadedFileInfo,
+  accessToken = '',
 ) {
-  assertDefined(path, viewer, onProgress, onUnknownType, onError)
-  // TODO(pablo): path feels a little underconstrained here.  axios works a
-  // little magic here, as either a url string or /foo.pdb work fine
+  assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, setLoadedFileInfo, accessToken)
+  console.log('Loader: in with path:', path)
 
-  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path, viewer)
-  debug().log(
-    `Loader#load, path=${path} loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText}`)
-
-  if (loader === undefined) {
-    onUnknownType()
-    return undefined
+  // Test for uploaded first
+  // Maybe use path.startsWith('/share/v/new')
+  if (testUuid(path)) {
+    console.log('Loader: upload detected')
+    path = getUploadedBlobPath(path)
+    // enablePageReloadApprovalCheck()
   }
 
-  let modelData
+  let shaHash
+  const isLocallyHostedFile = path.indexOf('/') === 0
+  if (!isOpfsAvailable) {
+    [path, shaHash] = await constructDownloadUrl(path, accessToken, isOpfsAvailable)
+  } else if (isLocallyHostedFile) {
+    console.log('Loader: locally hosted file')
+    path = path
+    shaHash = ''
+  } else {
+    console.log('Loader: download', path, accessToken, isOpfsAvailable);
+    // For logged in, you'll get a sha hash back.  otherwise null/undef
+    [path, shaHash] = await constructDownloadUrl(path, accessToken, isOpfsAvailable)
+  }
+
+  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path, viewer)
+  console.log(
+    `Loader#load, loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
+
+  if (loader === undefined) {
+    throw new Error(`Unknown filetype for: ${path}`)
+  }
+
+  const modelData = await axiosDownload(path, isFormatText, onProgress)
+
+  // Provide basePath for multi-file models.  Keep the last '/' for
+  // correct resolution of subpaths with '../'.
+  const basePath = path.substring(0, path.lastIndexOf('/') + 1)
+
+  return await readModel(loader, modelData, basePath, isLoaderAsync, viewer, fixupCb)
+}
+
+
+// TODO(pablo): move somewhere?
+/**
+ * Construct browser's actual blob URL from app URL for uploaded file.
+ *
+ * @param {string} filepath
+ * @return {string}
+ */
+function getUploadedBlobPath(filepath) {
+  const l = window.location
+  // TODO(pablo): fix this with the above TODO for ifc suffix.
+  filepath = filepath.split('.ifc')[0]
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
+}
+
+
+/**
+ * Construct browser's actual blob URL from app URL for uploaded file.
+ *
+ * @param {string} filepath
+ * @return {string}
+ */
+export function constructUploadedFilepath(filepath) {
+  const l = window.location
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
+}
+
+
+/**
+ * @param {string} path
+ * @param {boolean} isFormatText
+ * @param {Function} onProgress Handler from UI to display progress messages
+ * @return {Array<byte>}
+ * @throws Error for different events, with custom messages
+ */
+async function axiosDownload(path, isFormatText, onProgress) {
+  // TODO(pablo): path feels a little underconstrained here.  axios works a
+  // little magic here, as either a url string or /foo.pdb work fine
   try {
-    modelData = (await axios.get(
+    return (await axios.get(
       path,
       {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
+        onDownloadProgress: (event) => onProgressHandler(event, onProgress),
       },
     )).data
   } catch (error) {
@@ -64,22 +147,30 @@ export async function load(
     } else if (error.request) {
       throw new Error(`No response received from server: ${path}`)
     }
-
-    // Optional: Re-throw the error or handle it in a way that suits your use case
     throw new Error('Failed to fetch model data')
   }
+}
 
-  // Provide basePath for multi-file models.  Keep the last '/' for
-  // correct resolution of subpaths with '../'.
-  const basePath = path.substring(0, path.lastIndexOf('/') + 1)
-  let model = await readModel(loader, modelData, basePath, isLoaderAsync)
 
-  if (fixupCb) {
-    model = fixupCb(model, viewer)
+/**
+ * handles updating the stored file meta data for all cases except local files.
+ *
+ * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
+ */
+function updateLoadedFileInfo(uploadedFile, modelUrlStr) {
+  if (uploadedFile) {
+    return
   }
-
-  convertToShareModel(model, viewer)
-  return model
+  const githubRegex = /(raw.githubusercontent|github.com)/gi
+  if (modelUrlStr.indexOf('/') === 0) {
+    setLoadedFileInfo({
+      source: 'share', info: {
+        url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
+      },
+    })
+  } else if (githubRegex.test(modelUrlStr)) {
+    setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
+  }
 }
 
 
@@ -157,9 +248,11 @@ function convertToShareModel(model, viewer) {
  * @param {string|Buffer} modelData
  * @param {string} basePath
  * @param {boolean} isLoaderAsync
+ * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
+ * @param {Function} [fixupCb] to modify the model
  * @return {object}
  */
-async function readModel(loader, modelData, basePath, isLoaderAsync) {
+async function readModel(loader, modelData, basePath, isLoaderAsync, viewer, fixupCb) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -184,6 +277,12 @@ async function readModel(loader, modelData, basePath, isLoaderAsync) {
   if (!model) {
     throw new Error('Loader could not read model')
   }
+
+  if (fixupCb) {
+    model = fixupCb(model, viewer)
+  }
+
+  convertToShareModel(model, viewer)
   return model
 }
 
@@ -196,14 +295,15 @@ async function findLoader(pathname, viewer) {
   let extension
   try {
     extension = Filetype.getValidExtension(pathname)
+    console.log('Loader#findLoader, extension:', extension)
   } catch (e) {
     // TODO(pablo): need to think thru a better way to do content sniffing
-
     if (e instanceof Filetype.FilenameParseError) {
       extension = await Filetype.guessType(pathname)
       if (extension === null) {
         throw new Error(`Could not guess filetype for ${pathname}`)
       }
+      console.log('Loader#findLoader, hit path parse exception, guessed extension:', extension)
     } else {
       throw e
     }
@@ -224,6 +324,8 @@ async function findLoader(pathname, viewer) {
     }
     case 'ifc': {
       loader = await newIfcLoader()
+      // TODO(pablo): true should work but currently causes IFCLoader to fail
+      isFormatText = false
       break
     }
     case 'obj': {
@@ -323,6 +425,23 @@ async function newIfcLoader() {
 
   return loader
 }
+
+
+/**
+ * Computes progress and calls given onProgress handler
+ * @param {Event} progressEvent
+ * @param {function} onProgress
+ */
+function onProgressHandler(progressEvent, onProgress) {
+  if (Number.isFinite(progressEvent.loaded)) {
+    const loadedBytes = progressEvent.loaded
+    // eslint-disable-next-line no-magic-numbers
+    const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+    debug().log(`Loader#loadModel$onProgress, ${loadedBytes} bytes`)
+    onProgress(`${loadedMegs} MB`)
+  }
+}
+
 
 /**
  * For network or file resources that are not found.

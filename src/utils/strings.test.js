@@ -4,7 +4,7 @@ import {
   floatStrTrim,
   isNumber,
   isNumeric,
-  matchUuid,
+  testUuid,
   toTitleCase,
 } from './strings'
 
@@ -75,10 +75,10 @@ describe('strings', () => {
   })
 
 
-  it('matchUuid', () => {
-    expect(matchUuid('marry had a little lamb')).toBe(false)
-    expect(matchUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
-    expect(matchUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
+  it('testUuid', () => {
+    expect(testUuid('marry had a little lamb')).toBe(false)
+    expect(testUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
+    expect(testUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
   })
 
 

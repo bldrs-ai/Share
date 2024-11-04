@@ -6,7 +6,7 @@ import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
-import * as AllLoader from '../utils/loader'
+import * as Loader from '../loader/Loader'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
@@ -49,7 +49,19 @@ jest.mock('../OPFS/utils', () => {
   return {
     ...actualUtils, // Preserve other exports from the module
     downloadToOPFS: jest.fn().mockImplementation(() => {
-      // Read the file content from disk (consider using async read in real use-cases)
+      // Read the file content from disk
+      const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
+
+      const uint8Array = new Uint8Array(fileContent)
+      const blob = new Blob([uint8Array])
+
+      // The lastModified property is optional, and can be omitted or set to Date.now() if needed
+      const file = new FileMock([blob], 'index.ifc', {type: 'text/plain', lastModified: Date.now()})
+      // Return the mocked File in a promise if it's an async function
+      return Promise.resolve(file)
+    }),
+    downloadModel: jest.fn().mockImplementation(() => {
+      // Read the file content from disk
       const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
 
       const uint8Array = new Uint8Array(fileContent)
@@ -249,7 +261,7 @@ describe('CadView', () => {
 
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
-    jest.spyOn(AllLoader, 'getUploadedBlobPath').mockReturnValue('/haus.ifc')
+    jest.spyOn(Loader, 'constructUploadedFilepath').mockReturnValue('/haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
