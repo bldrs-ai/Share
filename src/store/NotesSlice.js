@@ -45,5 +45,8 @@ export default function createNotesSlice(set, get) {
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
+    body: '',
+    // Action to set the body
+    setBody: (newBody) => set({body: newBody}),
   }
 }

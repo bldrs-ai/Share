@@ -49,6 +49,9 @@ export default function usePlaceMark() {
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const placeMarkMode = useStore((state) => state.placeMarkMode)
   const setPlaceMarkMode = useStore((state) => state.setPlaceMarkMode)
+  const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const body = useStore((state) => state.body)
+  const setBody = useStore((state) => state.setBody)
 
 
   useEffect(() => {
@@ -102,6 +105,9 @@ export default function usePlaceMark() {
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
             normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
           })
+
+          svgGroup.visible = isNotesVisible
+
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
         }
@@ -118,6 +124,7 @@ export default function usePlaceMark() {
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
             normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
           })
+          newSvgGroup.visible = isNotesVisible
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
           placeMarkGroupMap.set(hash, newSvgGroup)
         }
@@ -145,6 +152,7 @@ export default function usePlaceMark() {
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
+    return newPlaceMark
   }
 
 
@@ -205,7 +213,6 @@ export default function usePlaceMark() {
     }
   }
 
-
   const savePlaceMark = async ({point, normal, promiseGroup}) => {
     if (!existPlaceMarkInFeature) {
       return
@@ -228,22 +235,26 @@ export default function usePlaceMark() {
 
     setPlaceMarkMode(false)
     deactivatePlaceMark()
+
     if (!repository || !Array.isArray(notes)) {
       return
     }
+
     const newNotes = [...notes]
     const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
-    // eslint-disable-next-line no-unused-vars
-    const issueNumber = placeMarkNote.number
-    // eslint-disable-next-line no-unused-vars
-    const newComment = {
-      body: `[placemark](${window.location.href})`,
-    }
-    // TODO: ennable createComment
-    // await createComment(repository, issueNumber, newComment, accessToken)
+
+    // Get the current note body and append the new placemark link
+    const newCommentBody = `[placemark](${window.location.href})`
+    const currentBody = body || '' // Retrieve the existing body
+    const updatedBody = `${currentBody}\n${newCommentBody}`
+
+    // Set the updated body in the store so NoteCardCreate can use it
+    setBody(updatedBody)
+
+    // Toggle the sidebar visibility after adding the placemark link
     toggleSynchSidebar()
   }
 

@@ -1,8 +1,8 @@
 import {
   EventDispatcher,
-  Mesh,
-  MeshBasicMaterial,
-  SphereGeometry,
+  Sprite,
+  SpriteMaterial,
+  CanvasTexture,
   Vector2,
   Raycaster,
   Matrix3,
@@ -11,13 +11,18 @@ import {OutlineEffect, BlendFunction} from 'postprocessing'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
 
+
 /**
- * Placemark class
+ * Class representing a PlaceMark in a 3D scene.
+ * Handles creation, rendering, occlusion detection, and selection of placemarks.
  */
 export default class PlaceMark extends EventDispatcher {
   /**
+   * Creates a new PlaceMark instance.
    *
-   * @param {context} context
+   * @param {object} options - Options for the PlaceMark.
+   * @param {object} options.context - Rendering context providing access to DOM element, camera, and scene.
+   * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
   constructor({context, postProcessor}) {
     super()
@@ -34,24 +39,22 @@ export default class PlaceMark extends EventDispatcher {
     _domElement.style.touchAction = 'none'
     const _pointer = new Vector2()
 
-    // Configure outline effect for selected markers
     const selectedOutlineEffect = new OutlineEffect(_scene, _camera, {
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 2.0,
       pulseSpeed: 0.0,
-      visibleEdgeColor: 0xffff00, // Yellow for selected markers
-      hiddenEdgeColor: 0x000000, // Not used here
-      xRay: false, // We don’t want selected outlines to show through objects
+      visibleEdgeColor: 0xffff00,
+      hiddenEdgeColor: 0x000000,
+      xRay: false,
     })
 
-    // Configure outline effect for occluded markers
     const occludedOutlineEffect = new OutlineEffect(_scene, _camera, {
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 1.5,
       pulseSpeed: 0.0,
-      visibleEdgeColor: 0xff0000, // Red for occluded markers
-      hiddenEdgeColor: 0xff0000, // Red for hidden edges
-      xRay: true, // Enable X-ray mode to show outline through occluding objects
+      visibleEdgeColor: 0xff0000,
+      hiddenEdgeColor: 0xff0000,
+      xRay: true,
     })
 
     this.activate = () => {
@@ -126,7 +129,6 @@ export default class PlaceMark extends EventDispatcher {
           res = getIntersectionPlaceMarkInfo()
           if (res.marker) {
             toggleMarkerSelection(res.marker)
-            // Prevent further propagation if `selectPlaceMark` is called
             event.stopPropagation()
             event.preventDefault()
           }
@@ -139,15 +141,28 @@ export default class PlaceMark extends EventDispatcher {
     this.putDown = ({point, normal, fillColor = 0xff0000}) => {
       return new Promise((resolve, reject) => {
         if (!normal) {
-          // eslint-disable-next-line prefer-promise-reject-errors
-          reject('Normal vector is not defined.')
+          reject(new Error('Normal vector is not defined.'))
           return
         }
-        const _placeMark = createSpherePlacemark(point, normal, fillColor)
-        _scene.add(_placeMark)
-        _placeMarks.push(_placeMark)
+        const _placeMark = createCirclePlacemark(point, fillColor)
         resolve(_placeMark)
       })
+    }
+
+    this.disposePlaceMarks = () => {
+      // Remove all place marks from the scene
+      if (this._placeMarks) {
+      this._placeMarks.forEach((placemark) => {
+        this._scene.remove(placemark)
+        if (placemark.material.map) {
+          placemark.material.map.dispose()
+        }
+        placemark.material.dispose()
+      })
+      this._placeMarks.length = 0
+
+      // Dispose of any other resources if necessary
+      }
     }
 
     this.disposePlaceMark = (_placeMark) => {
@@ -157,6 +172,15 @@ export default class PlaceMark extends EventDispatcher {
         _placeMarks.splice(index, 1)
         _scene.remove(_placeMark)
       }
+    }
+
+    /**
+     * Returns all active placemarks.
+     *
+     * @return {Array} Array of placemark objects.
+     */
+    this.getPlacemarks = () => {
+      return _placeMarks
     }
 
     const updatePointer = (event) => {
@@ -183,28 +207,51 @@ export default class PlaceMark extends EventDispatcher {
       return res
     }
 
-    const createSpherePlacemark = (position, normal, fillColor) => {
-      // eslint-disable-next-line no-magic-numbers
-      const geometry = new SphereGeometry(PLACE_MARK_SIZE, 16, 16)
-      const material = new MeshBasicMaterial({color: fillColor})
-      const placemark = new Mesh(geometry, material)
-
+    const createCirclePlacemark = (position, fillColor) => {
+      const texture = createCircleTexture(fillColor)
+      const material = new SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false, // Disable depth testing
+      })
+      const placemark = new Sprite(material)
       placemark.position.copy(position)
+      placemark.renderOrder = 999 // High render order to ensure it's drawn last
       _scene.add(placemark)
       _placeMarks.push(placemark)
       toggleMarkerSelection(placemark)
       return placemark
     }
 
+    const createCircleTexture = (fillColor) => {
+      const size = 64 // Texture size in pixels
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const canvasContext = canvas.getContext('2d')
+
+      // Draw the circle
+      canvasContext.beginPath()
+      // eslint-disable-next-line no-mixed-operators
+      canvasContext.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2) // -2 for a slight border
+      // eslint-disable-next-line no-magic-numbers
+      canvasContext.fillStyle = `#${fillColor.toString(16).padStart(6, '0')}`
+      canvasContext.fill()
+
+      // Optionally add a border
+      canvasContext.lineWidth = 2
+      canvasContext.strokeStyle = '#000000'
+      canvasContext.stroke()
+
+      return new CanvasTexture(canvas)
+    }
+
     const toggleMarkerSelection = (marker) => {
-      // Deselect all other markers by setting them to gray
       _selectedPlaceMarks.forEach((selectedMarker) => {
         // eslint-disable-next-line no-magic-numbers
         selectedMarker.material.color.set(0xA9A9A9)
       })
-      _selectedPlaceMarks.clear() // Clear the selected markers set
-
-      // Add the new marker to selected markers and set color to red
+      _selectedPlaceMarks.clear()
       _selectedPlaceMarks.add(marker)
       // eslint-disable-next-line no-magic-numbers
       marker.material.color.set(0xff0000)
@@ -213,7 +260,7 @@ export default class PlaceMark extends EventDispatcher {
     }
 
     const updateOutlineEffect = () => {
-      if ( selectedOutlineEffect.selection !== void 0) {
+      if (selectedOutlineEffect.selection !== void 0) {
         selectedOutlineEffect.selection.set(Array.from(_selectedPlaceMarks))
       }
 
@@ -239,33 +286,20 @@ export default class PlaceMark extends EventDispatcher {
 
     const updatePlacemarksVisibility = () => {
       _placeMarks.forEach((placemark) => {
-        placemark.quaternion.copy(_camera.quaternion) // Apply billboarding effect
-        const distance = placemark.position.distanceTo(_camera.position)
-
-        if (distance > MAX_VISIBLE_DISTANCE) {
-          placemark.visible = false
-        } else {
-          placemark.visible = true
-          const scale = distance / SCALE_FACTOR
-          placemark.scale.set(scale, scale, scale) // Adjust scaling based on distance
-        }
+        placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
       })
-      checkOcclusion() // Apply occlusion check in each frame update
+      checkOcclusion()
     }
 
     this.onRender = () => {
       updatePlacemarksVisibility()
       _placeMarks.sort((a, b) => a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
-      // Request the next frame
       requestAnimationFrame(this.onRender)
     }
 
-   // Start the render loop
-   requestAnimationFrame(this.onRender)
+    requestAnimationFrame(this.onRender)
   }
 }
 
-const PLACE_MARK_SIZE = 0.2
-const SCALE_FACTOR = 300
-const MAX_VISIBLE_DISTANCE = 200
+const PLACEMARK_SIZE = 2.5
 const PLACE_MARK_DISTANCE = 0

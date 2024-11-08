@@ -39,7 +39,8 @@ export default function NoteCardCreate({
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState(null)
+  const body = useStore((state) => state.body)
+  const setBody = useStore((state) => state.setBody)
 
 
   /**
