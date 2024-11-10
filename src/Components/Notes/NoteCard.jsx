@@ -1,4 +1,4 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect, useRef} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
@@ -76,6 +76,30 @@ export default function NoteCard({
   const [editBody, setEditBody] = useState(body)
 
   const {user} = useAuth0()
+
+   // Reference to the NoteCard element for scrolling
+   const noteCardRef = useRef(null)
+   const selectedCommentId = useStore((state) => state.selectedCommentId)
+
+  useEffect(() => {
+    // When the selected comment ID is set, scroll to that specific comment
+    if (selectedCommentId && noteCardRef.current) {
+      scrollToComment(selectedCommentId)
+    }
+  }, [selectedCommentId])
+
+  /**
+   * Scrolls to a specific comment within the NoteCard component.
+   *
+   * @param {number} commentId - The ID of the comment to scroll to.
+   */
+  function scrollToComment(commentId) {
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
+    if (commentElement) {
+      commentElement.scrollIntoView({behavior: 'smooth', block: 'center'})
+      // setCameraFromParams(firstCamera, cameraControls); // Set camera position if required
+    }
+  }
 
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -181,7 +205,7 @@ export default function NoteCard({
 
 
   return (
-    <Card elevation={1} data-testid='note-card'>
+    <Card elevation={1} data-testid='note-card' ref={noteCardRef}>
       {isNote ?
        <CardHeader
          title={title}

@@ -26,8 +26,10 @@ export default function NotesControl() {
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
+  const setSelectedCommentId = useStore((state) => state.setSelectedCommentId)
 
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const HASH_PREFIX_COMMENT = 'gc'
 
   // Fetch issues/notes
   useEffect(() => {
@@ -79,16 +81,50 @@ export default function NotesControl() {
 
 
   // TODO(pablo): hack, move into helper
+  // nickcastel50: this wasn't running if the hash changed - cleaned it up
   useEffect(() => {
-    const hashParams = getHashParams(window.location, HASH_PREFIX_NOTES)
-    if (hashParams) {
-      const parts = hashParams.split(':')
-      if (parts.length > 1) {
-        const id = parseInt(parts[1])
-        setSelectedNoteId(id)
+    const updateIdsFromHash = () => {
+      // Retrieve the note ID from the URL hash
+      const noteHash = getHashParams(window.location, HASH_PREFIX_NOTES)
+      let noteId = null
+      if (noteHash) {
+        const noteParts = noteHash.split(':')
+        if (noteParts[0] === 'i' && noteParts[1]) {
+          noteId = parseInt(noteParts[1], 10)
+        }
+      }
+
+      // Retrieve the comment ID from the URL hash
+      const commentHash = getHashParams(window.location, HASH_PREFIX_COMMENT) // Assuming HASH_PREFIX_COMMENTS is defined
+      let commentId = null
+      if (commentHash) {
+        const commentParts = commentHash.split(':')
+        if (commentParts[0] === 'gc' && commentParts[1]) {
+          commentId = parseInt(commentParts[1], 10)
+        }
+      }
+
+      // Set selected note ID if a valid one is found
+      if (noteId) {
+        setSelectedNoteId(noteId)
+      }
+
+      // Set selected comment ID if a valid one is found
+      if (commentId) {
+        setSelectedCommentId(commentId)
       }
     }
-  }, [setSelectedNoteId])
+
+    // Run on initial mount
+    updateIdsFromHash()
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', updateIdsFromHash)
+
+    // Cleanup listener on unmount
+    return () => window.removeEventListener('hashchange', updateIdsFromHash)
+  }, [setSelectedNoteId, setSelectedCommentId])
+
 
   useEffect(() => {
     if (isNotesVisible === false) {

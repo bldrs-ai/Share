@@ -144,7 +144,7 @@ export default function Notes() {
       {comments && selectedNote &&
        comments.map((comment, index) => {
          return (
-           <ListItem key={index}>
+           <ListItem key={index} data-comment-id={comment.id}>
              <NoteCard
                isNote={false}
                id={comment.id}

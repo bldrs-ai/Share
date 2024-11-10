@@ -24,6 +24,7 @@ export default function createNotesSlice(set, get) {
     placeMarkActivated: false,
     placeMarkId: null,
     selectedNoteId: null,
+    selectedCommentId: null,
     selectedNoteIndex: null,
     synchSidebar: true, // To render again, not related to flag
     placeMarkMode: false,
@@ -39,6 +40,7 @@ export default function createNotesSlice(set, get) {
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setSelectedNote: (note) => set(() => ({selectedNote: note})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
+    setSelectedCommentId: (commentId) => set(() => ({selectedCommentId: commentId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
     toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
     toggleIsCreateNoteVisible: () => set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),

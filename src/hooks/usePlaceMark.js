@@ -74,7 +74,12 @@ export default function usePlaceMark() {
         issueComments.forEach((comment) => {
           if (comment.body) {
             const newPlaceMarkUrls = findMarkdownUrls(comment.body, HASH_PREFIX_PLACE_MARK)
-            placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
+            placeMarkUrls = placeMarkUrls.concat(
+              newPlaceMarkUrls.map((url) => ({
+                url,
+                issueId: issue.id,
+                commentId: comment.id,
+              })))
           }
         })
 
@@ -84,9 +89,11 @@ export default function usePlaceMark() {
       const totalPlaceMarkUrls = (await Promise.all(promises1)).flat()
       const totalPlaceMarkHashUrlMap = new Map()
 
-      totalPlaceMarkUrls.forEach((url) => {
-        const hash = getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
-        totalPlaceMarkHashUrlMap.set(hash, url)
+      totalPlaceMarkUrls.forEach((valueMap) => {
+        const hash = getHashParamsFromUrl(valueMap.url, HASH_PREFIX_PLACE_MARK)
+        const newHash = `${hash};${HASH_PREFIX_ISSUE}:${valueMap.issueId};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
+        const newUrl = `${valueMap.url};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
+        totalPlaceMarkHashUrlMap.set(newHash, newUrl)
       })
 
       const totalPlaceMarkHashes = Array.from(totalPlaceMarkHashUrlMap.keys())
@@ -120,12 +127,15 @@ export default function usePlaceMark() {
         } else {
           // Drop inactive place mark mesh if it's not existed in scene
           const markArr = getObjectParams(hash)
+          // TODO: Fix bug in getObjectParams, doesn't return proper, semicolon is attached to last element
+          const lastElement = markArr[5].split(';')[0]
           const newSvgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-            normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
+            normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(lastElement)),
           })
           newSvgGroup.visible = isNotesVisible
-          addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
+          const mappedValue = totalPlaceMarkHashUrlMap.get(hash)
+          addUserDataInGroup(newSvgGroup, {url: mappedValue})
           placeMarkGroupMap.set(hash, newSvgGroup)
         }
       })
@@ -258,7 +268,6 @@ export default function usePlaceMark() {
     toggleSynchSidebar()
   }
 
-
   const selectPlaceMark = (res) => {
     if (!existPlaceMarkInFeature) {
       return
@@ -358,5 +367,7 @@ const resetPlaceMarkColors = () => {
 
 
 const HASH_PREFIX_PLACE_MARK = 'm'
+const HASH_PREFIX_ISSUE = 'i'
+const HASH_PREFIX_COMMENT = 'gc'
 const placeMarkGroupMap = new Map()
 let prevSynchSidebar
