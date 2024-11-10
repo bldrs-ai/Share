@@ -7,7 +7,6 @@ import {
   Raycaster,
   Matrix3,
 } from 'three'
-import {OutlineEffect, BlendFunction} from 'postprocessing'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
 
@@ -33,29 +32,10 @@ export default class PlaceMark extends EventDispatcher {
     let _objects = []
     const _placeMarks = []
     const _selectedPlaceMarks = new Set()
-    const _occludedPlaceMarks = new Set()
 
     this.activated = false
     _domElement.style.touchAction = 'none'
     const _pointer = new Vector2()
-
-    const selectedOutlineEffect = new OutlineEffect(_scene, _camera, {
-      blendFunction: BlendFunction.SCREEN,
-      edgeStrength: 2.0,
-      pulseSpeed: 0.0,
-      visibleEdgeColor: 0xffff00,
-      hiddenEdgeColor: 0x000000,
-      xRay: false,
-    })
-
-    const occludedOutlineEffect = new OutlineEffect(_scene, _camera, {
-      blendFunction: BlendFunction.SCREEN,
-      edgeStrength: 1.5,
-      pulseSpeed: 0.0,
-      visibleEdgeColor: 0xff0000,
-      hiddenEdgeColor: 0xff0000,
-      xRay: true,
-    })
 
     this.activate = () => {
       this.activated = true
@@ -99,7 +79,7 @@ export default class PlaceMark extends EventDispatcher {
             const normal = intersect.face.normal.clone().applyMatrix3(new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
             const offset = normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
             const point = intersectPoint.add(offset)
-            const promiseGroup = this.putDown({point, normal})
+            const promiseGroup = this.putDown({point, normal, active: false})
 
             res = {point, normal, promiseGroup}
           }
@@ -138,13 +118,17 @@ export default class PlaceMark extends EventDispatcher {
       return res
     }
 
-    this.putDown = ({point, normal, fillColor = 0xff0000}) => {
+    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/, active}) => {
       return new Promise((resolve, reject) => {
         if (!normal) {
           reject(new Error('Normal vector is not defined.'))
           return
         }
         const _placeMark = createCirclePlacemark(point, fillColor)
+
+        if (active) {
+          toggleMarkerSelection(_placeMark)
+        }
         resolve(_placeMark)
       })
     }
@@ -217,9 +201,10 @@ export default class PlaceMark extends EventDispatcher {
       const placemark = new Sprite(material)
       placemark.position.copy(position)
       placemark.renderOrder = 999 // High render order to ensure it's drawn last
+      placemark.material.color.set(fillColor)
       _scene.add(placemark)
       _placeMarks.push(placemark)
-      toggleMarkerSelection(placemark)
+      // toggleMarkerSelection(placemark)
       return placemark
     }
 
@@ -229,6 +214,9 @@ export default class PlaceMark extends EventDispatcher {
       canvas.width = size
       canvas.height = size
       const canvasContext = canvas.getContext('2d')
+
+      // Ensure the entire canvas is transparent initially
+      canvasContext.clearRect(0, 0, size, size)
 
       // Draw the circle
       canvasContext.beginPath()
@@ -255,40 +243,12 @@ export default class PlaceMark extends EventDispatcher {
       _selectedPlaceMarks.add(marker)
       // eslint-disable-next-line no-magic-numbers
       marker.material.color.set(0xff0000)
-
-      updateOutlineEffect()
-    }
-
-    const updateOutlineEffect = () => {
-      if (selectedOutlineEffect.selection !== void 0) {
-        selectedOutlineEffect.selection.set(Array.from(_selectedPlaceMarks))
-      }
-
-      if (occludedOutlineEffect.selection !== void 0) {
-        occludedOutlineEffect.selection.set(Array.from(_occludedPlaceMarks))
-      }
-    }
-
-    const checkOcclusion = () => {
-      _placeMarks.forEach((placemark) => {
-        _raycaster.set(_camera.position, placemark.position.clone().sub(_camera.position).normalize())
-        const intersections = _raycaster.intersectObjects(_objects, true)
-        const isOccluded = intersections.length > 0 && intersections[0].distance < placemark.position.distanceTo(_camera.position)
-
-        if (isOccluded) {
-          _occludedPlaceMarks.add(placemark)
-        } else {
-          _occludedPlaceMarks.delete(placemark)
-        }
-      })
-      updateOutlineEffect()
     }
 
     const updatePlacemarksVisibility = () => {
       _placeMarks.forEach((placemark) => {
         placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
       })
-      checkOcclusion()
     }
 
     this.onRender = () => {

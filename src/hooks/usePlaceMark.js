@@ -88,16 +88,23 @@ export default function usePlaceMark() {
 
       const totalPlaceMarkUrls = (await Promise.all(promises1)).flat()
       const totalPlaceMarkHashUrlMap = new Map()
+      let activePlaceMarkHash = getHashParams(location, HASH_PREFIX_PLACE_MARK)
 
       totalPlaceMarkUrls.forEach((valueMap) => {
         const hash = getHashParamsFromUrl(valueMap.url, HASH_PREFIX_PLACE_MARK)
         const newHash = `${hash};${HASH_PREFIX_ISSUE}:${valueMap.issueId};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
         const newUrl = `${valueMap.url};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
+
+        if (activePlaceMarkHash) {
+          if (hash.startsWith(activePlaceMarkHash)) {
+            activePlaceMarkHash = newHash
+          }
+        }
         totalPlaceMarkHashUrlMap.set(newHash, newUrl)
       })
 
       const totalPlaceMarkHashes = Array.from(totalPlaceMarkHashUrlMap.keys())
-      const activePlaceMarkHash = getHashParams(location, HASH_PREFIX_PLACE_MARK)
+
       const inactivePlaceMarkHashes = totalPlaceMarkHashes.filter((hash) => hash !== activePlaceMarkHash)
 
       if (activePlaceMarkHash) {
@@ -111,6 +118,7 @@ export default function usePlaceMark() {
           const svgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
             normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(markArr[5])),
+            active: true,
           })
 
           svgGroup.visible = isNotesVisible
@@ -132,6 +140,7 @@ export default function usePlaceMark() {
           const newSvgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
             normal: new Vector3(floatStrTrim(markArr[3]), floatStrTrim(markArr[4]), floatStrTrim(lastElement)),
+            active: false,
           })
           newSvgGroup.visible = isNotesVisible
           const mappedValue = totalPlaceMarkHashUrlMap.get(hash)
@@ -151,7 +160,7 @@ export default function usePlaceMark() {
         })
       }*/
 
-      resetPlaceMarkColors()
+      // resetPlaceMarkColors()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [synchSidebar, placeMark])
