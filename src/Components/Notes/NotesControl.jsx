@@ -95,11 +95,11 @@ export default function NotesControl() {
       }
 
       // Retrieve the comment ID from the URL hash
-      const commentHash = getHashParams(window.location, HASH_PREFIX_COMMENT) // Assuming HASH_PREFIX_COMMENTS is defined
+      const commentHash = getHashParams(window.location, HASH_PREFIX_COMMENT)
       let commentId = null
       if (commentHash) {
         const commentParts = commentHash.split(':')
-        if (commentParts[0] === 'gc' && commentParts[1]) {
+        if (commentParts[0] === HASH_PREFIX_COMMENT && commentParts[1]) {
           commentId = parseInt(commentParts[1], 10)
         }
       }
