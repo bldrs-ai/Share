@@ -72,8 +72,20 @@ export default function NoteCard({
   const [showCreateComment, setShowCreateComment] = useState(false)
 
 
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
+  const editModes = useStore((state) => state.editModes)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const editBodies = useStore((state) => state.editBodies)
+
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
+
+
+  const handleEditBodyChange = (newBody) => {
+    setEditBody(newBody) // Update local editBody state
+    setEditBodyGlobal(id, newBody) // Update global editBody state
+  }
+
 
   const {user} = useAuth0()
 
@@ -83,10 +95,37 @@ export default function NoteCard({
 
   useEffect(() => {
     // When the selected comment ID is set, scroll to that specific comment
+    if (selectedCommentId === -1 && noteCardRef.current) {
+      scrollToNote()
+      return
+    }
     if (selectedCommentId && noteCardRef.current) {
       scrollToComment(selectedCommentId)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommentId])
+
+  useEffect(() => {
+    // When the selected note ID is set, scroll to that specific note
+    if (selectedNoteId && noteCardRef.current) {
+      scrollToNote(selectedNoteId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNoteId])
+
+    // Sync local editMode with global editModes[id]
+    useEffect(() => {
+      if (editModes[id] !== undefined && editModes[id] !== editMode) {
+        setEditMode(editModes[id])
+      }
+    }, [editModes, id, editMode])
+
+      // Sync local editBody with global editBodies[id]
+  useEffect(() => {
+    if (editBodies[id] !== undefined && editBodies[id] !== editBody) {
+      setEditBody(editBodies[id])
+    }
+  }, [editBodies, id, editBody])
 
   /**
    * Scrolls to a specific comment within the NoteCard component.
@@ -97,6 +136,19 @@ export default function NoteCard({
     const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
     if (commentElement) {
       commentElement.scrollIntoView({behavior: 'smooth', block: 'center'})
+      // setCameraFromParams(firstCamera, cameraControls); // Set camera position if required
+    }
+  }
+
+  /**
+   * Scrolls to a specific Note within the NoteCard component.
+   *
+   * @param {number} noteId - The ID of the comment to scroll to.
+   */
+  function scrollToNote(noteId = -1) {
+    const noteElement = document.querySelector(`[data-note-id="${noteId === -1 ? selectedNoteId : noteId}"]`)
+    if (noteElement) {
+      noteElement.scrollIntoView({behavior: 'smooth', block: 'start'})
       // setCameraFromParams(firstCamera, cameraControls); // Set camera position if required
     }
   }
@@ -201,6 +253,7 @@ export default function NoteCard({
     editedNote.body = res.data.body
     setNotes(notes)
     setEditMode(false)
+    setEditModeGlobal(id, false)
   }
 
 
@@ -214,7 +267,10 @@ export default function NoteCard({
          action={
            synched && user && user.nickname === username &&
              <NoteMenu
-               onEditClick={() => setEditMode(true)}
+               onEditClick={() => {
+                setEditMode(true)
+                setEditModeGlobal(id, true)
+              }}
                onDeleteClick={() => onDeleteClick(noteNumber)}
                noteNumber={noteNumber}
              />
@@ -230,7 +286,7 @@ export default function NoteCard({
       {!isNote && <NoteContent markdownContent={editBody}/>}
       {editMode &&
        <NoteBodyEdit
-         handleTextUpdate={(event) => setEditBody(event.target.value)}
+         handleTextUpdate={(event) => handleEditBodyChange(event.target.value)}
          value={editBody}
          isNote={isNote}
          setShowCreateComment={setShowCreateComment}

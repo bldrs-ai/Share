@@ -15,6 +15,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
+import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
@@ -45,6 +46,7 @@ export default function NoteFooter({
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -137,14 +139,24 @@ export default function NoteFooter({
        />
       }
 
-      {editMode &&
-       <TooltipIconButton
-         title='Save'
-         placement='left'
-         icon={<CheckIcon className='icon-share'/>}
-         onClick={() => submitUpdate(repository, accessToken, id)}
-       />
-      }
+      {editMode && (
+        <>
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+          <TooltipIconButton
+            title='Cancel'
+            placement='left'
+            icon={<CloseIcon className='icon-share'/>}
+            onClick={() => {
+              setEditModeGlobal(id, false) // Update global edit mode state
+            }}
+          />
+        </>
+      )}
 
       {isNote && !selected &&
        <TooltipIconButton

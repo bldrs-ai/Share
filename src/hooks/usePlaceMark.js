@@ -52,6 +52,9 @@ export default function usePlaceMark() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const body = useStore((state) => state.body)
   const setBody = useStore((state) => state.setBody)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const editBodies = useStore((state) => state.editBodies)
+  const editModes = useStore((state) => state.editModes)
 
 
   useEffect(() => {
@@ -70,6 +73,15 @@ export default function usePlaceMark() {
       const promises1 = issueArr.map(async (issue) => {
         const issueComments = await getIssueComments(repository, issue.number, accessToken)
         let placeMarkUrls = []
+
+        const issuePlacemarkUrls = findMarkdownUrls(issue.body, HASH_PREFIX_PLACE_MARK)
+        placeMarkUrls = placeMarkUrls.concat(
+          issuePlacemarkUrls.map((url) => ({
+            url,
+            issueId: issue.id,
+            commentId: null,
+          })))
+
 
         issueComments.forEach((comment) => {
           if (comment.body) {
@@ -92,7 +104,8 @@ export default function usePlaceMark() {
 
       totalPlaceMarkUrls.forEach((valueMap) => {
         const hash = getHashParamsFromUrl(valueMap.url, HASH_PREFIX_PLACE_MARK)
-        const newHash = `${hash};${HASH_PREFIX_ISSUE}:${valueMap.issueId};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
+        const newHash = `${hash};${HASH_PREFIX_ISSUE}:${valueMap.issueId}${
+  valueMap.commentId ? `;${HASH_PREFIX_COMMENT}:${valueMap.commentId}` : ''}`
         const newUrl = `${valueMap.url};${HASH_PREFIX_COMMENT}:${valueMap.commentId}`
 
         if (activePlaceMarkHash) {
@@ -266,12 +279,17 @@ export default function usePlaceMark() {
     }
 
     // Get the current note body and append the new placemark link
+    const editMode = editModes?.[placeMarkNote.id]
     const newCommentBody = `[placemark](${window.location.href})`
-    const currentBody = body || '' // Retrieve the existing body
+    const currentBody = editMode ? (editBodies[placeMarkNote.id] || '') : (body || '') // Retrieve the existing body
     const updatedBody = `${currentBody}\n${newCommentBody}`
 
-    // Set the updated body in the store so NoteCardCreate can use it
-    setBody(updatedBody)
+    // Set the updated body in the global store so NoteCard can use it
+    if (editMode) {
+      setEditBodyGlobal(placeMarkNote.id, updatedBody)
+    } else {
+      setBody(updatedBody) // Fallback to set the local body if not in edit mode
+    }
 
     // Toggle the sidebar visibility after adding the placemark link
     toggleSynchSidebar()

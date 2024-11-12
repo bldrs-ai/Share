@@ -99,7 +99,7 @@ export default function Notes() {
       {!selectedNoteId && !isCreateNoteVisible && notes && !isLoadingNotes &&
        notes.map((note, index) => {
          return (
-           <ListItem key={index}>
+           <ListItem key={index} data-note-id={note.id}>
              <NoteCard
                index={note.index}
                id={note.id}
@@ -116,7 +116,8 @@ export default function Notes() {
          )
        })
       }
-      {selectedNote &&
+      {selectedNote && (
+      <ListItem data-note-id={selectedNote.id}>
         <NoteCard
           avatarUrl={selectedNote.avatarUrl}
           body={selectedNote.body}
@@ -129,7 +130,8 @@ export default function Notes() {
           title={selectedNote.title}
           username={selectedNote.username}
         />
-      }
+      </ListItem>
+    )}
       <ListItem key={'commentCreate'}>
         {user && selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
       </ListItem>

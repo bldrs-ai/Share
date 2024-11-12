@@ -112,6 +112,8 @@ export default function NotesControl() {
       // Set selected comment ID if a valid one is found
       if (commentId) {
         setSelectedCommentId(commentId)
+      } else {
+        setSelectedCommentId(-1)
       }
     }
 
