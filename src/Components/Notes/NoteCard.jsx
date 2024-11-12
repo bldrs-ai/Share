@@ -22,7 +22,7 @@ import {
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
 import NoteContent from './NoteContent'
-import {HASH_PREFIX_NOTES} from './hashState'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
 
@@ -211,6 +211,60 @@ export default function NoteCard({
     setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
+    /** Copies location which contains the issue id, comment ID, camera position, and selected element path */
+    function shareComment(issueID, commentID, clearHash = true) {
+      // Get the current URL
+      const href = new URL(window.location.href)
+
+      // Initialize the hash components based on the clearHash flag
+      let updatedHash
+      if (clearHash) {
+        // Only include `i` and `gc` if clearHash is true
+        updatedHash = `${HASH_PREFIX_NOTES}:${issueID}`
+        if (commentID) {
+          updatedHash += `;${HASH_PREFIX_COMMENT}:${commentID}`
+        }
+      } else {
+        // Start with the existing hash (without the leading `#`)
+        const currentHash = href.hash.slice(1)
+
+        // Split the existing hash into parts based on `;`
+        const hashParts = currentHash ? currentHash.split(';') : []
+        const hashMap = {}
+
+        // Populate hashMap with existing values
+        hashParts.forEach((part) => {
+          const [key, value] = part.split(':')
+          if (key && value) {
+            hashMap[key] = value
+          }
+        })
+
+        // Set or update `i` and `gc` values in the hashMap
+        hashMap[HASH_PREFIX_NOTES] = issueID // Always set the issueID
+        if (commentID) {
+          hashMap[HASH_PREFIX_COMMENT] = commentID // Set commentID if it’s provided
+        }
+
+        // Reconstruct the hash string from hashMap
+        updatedHash = Object.entries(hashMap)
+          .map(([key, value]) => `${key}:${value}`)
+          .join(';')
+      }
+
+      // Update the URL hash with the newly constructed value
+      href.hash = updatedHash
+
+      // Copy the updated URL to the clipboard
+      navigator.clipboard.writeText(href.toString())
+        .then(() => {
+          setSnackMessage({text: 'The URL path is copied to the clipboard', autoDismiss: true})
+        })
+        .catch((err) => {
+          setSnackMessage({text: 'Failed to copy URL', autoDismiss: true})
+        })
+    }
+
 
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
@@ -303,7 +357,7 @@ export default function NoteCard({
         noteNumber={noteNumber}
         numberOfComments={numberOfComments}
         onClickCamera={showCameraView}
-        onClickShare={shareIssue}
+        onClickShare={isNote ? shareIssue : shareComment}
         selectCard={selectCard}
         selected={selected}
         submitUpdate={submitUpdate}

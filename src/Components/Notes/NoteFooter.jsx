@@ -56,6 +56,7 @@ export default function NoteFooter({
   const {togglePlaceMarkActive} = usePlaceMark()
 
   const hasCameras = embeddedCameras.length > 0
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
 
   /** Navigate to github issue */
   function openGithubIssue() {
@@ -94,6 +95,19 @@ export default function NoteFooter({
          placement='bottom'
          onClick={() => {
            onClickShare()
+           setShareIssue(!shareIssue)
+         }}
+         icon={<ShareIcon className='icon-share'/>}
+       />
+      }
+
+      {!isNote &&
+       <TooltipIconButton
+         title='Share'
+         size='small'
+         placement='bottom'
+         onClick={() => {
+           onClickShare(selectedNoteId, id)
            setShareIssue(!shareIssue)
          }}
          icon={<ShareIcon className='icon-share'/>}

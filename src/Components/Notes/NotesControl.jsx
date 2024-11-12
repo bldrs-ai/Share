@@ -4,7 +4,7 @@ import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {getHashParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
-import {HASH_PREFIX_NOTES} from './hashState'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 
 
@@ -29,7 +29,6 @@ export default function NotesControl() {
   const setSelectedCommentId = useStore((state) => state.setSelectedCommentId)
 
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const HASH_PREFIX_COMMENT = 'gc'
 
   // Fetch issues/notes
   useEffect(() => {

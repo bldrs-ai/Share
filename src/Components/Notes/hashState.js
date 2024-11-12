@@ -3,6 +3,7 @@ import {hasParams} from '../../utils/location'
 
 /** The prefix to use for the Note state tokens */
 export const HASH_PREFIX_NOTES = 'i'
+export const HASH_PREFIX_COMMENT = 'gc'
 
 
 /** @return {boolean} */
