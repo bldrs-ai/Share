@@ -68,7 +68,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path, viewer)
+  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   console.log(
     `Loader#load, loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -144,7 +144,7 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  return await readModel(loader, modelData, basePath, isLoaderAsync, viewer, fixupCb)
+  return await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
 }
 
 
@@ -234,6 +234,7 @@ function convertToShareModel(model, viewer) {
    * @param {Object3D} model
    */
   function recursiveDecorate(obj3d) {
+    // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
     obj3d.Name = obj3d.Name || {value: 'Object'}
     obj3d.LongName = obj3d.LongName || {value: 'Object'}
@@ -264,6 +265,7 @@ function convertToShareModel(model, viewer) {
       // throw new Error('obj3d')
       // obj3d.geometry.attributes.index = {array: geomIndex}
     }
+
     if (obj3d.children && obj3d.children.length > 0) {
       obj3d.children.forEach((m) => recursiveDecorate(m))
     }
@@ -291,11 +293,12 @@ function convertToShareModel(model, viewer) {
  * @param {string|Buffer} modelData
  * @param {string} basePath
  * @param {boolean} isLoaderAsync
+ * @param {boolean} isIfc
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
  * @return {object}
  */
-async function readModel(loader, modelData, basePath, isLoaderAsync, viewer, fixupCb) {
+async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -327,7 +330,17 @@ async function readModel(loader, modelData, basePath, isLoaderAsync, viewer, fix
     model = fixupCb(model, viewer)
   }
 
-  convertToShareModel(model, viewer)
+  if (isIfc) {
+    // TODO(pablo): recursive or just top-level?
+    // First, any ops for three; web-ifc-viewer used to do this.
+    if (model.geometry) {
+      model.geometry.computeBoundingBox()
+    }
+    console.log('addIfcModel with model:', model)
+    viewer.IFC.addIfcModel(model.mesh)
+  } else {
+    convertToShareModel(model, viewer)
+  }
   return model
 }
 
@@ -353,8 +366,9 @@ async function findLoader(pathname, viewer) {
       throw e
     }
   }
-  const isLoaderAsync = false
+  let isLoaderAsync = false
   let isFormatText = false
+  let isIfc = false
   let loader
   let fixupCb
   switch (extension) {
@@ -369,8 +383,10 @@ async function findLoader(pathname, viewer) {
     }
     case 'ifc': {
       loader = await newIfcLoader()
+      isLoaderAsync = true
       // TODO(pablo): true should work but currently causes IFCLoader to fail
       isFormatText = false
+      isIfc = true
       break
     }
     case 'obj': {
@@ -428,7 +444,7 @@ async function findLoader(pathname, viewer) {
     */
     default: throw new Error('Unsupported filetype') // fix
   }
-  return [loader, isLoaderAsync, isFormatText, fixupCb]
+  return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
 
 
