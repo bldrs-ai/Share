@@ -239,13 +239,10 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
-    // const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
-    // let fitToFrame = !isCamHashSet
-
     const onProgress = (progressMsg) => setSnackMessage(`${loadingMessageBase}: ${progressMsg}`)
     let loadedModel
     try {
-      loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, setLoadedFileInfo, accessToken)
+      loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
       console.error(error)
       setSnackMessage(`Error: ${error.message}`)
@@ -263,9 +260,23 @@ export default function CadView({
     // always be 0.
     loadedModel.modelID = 0
     setModel(loadedModel)
+    // For App API.  TODO(pablo): doublecheck this method still works with this
+    // arg.. expected a url
+    updateLoadedFileInfo(filepath)
 
     viewer.context.scene.add(loadedModel)
-    await viewer.isolator.setModel(loadedModel)
+
+    const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
+    if (!isCamHashSet) {
+      viewer.context.ifcCamera.currentNavMode.fitModelToFrame()
+    }
+
+    // TODO(pablo): centralize capability check somewhere
+    if (loadedModel.ifcManager) {
+      await viewer.isolator.setModel(loadedModel)
+    } else {
+      console.warn('CadView#loadedModel: model without manager:', loadedModel)
+    }
 
     Analytics.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -283,6 +294,11 @@ export default function CadView({
   async function onModel(m) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
+    // TODO(pablo): centralize capability check somewhere
+    if (!m.ifcManager) {
+      console.warn('CadView#onModel, model without manager:', m)
+      return
+    }
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
     debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
@@ -465,6 +481,25 @@ export default function CadView({
       if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
         selectItemsInScene([targetId], false)
       }
+    }
+  }
+
+
+  /**
+   * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
+   */
+  function updateLoadedFileInfo(modelUrlStr) {
+    const githubRegex = /(raw.githubusercontent|github.com)/gi
+    if (modelUrlStr.indexOf('/') === 0) {
+      setLoadedFileInfo({
+        source: 'share', info: {
+          url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
+        },
+      })
+    } else if (githubRegex.test(modelUrlStr)) {
+      setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
     }
   }
 

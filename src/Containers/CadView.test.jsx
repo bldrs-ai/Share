@@ -206,7 +206,7 @@ describe('CadView', () => {
   })
 
 
-  it('sets up camera and cutting plan from URL,', async () => {
+  it('sets up camera and cutting plane from URL,', async () => {
     const mockCurrLocation = {
       ...defaultLocationValue,
       hash: `#${HASH_PREFIX_CAMERA}:1,2,3,4,5,6;${HASH_PREFIX_CUT_PLANE}:x=0`,

@@ -32,7 +32,7 @@ export default function AlertDialog({onClose}) {
     >
       <p>
         {createAlertReport(alert)}<br/>
-        For more helop contact us on our{' '}
+        For more help contact us on our{' '}
         <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
           Discord
         </Link>{' '}

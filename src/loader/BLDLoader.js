@@ -31,6 +31,7 @@ export default class BLDLoader {
     if (model.scale) {
       root.scale.setScalar(model.scale)
     }
+    console.log(`BLDLoader#parse: basePath(${basePath}), data:`, data)
 
     for (const objRef of model.objects) {
       // TODO(pablo):
@@ -39,8 +40,11 @@ export default class BLDLoader {
       }
       const subUrl = basePath ? new URL(objRef.href, basePath) : new URL(objRef.href)
       // TODO(pablo): error handling
+      const subUrlStr = subUrl.toString()
+      console.log('subUrlStr', subUrlStr, 'should be from these:', objRef.href, basePath)
       // eslint-disable-next-line no-empty-function
-      const subModel = await load(subUrl.toString(), this.viewer, () => {}, () => {}, () => {})
+      const subModel = await load(subUrlStr, this.viewer, () => {}, () => {}, () => {})
+      console.log('adding submodel:', subModel)
       root.add(subModel)
 
       if (objRef.pos) {
@@ -57,6 +61,7 @@ export default class BLDLoader {
         subModel.scale.setScalar(model.objScale)
       }
     }
+    console.trace('returning root:')
     return root
   }
 }

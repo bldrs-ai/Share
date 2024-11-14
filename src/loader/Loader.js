@@ -9,11 +9,13 @@ import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
+import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
+import {parseGitHubPath} from '../utils/location'
 import {testUuid} from '../utils/strings'
-import {constructDownloadUrl} from './urls'
+import {dereferenceAndProxyDownloadUrl} from './urls'
 import BLDLoader from './BLDLoader'
 import glbToThree from './glb'
 import pdbToThree from './pdb'
@@ -27,7 +29,6 @@ import xyzToThree from './xyz'
  * @param {Function} onProgress
  * @param {boolean} setOpfsFile
  * @param {Function} setOpfsFile
- * @param {Function} setLoadedFileInfo
  * @param {string} accessToken
  * @return {object} The model or undefined
  */
@@ -37,34 +38,36 @@ export async function load(
   onProgress,
   isOpfsAvailable,
   setOpfsFile,
-  setLoadedFileInfo,
   accessToken = '',
 ) {
-  assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, setLoadedFileInfo, accessToken)
+  assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
   console.log('Loader: in with path:', path)
 
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
-  if (testUuid(path)) {
+  const isUploadedFile = testUuid(path)
+  if (isUploadedFile) {
     console.log('Loader: upload detected')
     path = getUploadedBlobPath(path)
     // enablePageReloadApprovalCheck()
   }
 
+  // All of this is to get a path
   let shaHash
   const isLocallyHostedFile = path.indexOf('/') === 0
   if (!isOpfsAvailable) {
-    [path, shaHash] = await constructDownloadUrl(path, accessToken, isOpfsAvailable)
+    console.log('Loader: download1', path, accessToken, isOpfsAvailable);
+    [path, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
   } else if (isLocallyHostedFile) {
     console.log('Loader: locally hosted file')
-    path = path
     shaHash = ''
   } else {
-    console.log('Loader: download', path, accessToken, isOpfsAvailable);
+    console.log('Loader: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [path, shaHash] = await constructDownloadUrl(path, accessToken, isOpfsAvailable)
+    [path, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
   }
 
+  // Find loader can do a head download for content typecheck, but full download is delayed
   const [loader, isLoaderAsync, isFormatText, fixupCb] = await findLoader(path, viewer)
   console.log(
     `Loader#load, loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -73,7 +76,69 @@ export async function load(
     throw new Error(`Unknown filetype for: ${path}`)
   }
 
-  const modelData = await axiosDownload(path, isFormatText, onProgress)
+  let modelData
+  if (isOpfsAvailable) {
+    // download to file using caching system or else...
+    let file
+    if (isUploadedFile) {
+      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      console.log('Loader: getModelFromOPFS, file:', file)
+    } else if (path === '/index.ifc') {
+      file = await downloadToOPFS(
+        path,
+        'index.ifc',
+        'bldrs-ai',
+        'BldrsLocalStorage',
+        'V1',
+        'Projects',
+        onProgress)
+      console.log('Loader: downloadToOPFS, file:', file)
+    } else {
+      let pathUrl
+      try {
+        pathUrl = new URL(path)
+      } catch (e) {
+        throw new Error(`Cannot load resource: ${e}`)
+      }
+      if (pathUrl.host === 'github.com') {
+        // TODO: path was gitpath originally
+        const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
+        file = await downloadModel(
+          path,
+          shaHash,
+          filePath,
+          accessToken,
+          owner,
+          repo,
+          branch,
+          setOpfsFile,
+          onProgress)
+        console.log(`Loader: downloadModel with gitpath(${path}) used at gitpath, file:`, file)
+      } else {
+        const opfsFilename = btoa(pathUrl.pathname)
+        console.log(`Loader calling downloadToOPFS with pathUrl.pathname(${pathUrl.pathname}) encoded as:`, opfsFilename)
+        file = await downloadToOPFS(
+          path,
+          opfsFilename,
+          pathUrl.host,
+          'BldrsLocalStorage',
+          'V1',
+          'Projects',
+          onProgress)
+      }
+    }
+    setOpfsFile(file)
+    modelData = await file.arrayBuffer()
+    console.log('modelData from OPFS:', modelData)
+    if (isFormatText) {
+      const decoder = new TextDecoder('utf-8')
+      modelData = decoder.decode(modelData)
+    }
+    console.log('modelData from OPFS (decoded):', modelData)
+  } else {
+    modelData = await axiosDownload(path, isFormatText, onProgress)
+    console.log('modelData from axios:', modelData)
+  }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
@@ -148,28 +213,6 @@ async function axiosDownload(path, isFormatText, onProgress) {
       throw new Error(`No response received from server: ${path}`)
     }
     throw new Error('Failed to fetch model data')
-  }
-}
-
-
-/**
- * handles updating the stored file meta data for all cases except local files.
- *
- * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
- */
-function updateLoadedFileInfo(uploadedFile, modelUrlStr) {
-  if (uploadedFile) {
-    return
-  }
-  const githubRegex = /(raw.githubusercontent|github.com)/gi
-  if (modelUrlStr.indexOf('/') === 0) {
-    setLoadedFileInfo({
-      source: 'share', info: {
-        url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
-      },
-    })
-  } else if (githubRegex.test(modelUrlStr)) {
-    setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
   }
 }
 
@@ -270,8 +313,10 @@ async function readModel(loader, modelData, basePath, isLoaderAsync, viewer, fix
       }
     })
   } else if (isLoaderAsync) {
+    console.log(`async loader(->) parsing data:`, loader, modelData)
     model = await loader.parse(modelData, basePath)
   } else {
+    console.log(`sync loader(->) parsing data:`, loader, modelData)
     model = loader.parse(modelData, basePath)
   }
   if (!model) {

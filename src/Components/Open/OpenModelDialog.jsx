@@ -5,8 +5,8 @@ import Typography from '@mui/material/Typography'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
-import {handleBeforeUnload} from '../../utils/event'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {disablePageReloadApprovalCheck} from '../../utils/event'
 import SearchBar from '../Search/SearchBar'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
@@ -40,10 +40,14 @@ export default function OpenModelDialog({
 
 
   const openFile = () => {
+    const onLoad = (filename) => {
+      disablePageReloadApprovalCheck()
+      navigate(`${appPrefix}/v/new/${filename}`)
+    }
     if (isOpfsAvailable) {
-      loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
+      loadLocalFile(onLoad, false)
     } else {
-      loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, false)
+      loadLocalFileFallback(onLoad, false)
     }
     setIsDialogDisplayed(false)
   }

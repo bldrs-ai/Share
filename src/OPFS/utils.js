@@ -11,6 +11,7 @@ import {
   opfsClearCache,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
+import {disablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 
 
@@ -93,9 +94,6 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  * @return {File}
  */
 export function downloadToOPFS(
-    navigate,
-    appPrefix,
-    handleBeforeUnload,
     objectUrl,
     originalFilePath,
     commitHash,
@@ -104,9 +102,6 @@ export function downloadToOPFS(
     branch,
     onProgress) {
   assertDefined(
-      navigate,
-      appPrefix,
-      handleBeforeUnload,
       objectUrl,
       originalFilePath,
       commitHash,
@@ -154,23 +149,18 @@ export function downloadToOPFS(
 /**
  * Downloads a model, handles progress updates, and updates the OPFS file handle.
  *
- * @param {Function} navigate Function to navigate to a different route.
- * @param {string} appPrefix The application prefix for routing.
- * @param {Function} handleBeforeUnload Function to handle the beforeunload event.
  * @param {string} objectUrl The URL of the object to be downloaded.
+ * @param {string} shaHash TODO(pablo): give a reference for how we use these.
  * @param {string} originalFilePath The original file path of the model.
  * @param {string} accessToken Access token for authentication.
  * @param {string} owner The owner of the repository.
  * @param {string} repo The repository name.
  * @param {string} branch The branch name.
  * @param {Function} setOpfsFile Function to set the OPFS file in the state.
- * @param {Function} [onProgress] Optional function to handle progress events.
+ * @param {Function} onProgress Optional function to handle progress events.
  * @return {Promise<File>} - A promise that resolves to the downloaded file.
  */
 export function downloadModel(
-  navigate,
-  appPrefix,
-  handleBeforeUnload,
   objectUrl,
   shaHash,
   originalFilePath,
@@ -180,62 +170,48 @@ export function downloadModel(
   branch,
   setOpfsFile,
   onProgress) {
-assertDefined(
-    navigate,
-    appPrefix,
-    handleBeforeUnload,
-    objectUrl,
-    shaHash,
-    originalFilePath,
-    accessToken,
-    owner,
-    repo,
-    branch)
-
-return new Promise((resolve, reject) => {
-  const workerRef = initializeWorker()
-  if (workerRef !== null) {
-    // Listener for messages from the worker
-    const listener = (event) => {
-      if (event.data.error) {
-        debug().error('Error from worker:', event.data.error)
-        workerRef.removeEventListener('message', listener) // Remove the event listener
-        reject(new Error(event.data.error))
-      } else if (event.data.progressEvent) {
-        if (onProgress) {
-          onProgress({
-            lengthComputable: event.data.contentLength !== 0,
-            contentLength: event.data.contentLength,
-            receivedLength: event.data.receivedLength,
-          }) // Custom progress event
-        }
-      } else if (event.data.completed) {
-        if (event.data.event === 'download') {
-          debug().warn('Worker finished downloading file')
-        } else if (event.data.event === 'exists') {
-          debug().warn('Commit exists in OPFS.')
-        }
-
-        const file = event.data.file
-        if (event.data.event === 'renamed' || event.data.event === 'exists') {
+  assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (event) => {
+        if (event.data.error) {
+          debug().error('Error from worker:', event.data.error)
           workerRef.removeEventListener('message', listener) // Remove the event listener
-          if (file instanceof File) {
-            setOpfsFile(file)
-          } else {
-            debug().error('Retrieved object is not of type File.')
+          reject(new Error(event.data.error))
+        } else if (event.data.progressEvent) {
+          if (onProgress) {
+            onProgress({
+              lengthComputable: event.data.contentLength !== 0,
+              contentLength: event.data.contentLength,
+              receivedLength: event.data.receivedLength,
+            }) // Custom progress event
           }
+        } else if (event.data.completed) {
+          if (event.data.event === 'download') {
+            debug().warn('Worker finished downloading file')
+          } else if (event.data.event === 'exists') {
+            debug().warn('Commit exists in OPFS.')
+          }
+          const file = event.data.file
+          if (event.data.event === 'renamed' || event.data.event === 'exists') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            if (file instanceof File) {
+              setOpfsFile(file)
+            } else {
+              debug().error('Retrieved object is not of type File.')
+            }
+          }
+          resolve(file) // Resolve the promise with the file
         }
-
-        resolve(file) // Resolve the promise with the file
       }
+      workerRef.addEventListener('message', listener)
+    } else {
+      reject(new Error('Worker initialization failed'))
     }
-    workerRef.addEventListener('message', listener)
-  } else {
-    reject(new Error('Worker initialization failed'))
-  }
-
-  opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
-})
+    opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
+  })
 }
 
 /**
@@ -276,15 +252,11 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
             resolve(false) // Resolve the promise with false
           } else if (event.data.event === eventStatus) {
             workerRef.removeEventListener('message', listener) // Remove the event listener
-
             if (event.data.event === 'clear') {
-              // eslint-disable-next-line no-console
-              console.log('OPFS cache cleared.')
+              console.warn('OPFS cache cleared.')
             }
-
             if (event.data.directoryStructure) {
-              // eslint-disable-next-line no-console
-              console.log(`OPFS Directory Structure:\n${ event.data.directoryStructure}`)
+              console.warn(`OPFS Directory Structure:\n${ event.data.directoryStructure}`)
             }
             resolve(true) // Resolve the promise with true
           }
@@ -362,25 +334,19 @@ export function deleteFileFromOPFS(
 
 
 /**
- * Upload a local file for display from Drag And Drop.
+ * Upload a local file for display from Drag And Drop, storing in OPFS.
  *
- * @param {Function} navigate
- * @param {string} appPrefix
- * @param {Function} handleBeforeUnload
+ * @param {File} file
+ * @param {Function} callback
  */
-export function loadLocalFileDragAndDrop(
-    navigate,
-    appPrefix,
-    handleBeforeUnload,
-    file) {
-  assertDefined(navigate, appPrefix, handleBeforeUnload)
+export function saveDnDFileToOpfsAndNav(file, callback) {
+  assertDefined(file)
   let workerRef = null
   workerRef = initializeWorker()
 
-  debug().log('loader#loadLocalFileDragAndDrop#event:', event)
+  debug().log('loader#saveDnDFileToOpfsAndNav#event:', event)
   const tmpUrl = URL.createObjectURL(file)
-  console.log('OPFS/utils#loadLocalFileDragAndDrop, tmpURL', tmpUrl)
-  debug().log('loader#loadLocalFileDragAndDrop#event: url: ', tmpUrl)
+  debug().log('loader#saveDnDFileToOpfsAndNav#event: url: ', tmpUrl)
   // Post message to the worker to handle the file
   const parts = tmpUrl.split('/')
   const fileNametmpUrl = parts[parts.length - 1]
@@ -393,18 +359,15 @@ export function loadLocalFileDragAndDrop(
     } else if (workerEvent.data.completed) {
       if (workerEvent.data.event === 'write') {
         debug().log('Worker finished writing file')
-
         // Perform the navigation logic after the worker is done
         const fileName = workerEvent.data.fileName
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        workerRef.removeEventListener('message', listener) // Remove the event listener
-        navigate(`${appPrefix}/v/new/${fileName}`)
+        workerRef.removeEventListener('message', listener)
+        callback(fileName)
       } else if (workerEvent.data.event === 'read') {
         debug().log('Worker finished reading file')
         const fileName = workerEvent.data.file.name
-        window.removeEventListener('beforeunload', handleBeforeUnload)
         workerRef.removeEventListener('message', listener) // Remove the event listener
-        navigate(`${appPrefix}/v/new/${fileName}`)
+        callback(fileName)
       }
     }
   }

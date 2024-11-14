@@ -5,7 +5,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
-import {handleBeforeUnload} from '../../utils/event'
+import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
 import CloseIcon from '@mui/icons-material/Close'
 
@@ -37,7 +37,7 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
             setInputText(newInputText)
           }
         } else {
-          window.removeEventListener('beforeunload', handleBeforeUnload)
+          disablePageReloadApprovalCheck();
           navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
         }
       }
@@ -60,7 +60,7 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
-        window.removeEventListener('beforeunload', handleBeforeUnload)
+        disablePageReloadApprovalCheck()
         navigate(modelPath, {replace: true})
         if (setIsDialogDisplayed) {
           setIsDialogDisplayed(false)
@@ -74,7 +74,7 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      disablePageReloadApprovalCheck()
       navigate({
         pathname: newPath,
         search: `?q=${inputText}`,

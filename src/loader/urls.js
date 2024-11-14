@@ -104,8 +104,8 @@ export function parseCoords(url) {
 
 
 /**
- * Dereferences and inserts proxying as needed for given urlStr, to determine
- * what download URL to use.
+ * Dereferences and inserts proxying as needed (e.g. to follow LFS pointers) for
+ * given urlStr, to determine what download URL to use.
  *
  * @param {string} urlStr
  * @param {string} accessToken
@@ -113,7 +113,7 @@ export function parseCoords(url) {
  * @return {Array<string>} A tuple of urlStr (changed to our proxy if
  * github.com) and a sha if available.
  */
-export async function constructDownloadUrl(urlStr, accessToken, isOpfsAvailable) {
+export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfsAvailable) {
   const u = new URL(urlStr)
   switch (u.host.toLowerCase()) {
     case 'github.com':

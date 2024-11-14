@@ -2,20 +2,9 @@ import {loadLocalFile} from './loader'
 
 
 describe('loadLocalFile', () => {
-  let navigateMock
-  let handleBeforeUnloadMock
-  const appPrefix = '/appPrefix'
-
   beforeEach(() => {
     // Set up DOM
     document.body.innerHTML = `<div id="viewer-container"></div>`
-
-    // Mock functions
-    navigateMock = jest.fn()
-    handleBeforeUnloadMock = jest.fn()
-
-    // Mock window events
-    window.removeEventListener = jest.fn()
     URL.createObjectURL = jest.fn(() => 'testId')
   })
 
@@ -24,7 +13,8 @@ describe('loadLocalFile', () => {
   })
 
   it('loads a local file and navigates to the appropriate URL', () => {
-    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true, true)
+    const onLoad = jest.fn()
+    loadLocalFile(onLoad, true, true)
 
     // Mock input change event with a file
     const inputElement = document.querySelector('input[type="file"]')
@@ -33,19 +23,18 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(event)
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(event.target.files[0])
-    expect(window.removeEventListener).toHaveBeenCalledWith('beforeunload', handleBeforeUnloadMock)
-    expect(navigateMock).toHaveBeenCalledWith(`${appPrefix}/v/new/testId.ifc`)
+    expect(onLoad).toHaveBeenCalled()
   })
 
   it('throws an error if viewer-container is missing', () => {
     document.body.innerHTML = ''
     expect(() => {
-      loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true, true)
+      loadLocalFile(jest.fn(), true, true)
     }).toThrow()
   })
 
   it('removes the file input after click if skipAutoRemove is false', () => {
-    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, false, true)
+    loadLocalFile(jest.fn(), false, true)
     const inputElement = document.querySelector('input[type="file"]')
     expect(inputElement).toBeNull()
   })

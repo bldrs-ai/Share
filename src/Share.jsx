@@ -9,7 +9,7 @@ import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
-import {handleBeforeUnload} from './utils/event'
+import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
 import {testUuid} from './utils/strings'
 import {splitAroundExtension} from './Filetype'
@@ -125,7 +125,7 @@ function ModelTitle({repository, modelPath}) {
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
-  window.removeEventListener('beforeunload', handleBeforeUnload)
+  disablePageReloadApprovalCheck()
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
         `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :

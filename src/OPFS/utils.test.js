@@ -89,11 +89,6 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       const result = await downloadToOPFS(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'originalFilePath',
           'commitHash',
@@ -132,11 +127,6 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       await downloadToOPFS(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'originalFilePath',
           'commitHash',
@@ -170,11 +160,6 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       const result = await downloadModel(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'shaHash',
           'originalFilePath',
@@ -218,11 +203,6 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       await downloadModel(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'shaHash',
           'originalFilePath',

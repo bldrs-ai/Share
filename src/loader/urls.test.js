@@ -1,6 +1,6 @@
 import {
   SOURCE_TYPE,
-  constructDownloadUrl,
+  dereferenceAndProxyDownloadUrl,
   parseUrl,
 } from './urls'
 
@@ -109,9 +109,11 @@ describe('With environment variables', () => {
     process.env.RAW_GIT_PROXY_URL_NEW = `${testProxy}/bar`
 
     let isOpfsAvailable = false
-    expect(await constructDownloadUrl('https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, ''])
+    expect(await dereferenceAndProxyDownloadUrl(
+      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, ''])
 
     isOpfsAvailable = true
-    expect(await constructDownloadUrl('https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, ''])
+    expect(await dereferenceAndProxyDownloadUrl(
+      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, ''])
   })
 })

@@ -1,11 +1,11 @@
 import React, {ReactElement, useState} from 'react'
-import Box from '@mui/material/Box'
-import usePlaceMark from '../hooks/usePlaceMark'
 import {useNavigate} from 'react-router-dom'
-import {loadLocalFileDragAndDrop} from '../OPFS/utils'
+import Box from '@mui/material/Box'
+import {saveDnDFileToOpfsAndNav} from '../OPFS/utils'
+import usePlaceMark from '../hooks/usePlaceMark'
 import useStore from '../store/useStore'
-import {loadLocalFileDragAndDropFallback} from '../utils/loader'
-import {handleBeforeUnload} from '../utils/event'
+import {disablePageReloadApprovalCheck} from '../utils/event'
+import {saveDnDFileToOpfsAndNavFallback} from '../utils/loader'
 
 
 /** @return {ReactElement} */
@@ -39,22 +39,17 @@ export default function ViewerContainer() {
     event.preventDefault()
     setIsDragActive(false)
     const files =
-      event.dataTransfer.files
-    // Here you can handle the files as needed
+          event.dataTransfer.files
+    /** @param {string} fileName The filename the upload was given */
+    function onWritten(fileName) {
+      disablePageReloadApprovalCheck()
+      navigate(`${appPrefix}/v/new/${fileName}`)
+    }
     if (files.length === 1) {
       if (isOpfsAvailable) {
-        loadLocalFileDragAndDrop(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0])
+        saveDnDFileToOpfsAndNav(files[0], onWritten)
       } else {
-        loadLocalFileDragAndDropFallback(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0],
-        )
+        saveDnDFileToOpfsAndNavFallback(files[0], onWritten)
       }
     }
   }
