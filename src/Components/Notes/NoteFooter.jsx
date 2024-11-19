@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import CardActions from '@mui/material/CardActions'
 import useTheme from '@mui/styles/useTheme'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import usePlaceMark from '../../hooks/usePlaceMark'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -39,7 +39,6 @@ export default function NoteFooter({
   synched,
   username,
 }) {
-  const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
 
   const viewer = useStore((state) => state.viewer)
@@ -53,10 +52,11 @@ export default function NoteFooter({
 
   const {user} = useAuth0()
   const theme = useTheme()
-  const {togglePlaceMarkActive} = usePlaceMark()
 
   const hasCameras = embeddedCameras.length > 0
   const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   /** Navigate to github issue */
   function openGithubIssue() {
@@ -114,7 +114,7 @@ export default function NoteFooter({
        />
       }
 
-      {isNote && selected && synched && existPlaceMarkInFeature &&
+      {isNote && selected && synched &&
        user && user.nickname === username &&
        <Box
          sx={{

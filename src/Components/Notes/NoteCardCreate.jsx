@@ -15,7 +15,7 @@ import {createComment} from '../../net/github/Comments'
 import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
-import usePlaceMark from '../../hooks/usePlaceMark'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 
 
 /**
@@ -43,7 +43,7 @@ export default function NoteCardCreate({
   const [title, setTitle] = useState('')
   const body = useStore((state) => state.body)
   const setBody = useStore((state) => state.setBody)
-  const {togglePlaceMarkActive} = usePlaceMark()
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   /**
    * create issue takes in the title and body of the note from the state

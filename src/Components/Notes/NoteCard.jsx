@@ -91,27 +91,12 @@ export default function NoteCard({
 
    // Reference to the NoteCard element for scrolling
    const noteCardRef = useRef(null)
-   const selectedCommentId = useStore((state) => state.selectedCommentId)
+   const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
 
-  useEffect(() => {
-    // When the selected comment ID is set, scroll to that specific comment
-    if (selectedCommentId === -1 && noteCardRef.current) {
-      scrollToNote()
-      return
-    }
-    if (selectedCommentId && noteCardRef.current) {
-      scrollToComment(selectedCommentId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCommentId])
-
-  useEffect(() => {
-    // When the selected note ID is set, scroll to that specific note
-    if (selectedNoteId && noteCardRef.current) {
-      scrollToNote(selectedNoteId)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNoteId])
+   useEffect(() => {
+    setActiveNoteCardId(id)
+    return () => setActiveNoteCardId(null) // Reset when component unmounts
+  }, [id, setActiveNoteCardId])
 
     // Sync local editMode with global editModes[id]
     useEffect(() => {
@@ -126,32 +111,6 @@ export default function NoteCard({
       setEditBody(editBodies[id])
     }
   }, [editBodies, id, editBody])
-
-  /**
-   * Scrolls to a specific comment within the NoteCard component.
-   *
-   * @param {number} commentId - The ID of the comment to scroll to.
-   */
-  function scrollToComment(commentId) {
-    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
-    if (commentElement) {
-      commentElement.scrollIntoView({behavior: 'smooth', block: 'center'})
-      // setCameraFromParams(firstCamera, cameraControls); // Set camera position if required
-    }
-  }
-
-  /**
-   * Scrolls to a specific Note within the NoteCard component.
-   *
-   * @param {number} noteId - The ID of the comment to scroll to.
-   */
-  function scrollToNote(noteId = -1) {
-    const noteElement = document.querySelector(`[data-note-id="${noteId === -1 ? selectedNoteId : noteId}"]`)
-    if (noteElement) {
-      noteElement.scrollIntoView({behavior: 'smooth', block: 'start'})
-      // setCameraFromParams(firstCamera, cameraControls); // Set camera position if required
-    }
-  }
 
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {

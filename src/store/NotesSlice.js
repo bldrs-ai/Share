@@ -26,8 +26,10 @@ export default function createNotesSlice(set, get) {
     selectedNoteId: null,
     selectedCommentId: null,
     selectedNoteIndex: null,
+    selectedPlaceMarkId: null,
     synchSidebar: true, // To render again, not related to flag
     placeMarkMode: false,
+    setSelectedPlaceMarkId: (_placeMarkId) => set(() => ({selectedPlaceMarkId: _placeMarkId})),
     setPlaceMarkMode: (mode) => set(() => ({placeMarkMode: mode})),
     setComments: (comments) => set(() => ({comments: comments})),
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
@@ -62,5 +64,10 @@ export default function createNotesSlice(set, get) {
     // Action to set the body
     setBody: (newBody) => set({body: newBody}),
     setIssueBody: (newIssueBody) => set({issueBody: newIssueBody}),
+    activeNoteCardId: null,
+    setActiveNoteCardId: (id) => set({activeNoteCardId: id}),
+    markers: [],
+    writeMarkers: (newMarkers) => set({markers: newMarkers}), // Set markers
+    clearMarkers: () => set({markers: []}), // Clear markers
   }
 }

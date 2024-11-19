@@ -4,7 +4,8 @@ import useStore from '../../store/useStore'
 import {setParams, removeParams} from '../../utils/location'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
-import {HASH_PREFIX_NOTES} from './hashState'
+import {removeMarkerUrlParams} from '../Markers/MarkerControl'
+import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from './hashState'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -77,6 +78,9 @@ export default function NotesNavBar() {
          <TooltipIconButton
            title='Back to the list'
            onClick={() => {
+             removeMarkerUrlParams()
+             removeParams(HASH_PREFIX_NOTES)
+             removeParams(HASH_PREFIX_COMMENT)
              setParams(HASH_PREFIX_NOTES)
              setSelectedNoteId(null)
            }}

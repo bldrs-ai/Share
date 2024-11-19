@@ -31,7 +31,6 @@ export default class PlaceMark extends EventDispatcher {
     const _raycaster = new Raycaster()
     let _objects = []
     const _placeMarks = []
-    const _selectedPlaceMarks = new Set()
 
     this.activated = false
     _domElement.style.touchAction = 'none'
@@ -107,11 +106,11 @@ export default class PlaceMark extends EventDispatcher {
           res = dropPlaceMark(event)
         } else {
           res = getIntersectionPlaceMarkInfo()
-          if (res.marker) {
+         /* if (res.marker) {
             toggleMarkerSelection(res.marker)
             event.stopPropagation()
             event.preventDefault()
-          }
+          }*/
         }
       }
 
@@ -126,24 +125,24 @@ export default class PlaceMark extends EventDispatcher {
         }
         const _placeMark = createCirclePlacemark(point, fillColor)
 
-        if (active) {
-          toggleMarkerSelection(_placeMark)
-        }
+       // if (active) {
+       //   toggleMarkerSelection(_placeMark)
+       // }
         resolve(_placeMark)
       })
     }
 
     this.disposePlaceMarks = () => {
       // Remove all place marks from the scene
-      if (this._placeMarks) {
-      this._placeMarks.forEach((placemark) => {
-        this._scene.remove(placemark)
+      if (_placeMarks) {
+      _placeMarks.forEach((placemark) => {
+        _scene.remove(placemark)
         if (placemark.material.map) {
           placemark.material.map.dispose()
         }
         placemark.material.dispose()
       })
-      this._placeMarks.length = 0
+      _placeMarks.length = 0
 
       // Dispose of any other resources if necessary
       }
@@ -234,7 +233,7 @@ export default class PlaceMark extends EventDispatcher {
       return new CanvasTexture(canvas)
     }
 
-    const toggleMarkerSelection = (marker) => {
+    /* const toggleMarkerSelection = (marker) => {
       _selectedPlaceMarks.forEach((selectedMarker) => {
         // eslint-disable-next-line no-magic-numbers
         selectedMarker.material.color.set(0xA9A9A9)
@@ -243,7 +242,7 @@ export default class PlaceMark extends EventDispatcher {
       _selectedPlaceMarks.add(marker)
       // eslint-disable-next-line no-magic-numbers
       marker.material.color.set(0xff0000)
-    }
+    }*/
 
     const updatePlacemarksVisibility = () => {
       _placeMarks.forEach((placemark) => {

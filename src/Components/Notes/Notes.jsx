@@ -13,6 +13,9 @@ import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
 import ApplicationError from '../ApplicationError'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
+import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/MarkerControl'
+import {getObjectParams} from '../../utils/location'
 
 
 /**
@@ -29,6 +32,11 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
+  // Access markers and the necessary store functions
+  const markers = useStore((state) => state.markers)
+  const writeMarkers = useStore((state) => state.writeMarkers)
+
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
 
   const [hasError, setHasError] = useState(false)
 
@@ -49,40 +57,131 @@ export default function Notes() {
   }
 
   // Fetch comments based on selected note id
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!repository) {
-          debug().warn('IssuesControl#Notes: 1, no repo defined')
-          return
-        }
-        if (!selectedNoteId || !selectedNote) {
-          return
-        }
-        const newComments = []
-        const commentArr = await getIssueComments(repository, selectedNote.number, accessToken)
-        debug().log('Notes#useEffect: commentArr: ', commentArr)
-
-        if (commentArr) {
-          commentArr.map((comment) => {
-            newComments.push({
-              id: comment.id,
-              body: comment.body,
-              date: comment.created_at,
-              username: comment.user.login,
-              avatarUrl: comment.user.avatar_url,
-              synched: true,
-            })
-          })
-        }
-        setComments(newComments)
-      } catch (e) {
-        debug().warn('failed to fetch comments: ', e)
-        handleError(e)
+useEffect(() => {
+  (async () => {
+    try {
+      if (!repository) {
+        debug().warn('IssuesControl#Notes: 1, no repo defined')
+        return
       }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNote])
+      if (!selectedNoteId || !selectedNote) {
+        return
+      }
+
+      const newComments = []
+      const commentMarkers = [] // Array to store markers parsed from comments
+      const commentArr = await getIssueComments(repository, selectedNote.number, accessToken)
+      debug().log('Notes#useEffect: commentArr: ', commentArr)
+
+      // Get the main issue marker
+      const issueMarker = getMarkerById(selectedNoteId)
+
+      // Process each comment
+      if (commentArr) {
+        commentArr.forEach((comment) => {
+          newComments.push({
+            id: comment.id,
+            body: comment.body,
+            date: comment.created_at,
+            username: comment.user.login,
+            avatarUrl: comment.user.avatar_url,
+            synched: true,
+          })
+
+          // Parse marker data from the comment
+          const commentMarker = parseComment(comment)
+          // Check if commentMarker is an array and has coordinates
+          if (Array.isArray(commentMarker) && commentMarker.length > 0) {
+            commentMarkers.push(...commentMarker) // Spread the array elements into commentMarkers
+          }
+        })
+      }
+
+      // Combine the issue marker and comment markers
+      const hasActiveMarker = commentMarkers.some((marker) => marker.isActive)
+
+      if (issueMarker) {
+        issueMarker.isActive = !(hasActiveMarker)
+      }
+      const allMarkers = issueMarker ? [issueMarker, ...commentMarkers] : commentMarkers
+
+      // Update state with new comments and markers
+      setComments(newComments)
+      toggleSynchSidebar()
+      writeMarkers(allMarkers) // Assuming `setMarkers` is a function in your store or component state to update markers
+    } catch (e) {
+      debug().warn('failed to fetch comments: ', e)
+      handleError(e)
+    }
+  })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [selectedNote])
+
+
+/**
+ * Parses a comment to extract placemark markers.
+ *
+ * This function processes the body of a comment to extract placemark URLs,
+ * generates marker data, and determines their active/inactive state.
+ *
+ * @param {object} comment The comment object containing the body and metadata.
+ * @param {string} comment.body The text of the comment to parse for placemark URLs.
+ * @param {number} comment.id The unique identifier for the comment.
+ * @return {object[]} An array of marker objects with coordinates and other properties.
+ */
+function parseComment(comment) {
+  const inactiveColor = 0xA9A9A9
+  const activeColor = 0xff0000
+  const issuePlacemarkUrls = parsePlacemarkFromIssue(comment.body)
+  let activePlaceMarkHash = getActivePlaceMarkHash()
+
+  // Accumulate markers for the current issue
+  const markers_ = issuePlacemarkUrls.map((url) => {
+    const hash = parsePlacemarkFromURL(url)
+    const newHash = `${hash};${HASH_PREFIX_NOTES}:${selectedNoteId};${HASH_PREFIX_COMMENT}:${comment.id}`
+    let isActive = false
+
+    const markArr = Object.values(getObjectParams(hash))
+    const lastElement = markArr[5].split(';')[0]
+
+    if (markArr.length === 6) {
+      const coordinates = [
+        parseFloat(markArr[0]),
+        parseFloat(markArr[1]),
+        parseFloat(markArr[2]),
+        parseFloat(markArr[3]),
+        parseFloat(markArr[4]),
+        parseFloat(lastElement),
+      ]
+
+      if (activePlaceMarkHash && hash.startsWith(activePlaceMarkHash)) {
+        activePlaceMarkHash = newHash
+        isActive = true
+      }
+
+      return {
+        id: selectedNoteId,
+        commentId: comment.id,
+        coordinates: coordinates,
+        isActive: isActive,
+        activeColor: activeColor,
+        inactiveColor: inactiveColor,
+      }
+    }
+    return null
+  }).filter(Boolean) // Filter out any null values
+
+  return markers_ // Return accumulated markers for the issue
+}
+
+  /**
+   * Gets a marker given a marker ID
+   *
+   * @return {object[]} An array of marker objects with coordinates and other properties.
+   */
+  function getMarkerById(id) {
+    return markers.find((marker) => marker.id === id)
+  }
 
 
   return hasError ?

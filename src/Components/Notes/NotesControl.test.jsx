@@ -7,6 +7,9 @@ import NotesControl from './NotesControl'
 import model from '../../__mocks__/MockModel.js'
 
 
+window.HTMLElement.prototype.scrollIntoView = jest.fn()
+
+
 describe('NotesControl', () => {
   it('Does not issue fetch on initial page load when not visible', async () => {
     const {result} = renderHook(() => useStore((state) => state))

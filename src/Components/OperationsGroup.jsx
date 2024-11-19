@@ -10,6 +10,7 @@ import ProfileControl from './Profile/ProfileControl'
 import PropertiesControl from './Properties/PropertiesControl'
 import ShareControl from './Share/ShareControl'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
+import MarkerControl from '../Components/Markers/MarkerControl'
 
 
 /**
@@ -31,6 +32,11 @@ export default function OperationsGroup({deselectItems}) {
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isAnElementSelected = selectedElement !== null
 
+  // required for MarkerControl
+  const viewer = useStore((state) => state.viewer)
+  const isModelReady = useStore((state) => state.isModelReady)
+  const model = useStore((state) => state.model)
+
   return (
     <ButtonGroup orientation='vertical' variant='controls'>
       {isLoginEnabled && (
@@ -50,6 +56,13 @@ export default function OperationsGroup({deselectItems}) {
          onClick={() => toggleAppStoreDrawer()}
        />
       }
+      {(viewer && isModelReady) && (
+        <MarkerControl
+        context={viewer.context ? viewer.context : null}
+        oppositeObjects={[model ? model : null]}
+        postProcessor={viewer ? viewer.postProcessor : null}
+        />
+      )}
       {isImagineEnabled && <ImagineControl/>}
       {/* Invisible */}
       <CameraControl/>

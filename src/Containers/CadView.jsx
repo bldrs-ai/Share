@@ -13,7 +13,6 @@ import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
-import MarkerControl from '../Components/Markers/MarkerControl'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
 // TODO(pablo): use ^^ instead of this
@@ -726,13 +725,6 @@ export default function CadView({
        />}
       <Box sx={{...absBtm, left: 0}}><AboutControl/></Box>
       <Box sx={{...absBtm, right: 0}}><HelpControl/></Box>
-      {(viewer && isModelReady) && (
-                <MarkerControl
-                context={viewer.context ? viewer.context : null}
-                oppositeObjects={[model ? model : null]}
-                postProcessor={viewer ? viewer.postProcessor : null}
-                />
-      )}
       {viewer && (
         <>
           <ControlsGroupAndDrawer
