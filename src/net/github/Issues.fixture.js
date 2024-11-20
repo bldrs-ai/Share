@@ -2,6 +2,16 @@ const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL_UNAUTHENTICATED
 
 export const sampleIssues = [
   {
+    id: 13,
+    title: 'placemark_test_1',
+    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0)',
+  },
+  {
+    id: 14,
+    title: 'placemark_test_2',
+    body: 'Placemark test2 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-47.076,18.655,0,0,0,1)',
+  },
+  {
     id: 123,
     title: 'issueTitle_1',
     body: `issueBody_1. Lorem ipsum dolor sit amet, consectetur adipiscing
@@ -44,16 +54,6 @@ export const sampleIssues = [
     sollicitudin mauris. Integer in mauris eu nibh euismod gravida.
     - [cam 1](http://bogus:0/share/v/p/index.ifc#i:;c:-73.467,127.432,94,-27.69,7.071,1.331;)
     `,
-  },
-  {
-    id: 13,
-    title: 'placemark_test_1',
-    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0)',
-  },
-  {
-    id: 14,
-    title: 'placemark_test_2',
-    body: 'Placemark test2 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-47.076,18.655,0,0,0,1)',
   },
 ]
 
