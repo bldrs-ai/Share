@@ -88,11 +88,6 @@ export default function NotesNavBar() {
               (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment params
               (hash) => setParamsToHash(hash, HASH_PREFIX_NOTES), // Add notes params
             ])
-             /* let hash = removeMarkerUrlParams(_location)
-             hash = removeParamsFromHash(hash, HASH_PREFIX_NOTES)
-             hash = removeParamsFromHash(hash, HASH_PREFIX_COMMENT)
-             hash = setParamsToHash(HASH_PREFIX_NOTES)
-             window.location.hash = hash*/
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'

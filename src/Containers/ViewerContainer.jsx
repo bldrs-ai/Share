@@ -1,11 +1,11 @@
 import React, {ReactElement, useState} from 'react'
 import Box from '@mui/material/Box'
-import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import {useNavigate} from 'react-router-dom'
-import {loadLocalFileDragAndDrop} from '../OPFS/utils'
+import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import useStore from '../store/useStore'
-import {loadLocalFileDragAndDropFallback} from '../utils/loader'
+import {loadLocalFileDragAndDrop} from '../OPFS/utils'
 import {handleBeforeUnload} from '../utils/event'
+import {loadLocalFileDragAndDropFallback} from '../utils/loader'
 
 
 /** @return {ReactElement} */

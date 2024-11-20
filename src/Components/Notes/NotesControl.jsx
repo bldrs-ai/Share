@@ -1,12 +1,12 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {getHashParams, getObjectParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
-import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/MarkerControl'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 
 
 /**

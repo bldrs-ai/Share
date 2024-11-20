@@ -1,6 +1,6 @@
 import '@percy/cypress'
-import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../../support/utils'
 import {Raycaster, Vector2, Vector3} from 'three'
+import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../../support/utils'
 import {MOCK_MARKERS} from '../../../src/Components/Markers/Marker.fixture'
 
 

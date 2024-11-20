@@ -1,24 +1,25 @@
-// MarkerControl.jsx
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
-import React, {useEffect} from 'react'
 import PropTypes from 'prop-types'
+import React, {useEffect} from 'react'
 import debug from '../../utils/debug'
-import useStore from '../../store/useStore'
-import {HASH_PREFIX_PLACE_MARK} from './hashState'
-import {findMarkdownUrls} from '../../utils/strings'
-import {getHashParams,
-    getHashParamsFromUrl,
-    setParamsToHash,
-    removeParamsFromHash,
-    stripHashParams,
-    batchUpdateHash} from '../../utils/location'
+import {assertDefined} from '../../utils/assert'
 import {Vector3} from 'three'
-import PlaceMark from '../../Infrastructure/PlaceMark'
-import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {roundCoord} from '../../utils/math'
 import {setGroupColor} from '../../utils/svg'
-import {assertDefined} from '../../utils/assert'
+import {
+    batchUpdateHash,
+    getHashParams,
+    getHashParamsFromUrl,
+    removeParamsFromHash,
+    setParamsToHash,
+    stripHashParams,
+} from '../../utils/location'
+import {findMarkdownUrls} from '../../utils/strings'
+import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
+import PlaceMark from '../../Infrastructure/PlaceMark'
 import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from '../Notes/hashState'
+import useStore from '../../store/useStore'
+import {HASH_PREFIX_PLACE_MARK} from './hashState'
 
 
 /**

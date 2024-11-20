@@ -4,13 +4,13 @@ import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CameraControl from './Camera/CameraControl'
+import MarkerControl from '../Components/Markers/MarkerControl'
 import ImagineControl from './Imagine/ImagineControl'
 import NotesControl from './Notes/NotesControl'
 import ProfileControl from './Profile/ProfileControl'
 import PropertiesControl from './Properties/PropertiesControl'
 import ShareControl from './Share/ShareControl'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
-import MarkerControl from '../Components/Markers/MarkerControl'
 
 
 /**
