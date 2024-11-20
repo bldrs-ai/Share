@@ -9,6 +9,8 @@ import {IfcViewerAPIExtended} from '../../Infrastructure/IfcViewerAPIExtended'
 import {makeTestTree} from '../../utils/TreeUtils.test'
 import {actAsyncFlush} from '../../utils/tests'
 import {Mesh, BoxGeometry, MeshBasicMaterial} from 'three'
+import {HASH_PREFIX_NOTES} from '../../Components/Notes/hashState'
+import {HASH_PREFIX_PLACE_MARK} from './hashState'
 
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
@@ -196,7 +198,7 @@ const mockOppositeObjects = [
     })
 
     const {coordinates, id} = MOCK_MARKERS[0]
-    const expectedHash = `#m:${coordinates.join(',')};i:${id}`
+    const expectedHash = `#${HASH_PREFIX_PLACE_MARK}:${coordinates.join(',')};${HASH_PREFIX_NOTES}:${id}`
 
     expect(window.location.hash).toBe(expectedHash)
   })
