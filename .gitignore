@@ -9,6 +9,9 @@ cypress/e2e/logs
 
 /coverage
 
+# symlink for test-models repo
+public/test-models
+
 # misc
 .DS_Store
 .vscode
