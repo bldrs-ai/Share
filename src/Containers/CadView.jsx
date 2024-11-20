@@ -272,7 +272,7 @@ export default function CadView({
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
     if (!isCamHashSet) {
-      viewer.context.ifcCamera.currentNavMode.fitModelToFrame()
+      viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
     }
 
     // TODO(pablo): centralize capability check somewhere

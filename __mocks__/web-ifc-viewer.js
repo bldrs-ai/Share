@@ -52,6 +52,9 @@ const impl = {
             return target
           }),
         },
+        currentNavMode: {
+          fitModelToFrame: jest.fn()
+        }
       },
       items: {
         ifcModels: [],
