@@ -1,5 +1,6 @@
 import {getHashParamsFromHashStr} from './location'
 
+
 /**
  * Convert string to integer.
  *
@@ -151,4 +152,23 @@ export function toTitleCase(str) {
       function(txt) {
         return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
       })
+}
+
+
+/**
+ * Split str on / and remove empty string as first or last array elt if they are
+ * present.
+ *
+ * @param {string} pathStr
+ * @return {Array<string>}
+ */
+export function safePathSplit(pathStr) {
+  const parts = pathStr.split('/')
+  if (parts[0] === '') {
+    parts.shift()
+  }
+  if (parts.length > 0 && parts[parts.length - 1] === '') {
+    parts.pop()
+  }
+  return parts
 }

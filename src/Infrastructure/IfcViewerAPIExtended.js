@@ -5,7 +5,6 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
-import Picker from '../view/Picker'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -33,6 +32,15 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
+  }
+
+  /**
+   * Loads the given IFC in the current scene.
+   *
+   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
+   */
+  setCustomViewSettings(customViewSettings) {
+    this.viewsManager.setViewSettings(customViewSettings)
   }
 
   /**
@@ -101,9 +109,14 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     }
     if (toBeSelected.length !== 0) {
       try {
-        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, false, true)
+        debug().log('IfcViewerAPIExtended#setSelection, with Array<toBeSelected>: ', toBeSelected)
+        const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
+        const removePrevious = true
+        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
+        debug().log('IfcViewerAPIExtended#setSelection, meshes: ', this.IFC.selector.selection.meshes)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
+        console.warn('selection failure', e)
         debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
       }
     } else {
@@ -112,36 +125,24 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     }
   }
 
+
   /**
    * Highlights the item pointed by the cursor.
    *
    */
   async highlightIfcItem() {
-    const picker = new Picker(this.context)
-    const pickedAll = picker.castRay(this.context.scene.scene.children)
-    if (pickedAll.length === 0) {
-      return
-    }
-    // const picked = this.context.castRayIfc()
-    const picked = pickedAll[0]
-    if (!picked) {
+    const found = this.context.castRayIfc()
+    if (!found) {
       this.IFC.selector.preselection.toggleVisibility(false)
       return
     }
-    // const id = this.getPickedItemId(picked)
-    const id = picked.object.expressID
+    const id = this.getPickedItemId(found)
     if (this.isolator.canBePickedInScene(id)) {
-      /* const preselectMat = new MeshLambertMaterial({
-        transparent: true,
-        opacity: 0.5,
-        color: 0xff0000,
-        depthTest: true,
-      }) */
-      // new Selection(this.context, this.IFC.loader, preselectMat).pick(picked)
-      await this.IFC.selector.preselection.pick(picked)
+      await this.IFC.selector.preselection.pick(found)
       this.highlightPreselection()
     }
   }
+
 
   /**
    * applies Preselection effect on an Element by Id
@@ -151,6 +152,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   async preselectElementsByIds(modelId, expressIds) {
     const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
+    debug().log('IfcViewerAPIExtended#preselectElementsByIds, filteredIds:', filteredIds)
     if (filteredIds.length) {
       await this.IFC.selector.preselection.pickByID(modelId, filteredIds, false, true)
       this.highlightPreselection()
@@ -181,7 +183,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
 
   /**
-   *
    * Highlights the item pointed by the cursor.
    *
    * @param {object} picked item

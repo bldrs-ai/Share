@@ -1,9 +1,19 @@
 import axios from 'axios'
-import {assertDefined} from './utils/assert.js'
+import {assertDefined} from './utils/assert'
+import debug from './utils/debug'
 
 
-// TODO: 3dm, glb
-export const supportedTypes = ['bld', 'fbx', 'glb', 'ifc', 'obj', 'pdb']
+export const supportedTypes = [
+  // '3dm',
+  'bld',
+  'fbx',
+  'glb',
+  'ifc',
+  'obj',
+  // 'pdb',
+  'step',
+  'stp',
+]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
@@ -64,32 +74,66 @@ export function getValidExtension(pathOrExt) {
 }
 
 
+// File header magic is clear by this offset
+const HEADER_LIMIT = 1024
+
+
 /**
  * @param {string} path
  * @param {string} type
+ * @return {string} The result of the `analyzeHeader` function.
  */
 export async function guessType(path) {
-  console.log('Filetype#guessType, path:', path)
+  debug().log('Filetype#guessType, path:', path)
   const response = await axios.get(path, {
     headers: {
-      Range: 'bytes=0-1024', // Requesting the first 1024 bytes
+      Range: `bytes=0-${HEADER_LIMIT}`,
     },
     responseType: 'arraybuffer',
   })
-
-  const initialContent = response.data
-  const decoder = new TextDecoder('utf-8')
-  const initialContentString = decoder.decode(initialContent)
-  console.log('Filetype#guessType, initialContent:', initialContentString)
-  return analyzeHeader(initialContentString)
+  const headerBuffer = response.data
+  return analyzeHeader(headerBuffer)
 }
 
 
 /**
- * @param {string} header
+ * Analyzes the file type from a File object.
+ *
+ * @param {File} file The File object to analyze.
+ * @return {string} The result of the `analyzeHeader` function.
+ */
+export async function guessTypeFromFile(file) {
+  debug().log('Filetype#guessTypeFromFile, file:', file)
+  const start = 0
+  const headerLimit = 1024
+  const end = Math.min(file.size, headerLimit)
+  const fileSlice = file.slice(start, end)
+  const headerBuffer = await fileSlice.arrayBuffer()
+  return analyzeHeader(headerBuffer)
+}
+
+
+/**
+ * Attempts to guess the filetype by inspecting the given headerBuffer
+ *
+ * @param {ArrayBuffer} headerBuffer
  * @return {string} type
  */
-export function analyzeHeader(header) {
+export function analyzeHeader(headerBuffer) {
+  const decoder = new TextDecoder('utf-8')
+  const headerStr = decoder.decode(headerBuffer)
+  return analyzeHeaderStr(headerStr)
+}
+
+
+/**
+ * Attempts to guess the filetype by inspecting the given header string
+ *
+ * @param {string} headerStr
+ * @return {string} type
+ */
+export function analyzeHeaderStr(header) {
+  debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
   } else if (header.includes('FBX')) {

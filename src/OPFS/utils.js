@@ -11,7 +11,6 @@ import {
   opfsClearCache,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
-import {disablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 
 
@@ -58,7 +57,7 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
-      filepath = filepath.split('.ifc')[0]
+      // filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
 
@@ -334,19 +333,21 @@ export function deleteFileFromOPFS(
 
 
 /**
- * Upload a local file for display from Drag And Drop, storing in OPFS.
+ * Upload a local file for display from Drag And Drop, storing in OPFS and
+ * invoke given callback, e.g. for navigation change.
  *
  * @param {File} file
- * @param {Function} callback
+ * @param {string} type As defined in Filetype.
+ * @param {Function} callback Not optional since all known flows require it.
  */
-export function saveDnDFileToOpfsAndNav(file, callback) {
-  assertDefined(file)
+export function saveDnDFileToOpfs(file, type, callback) {
+  assertDefined(file, type, callback)
   let workerRef = null
   workerRef = initializeWorker()
 
-  debug().log('loader#saveDnDFileToOpfsAndNav#event:', event)
+  debug().log('OPFS/utils#saveDnDFileToOpfs: event:', event)
   const tmpUrl = URL.createObjectURL(file)
-  debug().log('loader#saveDnDFileToOpfsAndNav#event: url: ', tmpUrl)
+  debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
   // Post message to the worker to handle the file
   const parts = tmpUrl.split('/')
   const fileNametmpUrl = parts[parts.length - 1]
@@ -374,7 +375,10 @@ export function saveDnDFileToOpfsAndNav(file, callback) {
 
   workerRef.addEventListener('message', listener)
 
-  opfsWriteModel(tmpUrl, file.name, fileNametmpUrl)
+  const originalFilename = file.name
+  const filename = `${fileNametmpUrl}.${type}`
+  debug().log('OPFS/utils#saveDnDFileToOpfs: calling opfsWriteModel with typed filename:', filename)
+  opfsWriteModel(tmpUrl, originalFilename, filename)
 }
 
 /**

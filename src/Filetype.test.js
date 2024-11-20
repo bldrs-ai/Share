@@ -1,6 +1,6 @@
 import {
   FilenameParseError,
-  analyzeHeader,
+  analyzeHeaderStr,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -35,16 +35,16 @@ describe('Filetype', () => {
     }).toThrow(FilenameParseError)
   })
 
-  context('analyzeHeader', () => {
+  context('analyzeHeaderStr', () => {
     it('matches bld header', () => {
       const header = `{\n` +
             `  "metadata": {`
-      expect(analyzeHeader(header)).toBe('bld')
+      expect(analyzeHeaderStr(header)).toBe('bld')
     })
 
     it('matches gltf header', () => {
       const header = `glTFasdfasdfasdf`
-      expect(analyzeHeader(header)).toBe('gltf')
+      expect(analyzeHeaderStr(header)).toBe('gltf')
     })
 
     it('matches obj header', () => {
@@ -53,24 +53,24 @@ describe('Filetype', () => {
             `v 0.061043 0.025284 0.034490\n` +
             `v 0.011829 0.022302 0.083267\n` +
             `v 0`
-      expect(analyzeHeader(header)).toBe('obj')
+      expect(analyzeHeaderStr(header)).toBe('obj')
     })
 
     it('matches pdb header', () => {
-      expect(analyzeHeader(`COMPND  bucky.pdb`)).toBe('pdb')
-      expect(analyzeHeader(`HEADER    CSD ENTRY GLOBAL`)).toBe('pdb')
-      expect(analyzeHeader(`ORIGX1      1.000000  0.000000  0.000000        0.00000`)).toBe('pdb')
+      expect(analyzeHeaderStr(`COMPND  bucky.pdb`)).toBe('pdb')
+      expect(analyzeHeaderStr(`HEADER    CSD ENTRY GLOBAL`)).toBe('pdb')
+      expect(analyzeHeaderStr(`ORIGX1      1.000000  0.000000  0.000000        0.00000`)).toBe('pdb')
     })
 
     it('matches stl header', () => {
-      expect(analyzeHeader(`solid smth`)).toBe('stl')
+      expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
     })
 
     it('matches xyz header', () => {
       const header = `# header1 \n` +
             `#  \n` +
             `  0.3517846     -0.7869986      -2.873479`
-      expect(analyzeHeader(header)).toBe('xyz')
+      expect(analyzeHeaderStr(header)).toBe('xyz')
     })
   })
 })

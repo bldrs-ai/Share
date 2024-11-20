@@ -29,6 +29,7 @@ import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
+import {partsToPath} from './urls'
 import {initViewer} from './viewer'
 
 
@@ -181,8 +182,8 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
 
+    debug().log('CadView#onViewer: modelPath:', modelPath)
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    console.log(`CadView#onViewer: pathToLoad(${pathToLoad}) installPrefix(${installPrefix}) modelPath:`, modelPath)
     let tmpModelRef
     try {
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
@@ -195,12 +196,11 @@ export default function CadView({
       return
     }
     setIsModelLoading(false)
-
-    debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
-
     setSnackMessage(null)
-    debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
+
+    debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
+
     createPlaceMark({
       context: viewer.context,
       oppositeObjects: [tmpModelRef],
@@ -234,17 +234,21 @@ export default function CadView({
    * @param {string} gitpath to use for constructing API endpoints
    */
   async function loadModel(filepath, gitpath) {
-    console.log(`CadView#loadModel, filepath(${filepath}) gitpath(${gitpath})`)
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
+
+    // Call this before loader, as IFCLoader needs it.
+    viewer.setCustomViewSettings(customViewSettings)
 
     const onProgress = (progressMsg) => setSnackMessage(`${loadingMessageBase}: ${progressMsg}`)
     let loadedModel
     try {
       loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
-      console.error(error)
+      // TODO(pablo): useful to have a trace in prod
+      // eslint-disable-next-line no-console
+      console.trace(error)
       setSnackMessage(`Error: ${error.message}`)
       return
     } finally {
@@ -264,11 +268,11 @@ export default function CadView({
     // arg.. expected a url
     updateLoadedFileInfo(filepath)
 
-    viewer.context.scene.add(loadedModel)
+    viewer.context.getScene().add(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
     if (!isCamHashSet) {
-      viewer.context.ifcCamera.currentNavMode.fitModelToFrame()
+      viewer.context.getCamera().currentNavMode.fitModelToFrame()
     }
 
     // TODO(pablo): centralize capability check somewhere
@@ -282,6 +286,7 @@ export default function CadView({
       content_type: 'ifc_model',
       item_id: filepath,
     })
+
     return loadedModel
   }
 
@@ -319,29 +324,34 @@ export default function CadView({
 
   /** Handle double click event on canvas. */
   function canvasDoubleClickHandler(event) {
-    if (!event.target || event.target.tagName !== 'CANVAS') {
-      return
-    }
-
-    const picker = new Picker(viewer.context)
-    const pickedAll = picker.castRay(viewer.context.scene.scene.children)
-    if (pickedAll.length === 0) {
-      return
-    }
-    const picked = pickedAll[0]
-    const mesh = picked.object
-    // viewer.setHighlighted([mesh])
-    if (mesh.expressID !== undefined) {
-      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
-    } else {
-      const geom = mesh.geometry
-      if (!geom.index) {
-        throw new Error('Geometry does not have index information.')
+    try {
+      if (!event.target || event.target.tagName !== 'CANVAS') {
+        return
       }
-      const geoIndex = geom.index.array
-      const IdAttrName = 'expressID'
-      const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
-      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+
+      const picker = new Picker(viewer.context)
+      const pickedAll = picker.castRay(viewer.context.scene.scene.children)
+      if (pickedAll.length === 0) {
+        return
+      }
+      const picked = pickedAll[0]
+      const mesh = picked.object
+      // TODO(pablo): obsolete? needed this in h3 at some point
+      viewer.setHighlighted([mesh])
+      if (mesh.expressID !== undefined) {
+        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
+      } else {
+        const geom = mesh.geometry
+        if (!geom.index) {
+          throw new Error('Geometry does not have index information.')
+        }
+        const geoIndex = geom.index.array
+        const IdAttrName = 'expressID'
+        const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
+        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+      }
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -446,10 +456,15 @@ export default function CadView({
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-        const path = pathIds.join('/')
+        const elementPath = pathIds.join('/')
+        const path = partsToPath(pathPrefix, repoFilePath, elementPath)
+        // TODO(pablo): without a log before nav, some page crashes simply blank
+        // the screen and leave no trace
+        // eslint-disable-next-line no-console
+        console.log('navigate:', pathIds, elementPath, path)
         navWith(
           navigate,
-          `${pathPrefix}${repoFilePath}/${path}`,
+          path,
           {
             search: '',
             hash: window.location.hash,

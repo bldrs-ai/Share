@@ -37,7 +37,7 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
             setInputText(newInputText)
           }
         } else {
-          disablePageReloadApprovalCheck();
+          disablePageReloadApprovalCheck()
           navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
         }
       }

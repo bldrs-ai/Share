@@ -1,6 +1,5 @@
 import axios from 'axios'
-import {BufferAttribute, Mesh, Object3D} from 'three'
-import {IFCLoader} from 'web-ifc-three'
+import {BufferAttribute, Matrix4, Mesh, Object3D} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
@@ -18,6 +17,7 @@ import {testUuid} from '../utils/strings'
 import {dereferenceAndProxyDownloadUrl} from './urls'
 import BLDLoader from './BLDLoader'
 import glbToThree from './glb'
+import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
@@ -41,36 +41,45 @@ export async function load(
   accessToken = '',
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
-  console.log('Loader: in with path:', path)
+  debug().log('Loader#load: in with path:', path)
 
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
   const isUploadedFile = testUuid(path)
   if (isUploadedFile) {
-    console.log('Loader: upload detected')
-    path = getUploadedBlobPath(path)
-    // enablePageReloadApprovalCheck()
+    path = constructUploadedBlobPath(path)
+    debug().log('Loader#load: file uploaded, blob path:', path)
+    enablePageReloadApprovalCheck()
   }
 
   // All of this is to get a path
+  let derefPath
   let shaHash
+  // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
   const isLocallyHostedFile = path.indexOf('/') === 0
+  debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
-    console.log('Loader: download1', path, accessToken, isOpfsAvailable);
-    [path, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
+    if (isLocallyHostedFile) {
+      derefPath = path
+      shaHash = ''
+    } else {
+      [derefPath, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    }
   } else if (isLocallyHostedFile) {
-    console.log('Loader: locally hosted file')
+    debug().log('Loader#load: locally hosted file')
     shaHash = ''
   } else {
-    console.log('Loader: download2', path, accessToken, isOpfsAvailable);
+    debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [path, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    [derefPath, shaHash] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
-  console.log(
-    `Loader#load, loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
+  debug().log(
+    `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
   if (loader === undefined) {
     throw new Error(`Unknown filetype for: ${path}`)
@@ -81,30 +90,31 @@ export async function load(
     // download to file using caching system or else...
     let file
     if (isUploadedFile) {
+      debug().log('Loader#load: getModelFromOPFS for upload:', path)
       file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
-      console.log('Loader: getModelFromOPFS, file:', file)
-    } else if (path === '/index.ifc') {
+    } else if (isLocallyHostedFile) {
+      debug().log('Loader#load: local file:', path)
       file = await downloadToOPFS(
         path,
-        'index.ifc',
+        path,
         'bldrs-ai',
         'BldrsLocalStorage',
         'V1',
         'Projects',
         onProgress)
-      console.log('Loader: downloadToOPFS, file:', file)
     } else {
       let pathUrl
       try {
         pathUrl = new URL(path)
       } catch (e) {
-        throw new Error(`Cannot load resource: ${e}`)
+        throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
       }
       if (pathUrl.host === 'github.com') {
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
+        debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
         file = await downloadModel(
-          path,
+          derefPath,
           shaHash,
           filePath,
           accessToken,
@@ -113,10 +123,9 @@ export async function load(
           branch,
           setOpfsFile,
           onProgress)
-        console.log(`Loader: downloadModel with gitpath(${path}) used at gitpath, file:`, file)
       } else {
-        const opfsFilename = btoa(pathUrl.pathname)
-        console.log(`Loader calling downloadToOPFS with pathUrl.pathname(${pathUrl.pathname}) encoded as:`, opfsFilename)
+        const opfsFilename = pathUrl.pathname
+        debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
         file = await downloadToOPFS(
           path,
           opfsFilename,
@@ -127,24 +136,33 @@ export async function load(
           onProgress)
       }
     }
+    debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
     modelData = await file.arrayBuffer()
-    console.log('modelData from OPFS:', modelData)
     if (isFormatText) {
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
+      debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
-    console.log('modelData from OPFS (decoded):', modelData)
   } else {
-    modelData = await axiosDownload(path, isFormatText, onProgress)
-    console.log('modelData from axios:', modelData)
+    modelData = await axiosDownload(derefPath, isFormatText, onProgress)
+    debug().log('Loader#load: modelData from axios download:', modelData)
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  return await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
+  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
+
+  if (!isIfc) {
+    debug().log('Loader#load: converting non-IFC model to IFC:', model)
+    convertToShareModel(model, viewer)
+    viewer.IFC.addIfcModel(model)
+    viewer.IFC.loader.ifcManager.state.models.push(model)
+  }
+
+  return model
 }
 
 
@@ -155,24 +173,7 @@ export async function load(
  * @param {string} filepath
  * @return {string}
  */
-function getUploadedBlobPath(filepath) {
-  const l = window.location
-  // TODO(pablo): fix this with the above TODO for ifc suffix.
-  filepath = filepath.split('.ifc')[0]
-  const parts = filepath.split('/')
-  filepath = parts[parts.length - 1]
-  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
-  return filepath
-}
-
-
-/**
- * Construct browser's actual blob URL from app URL for uploaded file.
- *
- * @param {string} filepath
- * @return {string}
- */
-export function constructUploadedFilepath(filepath) {
+export function constructUploadedBlobPath(filepath) {
   const l = window.location
   const parts = filepath.split('/')
   filepath = parts[parts.length - 1]
@@ -185,7 +186,7 @@ export function constructUploadedFilepath(filepath) {
  * @param {string} path
  * @param {boolean} isFormatText
  * @param {Function} onProgress Handler from UI to display progress messages
- * @return {Array<byte>}
+ * @return {Array}
  * @throws Error for different events, with custom messages
  */
 async function axiosDownload(path, isFormatText, onProgress) {
@@ -273,13 +274,18 @@ function convertToShareModel(model, viewer) {
   recursiveDecorate(model)
 
   // Override for root
+  debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
   model.Name = model.Name || {value: 'Model'}
   model.LongName = model.LongName || {value: 'Model'}
-
-  model.ifcManager = viewer.IFC
+  // model.ifcManager = viewer.IFC
+  model.ifcManager = viewer.IFC.loader.ifcManager
   model.ifcManager.getSpatialStructure = (modelId, flatten) => {
     return model
+  }
+  model.ifcManager.getExpressId = (geom, faceNdx) => {
+    debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
+    return geom.id
   }
 
   model.getIfcType = (eltType) => eltType
@@ -298,7 +304,7 @@ function convertToShareModel(model, viewer) {
  * @param {Function} [fixupCb] to modify the model
  * @return {object}
  */
-async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
+export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -316,10 +322,10 @@ async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, view
       }
     })
   } else if (isLoaderAsync) {
-    console.log(`async loader(->) parsing data:`, loader, modelData)
+    debug().log(`async loader(->) parsing data:`, loader, modelData)
     model = await loader.parse(modelData, basePath)
   } else {
-    console.log(`sync loader(->) parsing data:`, loader, modelData)
+    debug().log(`sync loader(->) parsing data:`, loader, modelData)
     model = loader.parse(modelData, basePath)
   }
   if (!model) {
@@ -330,17 +336,6 @@ async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, view
     model = fixupCb(model, viewer)
   }
 
-  if (isIfc) {
-    // TODO(pablo): recursive or just top-level?
-    // First, any ops for three; web-ifc-viewer used to do this.
-    if (model.geometry) {
-      model.geometry.computeBoundingBox()
-    }
-    console.log('addIfcModel with model:', model)
-    viewer.IFC.addIfcModel(model.mesh)
-  } else {
-    convertToShareModel(model, viewer)
-  }
   return model
 }
 
@@ -353,7 +348,7 @@ async function findLoader(pathname, viewer) {
   let extension
   try {
     extension = Filetype.getValidExtension(pathname)
-    console.log('Loader#findLoader, extension:', extension)
+    debug().log('Loader#findLoader, extension:', extension)
   } catch (e) {
     // TODO(pablo): need to think thru a better way to do content sniffing
     if (e instanceof Filetype.FilenameParseError) {
@@ -361,7 +356,7 @@ async function findLoader(pathname, viewer) {
       if (extension === null) {
         throw new Error(`Could not guess filetype for ${pathname}`)
       }
-      console.log('Loader#findLoader, hit path parse exception, guessed extension:', extension)
+      debug().log('Loader#findLoader, hit path parse exception, guessed extension:', extension)
     } else {
       throw e
     }
@@ -381,8 +376,10 @@ async function findLoader(pathname, viewer) {
       loader = new FBXLoader()
       break
     }
+    case 'step':
+    case 'stp':
     case 'ifc': {
-      loader = await newIfcLoader()
+      loader = newIfcLoader(viewer)
       isLoaderAsync = true
       // TODO(pablo): true should work but currently causes IFCLoader to fail
       isFormatText = false
@@ -391,6 +388,7 @@ async function findLoader(pathname, viewer) {
     }
     case 'obj': {
       loader = new OBJLoader
+      fixupCb = objToThree
       isFormatText = true
       break
     }
@@ -442,7 +440,7 @@ async function findLoader(pathname, viewer) {
       break
     }
     */
-    default: throw new Error('Unsupported filetype') // fix
+    default: throw new Error(`Unsupported filetype; ${extension}`)
   }
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
@@ -463,35 +461,52 @@ function newGltfLoader() {
 /**
  * Sets up the IFCLoader to use the wasm module and move the model to
  * the origin on load.
+ *
+ * @return {object} Loader with parse function
  */
-async function newIfcLoader() {
-  const loader = new IFCLoader()
-  // TODO(pablo): Now using Conway, it's working, but not sure how!
-  // loader.ifcManager.setWasmPath('./')
-  // loader.ifcManager.setWasmPath('../web-ifc/')
-  // loader.ifcManager.setWasmPath('../../../bldrs-conway/compiled/dependencies/conway-geom/Dist/')
-
-  // Setting COORDINATE_TO_ORIGIN is necessary to align the model as
-  // it is in Share.  USE_FAST_BOOLS is also used live, tho not sure
-  // what it does.
-  await loader.ifcManager.applyWebIfcConfig({
-    COORDINATE_TO_ORIGIN: true,
-    USE_FAST_BOOLS: true,
-  })
-
-  // TODO(pablo): maybe useful to print the coordination matrix from
-  // the normalized view for debug?  Will need to be called after
-  // model is loaded.
-  // const coordMatrix = loader.ifcManager.ifcAPI.GetCoordinationMatrix(0)
-
+function newIfcLoader(viewer) {
+  const loader = viewer.IFC
+  // Loader is web-ifc-viewer/viewer/src/components/ifc/ifc-manager.ts
+  // It internally uses web-ifc-three/Loader
+  // Hot patch buffer-based parse alternative.
+  loader.parse = async function(
+    buffer,
+    onProgress,
+    onError,
+  ) {
+    if (this.context.items.ifcModels.length !== 0) {
+      throw new Error('Model cannot be loaded.  A model is already present')
+    }
+    try {
+      await this.loader.ifcManager.applyWebIfcConfig({
+        COORDINATE_TO_ORIGIN: true,
+        USE_FAST_BOOLS: true,
+      })
+      const ifcModel = await this.loader.parse(buffer, onProgress)
+      this.addIfcModel(ifcModel)
+      // eslint-disable-next-line new-cap
+      const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
+      const matrix = new Matrix4().fromArray(matrixArr)
+      this.loader.ifcManager.setupCoordinationMatrix(matrix)
+      this.context.fitToFrame()
+      return ifcModel
+    } catch (err) {
+      console.error(err)
+      if (onError) {
+        onError(err)
+      }
+      return null
+    }
+  }
   return loader
 }
 
 
 /**
  * Computes progress and calls given onProgress handler
+ *
  * @param {Event} progressEvent
- * @param {function} onProgress
+ * @param {Function} onProgress
  */
 function onProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
@@ -504,9 +519,7 @@ function onProgressHandler(progressEvent, onProgress) {
 }
 
 
-/**
- * For network or file resources that are not found.
- */
+/** For network or file resources that are not found. */
 export class NotFoundError extends Error {
   /** @param {string} message */
   constructor(message) {

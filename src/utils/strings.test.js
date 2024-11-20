@@ -4,6 +4,7 @@ import {
   floatStrTrim,
   isNumber,
   isNumeric,
+  safePathSplit,
   testUuid,
   toTitleCase,
 } from './strings'
@@ -97,5 +98,14 @@ describe('strings', () => {
     expect(toTitleCase('WALL')).toBe('Wall')
     expect(toTitleCase('wAlL')).toBe('Wall')
     expect(toTitleCase('wall')).toBe('Wall')
+  })
+
+
+  it('safePathSplit', () => {
+    expect(safePathSplit('/')).toStrictEqual([])
+    expect(safePathSplit('/a')).toStrictEqual(['a'])
+    expect(safePathSplit('/a/')).toStrictEqual(['a'])
+    expect(safePathSplit('/a/b')).toStrictEqual(['a', 'b'])
+    expect(safePathSplit('/a/b/c')).toStrictEqual(['a', 'b', 'c'])
   })
 })

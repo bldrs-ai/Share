@@ -1,11 +1,13 @@
 import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import {saveDnDFileToOpfsAndNav} from '../OPFS/utils'
+import {guessTypeFromFile} from '../Filetype'
+import {saveDnDFileToOpfs} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import useStore from '../store/useStore'
+import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
-import {saveDnDFileToOpfsAndNavFallback} from '../utils/loader'
+import {saveDnDFileToOpfsFallback} from '../utils/loader'
 
 
 /** @return {ReactElement} */
@@ -35,22 +37,36 @@ export default function ViewerContainer() {
 
 
   /** Handles file drop into drag-n-drop area */
-  function handleDrop(event) {
+  async function handleDrop(event) {
     event.preventDefault()
     setIsDragActive(false)
-    const files =
-          event.dataTransfer.files
+    const files = event.dataTransfer.files
+    if (files.length === 0) {
+      throw new Error('File upload initiated but found no data')
+    }
+    if (files.length > 1) {
+      throw new Error('File upload initiated for more than 1 file')
+    }
+
+    const uploadedFile = files[0]
+    debug().log('ViewerContainer#handleDrop: uploadedFile', uploadedFile)
+
+    const type = await guessTypeFromFile(uploadedFile)
+    if (type === null) {
+      throw new Error('File upload of unknown type')
+    }
+
     /** @param {string} fileName The filename the upload was given */
     function onWritten(fileName) {
       disablePageReloadApprovalCheck()
+      debug().log('ViewerContainer#handleDrop: navigate to:', fileName)
       navigate(`${appPrefix}/v/new/${fileName}`)
     }
-    if (files.length === 1) {
-      if (isOpfsAvailable) {
-        saveDnDFileToOpfsAndNav(files[0], onWritten)
-      } else {
-        saveDnDFileToOpfsAndNavFallback(files[0], onWritten)
-      }
+
+    if (isOpfsAvailable) {
+      saveDnDFileToOpfs(uploadedFile, type, onWritten)
+    } else {
+      saveDnDFileToOpfsFallback(uploadedFile, onWritten)
     }
   }
 

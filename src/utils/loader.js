@@ -99,14 +99,13 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
  * Upload a local file for display from Drag And Drop.
  *
  * @param {File} file
- * @param {string} appPrefix
- * @param {Function} onLoad
+ * @param {Function} callback Not optional since all known flows require it.
  */
-export function saveDnDFileToOpfsAndNavFallback(file, onLoad) {
-  assertDefined(file)
+export function saveDnDFileToOpfsFallback(file, callback) {
+  assertDefined(file, callback)
   let tmpUrl = URL.createObjectURL(file)
-  debug().log('loader#loadLocalFileDragAndDrop#event: url: ', tmpUrl)
+  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', tmpUrl)
   const parts = tmpUrl.split('/')
   tmpUrl = parts[parts.length - 1]
-  onLoad(tmpUrl)
+  callback(tmpUrl)
 }

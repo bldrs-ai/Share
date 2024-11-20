@@ -28,7 +28,9 @@ const impl = {
   _isMock: true,
   _loadedModel: loadedModel,
   IFC: {
+    addIfcModel: jest.fn(),
     context: {
+      fitToFrame: jest.fn(),
       getCamera: jest.fn(),
       getRenderer: jest.fn(),
       getScene: jest.fn(),
@@ -51,6 +53,9 @@ const impl = {
           }),
         },
       },
+      items: {
+        ifcModels: [],
+      },
     },
     setWasmPath: jest.fn(),
     selector: {
@@ -65,8 +70,15 @@ const impl = {
     },
     loader: {
       ifcManager: {
+        applyWebIfcConfig: jest.fn(),
+        ifcAPI: {
+          GetCoordinationMatrix: jest.fn(),
+        },
         parser: {},
+        setupCoordinationMatrix: jest.fn(),
+        state: {},
       },
+      parse: jest.fn(() => loadedModel),
     },
   },
   clipper: {
@@ -91,16 +103,26 @@ const impl = {
     style: {},
   },
   context: {
-    resize: jest.fn(),
     getRenderer: jest.fn(),
-    getScene: jest.fn(),
-    getCamera: jest.fn(),
+    getScene: jest.fn(() => {
+      return {
+        add: jest.fn(),
+      }
+    }),
+    getCamera: jest.fn(() => {
+      return {
+        currentNavMode: {
+          fitModelToFrame: jest.fn(),
+        },
+      }
+    }),
     getClippingPlanes: jest.fn(() => {
       return []
     }),
     renderer: {
       newScreenshot: jest.fn(),
     },
+    resize: jest.fn(),
   },
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   loadIfcFile: jest.fn(jest.fn(() => loadedModel)),
@@ -110,6 +132,7 @@ const impl = {
   pickIfcItemsByID: jest.fn(),
   preselectElementsByIds: jest.fn(),
   setSelection: jest.fn(),
+  setCustomViewSettings: jest.fn(),
   takeScreenshot: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
