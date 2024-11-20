@@ -61,6 +61,7 @@ export default function OperationsGroup({deselectItems}) {
         context={viewer.context ? viewer.context : null}
         oppositeObjects={[model ? model : null]}
         postProcessor={viewer ? viewer.postProcessor : null}
+        data-testid='markerControl'
         />
       )}
       {isImagineEnabled && <ImagineControl/>}

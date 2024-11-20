@@ -1,3 +1,4 @@
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 import {
   EventDispatcher,
   Sprite,
@@ -27,6 +28,14 @@ export default class PlaceMark extends EventDispatcher {
     super()
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
+    // Assign the camera to the global window object for Cypress testing
+    if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+    if (!window.markerScene) {
+      window.markerScene = {}
+    }
+      window.markerScene.domElement = _domElement
+      window.markerScene.camera = _camera
+    }
     const _scene = context.getScene()
     const _raycaster = new Raycaster()
     let _objects = []

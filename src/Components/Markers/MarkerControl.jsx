@@ -1,5 +1,5 @@
 // MarkerControl.jsx
-
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 import React, {useEffect} from 'react'
 import PropTypes from 'prop-types'
 import debug from '../../utils/debug'
@@ -128,6 +128,16 @@ function PlacemarkHandlers() {
             svgGroup.userData.inactiveColor = marker.inactiveColor
             svgGroup.userData.color = marker.isActive ? marker.activeColor : marker.inactiveColor
             svgGroup.userData.id = marker.commentId ? marker.commentId : marker.id
+            // testing purposes
+            if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+                if (!window.markerScene) {
+                    window.markerScene = {}
+                  }
+                if (!window.markerScene.markerObjects) {
+                    window.markerScene.markerObjects = []
+                }
+                window.markerScene.markerObjects.push(svgGroup)
+            }
 
             placeMarkGroupMap.set(svgGroup.userData.id, svgGroup)
           }

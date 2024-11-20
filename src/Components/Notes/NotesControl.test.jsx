@@ -35,7 +35,7 @@ describe('NotesControl', () => {
     await act(async () => {
       render(<ShareMock><NotesControl/></ShareMock>)
     })
-    expect(result.current.notes).toHaveLength(4)
+    expect(result.current.notes).toHaveLength(6)
   })
 
   it('Fetches issues when isNotesVisible in zustand', async () => {
@@ -53,7 +53,7 @@ describe('NotesControl', () => {
     await act(async () => {
       result.current.setIsNotesVisible(true)
     })
-    expect(result.current.notes).toHaveLength(4)
+    expect(result.current.notes).toHaveLength(6)
   })
 })
 
