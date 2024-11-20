@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setParams, removeParams} from '../../utils/location'
+import {setParams, removeParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
 import {removeMarkerUrlParams} from '../Markers/MarkerControl'
@@ -22,6 +22,7 @@ export default function NotesNavBar() {
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
+  const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
 
 
   /**
@@ -78,11 +79,20 @@ export default function NotesNavBar() {
          <TooltipIconButton
            title='Back to the list'
            onClick={() => {
-             removeMarkerUrlParams()
-             removeParams(HASH_PREFIX_NOTES)
-             removeParams(HASH_PREFIX_COMMENT)
-             setParams(HASH_PREFIX_NOTES)
+             setSelectedPlaceMarkId(null)
              setSelectedNoteId(null)
+             const _location = window.location
+             batchUpdateHash(_location, [
+              (hash) => removeMarkerUrlParams({hash}), // Remove marker params
+              (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes params
+              (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment params
+              (hash) => setParamsToHash(hash, HASH_PREFIX_NOTES), // Add notes params
+            ])
+             /* let hash = removeMarkerUrlParams(_location)
+             hash = removeParamsFromHash(hash, HASH_PREFIX_NOTES)
+             hash = removeParamsFromHash(hash, HASH_PREFIX_COMMENT)
+             hash = setParamsToHash(HASH_PREFIX_NOTES)
+             window.location.hash = hash*/
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'

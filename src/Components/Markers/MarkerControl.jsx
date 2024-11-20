@@ -6,12 +6,17 @@ import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {HASH_PREFIX_PLACE_MARK} from './hashState'
 import {findMarkdownUrls} from '../../utils/strings'
-import {getHashParams, getHashParamsFromUrl, addHashParams, removeHashParams} from '../../utils/location'
+import {getHashParams,
+    getHashParamsFromUrl,
+    setParamsToHash,
+    removeParamsFromHash,
+    stripHashParams,
+    batchUpdateHash} from '../../utils/location'
 import {Vector3} from 'three'
 import PlaceMark from '../../Infrastructure/PlaceMark'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {roundCoord} from '../../utils/math'
-import {addUserDataInGroup, setGroupColor} from '../../utils/svg'
+import {setGroupColor} from '../../utils/svg'
 import {assertDefined} from '../../utils/assert'
 import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from '../Notes/hashState'
 
@@ -21,8 +26,8 @@ import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from '../Notes/hashState'
  *
  * Extracts URLs that contain the specified placemark hash prefix from a given issue body.
  *
- * @param {string} issueBody - The body of the issue to parse for placemark URLs.
- * @return {string[]} - An array of extracted placemark URLs.
+ * @param {string} issueBody The body of the issue to parse for placemark URLs.
+ * @return {string[]} An array of extracted placemark URLs.
  */
 export function parsePlacemarkFromIssue(issueBody) {
     return findMarkdownUrls(issueBody, HASH_PREFIX_PLACE_MARK)
@@ -34,7 +39,7 @@ export function parsePlacemarkFromIssue(issueBody) {
  * Extracts the hash associated with a placemark (based on the defined hash prefix)
  * from the current window's location object.
  *
- * @return {string|null} - The active placemark hash, or `null` if no hash is found.
+ * @return {string|null} The active placemark hash, or `null` if no hash is found.
  */
 export function getActivePlaceMarkHash() {
     return getHashParams(location, HASH_PREFIX_PLACE_MARK)
@@ -46,8 +51,8 @@ export function getActivePlaceMarkHash() {
  * Parses a URL to extract the hash segment associated with a placemark,
  * based on the defined hash prefix.
  *
- * @param {string} url - The URL to parse for a placemark hash.
- * @return {string|null} - The extracted placemark hash, or `null` if no hash is found.
+ * @param {string} url The URL to parse for a placemark hash.
+ * @return {string|null} The extracted placemark hash, or `null` if no hash is found.
  */
 export function parsePlacemarkFromURL(url) {
     return getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
@@ -57,10 +62,14 @@ export function parsePlacemarkFromURL(url) {
  * Removes placemark parameters from the URL.
  *
  * This function removes any URL hash parameters associated with placemarks
- * (identified by the placemark hash prefix) from the current browser window's location.
+ * (identified by the placemark hash prefix) from the current browser window's location
+ * or a specified location object.
+ *
+ * @param {Location|null} location The location object to modify. If null, uses `window.location`.
+ * @return {string} The updated hash string with placemark parameters removed.
  */
-export function removeMarkerUrlParams() {
-    removeHashParams(window.location, HASH_PREFIX_PLACE_MARK)
+export function removeMarkerUrlParams(location = null) {
+    return stripHashParams(location ? location : window.location, HASH_PREFIX_PLACE_MARK)
 }
 
 
@@ -153,20 +162,31 @@ function PlacemarkHandlers() {
       const markArr = positionData.concat(normalData)
 
       // Update location hash
-      addHashParams(window.location, HASH_PREFIX_PLACE_MARK, markArr)
-      removeHashParams(window.location, HASH_PREFIX_CAMERA)
-      removeHashParams(window.location, HASH_PREFIX_NOTES)
-      removeHashParams(window.location, HASH_PREFIX_COMMENT)
+      batchUpdateHash(window.location, [
+        (hash) => setParamsToHash(hash, HASH_PREFIX_PLACE_MARK, markArr), // Add placemark
+        (hash) => removeParamsFromHash(hash, HASH_PREFIX_CAMERA), // Remove camera
+        (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes
+        (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment
+      ])
 
-      // Add metadata to the group
-      addUserDataInGroup(svgGroup, {url: window.location.href})
+      // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
+      const inactiveColor = 0xA9A9A9
+      const activeColor = 0xff0000
+      svgGroup.userData.isActive = false
+      svgGroup.userData.activeColor = activeColor
+      svgGroup.userData.inactiveColor = inactiveColor
+      svgGroup.userData.color = inactiveColor
+      svgGroup.material.color.set(inactiveColor)
+      svgGroup.userData.id = hash
+
       placeMarkGroupMap.set(hash, svgGroup)
       setPlaceMarkStatus(svgGroup, true)
     }
 
     setPlaceMarkMode(false)
-    // deactivatePlaceMark()
+    placeMark.deactivate()
+    setPlaceMarkActivated(false)
 
     if (!repository || !Array.isArray(notes)) {
         return
@@ -370,6 +390,13 @@ useEffect(() => {
 
     // Set the location hash
     window.location.hash = hash
+  } else {
+    // see if we have a temporary marker in the local group map
+    const temporaryMarker = placeMarkGroupMap.get(selectedPlaceMarkId)
+
+    if (temporaryMarker) {
+        window.location.hash = `#${selectedPlaceMarkId}`
+    }
   }
 }, [selectedPlaceMarkId, markers]) // Add markers as a dependency if it can change
 

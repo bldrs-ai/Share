@@ -28,6 +28,58 @@ export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
 }
 
+/**
+ * Serialize the given paramObj and add it to the provided hash string.
+ * If no params are provided, adds the key with no value.
+ *
+ * @param {string} hashString The original hash string (including `#`).
+ * @param {string} name A unique name for the params.
+ * @param {Object<string, any>} [params] The parameters to encode. If null or empty, adds key with no value.
+ * @param {boolean} includeNames Whether or not to include the parameter names in the encoding.
+ * @return {string} The updated hash string.
+ */
+export function setParamsToHash(hashString, name, params = {}, includeNames = false) {
+  if (hashString === '') {
+    hashString = '#'
+  }
+
+  if (!hashString.startsWith('#')) {
+    throw new Error('Invalid hash string: must start with "#"')
+  }
+
+  const FEATURE_SEP = ';' // Define the separator if not already defined
+  const existingHash = hashString.substring(1) // Remove the `#` prefix
+  const sets = existingHash.split(FEATURE_SEP)
+
+  /** @type {Object<string, string>} */
+  const setMap = {}
+
+  // Parse existing sets into a map
+  for (let i = 0; i < sets.length; i++) {
+    const set = sets[i]
+    if (!set) {
+continue
+}
+
+    const [setName, ...setValueParts] = set.split(':')
+    const setValue = setValueParts.join(':')
+    setMap[setName] = setValue
+  }
+
+  // Serialize the new params or set the key with no value
+  const encodedParams = params && Object.keys(params).length > 0 ?
+    getEncodedParam(params, includeNames) :
+    '' // Empty value for the key
+  setMap[name] = encodedParams
+
+  // Construct the new hash
+  const newHash = Object.entries(setMap)
+    .map(([key, value]) => (value ? `${key}:${value}` : key)) // Include only the key if value is empty
+    .join(FEATURE_SEP)
+
+  return `#${newHash}`
+}
+
 
 /**
  * Passhtru to addHashParams, with window.location
@@ -252,6 +304,128 @@ export function hasHashParams(location, name) {
  */
 export function removeParams(name, paramKeys = []) {
   removeHashParams(window.location, name, paramKeys)
+}
+
+/**
+ * Batches multiple hash updates into a single URL change.
+ *
+ * @param {Location} location The window.location object.
+ * @param {Array<Function>} hashUpdaters Array of hash update functions that modify the hash string.
+ */
+export function batchUpdateHash(location, hashUpdaters) {
+  const currentHash = location.hash
+  let newHash = currentHash
+
+  // Apply all hash updates in sequence
+  hashUpdaters.forEach((updateFn) => {
+    newHash = updateFn(newHash)
+  })
+
+  // Apply the final hash string once
+  if (newHash !== currentHash) {
+    location.hash = newHash
+  }
+}
+
+
+/**
+ * Removes specific parameters from a hash string.
+ *
+ * @param {string} hashString The full hash string to process (including `#`).
+ * @param {string} name The prefix of the params to match.
+ * @param {Array<string>} paramKeys Keys to remove from the hash params. If empty, removes the entire set.
+ * @return {string} The updated hash string.
+ */
+export function removeParamsFromHash(hashString, name, paramKeys = []) {
+  if (!hashString.startsWith('#') && hashString !== '') {
+    throw new Error('Invalid hash string: must start with "#"')
+  }
+
+   // Remove `#` and split by FEATURE_SEP
+  const sets = hashString.substring(1).split(FEATURE_SEP)
+  const prefix = `${name}:`
+  const newSets = []
+
+  for (let i = 0; i < sets.length; i++) {
+    const set = sets[i]
+
+    // Match the target prefix
+    if (set.startsWith(prefix)) {
+      if (!paramKeys.length) {
+        // If no specific keys, skip this entire set
+        continue
+      }
+
+      // Handle `m`-style values or key-value pairs
+      const [key, value] = set.split(':')
+      if (value.includes(',')) {
+        // For coordinate-like values, retain the prefix and skip removal
+        newSets.push(set)
+      } else {
+        // For key-value style sets, filter out specified param keys
+        /** @type {Object<string, any>} */
+        const objectSet = getObjectParams(set)
+        paramKeys.forEach((paramKey) => {
+          delete objectSet[paramKey]
+        })
+        const subSets = Object.entries(objectSet).map(
+          ([k, v]) => (v ? `${k}=${v}` : k),
+        )
+        if (subSets.length > 0) {
+          newSets.push(`${key}:${subSets.join(',')}`)
+        }
+      }
+    } else {
+      // Add non-matching sets directly
+      newSets.push(set)
+    }
+  }
+
+  const newHash = newSets.join(FEATURE_SEP)
+  return newHash ? `#${newHash}` : ''
+}
+
+
+/**
+ * Removes the given named hash param and constructs a modified hash string.
+ *
+ * @param {Location} location The location object to extract the hash from.
+ * @param {string} name The prefix of the params to fetch.
+ * @param {Array<string>} paramKeys Keys to remove from the hash params.
+ *     If empty, then remove all params under the given name.
+ * @return {string} The modified hash string.
+ */
+export function stripHashParams(location, name, paramKeys = []) {
+  assertObject(location)
+  const sets = location.hash.substring(1).split(FEATURE_SEP)
+  const prefix = `${name}:`
+  let newParamsEncoded = ''
+
+  for (let i = 0; i < sets.length; i++) {
+    let set = sets[i]
+
+    if (set.startsWith(prefix)) {
+      if (!paramKeys.length) {
+        continue // Skip this set entirely if no paramKeys and matches prefix
+      }
+      /** @type {Record<string, any>} */
+      const objectSet = getObjectParams(set)
+      paramKeys.forEach((paramKey) => {
+        delete objectSet[paramKey] // Remove the specified param keys
+      })
+      /** @type {string[]} */
+      const subSets = []
+      Object.entries(objectSet).forEach(([key, value]) => {
+        subSets.push(value ? `${key}=${value}` : key)
+      })
+      set = `${prefix}${subSets.join(',')}`
+    }
+
+    const separator = newParamsEncoded.length === 0 ? '' : FEATURE_SEP
+    newParamsEncoded += separator + set
+  }
+
+  return newParamsEncoded ? `#${newParamsEncoded}` : ''
 }
 
 
