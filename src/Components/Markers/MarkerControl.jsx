@@ -383,7 +383,7 @@ useEffect(() => {
     const coordinatesHash = `#${HASH_PREFIX_PLACE_MARK}:${coordinates.join(',')}`
 
     // Construct the issue/comment hash segment
-    const issueHash = `;i:${id}${commentId ? `;gc:${commentId}` : ''}`
+    const issueHash = `;${HASH_PREFIX_NOTES}:${id}${commentId ? `;${HASH_PREFIX_COMMENT}:${commentId}` : ''}`
 
     // Combine both segments
     const hash = `${coordinatesHash}${issueHash}`
