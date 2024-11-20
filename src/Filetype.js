@@ -5,13 +5,14 @@ import debug from './utils/debug'
 
 export const supportedTypes = [
   // '3dm',
-  'bld',
+  // 'bld',
   'fbx',
-  'glb',
+  // 'glb',
   'ifc',
   'obj',
   // 'pdb',
   'step',
+  'stl',
   'stp',
 ]
 
