@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1157",
+  "version": "1.0.1161",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -25,7 +25,7 @@
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
     "cy": "cypress run --browser chrome",
-    "cy-build": "yarn clean && SHARE_CONFIG=cypress yarn build-share-conway",
+    "cy-build": "yarn clean && SHARE_CONFIG=cypress MINIFY=false yarn build-share-conway",
     "cy-headed": "cypress run --headed --browser chrome --no-exit",
     "cy-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
     "cy-parallel": "time ./cypress/e2e/parallel.sh",

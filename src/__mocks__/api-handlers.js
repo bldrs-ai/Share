@@ -6,11 +6,13 @@ import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
-import testEnvVars from '../../tools/jest/testEnvVars'
+// import testEnvVars from '../../tools/jest/testEnvVars'
 
 
-const GH_BASE_AUTHED = testEnvVars.GITHUB_BASE_URL
-const GH_BASE_UNAUTHED = testEnvVars.GITHUB_BASE_URL_UNAUTHENTICATED
+// const GH_BASE_AUTHED = 'YO' // process.env.GITHUB_BASE_URL // testEnvVars.GITHUB_BASE_URL
+// const GH_BASE_UNAUTHED = testEnvVars.GITHUB_BASE_URL_UNAUTHENTICATED
+// console.log('GH_BASE_AUTHED', GH_BASE_AUTHED)
+
 
 const httpOk = 200
 const httpCreated = 201
@@ -23,11 +25,11 @@ const httpNotFound = 404
  *
  * @return {Array<object>} handlers
  */
-export function initHandlers() {
+export function initHandlers(defines) {
   const handlers = []
   handlers.push(...gaHandlers())
-  handlers.push(...githubHandlers(null, true))
-  handlers.push(...githubHandlers(null, false))
+  handlers.push(...githubHandlers(defines, true))
+  handlers.push(...githubHandlers(defines, false))
   return handlers
 }
 
@@ -52,10 +54,12 @@ function gaHandlers() {
 /**
  * Static stubs GitHub orgs, repos, issues.
  *
- * @param {object} githubStore todo implementation
+ * @param {object} defines todo implementation
  * @return {Array<object>} handlers
  */
-function githubHandlers(githubStore, authed) {
+function githubHandlers(defines, authed) {
+  const GH_BASE_AUTHED = defines.GITHUB_BASE_URL
+  const GH_BASE_UNAUTHED = defines.GITHUB_BASE_URL_UNAUTHENTICATED
   return [
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
@@ -91,7 +95,7 @@ function githubHandlers(githubStore, authed) {
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
         const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
-          `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
+            `${process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
 
         return res(
           ctx.status(httpOk),
