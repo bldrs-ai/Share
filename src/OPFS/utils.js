@@ -57,7 +57,6 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
-      // filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
 

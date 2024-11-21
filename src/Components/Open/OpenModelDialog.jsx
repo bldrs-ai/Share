@@ -2,15 +2,16 @@ import React, {ReactElement} from 'react'
 import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import TextField from '@mui/material/TextField'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import SearchBar from '../Search/SearchBar'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
+import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
@@ -82,15 +83,24 @@ export default function OpenModelDialog({
         }
         { currentTab === 1 &&
           <>
-            <>
-              <SearchBar placeholder='Model URL'
-                helperText='Paste GitHub file link to open the model'
-                id='githubsearch'
-                setIsDialogDisplayed={setIsDialogDisplayed}
-              />
-            </>
+            <TextField
+              label="GitHub Model URL"
+              value={name}
+              onChange={(event) => {
+                const ghPath = event.target.value
+                if (looksLikeLink(ghPath)) {
+                  setIsDialogDisplayed(false)
+                  navigate(githubUrlOrPathToSharePath(ghPath))
+                }
+              }}
+            />
             {isAuthenticated &&
-            <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
+             <GitHubFileBrowser
+               navigate={navigate}
+               orgNamesArr={orgNamesArr}
+               user={user}
+               setIsDialogDisplayed={setIsDialogDisplayed}
+             />}
             {!isAuthenticated && <PleaseLogin/>}
           </>
         }
