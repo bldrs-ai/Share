@@ -12,6 +12,14 @@ module.exports = import('./tools/esbuild/vars.cypress.js').then(({
       screenshotOnRunFailure: false,
       video: false,
       pageLoadTimeout: 15000,
+      setupNodeEvents(on, config) {
+        on('task', {
+          log(message) {
+            console.warn(message) // Logs message to the terminal (GitHub Actions output)
+            return null
+          },
+        })
+      },
     },
     env: {
       // Used in support/models.js to setup intercepts, should match what code

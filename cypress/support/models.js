@@ -15,6 +15,9 @@ export function setupVirtualPathIntercept(path, fixturePath, interceptTag) {
   const ghPath = path.substring(sharePrefix.length)
   const proxyEnv = Cypress.env('RAW_GIT_PROXY_URL')
   const interceptUrl = `${proxyEnv}${ghPath}`
+  cy.log('INTERCEPT URL:', interceptUrl)
+  cy.task('log', `RAW_GIT_PROXY_URL: ${Cypress.env('RAW_GIT_PROXY_URL')}`)
+  cy.task('log', `interceptUrl: ${interceptUrl}`)
   cy.intercept('GET', interceptUrl, {fixture: fixturePath})
     .as(interceptTag)
 }
