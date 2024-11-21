@@ -266,7 +266,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
   const prefix = `${name}:`
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
-    if (set.startsWith(prefix)) {
+    if (set.startsWith('#') ? set.substring(1, set.length).startsWith(prefix) : set.startsWith(prefix)) {
       return set
     }
   }

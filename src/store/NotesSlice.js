@@ -69,5 +69,7 @@ export default function createNotesSlice(set, get) {
     markers: [],
     writeMarkers: (newMarkers) => set({markers: newMarkers}), // Set markers
     clearMarkers: () => set({markers: []}), // Clear markers
+    selectedPlaceMarkInNoteId: null,
+    setSelectedPlaceMarkInNoteId: (_selectedPlaceMarkInNoteId) => set(() => ({selectedPlaceMarkInNoteId: _selectedPlaceMarkInNoteId})),
   }
 }

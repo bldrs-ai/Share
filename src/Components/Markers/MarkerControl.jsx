@@ -134,6 +134,21 @@ function PlacemarkHandlers() {
     // Access markers and the necessary store functions
     const markers = useStore((state) => state.markers)
     const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
+    const selectedPlaceMarkInNoteId = useStore((state) => state.selectedPlaceMarkInNoteId)
+
+    useEffect(() => {
+        if (!selectedPlaceMarkInNoteId) {
+            return
+        }
+        if (placeMarkGroupMap.size > 0) {
+        const _marker = placeMarkGroupMap.get(Number(selectedPlaceMarkInNoteId))
+
+        if (_marker) {
+          selectPlaceMarkMarker(_marker)
+        }
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPlaceMarkInNoteId])
 
     // Update the useEffect
     useEffect(() => {
@@ -272,6 +287,30 @@ function PlacemarkHandlers() {
         res.marker.userData.isActive = true
         res.marker.userData.color = res.marker.userData.activeColor
         res.marker.material.color.set(res.marker.userData.activeColor)
+        foundKey = key
+      } else {
+        value.userData.isActive = false
+        value.userData.color = value.userData.inactiveColor
+        value.material.color.set(value.userData.inactiveColor)
+      }
+    }
+
+    if (foundKey !== null) {
+      setSelectedPlaceMarkId(foundKey)
+    }
+  }
+
+  // Select a placemark
+  const selectPlaceMarkMarker = (marker) => {
+    assertDefined(marker)
+
+    let foundKey = null
+
+    for (const [key, value] of placeMarkGroupMap.entries()) {
+      if (key === marker.userData.id) {
+        marker.userData.isActive = true
+        marker.userData.color = marker.userData.activeColor
+        marker.material.color.set(marker.userData.activeColor)
         foundKey = key
       } else {
         value.userData.isActive = false
