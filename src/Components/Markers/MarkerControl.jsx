@@ -23,6 +23,41 @@ import {HASH_PREFIX_PLACE_MARK} from './hashState'
 
 
 /**
+ * @param {string} urlStr
+ * @return {string} The transformed URL
+ */
+export function modifyPlaceMarkHash(hash, _issueID, _commentID) {
+    if (hash && _issueID) {
+        let newHash = hash
+        let newURL = null
+        if (!hash.startsWith('#')) {
+            newURL = new URL(hash)
+            newHash = newURL.hash
+        }
+
+        if (newHash) {
+            newHash = removeParamsFromHash(newHash, HASH_PREFIX_NOTES) // Remove notes
+            newHash = removeParamsFromHash(newHash, HASH_PREFIX_COMMENT) // Remove comment
+            newHash = setParamsToHash(newHash, HASH_PREFIX_NOTES, {_issueID})
+
+            if (_commentID) {
+                newHash = setParamsToHash(newHash, HASH_PREFIX_COMMENT, {_commentID})
+            }
+        }
+
+        if (newURL) {
+            newURL.hash = newHash
+            return newURL.toString()
+        }
+
+        return newHash
+    }
+
+    return hash
+  }
+
+
+/**
  * Parses placemark URLs from an issue body.
  *
  * Extracts URLs that contain the specified placemark hash prefix from a given issue body.

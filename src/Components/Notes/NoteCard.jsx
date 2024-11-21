@@ -294,9 +294,9 @@ export default function NoteCard({
          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
        />}
       {isNote && !editMode && !selected &&
-       <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
+       <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}
-      {!isNote && <NoteContent markdownContent={editBody}/>}
+      {!isNote && <NoteContent markdownContent={editBody} issueID={selectedNoteId} commentID={id}/>}
       {editMode &&
        <NoteBodyEdit
          handleTextUpdate={(event) => handleEditBodyChange(event.target.value)}
