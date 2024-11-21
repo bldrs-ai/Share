@@ -1,118 +1,68 @@
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 import {
   EventDispatcher,
-  Mesh,
+  Sprite,
+  SpriteMaterial,
+  CanvasTexture,
   Vector2,
-  Vector3,
   Raycaster,
+  Matrix3,
 } from 'three'
-import {IfcContext} from 'web-ifc-viewer/dist/components'
-import {floatStrTrim} from '../utils/strings'
-import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
 import {isDevMode} from '../utils/common'
-import {BlendFunction} from 'postprocessing'
+import {floatStrTrim} from '../utils/strings'
 
 
 /**
- * PlaceMark to share notes
+ * Class representing a PlaceMark in a 3D scene.
+ * Handles creation, rendering, occlusion detection, and selection of placemarks.
  */
 export default class PlaceMark extends EventDispatcher {
   /**
-   * @param {IfcContext} context
+   * Creates a new PlaceMark instance.
+   *
+   * @param {object} options - Options for the PlaceMark.
+   * @param {object} options.context - Rendering context providing access to DOM element, camera, and scene.
+   * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
   constructor({context, postProcessor}) {
     super()
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
+    // Assign the camera to the global window object for Cypress testing
+    if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+    if (!window.markerScene) {
+      window.markerScene = {}
+    }
+      window.markerScene.domElement = _domElement
+      window.markerScene.camera = _camera
+    }
     const _scene = context.getScene()
-    const _pointer = new Vector2()
+    const _raycaster = new Raycaster()
     let _objects = []
     const _placeMarks = []
-    const _raycaster = new Raycaster()
-    const outlineEffect = postProcessor.createOutlineEffect({
-      blendFunction: BlendFunction.SCREEN,
-      edgeStrength: 1.5,
-      pulseSpeed: 0.0,
-      visibleEdgeColor: 0xc7c7c7,
-      hiddenEdgeColor: 0xff9b00,
-      height: window.innerHeight,
-      windth: window.innerWidth,
-      blur: false,
-      xRay: true,
-      opacity: 1,
-    })
-    const composer = postProcessor.getComposer
-
 
     this.activated = false
-    _domElement.style.touchAction = 'none' // disable touch scroll
-
+    _domElement.style.touchAction = 'none'
+    const _pointer = new Vector2()
 
     this.activate = () => {
       this.activated = true
       _domElement.style.cursor = 'alias'
     }
 
-
     this.deactivate = () => {
       this.activated = false
       _domElement.style.cursor = 'default'
     }
 
-
     this.setObjects = (objects) => {
+      if (!Array.isArray(objects) || objects.length === 0) {
+        // eslint-disable-next-line no-console
+        console.error('PlaceMark#setObjects: \'objects\' must be a non-empty array.')
+        return
+      }
       _objects = objects
     }
-
-
-    this.onSceneDoubleClick = (event) => {
-      let res = {}
-
-      switch (event.button) {
-        case 0: // Main button (left button)
-          res = dropPlaceMark(event)
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        case 2: // Secondary button (right button)
-          break
-        case 3: // Fourth button (back button)
-          break
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-
-      return res
-    }
-
-
-    this.onSceneClick = (event) => {
-      let res = {}
-
-      switch (event.button) {
-        case 0: // Main button (left button)
-          if (event.shiftKey) {
-            res = dropPlaceMark(event)
-          } else {
-            res = getIntersectionPlaceMarkInfo()
-          }
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        case 2: // Secondary button (right button)
-          break
-        case 3: // Fourth button (back button)
-          break
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-
-      return res
-    }
-
 
     const dropPlaceMark = (event) => {
       let res = {}
@@ -123,59 +73,115 @@ export default class PlaceMark extends EventDispatcher {
       if (_objects && this.activated) {
         updatePointer(event)
         const _intersections = []
-        _intersections.length = 0
         _raycaster.setFromCamera(_pointer, _camera)
         _raycaster.intersectObjects(_objects, true, _intersections)
 
         if (_intersections.length > 0) {
-          const intersectPoint = _intersections[0].point
+          const intersect = _intersections[0]
+          const intersectPoint = intersect.point.clone()
           intersectPoint.x = floatStrTrim(intersectPoint.x)
           intersectPoint.y = floatStrTrim(intersectPoint.y)
           intersectPoint.z = floatStrTrim(intersectPoint.z)
-          const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-          const point = intersectPoint.add(offset)
-          const lookAt = point.add(_intersections[0].face.normal)
-          const promiseGroup = this.putDown({point, lookAt})
-          res = {point, lookAt, promiseGroup}
+
+          if (intersect.face && intersect.object) {
+            const normal = intersect.face.normal.clone().applyMatrix3(new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
+            const offset = normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
+            const point = intersectPoint.add(offset)
+            const promiseGroup = this.putDown({point, normal, active: false})
+
+            res = {point, normal, promiseGroup}
+          }
         }
       }
 
       return res
     }
 
+    this.onSceneDoubleClick = (event) => {
+      let res = {}
 
-    this.putDown = ({point, lookAt, fillColor = 'black', height = INACTIVE_PLACE_MARK_HEIGHT}) => {
+      if (event.button === 0) {
+        res = dropPlaceMark(event)
+      }
+
+      return res
+    }
+
+    this.onSceneClick = (event) => {
+      let res = {}
+
+      if (event.button === 0) {
+        if (event.shiftKey) {
+          res = dropPlaceMark(event)
+        } else {
+          res = getIntersectionPlaceMarkInfo()
+         /* if (res.marker) {
+            toggleMarkerSelection(res.marker)
+            event.stopPropagation()
+            event.preventDefault()
+          }*/
+        }
+      }
+
+      return res
+    }
+
+    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/, active}) => {
       return new Promise((resolve, reject) => {
-        getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-          const _placeMark = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
-          _placeMark.position.copy(point)
-          _scene.add(_placeMark)
-          _placeMarks.push(_placeMark)
-          const placeMarkMeshSet = getPlaceMarkMeshSet()
-          outlineEffect.setSelection(placeMarkMeshSet)
-          resolve(_placeMark)
-        })
+        if (!normal) {
+          reject(new Error('Normal vector is not defined.'))
+          return
+        }
+        const _placeMark = createCirclePlacemark(point, fillColor)
+
+       // if (active) {
+       //   toggleMarkerSelection(_placeMark)
+       // }
+        resolve(_placeMark)
       })
     }
 
+    this.disposePlaceMarks = () => {
+      // Remove all place marks from the scene
+      if (_placeMarks) {
+      _placeMarks.forEach((placemark) => {
+        _scene.remove(placemark)
+        if (placemark.material.map) {
+          placemark.material.map.dispose()
+        }
+        placemark.material.dispose()
+      })
+      _placeMarks.length = 0
+
+      // Dispose of any other resources if necessary
+      }
+    }
 
     this.disposePlaceMark = (_placeMark) => {
       const index = _placeMarks.indexOf(_placeMark)
 
       if (index > -1) {
         _placeMarks.splice(index, 1)
-        disposeGroup(_placeMark)
         _scene.remove(_placeMark)
       }
     }
 
+    /**
+     * Returns all active placemarks.
+     *
+     * @return {Array} Array of placemark objects.
+     */
+    this.getPlacemarks = () => {
+      return _placeMarks
+    }
 
     const updatePointer = (event) => {
       const rect = _domElement.getBoundingClientRect()
-      _pointer.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
-      _pointer.y = ((-(event.clientY - rect.top) / rect.height) * 2) + 1
+      // eslint-disable-next-line no-mixed-operators
+      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      // eslint-disable-next-line no-mixed-operators
+      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
     }
-
 
     const getIntersectionPlaceMarkInfo = () => {
       let res = {}
@@ -183,72 +189,85 @@ export default class PlaceMark extends EventDispatcher {
       if (_placeMarks.length) {
         updatePointer(event)
         const _intersections = []
-        _intersections.length = 0
         _raycaster.setFromCamera(_pointer, _camera)
         _raycaster.intersectObjects(_placeMarks, true, _intersections)
         if (_intersections.length) {
-          res = {url: _intersections[0].object?.userData?.url}
+          res = {marker: _intersections[0].object}
         }
       }
 
       return res
     }
 
-
-    const getPlaceMarkMeshSet = () => {
-      const placeMarkMeshSet = new Set()
-      _placeMarks.forEach((placeMark) => {
-        placeMark.traverse((child) => {
-          if (child instanceof Mesh) {
-            placeMarkMeshSet.add(child)
-          }
-        })
+    const createCirclePlacemark = (position, fillColor) => {
+      const texture = createCircleTexture(fillColor)
+      const material = new SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false, // Disable depth testing
       })
-      return placeMarkMeshSet
+      const placemark = new Sprite(material)
+      placemark.position.copy(position)
+      placemark.renderOrder = 999 // High render order to ensure it's drawn last
+      placemark.material.color.set(fillColor)
+      _scene.add(placemark)
+      _placeMarks.push(placemark)
+      // toggleMarkerSelection(placemark)
+      return placemark
     }
 
+    const createCircleTexture = (fillColor) => {
+      const size = 64 // Texture size in pixels
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const canvasContext = canvas.getContext('2d')
 
-    const newRendererUpdate = () => {
-      /**
-       * Overrides the default update function in the context renderer
-       *
-       * @param {number} _delta
-       */
-      function newUpdateFn(_delta) {
-        if (!context) {
-          return
-        }
+      // Ensure the entire canvas is transparent initially
+      canvasContext.clearRect(0, 0, size, size)
 
-        _placeMarks.forEach((_placeMark) => {
-          _placeMark.quaternion.copy(_camera.quaternion)
-          const dist = _placeMark.position.distanceTo(_camera.position)
-          const sideScale = dist / PLACE_MARK_SCALE_FACTOR
-          tempScale.set(sideScale, sideScale, sideScale)
-          if (_placeMark.userData.isActive) {
-            tempScale.multiplyScalar(ACTIVE_PLACE_MARK_SCALE)
-          }
-          _placeMark.scale.copy(tempScale)
-        })
+      // Draw the circle
+      canvasContext.beginPath()
+      // eslint-disable-next-line no-mixed-operators
+      canvasContext.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2) // -2 for a slight border
+      // eslint-disable-next-line no-magic-numbers
+      canvasContext.fillStyle = `#${fillColor.toString(16).padStart(6, '0')}`
+      canvasContext.fill()
 
-        composer.render()
-      }
+      // Optionally add a border
+      canvasContext.lineWidth = 2
+      canvasContext.strokeStyle = '#000000'
+      canvasContext.stroke()
 
-
-      return newUpdateFn.bind(context.renderer)
+      return new CanvasTexture(canvas)
     }
 
+    /* const toggleMarkerSelection = (marker) => {
+      _selectedPlaceMarks.forEach((selectedMarker) => {
+        // eslint-disable-next-line no-magic-numbers
+        selectedMarker.material.color.set(0xA9A9A9)
+      })
+      _selectedPlaceMarks.clear()
+      _selectedPlaceMarks.add(marker)
+      // eslint-disable-next-line no-magic-numbers
+      marker.material.color.set(0xff0000)
+    }*/
 
-    if (context.renderer) {
-      // eslint-disable-next-line max-len
-      // This patch applies to https://github.com/IFCjs/web-ifc-viewer/blob/9ce3a42cb8d4ffd5b78b19d56f3b4fad2d1f3c0e/viewer/src/components/context/renderer/renderer.ts#L44
-      context.renderer.update = newRendererUpdate()
+    const updatePlacemarksVisibility = () => {
+      _placeMarks.forEach((placemark) => {
+        placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
+      })
     }
+
+    this.onRender = () => {
+      updatePlacemarksVisibility()
+      _placeMarks.sort((a, b) => a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
+      requestAnimationFrame(this.onRender)
+    }
+
+    requestAnimationFrame(this.onRender)
   }
 }
 
-
-const tempScale = new Vector3()
+const PLACEMARK_SIZE = 2.5
 const PLACE_MARK_DISTANCE = 0
-const INACTIVE_PLACE_MARK_HEIGHT = 1
-const ACTIVE_PLACE_MARK_SCALE = 1.6
-const PLACE_MARK_SCALE_FACTOR = 60

@@ -1,4 +1,4 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect, useRef} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
@@ -22,7 +22,7 @@ import {
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
 import NoteContent from './NoteContent'
-import {HASH_PREFIX_NOTES} from './hashState'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
 
@@ -72,10 +72,45 @@ export default function NoteCard({
   const [showCreateComment, setShowCreateComment] = useState(false)
 
 
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
+  const editModes = useStore((state) => state.editModes)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const editBodies = useStore((state) => state.editBodies)
+
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
 
+
+  const handleEditBodyChange = (newBody) => {
+    setEditBody(newBody) // Update local editBody state
+    setEditBodyGlobal(id, newBody) // Update global editBody state
+  }
+
+
   const {user} = useAuth0()
+
+   // Reference to the NoteCard element for scrolling
+   const noteCardRef = useRef(null)
+   const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
+
+   useEffect(() => {
+    setActiveNoteCardId(id)
+    return () => setActiveNoteCardId(null) // Reset when component unmounts
+  }, [id, setActiveNoteCardId])
+
+    // Sync local editMode with global editModes[id]
+    useEffect(() => {
+      if (editModes[id] !== undefined && editModes[id] !== editMode) {
+        setEditMode(editModes[id])
+      }
+    }, [editModes, id, editMode])
+
+      // Sync local editBody with global editBodies[id]
+  useEffect(() => {
+    if (editBodies[id] !== undefined && editBodies[id] !== editBody) {
+      setEditBody(editBodies[id])
+    }
+  }, [editBodies, id, editBody])
 
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -135,6 +170,60 @@ export default function NoteCard({
     setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
+    /** Copies location which contains the issue id, comment ID, camera position, and selected element path */
+    function shareComment(issueID, commentID, clearHash = true) {
+      // Get the current URL
+      const href = new URL(window.location.href)
+
+      // Initialize the hash components based on the clearHash flag
+      let updatedHash
+      if (clearHash) {
+        // Only include `i` and `gc` if clearHash is true
+        updatedHash = `${HASH_PREFIX_NOTES}:${issueID}`
+        if (commentID) {
+          updatedHash += `;${HASH_PREFIX_COMMENT}:${commentID}`
+        }
+      } else {
+        // Start with the existing hash (without the leading `#`)
+        const currentHash = href.hash.slice(1)
+
+        // Split the existing hash into parts based on `;`
+        const hashParts = currentHash ? currentHash.split(';') : []
+        const hashMap = {}
+
+        // Populate hashMap with existing values
+        hashParts.forEach((part) => {
+          const [key, value] = part.split(':')
+          if (key && value) {
+            hashMap[key] = value
+          }
+        })
+
+        // Set or update `i` and `gc` values in the hashMap
+        hashMap[HASH_PREFIX_NOTES] = issueID // Always set the issueID
+        if (commentID) {
+          hashMap[HASH_PREFIX_COMMENT] = commentID // Set commentID if it’s provided
+        }
+
+        // Reconstruct the hash string from hashMap
+        updatedHash = Object.entries(hashMap)
+          .map(([key, value]) => `${key}:${value}`)
+          .join(';')
+      }
+
+      // Update the URL hash with the newly constructed value
+      href.hash = updatedHash
+
+      // Copy the updated URL to the clipboard
+      navigator.clipboard.writeText(href.toString())
+        .then(() => {
+          setSnackMessage({text: 'The URL path is copied to the clipboard', autoDismiss: true})
+        })
+        .catch((err) => {
+          setSnackMessage({text: 'Failed to copy URL', autoDismiss: true})
+        })
+    }
+
 
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
@@ -177,11 +266,12 @@ export default function NoteCard({
     editedNote.body = res.data.body
     setNotes(notes)
     setEditMode(false)
+    setEditModeGlobal(id, false)
   }
 
 
   return (
-    <Card elevation={1} data-testid='note-card'>
+    <Card elevation={1} data-testid='note-card' ref={noteCardRef}>
       {isNote ?
        <CardHeader
          title={title}
@@ -190,7 +280,10 @@ export default function NoteCard({
          action={
            synched && user && user.nickname === username &&
              <NoteMenu
-               onEditClick={() => setEditMode(true)}
+               onEditClick={() => {
+                setEditMode(true)
+                setEditModeGlobal(id, true)
+              }}
                onDeleteClick={() => onDeleteClick(noteNumber)}
                noteNumber={noteNumber}
              />
@@ -201,12 +294,12 @@ export default function NoteCard({
          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
        />}
       {isNote && !editMode && !selected &&
-       <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
+       <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}
-      {!isNote && <NoteContent markdownContent={editBody}/>}
+      {!isNote && <NoteContent markdownContent={editBody} issueID={selectedNoteId} commentID={id}/>}
       {editMode &&
        <NoteBodyEdit
-         handleTextUpdate={(event) => setEditBody(event.target.value)}
+         handleTextUpdate={(event) => handleEditBodyChange(event.target.value)}
          value={editBody}
          isNote={isNote}
          setShowCreateComment={setShowCreateComment}
@@ -223,7 +316,7 @@ export default function NoteCard({
         noteNumber={noteNumber}
         numberOfComments={numberOfComments}
         onClickCamera={showCameraView}
-        onClickShare={shareIssue}
+        onClickShare={isNote ? shareIssue : shareComment}
         selectCard={selectCard}
         selected={selected}
         submitUpdate={submitUpdate}
