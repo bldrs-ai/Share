@@ -13,7 +13,7 @@ export function setupVirtualPathIntercept(path, fixturePath, interceptTag) {
   cy.intercept('GET', `${path}`, {fixture: '404.html'})
     .as(`${interceptTag}-bounce`)
   const ghPath = path.substring(sharePrefix.length)
-  cy.intercept('GET', `https://rawgit.bldrs.dev.msw/r${ghPath}`, {fixture: fixturePath})
+  cy.intercept('GET', `https://rawgit.bldrs.dev.msw/model${ghPath}`, {fixture: fixturePath})
     .as(interceptTag)
 }
 
