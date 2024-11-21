@@ -39,3 +39,6 @@ jobs:
         with:
           browser: chrome
           command: yarn cy
+        env:
+          # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
+          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.msw/r
