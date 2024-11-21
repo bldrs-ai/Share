@@ -35,8 +35,6 @@ jobs:
           NODE_ENV: production
           SHARE_CONFIG: cypress
 
-      - run: echo "RAW_GIT_PROXY_URL: $RAW_GIT_PROXY_URL"
-
       - uses: cypress-io/github-action@v5
         with:
           browser: chrome
