@@ -13,7 +13,9 @@ export function setupVirtualPathIntercept(path, fixturePath, interceptTag) {
   cy.intercept('GET', `${path}`, {fixture: '404.html'})
     .as(`${interceptTag}-bounce`)
   const ghPath = path.substring(sharePrefix.length)
-  cy.intercept('GET', `https://rawgit.bldrs.dev.msw/model${ghPath}`, {fixture: fixturePath})
+  const proxyEnv = Cypress.env('RAW_GIT_PROXY_URL')
+  const interceptUrl = `${proxyEnv}${ghPath}`
+  cy.intercept('GET', interceptUrl, {fixture: fixturePath})
     .as(interceptTag)
 }
 
