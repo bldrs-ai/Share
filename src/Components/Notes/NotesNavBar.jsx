@@ -23,6 +23,7 @@ export default function NotesNavBar() {
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
+  const setSelectedPlaceMarkInNoteIdData = useStore((state) => state.setSelectedPlaceMarkInNoteIdData)
 
 
   /**
@@ -81,6 +82,7 @@ export default function NotesNavBar() {
            onClick={() => {
              setSelectedPlaceMarkId(null)
              setSelectedNoteId(null)
+             setSelectedPlaceMarkInNoteIdData(null)
              const _location = window.location
              batchUpdateHash(_location, [
               (hash) => removeMarkerUrlParams({hash}), // Remove marker params

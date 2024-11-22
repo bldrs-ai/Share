@@ -43,6 +43,12 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const selectedPlaceMarkId = useStore((state) => state.selectedPlaceMarkId)
   const markers = useStore((state) => state.markers)
+  // eslint-disable-next-line no-unused-vars
+  const {selectedPlaceMarkInNoteId, cameraHash, forceMarkerNoteSync} = useStore((state) => ({
+    selectedPlaceMarkInNoteId: state.selectedPlaceMarkInNoteId,
+    cameraHash: state.cameraHash,
+    forceMarkerNoteSync: state.forceMarkerNoteSync,
+  }))
 
   useEffect(() => {
     if (!selectedPlaceMarkId || !markers || markers.length === 0) {
@@ -63,11 +69,12 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
       // Construct the issue/comment hash segment
       const issueHash = `;${HASH_PREFIX_NOTES}:${id}${commentId ? `;${HASH_PREFIX_COMMENT}:${commentId}` : ''}`
 
+
       // Combine both segments
-      const hash = `${coordinatesHash}${issueHash}`
+      const hash_ = `${coordinatesHash}${issueHash}${cameraHash ? `;${cameraHash}` : ''}`
 
       // Set the location hash
-      window.location.hash = hash
+      window.location.hash = hash_
     } else {
       // see if we have a temporary marker in the local group map
       const temporaryMarker = placeMarkGroupMap.get(selectedPlaceMarkId)
@@ -76,7 +83,8 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
         window.location.hash = `#${selectedPlaceMarkId}`
       }
     }
-  }, [selectedPlaceMarkId, markers]) // Add markers as a dependency if it can change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlaceMarkId, markers, forceMarkerNoteSync]) // Add markers as a dependency if it can change
 
 
   // Toggle visibility of all placemarks based on isNotesVisible
@@ -232,7 +240,11 @@ function PlacemarkHandlers() {
   // Access markers and the necessary store functions
   const markers = useStore((state) => state.markers)
   const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
-  const selectedPlaceMarkInNoteId = useStore((state) => state.selectedPlaceMarkInNoteId)
+  // eslint-disable-next-line no-unused-vars
+  const {selectedPlaceMarkInNoteId, cameraHash} = useStore((state) => ({
+    selectedPlaceMarkInNoteId: state.selectedPlaceMarkInNoteId,
+    cameraHash: state.cameraHash,
+  }))
 
   useEffect(() => {
     if (!selectedPlaceMarkInNoteId) {
