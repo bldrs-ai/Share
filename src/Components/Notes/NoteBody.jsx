@@ -8,7 +8,7 @@ import NoteContent from './NoteContent'
  * @property {string} markdownContent The note text in markdown format
  * @return {ReactElement}
  */
-export default function NoteBody({selectCard, markdownContent}) {
+export default function NoteBody({selectCard, markdownContent, issueID, commentID}) {
   return (
     <CardActionArea
       onClick={selectCard}
@@ -16,7 +16,7 @@ export default function NoteBody({selectCard, markdownContent}) {
       disableTouchRipple
       data-testid='note-body'
     >
-      <NoteContent markdownContent={markdownContent}/>
+      <NoteContent markdownContent={markdownContent} issueID={issueID} commentID={commentID}/>
     </CardActionArea>
   )
 }

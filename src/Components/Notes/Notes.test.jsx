@@ -6,6 +6,8 @@ import Notes from './Notes'
 import {MOCK_NOTES} from './Notes.fixture'
 
 
+window.HTMLElement.prototype.scrollIntoView = jest.fn()
+
 describe('Notes', () => {
   beforeEach(async () => {
     const {result} = renderHook(() => useStore((state) => state))

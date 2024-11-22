@@ -1,9 +1,9 @@
 import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
-import usePlaceMark from '../hooks/usePlaceMark'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
@@ -12,11 +12,10 @@ import {saveDnDFileToOpfsFallback} from '../utils/loader'
 
 /** @return {ReactElement} */
 export default function ViewerContainer() {
-  const {onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
-
   const appPrefix = useStore((state) => state.appPrefix)
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
 
   const [, setIsDragActive] = useState(false)
 
@@ -85,7 +84,7 @@ export default function ViewerContainer() {
         textAlign: 'center',
       }}
       onMouseDown={async (event) => await onSceneSingleTap(event)}
-      {...onSceneDoubleTap}
+      onDoubleClick={async (event) => await onSceneDoubleTap(event)}
       onDragOver={handleDragOverOrEnter}
       onDragEnter={handleDragOverOrEnter}
       onDragLeave={handleDragLeave}

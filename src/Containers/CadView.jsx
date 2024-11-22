@@ -12,8 +12,8 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import usePlaceMark from '../hooks/usePlaceMark'
 import {load} from '../loader/Loader'
+import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -113,8 +113,6 @@ export default function CadView({
   // Begin Hooks //
   const isMobile = useIsMobile()
   const location = useLocation()
-  // Place Mark
-  const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const setOpfsFile = useStore((state) => state.setOpfsFile)
@@ -201,11 +199,6 @@ export default function CadView({
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
 
-    createPlaceMark({
-      context: viewer.context,
-      oppositeObjects: [tmpModelRef],
-      postProcessor: viewer.postProcessor,
-    })
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
@@ -456,8 +449,12 @@ export default function CadView({
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+        const enabledFeatures = searchParams.get('feature')
         const elementPath = pathIds.join('/')
-        const path = partsToPath(pathPrefix, repoFilePath, elementPath)
+        let path = partsToPath(pathPrefix, repoFilePath, elementPath)
+        if (enabledFeatures) {
+          path += `?feature=${enabledFeatures}`
+        }
         // TODO(pablo): without a log before nav, some page crashes simply blank
         // the screen and leave no trace
         // eslint-disable-next-line no-console

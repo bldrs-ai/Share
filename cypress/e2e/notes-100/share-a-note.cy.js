@@ -13,13 +13,13 @@ describe('Notes-100: Share a note', () => {
     context('Open Notes > first note, click share in note footer', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-notes"]').click()
-        cy.get('[data-testid="list-notes"] :nth-child(1) > [data-testid="note-body"]').first().click()
+        cy.get('[data-testid="list-notes"] [data-testid="note-body"]').first().click()
 
         cy.window().then((win) => {
           cy.stub(win.navigator.clipboard, 'writeText').as('clipboardSpy')
             .resolves()
         })
-        cy.get('.MuiCardActions-root > [data-testid="Share"] > .icon-share').click()
+        cy.get('.MuiCardActions-root > [data-testid="Share"] > .icon-share').first().click()
       })
 
       it('Link copied, SnackBar reports that - Screen', () => {

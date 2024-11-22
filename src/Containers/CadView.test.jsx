@@ -17,6 +17,7 @@ import CadView from './CadView'
 import PkgJson from '../../package.json'
 
 
+window.HTMLElement.prototype.scrollIntoView = jest.fn()
 const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
