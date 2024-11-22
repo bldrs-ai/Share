@@ -3,9 +3,9 @@ import {initHandlers} from './api-handlers'
 
 
 /**
- * Configures a Service Worker with the given request handlers.
+ * Configures a MSW Worker with the given request handlers.
  *
- * @param {object} defines
+ * @param {object} defines Object mapping keys like 'process.env.VAR' to values.
  * @return {object} the worker
  */
 export function initWorker(defines) {

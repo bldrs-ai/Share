@@ -30,6 +30,7 @@ before(() => {
     if (urlStr.includes('undefined')) {
       console.warn(`cypress/support/e2e#before catch-all: Found undefined in: ${req.method} ${req.url}`)
     } else {
+      // eslint-disable-next-line no-console
       console.log(`cypress/support/e2e#before catch-all: ${req.method} ${req.url}`)
     }
   }).as('debugRequests')

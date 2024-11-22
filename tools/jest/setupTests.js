@@ -6,11 +6,15 @@ import '@testing-library/jest-dom'
 // Needed for async test
 import 'regenerator-runtime/runtime'
 import {disableDebug} from '../../src/utils/debug'
-import {server} from '../../src/__mocks__/server'
+import {getAndExportEnvVars} from './vars.jest'
+
+
+const {initServer} = require('../../src/__mocks__/server')
 
 
 disableDebug()
 
+const server = initServer(getAndExportEnvVars())
 
 // Establish API mocking before all tests.
 beforeAll(() => server.listen())

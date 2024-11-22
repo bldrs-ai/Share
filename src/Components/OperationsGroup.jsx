@@ -48,6 +48,7 @@ export default function OperationsGroup({deselectItems}) {
          icon={<AppStoreIcon/>}
          selected={isAppStoreOpen}
          onClick={() => toggleAppStoreDrawer()}
+         placement='left'
        />
       }
       {isImagineEnabled && <ImagineControl/>}
