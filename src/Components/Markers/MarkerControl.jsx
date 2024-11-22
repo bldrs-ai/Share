@@ -363,21 +363,15 @@ function PlacemarkHandlers() {
       return
     }
 
-    const newNotes = [...notes]
-    const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
-    if (!placeMarkNote) {
-      return
-    }
-
     // Get the current note body and append the new placemark link
-    const editMode = editModes?.[placeMarkNote.id]
+    const editMode = editModes?.[placeMarkId]
     const newCommentBody = `[placemark](${window.location.href})`
-    const currentBody = editMode ? (editBodies[placeMarkNote.id] || '') : (body || '') // Retrieve the existing body
+    const currentBody = editMode ? (editBodies[placeMarkId] || '') : (body || '') // Retrieve the existing body
     const updatedBody = `${currentBody}\n${newCommentBody}`
 
     // Set the updated body in the global store so NoteCard can use it
     if (editMode) {
-      setEditBodyGlobal(placeMarkNote.id, updatedBody)
+      setEditBodyGlobal(placeMarkId, updatedBody)
     } else {
       setBody(updatedBody) // Fallback to set the local body if not in edit mode
     }

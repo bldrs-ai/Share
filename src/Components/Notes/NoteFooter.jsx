@@ -129,6 +129,7 @@ export default function NoteFooter({
        >
          <TooltipIconButton
            title='Place Mark'
+           enabled={editMode}
            size='small'
            placement='bottom'
            onClick={() => {
