@@ -41,4 +41,8 @@ jobs:
           command: yarn cy
         env:
           # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
-          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.msw/r
+          GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
+          GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
+          RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
+          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
+          MSW_IS_ENABLED: true
