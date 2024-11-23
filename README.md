@@ -15,7 +15,7 @@ Access, manage, and share your models using your GitHub credentials. With seamle
 Explore 3D geometry with ease—navigate spatial structures, elements, and properties directly within the interface. Manage element attributes and IFC Property Sets in a clear, streamlined view, enabling precise control over model details.
 
 ## High Performance IFC&STEP CAD core
-Bldrs Share is powered by [Conway engine][https://github.com/bldrs-ai/conway], bringing high-quality, precision CAD to the web. This cutting-edge CAD engine, designed specifically for IFC and STEP formats, offers advanced geometric representation, enabling teams to open and visualize intricate models with exceptional accuracy and speed.
+Bldrs Share is powered by [Conway engine](https://github.com/bldrs-ai/conway), bringing high-quality, precision CAD to the web. This cutting-edge CAD engine, designed specifically for IFC and STEP formats, offers advanced geometric representation, enabling teams to open and visualize intricate models with exceptional accuracy and speed.
 
 # Contributing
 Please join us in creating Bldrs Share!  Come chat with us at the [Bldrs Discord](https://discord.gg/9SxguBkFfQ).
