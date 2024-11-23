@@ -10,7 +10,7 @@ export default function createUIEnabledSlice(set, get) {
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
     isAboutEnabled: true,
-    isImagineEnabled: true,
+    isImagineEnabled: false, // service failing
     isLoginEnabled: true,
     isModelActionsEnabled: true,
     isShareEnabled: true,
