@@ -46,6 +46,8 @@ export default function NoteFooter({
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const setEditModeGlobal = useStore((state) => state.setEditMode)
+  const editOriginalBodies = useStore((state) => state.editOriginalBodies)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -127,6 +129,7 @@ export default function NoteFooter({
        >
          <TooltipIconButton
            title='Place Mark'
+           enabled={editMode}
            size='small'
            placement='bottom'
            onClick={() => {
@@ -166,6 +169,7 @@ export default function NoteFooter({
             placement='left'
             icon={<CloseIcon className='icon-share'/>}
             onClick={() => {
+              setEditBodyGlobal(id, editOriginalBodies[id])
               setEditModeGlobal(id, false) // Update global edit mode state
             }}
           />

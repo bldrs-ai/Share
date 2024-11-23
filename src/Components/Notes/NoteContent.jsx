@@ -4,6 +4,7 @@ import useStore from '../../store/useStore'
 import CardContent from '@mui/material/CardContent'
 import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/MarkerControl'
 import {getHashParamsFromHashStr, getObjectParams} from '../../utils/location'
+import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 
 /**
@@ -11,7 +12,14 @@ import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
  * @return {ReactElement}
  */
 export default function NoteContent({markdownContent, issueID, commentID}) {
-  const setSelectedPlaceMarkInNoteId = useStore((state) => state.setSelectedPlaceMarkInNoteId)
+  const setSelectedPlaceMarkInNoteIdData = useStore((state) => state.setSelectedPlaceMarkInNoteIdData)
+
+  // eslint-disable-next-line no-unused-vars
+  const {selectedPlaceMarkInNoteId, cameraHash, forceMarkerNoteSync} = useStore((state) => ({
+    selectedPlaceMarkInNoteId: state.selectedPlaceMarkInNoteId,
+    cameraHash: state.cameraHash,
+    forceMarkerNoteSync: state.forceMarkerNoteSync,
+  }))
 
   /**
    * @param {string} urlStr
@@ -51,16 +59,18 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
         const params = Object.values(getObjectParams(`#${commentHash}`))
 
         if (params) {
-          setSelectedPlaceMarkInNoteId(params[0])
+          const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
+          setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
           event.preventDefault() // Prevent the default navigation
         }
       } else if (noteHash) {
           const params = Object.values(getObjectParams(`#${noteHash}`))
 
           if (params) {
-            setSelectedPlaceMarkInNoteId(params[0])
+            const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
+            setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
             event.preventDefault() // Prevent the default navigation
-          }
+        }
       }
     }
   }

@@ -61,6 +61,11 @@ export default function createNotesSlice(set, get) {
       set((state) => ({
         editBodies: {...state.editBodies, [id]: body},
       })),
+      editOriginalBodies: {}, // Track editBody for each NoteCard by id
+      setEditOriginalBody: (id, body) =>
+        set((state) => ({
+          editOriginalBodies: {...state.editOriginalBodies, [id]: body},
+        })),
     // Action to set the body
     setBody: (newBody) => set({body: newBody}),
     setIssueBody: (newIssueBody) => set({issueBody: newIssueBody}),
@@ -70,6 +75,13 @@ export default function createNotesSlice(set, get) {
     writeMarkers: (newMarkers) => set({markers: newMarkers}), // Set markers
     clearMarkers: () => set({markers: []}), // Clear markers
     selectedPlaceMarkInNoteId: null,
-    setSelectedPlaceMarkInNoteId: (_selectedPlaceMarkInNoteId) => set(() => ({selectedPlaceMarkInNoteId: _selectedPlaceMarkInNoteId})),
+    cameraHash: null,
+    forceMarkerNoteSync: false,
+    setSelectedPlaceMarkInNoteIdData: (placeMarkId, camHash, forceMarkerNoteSync) =>
+      set({
+        selectedPlaceMarkInNoteId: placeMarkId,
+        cameraHash: camHash,
+        forceMarkerNoteSync: forceMarkerNoteSync,
+      }),
   }
 }
