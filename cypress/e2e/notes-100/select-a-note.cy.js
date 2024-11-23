@@ -24,7 +24,11 @@ describe('Notes 100: Select a note', () => {
 
         cy.get('[data-testid="panelTitle"]').should('have.text', 'NOTE')
 
-        cy.get('[data-testid="Back to the list"]')
+        cy.get('[data-testid="Back to the list"]').click()
+
+        // Ensure we navigate back to the full list of notes
+        cy.get('[data-testid="list-notes"]').should('exist')
+        cy.get('[data-testid="list-notes"] :nth-child(1) > [data-testid="note-body"]').should('exist')
 
         cy.percySnapshot()
       })

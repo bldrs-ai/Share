@@ -24,6 +24,15 @@ describe('Notes 100: Comments on a note', () => {
         cy.get('[placeholder="Leave a comment ..."]')
         cy.percySnapshot()
       })
+      it('Allows writing over 256 characters in the comment box', () => {
+        auth0Login()
+        // eslint-disable-next-line no-magic-numbers
+        const longText = 'a'.repeat(300) // 300 characters
+        cy.get('[placeholder="Leave a comment ..."]')
+          .type(longText)
+          .should('have.value', longText) // Assert that the textbox contains the long input
+        cy.percySnapshot()
+      })
     })
   })
 })
