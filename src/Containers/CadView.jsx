@@ -12,26 +12,23 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
-import usePlaceMark from '../hooks/usePlaceMark'
+import {load} from '../loader/Loader'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-// TODO(pablo): use ^^ instead of this
-import {parseGitHubPath} from '../utils/location'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
-import {handleBeforeUnload} from '../utils/event'
+import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
-import {getUploadedBlobPath} from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
+import Picker from '../view/Picker'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
-import {getFinalDownloadData} from './urls'
+import {partsToPath} from './urls'
 import {initViewer} from './viewer'
 
 
@@ -97,7 +94,7 @@ export default function CadView({
   const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
-  const setErrorPath = useStore((state) => state.setErrorPath)
+  const setAlert = useStore((state) => state.setAlert)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
@@ -115,8 +112,6 @@ export default function CadView({
   // Begin Hooks //
   const isMobile = useIsMobile()
   const location = useLocation()
-  // Place Mark
-  const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const setOpfsFile = useStore((state) => state.setOpfsFile)
@@ -183,31 +178,26 @@ export default function CadView({
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
+
+    debug().log('CadView#onViewer: modelPath:', modelPath)
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
-      tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
+      tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
-      tmpModelRef = undefined
-      setSnackMessage(null)
-    }
-    setIsModelLoading(false)
-    debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
-
-    if (tmpModelRef === undefined || tmpModelRef === null) {
-      setErrorPath(pathToLoad)
+      setAlert(e)
       return
     }
-    // Leave snack message until here so alert box handler can clear
-    // it after user says OK.
+    if (!tmpModelRef) {
+      setAlert('Failed to parse model')
+      return
+    }
+    setIsModelLoading(false)
     setSnackMessage(null)
-    debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
+
+    debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
-    createPlaceMark({
-      context: viewer.context,
-      oppositeObjects: [tmpModelRef],
-      postProcessor: viewer.postProcessor,
-    })
+
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
@@ -235,170 +225,61 @@ export default function CadView({
    * @param {string} filepath
    * @param {string} gitpath to use for constructing API endpoints
    */
-  async function loadIfc(filepath, gitpath) {
-    debug().log(`CadView#loadIfc: `, filepath)
-    const uploadedFile = pathPrefix.endsWith('new')
-
-    if (uploadedFile) {
-      filepath = getUploadedBlobPath(filepath)
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      window.addEventListener('beforeunload', handleBeforeUnload)
-    }
-
+  async function loadModel(filepath, gitpath) {
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
-    // NB: for LFS targets, this will now be media.githubusercontent.com, so
-    // don't use for further API endpoint construction.
-    let ifcURL; let shaHash
+    // Call this before loader, as IFCLoader needs it.
+    viewer.setCustomViewSettings(customViewSettings)
 
-    if (uploadedFile || filepath.indexOf('/') === 0) {
-        ifcURL = filepath
-        shaHash = ''
-    } else {
-        [ifcURL, shaHash] = await getFinalDownloadData(filepath, accessToken, isOpfsAvailable)
+    const onProgress = (progressMsg) => setSnackMessage(`${loadingMessageBase}: ${progressMsg}`)
+    let loadedModel
+    try {
+      loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+    } catch (error) {
+      // TODO(pablo): useful to have a trace in prod
+      // eslint-disable-next-line no-console
+      console.trace(error)
+      setSnackMessage(`Error: ${error.message}`)
+      return
+    } finally {
+      setIsModelLoading(false)
     }
 
+    // Fix for https://github.com/bldrs-ai/Share/issues/91
+    //
+    // TODO(pablo): huge hack. Somehow this is getting incremented to
+    // 1 even though we have a new IfcViewer instance for each file
+    // load.  That modelID is used in the IFCjs code as [modelID] and
+    // leads to undefined refs e.g. in prePickIfcItem.  The id should
+    // always be 0.
+    loadedModel.modelID = 0
+    setModel(loadedModel)
+    // For App API.  TODO(pablo): doublecheck this method still works with this
+    // arg.. expected a url
+    updateLoadedFileInfo(filepath)
+
+    viewer.context.getScene().add(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
-
-    let loadedModel
-    if (!isOpfsAvailable) {
-      // fallback to loadIfcUrl
-      loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !isCamHashSet,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
-    } else if (uploadedFile) {
-      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          true, // ignore current camera for new load
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-      // TODO(nickcastel50): need a more permanent way to
-      // prevent redirect here for bundled ifc files
-    } else if (ifcURL === '/index.ifc') {
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          'index.ifc',
-          'bldrs-ai',
-          'BldrsLocalStorage',
-          'V1',
-          'Projects',
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !isCamHashSet,
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            setIsModelLoading(false)
-            setSnackMessage('')
-          }, customViewSettings)
-    } else {
-      // TODO(pablo): probably already available in this scope, or use
-      // parseGitHubRepositoryURL instead.
-      // eslint-disable-next-line no-unused-vars
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-
-      const file = await downloadModel(
-        navigate,
-        appPrefix,
-        handleBeforeUnload,
-        ifcURL,
-        shaHash,
-        filePath,
-        accessToken,
-        owner,
-        repo,
-        branch,
-        setOpfsFile,
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.receivedLength)) {
-            const loadedBytes = progressEvent.receivedLength
-            // eslint-disable-next-line no-magic-numbers
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        })
-
-        if (file) {
-        loadedModel = await viewer.loadIfcFile(
-          file,
-          !isCamHashSet,
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setErrorPath(filePath)
-          }, customViewSettings)
-      }
+    if (!isCamHashSet) {
+      viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
     }
 
-    if (loadedModel) {
-      // Fix for https://github.com/bldrs-ai/Share/issues/91
-      //
-      // TODO(pablo): huge hack. Somehow this is getting incremented to
-      // 1 even though we have a new IfcViewer instance for each file
-      // load.  That modelID is used in the IFCjs code as [modelID] and
-      // leads to undefined refs e.g. in prePickIfcItem.  The id should
-      // always be 0.
-      loadedModel.modelID = 0
-      setModel(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcURL)
-
+    // TODO(pablo): centralize capability check somewhere
+    if (loadedModel.ifcManager) {
       await viewer.isolator.setModel(loadedModel)
-
-      Analytics.recordEvent('select_content', {
-        content_type: 'ifc_model',
-        item_id: filepath,
-      })
-      return loadedModel
+    } else {
+      console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    debug().error('CadView#loadIfc: Model load failed!')
-    return null
+    Analytics.recordEvent('select_content', {
+      content_type: 'ifc_model',
+      item_id: filepath,
+    })
+
+    return loadedModel
   }
 
 
@@ -410,6 +291,11 @@ export default function CadView({
   async function onModel(m) {
     assertDefined(m)
     debug().log('CadView#onModel', m)
+    // TODO(pablo): centralize capability check somewhere
+    if (!m.ifcManager) {
+      console.warn('CadView#onModel, model without manager:', m)
+      return
+    }
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
     debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
@@ -419,7 +305,8 @@ export default function CadView({
     window.ondblclick = canvasDoubleClickHandler
     setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
-    const rootProps = await viewer.getProperties(0, rootElt.expressID) || {Name: 'Model', LongName: 'Model'}
+    const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
@@ -428,15 +315,36 @@ export default function CadView({
 
 
   /** Handle double click event on canvas. */
-  async function canvasDoubleClickHandler(event) {
-    if (!event.target || event.target.tagName !== 'CANVAS') {
-      return
+  function canvasDoubleClickHandler(event) {
+    try {
+      if (!event.target || event.target.tagName !== 'CANVAS') {
+        return
+      }
+
+      const picker = new Picker(viewer.context)
+      const pickedAll = picker.castRay(viewer.context.scene.scene.children)
+      if (pickedAll.length === 0) {
+        return
+      }
+      const picked = pickedAll[0]
+      const mesh = picked.object
+      // TODO(pablo): obsolete? needed this in h3 at some point
+      viewer.setHighlighted([mesh])
+      if (mesh.expressID !== undefined) {
+        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
+      } else {
+        const geom = mesh.geometry
+        if (!geom.index) {
+          throw new Error('Geometry does not have index information.')
+        }
+        const geoIndex = geom.index.array
+        const IdAttrName = 'expressID'
+        const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
+        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+      }
+    } catch (e) {
+      console.error(e)
     }
-    const item = await viewer.castRayToIfcScene()
-    if (!item) {
-      return
-    }
-    elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, item.id)
   }
 
 
@@ -516,7 +424,7 @@ export default function CadView({
     }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-    window.removeEventListener('beforeunload', handleBeforeUnload)
+    disablePageReloadApprovalCheck()
     navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
@@ -540,10 +448,19 @@ export default function CadView({
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-        const path = pathIds.join('/')
+        const enabledFeatures = searchParams.get('feature')
+        const elementPath = pathIds.join('/')
+        let path = partsToPath(pathPrefix, repoFilePath, elementPath)
+        if (enabledFeatures) {
+          path += `?feature=${enabledFeatures}`
+        }
+        // TODO(pablo): without a log before nav, some page crashes simply blank
+        // the screen and leave no trace
+        // eslint-disable-next-line no-console
+        console.log('navigate:', pathIds, elementPath, path)
         navWith(
           navigate,
-          `${pathPrefix}${repoFilePath}/${path}`,
+          path,
           {
             search: '',
             hash: window.location.hash,
@@ -582,21 +499,18 @@ export default function CadView({
   /**
    * handles updating the stored file meta data for all cases except local files.
    *
-   * @param {string} ifcUrl the final ifcUrl that was passed to the viewer
+   * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
    */
-  function updateLoadedFileInfo(uploadedFile, ifcUrl) {
-    if (uploadedFile) {
-      return
-    }
+  function updateLoadedFileInfo(modelUrlStr) {
     const githubRegex = /(raw.githubusercontent|github.com)/gi
-    if (ifcUrl.indexOf('/') === 0) {
+    if (modelUrlStr.indexOf('/') === 0) {
       setLoadedFileInfo({
         source: 'share', info: {
-          url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
+          url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
         },
       })
-    } else if (githubRegex.test(ifcUrl)) {
-      setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
+    } else if (githubRegex.test(modelUrlStr)) {
+      setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
     }
   }
 

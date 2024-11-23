@@ -7,6 +7,9 @@ import NotesControl from './NotesControl'
 import model from '../../__mocks__/MockModel.js'
 
 
+window.HTMLElement.prototype.scrollIntoView = jest.fn()
+
+
 describe('NotesControl', () => {
   it('Does not issue fetch on initial page load when not visible', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -32,7 +35,7 @@ describe('NotesControl', () => {
     await act(async () => {
       render(<ShareMock><NotesControl/></ShareMock>)
     })
-    expect(result.current.notes).toHaveLength(4)
+    expect(result.current.notes).toHaveLength(6)
   })
 
   it('Fetches issues when isNotesVisible in zustand', async () => {
@@ -50,7 +53,7 @@ describe('NotesControl', () => {
     await act(async () => {
       result.current.setIsNotesVisible(true)
     })
-    expect(result.current.notes).toHaveLength(4)
+    expect(result.current.notes).toHaveLength(6)
   })
 })
 

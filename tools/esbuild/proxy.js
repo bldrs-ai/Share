@@ -49,10 +49,8 @@ export function createProxyServer(host, port, useHttps = false) {
 
     // Handle request errors
     proxyReq.on('error', (err) => {
-      // eslint-disable-next-line no-console
       console.error(`Proxy request error: ${err.message}`)
-      // eslint-disable-next-line no-magic-numbers
-      res.writeHead(500)
+      res.writeHead(HTTP_SERVER_ERROR)
       res.end('Internal Server Error')
     })
 
@@ -63,6 +61,7 @@ export function createProxyServer(host, port, useHttps = false) {
 
 const HTTP_FOUND = 200
 const HTTP_NOT_FOUND = 404
+const HTTP_SERVER_ERROR = 500
 
 /** Serve a 200 bounce page for missing resources. */
 const serveNotFound = (res) => {
@@ -95,12 +94,17 @@ const serveNotFound = (res) => {
  * @return {string} The rewritten URL
  */
 function rewriteUrl(url) {
-  // If the URL is for a .wasm file and starts with '/share/v/p/', rewrite it
-  if (url.endsWith('.wasm') && url.startsWith('/share/v/p/')) {
-    return url.replace('/share/v/p/', '/')
+  // Regular expression to match any URL that ends with .wasm
+  const regex = /^.*\.wasm$/
+
+  // If the URL matches the regex, rewrite it
+  if (regex.test(url)) {
+    return '/static/js/ConwayGeomWasmWeb.wasm'
   }
+
   return url
 }
+
 
 /**
  * Get the Content-Type based on file extension.

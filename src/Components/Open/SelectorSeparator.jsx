@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
-import {handleBeforeUnload} from '../../utils/event'
+import {disablePageReloadApprovalCheck} from '../../utils/event'
 
 
 /**
@@ -23,7 +23,7 @@ export default function SelectorSeparator({
   ...props
 }) {
   const handleSelect = (e) => {
-    window.removeEventListener('beforeunload', handleBeforeUnload)
+    disablePageReloadApprovalCheck()
     setSelected(e.target.value)
   }
   return (

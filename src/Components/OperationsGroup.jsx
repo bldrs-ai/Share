@@ -4,6 +4,7 @@ import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CameraControl from './Camera/CameraControl'
+import MarkerControl from '../Components/Markers/MarkerControl'
 import ImagineControl from './Imagine/ImagineControl'
 import NotesControl from './Notes/NotesControl'
 import ProfileControl from './Profile/ProfileControl'
@@ -31,6 +32,11 @@ export default function OperationsGroup({deselectItems}) {
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isAnElementSelected = selectedElement !== null
 
+  // required for MarkerControl
+  const viewer = useStore((state) => state.viewer)
+  const isModelReady = useStore((state) => state.isModelReady)
+  const model = useStore((state) => state.model)
+
   return (
     <ButtonGroup orientation='vertical' variant='controls'>
       {isLoginEnabled && (
@@ -48,8 +54,17 @@ export default function OperationsGroup({deselectItems}) {
          icon={<AppStoreIcon/>}
          selected={isAppStoreOpen}
          onClick={() => toggleAppStoreDrawer()}
+         placement='left'
        />
       }
+      {(viewer && isModelReady) && (
+        <MarkerControl
+        context={viewer.context ? viewer.context : null}
+        oppositeObjects={[model ? model : null]}
+        postProcessor={viewer ? viewer.postProcessor : null}
+        data-testid='markerControl'
+        />
+      )}
       {isImagineEnabled && <ImagineControl/>}
       {/* Invisible */}
       <CameraControl/>

@@ -11,11 +11,11 @@ let DEBUG_LEVEL = WARN
 /**
  * Create debug statement.
  *
- * @param {number} level Default is INFO.
+ * @param {number|boolean} level Default is INFO.
  * @return {console|MockLog} returned function is console.log or a no-op if debugging is turned off
  */
 export default function debug(level = INFO) {
-  return level >= DEBUG_LEVEL ? console : mockLog
+  return (level === true || level >= DEBUG_LEVEL) ? console : mockLog
 }
 
 

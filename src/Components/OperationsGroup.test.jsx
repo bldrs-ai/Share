@@ -5,6 +5,9 @@ import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import OperationsGroup from './OperationsGroup'
 
+
+window.HTMLElement.prototype.scrollIntoView = jest.fn()
+
 // Instantiates ImagineControl which uses viewer's screenshot function
 // jest.mock('web-ifc-viewer')
 

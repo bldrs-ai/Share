@@ -22,7 +22,6 @@ export default {
     '^.+\\.css$': 'identity-obj-proxy',
   },
   setupFilesAfterEnv: [
-    '<rootDir>/tools/jest/setupEnvVars.js',
     '<rootDir>/tools/jest/setupTests.js',
     '<rootDir>/tools/jest/setupNodeFetch.cjs',
     '@alex_neo/jest-expect-message',

@@ -26,7 +26,6 @@ export default function EditCardBody({handleTextUpdate, value = ''}) {
           fullWidth
           multiline
           placeholder={'Note body'}
-          inputProps={{maxLength: 256}}
         />
       </Stack>
     </CardContent>

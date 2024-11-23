@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
@@ -8,12 +8,15 @@ import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
 import Stack from '@mui/material/Stack'
+import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue, getIssueComments} from '../../net/github/Issues'
 import {createComment} from '../../net/github/Comments'
 import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 
 
 /**
@@ -39,8 +42,25 @@ export default function NoteCardCreate({
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState(null)
+  const body = useStore((state) => state.body)
+  const setBody = useStore((state) => state.setBody)
+  const {togglePlaceMarkActive} = placemarkHandlers()
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const theme = useTheme()
+  const tempId = -1
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const editModes = useStore((state) => state.editModes)
+  const [placeMarkEnabled, setPlaceMarkEnabled] = useState()
 
+
+  useEffect(() => {
+    const hasAnyEditModeActive = Object.values(editModes).some((mode) => mode === true)
+    if (hasAnyEditModeActive) {
+      setPlaceMarkEnabled(!hasAnyEditModeActive)
+    } else {
+      setPlaceMarkEnabled(true)
+    }
+  }, [editModes])
 
   /**
    * create issue takes in the title and body of the note from the state
@@ -150,37 +170,61 @@ export default function NoteCardCreate({
             fullWidth
             multiline
             placeholder={isNote ? 'Note Body' : 'Leave a comment ...' }
-            inputProps={{maxLength: 256}}
             data-testid={isNote ? 'CreateNote' : 'CreateComment' }
           />
         </Box>
       </CardContent>
       <CardActions>
-        <Stack
-          justifyContent='flex-end'
-          alignContent='flex-end'
-          direction='row'
-          sx={{width: '100%'}}
-        >
-          {isNote ?
-          <TooltipIconButton
-            title='Submit'
-            onClick={createNote}
-            icon={<CheckIcon/>}
-            enabled={submitEnabled}
-            size='small'
-            placement='bottom'
-          /> :
-          <TooltipIconButton
-            title='Submit'
-            onClick={createNewComment}
-            icon={<CheckIcon/>}
-            enabled={submitEnabled}
-            size='small'
-            placement='bottom'
-          />
-          }
-        </Stack>
+      <Stack
+  justifyContent='flex-end'
+  alignContent='flex-end'
+  direction='row'
+  sx={{width: '100%'}}
+      >
+  {isNote ? (
+    <TooltipIconButton
+      title='Submit'
+      onClick={createNote}
+      icon={<CheckIcon/>}
+      enabled={submitEnabled}
+      size='small'
+      placement='bottom'
+    />
+  ) : (
+    <>
+    {!isNote &&
+       <Box
+         sx={{
+           '& svg': {
+             fill: (placeMarkId === tempId && placeMarkActivated) ?
+               'red' :
+               theme.palette.mode === 'light' ? 'black' : 'white',
+           },
+         }}
+       >
+         <TooltipIconButton
+           title='Place Mark'
+           enabled={placeMarkEnabled}
+           size='small'
+           placement='bottom'
+           onClick={() => {
+             togglePlaceMarkActive(tempId)
+           }}
+           icon={<PlaceMarkIcon className='icon-share'/>}
+         />
+       </Box>
+      }
+      <TooltipIconButton
+        title='Submit Comment'
+        onClick={createNewComment}
+        icon={<CheckIcon/>}
+        enabled={submitEnabled}
+        size='small'
+        placement='bottom'
+      />
+    </>
+  )}
+      </Stack>
       </CardActions>
     </Card>
   )
