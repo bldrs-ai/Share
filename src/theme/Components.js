@@ -164,7 +164,7 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
-    MuiListItem: {
+    MuiList: {
       styleOverrides: {
         root: {
           padding: '.5em 0',

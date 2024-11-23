@@ -19,19 +19,19 @@ import {CloseButton} from './Buttons'
  * @property {string} headerText Short message describing the operation
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
+ * @property {ReactElement} children Content of the dialog
  * @property {string|ReactElement} [actionTitle] Title for the action button, or Component
  * @property {Function} [actionCb] Callback for action button
- * @property {ReactElement} children Content of the dialog
  * @return {ReactElement}
  */
 export default function Dialog({
-  headerIcon,
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  children,
+  headerIcon,
   actionTitle,
   actionCb,
-  children,
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
@@ -77,7 +77,7 @@ export default function Dialog({
       </DialogTitle>
       <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
       <DialogContent>{children}</DialogContent>
-      {(actionTitle === undefined || actionTitle === undefined) ? null :
+      {actionTitle === undefined ? null :
        <DialogActions>
          {typeof actionTitle === 'string' ?
           <Button variant='contained' onClick={actionCb} aria-label='action-button' data-testid='button-dialog-main-action'>

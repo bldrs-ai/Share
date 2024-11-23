@@ -4,7 +4,8 @@ import {
   floatStrTrim,
   isNumber,
   isNumeric,
-  matchUuid,
+  safePathSplit,
+  testUuid,
   toTitleCase,
 } from './strings'
 
@@ -75,10 +76,10 @@ describe('strings', () => {
   })
 
 
-  it('matchUuid', () => {
-    expect(matchUuid('marry had a little lamb')).toBe(false)
-    expect(matchUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
-    expect(matchUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
+  it('testUuid', () => {
+    expect(testUuid('marry had a little lamb')).toBe(false)
+    expect(testUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
+    expect(testUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
   })
 
 
@@ -97,5 +98,14 @@ describe('strings', () => {
     expect(toTitleCase('WALL')).toBe('Wall')
     expect(toTitleCase('wAlL')).toBe('Wall')
     expect(toTitleCase('wall')).toBe('Wall')
+  })
+
+
+  it('safePathSplit', () => {
+    expect(safePathSplit('/')).toStrictEqual([])
+    expect(safePathSplit('/a')).toStrictEqual(['a'])
+    expect(safePathSplit('/a/')).toStrictEqual(['a'])
+    expect(safePathSplit('/a/b')).toStrictEqual(['a', 'b'])
+    expect(safePathSplit('/a/b/c')).toStrictEqual(['a', 'b', 'c'])
   })
 })

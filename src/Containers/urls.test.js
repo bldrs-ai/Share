@@ -1,8 +1,7 @@
 import {getFinalUrl} from './urls'
-import testEnvVars from '../../tools/jest/testEnvVars'
 
 
-describe.only('With environment variables', () => {
+describe('With environment variables', () => {
   const OLD_ENV = process.env
 
 
@@ -17,10 +16,10 @@ describe.only('With environment variables', () => {
   })
 
 
-  it.only('getFinalUrl', async () => {
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual(`${testEnvVars.RAW_GIT_PROXY_URL_NEW}/`)
+  it('getFinalUrl', async () => {
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual(`${process.env.RAW_GIT_PROXY_URL}/`)
 
-    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev.jest/model'
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev.jest/model/')
+    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
   })
 })

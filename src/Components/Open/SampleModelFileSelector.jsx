@@ -1,7 +1,7 @@
 import React, {ReactElement, useState} from 'react'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
-import {handleBeforeUnload} from '../../utils/event'
+import {disablePageReloadApprovalCheck} from '../../utils/event'
 
 
 /**
@@ -22,7 +22,7 @@ export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}
       5: '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/171210AISC_Sculpture_param.ifc',
       6: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
     }
-    window.removeEventListener('beforeunload', handleBeforeUnload)
+    disablePageReloadApprovalCheck()
     navigate({pathname: modelPath[e.target.value]})
     closeDialog()
   }

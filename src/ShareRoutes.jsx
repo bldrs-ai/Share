@@ -7,7 +7,7 @@ import {
   useNavigate,
 } from 'react-router-dom'
 import debug from './utils/debug'
-import {handleBeforeUnload} from './utils/event'
+import {disablePageReloadApprovalCheck} from './utils/event'
 import Share from './Share'
 
 
@@ -92,7 +92,7 @@ function Forward({appPrefix}) {
     if (location.pathname === appPrefix) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      disablePageReloadApprovalCheck()
       navigate(dest)
     }
   }, [location, appPrefix, navigate])

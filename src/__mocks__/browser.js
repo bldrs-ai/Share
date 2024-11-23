@@ -2,5 +2,13 @@ import {setupWorker} from 'msw'
 import {initHandlers} from './api-handlers'
 
 
-// This configures a Service Worker with the given request handlers.
-export const worker = setupWorker(...initHandlers())
+/**
+ * Configures a MSW Worker with the given request handlers.
+ *
+ * @param {object} defines Object mapping keys like 'process.env.VAR' to values.
+ * @return {object} the worker
+ */
+export function initWorker(defines) {
+  const worker = setupWorker(...initHandlers(defines))
+  return worker
+}

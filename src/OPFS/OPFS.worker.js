@@ -1,4 +1,3 @@
-// opfsWorker.js
 let GITHUB_BASE_URL_AUTHENTICATED = null
 let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
@@ -165,7 +164,6 @@ async function fetchRGHUC(modelUrl) {
 
     return modelResponse
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error:', error)
   }
 }
@@ -175,14 +173,13 @@ async function fetchRGHUC(modelUrl) {
  */
 async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
   try {
-    const STATUS_CACHED = 304
+    const STATUS_NOT_MODIFIED = 304
     // Step 1: Fetch the JSON response with ETag header if provided
     const fetchOptions = etag_ ? {headers: {ETag: etag_}} : {}
     const proxyResponse = await fetch(jsonUrl, fetchOptions)
 
-    if (proxyResponse.status === STATUS_CACHED) {
-      // eslint-disable-next-line no-console
-      console.log('Cached version is valid')
+    if (proxyResponse.status === STATUS_NOT_MODIFIED) {
+      console.warn('OPFS.worker#fetchAndHeadRequest: proxy responded HTTP_NOT_MODIFIED, using cached')
       return null
     }
 
@@ -195,8 +192,7 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
 
     const json = await clonedResponse.json()
 
-    // eslint-disable-next-line no-unused-vars
-    const {_, etag, finalURL} = json
+    const {etag, finalURL} = json
 
     // Step 3: fetch model
     const modelResponse = await fetch(finalURL)
@@ -207,7 +203,6 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
 
     return {proxyResponse, modelResponse, etag}
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error:', error)
   }
 }
@@ -496,9 +491,9 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
         const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
-          const pathSegments = originalFilePath.split('/') // Split the path into segments
+          const pathSegments = safePathSplit(originalFilePath)
           const lastSegment = pathSegments[pathSegments.length - 1]
-          const newFileName = `${lastSegment }.${shaHash}.${_commitHash}`
+          const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
           const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
 
           if (newResult !== null) {
@@ -525,9 +520,9 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
           const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
           if (_commitHash !== null) {
-            const pathSegments = originalFilePath.split('/') // Split the path into segments
+            const pathSegments = safePathSplit(originalFilePath)
             const lastSegment = pathSegments[pathSegments.length - 1]
-            const newFileName = `${lastSegment }.${shaHash}.${_commitHash}`
+            const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
             const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
 
             if (newResult !== null) {
@@ -571,7 +566,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
         const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
-          const pathSegments = originalFilePath.split('/') // Split the path into segments
+          const pathSegments = safePathSplit(originalFilePath)
           const lastSegment = pathSegments[pathSegments.length - 1]
           const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
           const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
@@ -584,62 +579,61 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
           }
         }
-      }
-    } catch (error) {
-      // expected if file not found - lets see if we have a temporary file
+      } else {
+        // expected if file not found - lets see if we have a temporary file
 
-      if (commitHash !== null) {
-        try {
-          [modelDirectoryHandle, modelBlobFileHandle] = await
-          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, 'temporary', false)
+        if (commitHash !== null) {
+          try {
+            [modelDirectoryHandle, modelBlobFileHandle] = await
+            retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, 'temporary', false)
 
-          if (modelBlobFileHandle !== null ) {
-            // Display model and get commitHash
-            const blobFile = await modelBlobFileHandle.getFile()
+            if (modelBlobFileHandle !== null ) {
+              // Display model and get commitHash
+              const blobFile = await modelBlobFileHandle.getFile()
 
-            self.postMessage({completed: true, event: 'download', file: blobFile})
+              self.postMessage({completed: true, event: 'download', file: blobFile})
 
-            // eslint-disable-next-line no-console
-            console.log('Getting commit hash...')
-            // TODO: get commit hash here
-            const _commitHash = await fetchLatestCommitHash(
-              GITHUB_BASE_URL_UNAUTHENTICATED,
-              owner,
-              repo,
-              originalFilePath,
-              accessToken,
-              branch)
+              // TODO: get commit hash here
+              const _commitHash = await fetchLatestCommitHash(
+                GITHUB_BASE_URL_UNAUTHENTICATED,
+                owner,
+                repo,
+                originalFilePath,
+                accessToken,
+                branch)
 
-            if (_commitHash !== null) {
-              const pathSegments = originalFilePath.split('/') // Split the path into segments
-              const lastSegment = pathSegments[pathSegments.length - 1]
-              const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
-              const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
+              if (_commitHash !== null) {
+                const pathSegments = safePathSplit(originalFilePath)
+                const lastSegment = pathSegments[pathSegments.length - 1]
+                const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
+                const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
 
-              if (newResult !== null) {
-                // Update cache with new data
-                await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
-                const updatedBlobFile = await newResult.getFile()
+                if (newResult !== null) {
+                  // Update cache with new data
+                  await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+                  const updatedBlobFile = await newResult.getFile()
 
-                self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+                  self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+                }
               }
             }
+          } catch (error_) {
+            // expected if file not found - invalidate cache and try again
+            console.warn('File not found in cache, invalidating cache and request again with no etag')
+            await CacheModule.deleteCache(cacheKey)
+            downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
+            return
           }
-        } catch (error_) {
-          // expected if file not found - invalidate cache and try again
-          // eslint-disable-next-line no-console
-          console.log('File not found in cache, invalidating cache and request again with no etag')
-          await CacheModule.deleteCache(cacheKey)
-          downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
-          return
         }
-      }
 
+        console.warn('File not found in cache, invalidating cache and request again with no etag')
+        await CacheModule.deleteCache(cacheKey)
+        downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
+        return
+      }
+    } catch (error) {
       // eslint-disable-next-line no-console
-      console.log('File not found in cache, invalidating cache and request again with no etag')
-      await CacheModule.deleteCache(cacheKey)
-      downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
-      return
+      console.trace(error)
     }
   }
 
@@ -683,7 +677,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
   if (_commitHash !== null) {
-    const pathSegments = originalFilePath.split('/') // Split the path into segments
+    const pathSegments = safePathSplit(originalFilePath)
     const lastSegment = pathSegments[pathSegments.length - 1]
     const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
     const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
@@ -762,7 +756,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
   let modelBlobFileHandle = null
   let modelDirectoryHandle = null
   let blobAccessHandle = null
-  const pathSegments = originalFilePath.split('/')
+  const pathSegments = safePathSplit(originalFilePath)
   const strippedFileName = pathSegments[pathSegments.length - 1]
   // lets see if our commit hash matches
   // Get file handle for file blob
@@ -843,11 +837,15 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
       receivedLength += value.length
 
       if (onProgress) {
+        // Variable names reflect MDN ProgressEvent field names
+        // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
         self.postMessage({
-          progressEvent: onProgress,
+          progressEvent: onProgress, // REVIEW: should this really be a function
+                                     // value for an event varname, and tests
+                                     // pass it a boolean?
           lengthComputable: contentLength !== 0,
-          contentLength: contentLength,
-          receivedLength: receivedLength,
+          total: contentLength,
+          loaded: receivedLength,
         })
       }
     }
@@ -876,7 +874,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
  * writeFileToPath
  */
 async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
-  const pathSegments = filePath.split('/') // Split the path into segments
+  const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
   for (let i = 0; i < pathSegments.length; i++) {
@@ -888,7 +886,7 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
       try {
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
-        const workerMessage = `Error getting/creating directory handle for segment: ${error}.`
+        const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
         self.postMessage({error: workerMessage})
         return null
       }
@@ -901,7 +899,7 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
            {create: true})
         return [currentHandle, fileHandle] // Return the file handle for further processing
       } catch (error) {
-        const workerMessage = `Error getting/creating file handle for file ${segment}: ${error}.`
+        const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
         self.postMessage({error: workerMessage})
         return null
       }
@@ -914,7 +912,7 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
  *
  */
 async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
-  const pathSegments = filePath.split('/') // Split the path into segments
+  const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
   for (let i = 0; i < pathSegments.length; i++) {
@@ -926,7 +924,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
       try {
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
-        const workerMessage = `Error getting/creating directory handle for segment: ${error}.`
+        const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
         self.postMessage({error: workerMessage})
         return null
       }
@@ -940,7 +938,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
         if (!shouldCreate) {
           return null
         }
-        const workerMessage = `Error getting/creating file handle for file ${segment}: ${error}.`
+        const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
         self.postMessage({error: workerMessage})
         return null
       }
@@ -952,7 +950,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
  *
  */
 async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
-  const pathSegments = filePath.split('/') // Split the path into segments
+  const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
   for (let i = 0; i < pathSegments.length; i++) {
@@ -964,7 +962,7 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
       try {
         currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
       } catch (error) {
-        const workerMessage = `Error getting/creating directory handle for segment: ${error}.`
+        const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
         self.postMessage({error: workerMessage})
         return [null, null]
       }
@@ -1133,7 +1131,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   // Get a file handle in the folder for the model
   let modelBlobFileHandle = null
   let modelDirectoryHandle = null
-  const pathSegments = originalFilePath.split('/')
+  const pathSegments = safePathSplit(originalFilePath)
   const strippedFileName = pathSegments[pathSegments.length - 1]
   // lets see if our commit hash matches
   // Get file handle for file blob
@@ -1217,7 +1215,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 
   // Get a file handle in the folder for the model
   let modelBlobFileHandle = null
-  const pathSegments = originalFilePath.split('/')
+  const pathSegments = safePathSplit(originalFilePath)
   const strippedFileName = pathSegments[pathSegments.length - 1]
   // lets see if our commit hash matches
   // Get file handle for file blob
@@ -1436,3 +1434,22 @@ function assertValues(obj, keys) {
   return obj
 }
 
+
+// From utils/strings
+/**
+ * Split str on / and remove empty string as first or last array elt if they are
+ * present.
+ *
+ * @param {string} pathStr
+ * @return {string}
+ */
+function safePathSplit(pathStr) {
+  const parts = pathStr.split('/')
+  if (parts[0] === '') {
+    parts.shift()
+  }
+  if (parts.length > 0 && parts[parts.length - 1] === '') {
+    parts.pop()
+  }
+  return parts
+}

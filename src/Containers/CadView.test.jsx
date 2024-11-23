@@ -1,14 +1,18 @@
+import axios from 'axios'
 import React from 'react'
 import * as reactRouting from 'react-router-dom'
+import * as Ifc from '@bldrs-ai/ifclib'
 import {render, renderHook, act, fireEvent, screen, waitFor, within} from '@testing-library/react'
+import * as Filetype from '../Filetype'
+import ShareMock from '../ShareMock'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
-import ShareMock from '../ShareMock'
+import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
-import * as AllLoader from '../utils/loader'
-import {actAsyncFlush} from '../utils/tests'
+import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
+import {actAsyncFlush} from '../utils/tests'
 import CadView from './CadView'
 import PkgJson from '../../package.json'
 
@@ -20,6 +24,10 @@ const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', stat
 // mock createObjectURL
 global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
 
+jest.mock('axios')
+jest.mock('@bldrs-ai/ifclib')
+jest.mock('../Filetype')
+jest.mock('../search/SearchIndex')
 jest.mock('../OPFS/utils', () => {
   const actualUtils = jest.requireActual('../OPFS/utils')
   const fs = jest.requireActual('fs')
@@ -106,6 +114,19 @@ describe('CadView', () => {
   beforeAll(() => {
     // Store the original Worker in case other tests need it
     originalWorker = global.Worker
+    axios.get.mockResolvedValue({
+      data: null,
+    })
+    Filetype.getValidExtension.mockReturnValue('ifc')
+    Filetype.guessType.mockResolvedValue('ifc')
+    Filetype.guessTypeFromFile.mockResolvedValue('ifc')
+    Ifc.getType.mockResolvedValue(null)
+    SearchIndex.mockImplementation(() => {
+      return {
+        indexElementsByString: jest.fn(),
+      }
+    })
+    // jest.spyOn(Loader, 'readModel').mockReturnValue({})
   })
 
 
@@ -199,15 +220,14 @@ describe('CadView', () => {
     fireEvent.dragOver(dropZone, {dataTransfer})
     fireEvent.drop(dropZone, {dataTransfer})
 
+    await actAsyncFlush()
+
     // Verify that URL.createObjectURL was called
     expect(global.URL.createObjectURL).toHaveBeenCalled()
-
-    // this is about as far as we can go since OPFS doesn't work in this context
-    await actAsyncFlush()
   })
 
 
-  it('sets up camera and cutting plan from URL,', async () => {
+  it('sets up camera and cutting plane from URL,', async () => {
     const mockCurrLocation = {
       ...defaultLocationValue,
       hash: `#${HASH_PREFIX_CAMERA}:1,2,3,4,5,6;${HASH_PREFIX_CUT_PLANE}:x=0`,
@@ -262,11 +282,12 @@ describe('CadView', () => {
 
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
-    jest.spyOn(AllLoader, 'getUploadedBlobPath').mockReturnValue('/haus.ifc')
-    const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
+    const testPath = '/4be9c3dc-e138-47e9-962b-d0cf55cbbc26.ifc'
+    jest.spyOn(Loader, 'constructUploadedBlobPath').mockReturnValue(testPath)
+    const mockCurrLocation = {...defaultLocationValue, pathname: testPath}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/haus.ifc`}))
+    await act(() => result.current.setModelPath({filepath: testPath}))
     render(
       <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>,
     )

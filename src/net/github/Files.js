@@ -266,8 +266,13 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
   return contents.data.download_url
 }
 
+
 /**
+ * Gets the file or directory contents at the given repository's path.
  *
+ * @param {string} repository
+ * @param {string} path
+ * @return {Array<string>} Pair of [downloadUrl, sha]
  */
 export async function getPathContents(repository, path, ref = '', accessToken = '') {
   assertDefined(...arguments)

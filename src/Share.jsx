@@ -9,8 +9,9 @@ import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
+import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
-import {handleBeforeUnload} from './utils/event'
+import {testUuid} from './utils/strings'
 import {splitAroundExtension} from './Filetype'
 import Styles from './Styles'
 
@@ -124,7 +125,7 @@ function ModelTitle({repository, modelPath}) {
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
-  window.removeEventListener('beforeunload', handleBeforeUnload)
+  disablePageReloadApprovalCheck()
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
         `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
@@ -137,13 +138,16 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
- * Returns a reference to an IFC model file.  For use by IfcViewerAPIExtended.load.
+ * Returns a reference to a model file.  For use by IfcViewerAPIExtended.load.
  *
  * Format is either a reference within this project's serving directory:
  *   {filepath: '/file.ifc'}
  *
  * or a global GitHub path:
  *   {gitpath: 'http://host/share/v/gh/bldrs-ai/Share/main/index.ifc'}
+ *
+ * or an uploaded path:
+ *   {filepath: '/xxxx-xxxx-xxxx-xxxx'}
  *
  * @param {string} installPrefix e.g. /share
  * @param {string} pathPrefix e.g. /share/v/p
@@ -169,6 +173,9 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   try {
     ({parts, extension} = splitAroundExtension(filepath))
   } catch (e) {
+    if (testUuid(filepath)) {
+      return {filepath, extension: null}
+    }
     alert(`Unsupported filetype: ${filepath}`)
     debug().error(e)
     return null

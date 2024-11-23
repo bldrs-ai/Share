@@ -57,7 +57,6 @@ export default class PlaceMark extends EventDispatcher {
 
     this.setObjects = (objects) => {
       if (!Array.isArray(objects) || objects.length === 0) {
-        // eslint-disable-next-line no-console
         console.error('PlaceMark#setObjects: \'objects\' must be a non-empty array.')
         return
       }

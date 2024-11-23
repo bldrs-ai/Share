@@ -68,7 +68,7 @@ describe('OPFS Test Suite', () => {
       // Assert the expected outcomes
       expect(result).toEqual(mockFile)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
-      expect(OPFSService.opfsReadModel).toHaveBeenCalledWith('file') // Since you manipulate the filepath in the function
+      expect(OPFSService.opfsReadModel).toHaveBeenCalledWith('file.ifc') // Since you manipulate the filepath in the function
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
     })
@@ -89,11 +89,6 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       const result = await downloadToOPFS(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'originalFilePath',
           'commitHash',
@@ -122,7 +117,7 @@ describe('OPFS Test Suite', () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
-            handler({data: {progressEvent: true, contentLength: 100, receivedLength: 50}}) // Simulate a progress update
+            handler({data: {progressEvent: true, total: 100, loaded: 50}}) // Simulate a progress update
             handler({data: {completed: true, event: 'download', file: new Blob(['content'])}}) // Then complete
           })
         }),
@@ -132,11 +127,6 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       await downloadToOPFS(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'originalFilePath',
           'commitHash',
@@ -148,8 +138,8 @@ describe('OPFS Test Suite', () => {
 
       expect(onProgressMock).toHaveBeenCalledWith({
         lengthComputable: true,
-        contentLength: 100,
-        receivedLength: 50,
+        total: 100,
+        loaded: 50,
       })
     })
   })
@@ -170,11 +160,6 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       const result = await downloadModel(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'shaHash',
           'originalFilePath',
@@ -218,11 +203,6 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       await downloadModel(
-          // eslint-disable-next-line no-empty-function
-          () => {}, // navigate
-          'appPrefix',
-          // eslint-disable-next-line no-empty-function
-          () => {}, // handleBeforeUnload
           'objectUrl',
           'shaHash',
           'originalFilePath',
