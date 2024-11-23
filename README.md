@@ -1,16 +1,24 @@
 <img width="1430" alt="image" src="https://user-images.githubusercontent.com/2480879/209037130-43d1d04e-d943-452c-93fc-2d556c4f17be.png">
 
-Share is a web-based BIM & CAD integration environment from [bldrs.ai](https://bldrs.ai/).
+# Bldrs Share
+Bldrs Share is a high-performance web application for BIM & CAD integration from [bldrs.ai](https://bldrs.ai/).  Built on open-standards and open-source standards for speed, accuracy, and flexibility.  Designed for real-time, browser-based teamwork, Bldrs Share empowers teams to effortlessly share detailed models and collaborate seamlessly from any device.
 
-- *Open* any IFC model on github by pasting into the searchbar, or uploading from your local desktop.
-- *View* the model, *navigate* its structure and use *cut planes* to view inside.
-- *Search* the model's elements and properties.
-- *Collaborate* with teammates by commenting on model parts and properties (in development).
-- *Share* with teammates, using permalinks to model parts with exact camera views.
-- *Extend* our platform with your Apps. (in development)
+### Browser-First, Desktop-Free
+Share lets you simply drag-and-drop your model files for instant browser-based viewing, eliminating backend latency, SaaS dependencies, and data residency issues. Work from anywhere, on any device, with just a web connection.
+
+### GitHub Integration for Team Collaboration
+Access, manage, and share your models using your GitHub credentials. With seamless GitHub integration, Share lets you keep your model library organized and accessible, while making it easy to log changes, share projects, and collaborate across teams.
+- Notes, Cameras and Pins Capture specific views and sections of the model, drop pins on geometry, and link notes to particular elements or perspectives. These tools make sharing insights and feedback effortless, so teams stay aligned throughout the design process.
+- Versioning and History Tracking Built on Git version control, Share provides intuitive versioning that makes it simple to navigate model history, manage revisions, and keep track of design evolution over time.
+
+### Navigation
+Explore 3D geometry with ease—navigate spatial structures, elements, and properties directly within the interface. Manage element attributes and IFC Property Sets in a clear, streamlined view, enabling precise control over model details.
+
+## High Performance IFC&STEP CAD core
+Bldrs Share is powered by [Conway engine][https://github.com/bldrs-ai/conway], bringing high-quality, precision CAD to the web. This cutting-edge CAD engine, designed specifically for IFC and STEP formats, offers advanced geometric representation, enabling teams to open and visualize intricate models with exceptional accuracy and speed.
 
 # Contributing
-Please join in creating Bldrs!  Come chat with us at the [Bldrs Discord](https://discord.gg/9SxguBkFfQ).
+Please join us in creating Bldrs Share!  Come chat with us at the [Bldrs Discord](https://discord.gg/9SxguBkFfQ).
 
 If you have ideas or issues, please file them in our GitHub [issues](https://github.com/bldrs-ai/Share/issues) page, or mail hello@bldrs.ai.
 
