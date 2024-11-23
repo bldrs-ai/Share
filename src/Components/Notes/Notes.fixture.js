@@ -5,7 +5,8 @@ export const MOCK_NOTES = [
     id: 13,
     number: 3,
     title: 'placemark_test_1',
-    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0)',
+    // eslint-disable-next-line max-len
+    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0;c:71.225,28.586,-45.341,-33,15,-5.613)',
     date: '2022-06-01T22:10:49Z',
     username: 'TEST_ISSUE_USERNAME',
     numberOfComments: 2,
