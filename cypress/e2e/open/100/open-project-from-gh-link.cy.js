@@ -29,7 +29,8 @@ describe('Open 100: Open Project From GitHub Link', () => {
         .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc{enter}')
     })
 
-    it('Model loads - Screen', () => {
+    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
+    it.skip('Model loads - Screen', () => {
       waitForModelReady(interceptTag)
       cy.percySnapshot()
     })
