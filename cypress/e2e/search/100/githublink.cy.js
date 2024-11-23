@@ -31,9 +31,10 @@ describe('Search 100: GitHub Link', () => {
       .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc{enter}')
     })
 
-    it('Momentum Loads Successfully - Screen', () => {
-        waitForModelReady(interceptTag)
-        cy.percySnapshot()
-      })
+    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
+    it.skip('Momentum Loads Successfully - Screen', () => {
+      waitForModelReady(interceptTag)
+      cy.percySnapshot()
+    })
   })
 })

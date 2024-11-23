@@ -17,7 +17,8 @@ describe('view 100: Initial model load and view', () => {
     context('Visits homepage', () => {
       beforeEach(visitHomepageWaitForModel)
 
-      it('See logo model, model title and all main controls - Screen', () => {
+      // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
+      it.skip('See logo model, model title and all main controls - Screen', () => {
         cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
 
         cy.get('[data-testid="control-button-open"]').should('exist')

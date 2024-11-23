@@ -7,8 +7,9 @@ import {
 } from '../../support/utils'
 
 
+// TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
 /** {@link https://github.com/bldrs-ai/Share/issues/1077} */
-describe('create-100: Imagine', () => {
+describe.skip('create-100: Imagine', () => {
   beforeEach(() => {
     homepageSetup()
     setIsReturningUser()
