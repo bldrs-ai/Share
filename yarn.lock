@@ -2078,17 +2078,17 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.1.3.tgz":
-  version "0.1.3"
-  resolved "./bldrs-ai-conway-web-ifc-adapter-0.1.3.tgz#071650ae2ce7e17f620030179baa7287bffd00b5"
+"@bldrs-ai/conway-web-ifc-adapter@./bldrs-ai-conway-web-ifc-adapter-0.1.6.tgz":
+  version "0.1.6"
+  resolved "./bldrs-ai-conway-web-ifc-adapter-0.1.6.tgz#c7b22c28a3cb6d432411a94137e4992b608235a8"
   dependencies:
-    "@bldrs-ai/conway" "./bldrs-ai-conway-0.1.670.tgz"
+    "@bldrs-ai/conway" "./bldrs-ai-conway-0.1.683.tgz"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@./bldrs-ai-conway-0.1.670.tgz":
-  version "0.1.670"
-  resolved "./bldrs-ai-conway-0.1.670.tgz#3538df2b625f1a582086582fa3dd51c4b4f84556"
+"@bldrs-ai/conway@./bldrs-ai-conway-0.1.683.tgz":
+  version "0.1.683"
+  resolved "./bldrs-ai-conway-0.1.683.tgz#a460021d1c86eb045e4cce595c48a28de422bd34"
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
