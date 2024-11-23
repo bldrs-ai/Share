@@ -80,6 +80,8 @@ export default function NoteCard({
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
 
+  const setEditOriginalBody = useStore((state) => state.setEditOriginalBody)
+
 
   const handleEditBodyChange = (newBody) => {
     setEditBody(newBody) // Update local editBody state
@@ -283,6 +285,9 @@ export default function NoteCard({
                onEditClick={() => {
                 setEditMode(true)
                 setEditModeGlobal(id, true)
+                setEditBody(body)
+                setEditOriginalBody(id, body)
+                setEditBodyGlobal(id, body) // Update global editBody state
               }}
                onDeleteClick={() => onDeleteClick(noteNumber)}
                noteNumber={noteNumber}

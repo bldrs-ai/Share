@@ -37,6 +37,8 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
         // eslint-disable-next-line no-unused-expressions
           expect(marker.userData.id).to.exist
         })
+
+        cy.percySnapshot()
       })
     })
   })
