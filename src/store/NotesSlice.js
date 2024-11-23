@@ -24,8 +24,13 @@ export default function createNotesSlice(set, get) {
     placeMarkActivated: false,
     placeMarkId: null,
     selectedNoteId: null,
+    selectedCommentId: null,
     selectedNoteIndex: null,
+    selectedPlaceMarkId: null,
     synchSidebar: true, // To render again, not related to flag
+    placeMarkMode: false,
+    setSelectedPlaceMarkId: (_placeMarkId) => set(() => ({selectedPlaceMarkId: _placeMarkId})),
+    setPlaceMarkMode: (mode) => set(() => ({placeMarkMode: mode})),
     setComments: (comments) => set(() => ({comments: comments})),
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
     setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
@@ -37,11 +42,34 @@ export default function createNotesSlice(set, get) {
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setSelectedNote: (note) => set(() => ({selectedNote: note})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
+    setSelectedCommentId: (commentId) => set(() => ({selectedCommentId: commentId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
     toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
     toggleIsCreateNoteVisible: () => set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
+    body: '',
+    issueBody: '',
+    editModes: {}, // Keeps track of edit modes by NoteCard IDs
+    setEditMode: (id, mode) =>
+      set((state) => ({
+        editModes: {...state.editModes, [id]: mode},
+      })),
+    editBodies: {}, // Track editBody for each NoteCard by id
+    setEditBody: (id, body) =>
+      set((state) => ({
+        editBodies: {...state.editBodies, [id]: body},
+      })),
+    // Action to set the body
+    setBody: (newBody) => set({body: newBody}),
+    setIssueBody: (newIssueBody) => set({issueBody: newIssueBody}),
+    activeNoteCardId: null,
+    setActiveNoteCardId: (id) => set({activeNoteCardId: id}),
+    markers: [],
+    writeMarkers: (newMarkers) => set({markers: newMarkers}), // Set markers
+    clearMarkers: () => set({markers: []}), // Clear markers
+    selectedPlaceMarkInNoteId: null,
+    setSelectedPlaceMarkInNoteId: (_selectedPlaceMarkInNoteId) => set(() => ({selectedPlaceMarkInNoteId: _selectedPlaceMarkInNoteId})),
   }
 }

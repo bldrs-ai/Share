@@ -14,6 +14,8 @@ import {createIssue, getIssueComments} from '../../net/github/Issues'
 import {createComment} from '../../net/github/Comments'
 import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 
 
 /**
@@ -39,8 +41,9 @@ export default function NoteCardCreate({
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState(null)
-
+  const body = useStore((state) => state.body)
+  const setBody = useStore((state) => state.setBody)
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   /**
    * create issue takes in the title and body of the note from the state
@@ -156,31 +159,43 @@ export default function NoteCardCreate({
         </Box>
       </CardContent>
       <CardActions>
-        <Stack
-          justifyContent='flex-end'
-          alignContent='flex-end'
-          direction='row'
-          sx={{width: '100%'}}
-        >
-          {isNote ?
-          <TooltipIconButton
-            title='Submit'
-            onClick={createNote}
-            icon={<CheckIcon/>}
-            enabled={submitEnabled}
-            size='small'
-            placement='bottom'
-          /> :
-          <TooltipIconButton
-            title='Submit'
-            onClick={createNewComment}
-            icon={<CheckIcon/>}
-            enabled={submitEnabled}
-            size='small'
-            placement='bottom'
-          />
-          }
-        </Stack>
+      <Stack
+  justifyContent='flex-end'
+  alignContent='flex-end'
+  direction='row'
+  sx={{width: '100%'}}
+      >
+  {isNote ? (
+    <TooltipIconButton
+      title='Submit'
+      onClick={createNote}
+      icon={<CheckIcon/>}
+      enabled={submitEnabled}
+      size='small'
+      placement='bottom'
+    />
+  ) : (
+    <>
+    <TooltipIconButton
+           title='Place Mark'
+           size='small'
+           placement='bottom'
+           onClick={() => {
+             togglePlaceMarkActive(selectedNoteId)
+           }}
+           icon={<PlaceMarkIcon className='icon-share'/>}
+    />
+      <TooltipIconButton
+        title='Submit Comment'
+        onClick={createNewComment}
+        icon={<CheckIcon/>}
+        enabled={submitEnabled}
+        size='small'
+        placement='bottom'
+      />
+    </>
+  )}
+      </Stack>
       </CardActions>
     </Card>
   )

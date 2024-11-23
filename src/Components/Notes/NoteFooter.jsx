@@ -1,17 +1,18 @@
 import React, {ReactElement, useState} from 'react'
 import Box from '@mui/material/Box'
 import CardActions from '@mui/material/CardActions'
-import useTheme from '@mui/styles/useTheme'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import usePlaceMark from '../../hooks/usePlaceMark'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
-import useStore from '../../store/useStore'
-import {TooltipIconButton} from '../Buttons'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import useTheme from '@mui/styles/useTheme'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
+import {TooltipIconButton} from '../Buttons'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
@@ -38,22 +39,24 @@ export default function NoteFooter({
   synched,
   username,
 }) {
-  const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
 
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
 
   const {user} = useAuth0()
   const theme = useTheme()
-  const {togglePlaceMarkActive} = usePlaceMark()
 
   const hasCameras = embeddedCameras.length > 0
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   /** Navigate to github issue */
   function openGithubIssue() {
@@ -98,7 +101,20 @@ export default function NoteFooter({
        />
       }
 
-      {isNote && selected && synched && existPlaceMarkInFeature &&
+      {!isNote &&
+       <TooltipIconButton
+         title='Share'
+         size='small'
+         placement='bottom'
+         onClick={() => {
+           onClickShare(selectedNoteId, id)
+           setShareIssue(!shareIssue)
+         }}
+         icon={<ShareIcon className='icon-share'/>}
+       />
+      }
+
+      {isNote && selected && synched &&
        user && user.nickname === username &&
        <Box
          sx={{
@@ -137,14 +153,24 @@ export default function NoteFooter({
        />
       }
 
-      {editMode &&
-       <TooltipIconButton
-         title='Save'
-         placement='left'
-         icon={<CheckIcon className='icon-share'/>}
-         onClick={() => submitUpdate(repository, accessToken, id)}
-       />
-      }
+      {editMode && (
+        <>
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+          <TooltipIconButton
+            title='Cancel'
+            placement='left'
+            icon={<CloseIcon className='icon-share'/>}
+            onClick={() => {
+              setEditModeGlobal(id, false) // Update global edit mode state
+            }}
+          />
+        </>
+      )}
 
       {isNote && !selected &&
        <TooltipIconButton

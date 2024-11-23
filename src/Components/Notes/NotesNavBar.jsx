@@ -1,10 +1,11 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setParams, removeParams} from '../../utils/location'
+import {setParams, removeParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
-import {HASH_PREFIX_NOTES} from './hashState'
+import {removeMarkerUrlParams} from '../Markers/MarkerControl'
+import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from './hashState'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -21,6 +22,7 @@ export default function NotesNavBar() {
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
+  const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
 
 
   /**
@@ -77,8 +79,15 @@ export default function NotesNavBar() {
          <TooltipIconButton
            title='Back to the list'
            onClick={() => {
-             setParams(HASH_PREFIX_NOTES)
+             setSelectedPlaceMarkId(null)
              setSelectedNoteId(null)
+             const _location = window.location
+             batchUpdateHash(_location, [
+              (hash) => removeMarkerUrlParams({hash}), // Remove marker params
+              (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes params
+              (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment params
+              (hash) => setParamsToHash(hash, HASH_PREFIX_NOTES), // Add notes params
+            ])
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'

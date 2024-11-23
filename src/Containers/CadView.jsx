@@ -13,7 +13,6 @@ import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
-import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
 // TODO(pablo): use ^^ instead of this
@@ -115,8 +114,6 @@ export default function CadView({
   // Begin Hooks //
   const isMobile = useIsMobile()
   const location = useLocation()
-  // Place Mark
-  const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const setOpfsFile = useStore((state) => state.setOpfsFile)
@@ -203,11 +200,6 @@ export default function CadView({
     setSnackMessage(null)
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
-    createPlaceMark({
-      context: viewer.context,
-      oppositeObjects: [tmpModelRef],
-      postProcessor: viewer.postProcessor,
-    })
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
@@ -540,7 +532,9 @@ export default function CadView({
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-        const path = pathIds.join('/')
+        const enabledFeatures = searchParams.get('feature')
+        const pathIDsStr = pathIds.join('/')
+        const path = enabledFeatures ? `${pathIDsStr }?feature=${ enabledFeatures}` : pathIDsStr
         navWith(
           navigate,
           `${pathPrefix}${repoFilePath}/${path}`,

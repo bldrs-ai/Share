@@ -95,12 +95,17 @@ const serveNotFound = (res) => {
  * @return {string} The rewritten URL
  */
 function rewriteUrl(url) {
-  // If the URL is for a .wasm file and starts with '/share/v/p/', rewrite it
-  if (url.endsWith('.wasm') && url.startsWith('/share/v/p/')) {
-    return url.replace('/share/v/p/', '/')
+  // Regular expression to match any URL that ends with .wasm
+  const regex = /^.*\.wasm$/
+
+  // If the URL matches the regex, rewrite it
+  if (regex.test(url)) {
+    return '/static/js/ConwayGeomWasmWeb.wasm'
   }
+
   return url
 }
+
 
 /**
  * Get the Content-Type based on file extension.
