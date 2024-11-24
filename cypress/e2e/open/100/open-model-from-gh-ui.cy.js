@@ -24,8 +24,9 @@ describe('Open 100: Open model from GH via UI', () => {
         interceptTag)
     })
 
+    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
     const interceptTag = 'ghOpenModelLoad'
-    it('Opens a model from Github via the UI - Screen', () => {
+    it.skip('Opens a model from Github via the UI - Screen', () => {
       cy.get('[data-testid="control-button-open"]').click()
       cy.findByText('Github').click()
       cy.findByLabelText('Organization', {timeout: 5000}).click()

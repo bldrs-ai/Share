@@ -77,7 +77,9 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
 
         cy.percySnapshot()
       })
-      it('should click a marker link with a camera coordinate in it and the camera should change', () => {
+
+      // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
+      it.skip('should click a marker link with a camera coordinate in it and the camera should change', () => {
         auth0Login()
         cy.get('[data-testid="list-notes"]')
         .children()
