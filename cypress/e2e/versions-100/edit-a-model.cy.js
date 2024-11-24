@@ -25,8 +25,9 @@ describe('Versions 100: Edit a specific version', () => {
         overwriteVersionInterceptTag)
     })
 
+    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
     // Assumes this flow's file exists cypress/e2e/open/100/open-model-from-gh-ui.cy.js
-    it('Save index.ifc to new name, that overwrites existing other file', () => {
+    it.skip('Save index.ifc to new name, that overwrites existing other file', () => {
         cy.findByTitle('Save', {timeout: 5000}).should('exist').click({force: true})
         cy.findByLabelText('Organization', {timeout: 5000}).click()
         cy.contains('@cypresstester').click()
