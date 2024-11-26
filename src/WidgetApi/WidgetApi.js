@@ -13,6 +13,7 @@ export default class WidgetApi {
    * @param {object} searchIndex SearchIndex
    */
   constructor(navigation, searchIndex) {
+    console.log('WidgetApi#ctor')
     if (this.detectIframe()) {
       const apiConnection = new ApiConnectionIframe()
       new ApiEventsRegistry(apiConnection, navigation, searchIndex)

@@ -55,6 +55,7 @@ export function TooltipIconButton({
       describeChild
       placement={placement}
       PopperProps={{style: {zIndex: 0}}}
+      sx={{border: 'dashed 1px orange'}}
     >
       <ToggleButton
         selected={selected}
@@ -68,6 +69,7 @@ export function TooltipIconButton({
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',
+          border: 'solid 1px green',
         }}
       >
         {icon}
@@ -100,8 +102,8 @@ export function ControlButton({
     <>
       <TooltipIconButton
         title={title}
-        icon={icon}
         onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
+        icon={icon}
         selected={isDialogDisplayed}
         variant='control'
         color='success'
@@ -210,6 +212,7 @@ export function FullScreenButton({onClick}) {
       title='Full screen'
       onClick={onClick}
       icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
+      placement='left'
       size='medium'
     />
   )
@@ -226,6 +229,7 @@ export function BackButton({onClick}) {
       title='Back'
       onClick={onClick}
       icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
+      placement='left'
       size='medium'
     />
   )

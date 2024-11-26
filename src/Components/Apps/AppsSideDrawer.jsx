@@ -1,4 +1,4 @@
-import React, {useRef} from 'react'
+import React, {Component, useRef} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
@@ -6,27 +6,28 @@ import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import HorizonResizerButton from '../SideDrawer/HorizonResizerButton'
 import VerticalResizerButton from '../SideDrawer/VerticalResizerButton'
-import {AppPreviewPanel, AppStorePanel} from './AppStorePanel'
+import AppsPanel, {AppPreviewPanel} from './AppsPanel'
+
 
 /**
- * @return {React.Component}
+ * @return {Component}
  */
-export default function AppStoreSideDrawer() {
-  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
-  const sidebarWidth = useStore((state) => state.appStoreSidebarWidth)
-  const setAppStoreSidebarWidth = useStore((state) => state.setAppStoreSidebarWidth)
-  const sidebarHeight = useStore((state) => state.appStoreSidebarHeight)
-  const setAppStoreSidebarHeight = useStore((state) => state.setAppStoreSidebarHeight)
+export default function AppsSideDrawer() {
+  const isAppsOpen = useStore((state) => state.isAppsOpen)
+  const sidebarWidth = useStore((state) => state.appsSidebarWidth)
+  const setAppsSidebarWidth = useStore((state) => state.setAppsSidebarWidth)
+  const sidebarHeight = useStore((state) => state.appsSidebarHeight)
+  const setAppsSidebarHeight = useStore((state) => state.setAppsSidebarHeight)
   const isMobile = useIsMobile()
   const sidebarRef = useRef(null)
   const theme = useTheme()
   const thickness = 10
-  const selectedStoreApp = useStore((state) => state.selectedStoreApp)
+  const selectedApp = useStore((state) => state.selectedApp)
 
   return (
     <Box
       sx={Object.assign({
-        display: isAppStoreOpen ? 'flex' : 'none',
+        display: isAppsOpen ? 'flex' : 'none',
         flexDirection: 'row',
       }, isMobile ? {
         width: '100%',
@@ -58,7 +59,7 @@ export default function AppStoreSideDrawer() {
             thickness={thickness}
             isOnLeft={true}
             sidebarWidth={sidebarWidth}
-            setSidebarWidth={setAppStoreSidebarWidth}
+            setSidebarWidth={setAppsSidebarWidth}
           />
         }
         {isMobile &&
@@ -67,7 +68,7 @@ export default function AppStoreSideDrawer() {
             thickness={thickness}
             isOnTop={true}
             sidebarHeight={sidebarHeight}
-            setSidebarHeight={setAppStoreSidebarHeight}
+            setSidebarHeight={setAppsSidebarHeight}
           />
         }
         {/* Content */}
@@ -80,15 +81,15 @@ export default function AppStoreSideDrawer() {
         >
           <Box
             sx={{
-              display: isAppStoreOpen ? 'block' : 'none',
+              display: isAppsOpen ? 'block' : 'none',
               height: '100%',
               overflowX: 'hidden',
               overflowY: 'auto',
             }}
           >
-            {!selectedStoreApp ?
-            <AppStorePanel/> :
-            <AppPreviewPanel item={selectedStoreApp}/>
+            {!selectedApp ?
+            <AppsPanel/> :
+            <AppPreviewPanel item={selectedApp}/>
             }
           </Box>
         </Box>

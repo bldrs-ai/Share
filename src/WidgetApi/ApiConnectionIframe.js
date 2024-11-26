@@ -6,7 +6,7 @@ import AbstractApiConnection from './ApiConnection'
 /**
  * ApiConnection to Iframed bldrs instance
  */
-class ApiConnectionIframe extends AbstractApiConnection {
+export default class ApiConnectionIframe extends AbstractApiConnection {
   widgetId = 'bldrs-share'
   matrixWidgetApi = null
 
@@ -26,6 +26,7 @@ class ApiConnectionIframe extends AbstractApiConnection {
    * @param {Function} callable
    */
   on(eventName, callable) {
+    console.log('ApiConnectionIframe#on, eventName:', eventName)
     this.matrixWidgetApi.on(
         eventName,
         (event) => {
@@ -43,6 +44,7 @@ class ApiConnectionIframe extends AbstractApiConnection {
    * @param {object} data
    */
   send(eventName, data) {
+    console.log('ApiConnectionIframe#send: eventName:', eventName)
     this.matrixWidgetApi.transport.send(eventName, data)
   }
 
@@ -52,6 +54,7 @@ class ApiConnectionIframe extends AbstractApiConnection {
    * @param {string[]} capabilities
    */
   requestCapabilities(capabilities) {
+    console.log('ApiConnectionIframe#send: requestCapabilities:', capabilities)
     this.matrixWidgetApi.requestCapabilities(capabilities)
   }
 
@@ -59,6 +62,7 @@ class ApiConnectionIframe extends AbstractApiConnection {
    * starts the api.
    */
   start() {
+    console.log('ApiConnectionIframe#send: start & sendContentLoaded!')
     this.matrixWidgetApi.start()
     this.matrixWidgetApi.sendContentLoaded()
   }
@@ -70,5 +74,3 @@ class ApiConnectionIframe extends AbstractApiConnection {
     this.matrixWidgetApi.stop()
   }
 }
-
-export default ApiConnectionIframe

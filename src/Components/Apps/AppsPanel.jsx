@@ -3,26 +3,26 @@ import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
 import {BackButton, CloseButton, FullScreenButton} from '../Buttons'
 import PanelWithTitle from '../SideDrawer/PanelWithTitle'
-import {AppStoreListing, AppStoreIFrame} from './AppStoreListing'
+import {AppsListing, AppIFrame} from './AppsListing'
 
 
 /** @return {ReactElement} */
-export function AppStorePanel() {
-  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
+export default function AppsPanel() {
+  const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
 
   return (
     <PanelWithTitle
-      title='App Store'
-      controlsGroup={<CloseButton onCloseClick={toggleAppStoreDrawer}/>}
+      title='Apps'
+      controlsGroup={<CloseButton onCloseClick={toggleAppsDrawer}/>}
     >
-      <AppStoreListing/>
+      <AppsListing/>
     </PanelWithTitle>
   )
 }
 
 /** @return {ReactElement} */
 export function AppPreviewPanel({item}) {
-  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
+  const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
   const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)
   return (
     <PanelWithTitle title={item.appName}
@@ -40,13 +40,13 @@ export function AppPreviewPanel({item}) {
             }}
             />
             <CloseButton
-              onClick={toggleAppStoreDrawer}
+              onClick={toggleAppsDrawer}
             />
           </Box>
         </>
       }
     >
-      <AppStoreIFrame item={item}/>
+      <AppIFrame item={item}/>
     </PanelWithTitle>
   )
 }

@@ -18,7 +18,7 @@ run_cy_spec() {
 echo "Running cypress specs in parallel..."
 
 # Misc
-run_cy_spec misc cypress/e2e/appStore,cypress/e2e/hide-feat,cypress/e2e/home,cypress/e2e/ifc-model,cypress/e2e/integration
+run_cy_spec misc cypress/e2e/apps,cypress/e2e/hide-feat,cypress/e2e/home,cypress/e2e/ifc-model,cypress/e2e/integration
 
 # Then conventional
 for EPIC in create-100 open notes-100 profile-100 versions-100 view-100 ; do

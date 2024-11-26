@@ -32,7 +32,6 @@ export function getComponentOverrides(palette, typography) {
         props: {variant: 'rectangular'},
         style: {
           border: `1px solid ${palette.primary.main}`,
-
         },
       }],
     },

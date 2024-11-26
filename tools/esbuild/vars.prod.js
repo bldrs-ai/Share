@@ -1,5 +1,5 @@
 export default {
-  APPS_IS_ENABLED: false,
+  APPS_IS_ENABLED: true,
 
   // Auth
   AUTH0_DOMAIN: 'bldrs.us.auth0.com',

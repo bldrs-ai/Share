@@ -1,4 +1,3 @@
-import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
 import {isVisibleInitially as imagineIsVisibleInitially} from '../Components/Imagine/hashState'
@@ -20,12 +19,6 @@ export default function createUISlice(set, get) {
   return {
     alert: null,
     setAlert: (a) => set(() => ({alert: a})),
-
-    appStoreSidebarWidth: MOBILE_WIDTH,
-    setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),
-
-    appStoreSidebarHeight: MOBILE_HEIGHT,
-    setAppStoreSidebarHeight: (height) => set(() => ({appStoreSidebarHeight: height})),
 
     cutPlanes: [],
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
