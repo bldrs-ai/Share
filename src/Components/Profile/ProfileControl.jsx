@@ -4,7 +4,7 @@ import Divider from '@mui/material/Divider'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
@@ -56,10 +56,10 @@ export default function ProfileControl() {
         icon={
           isAuthenticated ?
           <Avatar alt={user.name} src={user.picture}/> :
-          <AccountBoxOutlinedIcon className='icon-share' sx={{border: 'solid 1px red'}}/>
+          <AccountBoxOutlinedIcon className='icon-share'/>
         }
         variant='control'
-        placement='left'
+        placement='bottom'
         buttonTestId='control-button-profile'
       />
       <Menu

@@ -36,7 +36,7 @@ export default function ShareControl() {
       isDialogDisplayed={isShareVisible}
       setIsDialogDisplayed={setIsShareVisible}
       hashPrefix={HASH_PREFIX_SHARE}
-      placement='left'
+      placement='bottom'
     >
       <ShareDialog
         isDialogDisplayed={isShareVisible}

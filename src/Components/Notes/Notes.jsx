@@ -8,7 +8,6 @@ import debug from '../../utils/debug'
 import {getIssueComments} from '../../net/github/Issues'
 import {getObjectParams} from '../../utils/location'
 import useStore from '../../store/useStore'
-import {useIsMobile} from '../Hooks'
 import ApplicationError from '../ApplicationError'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
@@ -41,7 +40,6 @@ export default function Notes() {
   const [hasError, setHasError] = useState(false)
 
   const {user} = useAuth0()
-  const isMobile = useIsMobile()
 
   const selectedNote =
         (notes && selectedNoteId) ?
@@ -184,12 +182,13 @@ function parseComment(comment) {
   }
 
 
+  const liSx = {paddingTop: '0px', paddingLeft: '0px', paddingRight: '0px'}
   return hasError ?
     <ApplicationError/> : (
     <List
       spacing={3}
-      sx={isMobile ? {paddingBottom: '100px'} : {}}
-      data-testid='list-notes'
+      sx={{padding: '0px'}}
+      data-test-id='list-notes'
     >
       {isLoadingNotes && !isCreateNoteVisible && <Loader type={'linear'}/>}
       {notes && notes.length === 0 && !isCreateNoteVisible && !isLoadingNotes && <NoContent/>}
@@ -198,7 +197,7 @@ function parseComment(comment) {
       {!selectedNoteId && !isCreateNoteVisible && notes && !isLoadingNotes &&
        notes.map((note, index) => {
          return (
-           <ListItem key={index} data-note-id={note.id}>
+           <ListItem key={index} sx={liSx} data-note-id={note.id}>
              <NoteCard
                index={note.index}
                id={note.id}
@@ -216,7 +215,7 @@ function parseComment(comment) {
        })
       }
       {selectedNote && (
-      <ListItem data-note-id={selectedNote.id}>
+      <ListItem sx={liSx} data-note-id={selectedNote.id}>
         <NoteCard
           avatarUrl={selectedNote.avatarUrl}
           body={selectedNote.body}
@@ -231,7 +230,7 @@ function parseComment(comment) {
         />
       </ListItem>
     )}
-      <ListItem key={'commentCreate'}>
+      <ListItem sx={liSx} key={'commentCreate'}>
         {user && selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
       </ListItem>
       {selectedNote && !user &&
@@ -245,7 +244,7 @@ function parseComment(comment) {
       {comments && selectedNote &&
        comments.map((comment, index) => {
          return (
-           <ListItem key={index} data-comment-id={comment.id}>
+           <ListItem sx={liSx} key={index} data-comment-id={comment.id}>
              <NoteCard
                isNote={false}
                id={comment.id}

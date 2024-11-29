@@ -8,42 +8,32 @@ import {AppsListing, AppIFrame} from './AppsListing'
 
 /** @return {ReactElement} */
 export default function AppsPanel() {
-  const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
-
+  const toggleAppsIsVisible = useStore((state) => state.toggleAppsIsVisible)
   return (
     <PanelWithTitle
-      title='Apps'
-      controlsGroup={<CloseButton onCloseClick={toggleAppsDrawer}/>}
+      title='APPS'
+      controlsGroup={<CloseButton onCloseClick={toggleAppsIsVisible}/>}
+      data-test-id='AppsPanel'
     >
       <AppsListing/>
     </PanelWithTitle>
   )
 }
 
+
 /** @return {ReactElement} */
 export function AppPreviewPanel({item}) {
   const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
-  const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)
+  const setSelectedApp = useStore((state) => state.setSelectedApp)
   return (
     <PanelWithTitle title={item.appName}
       iconSrc={item.icon}
       controlsGroup={
-        <>
-          <Box>
-            <BackButton
-              onClick={() => {
-                setSelectedStoreApp(null)
-              }}
-            />
-            <FullScreenButton onClick={() => {
-              window.open(item.action, '_blank')
-            }}
-            />
-            <CloseButton
-              onClick={toggleAppsDrawer}
-            />
-          </Box>
-        </>
+        <Box>
+          <BackButton onClick={() => setSelectedApp(null)}/>
+          <FullScreenButton onClick={() => window.open(item.action, '_blank')}/>
+          <CloseButton onClick={toggleAppsDrawer}/>
+        </Box>
       }
     >
       <AppIFrame item={item}/>

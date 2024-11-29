@@ -14,11 +14,9 @@ import {HASH_PREFIX_PROPERTIES} from './hashState'
  * contains the title with additional controls, and the item
  * properties styled container
  *
- * @property {boolean} Include gutter Should be present only when
- *     Properties occupies full SideDrawer.
- * @return {ReactElement} Properties Panel react component
+ * @return {ReactElement}
  */
-export default function PropertiesPanel({includeGutter}) {
+export default function PropertiesPanel() {
   const selectedElement = useStore((state) => state.selectedElement)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
 
@@ -39,13 +37,12 @@ export default function PropertiesPanel({includeGutter}) {
 
   return (
     <PanelWithTitle
-      title={'PROPERTIES'}
+      title='PROPERTIES'
       controlsGroup={<CloseButton onCloseClick={onCloseClick}/>}
-      includeGutter={includeGutter}
     >
       {selectedElement ?
         <Properties/> :
-        <NoContent message={'Please select an element to access properties.'}/>
+        <NoContent message='Please select an element to access properties.'/>
       }
     </PanelWithTitle>
   )

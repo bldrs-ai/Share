@@ -13,7 +13,6 @@ import TreeIcon from '../../assets/icons/Tree.svg'
 export default function NavTreeControl() {
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
-
   return (
     <ControlButtonWithHashState
       title='Navigation'

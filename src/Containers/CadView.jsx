@@ -2,14 +2,13 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
 import {onHash} from '../Components/Camera/CameraControl'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import ElementGroup from '../Components/ElementGroup'
-import HelpControl from '../Components/Help/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import {load} from '../loader/Loader'
@@ -52,7 +51,8 @@ export default function CadView({
   const accessToken = useStore((state) => state.accessToken)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
+  const isNotesVisible = useStore((state) => state.isNotesVisible)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -623,11 +623,12 @@ export default function CadView({
   // looking at.
   // TODO(pablo): add render testing
   useEffect(() => {
+    const isDrawerOpen = isNotesVisible || isAppsVisible
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth})` : '100%'
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth}px)` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
+  }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
 
 
   const abs = {position: 'absolute'}
@@ -644,7 +645,6 @@ export default function CadView({
          data-is-camera-at-rest={isCameraAtRest}
        />}
       <Box sx={{...absBtm, left: 0}}><AboutControl/></Box>
-      <Box sx={{...absBtm, right: 0}}><HelpControl/></Box>
       {viewer && (
         <>
           <ControlsGroupAndDrawer
@@ -660,7 +660,7 @@ export default function CadView({
             <ElementGroup deselectItems={deselectItems}/>
           </Box>
 
-          <Box sx={isMobile ? {} : {...absTop, right: 0}}>
+          <Box sx={isMobile ? {} : {...absTop, right: 0, pointerEvents: 'none'}}>
             <OperationsGroupAndDrawer deselectItems={deselectItems}/>
           </Box>
         </>

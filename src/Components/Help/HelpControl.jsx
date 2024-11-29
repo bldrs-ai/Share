@@ -50,7 +50,7 @@ export default function HelpControl() {
       isDialogDisplayed={isHelpVisible}
       setIsDialogDisplayed={setIsHelpVisible}
       hashPrefix={HASH_PREFIX_HELP}
-      placement='left'
+      placement='top'
       dataTestId='help-control-button'
     >
       <HelpDialog

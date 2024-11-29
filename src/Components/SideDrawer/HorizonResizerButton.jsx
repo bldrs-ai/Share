@@ -2,7 +2,7 @@ import React, {useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import useStore from '../../store/useStore'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 import {isNumber} from '../../utils/strings'
 
 

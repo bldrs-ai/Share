@@ -1,6 +1,6 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 

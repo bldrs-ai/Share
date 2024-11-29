@@ -3,8 +3,8 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import {useIsMobile} from '../Components/Hooks'
 import OperationsGroup from '../Components/OperationsGroup'
-import AppsSideDrawer from '../Components/Apps/AppsSideDrawer'
-import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import AppsSideDrawer from './AppsSideDrawer'
+import NotesAndProperties from './NotesAndProperties'
 
 
 /**
@@ -35,14 +35,16 @@ export default function OperationsGroupAndDrawer({deselectItems}) {
             width: '100%',
           }}
         >
-          <SideDrawer/>
+          <NotesAndProperties/>
         </Box>
       </>
     ) : (
-      <Stack direction='row'>
+      <Stack direction='row' sx={{pointerEvents: 'none'}}>
         <OperationsGroup deselectItems={deselectItems}/>
-        <SideDrawer/>
-        <AppsSideDrawer/>
+        <Stack direction='row' style={{pointerEvents: 'auto'}}>
+          <NotesAndProperties/>
+          <AppsSideDrawer/>
+        </Stack>
       </Stack>
     )
   )

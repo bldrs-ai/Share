@@ -15,7 +15,7 @@ export default function NotesPanel() {
   }
 
   return (
-    <PanelWithTitle title={title} controlsGroup={<NotesNavBar/>} includeGutter={true}>
+    <PanelWithTitle title={title} controlsGroup={<NotesNavBar/>}>
       <Notes/>
     </PanelWithTitle>
   )

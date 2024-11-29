@@ -1,4 +1,4 @@
-import React, {Component, useCallback} from 'react'
+import React, {ReactElement, useCallback} from 'react'
 import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import CardActionArea from '@mui/material/CardActionArea'
@@ -12,29 +12,25 @@ import AppsRegistry from './AppsRegistry.json'
 import {IFrameCommunicationChannel} from './AppsMessagesHandler'
 
 
-console.warn('AppsRegistry', AppsRegistry)
-
-/** @return {Component} */
+/** @return {ReactElement} */
 export function AppsListing() {
   const setSelectedApp = useStore((state) => state.setSelectedApp)
   return (
-    <>
-      <Grid container spacing={1}>
-        {AppsRegistry.map((item, index) => (
-          <Grid item={true} xs={6} sm={6} md={6} key={index}>
-            <AppsEntry
-              clickHandler={setSelectedApp}
-              item={item}
-            />
-          </Grid>
-        ))}
-      </Grid>
-    </>
+    <Grid container spacing={1}>
+      {AppsRegistry.map((item, index) => (
+        <Grid xs={6} sm={6} md={6} key={index}>
+          <AppsEntry
+            clickHandler={setSelectedApp}
+            item={item}
+          />
+        </Grid>
+      ))}
+    </Grid>
   )
 }
 
 
-/** @return {Component} */
+/** @return {ReactElement} */
 function AppsEntry({item, clickHandler}) {
   return (
     <Paper>
@@ -68,7 +64,8 @@ function AppsEntry({item, clickHandler}) {
   )
 }
 
-/** @return {Component} */
+
+/** @return {ReactElement} */
 export function AppIFrame({
   item,
 }) {

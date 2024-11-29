@@ -1,7 +1,6 @@
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
 import {isVisibleInitially as imagineIsVisibleInitially} from '../Components/Imagine/hashState'
-import {isVisibleInitially as openModelIsVisibleInitially} from '../Components/Open/hashState'
 import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
 
 
@@ -48,9 +47,6 @@ export default function createUISlice(set, get) {
 
     isImagineVisible: imagineIsVisibleInitially(),
     setIsImagineVisible: (is) => set(() => ({isImagineVisible: is})),
-
-    isOpenModelVisible: openModelIsVisibleInitially(),
-    setIsOpenModelVisible: (is) => set(() => ({isOpenModelVisible: is})),
 
     isSaveModelVisible: false,
     setIsSaveModelVisible: (is) => set(() => ({isSaveModelVisible: is})),

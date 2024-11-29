@@ -19,7 +19,9 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        height: '70px',
       }}
+      data-test-id='PanelTitle'
     >
       <Box sx={{
         display: 'flex',
@@ -27,6 +29,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
         justifyContent: 'space-between',
         alignItems: 'center',
       }}
+      data-test-id='PanelTitleIconText'
       >
         {iconSrc ?
           <img style={{

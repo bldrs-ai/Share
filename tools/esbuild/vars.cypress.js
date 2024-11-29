@@ -13,6 +13,8 @@ export default {
   RAW_GIT_PROXY_URL_NEW: 'https://rawgit.bldrs.dev.msw/model',
   RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r',
 
+  NODE_ENV: 'development',
+
   // Share
   OPFS_IS_ENABLED: false,
   THEME_IS_ENABLED: false,

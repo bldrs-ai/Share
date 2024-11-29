@@ -21,6 +21,7 @@ import BackIcon from '../assets/icons/Back.svg'
  * @property {Function} onClick Callback
  * @property {object} icon Button icon
  * @property {string} placement Tooltip placement
+ * @property {Array<ReactElement>} [children] Optional child elts, e.g. a hosted dialog
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
@@ -32,6 +33,7 @@ export function TooltipIconButton({
   onClick,
   icon,
   placement,
+  children,
   enabled = true,
   selected = false,
   aboutInfo = true,
@@ -43,9 +45,10 @@ export function TooltipIconButton({
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
   const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
-
   const [openLocal, setOpenLocal] = useState(false)
-
+  // This moves the tooltip close to the icon instead of edge of button, which
+  // has a large margin.  Just eyeballed.
+  const offset = -15
   return (
     <Tooltip
       open={isHelpTooltipsVisible || openLocal}
@@ -55,12 +58,25 @@ export function TooltipIconButton({
       describeChild
       placement={placement}
       PopperProps={{style: {zIndex: 0}}}
-      sx={{border: 'dashed 1px orange'}}
+      arrow={true}
+      enterDelay={1000}
+      slotProps={{
+        popper: {
+          modifiers: [
+            {
+              name: 'offset',
+              options: {
+                offset: [0, offset],
+              },
+            },
+          ],
+        },
+      }}
     >
       <ToggleButton
         selected={selected}
         onClick={onClick}
-        value={''}
+        value=''
         size={size}
         color={color}
         variant={variant}
@@ -69,10 +85,10 @@ export function TooltipIconButton({
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',
-          border: 'solid 1px green',
         }}
       >
         {icon}
+        {children && children}
       </ToggleButton>
     </Tooltip>
   )
@@ -99,20 +115,19 @@ export function ControlButton({
 }) {
   assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
   return (
-    <>
-      <TooltipIconButton
-        title={title}
-        onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
-        icon={icon}
-        selected={isDialogDisplayed}
-        variant='control'
-        color='success'
-        size='small'
-        buttonTestId={props['data-testid'] || `control-button-${title.toLowerCase()}`}
-        {...props}
-      />
+    <TooltipIconButton
+      title={title}
+      onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
+      icon={icon}
+      selected={isDialogDisplayed}
+      variant='control'
+      color='success'
+      size='small'
+      buttonTestId={props['data-testid'] || `control-button-${title.toLowerCase()}`}
+      {...props}
+    >
       {children}
-    </>
+    </TooltipIconButton>
   )
 }
 
@@ -129,6 +144,7 @@ export function ControlButtonWithHashState({
   hashPrefix,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  children,
   ...props
 }) {
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
@@ -152,7 +168,9 @@ export function ControlButtonWithHashState({
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
       {...props}
-    />
+    >
+      {children}
+    </ControlButton>
   )
 }
 

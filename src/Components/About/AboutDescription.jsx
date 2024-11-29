@@ -1,13 +1,13 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 
 
 /**
  * A miniature view of the App to show as a guide in the About dialog.
  *
- * @return {React.ReactComponent}
+ * @return {ReactElement}
  */
 export default function AboutDescription({setIsDialogDisplayed}) {
   const theme = useTheme()

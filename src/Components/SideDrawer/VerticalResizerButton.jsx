@@ -1,8 +1,8 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react'
+import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/material/styles/useTheme'
 import useStore from '../../store/useStore'
 import {isNumber} from '../../utils/strings'
 
@@ -13,7 +13,7 @@ import {isNumber} from '../../utils/strings'
  * @property {useRef} sidebarRef sidebar ref object.
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnTop resizer is on the top.
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function VerticalResizerButton({
   sidebarRef,

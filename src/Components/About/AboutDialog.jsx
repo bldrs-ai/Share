@@ -63,13 +63,13 @@ function AboutContent() {
           <Typography variant='body1'>
             Welcome to Bldrs - Share!
           </Typography>
-          <Typography variant='body1'>
+          <div>
             Use the Open dialog to open IFC or STEP models from:
             <ul>
               <li>Local files - <em>no data is uploaded to our servers</em></li>
               <li>Files hosted on GitHub, public or private</li>
             </ul>
-          </Typography>
+          </div>
           <Typography variant='body1'>
             Position the camera, Select elements, Crop using section planes and
             Collaborate with your team via Notes.  For files on GitHub share the

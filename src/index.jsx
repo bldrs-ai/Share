@@ -71,6 +71,11 @@ if (process.env.MSW_IS_ENABLED) {
   })
 }
 
+// Enable esbuild hot-reload model
+if (process.env.NODE_ENV === 'development') {
+  new EventSource('/esbuild').addEventListener('change', () => location.reload())
+}
+
 const root = createRoot(document.getElementById('root'))
 
 root.render(

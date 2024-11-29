@@ -278,7 +278,8 @@ export default function NoteCard({
        <CardHeader
          title={title}
          avatar={<Avatar alt={username} src={avatarUrl}/>}
-         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+         sx={{alignItems: 'flex-start'}}
+         subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
          action={
            synched && user && user.nickname === username &&
              <NoteMenu
@@ -296,7 +297,7 @@ export default function NoteCard({
        /> :
        <CardHeader
          avatar={<Avatar alt={username} src={avatarUrl}/>}
-         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+         subheader={`${username}\n${dateParts[0]} ${dateParts[1]}`}
        />}
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
