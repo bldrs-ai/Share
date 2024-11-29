@@ -51,7 +51,7 @@ export default function HelpControl() {
       setIsDialogDisplayed={setIsHelpVisible}
       hashPrefix={HASH_PREFIX_HELP}
       placement='top'
-      dataTestId='help-control-button'
+      dataTestId={testId}
     >
       <HelpDialog
         isDialogDisplayed={isHelpVisible}
@@ -201,3 +201,6 @@ const HelpList = ({pageIndex}) => {
     </Stack>
   )
 }
+
+
+export const testId = 'control-button-help'

@@ -1,18 +1,15 @@
 import {WidgetApi as MatrixWidgetApi} from 'matrix-widget-api/lib/WidgetApi'
 import {MatrixCapabilities} from 'matrix-widget-api/lib/interfaces/Capabilities'
+import debug from '../utils/debug'
 import AbstractApiConnection from './ApiConnection'
 
 
-/**
- * ApiConnection to Iframed bldrs instance
- */
+/** ApiConnection to Iframed bldrs instance */
 export default class ApiConnectionIframe extends AbstractApiConnection {
   widgetId = 'bldrs-share'
   matrixWidgetApi = null
 
-  /**
-   * constructor
-   */
+  /** constructor */
   constructor() {
     super()
     this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId)
@@ -20,13 +17,13 @@ export default class ApiConnectionIframe extends AbstractApiConnection {
   }
 
   /**
-   * event resolver.
+   * Handler on Matrix API callbacks
    *
    * @param {string} eventName
    * @param {Function} callable
    */
   on(eventName, callable) {
-    console.log('ApiConnectionIframe#on, eventName:', eventName)
+    debug().log('ApiConnectionIframe#on, eventName:', eventName)
     this.matrixWidgetApi.on(
         eventName,
         (event) => {
@@ -38,38 +35,34 @@ export default class ApiConnectionIframe extends AbstractApiConnection {
   }
 
   /**
-   * send event.
+   * Send event on Matrix API transport
    *
    * @param {string} eventName
    * @param {object} data
    */
   send(eventName, data) {
-    console.log('ApiConnectionIframe#send: eventName:', eventName)
+    debug().log('ApiConnectionIframe#send: eventName:', eventName)
     this.matrixWidgetApi.transport.send(eventName, data)
   }
 
   /**
-   * requests capabilities.
+   * Requests capabilities from other end of Matrix API transport
    *
    * @param {string[]} capabilities
    */
   requestCapabilities(capabilities) {
-    console.log('ApiConnectionIframe#send: requestCapabilities:', capabilities)
+    debug().log('ApiConnectionIframe#send: requestCapabilities:', capabilities)
     this.matrixWidgetApi.requestCapabilities(capabilities)
   }
 
-  /**
-   * starts the api.
-   */
+  /** Starts the Matrix API message transprot */
   start() {
-    console.log('ApiConnectionIframe#send: start & sendContentLoaded!')
+    debug().log('ApiConnectionIframe#send: start & sendContentLoaded!')
     this.matrixWidgetApi.start()
     this.matrixWidgetApi.sendContentLoaded()
   }
 
-  /**
-   * stops the api.
-   */
+  /** Stops the Matrix API message transport */
   stop() {
     this.matrixWidgetApi.stop()
   }

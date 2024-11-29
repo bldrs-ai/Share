@@ -6,44 +6,42 @@ import {ThemeCtx} from '../theme/Theme.fixture'
 import QuestionIcon from '../assets/icons/Question.svg'
 
 
-describe('<TooltipIconButton />', () => {
+describe('TooltipIconButton', () => {
   it('should render successfully', async () => {
-    const buttonTestId = 'test-button'
+    const dataTestId = 'test-button'
+    const cb = jest.fn()
     const rendered = render(
-        <ThemeCtx>
-          <TooltipIconButton
-            title='Hello. Is it me ur looking for?'
-            // eslint-disable-next-line no-empty-function
-            onClick={() => {}}
-            icon={<QuestionIcon/>}
-            placement='top'
-            buttonTestId={buttonTestId}
-          />
-        </ThemeCtx>)
-
-    const button = rendered.getByTestId(buttonTestId)
-    fireEvent.mouseOver(button)
-
-    const tooltip = await rendered.findByRole('tooltip')
-    expect(tooltip).toBeInTheDocument()
+      <TooltipIconButton
+        title='Hello. Is it me ur looking for?'
+        icon={<QuestionIcon/>}
+        onClick={cb}
+        placement='top'
+        dataTestId={dataTestId}
+      />,
+      {wrapper: ThemeCtx})
+    const button = await rendered.findByTestId(dataTestId)
+    expect(button).toBeInTheDocument()
+    fireEvent.click(button)
+    expect(cb).toHaveBeenCalled()
   })
-
 
   it('show tooltip when the help is activated', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setIsHelpTooltipsVisible(true)
     })
+    const title = 'TestTooltip'
+    const cb = jest.fn()
     const {getByText} = render(
-        <ThemeCtx>
-          <TooltipIconButton
-            title='TestTooltip'
-            // eslint-disable-next-line no-empty-function
-            onClick={() => {}}
-            icon={<QuestionIcon/>}
-            placement='top'
-          />
-        </ThemeCtx>)
-    expect(await getByText('TestTooltip')).toBeVisible()
+      <TooltipIconButton
+        title={title}
+        icon={<QuestionIcon/>}
+        onClick={cb}
+        placement='top'
+      >
+        Foo
+      </TooltipIconButton>,
+      {wrapper: ThemeCtx})
+    expect(await getByText(title)).toBeVisible()
   })
 })

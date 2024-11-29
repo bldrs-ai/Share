@@ -1,10 +1,9 @@
 import ApiConnectionIframe from './ApiConnectionIframe'
 import ApiEventsRegistry from './ApiEventsRegistry'
+import debug from '../utils/debug'
 
 
-/**
- * WidgetApi main class
- */
+/** WidgetApi main class */
 export default class WidgetApi {
   /**
    * constructor
@@ -13,18 +12,14 @@ export default class WidgetApi {
    * @param {object} searchIndex SearchIndex
    */
   constructor(navigation, searchIndex) {
-    console.log('WidgetApi#ctor')
+    debug().log('WidgetApi#ctor')
     if (this.detectIframe()) {
       const apiConnection = new ApiConnectionIframe()
       new ApiEventsRegistry(apiConnection, navigation, searchIndex)
     }
   }
 
-  /**
-   * returns if code is executed in an iframe or not
-   *
-   * @return {boolean}
-   */
+  /** @return {boolean} if code is executed in an iframe or not */
   detectIframe() {
     // if this document is hosted in an iframe and has the *same origin*
     // as the parent document then window.frameElement is to be checked.

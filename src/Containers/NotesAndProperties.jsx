@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
-import useTheme from '@mui/material/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import useStore from '../store/useStore'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'

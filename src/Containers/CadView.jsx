@@ -2,7 +2,7 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/material/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
@@ -640,7 +640,7 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100%', height: '100%', m: 0, p: 0}}>
       {<ViewerContainer
-         data-testid={'cadview-dropzone'}
+         data-testid='cadview-dropzone'
          data-model-ready={isModelReady}
          data-is-camera-at-rest={isCameraAtRest}
        />}

@@ -14,8 +14,8 @@ import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
- * An icon button with a tooltip.  THe button will use a given buttonTestId or
- * the tip title as the data-testid on the button.
+ * An icon button with a tooltip.  The button will use a given dataTestId or the
+ * tip title as the data-testid on the button.
  *
  * @property {string} title Tooltip text
  * @property {Function} onClick Callback
@@ -25,7 +25,7 @@ import BackIcon from '../assets/icons/Back.svg'
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
- * @property {string} [buttonTestId] Internal attribute for component testing.
+ * @property {string} [dataTestId] Internal attribute for component testing.
  * @return {ReactElement}
  */
 export function TooltipIconButton({
@@ -40,7 +40,7 @@ export function TooltipIconButton({
   color,
   size,
   variant,
-  buttonTestId,
+  dataTestId,
 }) {
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
@@ -81,7 +81,7 @@ export function TooltipIconButton({
         color={color}
         variant={variant}
         disabled={!enabled}
-        data-testid={buttonTestId || title}
+        data-testid={dataTestId || title}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',
@@ -111,6 +111,7 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   children,
+  dataTestId,
   ...props
 }) {
   assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
@@ -123,7 +124,7 @@ export function ControlButton({
       variant='control'
       color='success'
       size='small'
-      buttonTestId={props['data-testid'] || `control-button-${title.toLowerCase()}`}
+      dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
       {...props}
     >
       {children}

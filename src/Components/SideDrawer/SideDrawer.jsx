@@ -1,7 +1,7 @@
 import React, {ReactElement, useRef} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import useTheme from '@mui/material/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import HorizonResizerButton from './HorizonResizerButton'

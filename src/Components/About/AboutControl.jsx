@@ -34,7 +34,7 @@ export default function AboutControl() {
       setIsDialogDisplayed={setIsAboutVisible}
       hashPrefix={HASH_PREFIX_ABOUT}
       placement='right'
-      buttonTestId='control-button-about'
+      dataTestId={testId}
     >
       <AboutDialog
         isDialogDisplayed={isAboutVisible}
@@ -44,3 +44,6 @@ export default function AboutControl() {
     </ControlButtonWithHashState>
   )
 }
+
+
+export const testId = 'control-button-about'

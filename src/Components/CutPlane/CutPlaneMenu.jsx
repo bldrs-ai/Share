@@ -104,7 +104,7 @@ export default function CutPlaneMenu() {
         selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}
         variant='control'
         placement='top'
-        buttonTestId='control-button-cut-plane'
+        dataTestId='control-button-cut-plane'
       />
       <Menu
         elevation={1}

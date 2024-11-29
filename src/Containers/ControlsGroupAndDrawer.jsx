@@ -104,10 +104,7 @@ export default function ControlsGroupAndDrawer({
          modelPath.repo !== undefined &&
          isVersionsVisible &&
          !isNavTreeVisible &&
-         <VersionsPanel
-           filePath={modelPath.filepath}
-           currentRef={branch}
-         />}
+         <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>}
       </Box>
     </Stack>
   )

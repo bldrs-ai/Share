@@ -27,4 +27,6 @@ const vars = {
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com.jest',
   RAW_GIT_PROXY_URL_NEW: 'https://rawgit.bldrs.dev.jest/model',
   RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.jest/r',
+  // Some test code in Mui will warn without this.
+  NODE_ENV: 'test',
 }

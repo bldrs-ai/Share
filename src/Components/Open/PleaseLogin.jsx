@@ -3,7 +3,7 @@ import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/material/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 
 
 /** @return {ReactElement} */

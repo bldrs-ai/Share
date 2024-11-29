@@ -4,7 +4,7 @@ import Divider from '@mui/material/Divider'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/material/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
@@ -60,7 +60,7 @@ export default function ProfileControl() {
         }
         variant='control'
         placement='bottom'
-        buttonTestId='control-button-profile'
+        dataTestId='control-button-profile'
       />
       <Menu
         elevation={1}
