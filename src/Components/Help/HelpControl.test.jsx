@@ -1,13 +1,13 @@
 import React from 'react'
 import {render, fireEvent} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../../Share.fixture'
-import HelpControl from './HelpControl'
+import HelpControl, {testId} from './HelpControl'
 
 
 describe('HelpControl', () => {
   it('renders the first page of the HelpDialog', () => {
-    const {getByTitle, getByText} = render(<HelpControl/>, {wrapper: StoreRouteThemeCtx})
-    const button = getByTitle('Help')
+    const {getByTestId, getByText} = render(<HelpControl/>, {wrapper: StoreRouteThemeCtx})
+    const button = getByTestId(testId)
     fireEvent.click(button)
     const text = getByText('Study the model using standard sections')
     expect(text).toBeInTheDocument()
@@ -15,7 +15,7 @@ describe('HelpControl', () => {
 
   it('navigates to the next page when the next button is clicked', () => {
     const {getByTestId, getByText} = render(<HelpControl/>, {wrapper: StoreRouteThemeCtx})
-    const button = getByTestId('control-button-help')
+    const button = getByTestId(testId)
     fireEvent.click(button)
     const nextPageButton = getByTestId('Next')
     fireEvent.click(nextPageButton)
