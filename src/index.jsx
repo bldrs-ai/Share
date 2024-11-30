@@ -79,7 +79,6 @@ if (process.env.MSW_IS_ENABLED) {
 if (process.env.NODE_ENV === 'development') {
   new EventSource('/esbuild').addEventListener('change', () => location.reload())
 }
-console.log('process.env.NODE_ENV:', process.env.NODE_ENV)
 
 const root = createRoot(document.getElementById('root'))
 

@@ -1,12 +1,12 @@
 import React, {ReactElement} from 'react'
-import {useAuth0} from '../Auth0/Auth0Proxy'
-import ButtonGroup from '@mui/material/ButtonGroup'
 import Stack from '@mui/material/Stack'
-import NavTreeControl from './NavTree/NavTreeControl'
-import OpenModelControl from './Open/OpenModelControl'
-import SaveModelControl from './Open/SaveModelControl'
-import SearchControl from './Search/SearchControl'
-import VersionsControl from './Versions/VersionsControl'
+import {useAuth0} from '../Auth0/Auth0Proxy'
+import NavTreeControl from '../Components/NavTree/NavTreeControl'
+import OpenModelControl from '../Components/Open/OpenModelControl'
+import SaveModelControl from '../Components/Open/SaveModelControl'
+import SearchBar from '../Components/Search/SearchBar'
+import SearchControl from '../Components/Search/SearchControl'
+import VersionsControl from '../Components/Versions/VersionsControl'
 import useStore from '../store/useStore'
 
 
@@ -16,23 +16,27 @@ import useStore from '../store/useStore'
  * @return {ReactElement}
  */
 export default function ControlsGroup() {
-  // RepositorySlice
-  const modelPath = useStore((state) => state.modelPath)
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isOpenEnabled = useStore((state) => state.isOpenEnabled)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  // RepositorySlice
+  const modelPath = useStore((state) => state.modelPath)
   const {isAuthenticated} = useAuth0()
   return (
-    <Stack direction='column'>
-      <ButtonGroup orientation='horizontal' variant='controls'>
+    <Stack>
+      <Stack direction='row'>
         {isOpenEnabled &&
          <>
            <OpenModelControl/>
-         {isAuthenticated && <SaveModelControl/>}
+           {isAuthenticated && <SaveModelControl/>}
          </>}
         {isSearchEnabled && <SearchControl/>}
-      </ButtonGroup>
+        {isSearchEnabled &&
+         isSearchBarVisible &&
+         <SearchBar placeholder='Search' id='search'/>}
+      </Stack>
       <Stack>
         {isNavTreeEnabled && <NavTreeControl/>}
         {isVersionsEnabled && <VersionsControl/>}

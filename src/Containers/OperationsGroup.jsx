@@ -41,11 +41,11 @@ export default function OperationsGroup() {
         alignItems: 'flex-end',
       }}
     >
-      <Box sx={{pointerEvents: 'auto'}}>
+      <Stack direction='row' sx={{pointerEvents: 'auto'}}>
         {isLoginEnabled && <ProfileControl/>}
         {isAppsEnabled && <AppsControl/>}
         {isShareEnabled && <ShareControl/>}
-      </Box>
+      </Stack>
       <Stack sx={{pointerEvents: 'auto', height: '100%'}}>
         <Divider/>
         {isNotesEnabled && <NotesControl/>}

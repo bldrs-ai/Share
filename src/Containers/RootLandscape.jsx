@@ -1,16 +1,14 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
+import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import AppsSideDrawer from './AppsSideDrawer'
 import BottomBar from './BottomBar'
-import ControlsGroup from '../Components/ControlsGroup'
-import LoadingBackdrop from '../Components/LoadingBackdrop'
+import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersions from './NavTreeAndVersions'
 import NotesAndProperties from './NotesAndProperties'
 import OperationsGroup from './OperationsGroup'
-import SearchBar from '../Components/Search/SearchBar'
-import useStore from '../store/useStore'
 
 
 /**
@@ -21,8 +19,6 @@ import useStore from '../store/useStore'
  * @return {ReactElement}
  */
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
-  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   return (
     <Stack
       direction='row'
@@ -33,7 +29,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
     >
       <Box
         sx={{
-          flexBasis: '10%',
+          flexBasis: '0%',
           flexGrow: 1,
         }}
       >
@@ -51,18 +47,12 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         <Stack
           direction='row'
           justifyContent='space-between'
+          // This pushes bottom bar down
           flexGrow={1}
           sx={{width: '100%'}}
           data-testid='CenterPaneTop'
         >
-          <Stack direction='row' data-testid='ControlsGroupAndSearch'>
-            <ControlsGroup/>
-            <Box sx={{width: '100%'}}>
-              {isSearchEnabled &&
-               isSearchBarVisible &&
-               <SearchBar placeholder='Search' id='search'/>}
-            </Box>
-          </Stack>
+          <ControlsGroup/>
           <OperationsGroup/>
         </Stack>
         <Box
