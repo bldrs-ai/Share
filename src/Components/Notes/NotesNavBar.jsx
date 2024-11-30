@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setParams, removeParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
+import {setParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
 import {removeMarkerUrlParams} from '../Markers/MarkerControl'
@@ -18,7 +18,6 @@ export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
-  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
@@ -46,13 +45,6 @@ export default function NotesNavBar() {
         removeCameraUrlParams()
       }
     }
-  }
-
-
-  /** Hide panel and remove hash state */
-  function onCloseClick() {
-    setIsNotesVisible(false)
-    removeParams(HASH_PREFIX_NOTES)
   }
 
 
@@ -151,7 +143,6 @@ export default function NotesNavBar() {
             />
 
         )}
-        <CloseButton onCloseClick={onCloseClick}/>
       </Box>
     </Box>
   )

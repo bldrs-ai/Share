@@ -1,5 +1,6 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
+import SvgIcon from '@mui/material/SvgIcon'
 import {useTheme} from '@mui/material/styles'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
@@ -9,7 +10,7 @@ import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 export function LogoB() {
   return (
     <ThemeBox>
-      <LogoBIcon className='icon-share'/>
+      <SvgIcon><LogoBIcon className='icon-share'/></SvgIcon>
     </ThemeBox>
   )
 }
@@ -22,14 +23,16 @@ export function LogoBWithDomain() {
   // use secondary contrastText
   return (
     <ThemeBox>
-      <LogoBWithDomainIcon
-        className='icon-share'
-        style={{
-          fill: theme.palette.secondary.contrastText,
-          width: '4em',
-          height: '4em',
-        }}
-      />
+      <SvgIcon>
+        <LogoBWithDomainIcon
+          className='icon-share'
+          style={{
+            fill: theme.palette.secondary.contrastText,
+            width: '4em',
+            height: '4em',
+          }}
+        />
+      </SvgIcon>
     </ThemeBox>
   )
 }

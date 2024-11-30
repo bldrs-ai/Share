@@ -2,26 +2,24 @@ import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Stack from '@mui/material/Stack'
-import useStore from '../store/useStore'
-import AppsControl from './Apps/AppsControl'
-import CameraControl from './Camera/CameraControl'
-import HelpControl from '../Components/Help/HelpControl'
+import AppsControl from '../Components/Apps/AppsControl'
+import CameraControl from '../Components/Camera/CameraControl'
 import MarkerControl from '../Components/Markers/MarkerControl'
-import ImagineControl from './Imagine/ImagineControl'
-import NotesControl from './Notes/NotesControl'
-import ProfileControl from './Profile/ProfileControl'
-import PropertiesControl from './Properties/PropertiesControl'
-import ShareControl from './Share/ShareControl'
+import ImagineControl from '../Components/Imagine/ImagineControl'
+import NotesControl from '../Components/Notes/NotesControl'
+import ProfileControl from '../Components/Profile/ProfileControl'
+import PropertiesControl from '../Components/Properties/PropertiesControl'
+import ShareControl from '../Components/Share/ShareControl'
+import useStore from '../store/useStore'
 
 
 /**
  * OperationsGroup contains tools for profile, sharing, notes, properties and
  * imagine
  *
- * @property {Function} deselectItems deselects currently selected element
  * @return {ReactElement}
  */
-export default function OperationsGroup({deselectItems}) {
+export default function OperationsGroup() {
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const isImagineEnabled = useStore((state) => state.isImagineEnabled)
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
@@ -63,7 +61,6 @@ export default function OperationsGroup({deselectItems}) {
         {isImagineEnabled && <ImagineControl/>}
         {/* Invisible */}
         <CameraControl/>
-        <Box sx={{marginTop: 'auto'}}><HelpControl/></Box>
       </Stack>
     </Stack>
   )

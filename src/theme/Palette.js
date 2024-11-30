@@ -26,6 +26,8 @@ export const day = {
     contrastText: colors.grey.darkest,
     // e.g. for list of items with one active
     active: '#00F0FF',
+    // main, but transparent
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
   },
 
   success: {
@@ -69,6 +71,8 @@ export const night = {
     contrastText: colors.grey.lightest,
     // e.g. for list of items with one active
     active: '#00F0FF',
+    // main, but transparent
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
   },
 
   success: {

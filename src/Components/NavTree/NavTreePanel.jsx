@@ -3,7 +3,7 @@ import TreeView from '@mui/lab/TreeView'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
-import {styled, useTheme} from '@mui/material/styles'
+import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
@@ -47,8 +47,6 @@ export default function NavTreePanel({
 
   const isNavTree = navigationMode === 'spatial-tree'
 
-  const theme = useTheme()
-
   // TODO(pablo): major perf hit?
   useEffect(() => {
     const nodeId = selectedElements[0]
@@ -66,9 +64,13 @@ export default function NavTreePanel({
   return (
     <Panel
       title='Navigation'
-      onCloseClick={() => setIsNavTreeVisible(false)}
-      action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
-      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
+      actions={
+        <Actions
+          navigationMode={navigationMode}
+          setNavigationMode={setNavigationMode}
+        />}
+      onClose={() => setIsNavTreeVisible(false)}
+      data-testid='NavTreePanel'
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
@@ -92,7 +94,6 @@ export default function NavTreePanel({
           'overflowY': 'scroll',
           'overflowX': 'hidden',
           'flexGrow': 1,
-          'backgroundColor': theme.palette.secondary.main,
           '&:focus svg': {
             visibility: 'visible !important',
           },
@@ -108,14 +109,14 @@ export default function NavTreePanel({
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               idToRef={idToRef}
             /> :
-            <TypesNavTree
-              keyId='types-nav-tree-root'
-              model={model}
-              types={elementTypesMap}
-              pathPrefix={pathPrefix}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              idToRef={idToRef}
-            />
+          <TypesNavTree
+            keyId='types-nav-tree-root'
+            model={model}
+            types={elementTypesMap}
+            pathPrefix={pathPrefix}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+            idToRef={idToRef}
+          />
         }
       </TreeView>
     </Panel>
@@ -134,6 +135,15 @@ function Actions({navigationMode, setNavigationMode}) {
       },
     },
   }))
+
+
+  /** Hide panel and remove hash state */
+/*  function onCloseClick() {
+    setIsNotesVisible(false)
+    removeParams(HASH_PREFIX_NOTES)
+  }*/
+
+
   return (
     <StyledToggleButtonGroup
       value={navigationMode}

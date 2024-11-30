@@ -1,11 +1,11 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import Timeline from '@mui/lab/Timeline'
-import TimelineDot from '@mui/lab/TimelineDot'
-import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineConnector from '@mui/lab/TimelineConnector'
 import TimelineContent from '@mui/lab/TimelineContent'
-import TimelineSeparator from '@mui/lab/TimelineSeparator'
+import TimelineDot from '@mui/lab/TimelineDot'
+import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
+import TimelineSeparator from '@mui/lab/TimelineSeparator'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -44,7 +44,7 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
   const shaLength = 40
   const refIsSha = currentRef.length === shaLength
   return (
-    <Timeline data-testid="timeline-list">
+    <Timeline data-testid='timeline-list'>
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
         <NoContent message='Please log into GitHub to use the project timeline'/>)}

@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
@@ -38,23 +39,26 @@ export default function Properties() {
   const propSeparatorBorderOpacity = 0.3
   const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
   return (
-    <Box sx={{
-      'paddingBottom': isMobile ? '80px' : '0px',
-      '& td': {
-        minWidth: '130px',
-        maxWidth: '130px',
-        verticalAlign: 'top',
-        cursor: 'pointer',
-        padding: '3px 0',
-        borderBottom: `.2px solid ${propSeparatorColor}`,
-      },
-      '& table': {
-        tableLayout: 'fixed',
-        width: '100%',
-        overflow: 'hidden',
-        borderSpacing: 0,
-      },
-    }}
+    <Paper
+      elevation={1}
+      sx={{
+        'padding': '0.5em',
+        'paddingBottom': isMobile ? '80px' : '0px',
+        '& td': {
+          minWidth: '130px',
+          maxWidth: '130px',
+          verticalAlign: 'top',
+          cursor: 'pointer',
+          padding: '3px 0',
+          borderBottom: `.2px solid ${propSeparatorColor}`,
+        },
+        '& table': {
+          tableLayout: 'fixed',
+          width: '100%',
+          overflow: 'hidden',
+          borderSpacing: 0,
+        },
+      }}
     >
       {propTable}
       {psetsList && psetsList.length > 0 &&
@@ -62,19 +66,16 @@ export default function Properties() {
           marginTop: '10px',
         }}
         >
-          <Typography variant='body1' sx={{
-            position: 'sticky',
-            top: '0px',
-            zIndex: 10,
-            backgroundColor: theme.palette.secondary.main,
-            textTransform: 'uppercase',
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          <Typography
+            variant='h3'
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
           >
-            Property Sets
+            Property sets
             <Toggle
               checked={expandAll}
               onChange={() => setExpandAll(!expandAll)}
@@ -83,7 +84,7 @@ export default function Properties() {
           {psetsList}
         </Box>
       }
-    </Box>
+    </Paper>
 )
 }
 

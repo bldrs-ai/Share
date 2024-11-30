@@ -5,12 +5,9 @@ import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
-import AboutControl from '../Components/About/AboutControl'
 import {onHash} from '../Components/Camera/CameraControl'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
-import ElementGroup from '../Components/ElementGroup'
 import {useIsMobile} from '../Components/Hooks'
-import LoadingBackdrop from '../Components/LoadingBackdrop'
 import {load} from '../loader/Loader'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
@@ -22,9 +19,7 @@ import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
-import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
-import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
-import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
+import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
@@ -542,7 +537,7 @@ export default function CadView({
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
-    debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
+    debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
     onModelPath()
   }, [modelPath, customViewSettings])
 
@@ -625,7 +620,7 @@ export default function CadView({
   useEffect(() => {
     const isDrawerOpen = isNotesVisible || isAppsVisible
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth}px)` : '100%'
+      viewer.container.style.width = isDrawerOpen ? `calc(100vw - ${sidebarWidth}px)` : '100vw'
       viewer.context.resize()
     }
   }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
@@ -633,40 +628,25 @@ export default function CadView({
 
   const abs = {position: 'absolute'}
   const absTop = {top: 0, ...abs}
-  const absBtm = {bottom: 0, ...abs}
-  const center = {left: '50%', transform: 'translate(-50%)'}
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
-    <Box sx={{...absTop, left: 0, width: '100%', height: '100%', m: 0, p: 0}}>
+    <Box sx={{...absTop, left: 0, width: '100vw', height: '100vh', m: 0, p: 0}}>
       {<ViewerContainer
          data-testid='cadview-dropzone'
          data-model-ready={isModelReady}
          data-is-camera-at-rest={isCameraAtRest}
        />}
-      <Box sx={{...absBtm, left: 0}}><AboutControl/></Box>
       {viewer && (
-        <>
-          <ControlsGroupAndDrawer
-            deselectItems={deselectItems}
-            pathPrefix={pathPrefix}
-            branch={modelPath.branch}
-            selectWithShiftClickEvents={(isShiftKeyDown, expressId) => {
-              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
-            }}
-          />
-
-          <Box sx={{...absBtm, ...center}}>
-            <ElementGroup deselectItems={deselectItems}/>
-          </Box>
-
-          <Box sx={isMobile ? {} : {...absTop, right: 0, pointerEvents: 'none'}}>
-            <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-          </Box>
-        </>
+        <RootLandscape
+          pathPrefix={pathPrefix}
+          branch={modelPath.branch}
+          selectWithShiftClickEvents={(isShiftKeyDown, expressId) => {
+            elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
+          }}
+          deselectItems={deselectItems}
+        />
       )}
-      <AlertDialogAndSnackbar/>
-      <LoadingBackdrop/>
     </Box>
   )
 }

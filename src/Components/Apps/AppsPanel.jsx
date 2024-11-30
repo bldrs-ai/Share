@@ -1,8 +1,8 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../../store/useStore'
 import {BackButton, CloseButton, FullScreenButton} from '../Buttons'
-import PanelWithTitle from '../SideDrawer/PanelWithTitle'
+import Panel from '../SideDrawer/Panel'
 import {AppsListing, AppIFrame} from './AppsListing'
 
 
@@ -10,13 +10,13 @@ import {AppsListing, AppIFrame} from './AppsListing'
 export default function AppsPanel() {
   const toggleAppsIsVisible = useStore((state) => state.toggleAppsIsVisible)
   return (
-    <PanelWithTitle
-      title='APPS'
-      controlsGroup={<CloseButton onCloseClick={toggleAppsIsVisible}/>}
-      data-test-id='AppsPanel'
+    <Panel
+      title='Apps'
+      onClose={toggleAppsIsVisible}
+      data-testid='AppsPanel'
     >
       <AppsListing/>
-    </PanelWithTitle>
+    </Panel>
   )
 }
 
@@ -26,17 +26,19 @@ export function AppPreviewPanel({item}) {
   const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
   const setSelectedApp = useStore((state) => state.setSelectedApp)
   return (
-    <PanelWithTitle title={item.appName}
+    <Panel
+      title={item.appName}
       iconSrc={item.icon}
       controlsGroup={
-        <Box>
+        <ButtonGroup>
           <BackButton onClick={() => setSelectedApp(null)}/>
           <FullScreenButton onClick={() => window.open(item.action, '_blank')}/>
           <CloseButton onClick={toggleAppsDrawer}/>
-        </Box>
+        </ButtonGroup>
       }
+      data-testid='AppsPreviewPanel'
     >
       <AppIFrame item={item}/>
-    </PanelWithTitle>
+    </Panel>
   )
 }

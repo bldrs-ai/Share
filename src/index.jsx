@@ -1,5 +1,5 @@
 import {CypressHistorySupport} from 'cypress-react-router'
-import React from 'react'
+import React, {ReactElement, StrictMode} from 'react'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
 import {Helmet, HelmetProvider} from 'react-helmet-async'
@@ -16,6 +16,10 @@ import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
+import '@fontsource/roboto/300.css'
+import '@fontsource/roboto/400.css'
+import '@fontsource/roboto/500.css'
+import '@fontsource/roboto/700.css'
 
 
 Sentry.init({
@@ -75,23 +79,39 @@ if (process.env.MSW_IS_ENABLED) {
 if (process.env.NODE_ENV === 'development') {
   new EventSource('/esbuild').addEventListener('change', () => location.reload())
 }
+console.log('process.env.NODE_ENV:', process.env.NODE_ENV)
 
 const root = createRoot(document.getElementById('root'))
 
+
+/** @return {ReactElement} The app with its context. */
+function AppWithContext() {
+  return (
+    <FlagsProvider value={flags}>
+      <HelmetProvider>
+        <Helmet>
+          <title>Bldrs.ai</title>
+        </Helmet>
+        <BrowserRouter>
+          <CypressHistorySupport/>
+          <Auth0ProviderWithHistory>
+            <BaseRoutes/>
+          </Auth0ProviderWithHistory>
+        </BrowserRouter>
+      </HelmetProvider>
+    </FlagsProvider>
+  )
+}
+
+// In prod use Sentry error tracking.  In local dev and testing use StrictMode.
 root.render(
+  process.env.NODE_ENV === 'production' ? (
     <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
-      <FlagsProvider value={flags}>
-        <HelmetProvider>
-          <Helmet>
-            <title>Bldrs.ai</title>
-          </Helmet>
-          <BrowserRouter>
-            <CypressHistorySupport/>
-            <Auth0ProviderWithHistory>
-              <BaseRoutes/>
-            </Auth0ProviderWithHistory>
-          </BrowserRouter>
-        </HelmetProvider>
-      </FlagsProvider>
-    </Sentry.ErrorBoundary>,
+      <AppWithContext/>
+    </Sentry.ErrorBoundary>
+  ) : (
+    <StrictMode>
+      <AppWithContext/>
+    </StrictMode>
+  )
 )

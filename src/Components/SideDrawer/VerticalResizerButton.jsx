@@ -10,19 +10,19 @@ import {isNumber} from '../../utils/strings'
 /**
  * Grab button to for resizing SideDrawer vertically.
  *
- * @property {useRef} sidebarRef sidebar ref object.
+ * @property {useRef} drawerRef drawer ref object.
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnTop resizer is on the top.
  * @return {ReactElement}
  */
 export default function VerticalResizerButton({
-  sidebarRef,
+  drawerRef,
   thickness = 10,
   isOnTop = true,
 }) {
-  const sidebarHeight = useStore((state) => state.sidebarHeight)
-  const sidebarHeightInitial = useStore((state) => state.sidebarHeightInitial)
-  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
+  const drawerHeight = useStore((state) => state.drawerHeight)
+  const drawerHeightInitial = useStore((state) => state.drawerHeightInitial)
+  const setDrawerHeight = useStore((state) => state.setDrawerHeight)
 
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -54,40 +54,40 @@ export default function VerticalResizerButton({
       (mouseMoveEvent) => {
         if (isResizing) {
           if (isOnTop) {
-            expansionSidebarHeight =
-              sidebarRef.current.getBoundingClientRect().bottom -
+            expansionDrawerHeight =
+              drawerRef.current.getBoundingClientRect().bottom -
               mouseMoveEvent.clientY +
               (thickness * half)
           } else {
-            expansionSidebarHeight =
+            expansionDrawerHeight =
               mouseMoveEvent.clientX -
-              sidebarRef.current.getBoundingClientRect().top -
+              drawerRef.current.getBoundingClientRect().top -
               (thickness * half)
           }
-          if (expansionSidebarHeight < 0) {
-            expansionSidebarHeight = 0
+          if (expansionDrawerHeight < 0) {
+            expansionDrawerHeight = 0
           }
-          if (expansionSidebarHeight > window.innerHeight) {
-            expansionSidebarHeight = window.innerHeight
+          if (expansionDrawerHeight > window.innerHeight) {
+            expansionDrawerHeight = window.innerHeight
           }
-          if (expansionSidebarHeight < thickness) {
-            expansionSidebarHeight = thickness
+          if (expansionDrawerHeight < thickness) {
+            expansionDrawerHeight = thickness
           }
-          setSidebarHeight(expansionSidebarHeight)
+          setDrawerHeight(expansionDrawerHeight)
           setIsExpanded(true)
         }
       },
-      [isResizing, isOnTop, setSidebarHeight, sidebarRef, thickness],
+      [isResizing, isOnTop, setDrawerHeight, drawerRef, thickness],
   )
 
 
   useEffect(() => {
     const onWindowResize = (e) => {
-      if (e.target.innerHeight < expansionSidebarHeight) {
-        expansionSidebarHeight = e.target.innerHeight
+      if (e.target.innerHeight < expansionDrawerHeight) {
+        expansionDrawerHeight = e.target.innerHeight
       }
-      if (e.target.innerHeight < sidebarHeight) {
-        setSidebarHeight(e.target.innerHeight)
+      if (e.target.innerHeight < drawerHeight) {
+        setDrawerHeight(e.target.innerHeight)
       }
     }
     window.addEventListener('resize', onWindowResize)
@@ -98,7 +98,7 @@ export default function VerticalResizerButton({
       window.removeEventListener('mousemove', resize)
       window.removeEventListener('mouseup', stopResizing)
     }
-  }, [resize, setSidebarHeight, sidebarHeight, stopResizing])
+  }, [resize, setDrawerHeight, drawerHeight, stopResizing])
 
 
   useEffect(() => {
@@ -140,20 +140,20 @@ export default function VerticalResizerButton({
       resizer.removeEventListener('touchend', onTouchEnd)
       resizer.removeEventListener('touchmove', onTouchMove)
     }
-  }, [resize, setSidebarHeight, sidebarHeight, startResizing, stopResizing])
+  }, [resize, setDrawerHeight, drawerHeight, startResizing, stopResizing])
 
 
   useEffect(() => {
     if (isExpanded) {
-      setSidebarHeight(expansionSidebarHeight)
+      setDrawerHeight(expansionDrawerHeight)
     } else {
       const defaultHeight =
-        isNumber(sidebarHeightInitial) ?
-        Math.min(window.innerHeight, sidebarHeightInitial) :
-        sidebarHeightInitial
-      setSidebarHeight(defaultHeight)
+        isNumber(drawerHeightInitial) ?
+        Math.min(window.innerHeight, drawerHeightInitial) :
+        drawerHeightInitial
+      setDrawerHeight(defaultHeight)
     }
-  }, [isExpanded, setSidebarHeight, sidebarHeightInitial])
+  }, [isExpanded, setDrawerHeight, drawerHeightInitial])
 
 
   return (
@@ -209,4 +209,4 @@ export default function VerticalResizerButton({
 }
 
 
-let expansionSidebarHeight = window.innerHeight
+let expansionDrawerHeight = window.innerHeight

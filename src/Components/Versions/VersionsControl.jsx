@@ -20,7 +20,7 @@ export default function VersionsControl() {
       isDialogDisplayed={isVersionsVisible}
       setIsDialogDisplayed={setIsVersionsVisible}
       hashPrefix={HASH_PREFIX_VERSIONS}
-      placement='bottom'
+      placement='right'
     />
   )
 }

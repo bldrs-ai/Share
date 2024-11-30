@@ -10,10 +10,12 @@ export default function LoadingBackdrop() {
   const isModelLoading = useStore((state) => state.isModelLoading)
   const theme = useTheme()
   return (
-    <Backdrop
-      open={isModelLoading}
-      sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
-    >
-      <CircularProgress color='inherit'/>
-    </Backdrop>)
+    theme &&
+      <Backdrop
+        open={isModelLoading}
+        sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
+      >
+        <CircularProgress color='inherit'/>
+      </Backdrop>
+  )
 }

@@ -9,22 +9,21 @@ import {isNumber} from '../../utils/strings'
 /**
  * Grab button to for resizing SideDrawer horizontally.
  *
- * @property {useRef} sidebarRef sidebar ref object.
- * @property {Function} setSidebarWidth sidebar width changing button.
+ * @property {useRef} drawerRef drawer ref object.
+ * @property {Function} setDrawerWidth drawer width changing button.
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnLeft resizer is on the left.
- * @property {string} sidebarWidth sidebar width (...px, ...vw).
+ * @property {string} drawerWidth drawer width (...px, ...vw).
  * @return {React.Component}
  */
 export default function HorizonResizerButton({
-  sidebarRef,
+  drawerRef,
   thickness = 100,
   isOnLeft = true,
+  drawerWidth,
+  drawerWidthInitial,
+  setDrawerWidth,
 }) {
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
-  const sidebarWidthInitial = useStore((state) => state.sidebarWidthInitial)
-  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
-
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -36,60 +35,49 @@ export default function HorizonResizerButton({
   const gripSize = thickness * gripButtonRatio
   const horizonPadding = (thickness - gripSize) / 2
 
-  const startResizing = useCallback(() => {
-    setIsResizing(true)
-  }, [])
-
-
-  const stopResizing = useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
-
-  const onResizerDblTap = useDoubleTap((e) => {
-    setIsExpanded(!isExpanded)
-  })
-
+  const startResizing = useCallback(() => setIsResizing(true), [])
+  const stopResizing = useCallback(() => setIsResizing(false), [])
+  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
 
   const half = 0.5
   const resize = useCallback(
       (mouseMoveEvent) => {
         if (isResizing) {
           if (isOnLeft) {
-            expansionSidebarWidth =
-              sidebarRef.current.getBoundingClientRect().right -
+            expansionDrawerWidth =
+              drawerRef.current.getBoundingClientRect().right -
               mouseMoveEvent.clientX +
               (thickness * half)
           } else {
-            expansionSidebarWidth =
+            expansionDrawerWidth =
               mouseMoveEvent.clientX -
-              sidebarRef.current.getBoundingClientRect().left -
+              drawerRef.current.getBoundingClientRect().left -
               (thickness * half)
           }
-          if (expansionSidebarWidth < 0) {
-            expansionSidebarWidth = 0
+          if (expansionDrawerWidth < 0) {
+            expansionDrawerWidth = 0
           }
-          if (expansionSidebarWidth > window.innerWidth) {
-            expansionSidebarWidth = window.innerWidth
+          if (expansionDrawerWidth > window.innerWidth) {
+            expansionDrawerWidth = window.innerWidth
           }
-          if (expansionSidebarWidth < thickness) {
-            expansionSidebarWidth = thickness
+          if (expansionDrawerWidth < thickness) {
+            expansionDrawerWidth = thickness
           }
-          setSidebarWidth(expansionSidebarWidth)
+          setDrawerWidth(expansionDrawerWidth)
           setIsExpanded(true)
         }
       },
-      [isResizing, isOnLeft, setSidebarWidth, sidebarRef, thickness],
+      [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
   )
 
 
   useEffect(() => {
     const onWindowResize = (e) => {
-      if (e.target.innerWidth < expansionSidebarWidth) {
-        expansionSidebarWidth = e.target.innerWidth
+      if (e.target.innerWidth < expansionDrawerWidth) {
+        expansionDrawerWidth = e.target.innerWidth
       }
-      if (e.target.innerWidth < sidebarWidth) {
-        setSidebarWidth(e.target.innerWidth)
+      if (e.target.innerWidth < drawerWidth) {
+        setDrawerWidth(e.target.innerWidth)
       }
     }
     window.addEventListener('resize', onWindowResize)
@@ -100,7 +88,7 @@ export default function HorizonResizerButton({
       window.removeEventListener('mousemove', resize)
       window.removeEventListener('mouseup', stopResizing)
     }
-  }, [resize, setSidebarWidth, sidebarWidth, stopResizing])
+  }, [resize, setDrawerWidth, drawerWidth, stopResizing])
 
 
   useEffect(() => {
@@ -142,20 +130,21 @@ export default function HorizonResizerButton({
       resizer.removeEventListener('touchend', onTouchEnd)
       resizer.removeEventListener('touchmove', onTouchMove)
     }
-  }, [resize, setSidebarWidth, sidebarWidth, startResizing, stopResizing])
+  }, [resize, setDrawerWidth, drawerWidth, startResizing, stopResizing])
 
 
+  // Double-click on resizer switches to previous width
   useEffect(() => {
     if (isExpanded) {
-      setSidebarWidth(expansionSidebarWidth)
+      setDrawerWidth(expansionDrawerWidth)
     } else {
-      const defaultWidth =
-        isNumber(sidebarWidthInitial) ?
-        Math.min(window.innerWidth, sidebarWidthInitial) :
-        sidebarWidthInitial
-      setSidebarWidth(defaultWidth)
+      const width =
+            isNumber(drawerWidthInitial) ?
+            Math.min(window.innerWidth, drawerWidthInitial) :
+            drawerWidthInitial
+      setDrawerWidth(width)
     }
-  }, [isExpanded, sidebarWidthInitial, setSidebarWidth])
+  }, [isExpanded, drawerWidthInitial, setDrawerWidth])
 
 
   return (
@@ -188,7 +177,7 @@ export default function HorizonResizerButton({
           cursor: 'col-resize',
         }}
         ref={resizerRef}
-        data-testid="x_resizer"
+        data-testid='x_resizer'
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
@@ -210,4 +199,4 @@ export default function HorizonResizerButton({
 }
 
 
-let expansionSidebarWidth = window.innerWidth
+let expansionDrawerWidth = window.innerWidth

@@ -1,12 +1,9 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import Divider from '@mui/material/Divider'
-import {useTheme} from '@mui/material/styles'
 import useStore from '../store/useStore'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
-import {hexToRgba} from '../utils/color'
 
 
 /**
@@ -15,15 +12,24 @@ import {hexToRgba} from '../utils/color'
  * @return {ReactElement}
  */
 export default function NotesAndProperties() {
+  const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
-  const isDrawerOpen = isNotesVisible === true || isPropertiesVisible === true
-  const isDividerVisible = isNotesVisible && isPropertiesVisible
-  const theme = useTheme()
-  const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
+  const isDrawerVisible = isNotesVisible === true || isPropertiesVisible === true
+
+  const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
+  const rightDrawerWidthInitial = useStore((state) => state.rightDrawerWidthInitial)
+  const setRightDrawerWidth = useStore((state) => state.setRightDrawerWidth)
+
   return (
-    <SideDrawer isDrawerOpen={isDrawerOpen}>
+    <SideDrawer
+      isDrawerVisible={isDrawerVisible}
+      drawerWidth={rightDrawerWidth}
+      drawerWidthInitial={rightDrawerWidthInitial}
+      setDrawerWidth={setRightDrawerWidth}
+      dataTestId='RightDrawer'
+    >
       <Box
         sx={{
           display: isNotesVisible ? 'block' : 'none',
@@ -31,18 +37,21 @@ export default function NotesAndProperties() {
           overflowX: 'hidden',
           overflowY: 'auto',
         }}
-        data-test-id='NotesAndProperties'
+        data-testid='NotesAndProperties'
       >
-        {isNotesVisible && <NotesPanel/>}
+        {isNotesEnabled &&
+         isNotesVisible &&
+         <NotesPanel/>}
       </Box>
-      {isDividerVisible && <Divider sx={{borderColor: borderColor}}/>}
       <Box
         sx={{
           display: isPropertiesVisible ? 'block' : 'none',
           height: isNotesVisible ? `50%` : '100%',
         }}
       >
-        {isPropertiesVisible && <PropertiesPanel/>}
+        {isPropertiesEnabled &&
+         isPropertiesVisible &&
+         <PropertiesPanel/>}
       </Box>
     </SideDrawer>
   )

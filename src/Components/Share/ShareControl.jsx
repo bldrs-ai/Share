@@ -15,8 +15,7 @@ import Dialog from '../Dialog'
 import Toggle from '../Toggle'
 import {HASH_PREFIX_SHARE} from './hashState'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import ShareIcon from '@mui/icons-material/Share'
-import CopyIcon from '../../assets/icons/Copy.svg'
+import ShareIcon from '@mui/icons-material/ShareOutlined'
 
 
 /**
@@ -119,7 +118,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='Copy Link'
-      actionIcon={<CopyIcon className='icon-share'/>}
+      actionIcon={<ContentCopyIcon className='icon-share'/>}
       actionCb={onCopy}
     >
       <Stack spacing={1}>

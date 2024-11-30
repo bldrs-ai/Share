@@ -15,9 +15,9 @@ describe('UI slice', () => {
   it('Set Drawer State', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
-      result.current.setIsSideDrawerVisible(true)
+      result.current.setIsSideDrawerEnabled(true)
     })
-    expect(result.current.isSideDrawerVisible).toEqual(true)
+    expect(result.current.isSideDrawerEnabled).toEqual(true)
   })
 })
 

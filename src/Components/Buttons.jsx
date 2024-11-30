@@ -36,7 +36,6 @@ export function TooltipIconButton({
   children,
   enabled = true,
   selected = false,
-  aboutInfo = true,
   color,
   size,
   variant,
@@ -45,15 +44,15 @@ export function TooltipIconButton({
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
   const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
-  const [openLocal, setOpenLocal] = useState(false)
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   // This moves the tooltip close to the icon instead of edge of button, which
   // has a large margin.  Just eyeballed.
   const offset = -15
   return (
     <Tooltip
-      open={isHelpTooltipsVisible || openLocal}
-      onClose={() => setOpenLocal(false)}
-      onOpen={() => setOpenLocal(aboutInfo)}
+      open={isHelpTooltipsVisible || isTooltipVisible}
+      onClose={() => setIsTooltipVisible(false)}
+      onOpen={() => setIsTooltipVisible(true)}
       title={title}
       describeChild
       placement={placement}
@@ -88,7 +87,6 @@ export function TooltipIconButton({
         }}
       >
         {icon}
-        {children && children}
       </ToggleButton>
     </Tooltip>
   )
@@ -116,19 +114,20 @@ export function ControlButton({
 }) {
   assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
   return (
-    <TooltipIconButton
-      title={title}
-      onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
-      icon={icon}
-      selected={isDialogDisplayed}
-      variant='control'
-      color='success'
-      size='small'
-      dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
-      {...props}
-    >
+    <>
+      <TooltipIconButton
+        title={title}
+        onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
+        icon={icon}
+        selected={isDialogDisplayed}
+        variant='control'
+        color='success'
+        size='small'
+        dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
+        {...props}
+      />
       {children}
-    </TooltipIconButton>
+    </>
   )
 }
 

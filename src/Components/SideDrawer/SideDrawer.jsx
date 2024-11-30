@@ -11,33 +11,44 @@ import VerticalResizerButton from './VerticalResizerButton'
 /**
  * Container for Notes and Properties
  *
- * @property {boolean} isDrawerOpen State toggle for drawer state
+ * @property {boolean} isDrawerVisible State toggle for drawer state
  * @property {Array<ReactElement>} children Drawer content
  * @return {ReactElement}
  */
-export default function SideDrawer({isDrawerOpen, children}) {
-  const sidebarHeight = useStore((state) => state.sidebarHeight)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
+export default function SideDrawer({
+  isDrawerVisible,
+  drawerWidth,
+  drawerWidthInitial,
+  setDrawerWidth,
+  isResizeOnLeft = true,
+  dataTestId,
+  children,
+}) {
+  // Only one bottom drawer, so accessed here instead of passed in
+  const drawerHeight = useStore((state) => state.drawerHeight)
+  const drawerHeightInitial = useStore((state) => state.drawerHeightInitial)
+  const setDrawerHeight = useStore((state) => state.setDrawerHeight)
   const isMobile = useIsMobile()
   const theme = useTheme()
-  const sidebarRef = useRef(null)
+  const drawerRef = useRef(null)
   const resizeButtonThickness = 10
+  const resizeMargin = isResizeOnLeft ? '0 0 0 1em' : '0 1em 0 0'
   return (
     <Box
       sx={Object.assign({
-        display: isDrawerOpen ? 'flex' : 'none',
+        display: isDrawerVisible ? 'flex' : 'none',
         flexDirection: 'row',
+        flexGrow: 1,
       }, isMobile ? {
         width: '100%',
-        height: sidebarHeight,
+        height: drawerHeight,
       } : {
         top: 0,
-        right: 0,
-        width: sidebarWidth,
+        width: drawerWidth,
         height: '100vh',
         minWidth: '8px',
-        maxWidth: '100vw',
       })}
+      data-testid={dataTestId}
     >
       <Paper
         sx={{
@@ -46,19 +57,36 @@ export default function SideDrawer({isDrawerOpen, children}) {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
-          background: theme.palette.secondary.main,
+          backgroundColor: theme.palette.secondary.backgroundColor,
         }}
-        ref={sidebarRef}
+        ref={drawerRef}
       >
-        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} thickness={resizeButtonThickness} isOnLeft={true}/>}
-        {isMobile && <VerticalResizerButton sidebarRef={sidebarRef} thickness={resizeButtonThickness} isOnTop={true}/>}
+        {!isMobile &&
+         <HorizonResizerButton
+           drawerRef={drawerRef}
+           thickness={resizeButtonThickness}
+           isOnLeft={isResizeOnLeft}
+           drawerWidth={drawerWidth}
+           drawerWidthInitial={drawerWidthInitial}
+           setDrawerWidth={setDrawerWidth}
+         />}
+        {isMobile &&
+         <VerticalResizerButton
+           drawerRef={drawerRef}
+           thickness={resizeButtonThickness}
+           isOnTop={true}
+           drawerHeight={drawerHeight}
+           drawerHeightInitial={drawerHeightInitial}
+           setDrawerHeight={setDrawerHeight}
+         />}
         <Box
           sx={{
             width: '100%',
-            margin: '0 0 0 1em',
+            margin: resizeMargin,
             overflow: 'hidden',
+            padding: isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em',
           }}
-          data-test-id='SideDrawer-OverflowHidden'
+          data-testid='SideDrawer-OverflowHidden'
         >
           {children}
         </Box>
