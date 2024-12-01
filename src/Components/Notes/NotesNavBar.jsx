@@ -1,11 +1,9 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
-import {CloseButton, TooltipIconButton} from '../Buttons'
+import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
-import {removeMarkerUrlParams} from '../Markers/MarkerControl'
-import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from './hashState'
+import {navBackToIssue, setHashParams} from './hashState'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -37,7 +35,7 @@ export default function NotesNavBar() {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
-      setParams(HASH_PREFIX_NOTES, {id: note.id})
+      setHashParams({id: note.id})
       if (note.url) {
         setCameraFromParams(note.url)
         addCameraUrlParams()
@@ -75,13 +73,7 @@ export default function NotesNavBar() {
              setSelectedPlaceMarkId(null)
              setSelectedNoteId(null)
              setSelectedPlaceMarkInNoteIdData(null)
-             const _location = window.location
-             batchUpdateHash(_location, [
-              (hash) => removeMarkerUrlParams({hash}), // Remove marker params
-              (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes params
-              (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment params
-              (hash) => setParamsToHash(hash, HASH_PREFIX_NOTES), // Add notes params
-            ])
+             navBackToIssue()
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'

@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
 import Button from '@mui/material/Button'
-import Box from '@mui/material/Box'
 import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -39,17 +38,19 @@ export default function Dialog({
       onClose={onCloseClick}
       data-testid={props['data-testid'] || 'mui-dialog'}
     >
-      <Box
+      <DialogTitle
+        variant='h1'
         sx={{
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
+          gap: '1em',
         }}
       >
         {headerIcon && headerIcon}
         {headerText}
-      </Box>
+      </DialogTitle>
       <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
       <DialogContent>{children}</DialogContent>
       {actionTitle === undefined ? null :

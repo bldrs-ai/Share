@@ -4,6 +4,7 @@ import Paper from '@mui/material/Paper'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
 
@@ -12,6 +13,11 @@ import VerticalResizerButton from './VerticalResizerButton'
  * Container for Notes and Properties
  *
  * @property {boolean} isDrawerVisible State toggle for drawer state
+ * @property {number} drawerWidth In pixels
+ * @property {number} drawerWidthInitial In pixels
+ * @property {Function} setDrawerWidth In pixels
+ * @property {boolean} [isResizeOnLeft] Position of the resize handle. Default: true
+ * @property {string} [dataTestId] data-testid tag
  * @property {Array<ReactElement>} children Drawer content
  * @return {ReactElement}
  */
@@ -20,10 +26,11 @@ export default function SideDrawer({
   drawerWidth,
   drawerWidthInitial,
   setDrawerWidth,
-  isResizeOnLeft = true,
-  dataTestId,
   children,
+  isResizeOnLeft = true,
+  dataTestId = 'SideDrawer',
 }) {
+  assertDefined(isDrawerVisible, drawerWidth, drawerWidthInitial, setDrawerWidth, isResizeOnLeft, dataTestId, children)
   // Only one bottom drawer, so accessed here instead of passed in
   const drawerHeight = useStore((state) => state.drawerHeight)
   const drawerHeightInitial = useStore((state) => state.drawerHeightInitial)

@@ -1,16 +1,13 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import Divider from '@mui/material/Divider'
-import {useTheme} from '@mui/material/styles'
 import useStore from '../store/useStore'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
-import {hexToRgba} from '../utils/color'
 
 
 /**
- * Container for NavTree and Versions
+ * Drawer for NavTree and Versions
  *
  * @return {ReactElement}
  */
@@ -32,15 +29,11 @@ export default function({
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const isDrawerVisible = isNavTreeVisible === true || isVersionsVisible === true
-  const isDividerVisible = isNavTreeVisible && isVersionsVisible
 
   const leftDrawerWidth = useStore((state) => state.leftDrawerWidth)
   const leftDrawerWidthInitial = useStore((state) => state.leftDrawerWidthInitial)
   const setLeftDrawerWidth = useStore((state) => state.setLeftDrawerWidth)
 
-  const theme = useTheme()
-  const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
   return (
     <SideDrawer
       isDrawerVisible={isDrawerVisible}
@@ -48,7 +41,7 @@ export default function({
       drawerWidthInitial={leftDrawerWidthInitial}
       setDrawerWidth={setLeftDrawerWidth}
       isResizeOnLeft={false}
-      dataTestId='LeftDrawer'
+      dataTestId='NavTreeAndVersionsDrawer'
     >
       <Box
         sx={{
@@ -57,7 +50,7 @@ export default function({
           overflowX: 'hidden',
           overflowY: 'auto',
         }}
-        data-testid='NavTreeAndVersions'
+        data-testid='NavTreeContainer'
       >
         {isNavTreeEnabled &&
          isNavTreeVisible &&
@@ -75,12 +68,12 @@ export default function({
            selectWithShiftClickEvents={selectWithShiftClickEvents}
          />}
       </Box>
-      {isDividerVisible && <Divider sx={{borderColor: borderColor}}/>}
       <Box
         sx={{
           display: isVersionsVisible ? 'block' : 'none',
           height: isNavTreeVisible ? `50%` : '100%',
         }}
+        data-testid='VersionsContainer'
       >
         {isVersionsEnabled &&
          (modelPath.repo !== undefined) &&

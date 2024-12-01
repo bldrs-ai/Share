@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useMemo, useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -11,6 +11,7 @@ import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ListIcon from '@mui/icons-material/List'
+import {removeHashParams} from './hashState'
 import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
 
@@ -27,7 +28,7 @@ export default function NavTreePanel({
   pathPrefix,
   selectWithShiftClickEvents,
 }) {
-  assertDefined(...arguments)
+  assertDefined(model, pathPrefix, selectWithShiftClickEvents)
   const defaultExpandedElements = useStore((state) => state.defaultExpandedElements)
   const defaultExpandedTypes = useStore((state) => state.defaultExpandedTypes)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
@@ -42,23 +43,14 @@ export default function NavTreePanel({
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const idToRef = {}
-
   const isNavTree = navigationMode === 'spatial-tree'
 
-  // TODO(pablo): major perf hit?
-  useEffect(() => {
-    const nodeId = selectedElements[0]
-    if (nodeId) {
-      const ref = idToRef[nodeId]
-      if (typeof ref?.current?.scrollIntoView === 'function') {
-        ref?.current?.scrollIntoView({
-          block: 'center',
-        })
-      }
-    }
-  }, [selectedElements, idToRef])
+
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsNavTreeVisible(false)
+    removeHashParams()
+  }
 
 
   return (
@@ -69,7 +61,7 @@ export default function NavTreePanel({
           navigationMode={navigationMode}
           setNavigationMode={setNavigationMode}
         />}
-      onClose={() => setIsNavTreeVisible(false)}
+      onClose={onClose}
       data-testid='NavTreePanel'
     >
       <TreeView
@@ -107,7 +99,6 @@ export default function NavTreePanel({
               element={rootElement}
               pathPrefix={pathPrefix}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
-              idToRef={idToRef}
             /> :
           <TypesNavTree
             keyId='types-nav-tree-root'
@@ -115,7 +106,6 @@ export default function NavTreePanel({
             types={elementTypesMap}
             pathPrefix={pathPrefix}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
-            idToRef={idToRef}
           />
         }
       </TreeView>
@@ -135,13 +125,6 @@ function Actions({navigationMode, setNavigationMode}) {
       },
     },
   }))
-
-
-  /** Hide panel and remove hash state */
-/*  function onCloseClick() {
-    setIsNotesVisible(false)
-    removeParams(HASH_PREFIX_NOTES)
-  }*/
 
 
   return (

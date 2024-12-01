@@ -6,8 +6,8 @@ import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import AppsSideDrawer from './AppsSideDrawer'
 import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
-import NavTreeAndVersions from './NavTreeAndVersions'
-import NotesAndProperties from './NotesAndProperties'
+import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
+import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 import OperationsGroup from './OperationsGroup'
 
 
@@ -33,7 +33,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           flexGrow: 1,
         }}
       >
-        <NavTreeAndVersions
+        <NavTreeAndVersionsDrawer
           pathPrefix={pathPrefix}
           branch={branch}
           selectWithShiftClickEvents={selectWithShiftClickEvents}
@@ -67,7 +67,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         </Box>
       </Stack>
       <Stack direction='row' style={{pointerEvents: 'auto'}} data-testid='RightPane'>
-        <NotesAndProperties/>
+        <NotesAndPropertiesDrawer/>
         <AppsSideDrawer/>
       </Stack>
     </Stack>

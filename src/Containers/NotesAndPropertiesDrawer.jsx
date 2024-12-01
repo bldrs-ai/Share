@@ -7,11 +7,11 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
 
 
 /**
- * Container for Notes and Properties
+ * Drawer for Notes and Properties
  *
  * @return {ReactElement}
  */
-export default function NotesAndProperties() {
+export default function NotesAndPropertiesDrawer() {
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
@@ -28,7 +28,7 @@ export default function NotesAndProperties() {
       drawerWidth={rightDrawerWidth}
       drawerWidthInitial={rightDrawerWidthInitial}
       setDrawerWidth={setRightDrawerWidth}
-      dataTestId='RightDrawer'
+      dataTestId='NotesAndPropertiesDrawer'
     >
       <Box
         sx={{
@@ -37,7 +37,7 @@ export default function NotesAndProperties() {
           overflowX: 'hidden',
           overflowY: 'auto',
         }}
-        data-testid='NotesAndProperties'
+        data-testid='NotesPanelContainer'
       >
         {isNotesEnabled &&
          isNotesVisible &&
@@ -48,6 +48,7 @@ export default function NotesAndProperties() {
           display: isPropertiesVisible ? 'block' : 'none',
           height: isNotesVisible ? `50%` : '100%',
         }}
+        data-testid='PropertiesPanelContainer'
       >
         {isPropertiesEnabled &&
          isPropertiesVisible &&

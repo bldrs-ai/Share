@@ -112,5 +112,5 @@ root.render(
     <StrictMode>
       <AppWithContext/>
     </StrictMode>
-  )
+  ),
 )

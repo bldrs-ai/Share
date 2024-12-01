@@ -7,29 +7,37 @@ import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 
 
 /** @return {ReactElement} */
-export function LogoB() {
+export function LogoB({...props}) {
   return (
     <ThemeBox>
-      <SvgIcon><LogoBIcon className='icon-share'/></SvgIcon>
+      <SvgIcon
+        fontSize='large'
+        titleAccess='BLDRS.AI'
+        {...props}
+      >
+        <LogoBIcon className='icon-share'/>
+      </SvgIcon>
     </ThemeBox>
   )
 }
 
 
 /** @return {ReactElement} */
-export function LogoBWithDomain() {
+export function LogoBWithDomain({...props}) {
   const theme = useTheme()
   // We're currently only showing Logo in dialogs, etc. so
   // use secondary contrastText
   return (
     <ThemeBox>
-      <SvgIcon>
+      <SvgIcon
+        fontSize='large'
+        titleAccess='BLDRS.AI'
+        {...props}
+      >
         <LogoBWithDomainIcon
           className='icon-share'
           style={{
             fill: theme.palette.secondary.contrastText,
-            width: '4em',
-            height: '4em',
           }}
         />
       </SvgIcon>

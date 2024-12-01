@@ -1,19 +1,21 @@
 import React from 'react'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import {useIsMobile} from '../Components/Hooks'
+import {TITLE_NOTES} from '../Components/Notes/NotesPanel'
+import {TITLE as TITLE_PROPS} from '../Components/Properties/PropertiesPanel'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
-import NotesAndProperties from './NotesAndProperties'
+import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 
 
 describe('NotesAndProperties', () => {
   it('properties', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {findByText} = render(<ShareMock><NotesAndProperties/></ShareMock>)
+    const {findByText} = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
     await act(() => {
       result.current.setIsPropertiesVisible(true)
     })
-    expect(await findByText('PROPERTIES')).toBeVisible()
+    expect(await findByText(TITLE_PROPS)).toBeVisible()
 
     // reset the store
     await act(() => {
@@ -25,20 +27,20 @@ describe('NotesAndProperties', () => {
   it('mobile vertical resizing', async () => {
     const mobileHook = renderHook(() => useIsMobile())
     const storeHook = renderHook(() => useStore((state) => state))
-    const notesAndPropsRender = render(<ShareMock><NotesAndProperties/></ShareMock>)
+    const notesAndPropsRender = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
     await act(() => {
       storeHook.result.current.toggleIsNotesVisible()
-      storeHook.result.current.setIsSideDrawerVisible(true)
     })
-    expect(await notesAndPropsRender.findByText('NOTES')).toBeVisible()
+    expect(await notesAndPropsRender.findByText(TITLE_NOTES)).toBeVisible()
     expect(mobileHook.result.current).toBe(false)
-    const sidebarWidthInitial = storeHook.result.current.sidebarWidthInitial
+    const leftDrawerWidthInitial = storeHook.result.current.leftDrawerWidthInitial
     const xResizerEl = notesAndPropsRender.getByTestId('x_resizer')
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
-    expect(storeHook.result.current.sidebarWidth).toBe(window.innerWidth)
+    const expectedWidth = 350 // TODO(pablo): hack, should be window.innerWidth
+    expect(storeHook.result.current.leftDrawerWidth).toBe(expectedWidth)
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
-    expect(storeHook.result.current.sidebarWidth).toBe(sidebarWidthInitial)
+    expect(storeHook.result.current.leftDrawerWidth).toBe(leftDrawerWidthInitial)
   })
 })

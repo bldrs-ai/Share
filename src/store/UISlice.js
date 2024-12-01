@@ -19,21 +19,6 @@ export default function createUISlice(set, get) {
     alert: null,
     setAlert: (a) => set(() => ({alert: a})),
 
-    cutPlanes: [],
-    addCutPlaneDirection: ({direction, offset}) => set((state) => {
-      if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
-        state.cutPlanes.push({direction, offset})
-      }
-      return state.cutPlanes
-    }),
-    removeCutPlaneDirection: (direction) => set((state) => {
-      const filterPlanes = state.cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      return {cutPlanes: filterPlanes}
-    }),
-    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
-    isCutPlaneActive: false,
-    setIsCutPlaneActive: (is) => set(() => ({isCutPlaneActive: is})),
-
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
     isAboutVisible: aboutIsVisibleInitially(),

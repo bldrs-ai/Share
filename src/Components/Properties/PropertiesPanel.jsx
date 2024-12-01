@@ -1,11 +1,10 @@
 import React, {ReactElement, useEffect} from 'react'
 import {useLocation} from 'react-router'
 import useStore from '../../store/useStore'
-import {getParams, removeParams} from '../../utils/location'
 import NoContent from '../NoContent'
 import Panel from '../SideDrawer/Panel'
 import Properties from './Properties'
-import {HASH_PREFIX_PROPERTIES} from './hashState'
+import {getHashParams, removeHashParams} from './hashState'
 
 
 /**
@@ -18,28 +17,26 @@ import {HASH_PREFIX_PROPERTIES} from './hashState'
 export default function PropertiesPanel() {
   const selectedElement = useStore((state) => state.selectedElement)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
-
   const location = useLocation()
 
+
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsPropertiesVisible(false)
+    removeHashParams()
+  }
+
+
   useEffect(() => {
-    const propsParams = getParams(location, HASH_PREFIX_PROPERTIES)
+    const propsParams = getHashParams(location)
     if (propsParams) {
       setIsPropertiesVisible(true)
     }
   }, [location, setIsPropertiesVisible])
 
-  /** Hide panel and remove hash state */
-  function onClose() {
-    setIsPropertiesVisible(false)
-    removeParams(HASH_PREFIX_PROPERTIES)
-  }
 
   return (
-    <Panel
-      title='Properties'
-      onClose={onClose}
-      data-testid='PropertiesPanel'
-    >
+    <Panel title={TITLE} onClose={onClose} data-testid='PropertiesPanel'>
       {selectedElement ?
         <Properties/> :
         <NoContent message='Please select an element to access properties.'/>
@@ -47,3 +44,6 @@ export default function PropertiesPanel() {
     </Panel>
   )
 }
+
+
+export const TITLE = 'Properties'

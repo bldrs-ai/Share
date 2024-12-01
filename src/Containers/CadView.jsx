@@ -404,7 +404,7 @@ export default function CadView({
     setLevelInstance(null)
 
     resetSelection()
-    resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
+    resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
     setIsNavTreeVisible(false)
     setIsPropertiesVisible(false)

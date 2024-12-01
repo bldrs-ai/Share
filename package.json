@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1171",
+  "version": "1.0.1176",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -89,6 +89,7 @@
     "esbuild-copy-static-files": "0.1.0",
     "esbuild-plugin-progress": "1.0.1",
     "esbuild-plugin-svgr": "2.0.0",
+    "eslint-plugin-react-compiler": "^19.0.0-beta-df7b47d-20241124",
     "html-webpack-plugin": "5.5.3",
     "js-cookie": "3.0.5",
     "material-ui-popup-state": "5.0.4",

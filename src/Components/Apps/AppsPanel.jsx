@@ -4,17 +4,23 @@ import useStore from '../../store/useStore'
 import {BackButton, CloseButton, FullScreenButton} from '../Buttons'
 import Panel from '../SideDrawer/Panel'
 import {AppsListing, AppIFrame} from './AppsListing'
+import {removeHashParams} from './hashState'
 
 
 /** @return {ReactElement} */
 export default function AppsPanel() {
-  const toggleAppsIsVisible = useStore((state) => state.toggleAppsIsVisible)
+  const setIsAppsVisible = useStore((state) => state.setIsAppsVisible)
+
+
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsAppsVisible(false)
+    removeHashParams()
+  }
+
+
   return (
-    <Panel
-      title='Apps'
-      onClose={toggleAppsIsVisible}
-      data-testid='AppsPanel'
-    >
+    <Panel title='Apps' onClose={onClose} data-testid='AppsPanel'>
       <AppsListing/>
     </Panel>
   )

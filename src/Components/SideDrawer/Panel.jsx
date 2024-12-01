@@ -20,11 +20,11 @@ import {useIsMobile} from '../Hooks'
 export default function Panel({title, onClose, children, actions = null, ...props}) {
   assertDefined(title, onClose, children)
   return (
-    <Box sx={{height: '100%', overflow: 'hidden'}}>
+    <Box sx={{height: '100%', overflow: 'hidden'}} {...props}>
       <PanelTitle
         title={title}
+        onClose={onClose}
         actions={actions}
-        data-testid='PanelTitle'
       />
       <Paper
         elevation={1}
@@ -34,7 +34,7 @@ export default function Panel({title, onClose, children, actions = null, ...prop
           height: `calc(100% - ${TITLE_HEIGHT})`,
           overflow: 'auto',
         }}
-        data-testid={props['data-testid'] || 'SideDrawerPanel'}
+        data-testid={'PanelPaper'}
       >
         {children}
       </Paper>
@@ -43,15 +43,14 @@ export default function Panel({title, onClose, children, actions = null, ...prop
 }
 
 
-// TODO(pablo): remove export once encapsulated
 /**
  * @property {string} title Panel title
+ * @property {Function} onClose Callback for close
  * @property {object} [actions] Actions component placed to the right of the title
- * @property {Function} [onClose] Callback for close
  * @return {ReactElement}
  */
-export function PanelTitle({title, actions, onClose}) {
-  assertDefined(title)
+function PanelTitle({title, onClose, actions}) {
+  assertDefined(title, onClose)
   const isMobile = useIsMobile()
   return (
     <Box
@@ -68,7 +67,7 @@ export function PanelTitle({title, actions, onClose}) {
       }}
       data-testid='PanelTitle'
     >
-      <Typography variant='h2' data-testid='PanelTitle'>{title}</Typography>
+      <Typography variant='h2'>{title}</Typography>
       <Box
         sx={{
           display: 'flex',

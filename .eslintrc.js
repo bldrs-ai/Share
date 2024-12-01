@@ -37,6 +37,7 @@ module.exports = {
     'react',
     'jsx-a11y',
     'jsdoc',
+    'eslint-plugin-react-compiler',
   ],
   rules: {
     'arrow-parens': ['error', 'always'],
@@ -101,6 +102,7 @@ module.exports = {
     'react/jsx-tag-spacing': ['error', {beforeSelfClosing: 'never'}],
     'react/prop-types': 'off',
     'react/self-closing-comp': 'error',
+    'react-compiler/react-compiler': 'error',
     'require-await': 'error',
     'semi': ['error', 'never'],
     'space-infix-ops': ['error'],

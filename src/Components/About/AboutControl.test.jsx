@@ -4,6 +4,7 @@ import {fireEvent, render, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import * as FirstTime from '../../privacy/firstTime'
 import AboutControl, {testId} from './AboutControl'
+import {BLDRS_MISSION} from './AboutDialog'
 
 
 describe('AboutControl', () => {
@@ -21,7 +22,7 @@ describe('AboutControl', () => {
     const {getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
     const aboutControl = getByTestId(testId)
     fireEvent.click(aboutControl)
-    const dialogTitle = getByText('Build every thing together')
+    const dialogTitle = getByText(BLDRS_MISSION)
     expect(dialogTitle).toBeInTheDocument()
   })
 

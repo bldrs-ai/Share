@@ -5,7 +5,7 @@ import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {getHashParams, getObjectParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
-import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/MarkerControl'
+import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 
 

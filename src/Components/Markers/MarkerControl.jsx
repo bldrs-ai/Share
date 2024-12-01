@@ -1,25 +1,26 @@
-const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 import PropTypes from 'prop-types'
-import React, {useEffect} from 'react'
-import debug from '../../utils/debug'
-import {assertDefined} from '../../utils/assert'
+import {memo, useEffect} from 'react'
 import {Vector3} from 'three'
+import {assertDefined} from '../../utils/assert'
+import debug from '../../utils/debug'
 import {roundCoord} from '../../utils/math'
 import {setGroupColor} from '../../utils/svg'
 import {
-  batchUpdateHash,
-  getHashParams,
   getHashParamsFromUrl,
-  removeParamsFromHash,
-  setParamsToHash,
-  stripHashParams,
 } from '../../utils/location'
-import {findMarkdownUrls} from '../../utils/strings'
-import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import PlaceMark from '../../Infrastructure/PlaceMark'
-import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from '../Notes/hashState'
+import {
+  HASH_PREFIX_COMMENT,
+  HASH_PREFIX_NOTES,
+} from '../Notes/hashState'
 import useStore from '../../store/useStore'
-import {HASH_PREFIX_PLACE_MARK} from './hashState'
+import {
+  HASH_PREFIX_PLACE_MARK,
+  saveMarkToHash,
+} from './hashState'
+
+
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
 
 /**
@@ -32,7 +33,7 @@ import {HASH_PREFIX_PLACE_MARK} from './hashState'
  * @param {object} props.context The application context, typically containing configuration or state.
  * @param {object} props.oppositeObjects An object containing references to objects opposite to the current focus.
  * @param {Function} props.postProcessor A callback function for post-processing marker-related actions.
- * @return {object} The MarkerControl component as a React element
+ * @return {null}
  */
 function MarkerControl({context, oppositeObjects, postProcessor}) {
   assertDefined(context, oppositeObjects, postProcessor)
@@ -83,8 +84,7 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
         window.location.hash = `#${selectedPlaceMarkId}`
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlaceMarkId, markers, forceMarkerNoteSync]) // Add markers as a dependency if it can change
+  }, [cameraHash, selectedPlaceMarkId, markers, forceMarkerNoteSync]) // Add markers as a dependency if it can change
 
 
   // Toggle visibility of all placemarks based on isNotesVisible
@@ -96,8 +96,8 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
     placeMark.getPlacemarks().forEach((placemark_) => {
       placemark_.visible = isNotesVisible
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNotesVisible])
+  }, [isNotesVisible, placeMark])
+
 
   // Initialize PlaceMark instance
   useEffect(() => {
@@ -121,104 +121,18 @@ function MarkerControl({context, oppositeObjects, postProcessor}) {
     }
   })
 
+
   // End of MarkerControl - no component returned
   return null
 }
 
-export default React.memo(MarkerControl)
-
-
-/**
- * @param {string} urlStr
- * @return {string} The transformed URL
- */
-export function modifyPlaceMarkHash(hash, _issueID, _commentID) {
-  if (hash && _issueID) {
-    let newHash = hash
-    let newURL = null
-    if (!hash.startsWith('#')) {
-      newURL = new URL(hash)
-      newHash = newURL.hash
-    }
-
-    if (newHash) {
-      newHash = removeParamsFromHash(newHash, HASH_PREFIX_NOTES) // Remove notes
-      newHash = removeParamsFromHash(newHash, HASH_PREFIX_COMMENT) // Remove comment
-      newHash = setParamsToHash(newHash, HASH_PREFIX_NOTES, {_issueID})
-
-      if (_commentID) {
-        newHash = setParamsToHash(newHash, HASH_PREFIX_COMMENT, {_commentID})
-      }
-    }
-
-    if (newURL) {
-      newURL.hash = newHash
-      return newURL.toString()
-    }
-
-    return newHash
-  }
-
-  return hash
-}
-
-
-/**
- * Parses placemark URLs from an issue body.
- *
- * Extracts URLs that contain the specified placemark hash prefix from a given issue body.
- *
- * @param {string} issueBody The body of the issue to parse for placemark URLs.
- * @return {string[]} An array of extracted placemark URLs.
- */
-export function parsePlacemarkFromIssue(issueBody) {
-  return findMarkdownUrls(issueBody, HASH_PREFIX_PLACE_MARK)
-}
-
-/**
- * Retrieves the active placemark hash from the current location.
- *
- * Extracts the hash associated with a placemark (based on the defined hash prefix)
- * from the current window's location object.
- *
- * @return {string|null} The active placemark hash, or `null` if no hash is found.
- */
-export function getActivePlaceMarkHash() {
-  return getHashParams(location, HASH_PREFIX_PLACE_MARK)
-}
-
-/**
- * Extracts the placemark hash from a given URL.
- *
- * Parses a URL to extract the hash segment associated with a placemark,
- * based on the defined hash prefix.
- *
- * @param {string} url The URL to parse for a placemark hash.
- * @return {string|null} The extracted placemark hash, or `null` if no hash is found.
- */
-export function parsePlacemarkFromURL(url) {
-  return getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
-}
-
-/**
- * Removes placemark parameters from the URL.
- *
- * This function removes any URL hash parameters associated with placemarks
- * (identified by the placemark hash prefix) from the current browser window's location
- * or a specified location object.
- *
- * @param {Location|null} location The location object to modify. If null, uses `window.location`.
- * @return {string} The updated hash string with placemark parameters removed.
- */
-export function removeMarkerUrlParams(location = null) {
-  return stripHashParams(location ? location : window.location, HASH_PREFIX_PLACE_MARK)
-}
+export default memo(MarkerControl)
 
 
 /**
  * Place Mark Hook
  *
- * @return {Function}
+ * @return {object}
  */
 function PlacemarkHandlers() {
   const placeMark = useStore((state) => state.placeMark)
@@ -332,14 +246,7 @@ function PlacemarkHandlers() {
       const normalData = roundCoord(...normal)
       const markArr = positionData.concat(normalData)
 
-      // Update location hash
-      batchUpdateHash(window.location, [
-        (hash) => setParamsToHash(hash, HASH_PREFIX_PLACE_MARK, markArr), // Add placemark
-        (hash) => removeParamsFromHash(hash, HASH_PREFIX_CAMERA), // Remove camera
-        (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes
-        (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment
-      ])
-
+      saveMarkToHash(markArr)
       // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
       const inactiveColor = 0xA9A9A9
