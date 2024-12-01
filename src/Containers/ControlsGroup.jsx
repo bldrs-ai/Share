@@ -21,8 +21,6 @@ export default function ControlsGroup() {
   const isOpenEnabled = useStore((state) => state.isOpenEnabled)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  // RepositorySlice
-  const modelPath = useStore((state) => state.modelPath)
   const {isAuthenticated} = useAuth0()
   return (
     <Stack>

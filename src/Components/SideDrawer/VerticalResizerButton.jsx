@@ -34,54 +34,45 @@ export default function VerticalResizerButton({
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
 
-  const startResizing = useCallback(() => {
-    setIsResizing(true)
-  }, [])
+  const startResizing = useCallback(() => setIsResizing(true), [])
+  const stopResizing = useCallback(() => setIsResizing(false), [])
+  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
 
-
-  const stopResizing = useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
-
-  const onResizerDblTap = useDoubleTap((e) => {
-    setIsExpanded(!isExpanded)
-  })
-
-
-  const half = 0.5
+    const half = 0.5
   const resize = useCallback(
-      (mouseMoveEvent) => {
-        if (isResizing) {
-          if (isOnTop) {
-            expansionDrawerHeight =
-              drawerRef.current.getBoundingClientRect().bottom -
-              mouseMoveEvent.clientY +
-              (thickness * half)
-          } else {
-            expansionDrawerHeight =
-              mouseMoveEvent.clientX -
-              drawerRef.current.getBoundingClientRect().top -
-              (thickness * half)
-          }
-          if (expansionDrawerHeight < 0) {
-            expansionDrawerHeight = 0
-          }
-          if (expansionDrawerHeight > window.innerHeight) {
-            expansionDrawerHeight = window.innerHeight
-          }
-          if (expansionDrawerHeight < thickness) {
-            expansionDrawerHeight = thickness
-          }
-          setDrawerHeight(expansionDrawerHeight)
-          setIsExpanded(true)
+    (mouseMoveEvent) => {
+      let expansionDrawerHeight = window.innerHeight
+      if (isResizing) {
+        if (isOnTop) {
+          expansionDrawerHeight =
+            drawerRef.current.getBoundingClientRect().bottom -
+            mouseMoveEvent.clientY +
+            (thickness * half)
+        } else {
+          expansionDrawerHeight =
+            mouseMoveEvent.clientX -
+            drawerRef.current.getBoundingClientRect().top -
+            (thickness * half)
         }
-      },
-      [isResizing, isOnTop, setDrawerHeight, drawerRef, thickness],
+        if (expansionDrawerHeight < 0) {
+          expansionDrawerHeight = 0
+        }
+        if (expansionDrawerHeight > window.innerHeight) {
+          expansionDrawerHeight = window.innerHeight
+        }
+        if (expansionDrawerHeight < thickness) {
+          expansionDrawerHeight = thickness
+        }
+        setDrawerHeight(expansionDrawerHeight)
+        setIsExpanded(true)
+      }
+    },
+    [isResizing, isOnTop, setDrawerHeight, drawerRef, thickness],
   )
 
 
   useEffect(() => {
+    let expansionDrawerHeight = window.innerHeight
     const onWindowResize = (e) => {
       if (e.target.innerHeight < expansionDrawerHeight) {
         expansionDrawerHeight = e.target.innerHeight
@@ -144,6 +135,7 @@ export default function VerticalResizerButton({
 
 
   useEffect(() => {
+    const expansionDrawerHeight = window.innerHeight
     if (isExpanded) {
       setDrawerHeight(expansionDrawerHeight)
     } else {
@@ -207,6 +199,3 @@ export default function VerticalResizerButton({
     </Box>
   )
 }
-
-
-let expansionDrawerHeight = window.innerHeight

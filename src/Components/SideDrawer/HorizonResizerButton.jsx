@@ -1,6 +1,5 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react'
+import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
-import useStore from '../../store/useStore'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
 import {isNumber} from '../../utils/strings'
@@ -14,7 +13,7 @@ import {isNumber} from '../../utils/strings'
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnLeft resizer is on the left.
  * @property {string} drawerWidth drawer width (...px, ...vw).
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function HorizonResizerButton({
   drawerRef,
@@ -41,37 +40,39 @@ export default function HorizonResizerButton({
 
   const half = 0.5
   const resize = useCallback(
-      (mouseMoveEvent) => {
-        if (isResizing) {
-          if (isOnLeft) {
-            expansionDrawerWidth =
-              drawerRef.current.getBoundingClientRect().right -
-              mouseMoveEvent.clientX +
-              (thickness * half)
-          } else {
-            expansionDrawerWidth =
-              mouseMoveEvent.clientX -
-              drawerRef.current.getBoundingClientRect().left -
-              (thickness * half)
-          }
-          if (expansionDrawerWidth < 0) {
-            expansionDrawerWidth = 0
-          }
-          if (expansionDrawerWidth > window.innerWidth) {
-            expansionDrawerWidth = window.innerWidth
-          }
-          if (expansionDrawerWidth < thickness) {
-            expansionDrawerWidth = thickness
-          }
-          setDrawerWidth(expansionDrawerWidth)
-          setIsExpanded(true)
+    (mouseMoveEvent) => {
+      let expansionDrawerWidth = window.innerWidth
+      if (isResizing) {
+        if (isOnLeft) {
+          expansionDrawerWidth =
+            drawerRef.current.getBoundingClientRect().right -
+            mouseMoveEvent.clientX +
+            (thickness * half)
+        } else {
+          expansionDrawerWidth =
+            mouseMoveEvent.clientX -
+            drawerRef.current.getBoundingClientRect().left -
+            (thickness * half)
         }
-      },
-      [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
+        if (expansionDrawerWidth < 0) {
+          expansionDrawerWidth = 0
+        }
+        if (expansionDrawerWidth > window.innerWidth) {
+          expansionDrawerWidth = window.innerWidth
+        }
+        if (expansionDrawerWidth < thickness) {
+          expansionDrawerWidth = thickness
+        }
+        setDrawerWidth(expansionDrawerWidth)
+        setIsExpanded(true)
+      }
+    },
+    [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
   )
 
 
   useEffect(() => {
+    let expansionDrawerWidth = window.innerWidth
     const onWindowResize = (e) => {
       if (e.target.innerWidth < expansionDrawerWidth) {
         expansionDrawerWidth = e.target.innerWidth
@@ -135,6 +136,7 @@ export default function HorizonResizerButton({
 
   // Double-click on resizer switches to previous width
   useEffect(() => {
+    const expansionDrawerWidth = window.innerWidth
     if (isExpanded) {
       setDrawerWidth(expansionDrawerWidth)
     } else {
@@ -197,6 +199,3 @@ export default function HorizonResizerButton({
     </Box>
   )
 }
-
-
-let expansionDrawerWidth = window.innerWidth

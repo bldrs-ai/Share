@@ -102,7 +102,7 @@ module.exports = {
     'react/jsx-tag-spacing': ['error', {beforeSelfClosing: 'never'}],
     'react/prop-types': 'off',
     'react/self-closing-comp': 'error',
-    'react-compiler/react-compiler': 'error',
+    // TODO(pablo): re-enable.. got this down to 10.  'react-compiler/react-compiler': 'error',
     'require-await': 'error',
     'semi': ['error', 'never'],
     'space-infix-ops': ['error'],

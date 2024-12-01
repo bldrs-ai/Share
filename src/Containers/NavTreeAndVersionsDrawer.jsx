@@ -11,7 +11,7 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
  *
  * @return {ReactElement}
  */
-export default function({
+export default function NavTreeAndVersionsDrawer({
   pathPrefix,
   branch,
   selectWithShiftClickEvents,

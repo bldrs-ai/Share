@@ -45,8 +45,7 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
       setInputText('')
       navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [id, inputText, location.pathname, location.search, navigate, searchParams])
 
 
   const onSubmit = (event) => {
