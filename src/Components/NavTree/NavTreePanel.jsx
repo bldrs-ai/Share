@@ -55,7 +55,7 @@ export default function NavTreePanel({
 
   return (
     <Panel
-      title='Navigation'
+      title={TITLE}
       actions={
         <Actions
           navigationMode={navigationMode}
@@ -147,3 +147,6 @@ function Actions({navigationMode, setNavigationMode}) {
     </StyledToggleButtonGroup>
   )
 }
+
+
+export const TITLE = 'Navigation'

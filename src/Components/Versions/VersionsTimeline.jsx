@@ -21,34 +21,34 @@ import CommitIcon from '@mui/icons-material/Commit'
  * Each version corresponds to a commit, and this component fetches
  * commit data for the provided branch and displays it.
  *
- * @property {Array<object>} commitData An array of commits
+ * @property {Array<object>} commits An array of commits
  * @property {string} currentRef To indicate as active in the UI
  * @property {Function} commitNavigateCb A callback function to navigate to a specific commit
  * @return {ReactElement}
  */
-export default function VersionsTimeline({commitData, currentRef, commitNavigateCb}) {
+export default function VersionsTimeline({commits, currentRef, commitNavigateCb}) {
   const [showLoginMessage, setShowLoginMessage] = useState(false)
 
   const timeoutMillis = 4000
   useEffect(() => {
-    // Set a timeout to display the login message after 4 seconds if commitData is still empty
+    // Set a timeout to display the login message after 4 seconds if commits is still empty
     const timer = setTimeout(() => {
-      if (commitData.length === 0) {
+      if (commits.length === 0) {
         setShowLoginMessage(true)
       }
     }, timeoutMillis)
-    // Clear the timeout if commitData is populated or the component unmounts
+    // Clear the timeout if commits is populated or the component unmounts
     return () => clearTimeout(timer)
-  }, [commitData])
+  }, [commits])
 
   const shaLength = 40
   const refIsSha = currentRef.length === shaLength
   return (
     <Timeline data-testid='timeline-list'>
-      {commitData.length === 0 && !showLoginMessage && <Loader/>}
+      {commits.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
         <NoContent message='Please log into GitHub to use the project timeline'/>)}
-      {commitData.map((commit, i) => (
+      {commits.map((commit, i) => (
         <CustomTimelineItem key={i} onClick={() => commitNavigateCb(i)}>
           <TimelineInfo
             commit={commit}

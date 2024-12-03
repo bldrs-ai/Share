@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {HelmetProvider} from 'react-helmet-async'
 import {MemoryRouter} from 'react-router'
 import {StoreCtx} from './store/Store.fixture'
@@ -6,8 +6,8 @@ import {ThemeCtx} from './theme/Theme.fixture'
 
 
 /**
- * @property {Array.<React.Component>} children The component under test
- * @return {React.Component}
+ * @property {Array.<ReactElement>} children The component under test
+ * @return {ReactElement}
  */
 export function RouteThemeCtx({children}) {
   return <MemoryRouter><ThemeCtx>{children}</ThemeCtx></MemoryRouter>
@@ -15,8 +15,8 @@ export function RouteThemeCtx({children}) {
 
 
 /**
- * @property {Array.<React.Component>} children The component under test
- * @return {React.Component}
+ * @property {Array.<ReactElement>} children The component under test
+ * @return {ReactElement}
  */
 export function StoreRouteThemeCtx({children}) {
   return <StoreCtx><RouteThemeCtx>{children}</RouteThemeCtx></StoreCtx>
@@ -26,8 +26,8 @@ export function StoreRouteThemeCtx({children}) {
 /**
  * Mostly for dialogs, which are often titled and routed
  *
- * @property {Array.<React.Component>} children The component under test
- * @return {React.Component}
+ * @property {Array.<ReactElement>} children The component under test
+ * @return {ReactElement}
  */
 export function HelmetStoreRouteThemeCtx({children}) {
   return <HelmetProvider><StoreRouteThemeCtx>{children}</StoreRouteThemeCtx></HelmetProvider>

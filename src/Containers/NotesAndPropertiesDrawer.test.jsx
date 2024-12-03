@@ -8,15 +8,14 @@ import useStore from '../store/useStore'
 import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 
 
-describe('NotesAndProperties', () => {
-  it('properties', async () => {
+describe('NotesAndPropertiesDrawer', () => {
+  it('properties panel renders', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {findByText} = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
     await act(() => {
       result.current.setIsPropertiesVisible(true)
     })
     expect(await findByText(TITLE_PROPS)).toBeVisible()
-
     // reset the store
     await act(() => {
       result.current.setSelectedElement({})
@@ -24,7 +23,7 @@ describe('NotesAndProperties', () => {
     })
   })
 
-  it('mobile vertical resizing', async () => {
+  it('double-click resizes horizontally', async () => {
     const mobileHook = renderHook(() => useIsMobile())
     const storeHook = renderHook(() => useStore((state) => state))
     const notesAndPropsRender = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
