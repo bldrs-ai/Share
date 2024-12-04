@@ -21,6 +21,7 @@ export default function ControlsGroup() {
   const isOpenEnabled = useStore((state) => state.isOpenEnabled)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const {isAuthenticated} = useAuth0()
   return (
     <Stack>
@@ -33,7 +34,11 @@ export default function ControlsGroup() {
         {isSearchEnabled && <SearchControl/>}
         {isSearchEnabled &&
          isSearchBarVisible &&
-         <SearchBar placeholder='Search' id='search'/>}
+         <SearchBar
+           placeholder='Search'
+           helperText='Paste GitHub file link to open the model'
+           onSuccess={() => setIsSearchBarVisible(false)}
+         />}
       </Stack>
       <Stack>
         {isNavTreeEnabled && <NavTreeControl/>}

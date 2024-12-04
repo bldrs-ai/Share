@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {TITLE_NOTE_ADD} from '../../../src/Components/Notes/component'
 import {
   auth0Login,
   homepageSetup,
@@ -19,7 +20,7 @@ describe('Notes 100: Create a note', () => {
       it('Notes list switches to display only create note card and back to the list when nav backbutton is pressed', () => {
         cy.get('[data-testid="Back to the list"]').should('exist')
         cy.get('[placeholder="Note Title"]').should('exist')
-        cy.get('[data-testid="panelTitle"]').contains('ADD A NOTE')
+        cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTE_ADD)
         cy.percySnapshot()
         cy.get('[data-testid="Back to the list"]').click()
         cy.get('[data-testid="list-notes"]').should('exist')

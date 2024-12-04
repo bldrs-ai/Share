@@ -22,8 +22,8 @@ export default function Panel({title, onClose, children, actions = null, ...prop
   return (
     <Box
       sx={{height: '100%', overflow: 'hidden'}}
+      data-testid={props['data-testid'] || `PanelBox-${title}`}
       {...props}
-      data-testid='PanelBox'
     >
       <PanelTitle
         title={title}
@@ -38,7 +38,7 @@ export default function Panel({title, onClose, children, actions = null, ...prop
           height: `calc(100% - ${TITLE_HEIGHT})`,
           overflow: 'auto',
         }}
-        data-testid={'PanelPaper'}
+        data-testid={`PanelPaper-${title}`}
       >
         {children}
       </Paper>
@@ -69,7 +69,7 @@ function PanelTitle({title, onClose, actions}) {
         top: 0,
         zIndex: 1,
       }}
-      data-testid='PanelTitle'
+      data-testid={`PanelTitle-${title}`}
     >
       {!isMobile && <Typography variant='h2'>{title}</Typography>}
       <Box

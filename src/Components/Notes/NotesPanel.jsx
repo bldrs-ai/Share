@@ -4,6 +4,7 @@ import Panel from '../SideDrawer/Panel'
 import Notes from './Notes'
 import NotesNavBar from './NotesNavBar'
 import {removeHashParams} from './hashState'
+import {TITLE_NOTE, TITLE_NOTES, TITLE_NOTE_ADD} from './component'
 
 
 /** @return {ReactElement} */
@@ -32,8 +33,3 @@ export default function NotesPanel() {
     </Panel>
   )
 }
-
-
-export const TITLE_NOTE = 'Note'
-export const TITLE_NOTES = 'Notes'
-export const TITLE_NOTE_ADD = 'Add a note'

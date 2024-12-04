@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {TITLE} from '../../../src/Components/Properties/component'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -26,7 +27,7 @@ describe('View 100: Access elements property', () => {
 
     it('Side drawer containing properties shall be visible', () => {
       cy.get('[data-testid="control-button-properties"]').should('be.visible')
-      cy.get('[data-testid="panelTitle"]').contains('PROPERTIES')
+      cy.get('[data-testid="PanelTitle"]').contains(TITLE)
       cy.percySnapshot()
     })
   })

@@ -5,6 +5,7 @@ import NoContent from '../NoContent'
 import Panel from '../SideDrawer/Panel'
 import Properties from './Properties'
 import {getHashParams, removeHashParams} from './hashState'
+import {TITLE} from './component'
 
 
 /**
@@ -44,6 +45,3 @@ export default function PropertiesPanel() {
     </Panel>
   )
 }
-
-
-export const TITLE = 'Properties'

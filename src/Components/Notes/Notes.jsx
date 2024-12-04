@@ -189,7 +189,7 @@ export default function Notes() {
     <List
       spacing={3}
       sx={{height: '100%', padding: '0px', overflow: 'scroll'}}
-      data-test-id='list-notes'
+      data-testid='list-notes'
     >
       {isLoadingNotes && !isCreateNoteVisible && <Loader type={'linear'}/>}
       {notes && notes.length === 0 && !isCreateNoteVisible && !isLoadingNotes && <NoContent/>}

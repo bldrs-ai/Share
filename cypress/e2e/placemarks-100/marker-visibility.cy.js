@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {TITLE_NOTES} from '../../../src/Components/Notes/component'
 import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../../support/utils'
 
 
@@ -8,23 +9,22 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
   context('Returning user visits homepage', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
     it('MarkerControl should not exist', () => {
-        cy.get('[data-testid="markerControl"]').should('not.exist')
+      cy.get('[data-testid="markerControl"]').should('not.exist')
     })
 
     context('Open Notes and MarkerControl should exist', () => {
-        let win
+      let win
       beforeEach(() => {
         cy.get('[data-testid="control-button-notes"]').click()
-
         cy.get('[data-testid="list-notes"]')
-        cy.get('[data-testid="panelTitle"]').contains('NOTES')
-
+        cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTES)
         cy.window().then((window) => {
-            win = window
+          win = window
         })
-        // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
-        cy.wait(1500)
-    })
+        const waitTimeMs = 1500
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(waitTimeMs)
+      })
       it('MarkerControl should exist', () => {
         // Access the scene objects
         const markers = win.markerScene.markerObjects
@@ -34,7 +34,7 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
 
         // Check visibility of markers
         markers.forEach((marker) => {
-        // eslint-disable-next-line no-unused-expressions
+          // eslint-disable-next-line no-unused-expressions
           expect(marker.userData.id).to.exist
         })
 

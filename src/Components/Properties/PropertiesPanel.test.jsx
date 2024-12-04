@@ -1,8 +1,9 @@
 import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
-import useStore from '../../store/useStore'
-import PropertiesPanel, {TITLE} from './PropertiesPanel'
 import {RouteThemeCtx} from '../../Share.fixture'
+import useStore from '../../store/useStore'
+import PropertiesPanel from './PropertiesPanel'
+import {TITLE} from './component'
 
 
 describe('PropertiesPanel', () => {

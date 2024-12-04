@@ -1,5 +1,6 @@
 import '@percy/cypress'
 import {Raycaster, Vector2, Vector3} from 'three'
+import {TITLE_NOTES} from '../../../src/Components/Notes/component'
 import {homepageSetup,
    returningUserVisitsHomepageWaitForModel,
    auth0Login,
@@ -18,13 +19,13 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-notes"]').click()
         cy.get('[data-testid="list-notes"]')
-        cy.get('[data-testid="panelTitle"]').contains('NOTES')
-
+        cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTES)
         cy.window().then((window) => {
             win = window
         })
-        // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
-        cy.wait(1000)
+        const waitTimeMs = 1000
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(waitTimeMs)
     })
       it('should select a marker and url hash should change', () => {
         const {markerObjects, camera, domElement} = win.markerScene

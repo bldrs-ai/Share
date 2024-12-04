@@ -1,12 +1,11 @@
 import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
-import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
+import {assertDefined} from '../../utils/assert'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -14,23 +13,30 @@ import CloseIcon from '@mui/icons-material/Close'
  * The search bar doubles as an input for search queries and also open
  * file paths
  *
- * @property {string} placeholder Text to display when search bar is inactive
- * @property {string} helperText Text to display under the TextField
+ * @property {string} [placeholder] Text to display when search bar is inactive
+ * @property {string} [helperText] Text to display under the TextField
+ * @property {boolean} [isGitHubSearch] Strict screening for GH only links
+ * @property {Function} [onSuccess] Optional callback when search succeeds
  * @return {ReactElement}
  */
-export default function SearchBar({placeholder, helperText, id, setIsDialogDisplayed}) {
+export default function SearchBar({
+  placeholder = 'Search',
+  helperText = 'Search building or paste model link',
+  isGitHubSearch = false,
+  onSuccess = null,
+}) {
+  assertDefined(placeholder, helperText, isGitHubSearch)
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
-  const [gitHubSearchText, setGitHubSearchText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
 
 
   useEffect(() => {
     if (location.search) {
-      if (id !== 'githubsearch') {
+      if (!isGitHubSearch) {
         if (validSearchQuery(searchParams)) {
           const newInputText = searchParams.get(QUERY_PARAM)
           if (inputText !== newInputText) {
@@ -45,7 +51,10 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
       setInputText('')
       navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
     }
-  }, [id, inputText, location.pathname, location.search, navigate, searchParams])
+    // TODO(pablo): we only care about the final state when searchParams change,
+    // but probably missing some validation state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
 
   const onSubmit = (event) => {
@@ -61,8 +70,8 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
         const modelPath = githubUrlOrPathToSharePath(inputText)
         disablePageReloadApprovalCheck()
         navigate(modelPath, {replace: true})
-        if (setIsDialogDisplayed) {
-          setIsDialogDisplayed(false)
+        if (onSuccess) {
+          onSuccess()
         }
       } catch (e) {
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
@@ -80,67 +89,38 @@ export default function SearchBar({placeholder, helperText, id, setIsDialogDispl
       })
     } else {
       setSearchParams({q: inputText})
-      setIsDialogDisplayed(true)
+      onSuccess()
     }
     searchInputRef.current.blur()
   }
-
-  const handleKeyDown = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      onSubmit(event)
-    }
-  }
-
 
   // The container and paper are set to 100% width to fill the
   // container SearchBar shares with NavTreePanel.  This is an easier
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} style={{minWidth: '10em', width: '25em'}}>
       <Autocomplete
         freeSolo
-        options={[]}
-        value={(id === 'githubsearch') ? gitHubSearchText : inputText}
-        onChange={(_, newValue) =>
-          (id === 'githubsearch') ? setGitHubSearchText(newValue || '') : setInputText(newValue || '')}
-        onInputChange={(_, newInputValue) =>
-          (id === 'githubsearch') ? setGitHubSearchText(newInputValue || '') : setInputText(newInputValue || '')}
+        options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
+        value={inputText}
+        onChange={(_, newValue) => setInputText(newValue || '')}
+        onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
         clearIcon={<CloseIcon className='icon-share'/>}
-        inputValue={(id === 'githubsearch') ? gitHubSearchText : inputText}
+        inputValue={inputText}
         renderInput={(params) => (
           <TextField
             {...params}
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder={placeholder}
+            placeholder='Search'
             variant='outlined'
-            helperText={helperText}
             sx={{
               width: '100%',
             }}
-            multiline
-            onKeyDown={handleKeyDown}
+            fullWidth
             data-testid='textfield-search-query'
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    aria-label="clear search"
-                    onClick={() => (id === 'githubsearch') ? setGitHubSearchText('') : setInputText('')}
-                    sx={{height: '2em', width: '2em'}}
-                  >
-                    <CloseIcon
-                      className="icon-share"
-                      color='primary'
-                      fontSize="small"
-                    />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
           />
         )}
       />

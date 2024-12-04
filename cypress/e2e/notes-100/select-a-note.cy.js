@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {TITLE_NOTE} from '../../../src/Components/Notes/component'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
@@ -22,7 +23,9 @@ describe('Notes 100: Select a note', () => {
         cy.get('[data-testid="list-notes"] > :nth-child(4) > [data-testid="note-card"] p').contains('testComment_1')
         cy.get('[data-testid="list-notes"] > :nth-child(5) > [data-testid="note-card"] p').contains('testComment_2')
 
-        cy.get('[data-testid="panelTitle"]').should('have.text', 'NOTE')
+        cy.get(`[data-testid="PanelTitle-${TITLE_NOTE}"]`).debug()
+
+        cy.get(`[data-testid="PanelTitle-${TITLE_NOTE}"]`).should('have.text', TITLE_NOTE)
 
         cy.get('[data-testid="Back to the list"]').click()
 

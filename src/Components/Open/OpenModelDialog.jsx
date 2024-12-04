@@ -5,16 +5,17 @@ import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
+import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
-import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
+import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 
@@ -31,7 +32,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = ['Local', 'Github', 'Samples']
+  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)

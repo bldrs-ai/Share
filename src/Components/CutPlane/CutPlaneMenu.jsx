@@ -48,9 +48,7 @@ export default function CutPlaneMenu() {
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
 
-  const handleClose = () => {
-    setAnchorEl(null)
-  }
+  const handleClose = () => setAnchorEl(null)
 
   const togglePlane = useCallback(({direction, offset = 0}) => {
     setLevelInstance(null)

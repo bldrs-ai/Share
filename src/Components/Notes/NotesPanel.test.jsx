@@ -1,7 +1,8 @@
 import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
 import useStore from '../../store/useStore'
-import NotesPanel, {TITLE_NOTES} from './NotesPanel'
+import NotesPanel from './NotesPanel'
+import {TITLE_NOTES} from './component'
 import {RouteThemeCtx} from '../../Share.fixture'
 
 

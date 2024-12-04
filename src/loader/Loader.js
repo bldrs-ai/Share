@@ -9,7 +9,7 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel} from '../OPFS/utils'
-import {assertDefined} from '../utils/assert'
+import {assert, assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
@@ -334,6 +334,21 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 
   if (fixupCb) {
     model = fixupCb(model, viewer)
+  }
+
+  // TODO(pablo): generalize our handling to multi-mesh
+  if (model.geometry === undefined) {
+    assertDefined(model.children)
+    // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
+    for (let i = 0, n = model.children.length; i < n; i++) {
+      const obj = model.children[i]
+      if (obj.geometry) {
+        model.geometry = obj.geometry
+        break
+      }
+    }
+    assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
+    console.warn('Only using first mesh for some operations')
   }
 
   return model
