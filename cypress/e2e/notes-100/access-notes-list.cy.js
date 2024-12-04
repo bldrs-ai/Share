@@ -12,7 +12,7 @@ describe('Notes 100: Access notes list', () => {
       beforeEach(() => cy.get('[data-testid="control-button-notes"]').click())
       it('Notes visible - Screen', () => {
         cy.get('[data-testid="list-notes"]')
-        cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTES)
+        cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
       })
     })
   })

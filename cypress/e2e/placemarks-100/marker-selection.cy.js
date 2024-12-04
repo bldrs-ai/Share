@@ -19,7 +19,7 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-notes"]').click()
         cy.get('[data-testid="list-notes"]')
-        cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTES)
+        cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
         cy.window().then((window) => {
             win = window
         })

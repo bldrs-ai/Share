@@ -14,7 +14,7 @@ describe('Notes 100: Access shared note', () => {
       waitForModel()
     })
     it('Notes open - Screen', () => {
-      cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTES)
+      cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
       // List of notes to be visible
       cy.get('.MuiList-root').should('exist')
       cy.percySnapshot()
@@ -27,7 +27,7 @@ describe('Notes 100: Access shared note', () => {
     })
 
     it('Panel title to contain NOTE string and back button', () => {
-      cy.get('[data-testid="PanelTitle"]').contains(TITLE_NOTE)
+      cy.get(`[data-testid="PanelTitle-${TITLE_NOTE}"]`).contains(TITLE_NOTE)
       cy.get('[data-testid="Back to the list"]').should('exist')
     })
 
