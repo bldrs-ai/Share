@@ -106,6 +106,7 @@
     "react-markdown": "8.0.3",
     "react-qr-code": "2.0.12",
     "react-router-dom": "6.3.0",
+    "react-window": "^1.8.10",
     "remark-gfm": "3.0.1",
     "run-script-os": "1.1.6",
     "shx": "0.3.4",

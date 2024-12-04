@@ -1,93 +1,91 @@
+import React, {forwardRef} from 'react'
 import clsx from 'clsx'
-import React, {ReactElement} from 'react'
-import {useTreeItem} from '@mui/lab/TreeItem'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import HideToggleButton from '../HideToggleButton'
+import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
+import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
+import {navTreeItemPropTypes} from './PropTypes'
 
 
-/**
- * @param {object} props CustomContent props provided via Mui TreeItem
- * @param {object} ref
- * @return {ReactElement}
- */
-export default function CustomContent(props, ref) {
+const NavTreeItem = forwardRef(function NavTreeItem(props, ref) {
   const {
+    // eslint-disable-next-line no-unused-vars
     classes,
     className,
     label,
     nodeId,
-    icon: iconProp,
-    expansionIcon,
-    displayIcon,
-    hasHideIcon,
     isExpandable,
+    isExpanded,
+    hasHideIcon,
+    // eslint-disable-next-line no-unused-vars
     selectWithShiftClickEvents,
     idToRef,
+    onIconClick,
+    onClick,
+    nodeDepth,
+    isSelected,
   } = props
 
-  const {
-    disabled,
-    expanded,
-    selected,
-    focused,
-    handleExpansion,
-    handleSelection,
-    preventSelection,
-  } = useTreeItem(nodeId)
+  const icon = isExpanded ? (
+    <NodeOpenIcon className="icon-share icon-nav-caret"/>
+  ) : (
+    <NodeClosedIcon className="icon-share icon-nav-caret"/>
+  )
 
-  const icon = iconProp || expansionIcon || displayIcon
-
-  const handleMouseDown = (event) => preventSelection(event)
-
-  const handleExpansionClick = (event) => handleExpansion(event)
-
-  const handleSelectionClick = (event) => {
-    handleSelection(event)
-    selectWithShiftClickEvents(event.shiftKey, parseInt(nodeId))
+  if (idToRef) {
+    idToRef[nodeId] = ref
   }
 
-  idToRef[nodeId] = ref
+  const handleMouseDown = (event) => {
+    // Prevent text selection on double-click
+    event.preventDefault()
+  }
 
-  // TODO(pablo): the following uses a measured value of 30px width for the
-  // visiblity icon, to compute widths for a straight column layout of all of
-  // the icons.  Thifs should either be an imported value or find a better way to
-  // do the layout
   return (
     <Box
-      className={clsx(className, classes.root, {
-        [classes.expanded]: expanded,
-        [classes.selected]: selected,
-        [classes.focused]: focused,
-        [classes.disabled]: disabled,
-      })}
+      className={clsx(className)}
       ref={ref}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        // eslint-disable-next-line no-magic-numbers
+        paddingLeft: nodeDepth * 20,
+        width: '100%',
+      }}
     >
-      <Box
-        onClick={handleExpansionClick}
-        // visual match for text lead to match parent
-        sx={{padding: isExpandable ? '0px 14px' : '0 0 0 1.15em'}}
-      >
-        {isExpandable && icon}
-      </Box>
-      <Stack direction='row' sx={{width: '300px'}}>
+      {isExpandable ? (
+        <Box onClick={onIconClick} sx={{marginRight: 1, cursor: 'pointer'}}>
+          {icon}
+        </Box>
+      ) : (
+        <Box sx={{width: 24, marginRight: 1}}/>
+      )}
+      <Stack direction="row" sx={{flexGrow: 1, alignItems: 'center'}}>
         <Box
-          display='flex'
           onMouseDown={handleMouseDown}
-          onClick={handleSelectionClick}
+          onClick={onClick}
           sx={{
-            width: hasHideIcon ? 'calc(100% - 30px)' : '100%',
+            flexGrow: 1,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: isSelected ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
           }}
         >
-          <Typography variant='tree'>{label}</Typography>
+          <Typography variant="body2">{label}</Typography>
         </Box>
-        {hasHideIcon &&
-         <Box display='flex' sx={{display: 'contents', width: '30px'}}>
-           <HideToggleButton elementId={parseInt(nodeId)}/>
-         </Box>
-        }
+        {hasHideIcon && (
+          <Box sx={{display: 'flex', alignItems: 'center'}}>
+            <HideToggleButton elementId={parseInt(nodeId, 10)}/>
+          </Box>
+        )}
       </Stack>
     </Box>
   )
-}
+})
+
+NavTreeItem.propTypes = navTreeItemPropTypes
+
+export default NavTreeItem
