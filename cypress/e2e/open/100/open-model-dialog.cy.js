@@ -1,13 +1,14 @@
 import '@percy/cypress'
+import {LABEL_GITHUB} from '../../../../src/Components/Open/component'
 import {
   auth0Login,
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../../support/utils'
 import {
-    setupVirtualPathIntercept,
-    waitForModelReady,
-  } from '../../../support/models'
+  setupVirtualPathIntercept,
+  waitForModelReady,
+} from '../../../support/models'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1159}*/
@@ -47,7 +48,7 @@ describe('Open 100: Open model dialog', () => {
     const interceptTag = 'ghOpenModelLoad'
     it('Choose the path to the model on GitHub -> model is loaded into the scene', () => {
       cy.get('[data-testid="tab-github"]').click()
-      cy.findByText('Github').click()
+      cy.findByText(LABEL_GITHUB).click()
       cy.findByLabelText('Organization', {timeout: 5000}).click()
       cy.contains('@cypresstester').click()
       cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()

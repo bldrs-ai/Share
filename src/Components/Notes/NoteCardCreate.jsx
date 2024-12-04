@@ -8,15 +8,15 @@ import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
 import Stack from '@mui/material/Stack'
-import useTheme from '@mui/styles/useTheme'
-import {TooltipIconButton} from '../Buttons'
+import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {createIssue, getIssueComments} from '../../net/github/Issues'
 import {createComment} from '../../net/github/Comments'
 import {assertStringNotEmpty} from '../../utils/assert'
-import CheckIcon from '@mui/icons-material/Check'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
+import CheckIcon from '@mui/icons-material/Check'
+import AddLocationIcon from '@mui/icons-material/AddLocationOutlined'
 
 
 /**
@@ -210,7 +210,7 @@ export default function NoteCardCreate({
            onClick={() => {
              togglePlaceMarkActive(tempId)
            }}
-           icon={<PlaceMarkIcon className='icon-share'/>}
+           icon={<AddLocationIcon className='icon-share'/>}
          />
        </Box>
       }

@@ -1,8 +1,8 @@
-import React, {useEffect, useState, useCallback, useRef} from 'react'
+import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {isNumber} from '../../utils/strings'
 
@@ -10,19 +10,19 @@ import {isNumber} from '../../utils/strings'
 /**
  * Grab button to for resizing SideDrawer vertically.
  *
- * @property {useRef} sidebarRef sidebar ref object.
+ * @property {useRef} drawerRef drawer ref object.
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnTop resizer is on the top.
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function VerticalResizerButton({
-  sidebarRef,
+  drawerRef,
   thickness = 10,
   isOnTop = true,
 }) {
-  const sidebarHeight = useStore((state) => state.sidebarHeight)
-  const sidebarHeightInitial = useStore((state) => state.sidebarHeightInitial)
-  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
+  const drawerHeight = useStore((state) => state.drawerHeight)
+  const drawerHeightInitial = useStore((state) => state.drawerHeightInitial)
+  const setDrawerHeight = useStore((state) => state.setDrawerHeight)
 
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -34,60 +34,51 @@ export default function VerticalResizerButton({
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
 
-  const startResizing = useCallback(() => {
-    setIsResizing(true)
-  }, [])
-
-
-  const stopResizing = useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
-
-  const onResizerDblTap = useDoubleTap((e) => {
-    setIsExpanded(!isExpanded)
-  })
-
+  const startResizing = useCallback(() => setIsResizing(true), [])
+  const stopResizing = useCallback(() => setIsResizing(false), [])
+  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
 
   const half = 0.5
   const resize = useCallback(
-      (mouseMoveEvent) => {
-        if (isResizing) {
-          if (isOnTop) {
-            expansionSidebarHeight =
-              sidebarRef.current.getBoundingClientRect().bottom -
-              mouseMoveEvent.clientY +
-              (thickness * half)
-          } else {
-            expansionSidebarHeight =
-              mouseMoveEvent.clientX -
-              sidebarRef.current.getBoundingClientRect().top -
-              (thickness * half)
-          }
-          if (expansionSidebarHeight < 0) {
-            expansionSidebarHeight = 0
-          }
-          if (expansionSidebarHeight > window.innerHeight) {
-            expansionSidebarHeight = window.innerHeight
-          }
-          if (expansionSidebarHeight < thickness) {
-            expansionSidebarHeight = thickness
-          }
-          setSidebarHeight(expansionSidebarHeight)
-          setIsExpanded(true)
+    (mouseMoveEvent) => {
+      let expansionDrawerHeight = window.innerHeight
+      if (isResizing) {
+        if (isOnTop) {
+          expansionDrawerHeight =
+            drawerRef.current.getBoundingClientRect().bottom -
+            mouseMoveEvent.clientY +
+            (thickness * half)
+        } else {
+          expansionDrawerHeight =
+            mouseMoveEvent.clientX -
+            drawerRef.current.getBoundingClientRect().top -
+            (thickness * half)
         }
-      },
-      [isResizing, isOnTop, setSidebarHeight, sidebarRef, thickness],
+        if (expansionDrawerHeight < 0) {
+          expansionDrawerHeight = 0
+        }
+        if (expansionDrawerHeight > window.innerHeight) {
+          expansionDrawerHeight = window.innerHeight
+        }
+        if (expansionDrawerHeight < thickness) {
+          expansionDrawerHeight = thickness
+        }
+        setDrawerHeight(expansionDrawerHeight)
+        setIsExpanded(true)
+      }
+    },
+    [isResizing, isOnTop, setDrawerHeight, drawerRef, thickness],
   )
 
 
   useEffect(() => {
+    let expansionDrawerHeight = window.innerHeight
     const onWindowResize = (e) => {
-      if (e.target.innerHeight < expansionSidebarHeight) {
-        expansionSidebarHeight = e.target.innerHeight
+      if (e.target.innerHeight < expansionDrawerHeight) {
+        expansionDrawerHeight = e.target.innerHeight
       }
-      if (e.target.innerHeight < sidebarHeight) {
-        setSidebarHeight(e.target.innerHeight)
+      if (e.target.innerHeight < drawerHeight) {
+        setDrawerHeight(e.target.innerHeight)
       }
     }
     window.addEventListener('resize', onWindowResize)
@@ -98,7 +89,7 @@ export default function VerticalResizerButton({
       window.removeEventListener('mousemove', resize)
       window.removeEventListener('mouseup', stopResizing)
     }
-  }, [resize, setSidebarHeight, sidebarHeight, stopResizing])
+  }, [resize, setDrawerHeight, drawerHeight, stopResizing])
 
 
   useEffect(() => {
@@ -140,20 +131,21 @@ export default function VerticalResizerButton({
       resizer.removeEventListener('touchend', onTouchEnd)
       resizer.removeEventListener('touchmove', onTouchMove)
     }
-  }, [resize, setSidebarHeight, sidebarHeight, startResizing, stopResizing])
+  }, [resize, setDrawerHeight, drawerHeight, startResizing, stopResizing])
 
 
   useEffect(() => {
+    const expansionDrawerHeight = window.innerHeight
     if (isExpanded) {
-      setSidebarHeight(expansionSidebarHeight)
+      setDrawerHeight(expansionDrawerHeight)
     } else {
       const defaultHeight =
-        isNumber(sidebarHeightInitial) ?
-        Math.min(window.innerHeight, sidebarHeightInitial) :
-        sidebarHeightInitial
-      setSidebarHeight(defaultHeight)
+        isNumber(drawerHeightInitial) ?
+        Math.min(window.innerHeight, drawerHeightInitial) :
+        drawerHeightInitial
+      setDrawerHeight(defaultHeight)
     }
-  }, [isExpanded, setSidebarHeight, sidebarHeightInitial])
+  }, [isExpanded, setDrawerHeight, drawerHeightInitial])
 
 
   return (
@@ -182,7 +174,7 @@ export default function VerticalResizerButton({
         sx={{
           width: '150px',
           paddingTop: `10px`,
-          paddingBottom: '40px',
+          paddingBottom: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -207,6 +199,3 @@ export default function VerticalResizerButton({
     </Box>
   )
 }
-
-
-let expansionSidebarHeight = window.innerHeight

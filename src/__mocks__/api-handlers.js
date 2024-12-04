@@ -6,12 +6,6 @@ import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
-// import testEnvVars from '../../tools/jest/testEnvVars'
-
-
-// const GH_BASE_AUTHED = 'YO' // process.env.GITHUB_BASE_URL // testEnvVars.GITHUB_BASE_URL
-// const GH_BASE_UNAUTHED = testEnvVars.GITHUB_BASE_URL_UNAUTHENTICATED
-// console.log('GH_BASE_AUTHED', GH_BASE_AUTHED)
 
 
 const httpOk = 200

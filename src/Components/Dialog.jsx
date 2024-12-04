@@ -1,13 +1,9 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import Typography from '@mui/material/Typography'
-import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import {CloseButton} from './Buttons'
 
@@ -35,45 +31,25 @@ export default function Dialog({
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
-
-  const theme = useTheme()
-
   const onCloseClick = () => setIsDialogDisplayed(false)
-
   return (
     <MuiDialog
       open={isDialogDisplayed}
       onClose={onCloseClick}
       data-testid={props['data-testid'] || 'mui-dialog'}
     >
-      <DialogTitle>
-        {headerIcon ?
-         <Box
-           sx={{
-             display: 'flex',
-             flexDirection: 'column',
-             justifyContent: 'center',
-             alignItems: 'center',
-           }}
-         >
-           <Paper
-             sx={{
-               display: 'flex',
-               flexDirection: 'column',
-               alignItems: 'center',
-               justifyContent: 'center',
-               width: '2.5em',
-               height: '2.5em',
-               borderRadius: '50%',
-               background: theme.palette.secondary.main,
-             }}
-           >
-             {headerIcon}
-           </Paper>
-           <Typography variant='overline'>{headerText}</Typography>
-         </Box> : headerText
-        }
-
+      <DialogTitle
+        variant='h1'
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '1em',
+        }}
+      >
+        {headerIcon && headerIcon}
+        {headerText}
       </DialogTitle>
       <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
       <DialogContent>{children}</DialogContent>

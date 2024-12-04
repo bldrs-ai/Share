@@ -1,6 +1,7 @@
 import React, {ReactElement, createRef, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
+import {useLocation} from 'react-router'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -10,13 +11,12 @@ import Typography from '@mui/material/Typography'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
-import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/CutPlaneMenu'
+import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/hashState'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
 import {HASH_PREFIX_SHARE} from './hashState'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import ShareIcon from '@mui/icons-material/Share'
-import CopyIcon from '../../assets/icons/Copy.svg'
+import ShareIcon from '@mui/icons-material/ShareOutlined'
 
 
 /**
@@ -36,7 +36,7 @@ export default function ShareControl() {
       isDialogDisplayed={isShareVisible}
       setIsDialogDisplayed={setIsShareVisible}
       hashPrefix={HASH_PREFIX_SHARE}
-      placement='left'
+      placement='bottom'
     >
       <ShareDialog
         isDialogDisplayed={isShareVisible}
@@ -66,9 +66,10 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
 
   const urlTextFieldRef = createRef()
+  const location = useLocation()
 
   useEffect(() => {
-    if (viewer && isDialogDisplayed) {
+    if (viewer?.clipper && isDialogDisplayed) {
       if (isCameraInUrl) {
         addCameraUrlParams(cameraControls)
       } else {
@@ -77,17 +78,18 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
       if (isCutPlaneActive) {
         setIsPlaneInUrl(true)
-        addPlanesToHashState(viewer, model)
+        addPlanesToHashState(location, viewer, model)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewer, model, isDialogDisplayed])
+  }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, location, model, viewer, viewer?.clipper])
+
 
   const onCopy = (event) => {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(window.location)
     urlTextFieldRef.current.select()
   }
+
 
   const toggleCameraIncluded = () => {
     if (isCameraInUrl) {
@@ -102,11 +104,12 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }
 
+
   const togglePlaneIncluded = () => {
     if (isPlaneInUrl) {
-      removePlanesFromHashState()
+      removePlanesFromHashState(location)
     } else {
-      addPlanesToHashState(viewer, model)
+      addPlanesToHashState(location, viewer, model)
     }
     setIsPlaneInUrl(!isPlaneInUrl)
   }
@@ -119,7 +122,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='Copy Link'
-      actionIcon={<CopyIcon className='icon-share'/>}
+      actionIcon={<ContentCopyIcon className='icon-share'/>}
       actionCb={onCopy}
     >
       <Stack spacing={1}>

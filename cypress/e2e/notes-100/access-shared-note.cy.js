@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {TITLE_NOTE, TITLE_NOTES} from '../../../src/Components/Notes/component'
 import {waitForModel, homepageSetup, setIsReturningUser} from '../../support/utils'
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1072} */
@@ -13,8 +14,7 @@ describe('Notes 100: Access shared note', () => {
       waitForModel()
     })
     it('Notes open - Screen', () => {
-      // Panel title to contain 'NOTES' string
-      cy.get('[data-testid="panelTitle"]').contains('NOTES')
+      cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
       // List of notes to be visible
       cy.get('.MuiList-root').should('exist')
       cy.percySnapshot()
@@ -27,7 +27,7 @@ describe('Notes 100: Access shared note', () => {
     })
 
     it('Panel title to contain NOTE string and back button', () => {
-      cy.get('[data-testid="panelTitle"]').contains('NOTE')
+      cy.get(`[data-testid="PanelTitle-${TITLE_NOTE}"]`).contains(TITLE_NOTE)
       cy.get('[data-testid="Back to the list"]').should('exist')
     })
 

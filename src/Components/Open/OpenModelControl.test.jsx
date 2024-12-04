@@ -8,6 +8,7 @@ import {
   mockedUserLoggedOut,
 } from '../../__mocks__/authentication'
 import {OpenModelControlFixture} from './OpenModelControl.fixture'
+import {LABEL_GITHUB} from './component'
 
 
 jest.mock('../../net/github/Organizations', () => ({
@@ -21,7 +22,7 @@ describe('OpenModelControl', () => {
     const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
     const openControlButton = getByTestId('control-button-open')
     fireEvent.click(openControlButton)
-    const GithubTab = getByText('Github')
+    const GithubTab = getByText(LABEL_GITHUB)
     fireEvent.click(GithubTab)
     const loginTextMatcher = (content, node) => {
       const hasText = (_node) => _node.textContent.includes('Host your model on GitHub and log in to Share')
@@ -40,7 +41,7 @@ describe('OpenModelControl', () => {
     const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
     const openControlButton = getByTestId('control-button-open')
     fireEvent.click(openControlButton)
-    const GithubTab = getByText('Github')
+    const GithubTab = getByText(LABEL_GITHUB)
     fireEvent.click(GithubTab)
     const File = getByTestId('openFile')
     const Repository = await getByTestId('openRepository')

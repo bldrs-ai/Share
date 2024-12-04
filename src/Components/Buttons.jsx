@@ -14,17 +14,18 @@ import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
- * An icon button with a tooltip.  THe button will use a given buttonTestId or
- * the tip title as the data-testid on the button.
+ * An icon button with a tooltip.  The button will use a given dataTestId or the
+ * tip title as the data-testid on the button.
  *
  * @property {string} title Tooltip text
  * @property {Function} onClick Callback
  * @property {object} icon Button icon
  * @property {string} placement Tooltip placement
+ * @property {Array<ReactElement>} [children] Optional child elts, e.g. a hosted dialog
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
- * @property {string} [buttonTestId] Internal attribute for component testing.
+ * @property {string} [dataTestId] Internal attribute for component testing.
  * @return {ReactElement}
  */
 export function TooltipIconButton({
@@ -32,39 +33,54 @@ export function TooltipIconButton({
   onClick,
   icon,
   placement,
+  children,
   enabled = true,
   selected = false,
-  aboutInfo = true,
   color,
   size,
   variant,
-  buttonTestId,
+  dataTestId,
 }) {
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
   const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
-
-  const [openLocal, setOpenLocal] = useState(false)
-
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
+  // This moves the tooltip close to the icon instead of edge of button, which
+  // has a large margin.  Just eyeballed.
+  const offset = -15
   return (
     <Tooltip
-      open={isHelpTooltipsVisible || openLocal}
-      onClose={() => setOpenLocal(false)}
-      onOpen={() => setOpenLocal(aboutInfo)}
+      open={isHelpTooltipsVisible || isTooltipVisible}
+      onClose={() => setIsTooltipVisible(false)}
+      onOpen={() => setIsTooltipVisible(true)}
       title={title}
       describeChild
       placement={placement}
       PopperProps={{style: {zIndex: 0}}}
+      arrow={true}
+      enterDelay={1000}
+      slotProps={{
+        popper: {
+          modifiers: [
+            {
+              name: 'offset',
+              options: {
+                offset: [0, offset],
+              },
+            },
+          ],
+        },
+      }}
     >
       <ToggleButton
         selected={selected}
         onClick={onClick}
-        value={''}
+        value=''
         size={size}
         color={color}
         variant={variant}
         disabled={!enabled}
-        data-testid={buttonTestId || title}
+        data-testid={dataTestId || title}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',
@@ -93,6 +109,7 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   children,
+  dataTestId,
   ...props
 }) {
   assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
@@ -100,13 +117,13 @@ export function ControlButton({
     <>
       <TooltipIconButton
         title={title}
-        icon={icon}
         onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
+        icon={icon}
         selected={isDialogDisplayed}
         variant='control'
         color='success'
         size='small'
-        buttonTestId={props['data-testid'] || `control-button-${title.toLowerCase()}`}
+        dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
         {...props}
       />
       {children}
@@ -127,6 +144,7 @@ export function ControlButtonWithHashState({
   hashPrefix,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  children,
   ...props
 }) {
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
@@ -150,7 +168,9 @@ export function ControlButtonWithHashState({
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
       {...props}
-    />
+    >
+      {children}
+    </ControlButton>
   )
 }
 
@@ -210,6 +230,7 @@ export function FullScreenButton({onClick}) {
       title='Full screen'
       onClick={onClick}
       icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
+      placement='left'
       size='medium'
     />
   )
@@ -226,6 +247,7 @@ export function BackButton({onClick}) {
       title='Back'
       onClick={onClick}
       icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
+      placement='left'
       size='medium'
     />
   )

@@ -1,13 +1,10 @@
 import React, {ReactElement, useRef} from 'react'
 import Box from '@mui/material/Box'
-import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
-import NotesPanel from '../Notes/NotesPanel'
-import PropertiesPanel from '../Properties/PropertiesPanel'
 import useStore from '../../store/useStore'
-import {hexToRgba} from '../../utils/color'
+import {assertDefined} from '../../utils/assert'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
 
@@ -15,42 +12,50 @@ import VerticalResizerButton from './VerticalResizerButton'
 /**
  * Container for Notes and Properties
  *
+ * @property {boolean} isDrawerVisible State toggle for drawer state
+ * @property {number} drawerWidth In pixels
+ * @property {number} drawerWidthInitial In pixels
+ * @property {Function} setDrawerWidth In pixels
+ * @property {boolean} [isResizeOnLeft] Position of the resize handle. Default: true
+ * @property {string} [dataTestId] data-testid tag
+ * @property {Array<ReactElement>} children Drawer content
  * @return {ReactElement}
  */
-export default function SideDrawer() {
-  const isNotesVisible = useStore((state) => state.isNotesVisible)
-  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
-  const sidebarHeight = useStore((state) => state.sidebarHeight)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
-
+export default function SideDrawer({
+  isDrawerVisible,
+  drawerWidth,
+  drawerWidthInitial,
+  setDrawerWidth,
+  children,
+  isResizeOnLeft = true,
+  dataTestId = 'SideDrawer',
+}) {
+  assertDefined(isDrawerVisible, drawerWidth, drawerWidthInitial, setDrawerWidth, isResizeOnLeft, dataTestId, children)
+  // Only one bottom drawer, so accessed here instead of passed in
+  const drawerHeight = useStore((state) => state.drawerHeight)
+  const drawerHeightInitial = useStore((state) => state.drawerHeightInitial)
+  const setDrawerHeight = useStore((state) => state.setDrawerHeight)
   const isMobile = useIsMobile()
   const theme = useTheme()
-
-  const sidebarRef = useRef(null)
-
-  const thickness = 10
-  const isDrawerOpen = isNotesVisible === true || isPropertiesVisible === true
-  const isDividerVisible = isNotesVisible && isPropertiesVisible
-  const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
-
-  // TODO(pablo): removed what looked to be notes useEffect here.
+  const drawerRef = useRef(null)
+  const resizeButtonThickness = 10
+  const resizeMargin = isResizeOnLeft ? '0 0 0 1em' : '0 1em 0 0'
   return (
     <Box
       sx={Object.assign({
-        display: isDrawerOpen ? 'flex' : 'none',
+        display: isDrawerVisible ? 'flex' : 'none',
         flexDirection: 'row',
+        flexGrow: 1,
       }, isMobile ? {
         width: '100%',
-        height: sidebarHeight,
+        height: drawerHeight,
       } : {
         top: 0,
-        right: 0,
-        width: sidebarWidth,
+        width: drawerWidth,
         height: '100vh',
         minWidth: '8px',
-        maxWidth: '100vw',
       })}
+      data-testid={dataTestId}
     >
       <Paper
         sx={{
@@ -59,40 +64,38 @@ export default function SideDrawer() {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
-          background: theme.palette.secondary.main,
+          backgroundColor: theme.palette.secondary.backgroundColor,
         }}
-        ref={sidebarRef}
+        ref={drawerRef}
       >
-        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnLeft={true}/>}
-        {isMobile && <VerticalResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnTop={true}/>}
-        {/* Content */}
+        {!isMobile &&
+         <HorizonResizerButton
+           drawerRef={drawerRef}
+           thickness={resizeButtonThickness}
+           isOnLeft={isResizeOnLeft}
+           drawerWidth={drawerWidth}
+           drawerWidthInitial={drawerWidthInitial}
+           setDrawerWidth={setDrawerWidth}
+         />}
+        {isMobile &&
+         <VerticalResizerButton
+           drawerRef={drawerRef}
+           thickness={resizeButtonThickness}
+           isOnTop={true}
+           drawerHeight={drawerHeight}
+           drawerHeightInitial={drawerHeightInitial}
+           setDrawerHeight={setDrawerHeight}
+         />}
         <Box
           sx={{
             width: '100%',
-            margin: '0 1em',
+            margin: isMobile ? '1em 0 0 0' : resizeMargin,
             overflow: 'hidden',
+            padding: isMobile ? '0' : (isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em'),
           }}
+          data-testid='SideDrawer-OverflowHidden'
         >
-          <Box
-            sx={{
-              display: isNotesVisible ? 'block' : 'none',
-              height: isPropertiesVisible ? `50%` : '100%',
-              overflowX: 'hidden',
-              overflowY: 'auto',
-            }}
-          >
-            {isNotesVisible && <NotesPanel/>}
-          </Box>
-          {isDividerVisible && <Divider sx={{borderColor: borderColor}}/>}
-          <Box
-            sx={{
-              display: isPropertiesVisible ? 'block' : 'none',
-              height: isNotesVisible ? `50%` : '100%',
-              marginTop: isDividerVisible ? '1em' : '0',
-            }}
-          >
-            {isPropertiesVisible && <PropertiesPanel/>}
-          </Box>
+          {children}
         </Box>
       </Paper>
     </Box>

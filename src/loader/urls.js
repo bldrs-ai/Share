@@ -119,7 +119,6 @@ export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfs
     case 'github.com':
       if (!accessToken) {
         const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL_NEW : process.env.RAW_GIT_PROXY_URL)
-        console.warn('isOpfsAvailable, proxyUrl', isOpfsAvailable, proxyUrl)
 
         // Replace the protocol, host, and hostname in the target
         u.protocol = proxyUrl.protocol

@@ -3,6 +3,7 @@ import {createTheme} from '@mui/material/styles'
 import * as Preferences from '../privacy/preferences'
 import useStore from '../store/useStore'
 import {getComponentOverrides} from './Components'
+import {getTypography} from './Typography'
 import {day, night} from './Palette'
 
 
@@ -52,6 +53,7 @@ function loadTheme(mode, setMode, themeChangeListeners) {
   const activePalette = mode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
+    typography: getTypography(),
     shape: {borderRadius: 10},
     palette: activePalette,
     zIndex: {

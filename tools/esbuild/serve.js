@@ -5,6 +5,8 @@ import {createProxyServer} from './proxy.js'
 
 const ctx = await esbuild.context(config)
 
+await ctx.watch()
+
 /**
  * "It's not possible to hook into esbuild's local server to customize
  * the behavior of the server itself. Instead, behavior should be

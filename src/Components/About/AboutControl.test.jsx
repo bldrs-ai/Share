@@ -3,11 +3,10 @@ import React from 'react'
 import {fireEvent, render, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import * as FirstTime from '../../privacy/firstTime'
-import AboutControl from './AboutControl'
-import PkgJson from '../../../package.json'
+import AboutControl, {testId} from './AboutControl'
+import {BLDRS_MISSION} from './AboutDialog'
 
 
-const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 describe('AboutControl', () => {
   beforeEach(() => {
     Cookies.remove(FirstTime.COOKIE_NAME)
@@ -15,21 +14,21 @@ describe('AboutControl', () => {
 
   it('renders the AboutControl button', () => {
     const {getByTestId} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTestId('control-button-about')
+    const aboutControl = getByTestId(testId)
     expect(aboutControl).toBeInTheDocument()
   })
 
   it('renders AboutDialog when control is pressed', () => {
-    const {getByTitle, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTitle(bldrsVersionString)
+    const {getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const aboutControl = getByTestId(testId)
     fireEvent.click(aboutControl)
-    const dialogTitle = getByText('Build every thing together')
+    const dialogTitle = getByText(BLDRS_MISSION)
     expect(dialogTitle).toBeInTheDocument()
   })
 
   it('updates the document title when the dialog is open', async () => {
     const {getByTestId} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTestId('control-button-about')
+    const aboutControl = getByTestId(testId)
     fireEvent.click(aboutControl)
     await(waitFor(() => expect(document.title).toBe('About — bldrs.ai')))
   })

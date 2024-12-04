@@ -1,11 +1,10 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect} from 'react'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setParams, removeParams, removeParamsFromHash, setParamsToHash, batchUpdateHash} from '../../utils/location'
-import {CloseButton, TooltipIconButton} from '../Buttons'
+import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
-import {removeMarkerUrlParams} from '../Markers/MarkerControl'
-import {HASH_PREFIX_COMMENT, HASH_PREFIX_NOTES} from './hashState'
+import {navBackToIssue, setHashParams} from './hashState'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -14,13 +13,18 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 
 /** @return {ReactElement} */
 export default function NotesNavBar() {
+  const {isAuthenticated} = useAuth0()
   const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
+  const setIsCreateNoteVisible = useStore((state) => state.setIsCreateNoteVisible)
+
   const notes = useStore((state) => state.notes)
+
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
-  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+
+  const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
   const setSelectedPlaceMarkInNoteIdData = useStore((state) => state.setSelectedPlaceMarkInNoteIdData)
@@ -38,7 +42,7 @@ export default function NotesNavBar() {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
-      setParams(HASH_PREFIX_NOTES, {id: note.id})
+      setHashParams({id: note.id})
       if (note.url) {
         setCameraFromParams(note.url)
         addCameraUrlParams()
@@ -49,11 +53,9 @@ export default function NotesNavBar() {
   }
 
 
-  /** Hide panel and remove hash state */
-  function onCloseClick() {
-    setIsNotesVisible(false)
-    removeParams(HASH_PREFIX_NOTES)
-  }
+  useEffect(() => {
+    setIsCreateNoteVisible(isAuthenticated)
+  }, [isAuthenticated, setIsCreateNoteVisible])
 
 
   return (
@@ -83,13 +85,7 @@ export default function NotesNavBar() {
              setSelectedPlaceMarkId(null)
              setSelectedNoteId(null)
              setSelectedPlaceMarkInNoteIdData(null)
-             const _location = window.location
-             batchUpdateHash(_location, [
-              (hash) => removeMarkerUrlParams({hash}), // Remove marker params
-              (hash) => removeParamsFromHash(hash, HASH_PREFIX_NOTES), // Remove notes params
-              (hash) => removeParamsFromHash(hash, HASH_PREFIX_COMMENT), // Remove comment params
-              (hash) => setParamsToHash(hash, HASH_PREFIX_NOTES), // Add notes params
-            ])
+             navBackToIssue()
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'
@@ -131,7 +127,6 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
-
         {!selectedNoteId && (isCreateNoteVisible ?
           <TooltipIconButton
             title='Back to the list'
@@ -149,9 +144,7 @@ export default function NotesNavBar() {
               size='medium'
               variant='noBackground'
             />
-
         )}
-        <CloseButton onCloseClick={onCloseClick}/>
       </Box>
     </Box>
   )

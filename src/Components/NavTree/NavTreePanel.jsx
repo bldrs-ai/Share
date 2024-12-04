@@ -1,10 +1,9 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import {styled} from '@mui/material/styles'
-import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
@@ -12,6 +11,7 @@ import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ListIcon from '@mui/icons-material/List'
+import {removeHashParams} from './hashState'
 import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
 
@@ -28,7 +28,7 @@ export default function NavTreePanel({
   pathPrefix,
   selectWithShiftClickEvents,
 }) {
-  assertDefined(...arguments)
+  assertDefined(model, pathPrefix, selectWithShiftClickEvents)
   const defaultExpandedElements = useStore((state) => state.defaultExpandedElements)
   const defaultExpandedTypes = useStore((state) => state.defaultExpandedTypes)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
@@ -43,33 +43,26 @@ export default function NavTreePanel({
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const idToRef = {}
-
   const isNavTree = navigationMode === 'spatial-tree'
 
-  const theme = useTheme()
 
-  // TODO(pablo): major perf hit?
-  useEffect(() => {
-    const nodeId = selectedElements[0]
-    if (nodeId) {
-      const ref = idToRef[nodeId]
-      if (typeof ref?.current?.scrollIntoView === 'function') {
-        ref?.current?.scrollIntoView({
-          block: 'center',
-        })
-      }
-    }
-  }, [selectedElements, idToRef])
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsNavTreeVisible(false)
+    removeHashParams()
+  }
 
 
   return (
     <Panel
-      title='Navigation'
-      onCloseClick={() => setIsNavTreeVisible(false)}
-      action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
-      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
+      title={TITLE}
+      actions={
+        <Actions
+          navigationMode={navigationMode}
+          setNavigationMode={setNavigationMode}
+        />}
+      onClose={onClose}
+      data-testid='NavTreePanel'
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
@@ -93,7 +86,6 @@ export default function NavTreePanel({
           'overflowY': 'scroll',
           'overflowX': 'hidden',
           'flexGrow': 1,
-          'backgroundColor': theme.palette.secondary.main,
           '&:focus svg': {
             visibility: 'visible !important',
           },
@@ -107,16 +99,14 @@ export default function NavTreePanel({
               element={rootElement}
               pathPrefix={pathPrefix}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
-              idToRef={idToRef}
             /> :
-            <TypesNavTree
-              keyId='types-nav-tree-root'
-              model={model}
-              types={elementTypesMap}
-              pathPrefix={pathPrefix}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              idToRef={idToRef}
-            />
+          <TypesNavTree
+            keyId='types-nav-tree-root'
+            model={model}
+            types={elementTypesMap}
+            pathPrefix={pathPrefix}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
         }
       </TreeView>
     </Panel>
@@ -135,6 +125,8 @@ function Actions({navigationMode, setNavigationMode}) {
       },
     },
   }))
+
+
   return (
     <StyledToggleButtonGroup
       value={navigationMode}
@@ -155,3 +147,6 @@ function Actions({navigationMode, setNavigationMode}) {
     </StyledToggleButtonGroup>
   )
 }
+
+
+export const TITLE = 'Navigation'

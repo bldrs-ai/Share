@@ -24,7 +24,6 @@ export default function CustomContent(props, ref) {
     hasHideIcon,
     isExpandable,
     selectWithShiftClickEvents,
-    idToRef,
   } = props
 
   const {
@@ -47,8 +46,6 @@ export default function CustomContent(props, ref) {
     handleSelection(event)
     selectWithShiftClickEvents(event.shiftKey, parseInt(nodeId))
   }
-
-  idToRef[nodeId] = ref
 
   // TODO(pablo): the following uses a measured value of 30px width for the
   // visiblity icon, to compute widths for a straight column layout of all of

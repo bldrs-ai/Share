@@ -5,6 +5,7 @@ import * as Ifc from '@bldrs-ai/ifclib'
 import {render, renderHook, act, fireEvent, screen, waitFor, within} from '@testing-library/react'
 import * as Filetype from '../Filetype'
 import ShareMock from '../ShareMock'
+import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
@@ -14,11 +15,9 @@ import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush} from '../utils/tests'
 import CadView from './CadView'
-import PkgJson from '../../package.json'
 
 
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
-const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
 // mock createObjectURL
@@ -153,7 +152,7 @@ describe('CadView', () => {
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(bldrsVersionString))
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
   })
 
 
@@ -165,7 +164,7 @@ describe('CadView', () => {
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(bldrsVersionString))
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 3 // First for root, second from URL path
 
@@ -196,7 +195,7 @@ describe('CadView', () => {
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(bldrsVersionString))
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
 
     // Identify the drop zone element using the cadview-dropzone attribute
     const dropZone = screen.getByTestId('cadview-dropzone')
@@ -292,7 +291,7 @@ describe('CadView', () => {
       <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>,
     )
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(bldrsVersionString))
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
     await actAsyncFlush()
 
     render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
