@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
+import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import AppsSideDrawer from './AppsSideDrawer'
@@ -9,6 +10,7 @@ import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 import OperationsGroup from './OperationsGroup'
+import TabbedPanels from './TabbedPanels'
 
 
 /**
@@ -19,6 +21,7 @@ import OperationsGroup from './OperationsGroup'
  * @return {ReactElement}
  */
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
+  const isMobile = useIsMobile()
   return (
     <Stack
       direction='row'
@@ -27,18 +30,20 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       sx={{width: '100vw', height: '100vh'}}
       data-testid='RootPane'
     >
-      <Box
-        sx={{
-          flexBasis: '0%',
-          flexGrow: 1,
-        }}
-      >
-        <NavTreeAndVersionsDrawer
-          pathPrefix={pathPrefix}
-          branch={branch}
-          selectWithShiftClickEvents={selectWithShiftClickEvents}
-        />
-      </Box>
+      {!isMobile &&
+       <Box
+         sx={{
+           flexBasis: '0%',
+           flexGrow: 1,
+         }}
+       >
+         <NavTreeAndVersionsDrawer
+           pathPrefix={pathPrefix}
+           branch={branch}
+           selectWithShiftClickEvents={selectWithShiftClickEvents}
+         />
+       </Box>
+      }
       <Stack
         justifyContent='space-between'
         sx={{width: '100%', height: '100%'}}
@@ -66,10 +71,17 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           <LoadingBackdrop/>
         </Box>
       </Stack>
-      <Stack direction='row' style={{pointerEvents: 'auto'}} data-testid='RightPane'>
-        <NotesAndPropertiesDrawer/>
-        <AppsSideDrawer/>
-      </Stack>
+      {isMobile ?
+       <TabbedPanels
+         pathPrefix={pathPrefix}
+         branch={branch}
+         selectWithShiftClickEvents={selectWithShiftClickEvents}
+       /> :
+       <Stack direction='row' style={{pointerEvents: 'auto'}} data-testid='RightPane'>
+         <NotesAndPropertiesDrawer/>
+         <AppsSideDrawer/>
+       </Stack>
+      }
     </Stack>
   )
 }

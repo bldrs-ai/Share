@@ -20,7 +20,11 @@ import {useIsMobile} from '../Hooks'
 export default function Panel({title, onClose, children, actions = null, ...props}) {
   assertDefined(title, onClose, children)
   return (
-    <Box sx={{height: '100%', overflow: 'hidden'}} {...props}>
+    <Box
+      sx={{height: '100%', overflow: 'hidden'}}
+      {...props}
+      data-testid='PanelBox'
+    >
       <PanelTitle
         title={title}
         onClose={onClose}
@@ -67,7 +71,7 @@ function PanelTitle({title, onClose, actions}) {
       }}
       data-testid='PanelTitle'
     >
-      <Typography variant='h2'>{title}</Typography>
+      {!isMobile && <Typography variant='h2'>{title}</Typography>}
       <Box
         sx={{
           display: 'flex',

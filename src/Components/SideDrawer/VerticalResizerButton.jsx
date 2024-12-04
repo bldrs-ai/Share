@@ -38,7 +38,7 @@ export default function VerticalResizerButton({
   const stopResizing = useCallback(() => setIsResizing(false), [])
   const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
 
-    const half = 0.5
+  const half = 0.5
   const resize = useCallback(
     (mouseMoveEvent) => {
       let expansionDrawerHeight = window.innerHeight
@@ -174,7 +174,7 @@ export default function VerticalResizerButton({
         sx={{
           width: '150px',
           paddingTop: `10px`,
-          paddingBottom: '40px',
+          paddingBottom: '20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

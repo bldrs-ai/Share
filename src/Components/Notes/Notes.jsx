@@ -188,7 +188,7 @@ export default function Notes() {
   return (hasError ? <ApplicationError/> :
     <List
       spacing={3}
-      sx={{padding: '0px'}}
+      sx={{height: '100%', padding: '0px', overflow: 'scroll'}}
       data-test-id='list-notes'
     >
       {isLoadingNotes && !isCreateNoteVisible && <Loader type={'linear'}/>}

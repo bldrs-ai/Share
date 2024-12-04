@@ -1,4 +1,5 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect} from 'react'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -12,12 +13,18 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 
 /** @return {ReactElement} */
 export default function NotesNavBar() {
+  const {isAuthenticated} = useAuth0()
   const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
+  const setIsCreateNoteVisible = useStore((state) => state.setIsCreateNoteVisible)
+
   const notes = useStore((state) => state.notes)
+
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+
+  const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
   const setSelectedPlaceMarkInNoteIdData = useStore((state) => state.setSelectedPlaceMarkInNoteIdData)
@@ -44,6 +51,11 @@ export default function NotesNavBar() {
       }
     }
   }
+
+
+  useEffect(() => {
+    setIsCreateNoteVisible(isAuthenticated)
+  }, [isAuthenticated, setIsCreateNoteVisible])
 
 
   return (
@@ -115,7 +127,6 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
-
         {!selectedNoteId && (isCreateNoteVisible ?
           <TooltipIconButton
             title='Back to the list'
@@ -133,7 +144,6 @@ export default function NotesNavBar() {
               size='medium'
               variant='noBackground'
             />
-
         )}
       </Box>
     </Box>

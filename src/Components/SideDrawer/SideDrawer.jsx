@@ -89,9 +89,9 @@ export default function SideDrawer({
         <Box
           sx={{
             width: '100%',
-            margin: resizeMargin,
+            margin: isMobile ? '1em 0 0 0' : resizeMargin,
             overflow: 'hidden',
-            padding: isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em',
+            padding: isMobile ? '0' : (isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em'),
           }}
           data-testid='SideDrawer-OverflowHidden'
         >

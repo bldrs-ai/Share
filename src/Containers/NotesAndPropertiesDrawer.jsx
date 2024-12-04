@@ -16,11 +16,11 @@ export default function NotesAndPropertiesDrawer() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
-  const isDrawerVisible = isNotesVisible === true || isPropertiesVisible === true
-
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const rightDrawerWidthInitial = useStore((state) => state.rightDrawerWidthInitial)
   const setRightDrawerWidth = useStore((state) => state.setRightDrawerWidth)
+
+  const isDrawerVisible = isNotesVisible || isPropertiesVisible
 
   return (
     <SideDrawer
