@@ -70,10 +70,11 @@ export default function TabbedPanels({
 
 
   const isDrawerVisible =
-    isAppsVisible ||
-      isNotesVisible ||
-      isPropertiesVisible ||
-      isVersionsVisible
+        isAppsVisible ||
+        isNavTreeVisible ||
+        isNotesVisible ||
+        isPropertiesVisible ||
+        isVersionsVisible
 
 
   /** @return {boolean} */
