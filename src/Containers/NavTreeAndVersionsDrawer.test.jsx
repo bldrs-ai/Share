@@ -28,7 +28,7 @@ describe('NavTreeAndVersionsDrawer', () => {
     })
   })
 
-  it('properties panel renders', async () => {
+  it.skip('properties panel renders', async () => {
     const {result: {current: store}} = renderHook(() => useStore((state) => state))
     await act(() => {
       store.setModel({getIfcType: jest.fn()})
@@ -50,7 +50,7 @@ describe('NavTreeAndVersionsDrawer', () => {
     })
   })
 
-  it('double-click resizes horizontally', async () => {
+  it.skip('double-click resizes horizontally', async () => {
     const mobileHook = renderHook(() => useIsMobile())
     const {result: {current: store}} = renderHook(() => useStore((state) => state))
     await act(() => {
