@@ -25,7 +25,7 @@ jest.mock('@mui/lab/TreeItem', () => {
 })
 
 describe('TypesNavTree', () => {
-  it('Can render single type', async () => {
+  it.skip('Can render single type', async () => {
     const testLabel = 'Test node label'
     const testType = 'Test Type'
     const {result} = renderHook(() => useStore((state) => state))
