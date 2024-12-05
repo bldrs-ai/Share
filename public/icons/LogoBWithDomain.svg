@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  version="1.1"
+  width="68"
+  height="100"
+  viewBox="0 0 68 100">
+  <title>BLDRS.AI</title>
+  <style>
+    text {
+      text-anchor: middle;
+      font: normal 10pt sans-serif;
+    }
+    .face {
+      stroke: black;
+    }
+    .face-left {
+      fill: lime;
+    }
+    .face-front {
+      fill: white;
+    }
+  </style>
+  <g transform="translate(15, 15) scale(0.6)">
+    <path class="face face-left" d="M17.9675 2L4.93939 8.07977V87.9853H17.9675V2Z"/>
+    <path class="face face-left" d="M19.5708 43.6635V87.9538L36.2068 87.9852L36.2541 39.292L19.5708 43.6635Z"/>
+    <path class="face face-front" d="M17.9675 2L45.7607 4.9999V40.2734L36.2068 39.3472L19.5707 43.6636V87.9853H17.9675V2Z"/>
+    <path class="face face-front" d="M36.1648 39.292L36.2068 87.9852H64V42.0577L36.1648 39.292Z"/>
+  </g>
+  <text x="34" y="90" class="title">BLDRS.AI</text>
+</svg>
+<!-- Keep this in sync with ./LogoB.svg -->

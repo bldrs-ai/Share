@@ -40,8 +40,8 @@ function AppsEntry({item, clickHandler}) {
         }}
         >
           <CardMedia
-            component="img"
-            height="140"
+            component='img'
+            height='140px'
             image={item.image}
             alt={item.name}
             sx={{
@@ -51,10 +51,10 @@ function AppsEntry({item, clickHandler}) {
             }}
           />
           <CardContent>
-            <Typography variant="body1" component="div">
+            <Typography variant='body1' component='div'>
               {item.name}
             </Typography>
-            <Typography variant="body2">
+            <Typography variant='body2'>
               {item.description}
             </Typography>
           </CardContent>
