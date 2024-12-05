@@ -1,7 +1,7 @@
 import React, {ReactElement, useState} from 'react'
 import {Grid, Chip, Typography} from '@mui/material'
+import AccessibilityIcon from '@mui/icons-material/AccessibilityOutlined'
 import Bplaza from '../../assets/icons/Bplaza.svg'
-import Eisvogel from '../../assets/icons/Eisvogel.svg'
 import Gear from '../../assets/icons/Gear.svg'
 import Momentum from '../../assets/icons/Momentum.svg'
 import Placeholder from '../../assets/icons/Placeholder.svg'
@@ -21,22 +21,22 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
   const modelPath = {
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Eisvogel: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
     Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
     Schependomlaan: '/share/v/gh/bldrs-ai/test-models/main/ifc/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
     Structural_detail: '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/171210AISC_Sculpture_param.ifc',
     Bldrs_plaza: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
+    Vitruvius: '/share/v/gh/bldrs-ai/test-models/main/fbx/samba-dancing.fbx#c:-1.016,129.356,253.729,0,90.107,2.409',
     Gear: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
   }
 
   const modelIcon = {
     Momentum: <Momentum style={iconsStyle}/>,
     Schneestock: <Sheenstock style={iconsStyle}/>,
-    Eisvogel: <Eisvogel style={iconsStyle}/>,
     Seestrasse: <Seestrasse style={iconsStyle}/>,
     Schependomlaan: <Schependomlaan style={iconsStyle}/>,
     Structural_detail: <Placeholder style={iconsStyle}/>,
     Bldrs_plaza: <Bplaza style={iconsStyle}/>,
+    Vitruvius: <AccessibilityIcon style={iconsStyle}/>,
     Gear: <Gear style={iconsStyle}/>,
   }
 

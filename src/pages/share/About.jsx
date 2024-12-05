@@ -6,6 +6,7 @@ import TitledLayout from '../../layouts/TitledLayout'
 
 /** @return {ReactElement} */
 export default function About() {
+  const prodPrefix = 'https://bldrs.ai/share/v/gh/bldrs-ai'
   return (
     <TitledLayout title='Bldrs Share: High-performance Web-based CAD sharing'>
       <Typography variant='p'>
@@ -21,7 +22,11 @@ export default function About() {
         <strong>Correct & Fast</strong>
       </Typography>
       <Typography variant='p'>
-        We bring your complex CAD models to life (supporting IFC/STEP, GLTF, STL, OBJ and
+        We bring your complex CAD models to life (supporting
+        <Link href={`${prodPrefix}/test-models/main/ifc/Schependomlaan.ifc#c:36.563,6.143,-16.59,5.457,5.29,0.326`}>IFC</Link>/
+        <Link href={`${prodPrefix}/test-models/main/step/zoo.dev/a-gear.step`}>STEP</Link>,
+        <Link href={`${prodPrefix}/test-models/main/stl/slotted_disk.stl#c:1.273,0.548,1.167,0.089,-0.072,-0.087`}>STL</Link>,
+        <Link href={`${prodPrefix}/headless-three/main/models/obj/tree.obj`}>OBJ</Link> and
         more) with the highest quality and best-in-class performance.
       </Typography>
       <Typography variant='p'>
