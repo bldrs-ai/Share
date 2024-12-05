@@ -29,11 +29,22 @@ export default function AppsPanel() {
 
 /** @return {ReactElement} */
 export function AppPreviewPanel({item}) {
+  const setIsAppsVisible = useStore((state) => state.setIsAppsVisible)
   const toggleAppsDrawer = useStore((state) => state.toggleAppsDrawer)
   const setSelectedApp = useStore((state) => state.setSelectedApp)
+
+
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsAppsVisible(false)
+    removeHashParams()
+  }
+
+
   return (
     <Panel
       title={item.appName}
+      onClose={onClose}
       iconSrc={item.icon}
       controlsGroup={
         <ButtonGroup>

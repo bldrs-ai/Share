@@ -1,16 +1,9 @@
 [
   {
-    "appName": "MOD",
-    "description": "Parts Supplier",
-    "image": "http://localhost:8080/icons/mod_logo.jpeg",
-    "action": "/widgets/mod.html",
-    "icon": "http://localhost:8080/icons/mod_logo.jpeg"
-  },
-  {
-    "appName": "vyzn",
-    "description": "Life Cycle Analysis",
-    "image": "https://www.vyzn.tech/wp-content/themes/stuiq-base/assets/images/logo.svg",
-    "action": "/widgets/example.html",
-    "icon": "https://www.vyzn.tech/wp-content/uploads/2023/02/cropped-loop_favicon-180x180.png"
+    "appName": "Example",
+    "description": "Events Logger",
+    "image": "http://localhost:8080/icons/LogoBWithDomain.svg",
+    "action": "/widgets/event-logger.html",
+    "icon": "http://localhost:8080/icons/LogoB.svg"
   }
 ]
