@@ -1,4 +1,4 @@
-<img width="1430" alt="image" src="https://user-images.githubusercontent.com/2480879/209037130-43d1d04e-d943-452c-93fc-2d556c4f17be.png">
+![image](https://github.com/user-attachments/assets/89c98fba-0057-45f2-a02a-161ced37f88c)
 
 # Bldrs Share
 Bldrs Share is a high-performance web application for BIM & CAD integration from [bldrs.ai](https://bldrs.ai/).  Built on open-standards and open-source, for speed, accuracy, and flexibility.  Designed for real-time, browser-based teamwork, Bldrs Share empowers teams to effortlessly share detailed models and collaborate seamlessly from any device.
