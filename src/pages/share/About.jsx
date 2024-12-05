@@ -1,0 +1,69 @@
+import React, {ReactElement} from 'react'
+import Link from '@mui/material/Link'
+import Typography from '@mui/material/Typography'
+import TitledLayout from '../../layouts/TitledLayout'
+
+
+/** @return {ReactElement} */
+export default function About() {
+  return (
+    <TitledLayout title='Bldrs Share: High-performance Web-based CAD sharing'>
+      <Typography variant='p'>
+        Bldrs Share is a high-performance web application for CAD model sharing and
+        collaboration, built on open-source standards for speed, accuracy, and flexibility.
+        Designed for real-time, browser-based teamwork, Bldrs Share empowers teams to
+        effortlessly share detailed models and collaborate seamlessly from any device.
+      </Typography>
+      <Typography variant='h2'>
+        <strong>Key Features of Bldrs Share</strong>
+      </Typography>
+      <Typography variant='h3'>
+        <strong>Correct & Fast</strong>
+      </Typography>
+      <Typography variant='p'>
+        We bring your complex CAD models to life (supporting IFC/STEP, GLTF, STL, OBJ and
+        more) with the highest quality and best-in-class performance.
+      </Typography>
+      <Typography variant='p'>
+        <strong>Fast is our favorite feature!</strong>
+      </Typography>
+      <Typography variant='p'>
+        <Link href="/share/about/conway">Explore the Conway Engine →</Link>
+      </Typography>
+      <Typography variant='h2'>
+        <strong>Browser-First, Desktop-Free</strong>
+      </Typography>
+      <Typography variant='p'>
+        Share lets you simply drag-and-drop your model files for instant browser-based viewing,
+        eliminating backend latency, SaaS dependencies, and data residency issues. Work from
+        anywhere, on any device, with just a web connection.
+      </Typography>
+      <Typography variant='h2'>
+        <strong>GitHub Integration for Team Collaboration</strong>
+      </Typography>
+      <Typography variant='p'>
+        Access, manage, and share your models using your GitHub credentials. With seamless
+        GitHub integration, Share lets you keep your model library organized and accessible, while
+        making it easy to log changes, share projects, and collaborate across teams.
+      </Typography>
+      <Typography variant='p'>
+        Notes, Cameras and Pins Capture specific views and sections of the model, drop pins on
+        geometry, and link notes to particular elements or perspectives. These tools make sharing
+        insights and feedback effortless, so teams stay aligned throughout the design process.
+      </Typography>
+      <Typography variant='p'>
+        Versioning and History Tracking Built on Git version control, Share provides intuitive
+        versioning that makes it simple to navigate model history, manage revisions, and keep
+        track of design evolution over time.
+      </Typography>
+      <Typography variant='h2'>
+        <strong>Navigation</strong>
+      </Typography>
+      <Typography variant='p'>
+        Explore 3D geometry with ease—navigate spatial structures, elements, and properties
+        directly within the interface. Manage element attributes and IFC Property Sets in a
+        clear, streamlined view, enabling precise control over model details.
+      </Typography>
+    </TitledLayout>
+  )
+}
