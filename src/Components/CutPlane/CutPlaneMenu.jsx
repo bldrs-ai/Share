@@ -152,7 +152,7 @@ export default function CutPlaneMenu() {
         <MenuItem
           onClick={() => {
             setAnchorEl(null)
-            resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
+            resetState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
           }}
           data-testid='menu-item-clear-all'
         >
@@ -175,7 +175,7 @@ export default function CutPlaneMenu() {
  */
 export function resetState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive) {
   // These aren't setup when CadView inits
-  if (viewer && setCutPlaneDirections && setIsCutPlaneActive) {
+  if (location && viewer && setCutPlaneDirections && setIsCutPlaneActive) {
     removePlanes(viewer)
     removeHashParams(location)
     setCutPlaneDirections([])
