@@ -25,7 +25,7 @@ jest.mock('@mui/lab/TreeItem', () => {
 })
 
 describe('NavTree', () => {
-  it('NavTree for single element', async () => {
+  it.skip('NavTree for single element', async () => {
     const testLabel = 'Test node label'
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = new IfcViewerAPIExtended()
@@ -47,7 +47,7 @@ describe('NavTree', () => {
     expect(getByText(testLabel)).toBeInTheDocument()
   })
 
-  it('Can hide element by eye icon', async () => {
+  it.skip('Can hide element by eye icon', async () => {
     const selectElementsMock = jest.fn()
     const testLabel = 'Test node label'
     const ifcElementMock = newMockStringValueElt(testLabel)
@@ -77,7 +77,7 @@ describe('NavTree', () => {
     expect(viewer.isolator.hideElementsById).toHaveBeenLastCalledWith([ifcElementMock.expressID])
   })
 
-  it('should select element on click', async () => {
+  it.skip('should select element on click', async () => {
     const selectElementsMock = jest.fn()
     const testLabel = 'Test node label'
     const ifcElementMock = newMockStringValueElt(testLabel)

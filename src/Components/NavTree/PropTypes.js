@@ -1,7 +1,8 @@
+// PropTypes.js
 import PropTypes from 'prop-types'
 
 
-export default {
+export const navTreeItemPropTypes = {
   /**
    * Override or extend the styles applied to the component.
    */
@@ -42,4 +43,25 @@ export default {
    * Multi-select callback
    */
   selectWithShiftClickEvents: PropTypes.func.isRequired,
+  /**
+   * Map of nodeId to ref
+   */
+  idToRef: PropTypes.object,
+  /**
+   * Expand/Collapse toggle handler
+   */
+  onIconClick: PropTypes.func,
+  /**
+   * Node click handler
+   */
+  onClick: PropTypes.func,
+  /**
+   * Depth of the node in the tree
+   */
+  nodeDepth: PropTypes.number,
+  /**
+   * Selection state
+   */
+  isSelected: PropTypes.bool,
 }
+
