@@ -39,8 +39,9 @@ export default function FirstPost() {
       </Typography>
       <Typography variant='h3'>Why Bldrs Share & Conway Engine?</Typography>
       <Typography variant='p'>
-        Start using Bldrs Share today to transform your CAD workflows. Join our community, explore the
-        documentation, and contribute to the development of the next-generation CAD tooling.
+        Start using <Link href="/">Bldrs Share</Link> today to transform your CAD workflows. Join our
+        community, explore the documentation, and contribute to the development of the
+        next-generation CAD tooling.
       </Typography>
       <Typography variant='p'>
         For more information, visit our project repositories on GitHub:
