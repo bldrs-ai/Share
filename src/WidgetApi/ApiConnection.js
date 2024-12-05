@@ -1,7 +1,7 @@
 /**
  * Abstract ApiConnection
  */
-class AbstractApiConnection {
+export default class AbstractApiConnection {
   /**
    * event resolver.
    *
@@ -85,5 +85,3 @@ class AbstractApiConnection {
     }
   }
 }
-
-export default AbstractApiConnection

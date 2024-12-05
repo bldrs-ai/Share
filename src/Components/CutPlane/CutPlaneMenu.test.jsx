@@ -5,14 +5,22 @@ import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
 import model from '../../__mocks__/MockModel.js'
 import ShareControl from '../Share/ShareControl'
-import CutPlaneMenu, {getPlanes} from './CutPlaneMenu'
-import {HASH_PREFIX_CUT_PLANE} from './hashState'
+import CutPlaneMenu from './CutPlaneMenu'
+import {HASH_PREFIX_CUT_PLANE, getPlanesFromHash} from './hashState'
 
 
 jest.mock('three')
 
 
 describe('CutPlaneMenu', () => {
+  beforeEach(() => {
+    delete global.window.location
+    global.window.location = {
+      hash: '',
+    }
+  })
+
+
   it('Section Button', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
@@ -90,29 +98,40 @@ describe('CutPlaneMenu', () => {
 
 
   // TODO(pablo): not sure why this is failing.  Works when full stood up.
-  it.skip('Plane Offset is correct', async () => {
+  it('Plane Offset is correct', async () => {
     const {result} = renderHook(() => useStore((state) => state))
+    const offset = 14
+    const hash = `#c:-136.31,37.98,62.86,-43.48,15.73,-4.34;${HASH_PREFIX_CUT_PLANE}:y=${offset}`
+    const pathname = `/v/p/index.ifc${hash}`
+    global.window.location = {
+      port: '123',
+      protocol: 'http:',
+      hostname: 'localhost',
+      pathname: pathname,
+      hash: hash,
+      href: `http://localhost:123${pathname}`,
+    }
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
+      result.current.cutPlanes = []
       result.current.setViewer(viewer)
       result.current.setModel(model)
     })
-    const urlSuffix = `/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34;${HASH_PREFIX_CUT_PLANE}:y=14`
     render(
         <ShareMock
           initialEntries={[
-            urlSuffix,
+            pathname,
           ]}
         >
           <CutPlaneMenu/>
         </ShareMock>)
     expect(result.current.cutPlanes[0].direction).toBe('y')
-    // eslint-disable-next-line no-magic-numbers
-    expect(result.current.cutPlanes[0].offset).toBe(14)
+    expect(result.current.cutPlanes[0].offset).toBe(offset)
+    delete global.window.location
   })
 
 
-  it('getPlanes handles many combinations', () => {
+  it('getPlanesFromHash handles many combinations', () => {
     const check = (actualPlanes, expectPlanes) => {
       expect(actualPlanes.length).toBe(expectPlanes.length)
       for (let i = 0; i < expectPlanes.length; i++) {
@@ -125,14 +144,14 @@ describe('CutPlaneMenu', () => {
 
     const pfx = HASH_PREFIX_CUT_PLANE
     /* eslint-disable no-magic-numbers */
-    check(getPlanes(''), [])
-    check(getPlanes(`${pfx}:x=1`), [['x', 1]])
-    check(getPlanes(`${pfx}:y=2`), [['y', 2]])
-    check(getPlanes(`${pfx}:z=3`), [['z', 3]])
-    check(getPlanes(`${pfx}:x=1,y=4`), [['x', 1], ['y', 4]])
-    check(getPlanes(`${pfx}:x=2,z=5`), [['x', 2], ['z', 5]])
-    check(getPlanes(`${pfx}:y=3,z=6`), [['y', 3], ['z', 6]])
-    check(getPlanes(`${pfx}:x=0,y=1.11111,z=2.22222`), [['x', 0], ['y', 1.111], ['z', 2.222]])
+    check(getPlanesFromHash(''), [])
+    check(getPlanesFromHash(`${pfx}:x=1`), [['x', 1]])
+    check(getPlanesFromHash(`${pfx}:y=2`), [['y', 2]])
+    check(getPlanesFromHash(`${pfx}:z=3`), [['z', 3]])
+    check(getPlanesFromHash(`${pfx}:x=1,y=4`), [['x', 1], ['y', 4]])
+    check(getPlanesFromHash(`${pfx}:x=2,z=5`), [['x', 2], ['z', 5]])
+    check(getPlanesFromHash(`${pfx}:y=3,z=6`), [['y', 3], ['z', 6]])
+    check(getPlanesFromHash(`${pfx}:x=0,y=1.11111,z=2.22222`), [['x', 0], ['y', 1.111], ['z', 2.222]])
     /* eslint-enable no-magic-numbers */
   })
 })

@@ -1,42 +1,37 @@
-import React, {useCallback} from 'react'
+import React, {ReactElement, useCallback} from 'react'
 import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
-import Grid from '@mui/material/Unstable_Grid2'
-import Typography from '@mui/material/Typography'
-import useStore from '../../store/useStore'
 import Card from '@mui/material/Card'
+import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
 import CardMedia from '@mui/material/CardMedia'
-import {CardActionArea} from '@mui/material'
-import {IFrameCommunicationChannel} from './AppStoreMessagesHandler'
-import AppStoreData from './AppStoreData.json'
+import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
+import Grid from '@mui/material/Unstable_Grid2'
+import useStore from '../../store/useStore'
+import AppsRegistry from './AppsRegistry.json'
+import {IFrameCommunicationChannel} from './AppsMessagesHandler'
 
 
-/** @return {React.Component} */
-export function AppStoreListing() {
-  const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)
+/** @return {ReactElement} */
+export function AppsListing() {
+  const setSelectedApp = useStore((state) => state.setSelectedApp)
   return (
-    <>
-      <Grid container spacing={2}>
-        {AppStoreData.map((item, index) => (
-          <Grid item={true} xs={6} sm={6} md={6} key={index}>
-            <AppStoreEntry
-              clickHandler={setSelectedStoreApp}
-              item={item}
-            />
-          </Grid>
-        ))}
-      </Grid>
-    </>
+    <Grid container spacing={1}>
+      {AppsRegistry.map((item, index) => (
+        <Grid xs={6} sm={6} md={6} key={index}>
+          <AppsEntry
+            clickHandler={setSelectedApp}
+            item={item}
+          />
+        </Grid>
+      ))}
+    </Grid>
   )
 }
 
 
-/** @return {React.Component} */
-export function AppStoreEntry({
-  item,
-  clickHandler,
-}) {
+/** @return {ReactElement} */
+function AppsEntry({item, clickHandler}) {
   return (
     <Paper>
       <Card>
@@ -69,8 +64,9 @@ export function AppStoreEntry({
   )
 }
 
-/** @return {React.Component} */
-export function AppStoreIFrame({
+
+/** @return {ReactElement} */
+export function AppIFrame({
   item,
 }) {
   const appFrameRef = useCallback((elt) => {

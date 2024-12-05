@@ -1,3 +1,7 @@
+const drawerWidthInitial = 350
+const drawerHeightInitial = '70vh'
+
+
 /**
  * SideDrawer store.
  *
@@ -10,19 +14,22 @@ export default function createSideDrawerSlice(set, get) {
     isSideDrawerEnabled: true,
     setIsSideDrawerEnabled: (isEnabled) => set(() => ({isSideDrawerEnabled: isEnabled})),
 
-    isSideDrawerVisible: false,
-    setIsSideDrawerVisible: (isVisible) => set(() => ({isSideDrawerVisible: isVisible})),
-    toggleIsSideDrawerVisible: () =>
-      set((state) => ({isSideDrawerVisible: !state.isSideDrawerVisible})),
+    drawerWidthInitial: drawerWidthInitial, // Leave constant. Don't change dynamically
+    drawerHeightInitial: drawerHeightInitial, // Leave constant. Don't change dynamically
 
-    sidebarWidth: '350px', // Same as sidebarWidthInitial
-    setSidebarWidth: (width) => set(() => ({sidebarWidth: width})),
+    leftDrawerWidth: drawerWidthInitial,
+    setLeftDrawerWidth: (width) => set(() => ({leftDrawerWidth: width})),
+    leftDrawerWidthInitial: drawerWidthInitial,
 
-    sidebarWidthInitial: '350px', // Leave constant. Don't change dynamically
+    rightDrawerWidth: drawerWidthInitial,
+    setRightDrawerWidth: (width) => set(() => ({rightDrawerWidth: width})),
+    rightDrawerWidthInitial: drawerWidthInitial,
 
-    sidebarHeight: '70vh',
-    setSidebarHeight: (height) => set(() => ({sidebarHeight: height})),
+    appsDrawerWidth: drawerWidthInitial,
+    setAppsDrawerWidth: (width) => set(() => ({appsDrawerWidth: width})),
+    appsDrawerWidthInitial: drawerWidthInitial,
 
-    sidebarHeightInitial: '70vh', // Leave constant. Don't change dynamically
+    drawerHeight: drawerHeightInitial,
+    setDrawerHeight: (height) => set(() => ({drawerHeight: height})),
   }
 }

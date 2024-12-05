@@ -1,35 +1,46 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/styles/useTheme'
+import SvgIcon from '@mui/material/SvgIcon'
+import {useTheme} from '@mui/material/styles'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 
 
 /** @return {ReactElement} */
-export function LogoB() {
+export function LogoB({...props}) {
   return (
     <ThemeBox>
-      <LogoBIcon className='icon-share'/>
+      <SvgIcon
+        fontSize='large'
+        titleAccess='BLDRS.AI'
+        {...props}
+      >
+        <LogoBIcon className='icon-share'/>
+      </SvgIcon>
     </ThemeBox>
   )
 }
 
 
 /** @return {ReactElement} */
-export function LogoBWithDomain() {
+export function LogoBWithDomain({...props}) {
   const theme = useTheme()
   // We're currently only showing Logo in dialogs, etc. so
   // use secondary contrastText
   return (
     <ThemeBox>
-      <LogoBWithDomainIcon
-        className='icon-share'
-        style={{
-          fill: theme.palette.secondary.contrastText,
-          width: '4em',
-          height: '4em',
-        }}
-      />
+      <SvgIcon
+        fontSize='large'
+        titleAccess='BLDRS.AI'
+        {...props}
+      >
+        <LogoBWithDomainIcon
+          className='icon-share'
+          style={{
+            fill: theme.palette.secondary.contrastText,
+          }}
+        />
+      </SvgIcon>
     </ThemeBox>
   )
 }

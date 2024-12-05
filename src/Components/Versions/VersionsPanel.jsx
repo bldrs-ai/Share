@@ -1,14 +1,16 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement} from 'react'
 import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
-import {getCommitsForFile} from '../../net/github/Commits'
 import {assertDefined} from '../../utils/assert'
-import debug from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {TooltipIconButton} from '../Buttons'
 import Panel from '../SideDrawer/Panel'
 import VersionsTimeline from './VersionsTimeline'
+import useVersions from './useVersions'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
+
+
+export const TITLE = 'Versions'
 
 
 /**
@@ -22,37 +24,12 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
  */
 export default function VersionsPanel({filePath, currentRef}) {
   assertDefined(filePath, currentRef)
+  const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const modelPath = useStore((state) => state.modelPath)
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
-
-  const [commitData, setCommitData] = useState([])
-
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    const fetchCommits = async () => {
-      try {
-        const commits = await getCommitsForFile(repository, filePath, accessToken)
-        if (commits) {
-          const versionsInfo = commits.map((entry) => {
-            const extractedData = {
-              authorName: entry.commit.author.name,
-              commitMessage: entry.commit.message,
-              commitDate: entry.commit.author.date,
-              sha: entry.sha,
-            }
-            return extractedData
-          })
-          setCommitData(versionsInfo)
-        }
-      } catch (error) {
-        debug().log(error)
-      }
-    }
-    fetchCommits()
-  }, [repository, filePath, accessToken])
+  const {commits, loading, error} = useVersions({accessToken, repository, filePath})
 
 
   /**
@@ -61,7 +38,7 @@ export default function VersionsPanel({filePath, currentRef}) {
    * @param {number} index active commit index
    */
   function navigateToCommit(index) {
-    const sha = commitData[index].sha
+    const sha = commits[index].sha
     if (modelPath) {
       const commitPath =
             navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
@@ -80,11 +57,10 @@ export default function VersionsPanel({filePath, currentRef}) {
     }
   }
 
-
   return (
     <Panel
-      title='Versions'
-      action={
+      title={TITLE}
+      actions={
         <TooltipIconButton
           title='Refresh'
           icon={<RestartAltIcon className='icon-share'/>}
@@ -93,15 +69,18 @@ export default function VersionsPanel({filePath, currentRef}) {
           size='small'
         />
       }
-      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
-      onCloseClick={() => setIsVersionsVisible(false)}
-      data-testid='Version Panel'
+      onClose={() => setIsVersionsVisible(false)}
+      data-testid='VersionsPanel'
     >
-      <VersionsTimeline
-        commitData={commitData}
-        currentRef={currentRef}
-        commitNavigateCb={navigateToCommit}
-      />
+      <>
+        {loading && <>Loading...</>}
+        {error && <>Error: error</>}
+        <VersionsTimeline
+          commits={commits}
+          currentRef={currentRef}
+          commitNavigateCb={navigateToCommit}
+        />
+      </>
     </Panel>
   )
 }

@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useMemo, useRef} from 'react'
+import React, {ReactElement, useEffect, useMemo} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -25,7 +25,7 @@ import Styles from './Styles'
  * @return {ReactElement}
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
-  const navigation = useRef(useNavigate())
+  const navigate = useNavigate()
   const urlParams = useParams()
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const modelPath = useStore((state) => state.modelPath)
@@ -36,9 +36,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   useMemo(() => {
     if (isAppsEnabled) {
-      new WidgetApi(navigation.current, searchIndex)
+      new WidgetApi(navigate, searchIndex)
     }
-  }, [isAppsEnabled, navigation, searchIndex])
+  }, [isAppsEnabled, navigate, searchIndex])
 
 
   /**
@@ -54,7 +54,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const onChangeUrlParams = (() => {
       const mp = getModelPath(installPrefix, pathPrefix, urlParams)
       if (mp === null) {
-        navToDefault(navigation.current, appPrefix)
+        navToDefault(navigate, appPrefix)
         return
       }
       if (modelPath === null ||
@@ -77,7 +77,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
+  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath, navigate])
 
 
   const theme = useShareTheme()

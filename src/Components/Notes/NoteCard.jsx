@@ -67,7 +67,6 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
-  const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const [showCreateComment, setShowCreateComment] = useState(false)
 
@@ -143,11 +142,6 @@ export default function NoteCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
-    let selectedNote = null
-    if (notes) {
-      selectedNote = notes.filter((issue) => issue.id === id)
-    }
-    setSelectedNote(selectedNote)
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
     if (embeddedCameraParams) {
@@ -278,7 +272,8 @@ export default function NoteCard({
        <CardHeader
          title={title}
          avatar={<Avatar alt={username} src={avatarUrl}/>}
-         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+         sx={{alignItems: 'flex-start'}}
+         subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
          action={
            synched && user && user.nickname === username &&
              <NoteMenu
@@ -296,7 +291,7 @@ export default function NoteCard({
        /> :
        <CardHeader
          avatar={<Avatar alt={username} src={avatarUrl}/>}
-         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+         subheader={`${username}\n${dateParts[0]} ${dateParts[1]}`}
        />}
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}

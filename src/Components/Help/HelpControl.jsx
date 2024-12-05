@@ -3,6 +3,7 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import ListItem from '@mui/material/ListItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
+import SvgIcon from '@mui/material/SvgIcon'
 import Stack from '@mui/material/Stack'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
@@ -22,11 +23,11 @@ import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import HistoryIcon from '@mui/icons-material/History'
 import PortraitIcon from '@mui/icons-material/Portrait'
 import SearchIcon from '@mui/icons-material/Search'
+import ShareIcon from '@mui/icons-material/Share'
 import ShiftIcon from '@mui/icons-material/FileUpload'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import TreeIcon from '../../assets/icons/Tree.svg'
-import ShareIcon from '../../assets/icons/Share.svg'
 
 
 /**
@@ -50,8 +51,8 @@ export default function HelpControl() {
       isDialogDisplayed={isHelpVisible}
       setIsDialogDisplayed={setIsHelpVisible}
       hashPrefix={HASH_PREFIX_HELP}
-      placement='left'
-      dataTestId='help-control-button'
+      placement='top'
+      dataTestId={testId}
     >
       <HelpDialog
         isDialogDisplayed={isHelpVisible}
@@ -157,7 +158,7 @@ const HelpList = ({pageIndex}) => {
       <ListItemText primary='Reset' secondary='Clear selected elements'/>
     </ListItem>,
     <ListItem key='10'>
-      <ListItemIcon><TreeIcon className='icon-share'/></ListItemIcon>
+      <ListItemIcon><SvgIcon><TreeIcon className='icon-share'/></SvgIcon></ListItemIcon>
       <ListItemText primary='Navigate' secondary='Navigate the model using element hierarchy'/>
     </ListItem>,
     <ListItem key='11'>
@@ -201,3 +202,6 @@ const HelpList = ({pageIndex}) => {
     </Stack>
   )
 }
+
+
+export const testId = 'control-button-help'

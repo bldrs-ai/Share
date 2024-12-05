@@ -32,7 +32,6 @@ export function getComponentOverrides(palette, typography) {
         props: {variant: 'rectangular'},
         style: {
           border: `1px solid ${palette.primary.main}`,
-
         },
       }],
     },
@@ -241,6 +240,12 @@ export function getComponentOverrides(palette, typography) {
       },
     },
     MuiSvgIcon: {
+      styleOverrides: {
+        root: {
+          width: '1.5rem',
+          height: '1.5rem',
+        },
+      },
       variants: [{
         // Used in HelpControl to indicate activity state
         props: {variant: 'success'},

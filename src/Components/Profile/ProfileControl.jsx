@@ -4,16 +4,16 @@ import Divider from '@mui/material/Divider'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
-import {TooltipIconButton} from '../Buttons'
+import {useTheme} from '@mui/material/styles'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined'
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined'
+import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {TooltipIconButton} from '../Buttons'
 
 
 /**
@@ -59,8 +59,8 @@ export default function ProfileControl() {
           <AccountBoxOutlinedIcon className='icon-share'/>
         }
         variant='control'
-        placement='left'
-        buttonTestId='control-button-profile'
+        placement='bottom'
+        dataTestId='control-button-profile'
       />
       <Menu
         elevation={1}
@@ -71,7 +71,6 @@ export default function ProfileControl() {
         anchorOrigin={{vertical: 'top', horizontal: 'left'}}
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
         sx={{transform: 'translateX(-1em)'}}
-
       >
         <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
 

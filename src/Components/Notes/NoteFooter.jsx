@@ -1,21 +1,20 @@
 import React, {ReactElement, useState} from 'react'
 import Box from '@mui/material/Box'
 import CardActions from '@mui/material/CardActions'
+import {useTheme} from '@mui/material/styles'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {TooltipIconButton} from '../Buttons'
+import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import AddLocationIcon from '@mui/icons-material/AddLocationOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import CloseIcon from '@mui/icons-material/Close'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
-import useTheme from '@mui/styles/useTheme'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
-import useStore from '../../store/useStore'
-import {TooltipIconButton} from '../Buttons'
-import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
-import CameraIcon from '../../assets/icons/Camera.svg'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
-import ShareIcon from '../../assets/icons/Share.svg'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCameraOutlined'
+import ShareIcon from '@mui/icons-material/Share'
 
 
 /**
@@ -76,7 +75,6 @@ export default function NoteFooter({
          placement='bottom'
          onClick={openGithubIssue}
          icon={<GitHubIcon className='icon-share'/>}
-         aboutInfo={false}
        />
       }
 
@@ -86,8 +84,7 @@ export default function NoteFooter({
          size='small'
          placement='bottom'
          onClick={onClickCamera}
-         icon={<CameraIcon className='icon-share'/>}
-         aboutInfo={false}
+         icon={<PhotoCameraIcon className='icon-share'/>}
        />}
 
       {selected &&
@@ -135,7 +132,7 @@ export default function NoteFooter({
            onClick={() => {
              togglePlaceMarkActive(id)
            }}
-           icon={<PlaceMarkIcon className='icon-share'/>}
+           icon={<AddLocationIcon className='icon-share'/>}
          />
        </Box>
       }

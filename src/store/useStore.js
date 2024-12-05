@@ -1,5 +1,7 @@
 import create from 'zustand'
-import createAppSlice from './AppSlice'
+import createAppsSlice from './AppsSlice'
+import createBrowserSlice from './BrowserSlice'
+import createCutPlanesSlice from './CutPlanesSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
@@ -8,6 +10,7 @@ import createOpenSlice from './OpenSlice'
 import createPropertiesSlice from './PropertiesSlice'
 import createRepositorySlice from './RepositorySlice'
 import createSearchSlice from './SearchSlice'
+import createShareSlice from './ShareSlice'
 import createSideDrawerSlice from './SideDrawerSlice'
 import createUIEnabledSlice from './UIEnabledSlice'
 import createUISlice from './UISlice'
@@ -15,7 +18,9 @@ import createVersionsSlice from './VersionsSlice'
 
 
 const useStore = create((set, get) => ({
-  ...createAppSlice(set, get),
+  ...createAppsSlice(set, get),
+  ...createBrowserSlice(set, get),
+  ...createCutPlanesSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
@@ -23,6 +28,7 @@ const useStore = create((set, get) => ({
   ...createOpenSlice(set, get),
   ...createPropertiesSlice(set, get),
   ...createRepositorySlice(set, get),
+  ...createShareSlice(set, get),
   ...createSearchSlice(set, get),
   ...createSideDrawerSlice(set, get),
   ...createUIEnabledSlice(set, get),

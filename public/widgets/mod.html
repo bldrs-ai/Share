@@ -1,0 +1,112 @@
+<!-- was based on example: https://javascriptbit.com/transfer-data-between-parent-window-iframe-channel-messaging-api/ -->
+
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOD Parts App</title>
+</head>
+
+<body style="background-color: whitesmoke">
+  <form id="iframe-form">
+    <label for="iframe-message">Send message to the parent
+      <input id="iframe-message" type="text" />
+    </label>
+    <button type="submit">Send</button>
+  </form>
+  <button id="loadfile" type="">loadfile</button>
+  <h2>Message received is shown here:</h2>
+  <div id="message-from-parent"></div>
+
+
+  <script>
+    // child.js
+    (async function () {
+      var port2;
+      // Listen for the intial port transfer message
+      var msgHandlers = {}
+      var $messageContainer = document.querySelector("#message-from-parent");
+      window.addEventListener("message", initPort);
+      // Setup the transfered port
+      function initPort(e) {
+        if (e.data === "init") {
+          port2 = e.ports[0];
+          port2.onmessage = onMessage;
+        } else {
+          var msgObj = e.data;
+          onMessage({
+            data: msgObj
+          });
+        }
+      }
+
+      // Handle messages received on port2
+      function onMessage(e) {
+        console.log(e)
+        $messageContainer.textContent = `Processing response of type ${e.data.action}`;
+        
+        if (e?.data?.action && msgHandlers[e.data.action]
+          && typeof msgHandlers[e.data.action] === 'function') {
+          msgHandlers[e.data.action](e.data.response)
+        }
+      }
+
+      // Sending message to the parent
+      var $form = document.querySelector("#iframe-form");
+      $form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var message = document.querySelector("#iframe-message").value;
+        port2.postMessage(message);
+      });
+
+      // Sending message to the parent
+      var loadfileBtn = document.querySelector("#loadfile");
+      loadfileBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        port2.postMessage('getLoadedFile');
+      });
+
+      msgHandlers['getLoadedFile'] = async (response) => {
+        if (!response) $messageContainer.textContent = "Received empty data"
+        if (response.source === 'local') {
+          readLocalFile(response.info[0], (r) => {
+            $messageContainer.textContent = r
+          })
+        } else if (response.source === 'github') {
+          $messageContainer.textContent = await (await fetch(response.info.url)).text()
+        } 
+        else if (response.source === 'share') {
+          $messageContainer.textContent = await (await fetch(response.info.url)).text()
+        } 
+      }
+      msgHandlers['getSelectedElements'] = (response) => {
+        if (!response) $messageContainer.textContent = "Received empty data"
+        $messageContainer.textContent = response
+      }
+    })();
+
+    function readLocalFile(file, callback) {
+      if (!file) {
+        return;
+      }
+      let reader = new FileReader();
+      reader.onload = function (e) {
+        let contents = e.target.result;
+        callback(contents)
+      };
+      reader.readAsText(file);
+    }
+
+
+    /*
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.open('GET', 'blob:link', true);
+    xmlhttp.setRequestHeader('Content-type','application/x-www-form-urlencoded');
+    xmlhttp.responseType = 'arraybuffer/blob';
+    xmlhttp.send();*/
+  </script>
+</body>
+
+</html>

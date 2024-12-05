@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import MuiAppBar from '@mui/material/AppBar'
 import Stack from '@mui/material/Stack'
 import Toolbar from '@mui/material/Toolbar'
-import useTheme from '@mui/styles/useTheme'
+import {useTheme} from '@mui/material/styles'
 import ControlsGroup from './ControlsGroup'
 import LoginMenu from './LoginMenu'
 import SearchBar from './Search/SearchBar'
@@ -37,7 +37,7 @@ export default function AppBar({isRepoActive}) {
           sx={{width: '100%'}}
         >
           <ControlsGroup isRepoActive={isRepoActive}/>
-          <SearchBar placeholder='Search' id='search'/>
+          <SearchBar/>
           <LoginMenu/>
         </Stack>
       </Toolbar>

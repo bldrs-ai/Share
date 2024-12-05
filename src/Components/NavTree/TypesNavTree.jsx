@@ -24,9 +24,8 @@ export default function TypesNavTree({
   types,
   pathPrefix,
   selectWithShiftClickEvents,
-  idToRef,
 }) {
-  assertDefined(keyId, model, types, pathPrefix, selectWithShiftClickEvents, idToRef)
+  assertDefined(keyId, model, types, pathPrefix, selectWithShiftClickEvents)
 
   const viewer = useStore((state) => state.viewer)
 
@@ -44,7 +43,6 @@ export default function TypesNavTree({
       ContentProps={{
         isExpandable: true,
         selectWithShiftClickEvents: selectWithShiftClickEvents,
-        idToRef: idToRef,
       }}
       data-testid={keyId}
     >
@@ -62,7 +60,6 @@ export default function TypesNavTree({
                   hasHideIcon: hasHideIcon,
                   isExpandable: false,
                   selectWithShiftClickEvents: selectWithShiftClickEvents,
-                  idToRef: idToRef,
                 }}
               />
             )

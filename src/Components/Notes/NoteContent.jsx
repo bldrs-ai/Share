@@ -2,10 +2,11 @@ import React, {ReactElement, useMemo} from 'react'
 import Markdown from 'react-markdown'
 import useStore from '../../store/useStore'
 import CardContent from '@mui/material/CardContent'
-import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/MarkerControl'
+import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {getHashParamsFromHashStr, getObjectParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
+
 
 /**
  * @property {string} markdownContent The note text in markdown format

@@ -17,7 +17,11 @@ disableDebug()
 const server = initServer(getAndExportEnvVars())
 
 // Establish API mocking before all tests.
-beforeAll(() => server.listen())
+beforeAll(() => {
+  server.listen({
+    onUnhandledRequest: 'error', // Warns about unhandled requests
+  })
+})
 
 // Reset any request handlers that we may add during the tests,
 // so they don't affect other tests.

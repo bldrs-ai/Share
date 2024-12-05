@@ -36,7 +36,7 @@ const NavTreeNode = ({
 
   // Determine the label based on whether it's a type node or an element node
   const label = node.label || reifyName({properties: model}, node)
-  const paddingLeft = 20
+  const paddingLeft = 20 // Indentation for each tree depth
 
   return (
     <div
@@ -44,11 +44,12 @@ const NavTreeNode = ({
         ...style,
         paddingLeft: depth * paddingLeft,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start', // Align items at the top for multiline labels
         backgroundColor: isSelected ? theme.palette.action.selected : 'transparent',
         cursor: 'pointer',
       }}
     >
+      {/* Expand/Collapse Icon */}
       {hasChildren ? (
         <div
           onClick={handleExpandClick}
@@ -59,7 +60,12 @@ const NavTreeNode = ({
           }}
           role="button"
           tabIndex={0}
-          style={{marginRight: 8}}
+          style={{
+            marginRight: 8,
+            marginTop: 4, // Align the icon with the text
+            display: 'flex',
+            alignItems: 'center',
+          }}
         >
           {isExpanded ? (
             <NodeOpenIcon className="icon-share icon-nav-caret"/>
@@ -71,7 +77,9 @@ const NavTreeNode = ({
         <div style={{width: 24, marginRight: 8}}/>
       )}
 
+      {/* Label */}
       <div
+        id="NavTreeNodeLabelId"
         onClick={handleLabelClick}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -80,13 +88,26 @@ const NavTreeNode = ({
         }}
         role="button"
         tabIndex={0}
-        style={{flexGrow: 1}}
+        style={{
+          flexGrow: 1,
+          wordBreak: 'break-word', // Allow breaking long words
+          whiteSpace: 'normal', // Enable multiline wrapping
+          overflow: 'visible', // Ensure full rendering of the content
+        }}
       >
         {label}
       </div>
+
+      {/* Hide Icon */}
       {hasHideIcon && (
         <div
-          style={{marginLeft: 'auto', paddingRight: 16}}
+          style={{
+            marginLeft: 'auto',
+            paddingRight: 16,
+            marginTop: 4, // Align the icon with the text
+            display: 'flex',
+            alignItems: 'center',
+          }}
           onClick={handleHideClick}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {

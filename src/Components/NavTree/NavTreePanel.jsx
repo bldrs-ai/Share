@@ -6,10 +6,11 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
-import ListIcon from '@mui/icons-material/List'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
+import ListIcon from '@mui/icons-material/List'
+import {removeHashParams} from './hashState'
 import NavTreeNode from './NavTreeNode'
 import PropTypes from 'prop-types'
 import {reifyName} from '@bldrs-ai/ifclib'
@@ -36,9 +37,41 @@ export default function NavTreePanel({
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
   const viewer = useStore((state) => state.viewer)
+  const itemDefaultHeight = 24
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
   const isNavTree = navigationMode === 'spatial-tree'
+
+  const containerRef = useRef(null)
+const [containerWidth, setContainerWidth] = useState(0)
+
+  useEffect(() => {
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // eslint-disable-next-line no-unused-vars
+        const {width, height} = entry.contentRect
+        setContainerWidth(width)
+      }
+    })
+
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
+
+    return () => {
+      if (containerRef.current) {
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        resizeObserver.unobserve(containerRef.current)
+      }
+    }
+  }, [])
+
+
+  /** Hide panel and remove hash state */
+  function onClose() {
+    setIsNavTreeVisible(false)
+    removeHashParams()
+  }
 
   const theme = useTheme()
 
@@ -72,8 +105,6 @@ export default function NavTreePanel({
     }
   }, [selectedElements, visibleNodes])
 
-  const itemDefaultHeight = 24
-
   // Function to get item size
   const getItemSize = useCallback(
     (index) => {
@@ -93,37 +124,54 @@ export default function NavTreePanel({
 
   return (
     <Panel
-      title="Navigation"
-      onCloseClick={() => setIsNavTreeVisible(false)}
-      action={
+      title={TITLE}
+      actions={
         <Actions
           navigationMode={navigationMode}
           setNavigationMode={setNavigationMode}
         />
       }
-      sx={{m: '0 0 0 10px'}}
+      onClose={onClose}
+      data-testid="NavTreePanel"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%', // Allow the panel to fill its parent container
+      }}
     >
-      <VariableSizeList
-        ref={listRef}
-        height={400} // Adjust as needed
-        itemCount={visibleNodes.length}
-        itemSize={getItemSize}
-        width="100%"
-        itemData={{
-          visibleNodes,
-          expandedNodeIds,
-          setExpandedNodeIds,
-          selectedNodeIds: selectedElements,
-          selectWithShiftClickEvents,
-          model,
-          viewer,
-          theme,
-          setItemSize,
-          isNavTree,
-        }}
+      <div
+  ref={containerRef}
+  style={{
+    flexGrow: 1,
+    overflowY: 'visible', // Allow vertical scrolling for overflow
+    overflowX: 'hidden', // Keep horizontal overflow hidden if needed
+    height: '100%',
+  }}
       >
-        {RenderRow}
-      </VariableSizeList>
+        {containerWidth > 0 && (
+          <VariableSizeList
+            ref={listRef}
+            height={containerRef.current.clientHeight} // Dynamically set height
+            width={containerWidth} // Dynamically set width
+            itemCount={visibleNodes.length}
+            itemSize={getItemSize}
+            itemData={{
+              visibleNodes,
+              expandedNodeIds,
+              setExpandedNodeIds,
+              selectedNodeIds: selectedElements,
+              selectWithShiftClickEvents,
+              model,
+              viewer,
+              theme,
+              setItemSize,
+              isNavTree,
+            }}
+          >
+            {RenderRow}
+          </VariableSizeList>
+        )}
+      </div>
     </Panel>
   )
 }
@@ -214,13 +262,30 @@ const RenderRow = ({index, style, data}) => {
   }
 
   const rowRef = useRef(null)
+  const itemDefaultHeight = 24
 
   useEffect(() => {
     if (rowRef.current) {
-      const height = rowRef.current.getBoundingClientRect().height
-      setItemSize(index, height)
+      const labelElement = rowRef.current.querySelector('[id="NavTreeNodeLabelId"]')
+      if (labelElement) {
+        const computedStyle = window.getComputedStyle(labelElement)
+        const lineHeight = parseFloat(computedStyle.lineHeight) || itemDefaultHeight
+
+        // Measure actual height
+        const actualHeight = labelElement.getBoundingClientRect().height
+
+        // Calculate number of lines
+        const numberOfLines = Math.ceil(actualHeight / lineHeight)
+
+        // Calculate new height
+        const newHeight = numberOfLines * lineHeight
+
+        // Update the item size
+        setItemSize(index, newHeight)
+      }
     }
-  }, [index, setItemSize])
+  }, [index, setItemSize, node.label, model])
+
 
   const handleToggle = (event) => {
     event.stopPropagation()
@@ -281,6 +346,8 @@ function Actions({navigationMode, setNavigationMode}) {
       },
     },
   }))
+
+
   return (
     <StyledToggleButtonGroup
       value={navigationMode}
@@ -305,6 +372,9 @@ function Actions({navigationMode, setNavigationMode}) {
     </StyledToggleButtonGroup>
   )
 }
+
+
+export const TITLE = 'Navigation'
 
 NavTreePanel.propTypes = {
   model: PropTypes.object.isRequired,

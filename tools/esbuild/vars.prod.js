@@ -1,5 +1,5 @@
 export default {
-  APPS_IS_ENABLED: false,
+  APPS_IS_ENABLED: true,
 
   // Auth
   AUTH0_DOMAIN: 'bldrs.us.auth0.com',
@@ -12,8 +12,9 @@ export default {
   GITHUB_API_TOKEN: null,
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
-  // RAW_GIT_PROXY_URL_NEW: 'http://localhost:8083/model',
-  // RAW_GIT_PROXY_URL: 'http:localhost:8083/r',
+
+  NODE_ENV: 'production',
+
   /**
    * RAW_GIT_PROXY_URL_NEW uses the /model endpoint for gitredir. This
    * endpoint is passed a cached etag, and returns either a 304 (cached),

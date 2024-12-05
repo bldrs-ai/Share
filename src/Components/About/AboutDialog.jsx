@@ -2,6 +2,7 @@ import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
+import SvgIcon from '@mui/material/SvgIcon'
 import Typography from '@mui/material/Typography'
 import Dialog from '../Dialog'
 import {LogoBWithDomain} from '../Logo/Logo'
@@ -9,12 +10,10 @@ import {LogoBWithDomain} from '../Logo/Logo'
 // import PrivacyControl from './PrivacyControl'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import EmailIcon from '@mui/icons-material/Email'
-import DiscordIcon from '../../assets/icons/Discord.svg'
+import DiscordIcon from './Discord.svg'
 
 
 /**
- * The AboutDialog component
- *
  * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} onClose Callback when closed
@@ -24,16 +23,19 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
   return (
     <Dialog
       headerIcon={null}
-      headerText={
-        (
-          <>
-            <Link href='/'>
-              <LogoBWithDomain/>
-            </Link>
-            Build every thing together
-          </>
-        )
-      }
+      headerText={(
+        <>
+          <Link href='/'>
+            <LogoBWithDomain
+              sx={{
+                width: '144px',
+                height: '144px',
+              }}
+            />
+          </Link>
+          {BLDRS_MISSION}
+        </>
+      )}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='OK'
@@ -63,13 +65,13 @@ function AboutContent() {
           <Typography variant='body1'>
             Welcome to Bldrs - Share!
           </Typography>
-          <Typography variant='body1'>
+          <div>
             Use the Open dialog to open IFC or STEP models from:
             <ul>
               <li>Local files - <em>no data is uploaded to our servers</em></li>
               <li>Files hosted on GitHub, public or private</li>
             </ul>
-          </Typography>
+          </div>
           <Typography variant='body1'>
             Position the camera, Select elements, Crop using section planes and
             Collaborate with your team via Notes.  For files on GitHub share the
@@ -79,17 +81,20 @@ function AboutContent() {
             Comments and suggestions welcome!
           </Typography>
           <Stack direction='row' justifyContent='center' alignItems='center' spacing={2}>
-            <a href="https://discord.gg/9SxguBkFfQ">
-              <DiscordIcon className='icon-share' style={{height: '0.7em', marginRight: '0.5em'}}/>Discord
-            </a>
-            <a href="https://github.com/bldrs-ai/Share">
-              <GitHubIcon className='icon-share' style={{height: '0.7em', marginRight: '0.25em'}}/>GitHub
-            </a>
-            <a href="mailto:info@bldrs.ai">
-              <EmailIcon className='icon-share' style={{height: '0.7em', marginRight: '0.25em'}}/>info@bldrs.ai
-            </a>
+            <Link href='https://discord.gg/9SxguBkFfQ' rel='noopener' sx={{display: 'flex', alignItems: 'center'}}>
+              <SvgIcon sx={{marginRight: '0.25em'}}><DiscordIcon className='icon-share'/></SvgIcon>Discord
+            </Link>
+            <Link href='https://github.com/bldrs-ai/Share' rel='noopener' sx={{display: 'flex', alignItems: 'center'}}>
+              <GitHubIcon className='icon-share' sx={{marginRight: '0.25em'}}/>GitHub
+            </Link>
+            <Link href='mailto:info@bldrs.ai' sx={{display: 'flex', alignItems: 'center'}}>
+              <EmailIcon className='icon-share' sx={{marginRight: '0.25em'}}/>info@bldrs.ai
+            </Link>
           </Stack>
         </Stack>
       </Stack>
     </>)
 }
+
+
+export const BLDRS_MISSION = 'Build Every Thing Together'

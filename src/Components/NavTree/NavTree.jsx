@@ -1,4 +1,4 @@
-import React, {ReactElement, RefObject, forwardRef} from 'react'
+import React, {ReactElement, forwardRef} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
 import useStore from '../../store/useStore'
@@ -14,7 +14,6 @@ import PropTypes from './PropTypes'
  * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
  * @property {Function} selectWithShiftClickEvents handler for shift-clicks
- * @property {Map<string,RefObject<HTMLDivElement>>} idToRef Mapping of expressId to TreeItem refs
  * @return {ReactElement}
  */
 export default function NavTree({
@@ -23,9 +22,8 @@ export default function NavTree({
   element,
   pathPrefix,
   selectWithShiftClickEvents,
-  idToRef,
 }) {
-  assertDefined(keyId, model, pathPrefix, selectWithShiftClickEvents, idToRef)
+  assertDefined(keyId, model, pathPrefix, selectWithShiftClickEvents)
 
   const navTreeItemRef = forwardRef(NavTreeItem)
   navTreeItemRef.propTypes = PropTypes
@@ -45,7 +43,6 @@ export default function NavTree({
         hasHideIcon: hasHideIcon,
         isExpandable: isExpandable,
         selectWithShiftClickEvents: selectWithShiftClickEvents,
-        idToRef: idToRef,
       }}
       data-testid={keyId}
     >
@@ -60,7 +57,6 @@ export default function NavTree({
               element={child}
               pathPrefix={pathPrefix}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
-              idToRef={idToRef}
             />
           )
         }) :
