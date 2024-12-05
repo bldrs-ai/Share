@@ -8,6 +8,8 @@ import {
 } from 'react-router-dom'
 import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
+import About from './pages/share/About'
+import Conway from './pages/share/Conway'
 import Share from './Share'
 
 
@@ -41,6 +43,8 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
   return (
     <Routes>
       <Route path='/' element={<Forward appPrefix={appPrefix}/>}>
+        <Route path='about' element={<About/>}/>
+        <Route path='about/conway' element={<Conway/>}/>
         <Route
           path='v/new/*'
           element={

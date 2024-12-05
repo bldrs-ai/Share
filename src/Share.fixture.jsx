@@ -6,6 +6,28 @@ import {ThemeCtx} from './theme/Theme.fixture'
 
 
 /**
+ * Mostly for dialogs, which are often titled and routed
+ *
+ * @property {Array.<ReactElement>} children The component under test
+ * @return {ReactElement}
+ */
+export function HelmetStoreRouteThemeCtx({children}) {
+  return <HelmetProvider><StoreRouteThemeCtx>{children}</StoreRouteThemeCtx></HelmetProvider>
+}
+
+
+/**
+ * For Pages like About and Blog.
+ *
+ * @property {Array.<ReactElement>} children The component under test
+ * @return {ReactElement}
+ */
+export function HelmetThemeCtx({children}) {
+  return <HelmetProvider><ThemeCtx>{children}</ThemeCtx></HelmetProvider>
+}
+
+
+/**
  * @property {Array.<ReactElement>} children The component under test
  * @return {ReactElement}
  */
@@ -20,15 +42,4 @@ export function RouteThemeCtx({children}) {
  */
 export function StoreRouteThemeCtx({children}) {
   return <StoreCtx><RouteThemeCtx>{children}</RouteThemeCtx></StoreCtx>
-}
-
-
-/**
- * Mostly for dialogs, which are often titled and routed
- *
- * @property {Array.<ReactElement>} children The component under test
- * @return {ReactElement}
- */
-export function HelmetStoreRouteThemeCtx({children}) {
-  return <HelmetProvider><StoreRouteThemeCtx>{children}</StoreRouteThemeCtx></HelmetProvider>
 }

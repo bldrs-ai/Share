@@ -208,13 +208,20 @@ export function getComponentOverrides(palette, typography) {
             padding: '10px',
           }),
         },
-        /* {
-          props: {variant: 'note'},
-          style: {
-            marginBottom: '10px',
-            backgroundColor: 'yellow',
-          },
-        }, */
+        {
+          props: {variant: 'page-background'},
+          style: ({theme}) => ({
+            padding: '10px',
+            borderRadius: '0',
+          }),
+        },
+        {
+          props: {variant: 'page'},
+          style: ({theme}) => ({
+            padding: '10px',
+            borderRadius: '0',
+          }),
+        },
       ],
     },
     MuiSelect: {
@@ -298,6 +305,12 @@ export function getComponentOverrides(palette, typography) {
         style: {
         },
       }],
+    },
+    MuiTypography: {
+      styleOverrides: {
+        root: {
+        },
+      },
     },
   }
 }
