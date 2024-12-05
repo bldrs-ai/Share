@@ -1,19 +1,15 @@
 import React, {ReactElement, useEffect, useMemo} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
-import CssBaseline from '@mui/material/CssBaseline'
-import {ThemeProvider} from '@mui/material/styles'
 import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
 import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
-import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
 import {testUuid} from './utils/strings'
 import {splitAroundExtension} from './Filetype'
-import Styles from './Styles'
 
 
 /**
@@ -80,22 +76,16 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath, navigate])
 
 
-  const theme = useShareTheme()
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
   return (
     modelPath &&
     <>
       <ModelTitle repository={repository} modelPath={modelPath}/>
-      <CssBaseline enableColorScheme>
-        <ThemeProvider theme={theme}>
-          <Styles theme={theme}/>
-          <CadView
-            installPrefix={installPrefix}
-            appPrefix={appPrefix}
-            pathPrefix={pathPrefix}
-          />
-        </ThemeProvider>
-      </CssBaseline>
+      <CadView
+        installPrefix={installPrefix}
+        appPrefix={appPrefix}
+        pathPrefix={pathPrefix}
+      />
     </>
   )
 }
