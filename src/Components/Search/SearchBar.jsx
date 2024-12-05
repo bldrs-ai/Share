@@ -6,6 +6,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
+import {useIsMobile} from '../Hooks'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -94,12 +95,14 @@ export default function SearchBar({
     searchInputRef.current.blur()
   }
 
+  const twoButtonWidth = '120px'
+  const isMobile = useIsMobile()
   // The container and paper are set to 100% width to fill the
   // container SearchBar shares with NavTreePanel.  This is an easier
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{minWidth: '10em', width: '25em'}}>
+    <form onSubmit={onSubmit} style={{minWidth: '10em', width: isMobile ? `calc(100vw - ${twoButtonWidth})` : '25em'}}>
       <Autocomplete
         freeSolo
         options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}

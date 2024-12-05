@@ -140,13 +140,13 @@ const [containerWidth, setContainerWidth] = useState(0)
       }}
     >
       <div
-  ref={containerRef}
-  style={{
-    flexGrow: 1,
-    overflowY: 'visible', // Allow vertical scrolling for overflow
-    overflowX: 'hidden', // Keep horizontal overflow hidden if needed
-    height: '100%',
-  }}
+        ref={containerRef}
+        style={{
+          flexGrow: 1,
+          overflowY: 'visible', // Allow vertical scrolling for overflow
+          overflowX: 'hidden', // Keep horizontal overflow hidden if needed
+          height: '100%',
+        }}
       >
         {containerWidth > 0 && (
           <VariableSizeList
