@@ -1,11 +1,18 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
+import CssBaseline from '@mui/material/CssBaseline'
+import {ThemeProvider} from '@mui/material/styles'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
+import Styles from './Styles'
+import About from './pages/About'
+import BlogIndex from './pages/blog/BlogIndex'
+import FirstPost from './pages/blog/FirstPost'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
 import useStore from './store/useStore'
+import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 
@@ -91,20 +98,29 @@ export default function BaseRoutes({testElt = null}) {
   }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
       isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
 
+  const theme = useShareTheme()
   return (
-    <SentryRoutes>
-      <Route path={basePath} element={<Outlet/>}>
-        <Route
-          path="share/*"
-          element={
-            testElt ||
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={`${appPrefix}`}
-              />
-          }
-        />
-      </Route>
-    </SentryRoutes>
+    <CssBaseline enableColorScheme>
+      <ThemeProvider theme={theme}>
+        <Styles theme={theme}/>
+        <SentryRoutes>
+          <Route path={basePath} element={<Outlet/>}>
+            <Route
+              path='share/*'
+              element={
+                testElt ||
+                  <ShareRoutes
+                    installPrefix={installPrefix}
+                    appPrefix={`${appPrefix}`}
+                  />
+              }
+            />
+            <Route path='about' element={<About/>}/>
+            <Route path='blog' element={<BlogIndex/>}/>
+            <Route path='blog/first-post' element={<FirstPost/>}/>
+          </Route>
+        </SentryRoutes>
+      </ThemeProvider>
+    </CssBaseline>
   )
 }
