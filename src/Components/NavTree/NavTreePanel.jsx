@@ -81,9 +81,10 @@ export default function NavTreePanel({
         }}
         key='tree'
         sx={{
+          'height': '100%',
           'padding': '7px 0 14px 0',
           'maxWidth': '400px',
-          'overflowY': 'scroll',
+//          'overflowY': 'scroll',
           'overflowX': 'hidden',
           'flexGrow': 1,
           '&:focus svg': {

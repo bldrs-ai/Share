@@ -188,7 +188,7 @@ export default function TabbedPanels({
           setDrawerWidth={() => console.warn('setDrawerWidth called on mobile drawer')}
           dataTestId='TabbedPanels'
         >
-          <Box sx={{height: 'fit-content', borderBottom: 1, borderColor: 'divider'}}>
+          <Box sx={{height: '100%', borderBottom: 1, borderColor: 'divider', overflowY: 'scroll'}}>
             <Tabs
               value={value}
               onChange={handleChange}
@@ -197,6 +197,9 @@ export default function TabbedPanels({
               allowScrollButtonsMobile
               aria-label='scrollable basic tabs example'
               sx={{
+                'position': 'sticky',
+                'top': 0,
+                'zIndex': 1,
                 '& .share-button-tab-close': {
                   display: 'none',
                 },
@@ -234,14 +237,17 @@ function CustomTabPanel(props) {
   const {children, value, index, ...other} = props
 
   return (
-    <div
+    <Box
       role='tabpanel'
       hidden={value !== index}
       id={`simple-tabpanel-${index}`}
       aria-labelledby={`simple-tab-${index}`}
+      sx={{
+        height: '100%',
+      }}
       {...other}
     >
-      {value === index && <Box sx={{p: '0.5em'}}>{children}</Box>}
-    </div>
+      {value === index && <Box sx={{p: '0.5em', height: '100%'}}>{children}</Box>}
+    </Box>
   )
 }
