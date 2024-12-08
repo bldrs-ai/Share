@@ -6,7 +6,7 @@ import SvgIcon from '@mui/material/SvgIcon'
 import Typography from '@mui/material/Typography'
 import Dialog from '../Dialog'
 import {LogoBWithDomain} from '../Logo/Logo'
-import {HEADER_MISSION, TITLE_ABOUT} from './component'
+import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
 import GitHubIcon from '@mui/icons-material/GitHub'
@@ -34,7 +34,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
               }}
             />
           </Link>
-          {HEADER_MISSION}
+          {ABOUT_MISSION}
         </>
       )}
       isDialogDisplayed={isDialogDisplayed}
@@ -54,7 +54,7 @@ function AboutContent() {
   return (
     <>
       <Helmet>
-        <title>{TITLE_ABOUT}</title>
+        <title>{ABOUT_PAGE_TITLE}</title>
       </Helmet>
       <Stack
         spacing={3}
