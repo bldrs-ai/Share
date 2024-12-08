@@ -4,6 +4,7 @@ import {
 } from '../../../src/Components/About/component'
 
 
+/** {@link https://github.com/bldrs-ai/Share/issues/1285}*/
 describe('About', () => {
   context('First-time user visits homepage', () => {
     before(() => {
