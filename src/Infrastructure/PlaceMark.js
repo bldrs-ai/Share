@@ -10,6 +10,7 @@ import {
 } from 'three'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
+import PlaceIcon from '@mui/icons-material/PlaceSharp'
 
 
 /**
@@ -217,28 +218,34 @@ export default class PlaceMark extends EventDispatcher {
 
     const createCircleTexture = (fillColor) => {
       const size = 64 // Texture size in pixels
+      const width = size
+      const height = size
       const canvas = document.createElement('canvas')
-      canvas.width = size
-      canvas.height = size
-      const canvasContext = canvas.getContext('2d')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
 
       // Ensure the entire canvas is transparent initially
-      canvasContext.clearRect(0, 0, size, size)
+      ctx.clearRect(0, 0, size, size)
 
-      // Draw the circle
-      canvasContext.beginPath()
-      // eslint-disable-next-line no-mixed-operators
-      canvasContext.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2) // -2 for a slight border
-      // eslint-disable-next-line no-magic-numbers
-      canvasContext.fillStyle = `#${fillColor.toString(16).padStart(6, '0')}`
-      canvasContext.fill()
+      ctx.fillStyle = `#ff0000`
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#000000'
 
-      // Optionally add a border
-      canvasContext.lineWidth = 2
-      canvasContext.strokeStyle = '#000000'
-      canvasContext.stroke()
+      const img = new Image()
+      console.log('PlaceMark#createCircleTexture, PlaceIcon:', PlaceIcon)
+      const svgBlob = new Blob([PlaceIcon], {type: 'image/svg+xml'})
+      const url = URL.createObjectURL(svgBlob)
 
-      return new CanvasTexture(canvas)
+      return new Promise((resolve) => {
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          ctx.drawImage(img, 0, 0, width, height)
+          URL.revokeObjectURL(url)
+          resolve(new CanvasTexture(canvas))
+        }
+        img.src = url
+      })
     }
 
     /* const toggleMarkerSelection = (marker) => {
