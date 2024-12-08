@@ -249,7 +249,7 @@ function PlacemarkHandlers() {
       saveMarkToHash(markArr)
       // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
-      const inactiveColor = 0xA9A9A9
+      const inactiveColor = 0x5555ff
       const activeColor = 0xff0000
       svgGroup.userData.isActive = false
       svgGroup.userData.activeColor = activeColor
@@ -441,7 +441,7 @@ const resetPlaceMarksActive = (isActive) => {
 
 const resetPlaceMarkColors = () => {
   placeMarkGroupMap.forEach((svgGroup) => {
-    let color = 'grey'
+    let color = '#5555ff'
     if (svgGroup.userData.isActive) {
       color = 'red'
     }
