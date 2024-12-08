@@ -6,6 +6,7 @@ import SvgIcon from '@mui/material/SvgIcon'
 import Typography from '@mui/material/Typography'
 import Dialog from '../Dialog'
 import {LogoBWithDomain} from '../Logo/Logo'
+import {HEADER_MISSION, TITLE_ABOUT} from './component'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
 import GitHubIcon from '@mui/icons-material/GitHub'
@@ -33,7 +34,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
               }}
             />
           </Link>
-          {BLDRS_MISSION}
+          {HEADER_MISSION}
         </>
       )}
       isDialogDisplayed={isDialogDisplayed}
@@ -53,7 +54,7 @@ function AboutContent() {
   return (
     <>
       <Helmet>
-        <title>About — bldrs.ai</title>
+        <title>{TITLE_ABOUT}</title>
       </Helmet>
       <Stack
         spacing={3}
@@ -95,6 +96,3 @@ function AboutContent() {
       </Stack>
     </>)
 }
-
-
-export const BLDRS_MISSION = 'Build Every Thing Together'
