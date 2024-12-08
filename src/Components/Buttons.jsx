@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
+import SvgIcon from '@mui/material/SvgIcon'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
@@ -246,7 +247,7 @@ export function BackButton({onClick}) {
     <TooltipIconButton
       title='Back'
       onClick={onClick}
-      icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
+      icon={<SvgIcon><BackIcon className='icon-share'/></SvgIcon>}
       placement='left'
       size='medium'
     />
