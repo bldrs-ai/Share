@@ -10,7 +10,7 @@ describe('Note screenshot', () => {
     })
 
     it.skip('should show screenshot when url param present', () => {
-      cy.routerNavigate('/share/v/p/index.ifc?feature=screenshot')
+      cy.visit('/share/v/p/index.ifc?feature=screenshot')
       cy.get('[title="Notes"]').click()
       cy.get('button[title="Take Screenshot"]').should('exist')
     })

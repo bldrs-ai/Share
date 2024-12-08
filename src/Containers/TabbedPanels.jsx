@@ -3,7 +3,8 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
-import AppsPanel, {AppPreviewPanel} from '../Components/Apps/AppsPanel'
+import AppsPanel from '../Components/Apps/AppsPanel'
+import AppPanel from '../Components/Apps/AppPanel'
 import {CloseButton} from '../Components/Buttons'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import NotesPanel from '../Components/Notes/NotesPanel'
@@ -121,7 +122,7 @@ export default function TabbedPanels({
       label: <LinkTab label='Apps' onClose={() => setIsAppsVisible(false)}/>,
       panel: !selectedApp ?
         <AppsPanel/> :
-        <AppPreviewPanel item={selectedApp}/>,
+        <AppPanel itemJson={selectedApp}/>,
     })
   }
   if (isNavTreeEnabled && isNavTreeVisible) {
