@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1179",
+  "version": "1.0.1182",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,6 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
+    "preinstall": "node ./scripts/netlify-preinstall.js",
     "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-conway-debug": "yarn clean && yarn build-share-conway && yarn build-share-copy-wasm-conway-profile && yarn build-cosmos",
@@ -63,7 +64,7 @@
     "@babel/plugin-syntax-import-assertions": "7.18.6",
     "@babel/preset-env": "7.18.10",
     "@babel/preset-react": "7.18.6",
-    "@bldrs-ai/conway-web-ifc-adapter": "./bldrs-ai-conway-web-ifc-adapter-0.1.6.tgz",
+    "@bldrs-ai/conway-web-ifc-adapter": "0.3.010",
     "@bldrs-ai/ifclib": "5.3.3",
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",
