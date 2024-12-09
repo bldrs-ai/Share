@@ -5,6 +5,7 @@ import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {getHashParams, getObjectParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
+import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from '../Markers/component'
 import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 
@@ -35,8 +36,8 @@ export default function NotesControl() {
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const markers = useStore((state) => state.markers)
   let activePlaceMarkHash = getActivePlaceMarkHash()
-  const inactiveColor = 0x0000ff
-  const activeColor = 0xff0000
+  const inactiveColor = MARKER_COLOR_INACTIVE
+  const activeColor = MARKER_COLOR_ACTIVE
 
 
   // Fetch issues/notes

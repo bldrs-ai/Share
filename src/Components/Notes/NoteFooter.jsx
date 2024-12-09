@@ -6,6 +6,7 @@ import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
+import {MARKER_COLOR_ACTIVE_CSS, MARKER_COLOR_INACTIVE_CSS} from '../Markers/component'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
@@ -52,6 +53,7 @@ export default function NoteFooter({
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const markers = useStore((state) => state.markers)
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -61,8 +63,6 @@ export default function NoteFooter({
 
   const hasCameras = embeddedCameras.length > 0
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-
-  const {togglePlaceMarkActive} = placemarkHandlers()
 
   /** Navigate to github issue */
   function openGithubIssue() {
@@ -82,8 +82,8 @@ export default function NoteFooter({
            <Box
              sx={{
                'display': 'flex',
-               'align-items': 'center',
-               'justify-content': 'center',
+               'alignItems': 'center',
+               'justifyContent': 'center',
                'height': '48px',
                'width': '48px',
                'margin': '5px',
@@ -92,7 +92,7 @@ export default function NoteFooter({
                  border: 'none !important',
                },
                '& svg': {
-                 fill: hasActiveMarker ? '#ff0000' : '#0000ff',
+                 fill: hasActiveMarker ? MARKER_COLOR_ACTIVE_CSS : MARKER_COLOR_INACTIVE_CSS,
                },
              }}
            >

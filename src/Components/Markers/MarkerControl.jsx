@@ -14,13 +14,11 @@ import {
   HASH_PREFIX_NOTES,
 } from '../Notes/hashState'
 import useStore from '../../store/useStore'
+import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from './component'
 import {
   HASH_PREFIX_PLACE_MARK,
   saveMarkToHash,
 } from './hashState'
-
-
-const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
 
 /**
@@ -134,7 +132,7 @@ export default memo(MarkerControl)
  *
  * @return {object}
  */
-function PlacemarkHandlers() {
+export function PlacemarkHandlers() {
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const placeMarkId = useStore((state) => state.placeMarkId)
@@ -248,8 +246,8 @@ function PlacemarkHandlers() {
       saveMarkToHash(markArr)
       // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
-      const inactiveColor = 0x0000ff
-      const activeColor = 0xff0000
+      const inactiveColor = MARKER_COLOR_INACTIVE
+      const activeColor = MARKER_COLOR_ACTIVE
       svgGroup.userData.isActive = false
       svgGroup.userData.activeColor = activeColor
       svgGroup.userData.inactiveColor = inactiveColor
@@ -458,4 +456,5 @@ MarkerControl.propTypes = {
   postProcessor: PropTypes.object,
 }
 
-export {PlacemarkHandlers}
+
+export const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
