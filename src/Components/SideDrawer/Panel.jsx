@@ -23,6 +23,7 @@ export default function Panel({title, onClose, children, actions = null, ...prop
     <Box
       sx={{height: '100%', overflow: 'hidden'}}
       data-testid={props['data-testid'] || `PanelBox-${title}`}
+      role='region'
       {...props}
     >
       <PanelTitle

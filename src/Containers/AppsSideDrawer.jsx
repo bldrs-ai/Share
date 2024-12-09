@@ -1,13 +1,12 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import AppsPanel, {AppPreviewPanel} from '../Components/Apps/AppsPanel'
+import AppsPanel from '../Components/Apps/AppsPanel'
+import AppPanel from '../Components/Apps/AppPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import useStore from '../store/useStore'
 
 
-/**
- * @return {ReactElement}
- */
+/** @return {ReactElement} */
 export default function AppsSideDrawer() {
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
@@ -41,7 +40,7 @@ export default function AppsSideDrawer() {
         >
           {!selectedApp ?
            <AppsPanel/> :
-           <AppPreviewPanel item={selectedApp}/>
+           <AppPanel itemJson={selectedApp}/>
           }
         </Box>
       </Box>
