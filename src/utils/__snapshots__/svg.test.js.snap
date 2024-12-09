@@ -106,7 +106,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
   ],
   "materials": [
     {
-      "color": 16711680,
+      "color": 16777215,
       "colorWrite": true,
       "depthFunc": 3,
       "depthTest": true,
@@ -136,56 +136,6 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
     "children": [
       {
         "children": [
-          {
-            "geometry": undefined,
-            "layers": 1,
-            "material": undefined,
-            "matrix": [
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-            ],
-            "type": "Mesh",
-            "uuid": undefined,
-          },
-          {
-            "geometry": undefined,
-            "layers": 1,
-            "material": undefined,
-            "matrix": [
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-            ],
-            "type": "Mesh",
-            "uuid": undefined,
-          },
           {
             "geometry": undefined,
             "layers": 1,
@@ -275,20 +225,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           },
           "type": "CubicBezierCurve",
           "v0": [
-            349.82,
-            44.801,
+            12,
+            2,
           ],
           "v1": [
-            272.496,
-            44.801,
+            8.13,
+            2,
           ],
           "v2": [
-            210,
-            107.375,
+            5,
+            5.13,
           ],
           "v3": [
-            210,
-            184.801,
+            5,
+            9,
           ],
         },
         {
@@ -300,54 +250,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           },
           "type": "CubicBezierCurve",
           "v0": [
-            210,
-            184.801,
+            5,
+            9,
           ],
           "v1": [
-            210,
-            202.582,
+            5,
+            14.25,
           ],
           "v2": [
-            215.184,
-            225.164,
+            12,
+            22,
           ],
           "v3": [
-            221.199,
-            240.801,
-          ],
-        },
-        {
-          "arcLengthDivisions": 200,
-          "metadata": {
-            "generator": "Curve.toJSON",
-            "type": "Curve",
-            "version": 4.5,
-          },
-          "type": "LineCurve",
-          "v1": [
-            221.199,
-            240.801,
-          ],
-          "v2": [
-            349.999,
-            515.201,
-          ],
-        },
-        {
-          "arcLengthDivisions": 200,
-          "metadata": {
-            "generator": "Curve.toJSON",
-            "type": "Curve",
-            "version": 4.5,
-          },
-          "type": "LineCurve",
-          "v1": [
-            349.999,
-            515.201,
-          ],
-          "v2": [
-            478.799,
-            240.801,
+            12,
+            22,
           ],
         },
         {
@@ -359,20 +275,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           },
           "type": "CubicBezierCurve",
           "v0": [
-            478.799,
-            240.801,
+            12,
+            22,
           ],
           "v1": [
-            484.846,
-            225.156,
+            12,
+            22,
           ],
           "v2": [
-            489.998,
-            202.59,
+            19,
+            14.25,
           ],
           "v3": [
-            489.998,
-            184.801,
+            19,
+            9,
           ],
         },
         {
@@ -384,37 +300,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           },
           "type": "CubicBezierCurve",
           "v0": [
-            489.998,
-            184.801,
+            19,
+            9,
           ],
           "v1": [
-            489.998,
-            107.375,
+            19,
+            5.13,
           ],
           "v2": [
-            427.15,
-            44.801,
+            15.870000000000001,
+            2,
           ],
           "v3": [
-            349.818,
-            44.801,
-          ],
-        },
-        {
-          "arcLengthDivisions": 200,
-          "metadata": {
-            "generator": "Curve.toJSON",
-            "type": "Curve",
-            "version": 4.5,
-          },
-          "type": "LineCurve",
-          "v1": [
-            349.818,
-            44.801,
-          ],
-          "v2": [
-            349.82,
-            44.801,
+            12,
+            2,
           ],
         },
       ],
@@ -436,20 +335,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               },
               "type": "CubicBezierCurve",
               "v0": [
-                349.996,
-                117.602,
+                12,
+                11.5,
               ],
               "v1": [
-                387.113,
-                117.602,
+                10.620000000000001,
+                11.5,
               ],
               "v2": [
-                417.195,
-                147.637,
+                9.5,
+                10.379999999999999,
               ],
               "v3": [
-                417.195,
-                184.801,
+                9.5,
+                9,
               ],
             },
             {
@@ -461,20 +360,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               },
               "type": "CubicBezierCurve",
               "v0": [
-                417.195,
-                184.801,
+                9.5,
+                9,
               ],
               "v1": [
-                417.195,
-                221.965,
+                9.5,
+                7.620000000000001,
               ],
               "v2": [
-                387.113,
-                252,
+                10.620000000000001,
+                6.5,
               ],
               "v3": [
-                349.996,
-                252,
+                12,
+                6.5,
               ],
             },
             {
@@ -486,20 +385,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               },
               "type": "CubicBezierCurve",
               "v0": [
-                349.996,
-                252,
+                12,
+                6.5,
               ],
               "v1": [
-                312.879,
-                252,
+                13.379999999999999,
+                6.5,
               ],
               "v2": [
-                282.797,
-                221.965,
+                14.5,
+                7.62,
               ],
               "v3": [
-                282.797,
-                184.801,
+                14.5,
+                9,
               ],
             },
             {
@@ -511,37 +410,20 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               },
               "type": "CubicBezierCurve",
               "v0": [
-                282.797,
-                184.801,
+                14.5,
+                9,
               ],
               "v1": [
-                282.797,
-                147.637,
+                14.5,
+                10.379999999999999,
               ],
               "v2": [
-                312.879,
-                117.602,
+                13.379999999999999,
+                11.5,
               ],
               "v3": [
-                349.996,
-                117.602,
-              ],
-            },
-            {
-              "arcLengthDivisions": 200,
-              "metadata": {
-                "generator": "Curve.toJSON",
-                "type": "Curve",
-                "version": 4.5,
-              },
-              "type": "LineCurve",
-              "v1": [
-                349.996,
-                117.602,
-              ],
-              "v2": [
-                349.996,
-                117.602,
+                12,
+                11.5,
               ],
             },
           ],
