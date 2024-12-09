@@ -19,7 +19,7 @@ describe('Notes-100: Share a note', () => {
           cy.stub(win.navigator.clipboard, 'writeText').as('clipboardSpy')
             .resolves()
         })
-        cy.get('.MuiCardActions-root > [data-testid="Share"] > .icon-share').first().click()
+        cy.get('.MuiCardActions-root [data-testid="Share"] > .icon-share').first().click()
       })
 
       it('Link copied, SnackBar reports that - Screen', () => {

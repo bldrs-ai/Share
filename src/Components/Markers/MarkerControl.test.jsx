@@ -107,7 +107,8 @@ describe('MarkerControl', () => {
     })
 
 
-    // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
+    // TODO: `document.createElement` can't be used in testing-library directly,
+    // need to move this after fixing that issue
     beforeEach(() => {
       viewer = new IfcViewerAPIExtended()
       viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
@@ -135,7 +136,7 @@ describe('MarkerControl', () => {
   }
 
   // Create mock opposite objects
-const mockOppositeObjects = [
+  const mockOppositeObjects = [
     new Mesh(
       new BoxGeometry(1, 1, 1),
       new MeshBasicMaterial({color: 0x00ff00}),
@@ -161,7 +162,7 @@ const mockOppositeObjects = [
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     const {container} = render(
       <ShareMock>
-       <CadView installPrefix={'/'} appPrefix={''} pathPrefix={''} modelPath={{filepath: '/index.ifc'}}/>
+       <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
           <MarkerControl
             context={mockContext}
             oppositeObjects={mockOppositeObjects}
@@ -178,7 +179,7 @@ const mockOppositeObjects = [
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(
       <ShareMock>
-        <CadView installPrefix={'/'} appPrefix={''} pathPrefix={''} modelPath={{filepath: '/index.ifc'}}/>
+        <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
           <MarkerControl
             context={mockContext}
             oppositeObjects={mockOppositeObjects}

@@ -21,7 +21,8 @@ export default class PlaceMark extends EventDispatcher {
    * Creates a new PlaceMark instance.
    *
    * @param {object} options - Options for the PlaceMark.
-   * @param {object} options.context - Rendering context providing access to DOM element, camera, and scene.
+   * @param {object} options.context - Rendering context providing access to DOM
+   *     element, camera, and scene.
    * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
   constructor({context, postProcessor}) {
@@ -83,7 +84,8 @@ export default class PlaceMark extends EventDispatcher {
           intersectPoint.z = floatStrTrim(intersectPoint.z)
 
           if (intersect.face && intersect.object) {
-            const normal = intersect.face.normal.clone().applyMatrix3(new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
+            const normal = intersect.face.normal.clone().applyMatrix3(
+              new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
             const offset = normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
             const point = intersectPoint.add(offset)
             const promiseGroup = this.putDown({point, normal, active: false})
@@ -131,12 +133,9 @@ export default class PlaceMark extends EventDispatcher {
           reject(new Error('Normal vector is not defined.'))
           return
         }
-        const _placeMark = createCirclePlacemark(point, fillColor)
-
-       // if (active) {
-       //   toggleMarkerSelection(_placeMark)
-       // }
-        resolve(_placeMark)
+        createCirclePlacemark(point, fillColor)
+          .then((mark) => resolve(mark))
+          .catch((e) => reject(e))
       })
     }
 
@@ -199,68 +198,114 @@ export default class PlaceMark extends EventDispatcher {
     }
 
     const createCirclePlacemark = (position, fillColor) => {
-      const texture = createCircleTexture(fillColor)
-      const material = new SpriteMaterial({
-        map: texture,
-        transparent: true,
-        depthTest: false, // Disable depth testing
-      })
-      const placemark = new Sprite(material)
-      placemark.position.copy(position)
-      placemark.renderOrder = 999 // High render order to ensure it's drawn last
-      placemark.material.color.set(fillColor)
-      _scene.add(placemark)
-      _placeMarks.push(placemark)
-      // toggleMarkerSelection(placemark)
-      return placemark
+      return createCircleTexture(fillColor)
+        .then((texture) => {
+          const material = new SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: false,
+          })
+          const placemark = new Sprite(material)
+          placemark.position.copy(position)
+          placemark.renderOrder = 999 // High render order to ensure it's drawn last
+          // placemark.material.color.set(0xffffff)
+          _scene.add(placemark)
+          _placeMarks.push(placemark)
+          return placemark
+        })
+        .catch((err) => {
+          throw err
+        })
     }
 
     const createCircleTexture = (fillColor) => {
-      const size = 64 // Texture size in pixels
+      const sW = 24
+      const sH = 24
+      // Base color should be white. Dynamic coloring tints the base color, so
+      // need white to give unbiased tinting so that
+      // e.g. material.color.set(0xff0000) will render as 0xff0000 on screen and
+      // not a blend.
+      // Share is from @mui/icons-material/Place
+      const icon = `<svg viewBox="0 0 ${sW} ${sH}" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0
+                 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5"
+        fill="#ffffff"/>
+      </svg>`
+      const oversample = 4
+      const width = sW * oversample
+      const height = sH * oversample
       const canvas = document.createElement('canvas')
-      canvas.width = size
-      canvas.height = size
-      const canvasContext = canvas.getContext('2d')
-
-      // Ensure the entire canvas is transparent initially
-      canvasContext.clearRect(0, 0, size, size)
-
-      // Draw the circle
-      canvasContext.beginPath()
-      // eslint-disable-next-line no-mixed-operators
-      canvasContext.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2) // -2 for a slight border
-      // eslint-disable-next-line no-magic-numbers
-      canvasContext.fillStyle = `#${fillColor.toString(16).padStart(6, '0')}`
-      canvasContext.fill()
-
-      // Optionally add a border
-      canvasContext.lineWidth = 2
-      canvasContext.strokeStyle = '#000000'
-      canvasContext.stroke()
-
-      return new CanvasTexture(canvas)
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      const img = new Image()
+      const svgBlob = new Blob([icon], {type: 'image/svg+xml'})
+      const url = URL.createObjectURL(svgBlob)
+      return new Promise((resolve) => {
+        img.onload = () => {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          // ctx.imageSmoothingEnabled = false
+          ctx.drawImage(img, 0, 0, width, height)
+          URL.revokeObjectURL(url)
+          resolve(new CanvasTexture(canvas))
+        }
+        img.src = url
+      })
     }
 
-    /* const toggleMarkerSelection = (marker) => {
-      _selectedPlaceMarks.forEach((selectedMarker) => {
-        // eslint-disable-next-line no-magic-numbers
-        selectedMarker.material.color.set(0xA9A9A9)
-      })
-      _selectedPlaceMarks.clear()
-      _selectedPlaceMarks.add(marker)
-      // eslint-disable-next-line no-magic-numbers
-      marker.material.color.set(0xff0000)
-    }*/
+    // For clamped-interpolation
+    /**
+     * Smoothstep easing function for non-linear interpolation.
+     *
+     * @return {number} interpolated X
+     */
+    /*
+    function smoothstep(edge0, edge1, x) {
+      const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
+      return t * t * (3 - (2 * t))
+    }
+    */
+
+    /**
+     * Smoothstep easing function for non-linear interpolation.
+     *
+     * @return {number} scale
+     */
+    /*
+    function getScaleForDistance(distance, minDist, maxDist, minScale, maxScale) {
+      const clampedDist = Math.min(Math.max(distance, minDist), maxDist)
+      const normalized = (clampedDist - minDist) / (maxDist - minDist)
+      const easedT = smoothstep(0, 1, normalized)
+      return minScale + (easedT * (maxScale - minScale))
+    }
+
+    const minDist = 1
+    const maxDist = 2
+    const minScale = 8
+    const maxScale = 10
+    */
+
+    const baselineDistance = 20 // e.g., at 100 units from camera, scale = 1
+    const baselineScale = 1
 
     const updatePlacemarksVisibility = () => {
+      const camPos = _camera.position
       _placeMarks.forEach((placemark) => {
-        placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
+        // Normal size in screen
+        // placemark.scale.set(PLACEMARK_SIZE, PLACEMARK_SIZE, PLACEMARK_SIZE)
+        const distance = placemark.position.distanceTo(camPos)
+        // Clamped-interpoliation
+        // const scale = getScaleForDistance(distance, minDist, maxDist, minScale, maxScale)
+        // Fixed size
+        const scale = baselineScale * (distance / baselineDistance)
+        placemark.scale.set(scale, scale, scale)
       })
     }
 
     this.onRender = () => {
       updatePlacemarksVisibility()
-      _placeMarks.sort((a, b) => a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
+      _placeMarks.sort((a, b) =>
+        a.position.distanceTo(_camera.position) - b.position.distanceTo(_camera.position))
       requestAnimationFrame(this.onRender)
     }
 
@@ -268,5 +313,6 @@ export default class PlaceMark extends EventDispatcher {
   }
 }
 
-const PLACEMARK_SIZE = 2.5
+// For normal sizing
+// const PLACEMARK_SIZE = 2.5
 const PLACE_MARK_DISTANCE = 0

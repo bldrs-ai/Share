@@ -72,9 +72,8 @@ export default function createNotesSlice(set, get) {
     placeMark: null,
     setPlaceMark: (newPlaceMark) => set(() => ({placeMark: newPlaceMark})),
 
-    placeMarkActivated: false,
-    setPlaceMarkActivated: (newPlaceMarkActivated) =>
-      set(() => ({placeMarkActivated: newPlaceMarkActivated})),
+    isPlaceMarkActivated: false,
+    setIsPlaceMarkActivated: (is) => set(() => ({isPlaceMarkActivated: is})),
 
     placeMarkId: null,
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
