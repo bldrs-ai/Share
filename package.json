@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1179",
+  "version": "1.0.1182",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,6 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
+    "preinstall": "node ./scripts/netlify-preinstall.js",
     "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-conway-debug": "yarn clean && yarn build-share-conway && yarn build-share-copy-wasm-conway-profile && yarn build-cosmos",
