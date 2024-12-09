@@ -1,10 +1,12 @@
 import React, {ReactElement, useState} from 'react'
 import Box from '@mui/material/Box'
 import CardActions from '@mui/material/CardActions'
+import Stack from '@mui/material/Stack'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
+import {MARKER_COLOR_ACTIVE_CSS, MARKER_COLOR_INACTIVE_CSS} from '../Markers/component'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
@@ -15,6 +17,7 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCameraOutlined'
 import ShareIcon from '@mui/icons-material/Share'
+import PlaceIcon from '@mui/icons-material/Place'
 
 
 /**
@@ -40,13 +43,17 @@ export default function NoteFooter({
 }) {
   const isScreenshotEnabled = useExistInFeature('screenshot')
 
-  const viewer = useStore((state) => state.viewer)
+  const editOriginalBodies = useStore((state) => state.editOriginalBodies)
   const repository = useStore((state) => state.repository)
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const viewer = useStore((state) => state.viewer)
+
+  // Markers
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const setEditModeGlobal = useStore((state) => state.setEditMode)
-  const editOriginalBodies = useStore((state) => state.editOriginalBodies)
-  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const markers = useStore((state) => state.markers)
+  const {togglePlaceMarkActive} = placemarkHandlers()
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -57,8 +64,6 @@ export default function NoteFooter({
   const hasCameras = embeddedCameras.length > 0
   const selectedNoteId = useStore((state) => state.selectedNoteId)
 
-  const {togglePlaceMarkActive} = placemarkHandlers()
-
   /** Navigate to github issue */
   function openGithubIssue() {
     window.open(
@@ -66,138 +71,168 @@ export default function NoteFooter({
       '_blank')
   }
 
+  const marker = markers.find((m) => m.id === id)
+  const hasActiveMarker = marker ? marker.isActive : false // Check isActive only if the marker is found
+
   return (
     <CardActions>
-      {isNote &&
-       <TooltipIconButton
-         title='Open in Github'
-         size='small'
-         placement='bottom'
-         onClick={openGithubIssue}
-         icon={<GitHubIcon className='icon-share'/>}
-       />
-      }
+      <Stack direction='row' justifyContent='space-between' sx={{width: '100%'}}>
+        <Stack direction='row'>
+          {marker &&
+           <Box
+             sx={{
+               'display': 'flex',
+               'alignItems': 'center',
+               'justifyContent': 'center',
+               'height': '48px',
+               'width': '48px',
+               'margin': '5px',
+               '& .Mui-disabled': {
+                 opacity: '1.0',
+                 border: 'none !important',
+               },
+               '& svg': {
+                 fill: hasActiveMarker ? MARKER_COLOR_ACTIVE_CSS : MARKER_COLOR_INACTIVE_CSS,
+               },
+             }}
+           >
+             <PlaceIcon className='icon-share'/>
+           </Box>
+          }
 
-      {hasCameras &&
-       <TooltipIconButton
-         title='Show the camera view'
-         size='small'
-         placement='bottom'
-         onClick={onClickCamera}
-         icon={<PhotoCameraIcon className='icon-share'/>}
-       />}
+          {isNote && selected && synched &&
+           user && user.nickname === username &&
+           <Box
+             sx={{
+               '& .Mui-disabled': {
+                 border: 'none !important',
+               },
+               '& svg': {
+                 fill: (placeMarkId === id && placeMarkActivated) ?
+                   'red' :
+                   theme.palette.mode === 'light' ? 'black' : 'white',
+               },
+             }}
+           >
+             <TooltipIconButton
+               title='Add Placemark'
+               enabled={editMode}
+               size='small'
+               placement='bottom'
+               onClick={() => togglePlaceMarkActive(id)}
+               icon={<AddLocationIcon className='icon-share'/>}
+             />
+           </Box>
+          }
 
-      {selected &&
-       <TooltipIconButton
-         title='Share'
-         size='small'
-         placement='bottom'
-         onClick={() => {
-           onClickShare()
-           setShareIssue(!shareIssue)
-         }}
-         icon={<ShareIcon className='icon-share'/>}
-       />
-      }
+          {hasCameras &&
+           <TooltipIconButton
+             title='Show the camera view'
+             size='small'
+             placement='bottom'
+             onClick={onClickCamera}
+             icon={<PhotoCameraIcon className='icon-share'/>}
+           />}
+          {isScreenshotEnabled && screenshotUri &&
+           <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
+          }
 
-      {!isNote &&
-       <TooltipIconButton
-         title='Share'
-         size='small'
-         placement='bottom'
-         onClick={() => {
-           onClickShare(selectedNoteId, id)
-           setShareIssue(!shareIssue)
-         }}
-         icon={<ShareIcon className='icon-share'/>}
-       />
-      }
+          {isScreenshotEnabled &&
+           <TooltipIconButton
+             title='Take Screenshot'
+             size='small'
+             placement='bottom'
+             onClick={() => {
+               setScreenshotUri(viewer.takeScreenshot())
+             }}
+             icon={<PhotoCameraIcon className='icon-share'/>}
+           />
+          }
 
-      {isNote && selected && synched &&
-       user && user.nickname === username &&
-       <Box
-         sx={{
-           '& svg': {
-             fill: (placeMarkId === id && placeMarkActivated) ?
-               'red' :
-               theme.palette.mode === 'light' ? 'black' : 'white',
-           },
-         }}
-       >
-         <TooltipIconButton
-           title='Place Mark'
-           enabled={editMode}
-           size='small'
-           placement='bottom'
-           onClick={() => {
-             togglePlaceMarkActive(id)
-           }}
-           icon={<AddLocationIcon className='icon-share'/>}
-         />
-       </Box>
-      }
+          {editMode && (
+            <>
+              <TooltipIconButton
+                title='Save'
+                placement='left'
+                icon={<CheckIcon className='icon-share'/>}
+                onClick={() => submitUpdate(repository, accessToken, id)}
+              />
+              <TooltipIconButton
+                title='Cancel'
+                placement='left'
+                icon={<CloseIcon className='icon-share'/>}
+                onClick={() => {
+                  setEditBodyGlobal(id, editOriginalBodies[id])
+                  setEditModeGlobal(id, false) // Update global edit mode state
+                }}
+              />
+            </>
+          )}
 
-      {isScreenshotEnabled && screenshotUri &&
-       <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
-      }
+          {isNote && !selected &&
+           <TooltipIconButton
+             title='Add Comment'
+             size='small'
+             placement='bottom'
+             selected={showCreateComment}
+             onClick={selectCard}
+             icon={<AddCommentOutlinedIcon className='icon-share'/>}
+           />
+          }
 
-      {isScreenshotEnabled &&
-       <TooltipIconButton
-         title='Take Screenshot'
-         size='small'
-         placement='bottom'
-         onClick={() => {
-           setScreenshotUri(viewer.takeScreenshot())
-         }}
-         icon={<PhotoCameraIcon className='icon-share'/>}
-       />
-      }
+          {numberOfComments > 0 && !editMode &&
+           <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
+             {!selected &&
+              <TooltipIconButton
+                title='Discussion'
+                size='small'
+                placement='bottom'
+                onClick={selectCard}
+                icon={<ForumOutlinedIcon className='icon-share'/>}
+              />
+             }
+             {!selected && numberOfComments}
+           </Box>
+          }
+        </Stack>
+        <Stack direction='row'>
+          {isNote &&
+           <TooltipIconButton
+             title='Open in Github'
+             size='small'
+             placement='bottom'
+             onClick={openGithubIssue}
+             icon={<GitHubIcon className='icon-share'/>}
+           />
+          }
 
-      {editMode && (
-        <>
-          <TooltipIconButton
-            title='Save'
-            placement='left'
-            icon={<CheckIcon className='icon-share'/>}
-            onClick={() => submitUpdate(repository, accessToken, id)}
-          />
-          <TooltipIconButton
-            title='Cancel'
-            placement='left'
-            icon={<CloseIcon className='icon-share'/>}
-            onClick={() => {
-              setEditBodyGlobal(id, editOriginalBodies[id])
-              setEditModeGlobal(id, false) // Update global edit mode state
-            }}
-          />
-        </>
-      )}
+          {selected &&
+           <TooltipIconButton
+             title='Share'
+             size='small'
+             placement='bottom'
+             onClick={() => {
+               onClickShare()
+               setShareIssue(!shareIssue)
+             }}
+             icon={<ShareIcon className='icon-share'/>}
+           />
+          }
 
-      {isNote && !selected &&
-       <TooltipIconButton
-         title='Add Comment'
-         size='small'
-         placement='bottom'
-         selected={showCreateComment}
-         onClick={selectCard}
-         icon={<AddCommentOutlinedIcon className='icon-share'/>}
-       />
-      }
-
-      {numberOfComments > 0 && !editMode &&
-       <Box sx={{marginLeft: 'auto', padding: '0 0.5em'}}>
-         {!selected &&
-          <TooltipIconButton
-            title='Discussion'
-            size='small'
-            placement='bottom'
-            onClick={selectCard}
-            icon={<ForumOutlinedIcon className='icon-share'/>}
-          />
-         }
-         {!selected && numberOfComments}
-       </Box>
-      }
+          {!isNote &&
+           <TooltipIconButton
+             title='Share'
+             size='small'
+             placement='bottom'
+             onClick={() => {
+               onClickShare(selectedNoteId, id)
+               setShareIssue(!shareIssue)
+             }}
+             icon={<ShareIcon className='icon-share'/>}
+           />
+          }
+        </Stack>
+      </Stack>
     </CardActions>
   )
 }

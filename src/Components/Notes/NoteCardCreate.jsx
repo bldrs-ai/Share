@@ -45,7 +45,7 @@ export default function NoteCardCreate({
   const body = useStore((state) => state.body)
   const setBody = useStore((state) => state.setBody)
   const {togglePlaceMarkActive} = placemarkHandlers()
-  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const isPlaceMarkActivated = useStore((state) => state.isPlaceMarkActivated)
   const theme = useTheme()
   const tempId = -1
   const placeMarkId = useStore((state) => state.placeMarkId)
@@ -175,56 +175,56 @@ export default function NoteCardCreate({
         </Box>
       </CardContent>
       <CardActions>
-      <Stack
-  justifyContent='flex-end'
-  alignContent='flex-end'
-  direction='row'
-  sx={{width: '100%'}}
-      >
-  {isNote ? (
-    <TooltipIconButton
-      title='Submit'
-      onClick={createNote}
-      icon={<CheckIcon/>}
-      enabled={submitEnabled}
-      size='small'
-      placement='bottom'
-    />
-  ) : (
-    <>
-    {!isNote &&
-       <Box
-         sx={{
-           '& svg': {
-             fill: (placeMarkId === tempId && placeMarkActivated) ?
-               'red' :
-               theme.palette.mode === 'light' ? 'black' : 'white',
-           },
-         }}
-       >
-         <TooltipIconButton
-           title='Place Mark'
-           enabled={placeMarkEnabled}
-           size='small'
-           placement='bottom'
-           onClick={() => {
-             togglePlaceMarkActive(tempId)
-           }}
-           icon={<AddLocationIcon className='icon-share'/>}
-         />
-       </Box>
-      }
-      <TooltipIconButton
-        title='Submit Comment'
-        onClick={createNewComment}
-        icon={<CheckIcon/>}
-        enabled={submitEnabled}
-        size='small'
-        placement='bottom'
-      />
-    </>
-  )}
-      </Stack>
+        <Stack
+          justifyContent='flex-end'
+          alignContent='flex-end'
+          direction='row'
+          sx={{width: '100%'}}
+        >
+          {isNote ? (
+            <TooltipIconButton
+              title='Submit'
+              onClick={createNote}
+              icon={<CheckIcon/>}
+              enabled={submitEnabled}
+              size='small'
+              placement='bottom'
+            />
+          ) : (
+            <>
+              {!isNote &&
+               <Box
+                 sx={{
+                   '& svg': {
+                     fill: (placeMarkId === tempId && isPlaceMarkActivated) ?
+                       'red' :
+                       theme.palette.mode === 'light' ? 'black' : 'white',
+                   },
+                 }}
+               >
+                 <TooltipIconButton
+                   title='Place Mark'
+                   enabled={placeMarkEnabled}
+                   size='small'
+                   placement='bottom'
+                   onClick={() => {
+                     togglePlaceMarkActive(tempId)
+                   }}
+                   icon={<AddLocationIcon className='icon-share'/>}
+                 />
+               </Box>
+              }
+              <TooltipIconButton
+                title='Submit Comment'
+                onClick={createNewComment}
+                icon={<CheckIcon/>}
+                enabled={submitEnabled}
+                size='small'
+                placement='bottom'
+              />
+            </>
+          )}
+        </Stack>
       </CardActions>
     </Card>
   )

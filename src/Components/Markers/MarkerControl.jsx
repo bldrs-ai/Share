@@ -14,13 +14,11 @@ import {
   HASH_PREFIX_NOTES,
 } from '../Notes/hashState'
 import useStore from '../../store/useStore'
+import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from './component'
 import {
   HASH_PREFIX_PLACE_MARK,
   saveMarkToHash,
 } from './hashState'
-
-
-const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
 
 /**
@@ -134,12 +132,12 @@ export default memo(MarkerControl)
  *
  * @return {object}
  */
-function PlacemarkHandlers() {
+export function PlacemarkHandlers() {
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const setPlaceMarkId = useStore((state) => state.setPlaceMarkId)
-  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const setIsPlaceMarkActivated = useStore((state) => state.setIsPlaceMarkActivated)
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
   const synchSidebar = useStore((state) => state.synchSidebar)
@@ -218,7 +216,6 @@ function PlacemarkHandlers() {
         }
       }
 
-
       // eslint-disable-next-line no-unused-vars
       for (const [_, value] of placeMarkGroupMap.entries()) {
         if (value.userData.isActive) {
@@ -249,8 +246,8 @@ function PlacemarkHandlers() {
       saveMarkToHash(markArr)
       // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
-      const inactiveColor = 0xA9A9A9
-      const activeColor = 0xff0000
+      const inactiveColor = MARKER_COLOR_INACTIVE
+      const activeColor = MARKER_COLOR_ACTIVE
       svgGroup.userData.isActive = false
       svgGroup.userData.activeColor = activeColor
       svgGroup.userData.inactiveColor = inactiveColor
@@ -264,7 +261,7 @@ function PlacemarkHandlers() {
 
     setPlaceMarkMode(false)
     placeMark.deactivate()
-    setPlaceMarkActivated(false)
+    setIsPlaceMarkActivated(false)
 
     if (!repository || !Array.isArray(notes)) {
       return
@@ -385,7 +382,7 @@ function PlacemarkHandlers() {
         return
       }
       placeMark.deactivate()
-      setPlaceMarkActivated(false)
+      setIsPlaceMarkActivated(false)
     }
 
     const activatePlaceMark = () => {
@@ -393,7 +390,7 @@ function PlacemarkHandlers() {
         return
       }
       placeMark.activate()
-      setPlaceMarkActivated(true)
+      setIsPlaceMarkActivated(true)
     }
 
     if (!placeMark) {
@@ -441,7 +438,7 @@ const resetPlaceMarksActive = (isActive) => {
 
 const resetPlaceMarkColors = () => {
   placeMarkGroupMap.forEach((svgGroup) => {
-    let color = 'grey'
+    let color = '#00ff00'
     if (svgGroup.userData.isActive) {
       color = 'red'
     }
@@ -459,4 +456,5 @@ MarkerControl.propTypes = {
   postProcessor: PropTypes.object,
 }
 
-export {PlacemarkHandlers}
+
+export const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
