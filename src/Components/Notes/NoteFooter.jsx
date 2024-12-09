@@ -15,6 +15,7 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCameraOutlined'
 import ShareIcon from '@mui/icons-material/Share'
+import PlaceIcon from '@mui/icons-material/Place'
 
 
 /**
@@ -40,13 +41,17 @@ export default function NoteFooter({
 }) {
   const isScreenshotEnabled = useExistInFeature('screenshot')
 
-  const viewer = useStore((state) => state.viewer)
+  const editOriginalBodies = useStore((state) => state.editOriginalBodies)
   const repository = useStore((state) => state.repository)
+  const setEditModeGlobal = useStore((state) => state.setEditMode)
+  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const viewer = useStore((state) => state.viewer)
+
+  // Markers
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const setEditModeGlobal = useStore((state) => state.setEditMode)
-  const editOriginalBodies = useStore((state) => state.editOriginalBodies)
-  const setEditBodyGlobal = useStore((state) => state.setEditBody)
+  const markers = useStore((state) => state.markers)
+  const selectedPlaceMarkId = useStore((state) => state.selectedPlaceMarkId)
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -66,8 +71,36 @@ export default function NoteFooter({
       '_blank')
   }
 
+  const marker = markers.find((m) => m.id === id)
+  const hasActiveMarker = marker ? marker.isActive : false // Check isActive only if the marker is found
+
   return (
     <CardActions>
+      {marker &&
+       <Box
+         sx={{
+           '& .Mui-disabled': {
+             opacity: '1.0',
+             border: 'none !important',
+           },
+           '& svg': {
+             fill: hasActiveMarker ?
+               '#ff0000' :
+               theme.palette.mode === 'light' ? 'black' : 'white',
+           },
+         }}
+       >
+         <TooltipIconButton
+           title='PlaceMark in scene'
+           enabled={false}
+           size='small'
+           placement='bottom'
+           onClick={() => {}}
+           icon={<PlaceIcon className='icon-share'/>}
+         />
+       </Box>
+      }
+
       {isNote &&
        <TooltipIconButton
          title='Open in Github'

@@ -139,7 +139,7 @@ function PlacemarkHandlers() {
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const setPlaceMarkId = useStore((state) => state.setPlaceMarkId)
-  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const setIsPlaceMarkActivated = useStore((state) => state.setIsPlaceMarkActivated)
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
   const synchSidebar = useStore((state) => state.synchSidebar)
@@ -249,7 +249,7 @@ function PlacemarkHandlers() {
       saveMarkToHash(markArr)
       // Add metadata to the temporary marker
       const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
-      const inactiveColor = 0x5555ff
+      const inactiveColor = 0x0000ff
       const activeColor = 0xff0000
       svgGroup.userData.isActive = false
       svgGroup.userData.activeColor = activeColor
@@ -264,7 +264,7 @@ function PlacemarkHandlers() {
 
     setPlaceMarkMode(false)
     placeMark.deactivate()
-    setPlaceMarkActivated(false)
+    setIsPlaceMarkActivated(false)
 
     if (!repository || !Array.isArray(notes)) {
       return
@@ -385,7 +385,7 @@ function PlacemarkHandlers() {
         return
       }
       placeMark.deactivate()
-      setPlaceMarkActivated(false)
+      setIsPlaceMarkActivated(false)
     }
 
     const activatePlaceMark = () => {
@@ -393,7 +393,8 @@ function PlacemarkHandlers() {
         return
       }
       placeMark.activate()
-      setPlaceMarkActivated(true)
+      console.log('setIsPlaceMarkActivated(true)')
+      setIsPlaceMarkActivated(true)
     }
 
     if (!placeMark) {
@@ -441,7 +442,7 @@ const resetPlaceMarksActive = (isActive) => {
 
 const resetPlaceMarkColors = () => {
   placeMarkGroupMap.forEach((svgGroup) => {
-    let color = '#5555ff'
+    let color = '#00ff00'
     if (svgGroup.userData.isActive) {
       color = 'red'
     }

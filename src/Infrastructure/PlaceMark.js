@@ -10,7 +10,6 @@ import {
 } from 'three'
 import {isDevMode} from '../utils/common'
 import {floatStrTrim} from '../utils/strings'
-// import MarkIcon from '../assets/icons/PlaceMark.svg'
 
 
 /**
@@ -22,7 +21,8 @@ export default class PlaceMark extends EventDispatcher {
    * Creates a new PlaceMark instance.
    *
    * @param {object} options - Options for the PlaceMark.
-   * @param {object} options.context - Rendering context providing access to DOM element, camera, and scene.
+   * @param {object} options.context - Rendering context providing access to DOM
+   *     element, camera, and scene.
    * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
   constructor({context, postProcessor}) {
@@ -84,7 +84,8 @@ export default class PlaceMark extends EventDispatcher {
           intersectPoint.z = floatStrTrim(intersectPoint.z)
 
           if (intersect.face && intersect.object) {
-            const normal = intersect.face.normal.clone().applyMatrix3(new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
+            const normal = intersect.face.normal.clone().applyMatrix3(
+              new Matrix3().getNormalMatrix(intersect.object.matrixWorld))
             const offset = normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
             const point = intersectPoint.add(offset)
             const promiseGroup = this.putDown({point, normal, active: false})
@@ -202,12 +203,13 @@ export default class PlaceMark extends EventDispatcher {
           const material = new SpriteMaterial({
             map: texture,
             transparent: true,
-            depthTest: false, // Disable depth testing
+            depthTest: false,
           })
           const placemark = new Sprite(material)
           placemark.position.copy(position)
           placemark.renderOrder = 999 // High render order to ensure it's drawn last
-          // placemark.material.color.set(fillColor)
+          // TODO(pablo): why doesn't this have an effect?
+          // placemark.material.color.set(0x00ff00)
           _scene.add(placemark)
           _placeMarks.push(placemark)
           return placemark
@@ -220,18 +222,15 @@ export default class PlaceMark extends EventDispatcher {
     const createCircleTexture = (fillColor) => {
       const hexBase = 16
       const fillColorStr = `#${fillColor.toString(hexBase).padStart(6, '0')}`
-      const sW = 279.998
-      const sH = 470.4
-      const icon = `<svg viewBox="210 44.801 ${sW} ${sH}" xmlns="http://www.w3.org/2000/svg">
-        <path d="M 349.82 44.801 C 272.496 44.801 210 107.375 210 184.801 C 210 202.582 215.184
-        225.164 221.199 240.801 L 349.999 515.201 L 478.799 240.801 C 484.846 225.156 489.998
-        202.59 489.998 184.801 C 489.998 107.375 427.15 44.801 349.818 44.801 L 349.82 44.801 Z
-        M 349.996 117.602 C 387.113 117.602 417.195 147.637 417.195 184.801 C 417.195 221.965
-        387.113 252 349.996 252 C 312.879 252 282.797 221.965 282.797 184.801 C 282.797 147.637
-        312.879 117.602 349.996 117.602 L 349.996 117.602 Z"
+      console.log('fillColorStr:', fillColorStr)
+      const sW = 24
+      const sH = 24
+      // From @mui/icons-material/Place
+      const icon = `<svg viewBox="0 0 ${sW} ${sH}" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0
+                 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5"
         fill="${fillColorStr}"/>
       </svg>`
-
       const oversample = 4
       const width = sW * oversample
       const height = sH * oversample
@@ -239,11 +238,9 @@ export default class PlaceMark extends EventDispatcher {
       canvas.width = width
       canvas.height = height
       const ctx = canvas.getContext('2d')
-
       const img = new Image()
       const svgBlob = new Blob([icon], {type: 'image/svg+xml'})
       const url = URL.createObjectURL(svgBlob)
-
       return new Promise((resolve) => {
         img.onload = () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height)

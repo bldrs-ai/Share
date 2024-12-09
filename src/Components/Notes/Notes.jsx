@@ -31,8 +31,10 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
+
   // Access markers and the necessary store functions
   const markers = useStore((state) => state.markers)
+  const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
   const writeMarkers = useStore((state) => state.writeMarkers)
 
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
@@ -156,6 +158,7 @@ export default function Notes() {
         if (activePlaceMarkHash && hash.startsWith(activePlaceMarkHash)) {
           activePlaceMarkHash = newHash
           isActive = true
+          setSelectedPlaceMarkId(selectedNoteId)
         }
 
         return {
