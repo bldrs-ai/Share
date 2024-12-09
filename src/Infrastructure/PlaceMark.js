@@ -208,8 +208,7 @@ export default class PlaceMark extends EventDispatcher {
           const placemark = new Sprite(material)
           placemark.position.copy(position)
           placemark.renderOrder = 999 // High render order to ensure it's drawn last
-          // TODO(pablo): why doesn't this have an effect?
-          // placemark.material.color.set(0x00ff00)
+          // placemark.material.color.set(0xffffff)
           _scene.add(placemark)
           _placeMarks.push(placemark)
           return placemark
@@ -220,16 +219,17 @@ export default class PlaceMark extends EventDispatcher {
     }
 
     const createCircleTexture = (fillColor) => {
-      const hexBase = 16
-      const fillColorStr = `#${fillColor.toString(hexBase).padStart(6, '0')}`
-      console.log('fillColorStr:', fillColorStr)
       const sW = 24
       const sH = 24
-      // From @mui/icons-material/Place
+      // Base color should be white. Dynamic coloring tints the base color, so
+      // need white to give unbiased tinting so that
+      // e.g. material.color.set(0xff0000) will render as 0xff0000 on screen and
+      // not a blend.
+      // Share is from @mui/icons-material/Place
       const icon = `<svg viewBox="0 0 ${sW} ${sH}" xmlns="http://www.w3.org/2000/svg">
         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7m0
                  9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5"
-        fill="${fillColorStr}"/>
+        fill="#ffffff"/>
       </svg>`
       const oversample = 4
       const width = sW * oversample

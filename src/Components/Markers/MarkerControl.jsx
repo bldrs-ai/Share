@@ -218,7 +218,6 @@ function PlacemarkHandlers() {
         }
       }
 
-
       // eslint-disable-next-line no-unused-vars
       for (const [_, value] of placeMarkGroupMap.entries()) {
         if (value.userData.isActive) {
@@ -393,7 +392,6 @@ function PlacemarkHandlers() {
         return
       }
       placeMark.activate()
-      console.log('setIsPlaceMarkActivated(true)')
       setIsPlaceMarkActivated(true)
     }
 

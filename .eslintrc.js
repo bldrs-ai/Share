@@ -87,6 +87,8 @@ module.exports = {
     'no-undef-init': 'error',
     'no-unneeded-ternary': 'error',
     'no-unused-expressions': 'error',
+    // TODO(pablo): cleanup fails and enable
+    // 'no-unused-vars': ['error', {varsIgnorePattern: '_'}],
     'no-useless-call': 'error',
     'no-useless-computed-key': 'error',
     'no-useless-concat': 'error',

@@ -35,8 +35,7 @@ export default function NotesControl() {
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const markers = useStore((state) => state.markers)
   let activePlaceMarkHash = getActivePlaceMarkHash()
-  // const inactiveColor = 0x0000ff
-  const inactiveColor = 0x80c0ff
+  const inactiveColor = 0x0000ff
   const activeColor = 0xff0000
 
 
