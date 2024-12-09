@@ -67,7 +67,7 @@ export default function NoteFooter({
   /** Navigate to github issue */
   function openGithubIssue() {
     window.open(
-      `https://github.com/${repository.orgName}/${repository.name}/issues/${id}`,
+      `https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`,
       '_blank')
   }
 
