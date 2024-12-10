@@ -1,5 +1,4 @@
-import React, {ReactElement, useEffect} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -13,9 +12,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 
 /** @return {ReactElement} */
 export default function NotesNavBar() {
-  const {isAuthenticated} = useAuth0()
   const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
-  const setIsCreateNoteVisible = useStore((state) => state.setIsCreateNoteVisible)
 
   const notes = useStore((state) => state.notes)
 
@@ -51,11 +48,6 @@ export default function NotesNavBar() {
       }
     }
   }
-
-
-  useEffect(() => {
-    setIsCreateNoteVisible(isAuthenticated)
-  }, [isAuthenticated, setIsCreateNoteVisible])
 
 
   return (
