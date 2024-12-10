@@ -189,7 +189,7 @@ export default function TabbedPanels({
           setDrawerWidth={() => console.warn('setDrawerWidth called on mobile drawer')}
           dataTestId='TabbedPanels'
         >
-          <Box sx={{height: '100%', borderBottom: 1, borderColor: 'divider', overflowY: 'scroll'}}>
+          <Box sx={{height: '100%', borderBottom: 1, borderColor: 'divider'}}>
             <Tabs
               value={value}
               onChange={handleChange}
