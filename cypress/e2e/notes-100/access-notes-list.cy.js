@@ -13,6 +13,7 @@ describe('Notes 100: Access notes list', () => {
       it('Notes visible - Screen', () => {
         cy.get('[data-testid="list-notes"]')
         cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
+        cy.percySnapshot()
       })
     })
     context('Open Notes - authenticated', () => {
@@ -23,6 +24,7 @@ describe('Notes 100: Access notes list', () => {
       it('Notes visible - Screen', () => {
         cy.get('[data-testid="list-notes"]')
         cy.get(`[data-testid="PanelTitle-${TITLE_NOTES}"]`).contains(TITLE_NOTES)
+        cy.percySnapshot()
       })
     })
   })
