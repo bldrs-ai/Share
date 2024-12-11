@@ -23,6 +23,7 @@
 //
 // -- This will overwrite an existing command --
 // Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
+import '@percy/cypress'
 import '@testing-library/cypress/add-commands'
 import 'cypress-react-router/add-commands'
 
