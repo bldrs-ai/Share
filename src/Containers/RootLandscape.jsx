@@ -1,4 +1,4 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
@@ -25,12 +25,22 @@ import TabbedPanels from './TabbedPanels'
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
   const isMobile = useIsMobile()
   const theme = useTheme()
+  const [vh, setVh] = useState(window.innerHeight)
+  useEffect(() => {
+    const setViewportHeight = () => {
+      setVh(window.innerHeight)
+    }
+    window.addEventListener('resize', setViewportHeight)
+    return () => {
+      window.removeEventListener('resize', setViewportHeight)
+    }
+  }, [])
   return (
     <Stack
       direction='row'
       justifyContent='space-between'
       alignItems='center'
-      sx={{width: '100vw', height: '100vh'}}
+      sx={{width: '100vw', height: `${vh}px`}}
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
