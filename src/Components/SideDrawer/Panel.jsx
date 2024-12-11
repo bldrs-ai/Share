@@ -1,10 +1,9 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
 import {assertDefined} from '../../utils/assert'
-import {CloseButton} from '../Buttons'
 import {useIsMobile} from '../Hooks'
+import PanelTitle, {PANEL_TITLE_HEIGHT} from './PanelTitle'
 
 
 /**
@@ -19,6 +18,7 @@ import {useIsMobile} from '../Hooks'
  */
 export default function Panel({title, onClose, children, actions = null, ...props}) {
   assertDefined(title, onClose, children)
+  const isMobile = useIsMobile()
   return (
     <Box
       sx={{height: '100%', overflow: 'hidden'}}
@@ -36,55 +36,16 @@ export default function Panel({title, onClose, children, actions = null, ...prop
         sx={{
           padding: '0.5em',
           // This ensures the overflowY scroll for the content doesn't underflow this title.
-          height: `calc(100% - ${TITLE_HEIGHT})`,
+          height: `calc(100% - ${PANEL_TITLE_HEIGHT})`,
           overflow: 'auto',
+          ...(isMobile ? {
+            borderRadius: 0,
+          } : {}),
         }}
-        data-testid={`PanelPaper-${title}`}
+        data-testid={`SideDrawerPanel-Paper-${title}`}
       >
         {children}
       </Paper>
     </Box>
   )
 }
-
-
-/**
- * @property {string} title Panel title
- * @property {Function} onClose Callback for close
- * @property {object} [actions] Actions component placed to the right of the title
- * @return {ReactElement}
- */
-function PanelTitle({title, onClose, actions}) {
-  assertDefined(title, onClose)
-  const isMobile = useIsMobile()
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: TITLE_HEIGHT,
-        // These keep the title from scrolling up
-        position: 'sticky',
-        top: 0,
-        zIndex: 1,
-      }}
-      data-testid={`PanelTitle-${title}`}
-    >
-      {!isMobile && <Typography variant='h2'>{title}</Typography>}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        {actions}
-        {!isMobile && <CloseButton onCloseClick={onClose}/>}
-      </Box>
-    </Box>
-  )
-}
-
-
-const TITLE_HEIGHT = '60px'

@@ -213,6 +213,9 @@ export default function TabbedPanels({
                   '& .Mui-selected .share-button-tab-close': {
                     display: 'flex',
                   },
+                  '& .MuiTab-root [role="tab"]': {
+                    padding: '0 0 0 0.5rem',
+                  },
                 }}
               >
                 {labelAndPanels.map((entry, index) => (

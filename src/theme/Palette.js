@@ -23,11 +23,13 @@ export const day = {
     main: colors.grey.light,
     light: colors.grey.lightest,
     dark: colors.grey.mediumlight,
-    contrastText: colors.grey.darkest,
-    // e.g. for list of items with one active
-    active: '#00F0FF',
-    // main, but transparent
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    // partly transparent. 0xC0: 0.75
+    contrastText: `${colors.grey.darkest}C0`,
+    // To match primary.sceneHighlight
+    selected: '#00F0FF40',
+    // partly transparent
+    backgroundColor: `${colors.grey.light}A0`,
+    backdropFilter: 'blur(1px)',
   },
 
   success: {
@@ -40,7 +42,7 @@ export const day = {
   action: {
     // Found this searching around
     // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
-    selectedOpacity: 0.3,
+    selectedOpacity: 0.25,
   },
 
   logo: {
@@ -68,11 +70,13 @@ export const night = {
     main: colors.grey.dark,
     light: colors.grey.mediumdark,
     dark: colors.grey.darkest,
-    contrastText: colors.grey.lightest,
-    // e.g. for list of items with one active
-    active: '#00F0FF',
-    // main, but transparent
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    // partly transparent. 0xC0: 0.75
+    contrastText: `${colors.grey.lightest}C0`,
+    // To match primary.sceneHighlight
+    selected: '#00F0FF40',
+    // partly transparent. 0x80: 0.5
+    backgroundColor: `${colors.grey.dark}80`,
+    backdropFilter: 'blur(1px)',
   },
 
   success: {
@@ -85,7 +89,7 @@ export const night = {
   action: {
     // Found this searching around
     // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
-    selectedOpacity: 0.3,
+    selectedOpacity: 0.25,
   },
 
   logo: {

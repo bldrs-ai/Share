@@ -31,7 +31,7 @@ export default function VerticalResizerButton({
 
   const theme = useTheme()
 
-  const gripButtonRatio = 0.5
+  const gripButtonRatio = 0.6
   const gripSize = thickness * gripButtonRatio
 
   const startResizing = useCallback(() => setIsResizing(true), [])
@@ -174,12 +174,12 @@ export default function VerticalResizerButton({
         sx={{
           width: '150px',
           paddingTop: `10px`,
-          paddingBottom: '20px',
+          paddingBottom: '10px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: `${gripSize}px`,
-          background: theme.palette.secondary.main,
+          background: 'transparent',
         }}
         data-testid='y_resizer'
       >

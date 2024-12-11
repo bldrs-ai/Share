@@ -62,7 +62,7 @@ function AboutContent() {
         justifyContent='center'
         alignItems='center'
       >
-        <Stack align='left' spacing={2}>
+        <Stack align='left' spacing={2} sx={{width: '100%'}}>
           <Typography variant='body1'>
             Welcome to Bldrs - Share!
           </Typography>
@@ -81,7 +81,7 @@ function AboutContent() {
           <Typography variant='body1'>
             Comments and suggestions welcome!
           </Typography>
-          <Stack direction='row' justifyContent='center' alignItems='center' spacing={2}>
+          <Stack direction='row' justifyContent='center' alignItems='center' spacing={1}>
             <Link href='https://discord.gg/9SxguBkFfQ' rel='noopener' sx={{display: 'flex', alignItems: 'center'}}>
               <SvgIcon sx={{marginRight: '0.25em'}}><DiscordIcon className='icon-share'/></SvgIcon>Discord
             </Link>

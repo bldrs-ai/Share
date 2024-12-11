@@ -1,24 +1,24 @@
-import React, {useEffect, useState, useRef, useCallback} from 'react'
+import PropTypes from 'prop-types'
+import React, {ReactElement, useEffect, useState, useRef, useCallback} from 'react'
 import {VariableSizeList} from 'react-window'
-import useTheme from '@mui/styles/useTheme'
-import {styled} from '@mui/material/styles'
+import {reifyName} from '@bldrs-ai/ifclib'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
-import ListIcon from '@mui/icons-material/List'
-import {removeHashParams} from './hashState'
 import NavTreeNode from './NavTreeNode'
-import PropTypes from 'prop-types'
-import {reifyName} from '@bldrs-ai/ifclib'
+import {removeHashParams} from './hashState'
+import ListIcon from '@mui/icons-material/List'
+
 
 /**
  * Nav tree panel component
  *
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function NavTreePanel({
   model,
@@ -43,7 +43,7 @@ export default function NavTreePanel({
   const isNavTree = navigationMode === 'spatial-tree'
 
   const containerRef = useRef(null)
-const [containerWidth, setContainerWidth] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
 
   useEffect(() => {
     const resizeObserver = new ResizeObserver((entries) => {
@@ -72,8 +72,6 @@ const [containerWidth, setContainerWidth] = useState(0)
     setIsNavTreeVisible(false)
     removeHashParams()
   }
-
-  const theme = useTheme()
 
   const listRef = useRef(null)
 
@@ -163,7 +161,6 @@ const [containerWidth, setContainerWidth] = useState(0)
               selectWithShiftClickEvents,
               model,
               viewer,
-              theme,
               setItemSize,
               isNavTree,
             }}
@@ -245,7 +242,6 @@ const RenderRow = ({index, style, data}) => {
     selectWithShiftClickEvents,
     model,
     viewer,
-    theme,
     setItemSize,
     isNavTree,
   } = data
@@ -323,7 +319,6 @@ const RenderRow = ({index, style, data}) => {
         handleSelect={handleSelect}
         hasHideIcon={hasHideIcon}
         model={model}
-        theme={theme}
         style={{}}
         isNavTree={isNavTree}
       />
@@ -334,7 +329,7 @@ const RenderRow = ({index, style, data}) => {
 /**
  * Actions component
  *
- * @return {React.Component}
+ * @return {ReactElement}
  */
 function Actions({navigationMode, setNavigationMode}) {
   const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
