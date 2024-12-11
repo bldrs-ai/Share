@@ -101,6 +101,8 @@ export default function CadView({
   const theme = useTheme()
   const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
 
+  const [vh, setVh] = useState(window.innerHeight)
+
   // Drag and Drop
   // Add a new state for drag over effect
 
@@ -625,13 +627,23 @@ export default function CadView({
     }
   }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
 
+  useEffect(() => {
+    const setViewportHeight = () => {
+      setVh(window.innerHeight)
+    }
+    window.addEventListener('resize', setViewportHeight)
+    return () => {
+      window.removeEventListener('resize', setViewportHeight)
+    }
+  }, [])
+
 
   const abs = {position: 'absolute'}
   const absTop = {top: 0, ...abs}
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
-    <Box sx={{...absTop, left: 0, width: '100vw', height: '100vh', m: 0, p: 0}}>
+    <Box sx={{...absTop, left: 0, width: '100vw', height: `${vh}px`, m: 0, p: 0}}>
       {<ViewerContainer
          data-testid='cadview-dropzone'
          data-model-ready={isModelReady}
