@@ -1,4 +1,4 @@
-import React, {ReactElement, useCallback, useEffect, useState, useRef} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
@@ -7,14 +7,10 @@ import SvgIcon from '@mui/material/SvgIcon'
 import Typography from '@mui/material/Typography'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
-import {floatStrTrim} from '../../utils/strings'
+import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
+import {floatStrTrim, isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
-import {
-  addHashParams,
-  getHashParams,
-  getPlanesFromHash,
-  removeHashParams,
-} from './hashState'
+import {HASH_PREFIX_CUT_PLANE} from './hashState'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import ElevationIcon from '../../assets/icons/Elevation.svg'
@@ -48,9 +44,27 @@ export default function CutPlaneMenu() {
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
 
-  const handleClose = () => setAnchorEl(null)
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
 
-  const togglePlane = useCallback(({direction, offset = 0}) => {
+  useEffect(() => {
+    const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
+    debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
+    if (planeHash && model && viewer) {
+      const planes = getPlanes(planeHash)
+      debug().log('CutPlaneMenu#useEffect: planes: ', planes)
+      if (planes && planes.length) {
+        setIsCutPlaneActive(true)
+        planes.forEach((plane) => {
+          togglePlane(plane)
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
+
+  const togglePlane = ({direction, offset = 0}) => {
     setLevelInstance(null)
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
@@ -61,8 +75,8 @@ export default function CutPlaneMenu() {
     debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
-      debug().log('CutPlaneMenu#togglePlane: found, removing...')
-      removeHashParams(location, [direction])
+      debug().log('CutPlaneMenu#togglePlane: found: ', true)
+      removeParams(HASH_PREFIX_CUT_PLANE, [direction])
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
@@ -74,35 +88,13 @@ export default function CutPlaneMenu() {
         setIsCutPlaneActive(false)
       }
     } else {
-      debug().log('CutPlaneMenu#togglePlane: not found, adding...')
-      addHashParams(location, {[direction]: offset})
+      debug().log('CutPlaneMenu#togglePlane: found: ', false)
+      addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
       setIsCutPlaneActive(true)
     }
-  }, [addCutPlaneDirection, cutPlanes, location, model?.geometry.boundingBox, removeCutPlaneDirection,
-      setIsCutPlaneActive, setLevelInstance, viewer?.clipper])
-
-
-  const lastHashRef = useRef('')
-  useEffect(() => {
-    if (!(model && viewer)) {
-      return
-    }
-
-    const planeHash = getHashParams(location)
-    if (lastHashRef.current === planeHash) {
-      return
-    }
-    lastHashRef.current = planeHash
-    const planes = getPlanesFromHash(planeHash)
-    if (planes && planes.length) {
-      setIsCutPlaneActive(true)
-      planes.forEach((plane) => {
-        togglePlane(plane)
-      })
-    }
-  }, [lastHashRef, location, model, setIsCutPlaneActive, togglePlane, viewer])
+  }
 
   return (
     <>
@@ -152,7 +144,7 @@ export default function CutPlaneMenu() {
         <MenuItem
           onClick={() => {
             setAnchorEl(null)
-            resetState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
+            resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
           }}
           data-testid='menu-item-clear-all'
         >
@@ -168,16 +160,15 @@ export default function CutPlaneMenu() {
 /**
  * Called by this component and CadView for consistent reset
  *
- * @param {object} location from react-router
  * @param {object} viewer
  * @param {Function} setCutPlaneDirections
  * @param {Function} setIsCutPlaneActive
  */
-export function resetState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive) {
+export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
   // These aren't setup when CadView inits
-  if (location && viewer && setCutPlaneDirections && setIsCutPlaneActive) {
+  if (viewer && viewer.clipper && setCutPlaneDirections && setIsCutPlaneActive) {
     removePlanes(viewer)
-    removeHashParams(location)
+    removePlanesFromHashState()
     setCutPlaneDirections([])
     setIsCutPlaneActive(false)
   }
@@ -228,6 +219,64 @@ export function getPlanesOffset(viewer, ifcModel) {
     return planesOffset
   }
   return undefined
+}
+
+
+/**
+ * Add plane normal and the offset to the hash state
+ *
+ * @param {object} viewer
+ * @param {object} ifcModel
+ */
+export function addPlanesToHashState(viewer, ifcModel) {
+  if (viewer.clipper.planes.length > 0) {
+    const planeInfo = getPlanesOffset(viewer, ifcModel)
+    debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
+    addHashParams(window.location, HASH_PREFIX_CUT_PLANE, planeInfo, true)
+  }
+}
+
+
+/**
+ * Get offset info of x, y, z from plane hash string
+ *
+ * @param {string} planeHash
+ * @return {Array}
+ */
+export function getPlanes(planeHash) {
+  if (!planeHash) {
+    return []
+  }
+  const parts = planeHash.split(':')
+  if (parts[0] !== HASH_PREFIX_CUT_PLANE || !parts[1]) {
+    return []
+  }
+  const planeObjectParams = getObjectParams(planeHash)
+  debug().log('CutPlaneMenu#getPlanes: planeObjectParams: ', planeObjectParams)
+  const planes = []
+  Object.entries(planeObjectParams).forEach((entry) => {
+    const [key, value] = entry
+    const removableParamKeys = []
+    if (isNumeric(key)) {
+      removableParamKeys.push(key)
+    } else {
+      planes.push({
+        direction: key,
+        offset: floatStrTrim(value),
+      })
+    }
+    if (removableParamKeys.length) {
+      removeParams(HASH_PREFIX_CUT_PLANE, removableParamKeys)
+    }
+  })
+  debug().log('CutPlaneMenu#getPlanes: planes: ', planes)
+  return planes
+}
+
+
+/** Removes cut plane params from hash state */
+export function removePlanesFromHashState() {
+  removeParams(HASH_PREFIX_CUT_PLANE)
 }
 
 
