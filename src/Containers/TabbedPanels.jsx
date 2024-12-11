@@ -180,7 +180,7 @@ export default function TabbedPanels({
 */
 
   return (
-    isDrawerVisible &&
+    isDrawerVisible && (
       <Box sx={{position: 'absolute', bottom: 0, width: '100%'}} data-testid='TabbedPanels-Box1'>
         <SideDrawer
           isDrawerVisible={isDrawerVisible}
@@ -189,43 +189,53 @@ export default function TabbedPanels({
           setDrawerWidth={() => console.warn('setDrawerWidth called on mobile drawer')}
           dataTestId='TabbedPanels'
         >
-          <Box sx={{height: '100%', borderBottom: 1, borderColor: 'divider', overflowY: 'scroll'}}>
-            <Tabs
-              value={value}
-              onChange={handleChange}
-              variant='scrollable'
-              scrollButtons='auto'
-              allowScrollButtonsMobile
-              aria-label='scrollable basic tabs example'
-              sx={{
-                'position': 'sticky',
-                'top': 0,
-                'zIndex': 1,
-                '& .share-button-tab-close': {
-                  display: 'none',
-                },
-                '& .Mui-selected .share-button-tab-close': {
-                  display: 'flex',
-                },
-              }}
-            >
+          <Box
+            sx={{
+              height: '100%',
+              borderBottom: 1,
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <Box sx={{position: 'sticky', top: 0, zIndex: 1}}>
+              <Tabs
+                value={value}
+                onChange={handleChange}
+                variant='scrollable'
+                scrollButtons='auto'
+                allowScrollButtonsMobile
+                aria-label='scrollable basic tabs example'
+                sx={{
+                  '& .share-button-tab-close': {
+                    display: 'none',
+                  },
+                  '& .Mui-selected .share-button-tab-close': {
+                    display: 'flex',
+                  },
+                }}
+              >
+                {labelAndPanels.map((entry, index) => (
+                  <Tab
+                    label={entry.label}
+                    {...a11yProps(index)}
+                    key={index}
+                    sx={{padding: 0}}
+                  />
+                ))}
+              </Tabs>
+            </Box>
+            <Box sx={{flex: 1, overflow: 'auto'}}>
               {labelAndPanels.map((entry, index) => (
-                <Tab
-                  label={entry.label} {...a11yProps(1)} key={index}
-                  sx={{
-                    padding: 0,
-                  }}
-                />
+                <CustomTabPanel value={value} index={index} key={index}>
+                  {entry.panel}
+                </CustomTabPanel>
               ))}
-            </Tabs>
-            {labelAndPanels.map((entry, index) => (
-              <CustomTabPanel value={value} index={index} key={index}>
-                {entry.panel}
-              </CustomTabPanel>
-            ))}
+            </Box>
           </Box>
         </SideDrawer>
       </Box>
+    )
   )
 }
 
@@ -248,7 +258,8 @@ function CustomTabPanel(props) {
       }}
       {...other}
     >
-      {value === index && <Box sx={{p: '0.5em', height: '100%'}}>{children}</Box>}
+      {value === index && <Box sx={{height: '100%'}}>{children}</Box>}
     </Box>
   )
 }
+
