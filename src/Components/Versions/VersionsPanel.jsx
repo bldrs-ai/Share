@@ -6,11 +6,9 @@ import {navigateBaseOnModelPath} from '../../utils/location'
 import {TooltipIconButton} from '../Buttons'
 import Panel from '../SideDrawer/Panel'
 import VersionsTimeline from './VersionsTimeline'
+import {VERSIONS_TITLE} from './component'
 import useVersions from './useVersions'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
-
-
-export const TITLE = 'Versions'
 
 
 /**
@@ -57,9 +55,10 @@ export default function VersionsPanel({filePath, currentRef}) {
     }
   }
 
+
   return (
     <Panel
-      title={TITLE}
+      title={VERSIONS_TITLE}
       actions={
         <TooltipIconButton
           title='Refresh'

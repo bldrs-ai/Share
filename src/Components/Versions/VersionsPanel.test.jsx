@@ -2,11 +2,12 @@ import React from 'react'
 import {act, render, renderHook, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
-import VersionsPanel, {TITLE} from './VersionsPanel'
+import VersionsPanel from './VersionsPanel'
 import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
 } from './VersionsPanel.fixture'
+import {VERSIONS_TITLE} from './component'
 import useVersions from './useVersions'
 import {MOCK_COMMITS} from './VersionsTimeline.fixture'
 
@@ -58,7 +59,7 @@ describe('VersionsPanel', () => {
 
     // Wait for the updated state to be rendered
     await waitFor(() => {
-      expect(getByText(TITLE)).toBeInTheDocument()
+      expect(getByText(VERSIONS_TITLE)).toBeInTheDocument()
     })
     MOCK_COMMITS.forEach((commit) => {
       expect(getByText(commit.authorName)).toBeInTheDocument()
