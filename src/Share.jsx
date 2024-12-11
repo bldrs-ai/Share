@@ -27,6 +27,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const setIsVersionsEnabled = useStore((state) => state.setIsVersionsEnabled)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
 
@@ -67,13 +68,15 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const {org, repo} = urlParams
     if (org && repo) {
       setRepository(org, repo)
+      setIsVersionsEnabled(true)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath, navigate])
+  }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
+      setIsVersionsEnabled, setModelPath, setRepository, urlParams])
 
 
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override

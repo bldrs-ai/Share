@@ -23,6 +23,7 @@
 //
 // -- This will overwrite an existing command --
 // Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
+import '@percy/cypress'
 import '@testing-library/cypress/add-commands'
 import 'cypress-react-router/add-commands'
 
@@ -41,3 +42,14 @@ Cypress.Commands.add('iframe', {prevSubject: 'element'}, ($iframe, callback = ()
       .within({}, callback)
 })
 
+
+Cypress.Commands.overwrite('percySnapshot', (label) => {
+  const mobileWidth = 390
+  const mobileHeight = 844
+  const desktopWidth = 1280
+  const desktopHeight = 1024
+  return cy.viewport(mobileWidth, mobileHeight)
+    .percySnapshot(label, {width: mobileWidth})
+    .viewport(desktopWidth, desktopHeight)
+    .percySnapshot({width: 1280})
+})

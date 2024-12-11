@@ -10,14 +10,14 @@ import {isVisibleInitially} from '../Components/Versions/hashState'
  */
 export default function createVersionsSlice(set, get) {
   return {
-    isVersionsEnabled: true,
-    setIsVersionsEnabled: (isEnabled) => set(() => ({isVersionsEnabled: isEnabled})),
+    isVersionsEnabled: false,
+    setIsVersionsEnabled: (is) => set(() => ({isVersionsEnabled: is})),
 
     activeVersion: 0,
     setActiveVersion: (version) => set(() => ({activeVersion: version})),
 
     isVersionsVisible: isVisibleInitially(),
-    setIsVersionsVisible: (isVisible) => set(() => ({isVersionsVisible: isVisible})),
+    setIsVersionsVisible: (is) => set(() => ({isVersionsVisible: is})),
     toggleIsVersionsVisible: () =>
       set((state) => ({isVersionsVisible: !state.isVersionsVisible})),
 
