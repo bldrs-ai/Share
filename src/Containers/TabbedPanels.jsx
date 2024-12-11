@@ -181,7 +181,14 @@ export default function TabbedPanels({
 
   return (
     isDrawerVisible && (
-      <Box sx={{position: 'absolute', bottom: 0, width: '100%'}} data-testid='TabbedPanels-Box1'>
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 0,
+          width: '100%',
+        }}
+        data-testid='TabbedPanels-Box1'
+      >
         <SideDrawer
           isDrawerVisible={isDrawerVisible}
           drawerWidth={0}
@@ -207,6 +214,7 @@ export default function TabbedPanels({
                 allowScrollButtonsMobile
                 aria-label='scrollable basic tabs example'
                 sx={{
+                  'padding': '0 0.5rem',
                   '& .share-button-tab-close': {
                     display: 'none',
                   },

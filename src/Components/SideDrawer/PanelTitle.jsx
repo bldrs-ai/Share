@@ -31,8 +31,8 @@ export default function PanelTitle({title, onClose, actions}) {
         zIndex: 1,
         ...(isMobile ? {
           justifyContent: 'flex-end',
-          backgroundColor: theme.palette.secondary.backgroundColor,
-          backdropFilter: theme.palette.secondary.backdropFilter,
+          backgroundColor: `${theme.palette.secondary.backgroundColor} !important`,
+          backdropFilter: `${theme.palette.secondary.backdropFilter} !important`,
         } : {}),
       }}
       data-testid={`PanelTitle-${title}`}

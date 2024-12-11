@@ -93,7 +93,7 @@ export default function SideDrawer({
             width: '100%',
             margin: isMobile ? '1em 0 0 0' : resizeMargin,
             overflow: 'hidden',
-            padding: isMobile ? '0 0.5rem' : (isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em'),
+            padding: isMobile ? '0px' : (isResizeOnLeft ? '0 1em 0 0' : '0 0 0 1em'),
           }}
           data-testid='SideDrawer-OverflowHidden'
         >
