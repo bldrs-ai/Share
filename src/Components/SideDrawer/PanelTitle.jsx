@@ -35,7 +35,7 @@ export default function PanelTitle({title, onClose, actions}) {
           backdropFilter: theme.palette.secondary.backdropFilter,
         } : {}),
       }}
-      data-testid={`PanelTitle-Box-${title}`}
+      data-testid={`PanelTitle-${title}`}
     >
       {!isMobile && <Typography variant='h2'>{title}</Typography>}
       <Box
