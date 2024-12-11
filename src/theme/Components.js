@@ -248,10 +248,11 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiSvgIcon: {
       styleOverrides: {
-        root: {
+        root: ({theme}) => ({
           width: '1.5rem',
           height: '1.5rem',
-        },
+          color: theme.palette.secondary.contrastText,
+        }),
       },
       variants: [{
         // Used in HelpControl to indicate activity state
@@ -283,19 +284,6 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
-    MuiTreeItem: {
-      styleOverrides: {
-        root: {
-          '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            color: palette.secondary.contrastText,
-            backgroundColor: palette.secondary.active,
-          },
-          '& > div.MuiTreeItem-content': {
-            borderRadius: '0px',
-          },
-        },
-      },
-    },
     MuiToggleButton: {
       styleOverrides: {
         root: StandardButton, // Same as MuiIconButton
@@ -308,8 +296,9 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiTypography: {
       styleOverrides: {
-        root: {
-        },
+        root: ({theme}) => ({
+          color: theme.palette.secondary.contrastText,
+        }),
       },
     },
   }

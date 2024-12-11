@@ -1,6 +1,8 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
+import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
@@ -22,13 +24,14 @@ import TabbedPanels from './TabbedPanels'
  */
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
   const isMobile = useIsMobile()
+  const theme = useTheme()
   return (
     <Stack
       direction='row'
       justifyContent='space-between'
       alignItems='center'
       sx={{width: '100vw', height: '100vh'}}
-      data-testid='RootPane'
+      data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
        <Box
@@ -49,13 +52,27 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         sx={{width: '100%', height: '100%'}}
         data-testid='CenterPane'
       >
+         <Box sx={{opacity: 0.5}}>
+           <Paper
+             elevation={0}
+             sx={{
+               position: 'absolute',
+               top: 0,
+               height: 58,
+               width: '100%',
+               backgroundColor: theme.palette.secondary.backgroundColor,
+               borderRadius: 0,
+             }}
+             data-testid='RootLandscape-ToolbarPaper'
+           />
+         </Box>
         <Stack
           direction='row'
           justifyContent='space-between'
           // This pushes bottom bar down
           flexGrow={1}
           sx={{width: '100%'}}
-          data-testid='CenterPaneTop'
+          data-testid='RootLandscape-CenterPaneTopStack'
         >
           <ControlsGroup/>
           <OperationsGroup/>
@@ -64,7 +81,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           sx={{
             width: '100%',
           }}
-          data-testid='CenterPaneBottom'
+          data-testid='RootLandscape-CenterPaneBottomBox'
         >
           <BottomBar deselectItems={deselectItems}/>
           <AlertDialogAndSnackbar/>
@@ -77,7 +94,11 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
          branch={branch}
          selectWithShiftClickEvents={selectWithShiftClickEvents}
        /> :
-       <Stack direction='row' style={{pointerEvents: 'auto'}} data-testid='RightPane'>
+       <Stack
+         direction='row'
+         sx={{pointerEvents: 'auto'}}
+         data-testid='RootLandscape-RightPaneStack'
+       >
          <NotesAndPropertiesDrawer/>
          <AppsSideDrawer/>
        </Stack>

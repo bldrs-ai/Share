@@ -75,7 +75,7 @@ export default function VersionsTimeline({commits, currentRef, commitNavigateCb}
 function TimelineInfo({commit, active}) {
   const theme = useTheme()
   const dotColor = active ?
-      theme.palette.secondary.active :
+      theme.palette.secondary.highlight :
       theme.palette.secondary.main
   return (
     <>

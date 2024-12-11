@@ -1,12 +1,14 @@
-import React from 'react'
 import PropTypes from 'prop-types'
+import React, {ReactElement} from 'react'
+import {reifyName} from '@bldrs-ai/ifclib'
+import {useTheme} from '@mui/material/styles'
 import HideToggleButton from '../HideToggleButton'
 import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
-import {reifyName} from '@bldrs-ai/ifclib'
 
 
-const NavTreeNode = ({
+/** @return {ReactElement} */
+export default function NavTreeNode({
   node,
   depth,
   isExpanded,
@@ -16,28 +18,24 @@ const NavTreeNode = ({
   handleSelect,
   hasHideIcon,
   model,
-  theme,
   style,
   isNavTree,
-}) => {
-  const handleLabelClick = (event) => {
-    handleSelect(event)
-  }
+}) {
+  const handleLabelClick = (event) => handleSelect(event)
 
   const handleExpandClick = (event) => {
     event.stopPropagation()
     handleToggle(event)
   }
 
-  const handleHideClick = (event) => {
-    event.stopPropagation()
-    // The HideToggleButton handles the hide/show logic internally
-  }
+  // The HideToggleButton handles the hide/show logic internally
+  const handleHideClick = (event) => event.stopPropagation()
 
   // Determine the label based on whether it's a type node or an element node
   const label = node.label || reifyName({properties: model}, node)
   const paddingLeft = 20 // Indentation for each tree depth
 
+  const theme = useTheme()
   return (
     <div
       style={{
@@ -45,7 +43,7 @@ const NavTreeNode = ({
         paddingLeft: depth * paddingLeft,
         display: 'flex',
         alignItems: 'flex-start', // Align items at the top for multiline labels
-        backgroundColor: isSelected ? theme.palette.action.selected : 'transparent',
+        backgroundColor: isSelected ? theme.palette.secondary.selected : 'transparent',
         cursor: 'pointer',
       }}
     >
@@ -58,19 +56,18 @@ const NavTreeNode = ({
               handleExpandClick(event)
             }
           }}
-          role="button"
+          role='button'
           tabIndex={0}
           style={{
-            marginRight: 8,
-            marginTop: 4, // Align the icon with the text
+            margin: '7px 8px 0 0',
             display: 'flex',
             alignItems: 'center',
           }}
         >
           {isExpanded ? (
-            <NodeOpenIcon className="icon-share icon-nav-caret"/>
+            <NodeOpenIcon className='icon-share icon-nav-caret'/>
           ) : (
-            <NodeClosedIcon className="icon-share icon-nav-caret"/>
+            <NodeClosedIcon className='icon-share icon-nav-caret'/>
           )}
         </div>
       ) : (
@@ -79,14 +76,14 @@ const NavTreeNode = ({
 
       {/* Label */}
       <div
-        id="NavTreeNodeLabelId"
+        id='NavTreeNodeLabelId'
         onClick={handleLabelClick}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             handleLabelClick(event)
           }
         }}
-        role="button"
+        role='button'
         tabIndex={0}
         style={{
           flexGrow: 1,
@@ -104,7 +101,6 @@ const NavTreeNode = ({
           style={{
             marginLeft: 'auto',
             paddingRight: 16,
-            marginTop: 4, // Align the icon with the text
             display: 'flex',
             alignItems: 'center',
           }}
@@ -114,7 +110,7 @@ const NavTreeNode = ({
               handleHideClick(event)
             }
           }}
-          role="button"
+          role='button'
           tabIndex={0}
         >
           <HideToggleButton elementId={parseInt(node.expressID, 10)}/>
@@ -134,9 +130,6 @@ NavTreeNode.propTypes = {
   handleSelect: PropTypes.func.isRequired,
   hasHideIcon: PropTypes.bool.isRequired,
   model: PropTypes.object.isRequired,
-  theme: PropTypes.object.isRequired,
   style: PropTypes.object.isRequired,
   isNavTree: PropTypes.bool.isRequired, // Added isNavTree to propTypes
 }
-
-export default NavTreeNode

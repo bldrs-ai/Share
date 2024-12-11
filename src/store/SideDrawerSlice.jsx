@@ -1,5 +1,5 @@
 const drawerWidthInitial = 350
-const drawerHeightInitial = '70vh'
+const drawerHeightInitial = '50vh'
 
 
 /**
