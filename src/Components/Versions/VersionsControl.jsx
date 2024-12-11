@@ -1,8 +1,8 @@
 import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
+import {VERSIONS_TITLE} from './component'
 import {HASH_PREFIX_VERSIONS} from './hashState'
-import {TITLE} from './VersionsPanel'
 import HistoryIcon from '@mui/icons-material/History'
 
 
@@ -16,7 +16,7 @@ export default function VersionsControl() {
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
   return (
     <ControlButtonWithHashState
-      title={TITLE}
+      title={VERSIONS_TITLE}
       icon={<HistoryIcon className='icon-share'/>}
       isDialogDisplayed={isVersionsVisible}
       setIsDialogDisplayed={setIsVersionsVisible}

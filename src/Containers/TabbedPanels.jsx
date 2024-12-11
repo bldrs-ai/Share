@@ -40,7 +40,7 @@ export default function TabbedPanels({
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
 
-  const isVersionsEnabled = useStore((state) => state.isVerisonsEnabled)
+  const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
 
