@@ -1,4 +1,4 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
@@ -16,19 +16,9 @@ export default function ViewerContainer() {
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
-  const [vh, setVh] = useState(window.innerHeight)
+  const vh = useStore((state) => state.vh)
 
   const [, setIsDragActive] = useState(false)
-
-  useEffect(() => {
-    const setViewportHeight = () => {
-      setVh(window.innerHeight)
-    }
-    window.addEventListener('resize', setViewportHeight)
-    return () => {
-      window.removeEventListener('resize', setViewportHeight)
-    }
-  }, [])
 
   const navigate = useNavigate()
 

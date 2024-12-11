@@ -92,6 +92,8 @@ export default function CadView({
   const setAlert = useStore((state) => state.setAlert)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const setVh = useStore((state) => state.setVh)
+  const vh = useStore((state) => state.vh)
 
   // Begin useState //
   // IFC
@@ -100,8 +102,6 @@ export default function CadView({
   // UI elts
   const theme = useTheme()
   const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
-
-  const [vh, setVh] = useState(window.innerHeight)
 
   // Drag and Drop
   // Add a new state for drag over effect
@@ -635,6 +635,7 @@ export default function CadView({
     return () => {
       window.removeEventListener('resize', setViewportHeight)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
 

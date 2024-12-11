@@ -1,4 +1,4 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
@@ -13,6 +13,7 @@ import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 import OperationsGroup from './OperationsGroup'
 import TabbedPanels from './TabbedPanels'
+import useStore from '../store/useStore'
 
 
 /**
@@ -25,16 +26,8 @@ import TabbedPanels from './TabbedPanels'
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
   const isMobile = useIsMobile()
   const theme = useTheme()
-  const [vh, setVh] = useState(window.innerHeight)
-  useEffect(() => {
-    const setViewportHeight = () => {
-      setVh(window.innerHeight)
-    }
-    window.addEventListener('resize', setViewportHeight)
-    return () => {
-      window.removeEventListener('resize', setViewportHeight)
-    }
-  }, [])
+  const vh = useStore((state) => state.vh)
+
   return (
     <Stack
       direction='row'
