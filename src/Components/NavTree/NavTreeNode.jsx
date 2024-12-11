@@ -59,7 +59,7 @@ export default function NavTreeNode({
           role='button'
           tabIndex={0}
           style={{
-            marginRight: 8,
+            margin: '7px 8px 0 0',
             display: 'flex',
             alignItems: 'center',
           }}

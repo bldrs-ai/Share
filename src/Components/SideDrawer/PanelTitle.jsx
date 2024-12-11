@@ -24,7 +24,6 @@ export default function PanelTitle({title, onClose, actions}) {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        // height: `calc(100% - ${PANEL_TITLE_HEIGHT})`,
         height: 'fit-content',
         // These keep the title from scrolling up
         position: 'sticky',
