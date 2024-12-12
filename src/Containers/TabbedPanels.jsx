@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Tab from '@mui/material/Tab'
@@ -52,11 +52,13 @@ export default function TabbedPanels({
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
 
+  // This state tracks the order in which panels were opened.
+  // We'll store keys like 'apps', 'nav', 'notes', 'props', 'versions'.
+  const [openPanels, setOpenPanels] = useState([])
+
   const [value, setValue] = useState(0)
 
-
   const handleChange = (event, newValue) => setValue(newValue)
-
 
   /**
    * @param {number} index
@@ -69,7 +71,6 @@ export default function TabbedPanels({
     }
   }
 
-
   const isDrawerVisible =
         isAppsVisible ||
         isNavTreeVisible ||
@@ -78,7 +79,7 @@ export default function TabbedPanels({
         isVersionsVisible
 
 
-  /** @return {boolean} */
+        /** @return {boolean} */
   function samePageLinkNavigation(event) {
     if (
       event.defaultPrevented ||
@@ -92,7 +93,6 @@ export default function TabbedPanels({
     }
     return true
   }
-
 
   /** @return {ReactElement} */
   function LinkTab({label, onClose, ...props}) {
@@ -115,69 +115,95 @@ export default function TabbedPanels({
     )
   }
 
-
-  const labelAndPanels = []
-  if (isAppsEnabled && isAppsVisible) {
-    labelAndPanels.push({
-      label: <LinkTab label='Apps' onClose={() => setIsAppsVisible(false)}/>,
-      panel: !selectedApp ?
-        <AppsPanel/> :
-        <AppPanel itemJson={selectedApp}/>,
-    })
-  }
-  if (isNavTreeEnabled && isNavTreeVisible) {
-    labelAndPanels.push({
-      label: <LinkTab label='Nav' onClose={() => setIsNavTreeVisible(false)}/>,
-      panel: model &&
-        rootElement &&
-        <NavTreePanel
-          model={model}
-          pathPrefix={
-            pathPrefix + (
-              modelPath.gitpath ?
-                modelPath.getRepoPath() :
-                modelPath.filepath
-            )
-          }
-          selectWithShiftClickEvents={selectWithShiftClickEvents}
-        />,
-    })
-  }
-  if (isNotesEnabled && isNotesVisible) {
-    labelAndPanels.push({
-      label: <LinkTab label='Notes' onClose={() => setIsNotesVisible(false)}/>,
-      panel: <NotesPanel/>,
-    })
-  }
-  if (isPropertiesEnabled && isPropertiesVisible) {
-    labelAndPanels.push({
-      label: <LinkTab label='Props' onClose={() => setIsPropertiesVisible(false)}/>,
-      panel: <PropertiesPanel/>,
-    })
-  }
-  if (isVersionsEnabled) {
-    labelAndPanels.push({
-      label: <LinkTab label='Versions' onClose={() => setIsVersionsVisible(false)}/>,
-      panel: (modelPath.repo !== undefined) &&
-        isVersionsVisible &&
-        <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
-    })
+  // Compute the currently visible panels in the order they appear in openPanels.
+  // The order in openPanels will determine the order in labelAndPanels.
+  const panelsMap = {
+    apps: isAppsEnabled && isAppsVisible ?
+      {
+          label: <LinkTab label='Apps' onClose={() => setIsAppsVisible(false)}/>,
+          panel: !selectedApp ? <AppsPanel/> : <AppPanel itemJson={selectedApp}/>,
+        } :
+      null,
+    nav: isNavTreeEnabled && isNavTreeVisible ?
+      {
+          label: <LinkTab label='Nav' onClose={() => setIsNavTreeVisible(false)}/>,
+          panel: model && rootElement && (
+            <NavTreePanel
+              model={model}
+              pathPrefix={
+                pathPrefix + (
+                  modelPath.gitpath ?
+                    modelPath.getRepoPath() :
+                    modelPath.filepath
+                )
+              }
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
+            />
+          ),
+        } :
+      null,
+    notes: isNotesEnabled && isNotesVisible ?
+      {
+          label: <LinkTab label='Notes' onClose={() => setIsNotesVisible(false)}/>,
+          panel: <NotesPanel/>,
+        } :
+      null,
+    props: isPropertiesEnabled && isPropertiesVisible ?
+      {
+          label: <LinkTab label='Props' onClose={() => setIsPropertiesVisible(false)}/>,
+          panel: <PropertiesPanel/>,
+        } :
+      null,
+    versions: isVersionsEnabled && isVersionsVisible ?
+      {
+          label: <LinkTab label='Versions' onClose={() => setIsVersionsVisible(false)}/>,
+          panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
+        } :
+      null,
   }
 
-/*
+  // Update openPanels whenever visibility changes.
+  // If a panel is newly visible and not in openPanels, add it.
+  // If a panel is no longer visible and is in openPanels, remove it.
   useEffect(() => {
-    if (isAppsVisible) {
-      if (!stack.includes('apps')) {
-      }
-    } else if (isNotesVisible) {
-      setValue(1)
-    } else if (isPropertiesVisible) {
-      setValue(2)
-    } else if (isVersionsVisible) {
-      setValue(3)
+    const panelKeys = ['apps', 'nav', 'notes', 'props', 'versions']
+    setOpenPanels((prev) => {
+      let newOpenPanels = [...prev]
+
+      // Add newly visible panels that are not in the list
+      panelKeys.forEach((key) => {
+        const isVisible = panelsMap[key] !== null
+        const existsInOpenPanels = newOpenPanels.includes(key)
+
+        if (isVisible && !existsInOpenPanels) {
+          // Add at the end since it's newly opened
+          newOpenPanels.push(key)
+        } else if (!isVisible && existsInOpenPanels) {
+          // Remove it if it's no longer visible
+          newOpenPanels = newOpenPanels.filter((k) => k !== key)
+        }
+      })
+
+      return newOpenPanels
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAppsVisible, isNavTreeVisible, isNotesVisible, isPropertiesVisible, isVersionsVisible])
+
+  // Generate labelAndPanels according to openPanels order
+  const labelAndPanels = openPanels
+    .map((key) => panelsMap[key])
+    .filter(Boolean) // ensure we only keep actual visible panels
+
+  // After labelAndPanels update, select the most recent panel (last in openPanels).
+  useEffect(() => {
+    if (labelAndPanels.length > 0) {
+      // Select the last added panel (which should be the last in openPanels, hence last in labelAndPanels)
+      setValue(labelAndPanels.length - 1)
+    } else {
+      // No panels left
+      setValue(0)
     }
-  }, [isAppsVisible, isNotesVisible, isPropertiesVisible, isVersionsVisible])
-*/
+  }, [labelAndPanels.length])
 
   return (
     isDrawerVisible && (
@@ -273,4 +299,3 @@ function CustomTabPanel(props) {
     </Box>
   )
 }
-
