@@ -1,14 +1,14 @@
 import axios from 'axios'
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
+import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
+import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
-import Box from '@mui/material/Box'
-import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
-import {RectangularButton} from '../Buttons'
 import Dialog from '../Dialog'
 import Loader from '../Loader'
 import ClearIcon from '@mui/icons-material/Clear'
@@ -126,16 +126,12 @@ export default function ImagineDialog({
             }}
           />
           <Stack direction='row' spacing={1} justifyContent='center'>
-            <RectangularButton
-              title='Create'
-              onClick={onCreateClick}
-              disabled={prompt.length === 0}
-            />
-            <RectangularButton
-              title='Download'
-              onClick={() => downloadImaginePng(imagine)}
-              disabled={imagine === null}
-            />
+            <Button onClick={onCreateClick} variant='contained' disabled={prompt.length === 0}>
+              Create
+            </Button>
+            <Button onClick={() => downloadImaginePng(imagine)} variant='text' disabled={imagine === null}>
+              Download
+            </Button>
           </Stack>
         </Stack>
       </Stack>

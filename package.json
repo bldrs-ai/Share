@@ -69,7 +69,6 @@
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",
     "@fontsource/roboto": "^5.1.0",
-    "@iconscout/react-unicons": "2.0.0",
     "@mui/icons-material": "5.16.8",
     "@mui/lab": "5.0.0-alpha.95",
     "@mui/material": "5.16.8",

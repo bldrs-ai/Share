@@ -2661,13 +2661,6 @@
   resolved "https://registry.npmjs.org/@humanwhocodes/object-schema/-/object-schema-1.2.1.tgz"
   integrity sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==
 
-"@iconscout/react-unicons@2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@iconscout/react-unicons/-/react-unicons-2.0.0.tgz#e5ca9cbf9315587ee3386b7df8d8f0c34a2bc161"
-  integrity sha512-C2zMwesxHTPtksmkQdqQCvDgbveWx9EveB1NdUD2XhuH4tupaEaNdMOG6Wltyx+6oJHW1XCTMxuA9fJKzNjNKw==
-  dependencies:
-    react ">=15.0.0 <17.0.0"
-
 "@isaacs/cliui@^8.0.2":
   version "8.0.2"
   resolved "https://registry.yarnpkg.com/@isaacs/cliui/-/cliui-8.0.2.tgz#b37667b7bc181c168782259bab42474fbf52b550"
@@ -10321,15 +10314,6 @@ react@18.2.0:
   integrity sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==
   dependencies:
     loose-envify "^1.1.0"
-
-"react@>=15.0.0 <17.0.0":
-  version "16.14.0"
-  resolved "https://registry.npmjs.org/react/-/react-16.14.0.tgz"
-  integrity sha512-0X2CImDkJGApiAlcf0ODKIneSwBPhqJawOa5wCtKbu7ZECrmS26NvtSILynQ66cgkT/RJ4LidJOc3bUESwmU8g==
-  dependencies:
-    loose-envify "^1.1.0"
-    object-assign "^4.1.1"
-    prop-types "^15.6.2"
 
 readable-stream@^3.4.0:
   version "3.6.0"
