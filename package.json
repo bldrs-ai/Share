@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1198",
+  "version": "1.0.1202",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -86,7 +86,6 @@
     "clsx": "1.2.1",
     "cypress-react-router": "2.0.1",
     "esbuild": "0.19.5",
-    "esbuild-clean-plugin": "1.0.0",
     "esbuild-copy-static-files": "0.1.0",
     "esbuild-plugin-progress": "1.0.1",
     "esbuild-plugin-svgr": "2.0.0",
