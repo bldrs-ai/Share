@@ -50,5 +50,8 @@ export default function createUISlice(set, get) {
 
     viewer: null,
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
+
+    vh: window.innerHeight,
+    setVh: (value) => set({vh: value}),
   }
 }

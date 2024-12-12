@@ -16,6 +16,7 @@ export default function ViewerContainer() {
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
+  const vh = useStore((state) => state.vh)
 
   const [, setIsDragActive] = useState(false)
 
@@ -78,7 +79,7 @@ export default function ViewerContainer() {
         top: 0,
         left: 0,
         width: '100vw',
-        height: '100vh',
+        height: `${vh}px`,
         margin: 0,
         padding: 0,
         textAlign: 'center',

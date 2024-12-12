@@ -92,6 +92,8 @@ export default function CadView({
   const setAlert = useStore((state) => state.setAlert)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const setVh = useStore((state) => state.setVh)
+  const vh = useStore((state) => state.vh)
 
   // Begin useState //
   // IFC
@@ -625,13 +627,24 @@ export default function CadView({
     }
   }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
 
+  useEffect(() => {
+    const setViewportHeight = () => {
+      setVh(window.innerHeight)
+    }
+    window.addEventListener('resize', setViewportHeight)
+    return () => {
+      window.removeEventListener('resize', setViewportHeight)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
 
   const abs = {position: 'absolute'}
   const absTop = {top: 0, ...abs}
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
-    <Box sx={{...absTop, left: 0, width: '100vw', height: '100vh', m: 0, p: 0}}>
+    <Box sx={{...absTop, left: 0, width: '100vw', height: `${vh}px`, m: 0, p: 0}}>
       {<ViewerContainer
          data-testid='cadview-dropzone'
          data-model-ready={isModelReady}

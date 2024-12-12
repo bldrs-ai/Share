@@ -13,6 +13,7 @@ import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 import OperationsGroup from './OperationsGroup'
 import TabbedPanels from './TabbedPanels'
+import useStore from '../store/useStore'
 
 
 /**
@@ -25,12 +26,14 @@ import TabbedPanels from './TabbedPanels'
 export default function RootLandscape({pathPrefix, branch, selectWithShiftClickEvents, deselectItems}) {
   const isMobile = useIsMobile()
   const theme = useTheme()
+  const vh = useStore((state) => state.vh)
+
   return (
     <Stack
       direction='row'
       justifyContent='space-between'
       alignItems='center'
-      sx={{width: '100vw', height: '100vh'}}
+      sx={{width: '100vw', height: `${vh}px`}}
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
