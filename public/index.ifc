@@ -284,7 +284,19 @@ DATA;
 #761= IFCPRODUCTDEFINITIONSHAPE($,$,(#753,#759));
 #765= IFCSHAPEREPRESENTATION(#169,'Body','Tessellation',(#720));
 #767= IFCSHAPEASPECT((#765),'BLDRS-Logo-grey','',.U.,#761);
-#771= IFCBUILDINGELEMENTPROXY('3hm2qpxcLC2QR6PjoCX$Ma',#28,'Together',$,$,#709,#761,'EBC02D33-EE65-4C09-A6C6-66DC8C87F5A4',.NOTDEFINED.);
+#771= IFCBUILDINGELEMENTPROXY('3hm2qpxcLC2QR6PjoCX_Ma',#28,'Together',$,$,#709,#761,'EBC02D33-EE65-4C09-A6C6-66DC8C87F5A4',.NOTDEFINED.);
+#800= IFCPROPERTYSET('3f47o8GqX6F8xqRkJ0_1N3', 'Pset_LogoProperties', 'Property Set for Logo', (
+  IFCPROPERTYSINGLEVALUE('Description', 'Description of the logo', IFCSTRING('Company Logo'), $),
+  IFCPROPERTYSINGLEVALUE('Color', 'Primary color of logo', IFCSTRING('Red'), $),
+  IFCPROPERTYSINGLEVALUE('Material', 'Material of the logo', IFCSTRING('Plastic'), $)
+));
+#810= IFCRELDEFINESBYPROPERTIES('4m2o9yHqX6F8xqRkJ0_1O4', $, $, $, (#771), #800);
+#900= IFCPROPERTYSET('3f47o8GqX6F8xqRkJ0_1AB', 'Pset_LogoProperties', 'Property Set for Logo', (
+  IFCPROPERTYSINGLEVALUE('Description', 'Description of the logo', IFCSTRING('Company Logo'), $),
+  IFCPROPERTYSINGLEVALUE('Color', 'Primary color of logo', IFCSTRING('Red'), $),
+  IFCPROPERTYSINGLEVALUE('Material', 'Material of the logo', IFCSTRING('Plastic'), $)
+));
+#910= IFCRELDEFINESBYPROPERTIES('4m2o9yHqX6F8xqRkJ0_1CD', $, $, $, (#771), #900);
 ENDSEC;
 
 END-ISO-10303-21;

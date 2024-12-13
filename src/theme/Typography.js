@@ -24,7 +24,7 @@ export function getTypography() {
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
-    propValue: {fontSize, lineHeight, letterSpacing, fontWeight: 300},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: 300},
+    propValue: {fontSize, lineHeight, letterSpacing, fontWeight},
   }
 }

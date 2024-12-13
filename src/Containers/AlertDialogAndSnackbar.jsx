@@ -44,6 +44,7 @@ export default function AlertAndSnackbar() {
     setIsSnackOpen(true)
   }, [snackMessage, setIsSnackOpen])
 
+
   return (
     <>
       <AlertDialog
@@ -59,24 +60,24 @@ export default function AlertAndSnackbar() {
         open={isSnackOpen}
         onClose={(event, reason) => setIsSnackOpen(false)}
         action={
-            <IconButton
-              onClick={() => setIsSnackOpen(false)}
-              size='small'
-              sx={{marginRight: '-.5em'}}
-            >
-                <CloseIcon color='primary' fontSize="inherit"/>
-            </IconButton>
-          }
+          <IconButton
+            onClick={() => setIsSnackOpen(false)}
+            size='small'
+            sx={{marginRight: '-.5em'}}
+          >
+            <CloseIcon color='primary' fontSize='inherit'/>
+          </IconButton>
+        }
         message={
-            <Typography
-              variant='body2'
-              sx={{
-                maxWidth: '19em',
-                overflowWrap: 'break-word',
-              }}
-            >
-              {text}
-            </Typography>
+          <Typography
+            variant='body2'
+            sx={{
+              maxWidth: '19em',
+              overflowWrap: 'break-word',
+            }}
+          >
+            {text}
+          </Typography>
         }
         data-testid='snackbar'
       />

@@ -97,41 +97,6 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
-    MuiChip: {
-      styleOverrides: {
-        filled: ({theme}) => ({
-          'border': `1px solid ${theme.palette.primary.main}`,
-          'backgroundColor': theme.palette.primary.main,
-          '&:hover': {
-            backgroundColor: theme.palette.secondary.main,
-          },
-        }),
-        outlined: ({theme}) => ({
-          'borderColor': theme.palette.primary.main,
-          'color': theme.palette.primary.contrastText,
-          '&&:hover': {
-            backgroundColor: theme.palette.primary.main,
-          },
-        }),
-        sampleModel: ({theme}) => ({
-          'borderColor': theme.palette.primary.main,
-          'backgroundColor': theme.palette.secondary.main,
-          'color': theme.palette.primary.contrastText,
-          'width': '11em',
-          'height': '6em',
-          'display': 'flex',
-          'justifyContent': 'center',
-          '&&:hover': {
-            backgroundColor: theme.palette.primary.main,
-          },
-          '& .MuiChip-label': {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-          },
-        }),
-      },
-    },
     MuiDialog: {
       styleOverrides: {
         paper: {
@@ -179,18 +144,18 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiMenuItem: {
       styleOverrides: {
-        root: ({theme}) => ({
+        root: {
           '&.Mui-selected': {
-            backgroundColor: theme.palette.secondary.dark,
+            backgroundColor: palette.secondary.dark,
             fontWeight: 'bold',
           },
           '&.Mui-selected:hover': {
             // TODO(pablo): merge with above. Can't figure out combined selector
-            backgroundColor: theme.palette.secondary.dark,
+            backgroundColor: palette.secondary.dark,
             fontWeight: 'bold',
             fontStyle: 'italic',
           },
-        }),
+        },
       },
     },
     MuiPaper: {
@@ -210,31 +175,24 @@ export function getComponentOverrides(palette, typography) {
         },
         {
           props: {variant: 'page-background'},
-          style: ({theme}) => ({
+          style: {
             padding: '10px',
             borderRadius: '0',
-          }),
+          },
         },
         {
           props: {variant: 'page'},
-          style: ({theme}) => ({
+          style: {
             padding: '10px',
             borderRadius: '0',
-          }),
+          },
         },
       ],
-    },
-    MuiSelect: {
-      styleOverrides: {
-        root: {
-          // background: palette.primary.main,
-        },
-      },
     },
     MuiLink: {
       styleOverrides: {
         root: {
-          color: palette.primary.contrastText,
+          color: palette.secondary.contrastText,
           textDecoration: 'underline',
         },
       },
@@ -242,17 +200,18 @@ export function getComponentOverrides(palette, typography) {
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
+          backgroundColor: palette.secondary.main,
           borderRadius: '10px',
         },
       },
     },
     MuiSvgIcon: {
       styleOverrides: {
-        root: ({theme}) => ({
+        root: {
           width: '1.5rem',
           height: '1.5rem',
-          color: theme.palette.secondary.contrastText,
-        }),
+          color: palette.secondary.contrastText,
+        },
       },
       variants: [{
         // Used in HelpControl to indicate activity state
@@ -296,9 +255,9 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiTypography: {
       styleOverrides: {
-        root: ({theme}) => ({
-          color: theme.palette.secondary.contrastText,
-        }),
+        root: {
+          color: palette.secondary.contrastText,
+        },
       },
     },
   }
