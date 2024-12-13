@@ -4,12 +4,12 @@ import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {useTheme} from '@mui/material/styles'
-import useStore from '../../store/useStore'
-import {hexToRgba} from '../../utils/color'
-import {createPropertyTable} from '../../utils/itemProperties'
-import ExpansionPanel from './ExpansionPanel'
 import {useIsMobile} from '../Hooks'
 import Toggle from '../Toggle'
+import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
+import ExpansionPanel from './ExpansionPanel'
+import {createPropertyTable} from './itemProperties'
 
 
 /**
