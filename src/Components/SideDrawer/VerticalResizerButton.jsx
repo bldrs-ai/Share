@@ -41,30 +41,27 @@ export default function VerticalResizerButton({
   const half = 0.5
   const resize = useCallback(
     (mouseMoveEvent) => {
-      let expansionDrawerHeight = window.innerHeight
       if (isResizing) {
+        let newHeight = window.innerHeight
         if (isOnTop) {
-          expansionDrawerHeight =
-            drawerRef.current.getBoundingClientRect().bottom -
-            mouseMoveEvent.clientY +
-            (thickness * half)
+          const btm = drawerRef.current.getBoundingClientRect().bottom
+          const offset = (thickness * half)
+          const cy = mouseMoveEvent.clientY
+          newHeight = btm - cy + offset
         } else {
-          expansionDrawerHeight =
-            mouseMoveEvent.clientX -
-            drawerRef.current.getBoundingClientRect().top -
-            (thickness * half)
+          const top = drawerRef.current.getBoundingClientRect().top
+          newHeight = mouseMoveEvent.clientX - top - (thickness * half)
         }
-        if (expansionDrawerHeight < 0) {
-          expansionDrawerHeight = 0
+        if (newHeight < 0) {
+          newHeight = 0
         }
-        if (expansionDrawerHeight > window.innerHeight) {
-          expansionDrawerHeight = window.innerHeight
+        if (newHeight > window.innerHeight) {
+          newHeight = window.innerHeight
         }
-        if (expansionDrawerHeight < thickness) {
-          expansionDrawerHeight = thickness
+        if (newHeight < thickness) {
+          newHeight = thickness
         }
-        setDrawerHeight(expansionDrawerHeight)
-        setIsExpanded(true)
+        setDrawerHeight(newHeight)
       }
     },
     [isResizing, isOnTop, setDrawerHeight, drawerRef, thickness],
@@ -72,10 +69,10 @@ export default function VerticalResizerButton({
 
 
   useEffect(() => {
-    let expansionDrawerHeight = window.innerHeight
+    let newHeight = window.innerHeight
     const onWindowResize = (e) => {
-      if (e.target.innerHeight < expansionDrawerHeight) {
-        expansionDrawerHeight = e.target.innerHeight
+      if (e.target.innerHeight < newHeight) {
+        newHeight = e.target.innerHeight
       }
       if (e.target.innerHeight < drawerHeight) {
         setDrawerHeight(e.target.innerHeight)
@@ -135,14 +132,14 @@ export default function VerticalResizerButton({
 
 
   useEffect(() => {
-    const expansionDrawerHeight = window.innerHeight
+    const newHeight = window.innerHeight
     if (isExpanded) {
-      setDrawerHeight(expansionDrawerHeight)
+      setDrawerHeight(newHeight)
     } else {
       const defaultHeight =
         isNumber(drawerHeightInitial) ?
         Math.min(window.innerHeight, drawerHeightInitial) :
-        drawerHeightInitial
+            drawerHeightInitial
       setDrawerHeight(defaultHeight)
     }
   }, [isExpanded, setDrawerHeight, drawerHeightInitial])
@@ -181,7 +178,7 @@ export default function VerticalResizerButton({
           gap: `${gripSize}px`,
           background: 'transparent',
         }}
-        data-testid='y_resizer'
+        data-testid={ID_RESIZE_HANDLE_Y}
       >
         {Array.from({length: 3}).map((v, i) =>
           <Box
@@ -199,3 +196,6 @@ export default function VerticalResizerButton({
     </Box>
   )
 }
+
+
+export const ID_RESIZE_HANDLE_Y = 'resize-handle-y'

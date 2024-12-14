@@ -3,6 +3,7 @@ import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import {useIsMobile} from '../Components/Hooks'
 import {TITLE_NOTES} from '../Components/Notes/component'
 import {TITLE as TITLE_PROPS} from '../Components/Properties/component'
+import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
@@ -33,7 +34,7 @@ describe('NotesAndPropertiesDrawer', () => {
     expect(await notesAndPropsRender.findByText(TITLE_NOTES)).toBeVisible()
     expect(mobileHook.result.current).toBe(false)
     const leftDrawerWidthInitial = storeHook.result.current.leftDrawerWidthInitial
-    const xResizerEl = notesAndPropsRender.getByTestId('x_resizer')
+    const xResizerEl = notesAndPropsRender.getByTestId(ID_RESIZE_HANDLE_X)
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
     const expectedWidth = 350 // TODO(pablo): hack, should be window.innerWidth
