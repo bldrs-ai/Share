@@ -99,7 +99,7 @@ export default function NavTreeNode({
         <div
           style={{
             marginLeft: 'auto',
-            paddingRight: 16,
+            paddingRight: '0.5rem',
             display: 'flex',
             alignItems: 'center',
           }}

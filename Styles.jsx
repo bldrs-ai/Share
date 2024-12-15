@@ -1,12 +1,15 @@
-import React from 'react'
+import React, {Fragment} from 'react'
 import GlobalStyles from '@mui/material/GlobalStyles'
+
 
 /**
  * @property {object} theme To set link, icon and scrollbar colors.
  * @return {React.Component}
  */
 export default function Styles({theme}) {
-  return (
+  // For performance
+  // See https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
+  const globalStyles = (
     <GlobalStyles
       styles={{
         'body': {
@@ -35,18 +38,8 @@ export default function Styles({theme}) {
         'a': {
           color: theme.palette.primary.main,
         },
-        // TODO(pablo): move these Mui styles to
-        // src/theme/Components.js
-        '.MuiDialog-paper > .MuiButtonBase-root': {
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          margin: '0.5em',
-          opacity: 0.5,
-        },
-        '.MuiDialogActions-root > .MuiButtonBase-root': {
-          marginLeft: 'auto',
-          marginRight: 'auto',
+        '.no-select': {
+          userSelect: 'none',
         },
         '.icon-share': {
           width: '40px',
@@ -70,10 +63,8 @@ export default function Styles({theme}) {
           width: '12px',
           height: '12px',
         },
-        '.no-select': {
-          userSelect: 'none',
-        },
       }}
     />
   )
+  return <Fragment>{globalStyles}</Fragment>
 }
