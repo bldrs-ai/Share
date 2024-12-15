@@ -61,7 +61,12 @@ export default function OpenModelDialog({
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
-      <Tabs tabLabels={tabLabels} currentTab={currentTab} actionCb={(value) => setCurrentTab(value)} isScrollable={false}/>
+      <Tabs
+        tabLabels={tabLabels}
+        currentTab={currentTab}
+        actionCb={(value) => setCurrentTab(value)}
+        isScrollable={false}
+      />
         <Stack
           spacing={1}
           direction='column'
@@ -71,7 +76,7 @@ export default function OpenModelDialog({
         >
         { currentTab === 0 &&
           <Stack spacing={1} sx={{width: '92%'}}>
-            <Button onClick={openFile} variant='contained' data-testid={'button_open_file'}>
+            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
               Browse files...
             </Button>
             {!isMobile &&
@@ -85,7 +90,7 @@ export default function OpenModelDialog({
         { currentTab === 1 &&
           <>
             <TextField
-              label="GitHub Model URL"
+              label='GitHub Model URL'
               value={name}
               onChange={(event) => {
                 const ghPath = event.target.value
