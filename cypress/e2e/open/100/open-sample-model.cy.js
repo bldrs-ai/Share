@@ -19,8 +19,7 @@ describe('Open 100: Open Sample Model', () => {
       visitHomepageWaitForModel()
     })
 
-    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
-    context.skip('Select OpenModelControl > Sample Models', () => {
+    context('Select OpenModelControl > Sample Models', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-open"]').click()
         cy.get('[data-testid="tab-samples"]').click()
@@ -48,8 +47,7 @@ describe('Open 100: Open Sample Model', () => {
       })
     })
 
-    // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
-    context.skip('Open up all persistent controls', () => {
+    context('Open up all persistent controls', () => {
       beforeEach(() => {
         // Select element, opens nav
         const interceptEltSelectTag = 'twoLevelSelect'
