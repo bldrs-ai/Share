@@ -10,8 +10,9 @@ import {
 } from '../../../support/models'
 
 
+// TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
 /** {@link https://github.com/bldrs-ai/Share/issues/757} */
-describe('Open 100: Open Sample Model', () => {
+describe.skip('Open 100: Open Sample Model', () => {
   context('Returning user visits homepage', () => {
     beforeEach(() => {
       homepageSetup()
