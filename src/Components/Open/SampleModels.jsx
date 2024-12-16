@@ -54,7 +54,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
       alignItems='center'
     >
       {Object.keys(modelPath).map((model, i) => (
-        <Grid item xs={6} key={i}>
+        <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>
           <Chip
             label={
               <>
@@ -63,9 +63,9 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
               </>
             }
             variant='sampleModel'
-            data-testid='sample-model-chip'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
             color='primary'
+            data-testid='sample-model-chip'
           />
         </Grid>
       ))}
