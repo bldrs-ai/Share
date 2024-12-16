@@ -65,11 +65,6 @@ export function getComponentOverrides(palette, typography) {
         }),
       }],
     },
-    MuiIconButton: {
-      styleOverrides: {
-        root: StandardButton, // Same as MuiToggleButton
-      },
-    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -145,6 +140,16 @@ export function getComponentOverrides(palette, typography) {
           fontWeight: 400,
           textAlign: 'center',
         },
+      },
+    },
+    MuiGrid: {
+      styleOverrides: {
+        root: {},
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: StandardButton, // Same as MuiToggleButton
       },
     },
     MuiList: {
