@@ -63,9 +63,9 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
               </>
             }
             variant='sampleModel'
-            data-testid='sample-model-chip'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
             color='primary'
+            data-testid='sample-model-chip'
           />
         </Grid>
       ))}

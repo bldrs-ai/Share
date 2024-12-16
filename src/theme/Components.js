@@ -97,6 +97,22 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiChip: {
+      variants: [{
+        props: {variant: 'sampleModel'},
+        style: {
+          width: '11em',
+          height: '6em',
+        },
+      }],
+      styleOverrides: {
+        label: {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        },
+      },
+    },
     MuiDialog: {
       styleOverrides: {
         paper: {
