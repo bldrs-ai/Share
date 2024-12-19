@@ -11,8 +11,9 @@ import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 
 describe('NotesAndPropertiesDrawer', () => {
   it('properties panel renders', async () => {
+    const mockSetDrawerWidth = jest.fn()
     const {result} = renderHook(() => useStore((state) => state))
-    const {findByText} = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
+    const {findByText} = render(<ShareMock><NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/></ShareMock>)
     await act(() => {
       result.current.setIsPropertiesVisible(true)
     })
@@ -25,9 +26,12 @@ describe('NotesAndPropertiesDrawer', () => {
   })
 
   it('double-click resizes horizontally', async () => {
+    const mockSetDrawerWidth = jest.fn()
     const mobileHook = renderHook(() => useIsMobile())
     const storeHook = renderHook(() => useStore((state) => state))
-    const notesAndPropsRender = render(<ShareMock><NotesAndPropertiesDrawer/></ShareMock>)
+    const notesAndPropsRender = render(<ShareMock>
+      <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
+                                       </ShareMock>)
     await act(() => {
       storeHook.result.current.toggleIsNotesVisible()
     })
