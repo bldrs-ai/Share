@@ -65,11 +65,6 @@ export function getComponentOverrides(palette, typography) {
         }),
       }],
     },
-    MuiIconButton: {
-      styleOverrides: {
-        root: StandardButton, // Same as MuiToggleButton
-      },
-    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -94,6 +89,22 @@ export function getComponentOverrides(palette, typography) {
           // TODO(pablo): react-markdown sets smaller?
           'fontSize': '1rem',
           'lineHeight': 1.5,
+        },
+      },
+    },
+    MuiChip: {
+      variants: [{
+        props: {variant: 'sampleModel'},
+        style: {
+          width: '11em',
+          height: '6em',
+        },
+      }],
+      styleOverrides: {
+        label: {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
         },
       },
     },
@@ -129,6 +140,16 @@ export function getComponentOverrides(palette, typography) {
           fontWeight: 400,
           textAlign: 'center',
         },
+      },
+    },
+    MuiGrid: {
+      styleOverrides: {
+        root: {},
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: StandardButton, // Same as MuiToggleButton
       },
     },
     MuiList: {
