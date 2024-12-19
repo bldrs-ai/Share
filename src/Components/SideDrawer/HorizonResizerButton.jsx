@@ -74,7 +74,7 @@ export default function HorizonResizerButton({
           expansionDrawerWidth = thickness
         }
         setDrawerWidth(expansionDrawerWidth)
-        setIsExpanded(true)
+        // setIsExpanded(true)
       }
     },
     [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
@@ -148,15 +148,16 @@ export default function HorizonResizerButton({
   useEffect(() => {
     const expansionDrawerWidth = window.innerWidth
     if (isExpanded) {
-      setDrawerWidth(expansionDrawerWidth)
+      setDrawerWidth(expansionDrawerWidth, isExpanded)
     } else {
       const width =
             isNumber(drawerWidthInitial) ?
             Math.min(window.innerWidth, drawerWidthInitial) :
             drawerWidthInitial
-      setDrawerWidth(width)
+      setDrawerWidth(width, isExpanded)
     }
-  }, [isExpanded, drawerWidthInitial, setDrawerWidth])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, drawerWidthInitial])
 
 
   return (
