@@ -1,6 +1,7 @@
 import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import {useIsMobile} from '../Components/Hooks'
 import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
@@ -17,6 +18,7 @@ export default function ViewerContainer() {
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
   const vh = useStore((state) => state.vh)
+  const isMobile = useIsMobile()
 
   const [, setIsDragActive] = useState(false)
 
@@ -79,7 +81,7 @@ export default function ViewerContainer() {
         top: 0,
         left: 0,
         width: '100vw',
-        height: `${vh}px`,
+        height: isMobile ? `${vh}px` : '100vh',
         margin: 0,
         padding: 0,
         textAlign: 'center',

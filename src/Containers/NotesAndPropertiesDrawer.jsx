@@ -11,14 +11,13 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
  *
  * @return {ReactElement}
  */
-export default function NotesAndPropertiesDrawer() {
+export default function NotesAndPropertiesDrawer({setDrawerWidth}) {
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const rightDrawerWidthInitial = useStore((state) => state.rightDrawerWidthInitial)
-  const setRightDrawerWidth = useStore((state) => state.setRightDrawerWidth)
 
   const isDrawerVisible = isNotesVisible || isPropertiesVisible
 
@@ -27,14 +26,14 @@ export default function NotesAndPropertiesDrawer() {
       isDrawerVisible={isDrawerVisible}
       drawerWidth={rightDrawerWidth}
       drawerWidthInitial={rightDrawerWidthInitial}
-      setDrawerWidth={setRightDrawerWidth}
+      setDrawerWidth={setDrawerWidth}
       dataTestId='NotesAndPropertiesDrawer'
     >
       <Box
         sx={{
           display: isNotesVisible ? 'block' : 'none',
           height: isPropertiesVisible ? `50%` : '100%',
-          overflowX: 'hidden',
+          overflowX: 'auto',
           overflowY: 'auto',
         }}
         data-testid='NotesPanelContainer'

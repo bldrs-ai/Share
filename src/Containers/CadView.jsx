@@ -644,7 +644,7 @@ export default function CadView({
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
-    <Box sx={{...absTop, left: 0, width: '100vw', height: `${vh}px`, m: 0, p: 0}}>
+    <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer
          data-testid='cadview-dropzone'
          data-model-ready={isModelReady}

@@ -6,12 +6,11 @@ import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
-import AppsSideDrawer from './AppsSideDrawer'
 import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
-import NotesAndPropertiesDrawer from './NotesAndPropertiesDrawer'
 import OperationsGroup from './OperationsGroup'
+import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
 import useStore from '../store/useStore'
 
@@ -33,7 +32,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       direction='row'
       justifyContent='space-between'
       alignItems='center'
-      sx={{width: '100vw', height: `${vh}px`}}
+      sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh'}}
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
@@ -97,14 +96,8 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
          branch={branch}
          selectWithShiftClickEvents={selectWithShiftClickEvents}
        /> :
-       <Stack
-         direction='row'
-         sx={{pointerEvents: 'auto'}}
-         data-testid='RootLandscape-RightPaneStack'
-       >
-         <NotesAndPropertiesDrawer/>
-         <AppsSideDrawer/>
-       </Stack>
+       // On non-mobile, use RightSideDrawers for the combined drawer logic
+       <RightSideDrawers/>
       }
     </Stack>
   )
