@@ -32,7 +32,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       direction='row'
       justifyContent='space-between'
       alignItems='center'
-      sx={{width: '100%', height: `${vh}px`}}
+      sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh'}}
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
