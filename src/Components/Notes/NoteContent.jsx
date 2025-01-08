@@ -14,6 +14,7 @@ import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
  */
 export default function NoteContent({markdownContent, issueID, commentID}) {
   const setSelectedPlaceMarkInNoteIdData = useStore((state) => state.setSelectedPlaceMarkInNoteIdData)
+  const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
 
   // eslint-disable-next-line no-unused-vars
   const {selectedPlaceMarkInNoteId, cameraHash, forceMarkerNoteSync} = useStore((state) => ({
@@ -62,6 +63,7 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
         if (params) {
           const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
           setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
+          setSelectedPlaceMarkId(Number(params[0]))
           event.preventDefault() // Prevent the default navigation
         }
       } else if (noteHash) {
@@ -70,6 +72,7 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
           if (params) {
             const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
             setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
+            setSelectedPlaceMarkId(Number(params[0]))
             event.preventDefault() // Prevent the default navigation
         }
       }
