@@ -1,6 +1,6 @@
 import {rest} from 'msw'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
-import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
+import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
@@ -10,8 +10,11 @@ import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositorie
 
 const httpOk = 200
 const httpCreated = 201
+const httpNoContent = 204
 const httpAuthorizationRequired = 401
 const httpNotFound = 404
+
+let commentDeleted = false
 
 
 /**
@@ -69,6 +72,14 @@ function githubHandlers(defines, authed) {
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return res(ctx.status(httpNotFound))
+      }
+
+      if (commentDeleted) {
+        commentDeleted = false
+        return res(
+          ctx.status(httpOk),
+          ctx.json(MOCK_COMMENTS_POST_DELETION.data),
+        )
       }
       return res(
           ctx.status(httpOk),
@@ -235,10 +246,18 @@ function githubHandlers(defines, authed) {
     rest.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       const {org, repo, commentId} = req.params
 
-      if (org !== 'bldrs-ai' || repo !== 'Share' || !commentId) {
+      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !commentId) {
         return res(ctx.status(httpNotFound))
       }
 
+      commentDeleted = true
+
+      return res(
+          ctx.status(httpNoContent),
+      )
+    }),
+
+    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
       )

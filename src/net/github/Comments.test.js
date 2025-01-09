@@ -4,8 +4,8 @@ import {
 } from './Comments'
 
 
-const httpOK = 200
 const httpCreated = 201
+const httpNoContent = 204
 
 describe('net/github/Comments', () => {
   it('successfully create comment', async () => {
@@ -14,7 +14,7 @@ describe('net/github/Comments', () => {
   })
 
   it('successfully delete comment', async () => {
-    const res = await deleteComment({orgName: 'bldrs-ai', name: 'Share'}, 1)
-    expect(res.status).toEqual(httpOK)
+    const res = await deleteComment({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
+    expect(res.status).toEqual(httpNoContent)
   })
 })
