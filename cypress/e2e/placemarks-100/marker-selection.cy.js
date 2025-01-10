@@ -76,6 +76,10 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
         const expectedHash = `#m:${markerCoordinates[0]},${markerCoordinates[1]},${markerCoordinates[2]}`
         cy.url().should('include', expectedHash)
 
+        const waitTimeMs = 2000
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(waitTimeMs)
+
         cy.percySnapshot()
       })
 
