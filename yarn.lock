@@ -2284,19 +2284,19 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.4.011":
-  version "0.4.11"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway-web-ifc-adapter/0.4.11/f5b682ecdce39fd0e70b01d9ebf5762e24b0e396#f5b682ecdce39fd0e70b01d9ebf5762e24b0e396"
-  integrity sha512-Rb/5OykIJ9YNhtO8rSxLHSh+ZYp+0Rcw0ePAklW6ou7XuHQ0/k+quhdyCgpKUVVHdZIwYog0triWzEg1b0F5jA==
+"@bldrs-ai/conway-web-ifc-adapter@0.4.012":
+  version "0.4.12"
+  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway-web-ifc-adapter/0.4.12/0cd5f374998cd1a829ceb5cb69929603da7d1fc7#0cd5f374998cd1a829ceb5cb69929603da7d1fc7"
+  integrity sha512-sZXfY1LVMxwaZ9mcIbYbdL1dp9TpOzf4VvgdPodsorKSwgC3Sxs6+n1bycU6Y30sZ2JAxYVeCf6XoC7oCZIy3w==
   dependencies:
-    "@bldrs-ai/conway" "0.5.721"
+    "@bldrs-ai/conway" "0.6.722"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.5.721":
-  version "0.5.721"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway/0.5.721/3432840572cab3046935c2162b95704095cea138#3432840572cab3046935c2162b95704095cea138"
-  integrity sha512-DtGDZKB0eMWqSpH7XdjFYxk18z42MV3ZaGAeE5JEsLM2zs9vMI882mvf5tJfhQyPg5e+x4dq71p9hxAkFPXPVQ==
+"@bldrs-ai/conway@0.6.722":
+  version "0.6.722"
+  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway/0.6.722/eade16ce078752759223824ff0d6d97f696ddc1e#eade16ce078752759223824ff0d6d97f696ddc1e"
+  integrity sha512-j9IAkf/XOI9U35mL7aqHNKuzzOscFKixiFlb6AimqWJ5Nl6ry+/XhMWwDF+HWBVxfMn3fwjxYkNt3slhw1N6BA==
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
