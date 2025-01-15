@@ -234,7 +234,7 @@ export default function NotesControl() {
 }, [selectedNoteId])
 
   // TODO(pablo): hack, move into helper
-  // nickcastel50: this wasn't running if the hash changed - cleaned it up
+  // nickcastel50: This wasn't running if the hash changed - cleaned it up
   useEffect(() => {
     const updateIdsFromHash = () => {
       // Retrieve the note ID from the URL hash
