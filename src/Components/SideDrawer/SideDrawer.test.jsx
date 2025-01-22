@@ -34,7 +34,7 @@ describe('SideDrawer', () => {
     fireEvent.mouseDown(resizeHandle, {clientX: dragStart})
     fireEvent.mouseMove(document, {clientX: dragEnd})
     fireEvent.mouseUp(document)
-    expect(mockSetDrawerWidth).toHaveBeenCalledWith(dragEnd)
+    expect(mockSetDrawerWidth).toHaveBeenCalledWith(dragEnd, false)
   })
 
   context('mobile renders and drags', () => {

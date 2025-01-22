@@ -7,18 +7,17 @@ import useStore from '../store/useStore'
 
 
 /** @return {ReactElement} */
-export default function AppsSideDrawer() {
+export default function AppsSideDrawer({setDrawerWidth}) {
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
   const appsDrawerWidthInitial = useStore((state) => state.appsDrawerWidthInitial)
-  const setAppsDrawerWidth = useStore((state) => state.setAppsDrawerWidth)
   const selectedApp = useStore((state) => state.selectedApp)
   return (
     <SideDrawer
       isDrawerVisible={isAppsVisible}
       drawerWidth={appsDrawerWidth}
       drawerWidthInitial={appsDrawerWidthInitial}
-      setDrawerWidth={setAppsDrawerWidth}
+      setDrawerWidth={setDrawerWidth}
       dataTestId='AppsDrawer'
     >
       <Box
