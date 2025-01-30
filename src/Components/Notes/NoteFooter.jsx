@@ -37,7 +37,8 @@ export default function NoteFooter({
   selectCard,
   selected,
   showCreateComment,
-  submitUpdate,
+  submitNoteUpdate,
+  submitCommentUpdate,
   synched,
   username,
 }) {
@@ -54,6 +55,7 @@ export default function NoteFooter({
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const markers = useStore((state) => state.markers)
   const {togglePlaceMarkActive} = placemarkHandlers()
+  const selectedPlaceMarkId = useStore((state) => state.selectedPlaceMarkId)
 
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -71,8 +73,31 @@ export default function NoteFooter({
       '_blank')
   }
 
-  const marker = markers.find((m) => m.id === id)
-  const hasActiveMarker = marker ? marker.isActive : false // Check isActive only if the marker is found
+  /** Navigate to github comment */
+  function openGithubComment() {
+    window.open(
+      `https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}#issuecomment-${id}`,
+      '_blank')
+  }
+
+  let marker = null
+  marker = markers.find((m) => m.id === id)
+
+  if (!marker) {
+    // check comment IDs
+    marker = markers.find((m) => m.commentId === id)
+  }
+
+  let hasActiveMarker = false
+
+  if (marker) {
+    if (marker.commentId !== null) {
+      hasActiveMarker = marker ? marker.commentId === selectedPlaceMarkId : false
+    } else {
+      hasActiveMarker = marker ? marker.id === selectedPlaceMarkId : false
+    }
+  }
+
 
   return (
     <CardActions>
@@ -100,7 +125,7 @@ export default function NoteFooter({
            </Box>
           }
 
-          {isNote && selected && synched &&
+          {((isNote && selected) || !isNote) && synched &&
            user && user.nickname === username &&
            <Box
              sx={{
@@ -155,7 +180,7 @@ export default function NoteFooter({
                 title='Save'
                 placement='left'
                 icon={<CheckIcon className='icon-share'/>}
-                onClick={() => submitUpdate(repository, accessToken, id)}
+                onClick={() => isNote ? submitNoteUpdate(id) : submitCommentUpdate(id)}
               />
               <TooltipIconButton
                 title='Cancel'
@@ -196,15 +221,13 @@ export default function NoteFooter({
           }
         </Stack>
         <Stack direction='row'>
-          {isNote &&
            <TooltipIconButton
              title='Open in Github'
              size='small'
              placement='bottom'
-             onClick={openGithubIssue}
+             onClick={isNote ? openGithubIssue : openGithubComment}
              icon={<GitHubIcon className='icon-share'/>}
            />
-          }
 
           {selected &&
            <TooltipIconButton

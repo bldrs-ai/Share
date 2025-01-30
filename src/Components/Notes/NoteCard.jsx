@@ -4,6 +4,7 @@ import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import NoteBodyEdit from './NoteBodyEdit'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {updateComment} from '../../net/github/Comments'
 import {
   closeIssue,
   updateIssue,
@@ -25,6 +26,7 @@ import NoteContent from './NoteContent'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
+import {deleteComment} from '../../net/github/Comments'
 
 
 /**
@@ -61,7 +63,6 @@ export default function NoteCard({
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  // TODO(pablo)
   // const comments = useStore((state) => state.comments)
   // const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
@@ -80,6 +81,8 @@ export default function NoteCard({
   const [editBody, setEditBody] = useState(body)
 
   const setEditOriginalBody = useStore((state) => state.setEditOriginalBody)
+
+  const signalCommentMutated = useStore((state) => state.signalCommentMutated)
 
 
   const handleEditBodyChange = (newBody) => {
@@ -226,13 +229,26 @@ export default function NoteCard({
    *
    * @param {number} noteNumber obtained from github issue
    */
-  async function onDeleteClick(noteNumberToDelete) {
+  async function onDeleteNote(noteNumberToDelete) {
     // TODO(pablo): handle response
     const res = await closeIssue(repository, noteNumberToDelete, accessToken)
     const updatedNotes = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(updatedNotes)
     setSelectedNoteId(null)
     return res
+  }
+
+  /**
+   *
+   */
+  async function onDeleteComment(commentID) {
+    // TODO(nickcastel50): handle response
+    const NO_CONTENT = 204
+    const res = await deleteComment(repository, commentID, accessToken)
+
+    if (res.status === NO_CONTENT) {
+      signalCommentMutated()
+    }
   }
 
 
@@ -256,19 +272,32 @@ export default function NoteCard({
 
 
   /** Update issue on GH, set read-only */
-  async function submitUpdate() {
+  async function submitNoteUpdate() {
     const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
     const editedNote = notes.find((note) => note.id === id)
     editedNote.body = res.data.body
     setNotes(notes)
     setEditMode(false)
     setEditModeGlobal(id, false)
+    signalCommentMutated()
+  }
+
+   /**
+    * Update comment in github
+    *
+    * @param {number} commentId
+    */
+   async function submitCommentUpdate(commentId) {
+    // eslint-disable-next-line no-unused-vars
+    const updatedComment = await updateComment(repository, commentId, editBody, accessToken)
+    setEditMode(false)
+    setEditModeGlobal(commentId, false)
+    signalCommentMutated()
   }
 
 
   return (
     <Card elevation={1} data-testid='note-card' ref={noteCardRef}>
-      {isNote ?
        <CardHeader
          title={title}
          avatar={<Avatar alt={username} src={avatarUrl}/>}
@@ -284,19 +313,15 @@ export default function NoteCard({
                 setEditOriginalBody(id, body)
                 setEditBodyGlobal(id, body) // Update global editBody state
               }}
-               onDeleteClick={() => onDeleteClick(noteNumber)}
+               onDeleteClick={() => isNote ? onDeleteNote(noteNumber) : onDeleteComment(id)}
                noteNumber={noteNumber}
              />
          }
-       /> :
-       <CardHeader
-         avatar={<Avatar alt={username} src={avatarUrl}/>}
-         subheader={`${username}\n${dateParts[0]} ${dateParts[1]}`}
-       />}
+       />
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}
-      {!isNote && <NoteContent markdownContent={editBody} issueID={selectedNoteId} commentID={id}/>}
+      {!isNote && !editMode && <NoteContent markdownContent={editBody} issueID={selectedNoteId} commentID={id}/>}
       {editMode &&
        <NoteBodyEdit
          handleTextUpdate={(event) => handleEditBodyChange(event.target.value)}
@@ -319,7 +344,8 @@ export default function NoteCard({
         onClickShare={isNote ? shareIssue : shareComment}
         selectCard={selectCard}
         selected={selected}
-        submitUpdate={submitUpdate}
+        submitNoteUpdate={submitNoteUpdate}
+        submitCommentUpdate={submitCommentUpdate}
         synched={synched}
         username={username}
       />
