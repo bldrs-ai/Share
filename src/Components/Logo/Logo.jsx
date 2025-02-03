@@ -12,7 +12,6 @@ export function LogoB({...props}) {
     <ThemeBox>
       <SvgIcon
         fontSize='large'
-        titleAccess='BLDRS.AI'
         {...props}
       >
         <LogoBIcon className='icon-share'/>
@@ -31,7 +30,6 @@ export function LogoBWithDomain({...props}) {
     <ThemeBox>
       <SvgIcon
         fontSize='large'
-        titleAccess='BLDRS.AI'
         {...props}
       >
         <LogoBWithDomainIcon
