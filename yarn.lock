@@ -2284,10 +2284,10 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.5.013":
-  version "0.5.13"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway-web-ifc-adapter/0.5.13/aafdf3e18ea8751dcd05957bd74129bc468bad27#aafdf3e18ea8751dcd05957bd74129bc468bad27"
-  integrity sha512-AyU/055jmF/pZxzasGeuCAAuTZBZUoag2DNxUljs4dUyLl3X5PTcIk8goHu8U7tgqRkp5z4Ux1/VC06q1H09CQ==
+"@bldrs-ai/conway-web-ifc-adapter@0.7.727":
+  version "0.7.727"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.7.727.tgz#9eb8faeeef018ace6981144e9522944cb796458c"
+  integrity sha512-zthD/9mQBa+Goh244x9Scz+XKAA2Uyvrvlnf1joJoRkBxGcTKvWSfDMunAKgmBqhyikPW3E5Sppjvq3sdB0rEw==
   dependencies:
     "@bldrs-ai/conway" "0.7.727"
     "@types/node" "22.5.5"
