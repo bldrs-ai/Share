@@ -1,19 +1,25 @@
 import React, {ReactElement, useEffect, useState} from 'react'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {useTheme} from '@mui/material/styles'
 import Avatar from '@mui/material/Avatar'
-import Divider from '@mui/material/Divider'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import {useTheme} from '@mui/material/styles'
-import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
-import GitHubIcon from '@mui/icons-material/GitHub'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
-import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined'
-import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined'
-import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
+import Divider from '@mui/material/Divider'
 import {TooltipIconButton} from '../Buttons'
+import {
+  AccountBoxOutlined as AccountBoxOutlinedIcon,
+  GitHub as GitHubIcon,
+  InfoOutlined as InfoOutlinedIcon,
+  LoginOutlined as LoginOutlinedIcon,
+  LogoutOutlined as LogoutOutlinedIcon,
+  NightlightOutlined as NightlightOutlinedIcon,
+  WbSunnyOutlined as WbSunnyOutlinedIcon,
+  PaymentOutlined,
+} from '@mui/icons-material'
+
+// Our extracted PricingDialog
+import PricingDialog from '../Stripe/PricingDialog'
 
 
 /**
@@ -25,25 +31,42 @@ export default function ProfileControl() {
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
 
+  const [openPricing, setOpenPricing] = useState(false)
+
   const theme = useTheme()
   const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
-
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
 
-  const onLoginClick = async () => {
-    onCloseClick()
-    await loginWithPopup({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
-  }
-  const onLogoutClick = () => {
-    logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
-    onCloseClick()
-  }
   const onCloseClick = () => setAnchorEl(null)
 
+  // Login
+  const onLoginClick = async () => {
+    onCloseClick()
+    await loginWithPopup({appState: {returnTo: window.location.pathname}})
+  }
+
+  // Logout
+  const onLogoutClick = () => {
+    logout({returnTo: window.location.origin})
+    onCloseClick()
+  }
+
+  // Toggle theme
+  const handleThemeToggle = () => {
+    theme.toggleColorMode()
+    onCloseClick()
+  }
+
+  // Open Pricing
+  const handleOpenPricing = () => {
+    setOpenPricing(true)
+    onCloseClick()
+  }
+
+  // Close Pricing
+  const handleClosePricing = () => setOpenPricing(false)
+
+  // Sync local isDay with MUI theme
   useEffect(() => {
     setIsDay(theme.palette.mode === 'light')
   }, [theme.palette.mode])
@@ -55,8 +78,8 @@ export default function ProfileControl() {
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
           isAuthenticated ?
-          <Avatar alt={user.name} src={user.picture}/> :
-          <AccountBoxOutlinedIcon className='icon-share'/>
+            <Avatar alt={user?.name} src={user?.picture}/> :
+            <AccountBoxOutlinedIcon className='icon-share'/>
         }
         variant='control'
         placement='bottom'
@@ -64,7 +87,6 @@ export default function ProfileControl() {
       />
       <Menu
         elevation={1}
-        id='basic-menu'
         anchorEl={anchorEl}
         open={isMenuVisible}
         onClose={onCloseClick}
@@ -72,46 +94,62 @@ export default function ProfileControl() {
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
         sx={{transform: 'translateX(-1em)'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
+        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick}>
+          {isAuthenticated ? (
+            <>
+              <LogoutOutlinedIcon/>
+              <Typography sx={{marginLeft: '10px'}} variant='overline'>
+                Log out
+              </Typography>
+            </>
+          ) : (
+            <>
+              <LoginOutlinedIcon/>
+              <Typography sx={{marginLeft: '10px'}} variant='overline'>
+                Log in with GitHub
+              </Typography>
+            </>
+          )}
+        </MenuItem>
 
-          {isAuthenticated ?
-          <>
-            <LogoutOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography>
-          </> :
-          <>
-            <LoginOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>
-          </>
-           }
-        </MenuItem>
-        <MenuItem onClick={() => window.open(`https://github.com/signup`, '_blank')} data-testid='link-join-github'>
+        {isAuthenticated && (
+          <MenuItem onClick={handleOpenPricing}>
+            <PaymentOutlined/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
+              Upgrade to Pro
+            </Typography>
+          </MenuItem>
+        )}
+
+        <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Join GitHub</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Join GitHub
+          </Typography>
         </MenuItem>
-        <MenuItem onClick={() => window.open(`https://github.com/bldrs-ai/Share/wiki`, '_blank')} data-testid='link-bldrs-wiki'>
+        <MenuItem onClick={() => window.open('https://github.com/bldrs-ai/Share/wiki', '_blank')}>
           <InfoOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Bldrs Wiki</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Bldrs Wiki
+          </Typography>
         </MenuItem>
         <Divider/>
-        <MenuItem
-          onClick={() => {
-            theme.toggleColorMode()
-            onCloseClick()
-          }}
-          data-testid={`change-theme-to-${isDay ? 'night' : 'day'}`}
-        >
+        <MenuItem onClick={handleThemeToggle}>
           {isDay ?
-          <NightlightOutlinedIcon className='icon-share'/> :
-          <WbSunnyOutlinedIcon className='icon-share'/> }
-          <Typography
-            sx={{marginLeft: '10px'}}
-            variant='overline'
-          >
-            {`${isDay ? 'Night' : 'Day'} theme`}
+            <NightlightOutlinedIcon className='icon-share'/> :
+            <WbSunnyOutlinedIcon className='icon-share'/>
+          }
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            {isDay ? 'Night' : 'Day'} theme
           </Typography>
         </MenuItem>
       </Menu>
+
+      <PricingDialog
+        openPricing={openPricing}
+        handleClosePricing={handleClosePricing}
+        isDay={isDay}
+      />
     </>
   )
 }
