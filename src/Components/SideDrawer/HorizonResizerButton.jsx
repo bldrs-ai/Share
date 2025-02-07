@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'rea
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
+import {disablePageTextSelect, reenablePageTextSelect} from '../../utils/event'
 import {isNumber} from '../../utils/strings'
 
 
@@ -38,6 +39,15 @@ export default function HorizonResizerButton({
   const stopResizing = useCallback(() => setIsResizing(false), [])
   const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
 
+  useEffect(() => {
+    if (isResizing) {
+      disablePageTextSelect()
+    } else {
+      reenablePageTextSelect()
+    }
+    return () => reenablePageTextSelect()
+  }, [isResizing])
+
   const half = 0.5
   const resize = useCallback(
     (mouseMoveEvent) => {
@@ -64,7 +74,7 @@ export default function HorizonResizerButton({
           expansionDrawerWidth = thickness
         }
         setDrawerWidth(expansionDrawerWidth)
-        setIsExpanded(true)
+        // setIsExpanded(true)
       }
     },
     [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
@@ -138,15 +148,16 @@ export default function HorizonResizerButton({
   useEffect(() => {
     const expansionDrawerWidth = window.innerWidth
     if (isExpanded) {
-      setDrawerWidth(expansionDrawerWidth)
+      setDrawerWidth(expansionDrawerWidth, isExpanded)
     } else {
       const width =
             isNumber(drawerWidthInitial) ?
             Math.min(window.innerWidth, drawerWidthInitial) :
             drawerWidthInitial
-      setDrawerWidth(width)
+      setDrawerWidth(width, isExpanded)
     }
-  }, [isExpanded, drawerWidthInitial, setDrawerWidth])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded, drawerWidthInitial])
 
 
   return (
@@ -179,7 +190,7 @@ export default function HorizonResizerButton({
           cursor: 'col-resize',
         }}
         ref={resizerRef}
-        data-testid='x_resizer'
+        data-testid={ID_RESIZE_HANDLE_X}
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
@@ -199,3 +210,6 @@ export default function HorizonResizerButton({
     </Box>
   )
 }
+
+
+export const ID_RESIZE_HANDLE_X = 'resize-handle-x'

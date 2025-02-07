@@ -90,7 +90,7 @@ export function addPlanesToHashState(location, viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
-    addHashParams(location, planeInfo)
+    addHashParams(window.location, planeInfo)
   }
 }
 

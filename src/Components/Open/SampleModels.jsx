@@ -50,22 +50,22 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
     <Grid
       container
       spacing={2}
-      justifyContent="center"
-      alignItems="center"
+      justifyContent='center'
+      alignItems='center'
     >
       {Object.keys(modelPath).map((model, i) => (
-        <Grid item xs={6} key={i}>
+        <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>
           <Chip
             label={
               <>
                 {modelIcon[model]}
-                <Typography variant="caption" sx={{marginTop: '.5em'}}>{model}</Typography>
+                <Typography variant='caption' sx={{marginTop: '.5em'}}>{model}</Typography>
               </>
             }
-            variant="sampleModel"
-            data-testid='sample-model-chip'
+            variant='sampleModel'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
-            color="primary"
+            color='primary'
+            data-testid='sample-model-chip'
           />
         </Grid>
       ))}

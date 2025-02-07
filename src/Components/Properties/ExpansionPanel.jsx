@@ -3,7 +3,7 @@ import Accordion from '@mui/material/Accordion'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import Typography from '@mui/material/Typography'
-import CaretIcon from '../../assets/icons/Caret.svg'
+import PsetOpenIcon from '@mui/icons-material/KeyboardArrowDown'
 
 
 /**
@@ -42,9 +42,9 @@ export default function ExpansionPanel({summary, detail, expandState}) {
       onChange={() => setExpanded(!expanded)}
     >
       <AccordionSummary
-        expandIcon={<CaretIcon className='caretToggle'/>}
-        aria-controls="panel1a-content"
-        id="panel1a-header"
+        expandIcon={<PsetOpenIcon className='icon-share'/>}
+        aria-controls='panel1a-content'
+        id='panel1a-header'
       >
         <Typography sx={{
           'maxWidth': '260px',

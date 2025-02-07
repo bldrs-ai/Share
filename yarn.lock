@@ -2284,19 +2284,19 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.3.010":
-  version "0.3.10"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway-web-ifc-adapter/0.3.10/6192b84575bda50bafc9d3ee6bd0052240af4627#6192b84575bda50bafc9d3ee6bd0052240af4627"
-  integrity sha512-HNp5E1UJbe/UyxLvk9UcwDXt6RHBd+ikjY6YpvUpB8UBdZV8dp00Np7hTAi8H8n9cVsTIzA8zXSfN5Dj4S1Jbw==
+"@bldrs-ai/conway-web-ifc-adapter@0.8.750":
+  version "0.8.750"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.8.750.tgz#4554e71d9ce58befab0843cb1ccf688fd07a4b4d"
+  integrity sha512-96RY2aJ2aQG97cOvSVuHyjbpxSykFa3Tk/9J8RM1W2V2IFF0NXa1AAGWi6wHtYkuHXJt8/a+Rsgvt9kEFTCWyQ==
   dependencies:
-    "@bldrs-ai/conway" "0.3.695"
+    "@bldrs-ai/conway" "0.8.750"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.3.695":
-  version "0.3.695"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway/0.3.695/5a93302095933c49afa5fae18cae5bbdec5acbcc#5a93302095933c49afa5fae18cae5bbdec5acbcc"
-  integrity sha512-nwz8euEfojaSV1HpgfKwqY9QYzzXqLbathMjAHjPCkODDPlE/3LA9DtZT1IZ+5vhfhTkDdabbqgwZgDx/UJ7XQ==
+"@bldrs-ai/conway@0.8.750":
+  version "0.8.750"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.8.750.tgz#b83aedf0f1fc76a76ed5d4785e5593d14b34bec5"
+  integrity sha512-YQ+Y90qppe6mONnJPLeHWKweVeDgtg7zkasyM5R/WVv6w2uoH4QyKqsKNc9NaKu0AcyUNe+UmaISsFttvwXR4A==
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
@@ -2660,13 +2660,6 @@
   version "1.2.1"
   resolved "https://registry.npmjs.org/@humanwhocodes/object-schema/-/object-schema-1.2.1.tgz"
   integrity sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==
-
-"@iconscout/react-unicons@2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@iconscout/react-unicons/-/react-unicons-2.0.0.tgz#e5ca9cbf9315587ee3386b7df8d8f0c34a2bc161"
-  integrity sha512-C2zMwesxHTPtksmkQdqQCvDgbveWx9EveB1NdUD2XhuH4tupaEaNdMOG6Wltyx+6oJHW1XCTMxuA9fJKzNjNKw==
-  dependencies:
-    react ">=15.0.0 <17.0.0"
 
 "@isaacs/cliui@^8.0.2":
   version "8.0.2"
@@ -5906,20 +5899,6 @@ define-properties@^1.2.0:
     has-property-descriptors "^1.0.0"
     object-keys "^1.1.1"
 
-del@^6.0.0:
-  version "6.1.1"
-  resolved "https://registry.yarnpkg.com/del/-/del-6.1.1.tgz#3b70314f1ec0aa325c6b14eb36b95786671edb7a"
-  integrity sha512-ua8BhapfP0JUJKC/zV9yHHDW/rDoDxP4Zhn3AkA6/xT6gY7jYXJiaeyBZznYVujhZZET+UgcbZiQ7sN3WqcImg==
-  dependencies:
-    globby "^11.0.1"
-    graceful-fs "^4.2.4"
-    is-glob "^4.0.1"
-    is-path-cwd "^2.2.0"
-    is-path-inside "^3.0.2"
-    p-map "^4.0.0"
-    rimraf "^3.0.2"
-    slash "^3.0.0"
-
 delayed-stream@~1.0.0:
   version "1.0.0"
   resolved "https://registry.npmjs.org/delayed-stream/-/delayed-stream-1.0.0.tgz"
@@ -6257,13 +6236,6 @@ es6-promisify@^7.0.0:
   version "7.0.0"
   resolved "https://registry.yarnpkg.com/es6-promisify/-/es6-promisify-7.0.0.tgz#9a710008dd6a4ab75a89e280bad787bfb749927b"
   integrity sha512-ginqzK3J90Rd4/Yz7qRrqUeIpe3TwSXTPPZtPne7tGBPeAaQiU8qt4fpKApnxHcq1AwtUdHVg5P77x/yrggG8Q==
-
-esbuild-clean-plugin@1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/esbuild-clean-plugin/-/esbuild-clean-plugin-1.0.0.tgz#bf63199c8b471e043ffe9f6a7db279e728b5cba9"
-  integrity sha512-Omr+4j5Cm8hdMLhW734ksqzqTaNX55J7/7HBQTqz5n/B9ZCgnTAb6RKqTKBuUyNEuABURyzfZVK4mZ/tqO2BxQ==
-  dependencies:
-    del "^6.0.0"
 
 esbuild-copy-static-files@0.1.0:
   version "0.1.0"
@@ -7156,7 +7128,7 @@ globals@^13.15.0:
   dependencies:
     type-fest "^0.20.2"
 
-globby@^11.0.1, globby@^11.1.0:
+globby@^11.1.0:
   version "11.1.0"
   resolved "https://registry.yarnpkg.com/globby/-/globby-11.1.0.tgz#bd4be98bb042f83d796f7e3811991fbe82a0d34b"
   integrity sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==
@@ -7737,11 +7709,6 @@ is-number@^7.0.0:
   version "7.0.0"
   resolved "https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz"
   integrity sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==
-
-is-path-cwd@^2.2.0:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/is-path-cwd/-/is-path-cwd-2.2.0.tgz#67d43b82664a7b5191fd9119127eb300048a9fdb"
-  integrity sha512-w942bTcih8fdJPJmQHFzkS76NEP8Kzzvmw92cXsazb8intwLqPibPPdXf4ANdKV3rYMuuQYGIWtvz9JilB3NFQ==
 
 is-path-inside@^3.0.2:
   version "3.0.3"
@@ -10347,15 +10314,6 @@ react@18.2.0:
   integrity sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==
   dependencies:
     loose-envify "^1.1.0"
-
-"react@>=15.0.0 <17.0.0":
-  version "16.14.0"
-  resolved "https://registry.npmjs.org/react/-/react-16.14.0.tgz"
-  integrity sha512-0X2CImDkJGApiAlcf0ODKIneSwBPhqJawOa5wCtKbu7ZECrmS26NvtSILynQ66cgkT/RJ4LidJOc3bUESwmU8g==
-  dependencies:
-    loose-envify "^1.1.0"
-    object-assign "^4.1.1"
-    prop-types "^15.6.2"
 
 readable-stream@^3.4.0:
   version "3.6.0"

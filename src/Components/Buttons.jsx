@@ -1,6 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
-import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
 import SvgIcon from '@mui/material/SvgIcon'
 import ToggleButton from '@mui/material/ToggleButton'
@@ -192,31 +191,6 @@ export function CloseButton({onCloseClick, ...props}) {
     >
       <CloseIcon className='icon-share'/>
     </IconButton>
-  )
-}
-
-
-/**
- * A RectangularButton is used in dialogs
- *
- * @property {string} title Text to show in button
- * @property {Function} onClick callback
- * @property {object} [icon] Start icon to left of text
- * @property {boolean} [border] Default: false
- * @property {boolean} [background] Default: true
- * @return {object} React component
- */
-export function RectangularButton({
-  title,
-  onClick,
-  icon = null,
-  disabled = false,
-}) {
-  assertDefined(title, onClick)
-  return (
-    icon ?
-      <Button onClick={onClick} startIcon={icon} variant='contained'>{title}</Button> :
-      <Button onClick={onClick} variant='contained' disabled={disabled}>{title}</Button>
   )
 }
 

@@ -7,6 +7,11 @@ const colors = getColors()
 export const day = {
   mode: 'light',
 
+  background: {
+    // Same as primary.sceneBackground for no page flicker
+    default: '#ffffff',
+  },
+
   // The 3d canvas and ControlButtons on it.
   primary: {
     // TODO(pablo): main controls both primary action buttons and link text in NoteContent.
@@ -14,7 +19,7 @@ export const day = {
     light: colors.grey.lightest,
     dark: colors.grey.mediumlight,
     contrastText: colors.grey.darkest,
-    sceneBackground: '#FFFFFF',
+    sceneBackground: '#ffffff',
     sceneHighlight: '#00F0FF',
   },
 
@@ -54,6 +59,11 @@ export const day = {
 
 export const night = {
   mode: 'dark',
+
+  background: {
+    // Same as primary.sceneBackground for no page flicker
+    default: '#000000',
+  },
 
   // The 3d canvas and ControlButtons on it.
   primary: {

@@ -20,3 +20,15 @@ export function disablePageReloadApprovalCheck() {
 export function handleBeforeUnload(e) {
   (e || window.event).returnValue = true
 }
+
+
+/** Disable text select for whole document, e.g. during a drag operation. */
+export function disablePageTextSelect() {
+  document.body.classList.add('no-select')
+}
+
+
+/** Re-enable text select for whole document after a drag. */
+export function reenablePageTextSelect() {
+  document.body.classList.remove('no-select')
+}

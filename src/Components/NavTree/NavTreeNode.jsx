@@ -3,8 +3,8 @@ import React, {ReactElement} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import {useTheme} from '@mui/material/styles'
 import HideToggleButton from '../HideToggleButton'
-import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
-import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
+import NodeClosedIcon from '@mui/icons-material/KeyboardArrowRight'
+import NodeOpenIcon from '@mui/icons-material/KeyboardArrowDown'
 
 
 /** @return {ReactElement} */
@@ -59,7 +59,6 @@ export default function NavTreeNode({
           role='button'
           tabIndex={0}
           style={{
-            margin: '7px 8px 0 0',
             display: 'flex',
             alignItems: 'center',
           }}
@@ -100,7 +99,7 @@ export default function NavTreeNode({
         <div
           style={{
             marginLeft: 'auto',
-            paddingRight: 16,
+            paddingRight: '0.5rem',
             display: 'flex',
             alignItems: 'center',
           }}

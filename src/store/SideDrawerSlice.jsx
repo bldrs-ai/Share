@@ -16,6 +16,8 @@ export default function createSideDrawerSlice(set, get) {
 
     drawerWidthInitial: drawerWidthInitial, // Leave constant. Don't change dynamically
     drawerHeightInitial: drawerHeightInitial, // Leave constant. Don't change dynamically
+    // Just for test setup
+    setDrawerHeightInitial: (height) => set(() => ({drawerHeightInitial: height})),
 
     leftDrawerWidth: drawerWidthInitial,
     setLeftDrawerWidth: (width) => set(() => ({leftDrawerWidth: width})),

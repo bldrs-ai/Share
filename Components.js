@@ -65,6 +65,11 @@ export function getComponentOverrides(palette, typography) {
         }),
       }],
     },
+    MuiIconButton: {
+      styleOverrides: {
+        root: StandardButton, // Same as MuiToggleButton
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -92,37 +97,32 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
-    MuiChip: {
-      variants: [{
-        props: {variant: 'sampleModel'},
-        style: {
-          width: '11em',
-          height: '6em',
-        },
-      }],
-      styleOverrides: {
-        label: {
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        },
-      },
-    },
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: '10px',
-          textAlign: 'center',
-          padding: '0.5em',
+          'borderRadius': '10px',
+          'textAlign': 'center',
+          'padding': '0.5em',
+          '& .MuiButtonBase-root': {
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            margin: '0.5em',
+            opacity: 0.5,
+          },
         },
       },
     },
     MuiDialogActions: {
       styleOverrides: {
         root: {
-          justifyContent: 'center',
-          textAlign: 'center',
-          padding: '1em 0px',
+          'justifyContent': 'center',
+          'textAlign': 'center',
+          'padding': '1em 0px',
+          '& .MuiButtonBase-root': {
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          },
         },
       },
     },
@@ -140,16 +140,6 @@ export function getComponentOverrides(palette, typography) {
           fontWeight: 400,
           textAlign: 'center',
         },
-      },
-    },
-    MuiGrid: {
-      styleOverrides: {
-        root: {},
-      },
-    },
-    MuiIconButton: {
-      styleOverrides: {
-        root: StandardButton, // Same as MuiToggleButton
       },
     },
     MuiList: {
