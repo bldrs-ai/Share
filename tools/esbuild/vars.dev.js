@@ -9,4 +9,5 @@ export default {
   // Off for accurate performance
   THREE_PDB_IS_ENABLED: false,
   PLATFORM: 'web',
+  FORCE_SINGLE_THREAD: 'false',
 }

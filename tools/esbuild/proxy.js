@@ -19,8 +19,8 @@ export function createProxyServer(host, port, useHttps = false) {
 
   const serverOptions = useHttps ?
     {
-        key: fs.readFileSync(path.join(__dirname, './certificate/server.key')), // Replace with the path to your key file
-        cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')), // Replace with the path to your cert file
+        key: fs.readFileSync(path.join(__dirname, './certificate/server.key')),
+        cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')),
       } :
     {}
 
@@ -57,7 +57,14 @@ export function createProxyServer(host, port, useHttps = false) {
         res.setHeader('Cache-Control', 'public, max-age=31536000')
       }
 
-      res.writeHead(proxyResponse.statusCode, proxyResponse.headers)
+      // Merge the COOP/COEP headers with the headers coming from the proxy.
+      const mergedHeaders = {
+        ...proxyResponse.headers,
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      }
+
+      res.writeHead(proxyResponse.statusCode, useHttps ? mergedHeaders : proxyResponse.headers)
       proxyResponse.pipe(res, {end: true})
     })
 
@@ -79,7 +86,11 @@ const HTTP_SERVER_ERROR = 500
 
 /** Serve a 200 bounce page for missing resources. */
 const serveNotFound = (res) => {
-  res.writeHead(HTTP_FOUND, {'Content-Type': 'text/html'})
+  res.writeHead(HTTP_FOUND, {
+    'Content-Type': 'text/html',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+  })
   res.end(`<!DOCTYPE html>
 <html>
   <head>
@@ -113,7 +124,14 @@ function rewriteUrl(url) {
 
   // If the URL matches the regex, rewrite it
   if (regex.test(url)) {
-    return '/static/js/ConwayGeomWasmWeb.wasm'
+    return '/static/js/ConwayGeomWasmWebMT.wasm'
+  }
+
+  // Regular expression to match any URL containing ConwayGeomWasmWeb.js
+  const regex2 = /ConwayGeomWasmWebMT\.js$/
+
+  if (regex2.test(url)) {
+    return '/static/js/ConwayGeomWasmWebMT.js'
   }
 
   return url
