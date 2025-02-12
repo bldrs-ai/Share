@@ -22,7 +22,7 @@
     "build-share-webifc:win32": "set USE_WEBIFC_SHIM=false&& yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-webifc:linux:darwin": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
-    "build-share-copy-wasm-conway-MT": "shx cp node_modules/@bldrs-ai/conway-web-ifc-adapter/node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
+    "build-share-copy-wasm-conway-MT": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-copy-wasm-conway-profile": "shx cp node_modules/@bldrs-ai/conway-web-ifc-adapter/node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
