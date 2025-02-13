@@ -29,8 +29,12 @@ const {host, port} = await ctx.serve({
   servedir: config.outdir,
 })
 log(`Esbuild's backend server 👆\n`)
-createProxyServer(host, port).listen(SERVE_PORT)
+createProxyServer(host, port, (process.env.serveHttps === 'true')).listen(SERVE_PORT)
 
 // Make sure to add a newline as the subsequent watch mode will otherwise
-// overewrite the current line
-log(`Share frontend server 👉 http://localhost:${SERVE_PORT} and watching...\n`)
+// overwrite the current line
+if (process.env.serveHttps === 'true') {
+  log(`Share frontend server 👉 https://localhost:${SERVE_PORT} and watching...\n`)
+} else {
+  log(`Share frontend server 👉 http://localhost:${SERVE_PORT} and watching...\n`)
+}

@@ -1,5 +1,8 @@
 import http from 'node:http'
 import https from 'node:https'
+import fs from 'fs'
+import path from 'path'
+import {fileURLToPath} from 'url'
 
 /**
  * @param {string} proxiedHost The host to which traffic will be sent. E.g. localhost
@@ -9,10 +12,26 @@ import https from 'node:https'
  * @see https://esbuild.github.io/api/#serve-proxy
  */
 export function createProxyServer(host, port, useHttps = false) {
-  const requestModule = useHttps ? https : http
+  const requestModule = http
+  // Derive __dirname equivalent in ES Modules
+  const __filename = fileURLToPath(import.meta.url)
+  const __dirname = path.dirname(__filename)
 
-  return http.createServer((req, res) => {
-    // Rewrite the URL if it matches the pattern for a .wasm file
+  const serverOptions = useHttps ?
+    {
+        key: fs.readFileSync(path.join(__dirname, './certificate/server.key')),
+        cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')),
+      } :
+    {}
+
+  const server = useHttps ?
+    https.createServer(serverOptions, handleRequest) :
+    http.createServer(handleRequest)
+
+  /**
+   *
+   */
+  function handleRequest(req, res) {
     req.url = rewriteUrl(req.url)
 
     const options = {
@@ -23,40 +42,42 @@ export function createProxyServer(host, port, useHttps = false) {
       headers: req.headers,
     }
 
-    // Forward each incoming request to the proxied server
     const proxyReq = requestModule.request(options, (proxyResponse) => {
-      // If proxied server cannot find the resource, send a custom not-found page
       if (proxyResponse.statusCode === HTTP_NOT_FOUND) {
         serveNotFound(res)
         return
       }
 
-      // Set the correct Content-Type for specific file types
       const contentType = getContentType(req.url)
       if (contentType) {
         res.setHeader('Content-Type', contentType)
       }
 
-      // Optionally set Cache-Control headers for static assets
       if (isCacheable(req.url)) {
         res.setHeader('Cache-Control', 'public, max-age=31536000')
       }
 
-      // Forward the response from the proxied server to the client
-      res.writeHead(proxyResponse.statusCode, proxyResponse.headers)
+      // Merge the COOP/COEP headers with the headers coming from the proxy.
+      const mergedHeaders = {
+        ...proxyResponse.headers,
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      }
+
+      res.writeHead(proxyResponse.statusCode, useHttps ? mergedHeaders : proxyResponse.headers)
       proxyResponse.pipe(res, {end: true})
     })
 
-    // Handle request errors
     proxyReq.on('error', (err) => {
       console.error(`Proxy request error: ${err.message}`)
       res.writeHead(HTTP_SERVER_ERROR)
       res.end('Internal Server Error')
     })
 
-    // Forward the body of the request to the proxied server
     req.pipe(proxyReq, {end: true})
-  })
+  }
+
+  return server
 }
 
 const HTTP_FOUND = 200
@@ -65,7 +86,11 @@ const HTTP_SERVER_ERROR = 500
 
 /** Serve a 200 bounce page for missing resources. */
 const serveNotFound = (res) => {
-  res.writeHead(HTTP_FOUND, {'Content-Type': 'text/html'})
+  res.writeHead(HTTP_FOUND, {
+    'Content-Type': 'text/html',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+  })
   res.end(`<!DOCTYPE html>
 <html>
   <head>
@@ -99,7 +124,14 @@ function rewriteUrl(url) {
 
   // If the URL matches the regex, rewrite it
   if (regex.test(url)) {
-    return '/static/js/ConwayGeomWasmWeb.wasm'
+    return '/static/js/ConwayGeomWasmWebMT.wasm'
+  }
+
+  // Regular expression to match any URL containing ConwayGeomWasmWeb.js
+  const regex2 = /ConwayGeomWasmWebMT\.js$/
+
+  if (regex2.test(url)) {
+    return '/static/js/ConwayGeomWasmWebMT.js'
   }
 
   return url
