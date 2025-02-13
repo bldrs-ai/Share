@@ -2284,20 +2284,21 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.8.750":
-  version "0.8.750"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.8.750.tgz#4554e71d9ce58befab0843cb1ccf688fd07a4b4d"
-  integrity sha512-96RY2aJ2aQG97cOvSVuHyjbpxSykFa3Tk/9J8RM1W2V2IFF0NXa1AAGWi6wHtYkuHXJt8/a+Rsgvt9kEFTCWyQ==
+"@bldrs-ai/conway-web-ifc-adapter@0.8.782":
+  version "0.8.782"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.8.782.tgz#628ebcfeebfeeedf4fd2c430ffefb792d667b9eb"
+  integrity sha512-GD5OCHJgT0wQuJrrlRBfzjBd/WlXwnRW/CbIMs6olFt3z1Y6Pz025Wz/hRCnrQUOAh3z7Zizyl4QqGa0YQIr0A==
   dependencies:
-    "@bldrs-ai/conway" "0.8.750"
+    "@bldrs-ai/conway" "0.8.782"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.8.750":
-  version "0.8.750"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.8.750.tgz#b83aedf0f1fc76a76ed5d4785e5593d14b34bec5"
-  integrity sha512-YQ+Y90qppe6mONnJPLeHWKweVeDgtg7zkasyM5R/WVv6w2uoH4QyKqsKNc9NaKu0AcyUNe+UmaISsFttvwXR4A==
+"@bldrs-ai/conway@0.8.782":
+  version "0.8.782"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.8.782.tgz#d04807e59bc5e84b56083da526e05d2b868ce968"
+  integrity sha512-XAVaIs/Aw58fSVFeNoRMQZrC4F1CljUViOGPHy1NZN2HBO1ko8sNu1PPUooesGbQpos61wKFgjpB/WLvRbchQw==
   dependencies:
+    adm-zip "^0.5.16"
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
     seedrandom "^3.0.5"
@@ -4509,6 +4510,11 @@ acorn@^8.8.2:
   version "8.10.0"
   resolved "https://registry.yarnpkg.com/acorn/-/acorn-8.10.0.tgz#8be5b3907a67221a81ab23c7889c4c5526b62ec5"
   integrity sha512-F0SAmZ8iUtS//m8DmCTA0jlh6TDKkHQyK6xc6V4KDTyZKA9dnvX9/3sRTVQrWm79glUAZbnmmNcdYwUIHWVybw==
+
+adm-zip@^0.5.16:
+  version "0.5.16"
+  resolved "https://registry.yarnpkg.com/adm-zip/-/adm-zip-0.5.16.tgz#0b5e4c779f07dedea5805cdccb1147071d94a909"
+  integrity sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ==
 
 agent-base@6:
   version "6.0.2"
