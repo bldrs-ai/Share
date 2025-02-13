@@ -5,7 +5,13 @@
     Cross-Origin-Embedder-Policy = "require-corp"
 
 [[redirects]]
-  from = "/share*ConwayGeomWasmWebMT.js"
+  from = "/share/v/p/ConwayGeomWasmWebMT.js"
+  to = "/static/js/ConwayGeomWasmWebMT.js"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/share/v/gh/ConwayGeomWasmWebMT.js"
   to = "/static/js/ConwayGeomWasmWebMT.js"
   status = 200
   force = true
