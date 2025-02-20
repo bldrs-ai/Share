@@ -2284,19 +2284,19 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.11.800":
-  version "0.11.800"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.11.800.tgz#c0fde19e902d584cf5d94cbcdb3fde8d75678d41"
-  integrity sha512-+xlTyPNVvk1NWp/dYuWcsctyEDmWTrbox+II6u+yoSSKiXOpdfWzUtsT0rF4t1R9X4YS2YvcyiUTu/T4EjV41A==
+"@bldrs-ai/conway-web-ifc-adapter@0.12.800":
+  version "0.12.800"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.12.800.tgz#79ade3e15231adc21ee572943b25b92a2edb5ca3"
+  integrity sha512-/KGlzlYs5nXvNxDwssVjbA84s/rdpNeELZ5uyTskAFvK0C65T0LxenxFaz060h1JdCIhth4WoyIlx/DrYVPkSA==
   dependencies:
-    "@bldrs-ai/conway" "0.11.800"
+    "@bldrs-ai/conway" "0.12.800"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.11.800":
-  version "0.11.800"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.11.800.tgz#1630a3ac3f5a56acd553213d3ea2033aa306d0f5"
-  integrity sha512-dEjTOamPc7whuxJyJ0f2mK1mUpOUn76TUs2bBEQsleNrwQIzM05x7eYO1MoVCwzDsmVas9v04uVqdsXFpMNo5g==
+"@bldrs-ai/conway@0.12.800":
+  version "0.12.800"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.12.800.tgz#e1e69893f81566b732af2ef808a93007106c6c6b"
+  integrity sha512-+DhGa1MzpoV4Xbt9enB4PchAX/832kOfHnxhkduuYQMF+JU5KoFzcByY9okZMAdEpIHrgzpx6N4altvTm5hTcg==
   dependencies:
     adm-zip "^0.5.16"
     buffer "^6.0.3"
