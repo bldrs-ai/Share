@@ -292,7 +292,7 @@ export default function CadView({
       // todo(zein): this is obviously an invalid state and should be fixed at the level of URL change handling
       // meanwhile we prevent the application from throwing errors at the user
       return
-    }
+    } 
 
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
@@ -677,7 +677,9 @@ export default function CadView({
           }
         </Box>
       )}
-      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      {false &&
+        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      }
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }

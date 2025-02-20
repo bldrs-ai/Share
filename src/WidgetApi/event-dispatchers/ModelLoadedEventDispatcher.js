@@ -25,11 +25,22 @@ class ModelLoadedEventDispatcher extends ApiEventDispatcher {
   initDispatch() {
     useStore.subscribe((state, previousState) => {
       if (state.model !== previousState.model) {
-        const eventData = {}
+        const eventData = { srcPath: this.getSrcPath() }
         this.apiConnection.send(this.name, eventData)
       }
     })
   }
-}
+
+  getSrcPath() {
+    let modelUrl = null;
+    const modelUrlIndex = 2;
+    const urlParts = window.location.href.split('/');
+    if(urlParts.length > modelUrlIndex) {
+      const modelUrlBase64 = urlParts[urlParts.length - modelUrlIndex];
+      modelUrl = atob(modelUrlBase64);  
+    }
+    return modelUrl;
+  }
+} 
 
 export default ModelLoadedEventDispatcher

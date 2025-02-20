@@ -16,7 +16,7 @@ export default function createUIVisibilitySlice(set, get) {
 
     isAboutDialogSuppressed: false,
 
-    setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
+    setIsLoginVisibile: (isVisible) => set(() => ({isLoginVisible: isVisible})),
     setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsNavigationPanelVisibile: (isVisible) => set(() => ({isNavigationPanelVisible: isVisible})),
 

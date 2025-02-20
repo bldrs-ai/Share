@@ -35,6 +35,9 @@ class UIComponentsVisibilityEventHandler extends ApiEventHandler {
     if (('searchBar' in data)) {
       useStore.getState().setIsSearchbarVisibile(data.searchBar)
     }
+    if (('login' in data)) {
+      useStore.getState().setIsLoginVisibile(data.login)
+    }
     if (('navigationPanel' in data)) {
       useStore.getState().setIsNavigationPanelVisibile(data.navigationPanel)
     }

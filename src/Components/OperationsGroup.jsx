@@ -113,15 +113,17 @@ export default function OperationsGroup({deselectItems}) {
 
       {isModelInteractionGroupVisible &&
        <ButtonGroup orientation='vertical'>
-         <TooltipIconButton
-           title='Notes'
-           icon={<NotesIcon/>}
-           selected={isNotesOn}
-           onClick={() => {
-             turnOffTooltips()
-             toggle('Notes')
-           }}
-         />
+        {isLoginVisible &&
+          <TooltipIconButton
+            title='Notes'
+            icon={<NotesIcon/>}
+            selected={isNotesOn}
+            onClick={() => {
+              turnOffTooltips()
+              toggle('Notes')
+            }}
+          />
+        }
          <TooltipIconButton
            title='Properties'
            onClick={() => {
