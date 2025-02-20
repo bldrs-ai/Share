@@ -118,7 +118,7 @@ function FetchFromUrl({appPrefix}) {
           localBlobUrl = parts[parts.length - 1]
 
           window.removeEventListener('beforeunload', handleBeforeUnload)
-          navigate(`${appPrefix}/v/new/${localBlobUrl}.ifc`)
+          navigate(`${appPrefix}/v/new/${btoa(encodedUrl)}/${localBlobUrl}.ifc`)
         }
       }
     }
