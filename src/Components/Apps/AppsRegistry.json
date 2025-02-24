@@ -2,8 +2,8 @@
   {
     "appName": "ExampleApp",
     "description": "Events Logger",
-    "image": "/icons/LogoBWithDomain.svg",
+    "image": "//bldrs.ai/icons/LogoBWithDomain.svg",
     "action": "/widgets/event-logger.html",
-    "icon": "/icons/LogoB.svg"
+    "icon": "//bldrs.ai/icons/LogoB.svg"
   }
 ]
