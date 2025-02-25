@@ -9,8 +9,8 @@ export default function BlogIndex() {
     <BlogLayout title='Blog Posts'>
       <ul reversed>
         <li>2025-02-25:&nbsp;
-          <Link href="/blog/2025-02-25-high-performance-cad-js-parsing-ifc-schema-coverage-exact-csg">
-            Tech Talk: High-Performance CAD: JS Parsing, IFC Schema Coverage, Exact CSG
+          <Link href="/blog/2025-02-25-high-performance-js-parsing-complete-ifc-step-coverage-exact-bools">
+            Tech Talk: High-Performance JS Parsing, Complete IFC+STEP Coverage, Exact Bools
           </Link>
         </li>
         <li>2024-12-05:&nbsp;
