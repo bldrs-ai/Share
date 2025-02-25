@@ -30,4 +30,7 @@ export default {
   logLevel: 'info',
   define: defines,
   plugins: plugins,
+  loader: {
+    '.md': 'text',
+  },
 }

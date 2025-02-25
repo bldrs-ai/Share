@@ -14,6 +14,7 @@ export default {
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
+    '\\.md$': '<rootDir>/tools/jest/mdTransform.js',
   },
   transformIgnorePatterns: [
     `/node_modules/(?!${excludedNodeModules}/)`,
