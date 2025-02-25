@@ -12,10 +12,10 @@ export default function BlogRoutes() {
     <Routes>
       <Route path='/' element={<BlogIndex/>}/>
       <Route
-        path='/2025-02-25-high-performance-cad-js-parsing-ifc-schema-coverage-exact-csg'
+        path='/2025-02-25-high-perf-js-parsing-complete-ifc-step-coverage-exact-bools'
         element={
           <MarkdownBlogPost
-            title='Tech Talk: High-Performance CAD: JS Parsing, IFC Schema Coverage, Exact CSG'
+            title='Tech Talk: High-Perf JS Parsing, Complete IFC+STEP Coverage, Exact Bools'
             dateline='2025-02-25'
             markdownContent={Post20250225}
           />
