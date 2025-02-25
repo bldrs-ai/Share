@@ -12,7 +12,7 @@ export default function BlogRoutes() {
     <Routes>
       <Route path='/' element={<BlogIndex/>}/>
       <Route
-        path='/2025-02-25-high-perf-js-parsing-complete-ifc-step-coverage-exact-bools'
+        path='/2025-02-25-high-performance-js-parsing-complete-ifc-step-coverage-exact-bools'
         element={
           <MarkdownBlogPost
             title='Tech Talk: High-Perf JS Parsing, Complete IFC+STEP Coverage, Exact Bools'
