@@ -31,6 +31,7 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
+  const commentMutatedSignal = useStore((state) => state.commentMutatedSignal)
 
   // Access markers and the necessary store functions
   const markers = useStore((state) => state.markers)
@@ -103,20 +104,23 @@ export default function Notes() {
 
         if (issueMarker) {
           issueMarker.isActive = !(hasActiveMarker)
+          if (issueMarker.isActive) {
+            setSelectedPlaceMarkId(issueMarker.id)
+          }
         }
         const allMarkers = issueMarker ? [issueMarker, ...commentMarkers] : commentMarkers
 
         // Update state with new comments and markers
         setComments(newComments)
         toggleSynchSidebar()
-        writeMarkers(allMarkers) // Assuming `setMarkers` is a function in your store or component state to update markers
+        writeMarkers(allMarkers)
       } catch (e) {
         debug().warn('failed to fetch comments: ', e)
         handleError(e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNote])
+  }, [selectedNote, commentMutatedSignal])
 
 
   /**
@@ -158,7 +162,7 @@ export default function Notes() {
         if (activePlaceMarkHash && hash.startsWith(activePlaceMarkHash)) {
           activePlaceMarkHash = newHash
           isActive = true
-          setSelectedPlaceMarkId(selectedNoteId)
+          setSelectedPlaceMarkId(comment.id)
         }
 
         return {
@@ -258,6 +262,7 @@ export default function Notes() {
                username={comment.username}
                avatarUrl={comment.avatarUrl}
                synched={comment.synched}
+               noteNumber={selectedNote.number}
              />
            </ListItem>
          )

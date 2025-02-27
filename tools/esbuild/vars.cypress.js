@@ -25,4 +25,5 @@ export default {
   // https://www.browserstack.com/docs/percy/common-issue/canvas-elements-not-captured
   THREE_PDB_IS_ENABLED: true,
   PLATFORM: 'web',
+  FORCE_SINGLE_THREAD: 'false',
 }

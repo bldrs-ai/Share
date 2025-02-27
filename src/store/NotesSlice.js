@@ -24,6 +24,8 @@ export default function createNotesSlice(set, get) {
 
     comments: [],
     setComments: (comments) => set(() => ({comments: comments})),
+    commentMutatedSignal: false,
+    signalCommentMutated: () => set((state) => ({commentMutatedSignal: !state.commentMutatedSignal})),
 
     createdNotes: null,
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),

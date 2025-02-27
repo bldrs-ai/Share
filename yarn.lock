@@ -2284,20 +2284,21 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.5.013":
-  version "0.5.13"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway-web-ifc-adapter/0.5.13/aafdf3e18ea8751dcd05957bd74129bc468bad27#aafdf3e18ea8751dcd05957bd74129bc468bad27"
-  integrity sha512-AyU/055jmF/pZxzasGeuCAAuTZBZUoag2DNxUljs4dUyLl3X5PTcIk8goHu8U7tgqRkp5z4Ux1/VC06q1H09CQ==
+"@bldrs-ai/conway-web-ifc-adapter@0.13.802":
+  version "0.13.802"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.13.802.tgz#6026d5b66afaa3fc1f1163517e56cc29643b43bb"
+  integrity sha512-0Tn0rl++p7tbGXnxtC9DjRno0SlC+TJ6ToJTvkq2r1WTOAPwi0qm/jzkoX2S2b182uhRk1eJpykIR4HjuQi8Mw==
   dependencies:
-    "@bldrs-ai/conway" "0.7.727"
+    "@bldrs-ai/conway" "0.13.802"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.7.727":
-  version "0.7.727"
-  resolved "https://npm.pkg.github.com/download/@bldrs-ai/conway/0.7.727/fba7304d25c33e32c8e1e12f944aa8eabddc356d#fba7304d25c33e32c8e1e12f944aa8eabddc356d"
-  integrity sha512-F84DZVXQ5U6xKp5kLrcmN4Q7PdRWTquKpK2S04di0rA6PwRC724i/n1NOCQyLA4961R0e+D+4LW8Feg/dkh97Q==
+"@bldrs-ai/conway@0.13.802":
+  version "0.13.802"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.13.802.tgz#2f5ec06575ceba17aefbf1d467342e358facea91"
+  integrity sha512-XaAlVbtNEk69MPPGd2K/gwlUCnN7yI4s1gu4LV70nViRT4UZ7P2kl6QMzqu1aBM6PYVHCctB8kbEsYzGqlYplA==
   dependencies:
+    adm-zip "^0.5.16"
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
     seedrandom "^3.0.5"
@@ -4509,6 +4510,11 @@ acorn@^8.8.2:
   version "8.10.0"
   resolved "https://registry.yarnpkg.com/acorn/-/acorn-8.10.0.tgz#8be5b3907a67221a81ab23c7889c4c5526b62ec5"
   integrity sha512-F0SAmZ8iUtS//m8DmCTA0jlh6TDKkHQyK6xc6V4KDTyZKA9dnvX9/3sRTVQrWm79glUAZbnmmNcdYwUIHWVybw==
+
+adm-zip@^0.5.16:
+  version "0.5.16"
+  resolved "https://registry.yarnpkg.com/adm-zip/-/adm-zip-0.5.16.tgz#0b5e4c779f07dedea5805cdccb1147071d94a909"
+  integrity sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ==
 
 agent-base@6:
   version "6.0.2"

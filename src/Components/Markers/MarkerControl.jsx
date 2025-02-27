@@ -152,6 +152,7 @@ export function PlacemarkHandlers() {
   // Access markers and the necessary store functions
   const markers = useStore((state) => state.markers)
   const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
+  const commentMutatedSignal = useStore((state) => state.commentMutatedSignal)
   // eslint-disable-next-line no-unused-vars
   const {selectedPlaceMarkInNoteId, cameraHash} = useStore((state) => ({
     selectedPlaceMarkInNoteId: state.selectedPlaceMarkInNoteId,
@@ -232,7 +233,7 @@ export function PlacemarkHandlers() {
     })()
     // Add markers to the dependency array so useEffect re-runs on markers change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers])
+  }, [markers, commentMutatedSignal])
 
 
   // Save a placemark

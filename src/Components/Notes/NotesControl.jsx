@@ -38,6 +38,7 @@ export default function NotesControl() {
   let activePlaceMarkHash = getActivePlaceMarkHash()
   const inactiveColor = MARKER_COLOR_INACTIVE
   const activeColor = MARKER_COLOR_ACTIVE
+  const setSelectedPlaceMarkId = useStore((state) => state.setSelectedPlaceMarkId)
 
 
   // Fetch issues/notes
@@ -116,6 +117,8 @@ export default function NotesControl() {
           parseFloat(lastElement),
         ]
 
+        setSelectedPlaceMarkId('temporary')
+
         return {
           id: 'temporary',
           commentId: null,
@@ -160,6 +163,7 @@ export default function NotesControl() {
         if (activePlaceMarkHash && hash.startsWith(activePlaceMarkHash)) {
           activePlaceMarkHash = newHash
           isActive = true
+          setSelectedPlaceMarkId(issue.id)
         }
 
         return {
