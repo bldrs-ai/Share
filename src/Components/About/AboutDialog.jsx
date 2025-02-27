@@ -69,7 +69,7 @@ function AboutContent() {
           <div>
             Use the Open dialog to open IFC or STEP models from:
             <ul>
-              <li>Local files - <em>Drag 'n Drop to open; no data is uploaded</em></li>
+              <li>Local files - <em>Drag &amp; Drop to open; no data is uploaded</em></li>
               <li>Files hosted on GitHub, public or private</li>
               <li>Click the Open folder and check out Sample models</li>
             </ul>

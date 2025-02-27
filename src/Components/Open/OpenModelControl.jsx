@@ -48,6 +48,7 @@ export default function OpenModelControl() {
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={HASH_PREFIX_OPEN_MODEL}
+      dataTestId='control-button-open'
       placement='bottom'
     >
       <OpenModelDialog
