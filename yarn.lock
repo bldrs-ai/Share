@@ -2284,23 +2284,24 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.13.802":
-  version "0.13.802"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.13.802.tgz#6026d5b66afaa3fc1f1163517e56cc29643b43bb"
-  integrity sha512-0Tn0rl++p7tbGXnxtC9DjRno0SlC+TJ6ToJTvkq2r1WTOAPwi0qm/jzkoX2S2b182uhRk1eJpykIR4HjuQi8Mw==
+"@bldrs-ai/conway-web-ifc-adapter@0.14.835":
+  version "0.14.835"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.14.835.tgz#77475bf1bd654104ac22448dfff876aec2bf7b2d"
+  integrity sha512-dsNnmhNUb8yWTspKJcj/Pybgi5JsiZ5HaUXucQ5Zp5bQX877TgmacRqJrFC+X+/zdsfDDnZDj9WvxK4YNZbFuw==
   dependencies:
-    "@bldrs-ai/conway" "0.13.802"
+    "@bldrs-ai/conway" "0.14.835"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.13.802":
-  version "0.13.802"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.13.802.tgz#2f5ec06575ceba17aefbf1d467342e358facea91"
-  integrity sha512-XaAlVbtNEk69MPPGd2K/gwlUCnN7yI4s1gu4LV70nViRT4UZ7P2kl6QMzqu1aBM6PYVHCctB8kbEsYzGqlYplA==
+"@bldrs-ai/conway@0.14.835":
+  version "0.14.835"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.14.835.tgz#05ff4bb4973701e8d335b05d6bc82940264a3348"
+  integrity sha512-BaSbHKKrgdko6ttdUc9yB6SY+aI9rXHRwYoTFBhsf2tHQdTu+vqSaHceu69jG/zOqUCApXyrRKjdLIRPF4dMGw==
   dependencies:
     adm-zip "^0.5.16"
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
+    p-limit "^6.2.0"
     seedrandom "^3.0.5"
     smart-buffer "^4.2.0"
     yargs "^17.7.1"
@@ -9756,6 +9757,13 @@ p-limit@^4.0.0:
   dependencies:
     yocto-queue "^1.0.0"
 
+p-limit@^6.2.0:
+  version "6.2.0"
+  resolved "https://registry.yarnpkg.com/p-limit/-/p-limit-6.2.0.tgz#c254d22ba6aeef441a3564c5e6c2f2da59268a0f"
+  integrity sha512-kuUqqHNUqoIWp/c467RI4X6mmyuojY5jGutNU0wVTmEOOfcuwLqyMVoAi9MKi2Ak+5i9+nhmrK4ufZE8069kHA==
+  dependencies:
+    yocto-queue "^1.1.1"
+
 p-locate@^4.1.0:
   version "4.1.0"
   resolved "https://registry.npmjs.org/p-locate/-/p-locate-4.1.0.tgz"
@@ -12098,6 +12106,11 @@ yocto-queue@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.0.0.tgz#7f816433fb2cbc511ec8bf7d263c3b58a1a3c251"
   integrity sha512-9bnSc/HEW2uRy67wc+T8UwauLuPJVn28jb+GtJY16iiKWyvmYJRXVT4UamsAEGQfPohgr2q4Tq0sQbQlxTfi1g==
+
+yocto-queue@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.1.1.tgz#fef65ce3ac9f8a32ceac5a634f74e17e5b232110"
+  integrity sha512-b4JR1PFR10y1mKjhHY9LaGo6tmrgjit7hxVIeAmyMw3jegXR4dhYqLaQF5zMXZxY7tLpMyJeLjr1C4rLmkVe8g==
 
 zod-validation-error@^3.0.3:
   version "3.4.0"
