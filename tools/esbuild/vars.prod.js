@@ -42,4 +42,5 @@ export default {
   // https://stackoverflow.com/a/40098594
   THREE_PDB_IS_ENABLED: false,
   PLATFORM: 'web',
+  FORCE_SINGLE_THREAD: 'false',
 }
