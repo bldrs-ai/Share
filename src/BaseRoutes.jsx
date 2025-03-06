@@ -14,6 +14,8 @@ import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
+import PopupAuth from './Components/Auth/PopupAuth'
+import PopupCallback from './Components/Auth/PopupCallback'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -120,6 +122,8 @@ export default function BaseRoutes({testElt = null}) {
               element={<BlogRoutes/>}
             />
           </Route>
+          <Route path='popup-auth' element={<PopupAuth/>}/>
+          <Route path='popup-callback' element={<PopupCallback/>}/>
         </SentryRoutes>
       </ThemeProvider>
     </CssBaseline>

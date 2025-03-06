@@ -26,17 +26,40 @@ export default function ProfileControl() {
   const isMenuVisible = Boolean(anchorEl)
 
   const theme = useTheme()
-  const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
+  const {isAuthenticated, logout, user} = useAuth0()
 
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const {getAccessTokenSilently} = useAuth0()
 
-  const onLoginClick = async () => {
+  useEffect(() => {
+    /**
+     * Listen for changes in localStorage
+     */
+    function handleStorageEvent(event) {
+      if (event.key === 'refreshAuth' && event.newValue === 'true') {
+        // When login is detected, refresh the auth state
+        getAccessTokenSilently()
+          .then((token) => {
+            // clear the flag so the event doesn't fire again unnecessarily
+            localStorage.removeItem('refreshAuth')
+          })
+          .catch((error) => {
+            console.error('Error refreshing token:', error)
+          })
+      }
+    }
+    window.addEventListener('storage', handleStorageEvent)
+    return () => window.removeEventListener('storage', handleStorageEvent)
+  }, [getAccessTokenSilently])
+
+  // Open a popup that will trigger Auth0 login
+  const handleLogin = () => {
+    window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+  }
+
+  const onLoginClick = () => {
     onCloseClick()
-    await loginWithPopup({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
+    handleLogin()
   }
   const onLogoutClick = () => {
     logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
