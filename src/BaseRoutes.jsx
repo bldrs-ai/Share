@@ -14,6 +14,7 @@ import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
+import {jwtDecode} from 'jwt-decode'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -43,6 +44,7 @@ export default function BaseRoutes({testElt = null}) {
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
+  const setAppMetadata = useStore((state) => state.setAppMetadata)
 
 
   useEffect(() => {
@@ -84,6 +86,12 @@ export default function BaseRoutes({testElt = null}) {
       }).then((token) => {
         if (token !== '') {
           initializeOctoKitAuthenticated()
+          // Decode the token to extract the app_metadata custom claim.
+          const decodedToken = jwtDecode(token)
+          const appData = decodedToken['https://bldrs.ai/app_metadata']
+          if (appData) {
+            setAppMetadata(appData)
+          }
         } else {
           initializeOctoKitUnauthenticated()
         }
@@ -95,7 +103,8 @@ export default function BaseRoutes({testElt = null}) {
       })
     }
   }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
-      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
+      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken,
+      setAppMetadata])
 
   const theme = useShareTheme()
   return (
