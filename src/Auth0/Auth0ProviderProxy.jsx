@@ -26,26 +26,23 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
   })
 
   const getAccessTokenSilently = (options) => {
+    if (!state.isAuthenticated) {
+       // Detailed response based on the options
+       setState({
+        isAuthenticated: true,
+        user: mockGitHubUser,
+        token: 'mock_access_token',
+      })
+    }
     return new Promise((resolve, reject) => {
-      if (state.isAuthenticated) {
-        if (options && options.detailedResponse) {
-          // Detailed response based on the options
-          const response = {
-            access_token: 'mock_access_token',
-            id_token: 'mock_id_token',
-            expires_in: 3600, // Expiry in seconds
-            token_type: 'Bearer',
-            scope: 'openid profile email offline_access repo',
-          }
-          resolve(response)
-        } else {
-          // Default to returning a simple string access token
-          resolve('mock_access_token')
-        }
-      } else {
-        // eslint-disable-next-line prefer-promise-reject-errors
-        reject({error: 'login_required'})
+      const response = {
+        access_token: 'mock_access_token',
+        id_token: 'mock_id_token',
+        expires_in: 3600, // Expiry in seconds
+        token_type: 'Bearer',
+        scope: 'openid profile email offline_access repo',
       }
+      resolve(response)
     })
   }
 
@@ -57,6 +54,19 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
       token: 'mock_access_token',
     })
   }
+
+  // Simulate the login functionality
+  const loginWithRedirect = () => {
+    setState({
+      isAuthenticated: true,
+      user: mockGitHubUser,
+      token: 'mock_access_token',
+    })
+
+    // Simulate Auth0 redirect to /popup-callback
+    window.location.href = '/popup-callback'
+  }
+
 
   // Simulate the logout functionality
   const logout = () => {
@@ -71,6 +81,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
   const providerValue = {
     ...state,
     loginWithPopup,
+    loginWithRedirect,
     logout,
     getAccessTokenSilently,
   }

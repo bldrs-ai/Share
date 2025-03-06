@@ -1,5 +1,5 @@
 import React, {useEffect} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 
 
 /**
@@ -18,7 +18,7 @@ function PopupAuth() {
     loginWithRedirect({
       redirectUri: `${window.location.origin }/popup-callback`,
     })
-  }, [loginWithRedirect])
+  })
 
   return <div>Redirecting to Auth0…</div>
 }

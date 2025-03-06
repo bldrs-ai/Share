@@ -50,7 +50,7 @@ export default function ProfileControl() {
     }
     window.addEventListener('storage', handleStorageEvent)
     return () => window.removeEventListener('storage', handleStorageEvent)
-  }, [getAccessTokenSilently])
+  })
 
   // Open a popup that will trigger Auth0 login
   const handleLogin = () => {

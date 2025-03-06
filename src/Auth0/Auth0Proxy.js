@@ -58,6 +58,14 @@ function mockLoginWithPopup() {
 /**
  *
  */
+function mockLoginWithRedirect() {
+  MockAuth0Context._currentValue.isAuthenticated = true
+  MockAuth0Context._currentValue.user = mockGitHubUser
+}
+
+/**
+ *
+ */
 function mockLogout() {
   MockAuth0Context._currentValue.isAuthenticated = false
 }
@@ -71,7 +79,7 @@ export const MockAuth0Context = React.createContext({
   getAccessTokenSilently: mockGetAccessTokenSilently,
   getAccessTokenWithPopup: () => 'mock_access_token',
   getIdTokenClaims: () => ({__raw: 'mock_id_token'}),
-  loginWithRedirect: () => undefined,
+  loginWithRedirect: mockLoginWithRedirect,
   loginWithPopup: mockLoginWithPopup,
   logout: mockLogout,
   handleRedirectCallback: () => ({appState: {}}),
