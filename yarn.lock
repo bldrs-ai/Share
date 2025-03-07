@@ -2284,27 +2284,26 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.15.836":
-  version "0.15.836"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.15.836.tgz#2779612c1ddaefad54de9d3bcedc13bff37c68a2"
-  integrity sha512-1uU3ebKjrXl2PTO58c2dzD2u3YY31FtwoAG2LCF4hiNFW4W6ojq3zL9xof5cjj11QfxrRXh1U/bQ54Sk4StIeQ==
+"@bldrs-ai/conway-web-ifc-adapter@0.17.852":
+  version "0.17.852"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.17.852.tgz#cd3a7b36f29add0f9943514c22579e85d5c5f6ad"
+  integrity sha512-PeLEObvU8KT39qHqQSUR9lLnOLKA1LOrCYQruetoTrWJ3sg0hzXCnGhPma5l4oX46w43PTMW9r/Nkpe9S06YnA==
   dependencies:
-    "@bldrs-ai/conway" "0.15.836"
+    "@bldrs-ai/conway" "0.17.852"
     "@types/node" "22.5.5"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.15.836":
-  version "0.15.836"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.15.836.tgz#b09894b715d4956599114d483ca8f1cee4254a03"
-  integrity sha512-052CTE58Co6OC14RLxub8rlZZrEsbcUQp+/b2ZCSzEMJzEOWTi0xOgxVs0RxT+J1scZAk9daE9GvRhLfm5UUSw==
+"@bldrs-ai/conway@0.17.852":
+  version "0.17.852"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.17.852.tgz#6fe0502113f24f9043dee379a767687595b5a8fe"
+  integrity sha512-UYdIc27Y8thGvXzkboS3sD7qMHx6Pn4LgnVC0qjG3otZkuHmjUJTF7/qAQh9145tFhh+JEraJDBxR92900kQgg==
   dependencies:
-    adm-zip "^0.5.16"
-    buffer "^6.0.3"
-    gl-matrix "^3.4.3"
-    p-limit "^6.2.0"
-    seedrandom "^3.0.5"
-    smart-buffer "^4.2.0"
-    yargs "^17.7.1"
+    adm-zip "0.5.16"
+    buffer "6.0.3"
+    gl-matrix "3.4.3"
+    seedrandom "3.0.5"
+    smart-buffer "4.2.0"
+    yargs "17.7.1"
 
 "@bldrs-ai/ifclib@5.3.3":
   version "5.3.3"
@@ -4512,7 +4511,7 @@ acorn@^8.8.2:
   resolved "https://registry.yarnpkg.com/acorn/-/acorn-8.10.0.tgz#8be5b3907a67221a81ab23c7889c4c5526b62ec5"
   integrity sha512-F0SAmZ8iUtS//m8DmCTA0jlh6TDKkHQyK6xc6V4KDTyZKA9dnvX9/3sRTVQrWm79glUAZbnmmNcdYwUIHWVybw==
 
-adm-zip@^0.5.16:
+adm-zip@0.5.16:
   version "0.5.16"
   resolved "https://registry.yarnpkg.com/adm-zip/-/adm-zip-0.5.16.tgz#0b5e4c779f07dedea5805cdccb1147071d94a909"
   integrity sha512-TGw5yVi4saajsSEgz25grObGHEUaDrniwvA2qwSC060KfqGPdglhvPMA2lPIoxs3PQIItj2iag35fONcQqgUaQ==
@@ -5128,6 +5127,14 @@ buffer-from@^1.0.0:
   resolved "https://registry.npmjs.org/buffer-from/-/buffer-from-1.1.2.tgz"
   integrity sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==
 
+buffer@6.0.3:
+  version "6.0.3"
+  resolved "https://registry.yarnpkg.com/buffer/-/buffer-6.0.3.tgz#2ace578459cc8fbe2a70aaa8f52ee63b6a74c6c6"
+  integrity sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==
+  dependencies:
+    base64-js "^1.3.1"
+    ieee754 "^1.2.1"
+
 buffer@^5.5.0, buffer@^5.7.1:
   version "5.7.1"
   resolved "https://registry.npmjs.org/buffer/-/buffer-5.7.1.tgz"
@@ -5135,14 +5142,6 @@ buffer@^5.5.0, buffer@^5.7.1:
   dependencies:
     base64-js "^1.3.1"
     ieee754 "^1.1.13"
-
-buffer@^6.0.3:
-  version "6.0.3"
-  resolved "https://registry.yarnpkg.com/buffer/-/buffer-6.0.3.tgz#2ace578459cc8fbe2a70aaa8f52ee63b6a74c6c6"
-  integrity sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==
-  dependencies:
-    base64-js "^1.3.1"
-    ieee754 "^1.2.1"
 
 bytes@3.1.2:
   version "3.1.2"
@@ -7069,7 +7068,7 @@ getpass@^0.1.1:
   dependencies:
     assert-plus "^1.0.0"
 
-gl-matrix@^3.4.3:
+gl-matrix@3.4.3:
   version "3.4.3"
   resolved "https://registry.yarnpkg.com/gl-matrix/-/gl-matrix-3.4.3.tgz#fc1191e8320009fd4d20e9339595c6041ddc22c9"
   integrity sha512-wcCp8vu8FT22BnvKVPjXa/ICBWRq/zjFfdofZy1WSpQZpphblv12/bOQLBC1rMM7SGOFS9ltVmKOHil5+Ml7gA==
@@ -9757,13 +9756,6 @@ p-limit@^4.0.0:
   dependencies:
     yocto-queue "^1.0.0"
 
-p-limit@^6.2.0:
-  version "6.2.0"
-  resolved "https://registry.yarnpkg.com/p-limit/-/p-limit-6.2.0.tgz#c254d22ba6aeef441a3564c5e6c2f2da59268a0f"
-  integrity sha512-kuUqqHNUqoIWp/c467RI4X6mmyuojY5jGutNU0wVTmEOOfcuwLqyMVoAi9MKi2Ak+5i9+nhmrK4ufZE8069kHA==
-  dependencies:
-    yocto-queue "^1.1.1"
-
 p-locate@^4.1.0:
   version "4.1.0"
   resolved "https://registry.npmjs.org/p-locate/-/p-locate-4.1.0.tgz"
@@ -10702,7 +10694,7 @@ schema-utils@^4.0.0:
     ajv-formats "^2.1.1"
     ajv-keywords "^5.1.0"
 
-seedrandom@^3.0.5:
+seedrandom@3.0.5:
   version "3.0.5"
   resolved "https://registry.yarnpkg.com/seedrandom/-/seedrandom-3.0.5.tgz#54edc85c95222525b0c7a6f6b3543d8e0b3aa0a7"
   integrity sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==
@@ -10884,7 +10876,7 @@ slice-ansi@^4.0.0:
     astral-regex "^2.0.0"
     is-fullwidth-code-point "^3.0.0"
 
-smart-buffer@^4.2.0:
+smart-buffer@4.2.0:
   version "4.2.0"
   resolved "https://registry.yarnpkg.com/smart-buffer/-/smart-buffer-4.2.0.tgz#6e1d71fa4f18c05f7d0ff216dd16a481d0e8d9ae"
   integrity sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==
@@ -12063,6 +12055,19 @@ yargs-parser@^21.1.1:
   resolved "https://registry.npmjs.org/yargs-parser/-/yargs-parser-21.1.1.tgz"
   integrity sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==
 
+yargs@17.7.1:
+  version "17.7.1"
+  resolved "https://registry.yarnpkg.com/yargs/-/yargs-17.7.1.tgz#34a77645201d1a8fc5213ace787c220eabbd0967"
+  integrity sha512-cwiTb08Xuv5fqF4AovYacTFNxk62th7LKJ6BL9IGUpTJrWoU7/7WdQGTP2SjKf1dUNBGzDd28p/Yfs/GI6JrLw==
+  dependencies:
+    cliui "^8.0.1"
+    escalade "^3.1.1"
+    get-caller-file "^2.0.5"
+    require-directory "^2.1.1"
+    string-width "^4.2.3"
+    y18n "^5.0.5"
+    yargs-parser "^21.1.1"
+
 yargs@^17.3.1:
   version "17.6.2"
   resolved "https://registry.npmjs.org/yargs/-/yargs-17.6.2.tgz"
@@ -12076,7 +12081,7 @@ yargs@^17.3.1:
     y18n "^5.0.5"
     yargs-parser "^21.1.1"
 
-yargs@^17.7.1, yargs@^17.7.2:
+yargs@^17.7.2:
   version "17.7.2"
   resolved "https://registry.yarnpkg.com/yargs/-/yargs-17.7.2.tgz#991df39aca675a192b816e1e0363f9d75d2aa269"
   integrity sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w==
@@ -12106,11 +12111,6 @@ yocto-queue@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.0.0.tgz#7f816433fb2cbc511ec8bf7d263c3b58a1a3c251"
   integrity sha512-9bnSc/HEW2uRy67wc+T8UwauLuPJVn28jb+GtJY16iiKWyvmYJRXVT4UamsAEGQfPohgr2q4Tq0sQbQlxTfi1g==
-
-yocto-queue@^1.1.1:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/yocto-queue/-/yocto-queue-1.2.0.tgz#4a29a93e7591328fa31768701e6ea66962401f79"
-  integrity sha512-KHBC7z61OJeaMGnF3wqNZj+GGNXOyypZviiKpQeiHirG5Ib1ImwcLBH70rbMSkKfSmUNBsdf2PwaEJtKvgmkNw==
 
 zod-validation-error@^3.0.3:
   version "3.4.0"
