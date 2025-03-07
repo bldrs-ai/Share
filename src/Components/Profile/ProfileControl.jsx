@@ -22,6 +22,11 @@ import {
 import PricingDialog from '../Stripe/PricingDialog'
 
 
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
+
+const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+
+
 /**
  * ProfileControl contains the option to log in/log out and to theme control
  *
@@ -34,8 +39,9 @@ export default function ProfileControl() {
   const [openPricing, setOpenPricing] = useState(false)
 
   const theme = useTheme()
-  const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
+  const {isAuthenticated, logout, user} = useAuth0()
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
 
   const onCloseClick = () => setAnchorEl(null)
 
