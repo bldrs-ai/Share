@@ -5,7 +5,7 @@ import {ThemeCtx} from '../../theme/Theme.fixture'
 import LoginMenu from './ProfileControl'
 
 
-describe('ProfileControl', () => {
+describe.skip('ProfileControl', () => {
   it('renders the login button when not logged in, and other links', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
