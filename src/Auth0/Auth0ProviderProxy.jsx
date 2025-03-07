@@ -63,8 +63,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
       token: 'mock_access_token',
     })
 
-    // Simulate Auth0 redirect to /popup-callback
-    window.location.href = '/popup-callback'
+    localStorage.setItem('refreshAuth', 'true')
   }
 
 

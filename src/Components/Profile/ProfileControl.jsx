@@ -16,6 +16,11 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {TooltipIconButton} from '../Buttons'
 
 
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
+
+const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+
+
 /**
  * ProfileControl contains the option to log in/log out and to theme control
  *
@@ -29,7 +34,7 @@ export default function ProfileControl() {
   const {isAuthenticated, logout, user} = useAuth0()
 
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
-  const {getAccessTokenSilently} = useAuth0()
+  const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
 
   useEffect(() => {
     /**
@@ -54,7 +59,11 @@ export default function ProfileControl() {
 
   // Open a popup that will trigger Auth0 login
   const handleLogin = () => {
-    window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+    if (useMock) {
+      loginWithRedirect()
+    } else {
+      window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+    }
   }
 
   const onLoginClick = () => {
