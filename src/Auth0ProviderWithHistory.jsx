@@ -7,8 +7,8 @@ import {Auth0Provider} from './Auth0/Auth0ProviderProxy'
 export default function Auth0ProviderWithHistory({children}) {
   const navigate = useNavigate()
   const onRedirect = (state) => {
-    navigate(state && state.returnTo ? state.returnTo : window.location.pathname, {replace: true})
-    navigate(0)
+    navigate(state && state.returnTo ? state.returnTo : 'popup-callback', {replace: true})
+    // navigate(0)
   }
   return (
     <Auth0Provider
@@ -21,7 +21,7 @@ export default function Auth0ProviderWithHistory({children}) {
       }}
       cacheLocation={'localstorage'}
       onRedirectCallback={onRedirect}
-      useRefreshTokens={false}
+      useRefreshTokens={true}
     >
       {children}
     </Auth0Provider>

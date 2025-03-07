@@ -16,6 +16,11 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {TooltipIconButton} from '../Buttons'
 
 
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
+
+const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+
+
 /**
  * ProfileControl contains the option to log in/log out and to theme control
  *
@@ -26,17 +31,44 @@ export default function ProfileControl() {
   const isMenuVisible = Boolean(anchorEl)
 
   const theme = useTheme()
-  const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
+  const {isAuthenticated, logout, user} = useAuth0()
 
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
 
-  const onLoginClick = async () => {
+  useEffect(() => {
+    /**
+     * Listen for changes in localStorage
+     */
+    function handleStorageEvent(event) {
+      if (event.key === 'refreshAuth' && event.newValue === 'true') {
+        // When login is detected, refresh the auth state
+        getAccessTokenSilently()
+          .then((token) => {
+            // clear the flag so the event doesn't fire again unnecessarily
+            localStorage.removeItem('refreshAuth')
+          })
+          .catch((error) => {
+            console.error('Error refreshing token:', error)
+          })
+      }
+    }
+    window.addEventListener('storage', handleStorageEvent)
+    return () => window.removeEventListener('storage', handleStorageEvent)
+  })
+
+  // Open a popup that will trigger Auth0 login
+  const handleLogin = () => {
+    if (useMock) {
+      loginWithRedirect()
+    } else {
+      window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+    }
+  }
+
+  const onLoginClick = () => {
     onCloseClick()
-    await loginWithPopup({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
+    handleLogin()
   }
   const onLogoutClick = () => {
     logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
