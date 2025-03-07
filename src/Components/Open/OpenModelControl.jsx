@@ -43,11 +43,12 @@ export default function OpenModelControl() {
 
   return (
     <ControlButtonWithHashState
-      title='Open'
+      title='Open Models and Samples'
       icon={<FolderOpenIcon className='icon-share'/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={HASH_PREFIX_OPEN_MODEL}
+      dataTestId='control-button-open'
       placement='bottom'
     >
       <OpenModelDialog
