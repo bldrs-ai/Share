@@ -129,7 +129,7 @@ export default function ProfileControl() {
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
         sx={{transform: 'translateX(-1em)'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick}>
+        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
           {isAuthenticated ? (
             <>
               <LogoutOutlinedIcon/>

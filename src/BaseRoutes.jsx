@@ -83,12 +83,17 @@ export default function BaseRoutes({testElt = null}) {
       getAccessTokenSilently({
         authorizationParams: {
           audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access public_repo',
+          scope: 'openid profile email offline_access repo',
         },
       }).then((token) => {
         if (token !== '') {
           initializeOctoKitAuthenticated()
           // Decode the token to extract the app_metadata custom claim.
+          // cypress check
+          if (token.access_token && token.access_token === 'mock_access_token') {
+            setAccessToken(token)
+            return
+          }
           const decodedToken = jwtDecode(token)
           const appData = decodedToken['https://bldrs.ai/app_metadata']
           if (appData) {
