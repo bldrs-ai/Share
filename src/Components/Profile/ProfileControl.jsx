@@ -43,12 +43,41 @@ export default function ProfileControl() {
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
 
+  useEffect(() => {
+    /**
+     * Listen for changes in localStorage
+     */
+    function handleStorageEvent(event) {
+      if (event.key === 'refreshAuth' && event.newValue === 'true') {
+        // When login is detected, refresh the auth state
+        getAccessTokenSilently()
+          .then((token) => {
+            // clear the flag so the event doesn't fire again unnecessarily
+            localStorage.removeItem('refreshAuth')
+          })
+          .catch((error) => {
+            console.error('Error refreshing token:', error)
+          })
+      }
+    }
+    window.addEventListener('storage', handleStorageEvent)
+    return () => window.removeEventListener('storage', handleStorageEvent)
+  })
+
   const onCloseClick = () => setAnchorEl(null)
 
+  const handleLogin = () => {
+    if (useMock) {
+      loginWithRedirect()
+    } else {
+      window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+    }
+  }
+
   // Login
-  const onLoginClick = async () => {
+  const onLoginClick = () => {
     onCloseClick()
-    await loginWithPopup({appState: {returnTo: window.location.pathname}})
+    handleLogin()
   }
 
   // Logout
