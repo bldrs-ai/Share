@@ -16,7 +16,7 @@ export default function Auth0ProviderWithHistory({children}) {
       clientId={process.env.OAUTH2_CLIENT_ID}
       authorizationParams={{
         audience: 'https://api.github.com/',
-        scope: 'openid profile email offline_access repo',
+        scope: 'openid profile email offline_access repo public_repo',
         redirect_uri: process.env.OAUTH2_REDIRECT_URI || window.location.origin,
       }}
       cacheLocation={'localstorage'}

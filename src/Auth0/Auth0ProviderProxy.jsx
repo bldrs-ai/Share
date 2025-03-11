@@ -40,7 +40,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
         id_token: 'mock_id_token',
         expires_in: 3600, // Expiry in seconds
         token_type: 'Bearer',
-        scope: 'openid profile email offline_access repo',
+        scope: 'openid profile email offline_access repo public_repo',
       }
       resolve(response)
     })
