@@ -11,7 +11,6 @@ import {
   matchRoutes,
 } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import {BrowserTracing} from '@sentry/tracing'
 import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
@@ -26,7 +25,7 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT,
   integrations: [
-    new BrowserTracing({
+    new Sentry.BrowserTracing({
       routingInstrumentation: Sentry.reactRouterV6Instrumentation(
           React.useEffect,
           useLocation,
