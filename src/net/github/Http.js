@@ -59,6 +59,39 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
   }
 }
 
+/**
+ * Fetch the resource at the given path from GitHub, substituting in the given args.
+ * Disable caching, some endpoints on GitHub use the file hash as the ETAG, yet
+ * return signed download URLs that will expire. Because of this, if you send
+ * an ETAG up to the server after caching a the HTTP response once, you will not be
+ * able to query it again.
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args to substitute
+ * @param {string} [accessToken]
+ * @return {object} The object at the resource
+ */
+export async function getGitHubNoCache(repository, path, args = {}, accessToken = '') {
+  assertDefined(repository.orgName, repository.name)
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  } else {
+    args.headers = {}
+  }
+
+  const response = await requestWithTimeout(octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  }))
+
+  return response
+}
+
 
 /**
  * Post the resource to the GitHub
