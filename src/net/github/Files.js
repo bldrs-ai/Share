@@ -1,6 +1,6 @@
 import {assertDefined} from '../../utils/assert'
 import {octokit} from './OctokitExport'
-import {getGitHub} from './Http' // TODO(pablo): don't use octokit directly
+import {getGitHub, getGitHubNoCache} from './Http' // TODO(pablo): don't use octokit directly
 import {checkCache, updateCache} from './Cache'
 
 
@@ -281,7 +281,7 @@ export async function getPathContents(repository, path, ref = '', accessToken = 
     ref: ref,
   }
 
-  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args, accessToken)
+  const contents = await getGitHubNoCache(repository, 'contents/{path}?ref={ref}', args, accessToken)
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
   }
