@@ -281,6 +281,17 @@ export async function getPathContents(repository, path, ref = '', accessToken = 
     ref: ref,
   }
 
+  /**
+   * Getting path contents is the primary step to get the download URL for a model. For private models,
+   * the returned URL will have a temporary token attached to the URL as in:
+   * https://media.githubusercontent.com/media/private_repo/index.ifc?token=ABCDE..
+   * For small models, the content field of the response will include the file base64 encoded, but we
+   * don't use that. We currently always use the download link. When we download the model from that
+   * link, we get an ETAG and keep it, using it later to check If-Modified-Since.
+   *
+   * GitHub API uses the file hash for caching (ETAG), which conflicts with the one time use
+   * download_url, so we need to request with no cache enabled here.
+   */
   const contents = await getGitHubNoCache(repository, 'contents/{path}?ref={ref}', args, accessToken)
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
