@@ -2638,7 +2638,7 @@
     minimatch "^3.1.2"
     strip-json-comments "^3.1.1"
 
-"@fontsource/roboto@^5.1.0":
+"@fontsource/roboto@5.1.0":
   version "5.1.0"
   resolved "https://registry.yarnpkg.com/@fontsource/roboto/-/roboto-5.1.0.tgz#00230737ec09c60ae877a5e33d067c0607fdd5ba"
   integrity sha512-cFRRC1s6RqPygeZ8Uw/acwVHqih8Czjt6Q0MwoUoDe9U3m4dH1HmNDRBZyqlMSFwgNAUKgFImncKdmDHyKpwdg==
@@ -3487,7 +3487,7 @@
     fast-glob "^3.2.11"
     image-size "^1.0.0"
 
-"@percy/cli@^1.28.2":
+"@percy/cli@1.28.2":
   version "1.28.2"
   resolved "https://registry.yarnpkg.com/@percy/cli/-/cli-1.28.2.tgz#94ee5237247a2ca2490188c930d998c2f251d254"
   integrity sha512-hwibBu6zsjfWXIe8WFgrKizGjxkTzYcGQ4eOPcMQXfgK3yUZ24N5v8sqCOobRA/SbdD117zp2WUEkBRWCJ85gg==
@@ -3540,7 +3540,7 @@
     rimraf "^3.0.2"
     ws "^8.0.0"
 
-"@percy/cypress@^3.1.2":
+"@percy/cypress@3.1.2":
   version "3.1.2"
   resolved "https://registry.yarnpkg.com/@percy/cypress/-/cypress-3.1.2.tgz#a087d3c59a6b155eab5fdb4c237526b9cfacbc22"
   integrity sha512-JXrGDZbqwkzQd2h5T5D7PvqoucNaiMh4ChPp8cLQiEtRuLHta9nf1lEuXH+jnatGL2j+3jJFIHJ0L7XrgVnvQA==
@@ -6408,7 +6408,7 @@ eslint-plugin-jsx-a11y@6.6.1:
     minimatch "^3.1.2"
     semver "^6.3.0"
 
-eslint-plugin-react-compiler@^19.0.0-beta-df7b47d-20241124:
+eslint-plugin-react-compiler@19.0.0-beta-df7b47d-20241124:
   version "19.0.0-beta-df7b47d-20241124"
   resolved "https://registry.yarnpkg.com/eslint-plugin-react-compiler/-/eslint-plugin-react-compiler-19.0.0-beta-df7b47d-20241124.tgz#468751d3a8a6781189405ee56b39b80545306df8"
   integrity sha512-82PfnllC8jP/68KdLAbpWuYTcfmtGLzkqy2IW85WopKMTr+4rdQpp+lfliQ/QE79wWrv/dRoADrk3Pdhq25nTw==
@@ -10290,7 +10290,7 @@ react-transition-group@^4.4.5:
     loose-envify "^1.4.0"
     prop-types "^15.6.2"
 
-react-window@^1.8.10:
+react-window@1.8.10:
   version "1.8.10"
   resolved "https://registry.yarnpkg.com/react-window/-/react-window-1.8.10.tgz#9e6b08548316814b443f7002b1cf8fd3a1bdde03"
   integrity sha512-Y0Cx+dnU6NLa5/EvoHukUD0BklJ8qITCtVEPY1C/nL8wwoZ0b5aEw8Ff1dOVHw7fCzMt55XfJDd8S8W8LCaUCg==

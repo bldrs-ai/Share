@@ -27,7 +27,24 @@ jobs:
           echo "@bldrs-ai:registry=https://npm.pkg.github.com" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
-      - run: yarn install
+
+      # ChatG: Next two steps are for correct caching and not using out-of-date
+      #  versions, for reproducible results
+      - name: Cache Cypress and Node Modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/Cypress
+            node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+            
+      - name: Clear Cypress Cache
+        run: npx cypress cache prune
+
+      # Use exact lock file to ensure reproducible install
+      - run: yarn install --frozen-lockfile
 
       - run: yarn cy-build
         # Ensure your build script correctly outputs to the ./docs directory
