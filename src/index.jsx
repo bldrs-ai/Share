@@ -1,5 +1,5 @@
 import {CypressHistorySupport} from 'cypress-react-router'
-import React, {ReactElement, StrictMode} from 'react'
+import React, {ReactElement, StrictMode, useEffect} from 'react'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
 import {Helmet, HelmetProvider} from 'react-helmet-async'
@@ -25,14 +25,12 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT,
   integrations: [
-    new Sentry.BrowserTracing({
-      routingInstrumentation: Sentry.reactRouterV6Instrumentation(
-          React.useEffect,
-          useLocation,
-          useNavigationType,
-          createRoutesFromChildren,
-          matchRoutes,
-      ),
+    Sentry.reactRouterV6BrowserTracingIntegration({
+      useEffect,
+      useLocation,
+      useNavigationType,
+      createRoutesFromChildren,
+      matchRoutes,
     }),
   ],
   tracesSampleRate: 1.0,

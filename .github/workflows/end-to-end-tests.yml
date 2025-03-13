@@ -46,6 +46,12 @@ jobs:
       # Use exact lock file to ensure reproducible install
       - run: yarn install --frozen-lockfile
 
+      - name: Install Cypress Binary
+        run: npx cypress install
+
+      - name: Verify Cypress Installation
+        run: npx cypress info
+
       - run: yarn cy-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
