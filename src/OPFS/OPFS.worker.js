@@ -165,6 +165,7 @@ async function fetchRGHUC(modelUrl) {
     return modelResponse
   } catch (error) {
     console.error('Error:', error)
+    return null
   }
 }
 
@@ -1089,75 +1090,20 @@ async function renameFileInOPFS(parentDirectory, fileHandle, newFileName) {
  */
 async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
-  let ownerFolderHandle = null
-  let repoFolderHandle = null
-  let branchFolderHandle = null
-  // See if owner folder handle exists
-  try {
-    ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
-  } catch (error) {
-    // Expected: folder does not exist
-  }
-
-  if (ownerFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return
-  }
-
-  // See if repo folder handle exists
-  try {
-    repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
-  } catch (error) {
-    // Expected: folder does not exist
-  }
-
-  if (repoFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return
-  }
-
-  // See if branch folder handle exists
-  try {
-    branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
-  } catch (error) {
-    // Expected: folder does not exist
-  }
-
-  if (branchFolderHandle === null) {
-    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return
-  }
-
-  // Get a file handle in the folder for the model
-  let modelBlobFileHandle = null
+  const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
   let modelDirectoryHandle = null
-  const pathSegments = safePathSplit(originalFilePath)
-  const strippedFileName = pathSegments[pathSegments.length - 1]
-  // lets see if our commit hash matches
-  // Get file handle for file blob
-  try {
-    // eslint-disable-next-line no-unused-vars
-    [modelDirectoryHandle, modelBlobFileHandle] = await
-    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
-  } catch (error) {
-    // expected if file not found
-  }
+  let modelBlobFileHandle = null;
 
-  let fileIsCached = false
-  if (modelBlobFileHandle !== null) {
-    // file name is name.ifc.commitHash, we just want to compare commitHash
-    const testCommitHash = modelBlobFileHandle.name.split(strippedFileName)[1].slice(1)
-    if (commitHash === testCommitHash) {
-      fileIsCached = true
-    }
-  }
+  // eslint-disable-next-line no-unused-vars
+  [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(
+    opfsRoot, cacheKey, null, commitHash, false,
+  )
 
-  if (fileIsCached) {
+  if (modelBlobFileHandle !== null ) {
     self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
-    return
+  } else {
+    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
   }
-
-  self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
 }
 
 /**

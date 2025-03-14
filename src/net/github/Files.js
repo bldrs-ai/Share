@@ -1,6 +1,6 @@
 import {assertDefined} from '../../utils/assert'
 import {octokit} from './OctokitExport'
-import {getGitHub, getGitHubNoCache} from './Http' // TODO(pablo): don't use octokit directly
+import {getGitHub, getGitHubResource} from './Http' // TODO(pablo): don't use octokit directly
 import {checkCache, updateCache} from './Cache'
 
 
@@ -272,9 +272,10 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  *
  * @param {string} repository
  * @param {string} path
- * @return {Array<string>} Pair of [downloadUrl, sha]
+ * @param {boolean} useCache
+ * @return {Array<string>} [downloadUrl, sha, isCacheHit]
  */
-export async function getPathContents(repository, path, ref = '', accessToken = '') {
+export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
   assertDefined(...arguments)
   const args = {
     path: path,
@@ -290,14 +291,21 @@ export async function getPathContents(repository, path, ref = '', accessToken = 
    * link, we get an ETAG and keep it, using it later to check If-Modified-Since.
    *
    * GitHub API uses the file hash for caching (ETAG), which conflicts with the one time use
-   * download_url, so we need to request with no cache enabled here.
+   * download_url, so we need to request with no cache enabled here, only if a cache hit results in
+   * a stale download URL.
    */
-  const contents = await getGitHubNoCache(repository, 'contents/{path}?ref={ref}', args, accessToken)
-  if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
+  const {response, isCacheHit} = await getGitHubResource(
+    repository,
+    'contents/{path}?ref={ref}',
+    args,
+    useCache,
+    accessToken,
+  )
+  if (!response || !response.data || !response.data.download_url || !response.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
   }
 
-  return [contents.data.download_url, contents.data.sha]
+  return [response.data.download_url, response.data.sha, isCacheHit]
 }
 
 
