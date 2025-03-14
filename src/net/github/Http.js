@@ -3,6 +3,83 @@ import {checkCache, updateCache} from './Cache'
 import {octokit} from './OctokitExport'
 
 /**
+ * Fetch the resource at the given path from GitHub, optionally using cache checks (ETag).
+ *
+ * @param {object}  repository
+ * @param {string}  path The resource path with arg substitution markers, e.g. `contents/{path}?ref={ref}`
+ * @param {object}  args The args to substitute (e.g. { path: 'myfile', ref: 'main' })
+ * @param {boolean} useCache Whether to enable ETag caching logic
+ * @param {string}  [accessToken] (Optional) Token for private repos
+ * @return {object} { response, cacheHit }
+ */
+export async function getGitHubResource(repository, path, args = {}, useCache = false, accessToken = '') {
+  assertDefined(repository.orgName, repository.name)
+
+  // Ensure headers exist
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  } else {
+    args.headers = {...args.headers}
+  }
+
+
+  // Will set to true if we end up using a 304/cached response
+  let cacheHit = false
+  let cacheKey
+  let cached
+
+  if (useCache) {
+    cacheKey = `${repository.orgName}/${repository.name}/${path}`
+    cached = await checkCache(cacheKey)
+
+    // If we have a cached ETag, send 'If-None-Match' to possibly get a 304
+    if (cached?.headers?.etag) {
+      args.headers['If-None-Match'] = cached.headers.etag
+    } else {
+      args.headers['If-None-Match'] = ''
+    }
+  }
+
+  try {
+    // Use octokit to fetch the resource
+    const response = await requestWithTimeout(
+      octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+        org: repository.orgName,
+        repo: repository.name,
+        ...args,
+      }),
+    )
+
+    // If we used cache logic and got a fresh 200 OK, update cache
+    if (useCache) {
+      await updateCache(cacheKey, response)
+    }
+
+    return {
+      response,
+      cacheHit,
+    }
+  } catch (error) {
+    const NOTMODIFIED = 304
+    if (useCache && error.status === NOTMODIFIED) {
+      // We got a 304 Not Modified, meaning we can safely use our cached copy
+      if (cached) {
+        cacheHit = true
+        return {
+          response: cached,
+          cacheHit,
+        }
+      }
+    }
+    // If it wasn't a 304 or we have no cached copy, rethrow the error
+    throw error
+  }
+}
+
+/**
  * Fetch the resource at the given path from GitHub, substituting in the given args
  *
  * @param {object} repository
