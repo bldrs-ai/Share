@@ -111,8 +111,9 @@ export function parseCoords(url) {
  * @param {string} accessToken
  * @param {boolean} isOpfsAvailable
  * @param {boolean} useCache
- * @return {Array<string>} A tuple of urlStr (changed to our proxy if
- * github.com) and a sha if available.
+ * @return {Array<object>} A triple of urlStr (changed to our proxy if
+ * github.com), a sha if available, and a boolean indicating if http
+ * cache was hit.
  */
 export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfsAvailable, useCache = true) {
   const u = new URL(urlStr)
@@ -155,7 +156,7 @@ export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfs
  */
 async function getGitHubPathContents(urlStr, accessToken, useCache) {
   const repo = parseGitHubRepositoryUrl(urlStr)
-  const [downloadUrl, sha, cacheHit] = await getPathContents(
+  const [downloadUrl, sha, isCacheHit] = await getPathContents(
     {
       orgName: repo.owner,
       name: repo.repository,
@@ -165,5 +166,5 @@ async function getGitHubPathContents(urlStr, accessToken, useCache) {
     repo.ref,
     accessToken,
   )
-  return [downloadUrl, sha, cacheHit]
+  return [downloadUrl, sha, isCacheHit]
 }

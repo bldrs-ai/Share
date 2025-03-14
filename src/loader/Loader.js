@@ -55,7 +55,7 @@ export async function load(
   // All of this is to get a path
   let derefPath
   let shaHash
-  let cacheHit
+  let isCacheHit
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
   const isLocallyHostedFile = path.indexOf('/') === 0
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
@@ -64,9 +64,9 @@ export async function load(
     if (isLocallyHostedFile) {
       derefPath = path
       shaHash = ''
-      cacheHit = false
+      isCacheHit = false
     } else {
-      [derefPath, shaHash, cacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+      [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
     }
   } else if (isLocallyHostedFile) {
     debug().log('Loader#load: locally hosted file')
@@ -74,7 +74,7 @@ export async function load(
   } else {
     debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [derefPath, shaHash, cacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
@@ -117,8 +117,8 @@ export async function load(
 
 
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
-        if (cacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
-          [derefPath, shaHash, cacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable, false)
+        if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
+          [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable, false)
         }
         debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
         file = await downloadModel(

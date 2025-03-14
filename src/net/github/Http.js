@@ -10,7 +10,7 @@ import {octokit} from './OctokitExport'
  * @param {object}  args The args to substitute (e.g. { path: 'myfile', ref: 'main' })
  * @param {boolean} useCache Whether to enable ETag caching logic
  * @param {string}  [accessToken] (Optional) Token for private repos
- * @return {object} { response, cacheHit }
+ * @return {object} { response, isCacheHit }
  */
 export async function getGitHubResource(repository, path, args = {}, useCache = false, accessToken = '') {
   assertDefined(repository.orgName, repository.name)
@@ -27,7 +27,7 @@ export async function getGitHubResource(repository, path, args = {}, useCache = 
 
 
   // Will set to true if we end up using a 304/cached response
-  let cacheHit = false
+  let isCacheHit = false
   let cacheKey
   let cached
 
@@ -60,17 +60,17 @@ export async function getGitHubResource(repository, path, args = {}, useCache = 
 
     return {
       response,
-      cacheHit,
+      isCacheHit,
     }
   } catch (error) {
     const NOTMODIFIED = 304
     if (useCache && error.status === NOTMODIFIED) {
       // We got a 304 Not Modified, meaning we can safely use our cached copy
       if (cached) {
-        cacheHit = true
+        isCacheHit = true
         return {
           response: cached,
-          cacheHit,
+          isCacheHit,
         }
       }
     }

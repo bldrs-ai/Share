@@ -273,7 +273,7 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  * @param {string} repository
  * @param {string} path
  * @param {boolean} useCache
- * @return {Array<string>} Pair of [downloadUrl, sha]
+ * @return {Array<string>} [downloadUrl, sha, isCacheHit]
  */
 export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
   assertDefined(...arguments)
@@ -294,7 +294,7 @@ export async function getPathContents(repository, path, useCache, ref = '', acce
    * download_url, so we need to request with no cache enabled here, only if a cache hit results in
    * a stale download URL.
    */
-  const {response, cacheHit} = await getGitHubResource(
+  const {response, isCacheHit} = await getGitHubResource(
     repository,
     'contents/{path}?ref={ref}',
     args,
@@ -305,7 +305,7 @@ export async function getPathContents(repository, path, useCache, ref = '', acce
     throw new Error('No contents returned from github')
   }
 
-  return [response.data.download_url, response.data.sha, cacheHit]
+  return [response.data.download_url, response.data.sha, isCacheHit]
 }
 
 
