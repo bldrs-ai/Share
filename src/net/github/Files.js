@@ -272,6 +272,7 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  *
  * @param {string} repository
  * @param {string} path
+ * @param {boolean} useCache
  * @return {Array<string>} Pair of [downloadUrl, sha]
  */
 export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
@@ -290,7 +291,8 @@ export async function getPathContents(repository, path, useCache, ref = '', acce
    * link, we get an ETAG and keep it, using it later to check If-Modified-Since.
    *
    * GitHub API uses the file hash for caching (ETAG), which conflicts with the one time use
-   * download_url, so we need to request with no cache enabled here.
+   * download_url, so we need to request with no cache enabled here, only if a cache hit results in
+   * a stale download URL.
    */
   const {response, cacheHit} = await getGitHubResource(
     repository,

@@ -110,6 +110,7 @@ export function parseCoords(url) {
  * @param {string} urlStr
  * @param {string} accessToken
  * @param {boolean} isOpfsAvailable
+ * @param {boolean} useCache
  * @return {Array<string>} A tuple of urlStr (changed to our proxy if
  * github.com) and a sha if available.
  */
@@ -149,6 +150,7 @@ export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfs
 /**
  * @param {string} urlStr
  * @param {string} accessToken
+ * @param {boolean} useCache
  * @return {Array<string>} Pair of [downloadUrl, sha]
  */
 async function getGitHubPathContents(urlStr, accessToken, useCache) {
