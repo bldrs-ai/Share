@@ -8,13 +8,13 @@ import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
-import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS} from '../OPFS/utils'
+import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
 import {assert, assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
 import {testUuid} from '../utils/strings'
-import {dereferenceAndProxyDownloadUrl} from './urls'
+import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import glbToThree from './glb'
 import objToThree from './obj'
@@ -56,6 +56,7 @@ export async function load(
   let derefPath
   let shaHash
   let isCacheHit
+  let isBase64
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
   const isLocallyHostedFile = path.indexOf('/') === 0
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
@@ -66,7 +67,7 @@ export async function load(
       shaHash = ''
       isCacheHit = false
     } else {
-      [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+      [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     }
   } else if (isLocallyHostedFile) {
     debug().log('Loader#load: locally hosted file')
@@ -74,7 +75,7 @@ export async function load(
   } else {
     debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
-    [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable)
+    [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
@@ -118,19 +119,24 @@ export async function load(
 
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
         if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
-          [derefPath, shaHash, isCacheHit] = await dereferenceAndProxyDownloadUrl(path, accessToken, isOpfsAvailable, false)
+          [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
         }
-        debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-        file = await downloadModel(
-          derefPath,
-          shaHash,
-          filePath,
-          accessToken,
-          owner,
-          repo,
-          branch,
-          setOpfsFile,
-          onProgress)
+
+        if (isBase64) {
+         file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+        } else {
+          debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
+          file = await downloadModel(
+            derefPath,
+            shaHash,
+            filePath,
+            accessToken,
+            owner,
+            repo,
+            branch,
+            setOpfsFile,
+            onProgress)
+        }
       } else {
         const opfsFilename = pathUrl.pathname
         debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)

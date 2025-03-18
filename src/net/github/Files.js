@@ -277,23 +277,8 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  */
 export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
   assertDefined(...arguments)
-  const args = {
-    path: path,
-    ref: ref,
-  }
+  const args = {path, ref}
 
-  /**
-   * Getting path contents is the primary step to get the download URL for a model. For private models,
-   * the returned URL will have a temporary token attached to the URL as in:
-   * https://media.githubusercontent.com/media/private_repo/index.ifc?token=ABCDE..
-   * For small models, the content field of the response will include the file base64 encoded, but we
-   * don't use that. We currently always use the download link. When we download the model from that
-   * link, we get an ETAG and keep it, using it later to check If-Modified-Since.
-   *
-   * GitHub API uses the file hash for caching (ETAG), which conflicts with the one time use
-   * download_url, so we need to request with no cache enabled here, only if a cache hit results in
-   * a stale download URL.
-   */
   const {response, isCacheHit} = await getGitHubResource(
     repository,
     'contents/{path}?ref={ref}',
@@ -301,11 +286,31 @@ export async function getPathContents(repository, path, useCache, ref = '', acce
     useCache,
     accessToken,
   )
-  if (!response || !response.data || !response.data.download_url || !response.data.download_url.length > 0) {
-    throw new Error('No contents returned from github')
+
+  // Validate the response
+  if (!response || !response.data || !response.data.download_url || response.data.download_url.length === 0) {
+    throw new Error('No contents returned from GitHub')
   }
 
-  return [response.data.download_url, response.data.sha, isCacheHit]
+  // Check if the download_url is a raw GitHub URL and if the base64 content is available
+  const result = {
+    sha: response.data.sha,
+    isCacheHit,
+    isBase64: false,
+    content: response.data.download_url, // default to the download URL
+  }
+
+  if (
+    response.data.download_url.includes('raw.githubusercontent.com') &&
+    response.data.content // ensures content is not null/undefined/empty
+  ) {
+    // If the file content is available in base64,
+    // return it along with a flag indicating that it's base64 encoded.
+    result.content = response.data.content
+    result.isBase64 = true
+  }
+
+  return result
 }
 
 
