@@ -110,10 +110,10 @@ describe('With environment variables', () => {
 
     let isOpfsAvailable = false
     expect(await dereferenceAndProxyDownloadUrl(
-      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, ''])
+      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, '', false])
 
     isOpfsAvailable = true
     expect(await dereferenceAndProxyDownloadUrl(
-      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, ''])
+      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, '', false])
   })
 })
