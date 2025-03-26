@@ -49,6 +49,11 @@ self.addEventListener('message', async (event) => {
       assertValues(event.data,
         ['objectUrl', 'shaHash', 'originalFilePath', 'owner', 'repo', 'branch', 'accessToken', 'onProgress'])
       await downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
+    } else if (event.data.command === 'writeBase64Model') {
+      const {content, shaHash, originalFilePath, owner, repo, branch, accessToken} =
+      assertValues(event.data, ['content', 'shaHash', 'originalFilePath', 'owner', 'repo', 'branch', 'accessToken'])
+
+    await writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
     } else if (event.data.command === 'doesFileExist') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
@@ -396,6 +401,54 @@ async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onPro
   }
 }
 
+// Function to write temporary file to OPFS (Origin Private File System)
+/**
+ *
+ */
+async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag) {
+  const opfsRoot = await navigator.storage.getDirectory()
+  let modelDirectoryHandle = null
+  let modelBlobFileHandle = null
+
+  // lets see if our etag matches
+  // Get file handle for file blob
+  try {
+    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false)
+
+    if (modelBlobFileHandle !== null) {
+      const blobFile = await modelBlobFileHandle.getFile()
+
+      self.postMessage({completed: true, event: 'download', file: blobFile})
+      return [modelDirectoryHandle, modelBlobFileHandle]
+    }
+  } catch (error) {
+    // expected if file not found
+  }
+  let blobAccessHandle = null
+
+  try {
+    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null)
+    // Create FileSystemSyncAccessHandle on the file.
+    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+    // Write buffer
+    const arrayBuffer = await blob.arrayBuffer()
+    await blobAccessHandle.write(arrayBuffer, {at: 0})
+
+    const blobFile = await modelBlobFileHandle.getFile()
+
+    self.postMessage({completed: true, event: 'download', file: blobFile})
+
+    return [modelDirectoryHandle, modelBlobFileHandle]
+  } catch (error) {
+    const workerMessage = `Error writing file handle for ${originalFilePath}: ${error}`
+    // Close the access handle when done
+    if (blobAccessHandle) {
+      await blobAccessHandle.close()
+    }
+    self.postMessage({error: workerMessage})
+  }
+}
+
 
 /**
  * Generates a mock HTTP Response object with a specified SHA hash header.
@@ -426,6 +479,130 @@ function generateMockResponse(shaHash) {
   })
 
   return mockResponse
+}
+
+/**
+ * @return {Blob} The Blob object created from the base64 string.
+ */
+function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+  const binaryString = atob(base64)
+  const len = binaryString.length
+  const bytes = new Uint8Array(len)
+
+  for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+  }
+
+  return new Blob([bytes], {type: mimeType})
+}
+
+/**
+ *
+ */
+async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
+  let _etag = null
+  let commitHash = null
+  let cleanEtag = null
+  let modelDirectoryHandle = null
+  let modelBlobFileHandle = null
+  const opfsRoot = await navigator.storage.getDirectory()
+  const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
+
+  const cached = await CacheModule.checkCacheRaw(cacheKey)
+
+  const cacheExist = cached && cached.headers
+
+
+  if (cacheExist) {
+    const clonedCached = cached.clone()
+    // eslint-disable-next-line no-unused-vars
+    const {_, etag, finalURL} = await clonedCached.json()
+    _etag = etag
+
+      // Remove any enclosing quotes from the ETag value
+    cleanEtag = _etag.replace(/"/g, '')
+
+    if (clonedCached.headers.get('commithash')) {
+      commitHash = clonedCached.headers.get('commithash')
+    }
+  }
+
+  if (shaHash) {
+    try {
+      [modelDirectoryHandle, modelBlobFileHandle] = await
+      retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, commitHash, false)
+
+      if (modelBlobFileHandle === null) {
+        // couldn't find via shaHash or commitHash, see if we have an unauthed etag
+        if (cleanEtag) {
+          [modelDirectoryHandle, modelBlobFileHandle] = await
+          retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, null, false)
+        }
+      }
+
+      if (modelBlobFileHandle !== null ) {
+        // Display model
+        const blobFile = await modelBlobFileHandle.getFile()
+
+        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
+
+        if (commitHash !== null) {
+          return
+        }
+        // get commit hash
+        const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+
+        if (_commitHash !== null) {
+          const pathSegments = safePathSplit(originalFilePath)
+          const lastSegment = pathSegments[pathSegments.length - 1]
+          const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
+          const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
+
+          if (newResult !== null) {
+            const mockResponse = generateMockResponse(shaHash)
+            // Update cache with new data
+            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
+            const updatedBlobFile = await newResult.getFile()
+
+            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+          }
+        }
+      } else {
+        // we don't have it stored and need to decode the base64 blob to file and write to OPFS
+        const blob = base64ToBlob(content)
+
+        if (blob !== null) {
+          [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryBase64BlobFileToOPFS(blob, cacheKey, shaHash)
+
+          const mockResponse = generateMockResponse(shaHash)
+
+          await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
+
+          // get commit hash
+          const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+
+          if (_commitHash !== null) {
+            const pathSegments = safePathSplit(originalFilePath)
+            const lastSegment = pathSegments[pathSegments.length - 1]
+            const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
+            const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
+
+            if (newResult !== null) {
+              // Update cache with new data
+              const clonedResponse = generateMockResponse(shaHash)
+              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
+              const updatedBlobFile = await newResult.getFile()
+
+              self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+            }
+          }
+        }
+      }
+    } catch (error) {
+      const workerMessage = `Error writing base64 model for ${cacheKey}: ${error}`
+      self.postMessage({error: workerMessage})
+    }
+  }
 }
 
 /**
