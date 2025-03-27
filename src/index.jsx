@@ -16,7 +16,6 @@ import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
-import usePageTracking from './hooks/usePageTracking'
 import '@fontsource/roboto/300.css'
 import '@fontsource/roboto/400.css'
 import '@fontsource/roboto/500.css'
@@ -93,7 +92,6 @@ function AppWithContext() {
           <title>Bldrs.ai</title>
         </Helmet>
         <BrowserRouter>
-          {usePageTracking()}
           <CypressHistorySupport/>
           <Auth0ProviderWithHistory>
             <BaseRoutes/>
