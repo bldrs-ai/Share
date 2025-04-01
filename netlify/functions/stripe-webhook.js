@@ -31,7 +31,7 @@ exports.handler = async (event, context) => {
   // 1. Verify the Stripe webhook signature
   const sig = event.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  let stripeEvent;
+  let stripeEvent; 
 
   try {
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
