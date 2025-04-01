@@ -1,19 +1,27 @@
 import React, {useEffect} from 'react'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 
 
 /**
- * PopupCallback component that handles the Auth0 login callback.
- * It sets a localStorage flag to indicate a successful login and closes the popup.
- *
- * @return {React.ReactElement} A div indicating the login process is in progress.
+ *  @return {React.Component}
  */
 function PopupCallback() {
-  useEffect(() => {
-    localStorage.setItem('refreshAuth', 'true')
+  const {handleRedirectCallback} = useAuth0()
 
-    // Close the popup window after setting the flag
-    window.close()
-  }, [])
+  useEffect(() => {
+    /**
+     *
+     */
+    async function processCallback() {
+      // Wait for Auth0 to handle the redirect callback
+      await handleRedirectCallback()
+      // Now that Auth0 has processed the callback and written tokens to storage,
+      // set our flag and close the popup.
+      localStorage.setItem('refreshAuth', 'true')
+      window.close()
+    }
+    processCallback()
+  }, [handleRedirectCallback])
 
   return <div>Logging in, please wait…</div>
 }

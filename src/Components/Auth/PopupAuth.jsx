@@ -13,12 +13,32 @@ function PopupAuth() {
   const {loginWithRedirect} = useAuth0()
 
   useEffect(() => {
-    // Immediately trigger the Auth0 redirect on mount.
-    // The redirectUri points to a route in the popup that will process the callback.
-    loginWithRedirect({
-      redirectUri: `${window.location.origin }/popup-callback`,
-    })
-  })
+    // Extract scope from the query parameters
+    const params = new URLSearchParams(window.location.search)
+
+    if (params.get('scope')) {
+      const scope = params.get('scope')
+
+      // Trigger the Auth0 login redirect
+      loginWithRedirect({
+        authorizationParams: {
+          redirect_uri: `${window.location.origin}/popup-callback`,
+          scope: 'openid profile email offline_access',
+          connection: 'github',
+          connection_scope: scope,
+        },
+     })
+    } else {
+      // Trigger the Auth0 login redirect
+      loginWithRedirect({
+        authorizationParams: {
+          redirect_uri: `${window.location.origin}/popup-callback`,
+          scope: 'openid profile email offline_access',
+          connection: 'github',
+        },
+      })
+    }
+  }, [loginWithRedirect]) // Include loginWithRedirect as a dependency
 
   return <div>Redirecting to Auth0…</div>
 }

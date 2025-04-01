@@ -18,9 +18,6 @@ import {
   PaymentOutlined,
 } from '@mui/icons-material'
 
-// Our extracted PricingDialog
-import PricingDialog from '../Stripe/PricingDialog'
-
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
@@ -36,8 +33,6 @@ export default function ProfileControl() {
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
 
-  const [openPricing, setOpenPricing] = useState(false)
-
   const theme = useTheme()
   const {isAuthenticated, logout, user} = useAuth0()
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
@@ -50,7 +45,15 @@ export default function ProfileControl() {
     function handleStorageEvent(event) {
       if (event.key === 'refreshAuth' && event.newValue === 'true') {
         // When login is detected, refresh the auth state
-        getAccessTokenSilently()
+        getAccessTokenSilently(
+          {
+          authorizationParams: {
+          audience: 'https://api.github.com/',
+          scope: 'openid profile email offline_access',
+        },
+        cacheMode: 'on',
+        useRefreshTokens: true,
+      })
           .then((token) => {
             // clear the flag so the event doesn't fire again unnecessarily
             localStorage.removeItem('refreshAuth')
@@ -93,13 +96,12 @@ export default function ProfileControl() {
   }
 
   // Open Pricing
+  // Navigate to /subscribe for the pricing table and pass the current theme as a query parameter.
   const handleOpenPricing = () => {
-    setOpenPricing(true)
     onCloseClick()
+    const themeParam = isDay ? 'light' : 'dark'
+    window.location.href = `/subscribe/?theme=${themeParam}`
   }
-
-  // Close Pricing
-  const handleClosePricing = () => setOpenPricing(false)
 
   // Sync local isDay with MUI theme
   useEffect(() => {
@@ -179,12 +181,6 @@ export default function ProfileControl() {
           </Typography>
         </MenuItem>
       </Menu>
-
-      <PricingDialog
-        openPricing={openPricing}
-        handleClosePricing={handleClosePricing}
-        isDay={isDay}
-      />
     </>
   )
 }

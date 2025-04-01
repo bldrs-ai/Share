@@ -83,27 +83,35 @@ export default function BaseRoutes({testElt = null}) {
       getAccessTokenSilently({
         authorizationParams: {
           audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access repo public_repo',
-          ignoreCache: true,
+          scope: 'openid profile email offline_access',
         },
+        cacheMode: 'off',
+        useRefreshTokens: true,
       }).then((token) => {
         if (token !== '') {
-          initializeOctoKitAuthenticated()
           // Decode the token to extract the app_metadata custom claim.
           // cypress check
           if (token.access_token && token.access_token === 'mock_access_token') {
+            initializeOctoKitAuthenticated()
             setAccessToken(token)
             return
           }
           const decodedToken = jwtDecode(token)
           const appData = decodedToken['https://bldrs.ai/app_metadata']
           if (appData) {
-            setAppMetadata(appData)
+            if (appData.subscriptionStatus === 'shareProPendingReauth') {
+              // reauth with updated scope
+              window.open('/popup-auth?scope=repo', 'authPopup', 'width=600,height=600')
+            } else {
+              setAppMetadata(appData)
+              initializeOctoKitAuthenticated()
+              setAccessToken(token)
+            }
           }
         } else {
           initializeOctoKitUnauthenticated()
+          setAccessToken(token)
         }
-        setAccessToken(token)
       }).catch((err) => {
         if (err.error !== 'login_required') {
           throw err

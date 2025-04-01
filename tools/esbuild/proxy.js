@@ -57,14 +57,22 @@ export function createProxyServer(host, port, useHttps = false) {
         res.setHeader('Cache-Control', 'public, max-age=31536000')
       }
 
-      // Merge the COOP/COEP headers with the headers coming from the proxy.
-      const mergedHeaders = {
-        ...proxyResponse.headers,
-        'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp',
+      // If the request is for /subscribe, do not add COOP/COEP headers.
+      // Otherwise, add the headers needed for cross-origin isolation.
+      let headersToSend = {}
+      if (req.url.startsWith('/subscribe')) {
+        headersToSend = {
+          ...proxyResponse.headers,
+        }
+      } else {
+        headersToSend = {
+          ...proxyResponse.headers,
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Embedder-Policy': 'require-corp',
+        }
       }
 
-      res.writeHead(proxyResponse.statusCode, useHttps ? mergedHeaders : proxyResponse.headers)
+      res.writeHead(proxyResponse.statusCode, headersToSend)
       proxyResponse.pipe(res, {end: true})
     })
 
@@ -76,6 +84,7 @@ export function createProxyServer(host, port, useHttps = false) {
 
     req.pipe(proxyReq, {end: true})
   }
+
 
   return server
 }
