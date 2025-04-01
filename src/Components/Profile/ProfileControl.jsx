@@ -7,6 +7,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import {TooltipIconButton} from '../Buttons'
+import useStore from '../../store/useStore'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
   GitHub as GitHubIcon,
@@ -37,6 +38,8 @@ export default function ProfileControl() {
   const {isAuthenticated, logout, user} = useAuth0()
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
+  const appMetadata = useStore((state) => state.appMetadata)
+  const userEmail = appMetadata?.userEmail || ''
 
   useEffect(() => {
     /**
@@ -100,7 +103,7 @@ export default function ProfileControl() {
   const handleOpenPricing = () => {
     onCloseClick()
     const themeParam = isDay ? 'light' : 'dark'
-    window.location.href = `/subscribe/?theme=${themeParam}`
+    window.location.href = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
   }
 
   // Sync local isDay with MUI theme

@@ -19,6 +19,9 @@ function App() {
   // Retrieve the theme from the query string, default to 'light' if not provided.
   const theme = getQueryParam('theme') || 'light'
 
+  // get the signup email
+  const userEmail = getQueryParam('userEmail') || null
+
   useEffect(() => {
     document.body.classList.remove('light', 'dark')
     document.body.classList.add(theme)
@@ -26,7 +29,7 @@ function App() {
 
   return (
     <div style={{backgroundColor: (theme === 'light') ? '#FFFFFF' : '#414141', minHeight: '100vh'}}>
-      <PricingTable theme={theme}/>
+      <PricingTable theme={theme} userEmail={userEmail}/>
     </div>
   )
 }

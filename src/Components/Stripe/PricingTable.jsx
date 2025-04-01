@@ -1,5 +1,4 @@
 import React, {ReactElement} from 'react'
-import useStore from '../../store/useStore'
 
 
 /**
@@ -7,9 +6,7 @@ import useStore from '../../store/useStore'
  *
  * @return {ReactElement}
  */
-function PricingTable({theme = 'light'}) {
-  const appMetadata = useStore((state) => state.appMetadata)
-  const userEmail = appMetadata?.userEmail || ''
+function PricingTable({theme = 'light', userEmail = ''}) {
   // const stripeCustomerId = appMetadata?.stripeCustomerId || ''
 
   // return (<potio-pricing-table action="payment"data-key="BFrRi9f1cuR1Bdpv"
