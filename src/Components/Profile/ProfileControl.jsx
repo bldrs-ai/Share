@@ -40,6 +40,7 @@ export default function ProfileControl() {
   const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
   const appMetadata = useStore((state) => state.appMetadata)
   const userEmail = appMetadata?.userEmail || ''
+  const stripeCustomerId = appMetadata?.stripeCustomerId || null
 
   useEffect(() => {
     /**
@@ -100,11 +101,35 @@ export default function ProfileControl() {
 
   // Open Pricing
   // Navigate to /subscribe for the pricing table and pass the current theme as a query parameter.
-  const handleOpenPricing = () => {
+  const handleSubscriptionClick = async () => {
     onCloseClick()
+
     const themeParam = isDay ? 'light' : 'dark'
-    window.location.href = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
+
+    if (stripeCustomerId) {
+      // 1) If the user has a stripeCustomerId, go to the Stripe Billing Portal
+      try {
+        const response = await fetch('/.netlify/functions/create-portal-session', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({stripeCustomerId}),
+        })
+        const data = await response.json()
+        if (data.url) {
+          window.location.href = data.url
+        } else {
+          console.error('No portal URL returned:', data)
+        }
+      } catch (err) {
+        console.error('Error creating portal session:', err)
+      }
+    } else {
+      // 2) If there's no stripeCustomerId yet, redirect to the pricing table
+      const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
+      window.location.href = subscribeUrl
+    }
   }
+
 
   // Sync local isDay with MUI theme
   useEffect(() => {
@@ -153,10 +178,10 @@ export default function ProfileControl() {
         </MenuItem>
 
         {isAuthenticated && (
-          <MenuItem onClick={handleOpenPricing}>
+          <MenuItem onClick={handleSubscriptionClick}>
             <PaymentOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
-              Upgrade to Pro
+              {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
             </Typography>
           </MenuItem>
         )}
