@@ -112,7 +112,7 @@ exports.handler = async (event, context) => {
                 auth0UserId
               )}`,
               {
-                app_metadata: { subscriptionStatus: newStatus },
+                app_metadata: { subscriptionStatus: newStatus, stripeCustomerId: stripeCustomerId },
               },
               {
                 headers: {
@@ -121,7 +121,8 @@ exports.handler = async (event, context) => {
                 },
               }
             );
-            console.log('Updated Auth0 user with subscription status:', newStatus);
+            
+            console.log(`Updated Auth0 user with subscription status: ${newStatus} and customer ID: ${stripeCustomerId}`);
 
             // 2g. If the user upgraded, optionally revoke refresh tokens
             /*if (isPro) {
