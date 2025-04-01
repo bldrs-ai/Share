@@ -12,8 +12,7 @@
     Cross-Origin-Opener-Policy = "unsafe-none"
     Cross-Origin-Embedder-Policy = "unsafe-none"
 
-# Optional: Redirect /subscribe to /subscribe/ to enforce a trailing slash.
-# This helps if your built output lives under /subscribe/index.html.
+# Redirect /subscribe to /subscribe/ to enforce a trailing slash.
 [[redirects]]
   from = "/subscribe"
   to = "/subscribe/"
