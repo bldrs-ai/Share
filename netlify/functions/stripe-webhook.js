@@ -98,7 +98,7 @@ exports.handler = async (event, context) => {
           // or set to something custom if they upgraded
           let newStatus = subscription.status;
           if (isPro) {
-            newStatus = 'sharePro';
+            newStatus = 'shareProPendingReauth';
           }
 
           // 2f. Update the user's app_metadata in Auth0
