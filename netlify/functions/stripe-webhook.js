@@ -121,10 +121,10 @@ exports.handler = async (event, context) => {
                 },
               }
             );
-            console.log('Updated Auth0 user with subscription status:', updateResp.data);
+            console.log('Updated Auth0 user with subscription status:', newStatus);
 
             // 2g. If the user upgraded, optionally revoke refresh tokens
-            if (isPro) {
+            /*if (isPro) {
               try {
                 const revokeResp = await axios.post(
                   `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(
@@ -142,7 +142,7 @@ exports.handler = async (event, context) => {
               } catch (revokeError) {
                 console.error('Error revoking refresh tokens:', revokeError.message);
               }
-            }
+            }*/
           } catch (updateError) {
             console.error('Error updating Auth0 user metadata:', updateError.message);
           }
