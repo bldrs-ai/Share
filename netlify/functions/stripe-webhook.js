@@ -29,6 +29,8 @@ async function getManagementApiToken() {
 
 exports.handler = async (event, context) => {
   // 1. Verify the Stripe webhook signature
+
+  console.log("Stripe webhook function invoked!");
   const sig = event.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let stripeEvent; 
@@ -42,6 +44,8 @@ exports.handler = async (event, context) => {
       body: `Webhook Error: ${err.message}`,
     };
   }
+
+  console.log("Stripe event type:", stripeEvent.type);
 
   // 2. Handle the subscription update event
   if (stripeEvent.type === 'customer.subscription.created') {
@@ -150,6 +154,9 @@ exports.handler = async (event, context) => {
   } else {
     console.log(`test: ${JSON.stringify(stripeEvent)}`);
   }
+
+
+  console.log("Returning success");
 
   // Return success so Stripe doesn't retry indefinitely
   return {
