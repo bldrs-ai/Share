@@ -147,6 +147,8 @@ exports.handler = async (event, context) => {
     } catch (err) {
       console.error('Error retrieving Stripe customer or updating Auth0:', err);
     }
+  } else {
+    console.log(`test: ${JSON.stringify(stripeEvent)}`);
   }
 
   // Return success so Stripe doesn't retry indefinitely
