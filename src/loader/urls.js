@@ -111,11 +111,12 @@ export function parseCoords(url) {
  * @param {string} accessToken
  * @param {boolean} isOpfsAvailable
  * @param {boolean} useCache
- * @return {Array<object>} A triple of urlStr (changed to our proxy if
- * github.com), a sha if available, and a boolean indicating if http
- * cache was hit.
+ * @return {Array<object>} A quadruple of urlStr (changed to our proxy if
+ * github.com), a sha if available, a boolean indicating if http
+ * cache was hit, and a boolean indicating if the content is base64 encoded
+ * and available.
  */
-export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfsAvailable, useCache = true) {
+export async function dereferenceAndProxyDownloadContents(urlStr, accessToken, isOpfsAvailable, useCache = true) {
   const u = new URL(urlStr)
   switch (u.host.toLowerCase()) {
     case 'github.com':
@@ -137,13 +138,13 @@ export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfs
           u.pathname = proxyUrl.pathname + u.pathname
         }
 
-        return [u.toString(), '', false]
+        return [u.toString(), '', false, false]
       }
 
       return await getGitHubPathContents(urlStr, accessToken, useCache)
 
     default:
-      return [urlStr, '', false]
+      return [urlStr, '', false, false]
   }
 }
 
@@ -152,11 +153,11 @@ export async function dereferenceAndProxyDownloadUrl(urlStr, accessToken, isOpfs
  * @param {string} urlStr
  * @param {string} accessToken
  * @param {boolean} useCache
- * @return {Array<string>} Pair of [downloadUrl, sha]
+ * @return {Array<string>} Quadruple of [downloadUrl, sha, isCacheHit, isBase64]
  */
 async function getGitHubPathContents(urlStr, accessToken, useCache) {
   const repo = parseGitHubRepositoryUrl(urlStr)
-  const [downloadUrl, sha, isCacheHit] = await getPathContents(
+  const {content, sha, isCacheHit, isBase64} = await getPathContents(
     {
       orgName: repo.owner,
       name: repo.repository,
@@ -166,5 +167,5 @@ async function getGitHubPathContents(urlStr, accessToken, useCache) {
     repo.ref,
     accessToken,
   )
-  return [downloadUrl, sha, isCacheHit]
+  return [content, sha, isCacheHit, isBase64]
 }

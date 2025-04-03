@@ -9,6 +9,7 @@ import {
   opfsDeleteModel,
   opfsSnapshotCache,
   opfsClearCache,
+  opfsWriteBase64Model,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
@@ -141,6 +142,65 @@ export function downloadToOPFS(
     }
 
     opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
+  })
+}
+
+/**
+ * Downloads a model, handles progress updates, and updates the OPFS file handle.
+ *
+ * @param {string} content The base 64 content of the object to be downloaded.
+ * @param {string} shaHash TODO(pablo): give a reference for how we use these.
+ * @param {string} originalFilePath The original file path of the model.
+ * @param {string} accessToken Access token for authentication.
+ * @param {string} owner The owner of the repository.
+ * @param {string} repo The repository name.
+ * @param {string} branch The branch name.
+ * @param {Function} setOpfsFile Function to set the OPFS file in the state.
+ * @param {Function} onProgress Optional function to handle progress events.
+ * @return {Promise<File>} - A promise that resolves to the downloaded file.
+ */
+export function writeBase64Model(
+  content,
+  shaHash,
+  originalFilePath,
+  accessToken,
+  owner,
+  repo,
+  branch,
+  setOpfsFile) {
+  assertDefined(content, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile)
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (event) => {
+        if (event.data.error) {
+          debug().error('Error from worker:', event.data.error)
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          reject(new Error(event.data.error))
+        } else if (event.data.completed) {
+          if (event.data.event === 'download') {
+            debug().warn('Worker finished downloading file')
+          } else if (event.data.event === 'exists') {
+            debug().warn('Commit exists in OPFS.')
+          }
+          const file = event.data.file
+          if (event.data.event === 'renamed' || event.data.event === 'exists') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            if (file instanceof File) {
+              setOpfsFile(file)
+            } else {
+              debug().error('Retrieved object is not of type File.')
+            }
+          }
+          resolve(file) // Resolve the promise with the file
+        }
+      }
+      workerRef.addEventListener('message', listener)
+    } else {
+      reject(new Error('Worker initialization failed'))
+    }
+    opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
   })
 }
 
