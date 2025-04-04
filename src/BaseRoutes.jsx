@@ -15,6 +15,7 @@ import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
+import {jwtDecode} from 'jwt-decode'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 
@@ -46,6 +47,7 @@ export default function BaseRoutes({testElt = null}) {
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
+  const setAppMetadata = useStore((state) => state.setAppMetadata)
 
 
   useEffect(() => {
@@ -82,15 +84,38 @@ export default function BaseRoutes({testElt = null}) {
       getAccessTokenSilently({
         authorizationParams: {
           audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access repo',
+          scope: 'openid profile email offline_access',
         },
+        cacheMode: 'off',
+        useRefreshTokens: true,
       }).then((token) => {
         if (token !== '') {
-          initializeOctoKitAuthenticated()
+          // Decode the token to extract the app_metadata custom claim.
+          // cypress check
+          if (token.access_token && token.access_token === 'mock_access_token') {
+            initializeOctoKitAuthenticated()
+            setAccessToken(token)
+            return
+          }
+          const decodedToken = jwtDecode(token)
+          const appData = decodedToken['https://bldrs.ai/app_metadata']
+          if (appData) {
+            if (appData.subscriptionStatus === 'shareProPendingReauth') {
+              // reauth with updated repo scope
+              window.open('/popup-auth?scope=repo', 'authPopup', 'width=600,height=600')
+            } else if (appData.subscriptionStatus === 'freePendingReauth') {
+              // reauth with updated scope (default scope)
+              window.open('/popup-auth?scope=public_repo', 'authPopup', 'width=600,height=600')
+            } else {
+              setAppMetadata(appData)
+              initializeOctoKitAuthenticated()
+              setAccessToken(token)
+            }
+          }
         } else {
           initializeOctoKitUnauthenticated()
+          setAccessToken(token)
         }
-        setAccessToken(token)
       }).catch((err) => {
         if (err.error !== 'login_required') {
           throw err
@@ -98,7 +123,8 @@ export default function BaseRoutes({testElt = null}) {
       })
     }
   }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
-      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
+      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken,
+      setAppMetadata])
 
   const theme = useShareTheme()
   return (

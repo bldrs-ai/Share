@@ -1,6 +1,20 @@
+# Apply strict cross-origin isolation for all routes by default
 [[headers]]
   for = "/*"
   [headers.values]
     Cross-Origin-Opener-Policy = "same-origin"
     Cross-Origin-Embedder-Policy = "require-corp"
-    
+
+# Override headers for the /subscribe route so that no strict isolation is enforced.
+[[headers]]
+  for = "/subscribe/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "unsafe-none"
+    Cross-Origin-Embedder-Policy = "unsafe-none"
+
+# Redirect /subscribe to /subscribe/ to enforce a trailing slash.
+[[redirects]]
+  from = "/subscribe"
+  to = "/subscribe/"
+  status = 301
+  force = true
