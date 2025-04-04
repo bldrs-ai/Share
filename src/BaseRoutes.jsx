@@ -105,7 +105,7 @@ export default function BaseRoutes({testElt = null}) {
               window.open('/popup-auth?scope=repo', 'authPopup', 'width=600,height=600')
             } else if (appData.subscriptionStatus === 'freePendingReauth') {
               // reauth with updated scope (default scope)
-              window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+              window.open('/popup-auth?scope=public_repo', 'authPopup', 'width=600,height=600')
             } else {
               setAppMetadata(appData)
               initializeOctoKitAuthenticated()
