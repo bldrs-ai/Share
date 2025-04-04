@@ -51,24 +51,18 @@ function onLoad(location, cameraControls, viewer) {
   addHashListener('camera', () => onHash(location, cameraControls))
   const canvas = document.querySelector('canvas')
   if (viewer && canvas) {
-    let isMouseDown = false
-    const onMouseDown = () => {
-      isMouseDown = true
-    }
+    let isMouseMoved = false
     const onMouseMove = () => {
-      if (isMouseDown) {
-        removeCameraUrlParams()
-      }
+      isMouseMoved = true
     }
     const onMouseUp = () => {
-      isMouseDown = false
+      if (isMouseMoved) {
+        removeCameraUrlParams()
+      }
+      isMouseMoved = false
     }
-    canvas.removeEventListener('mousedown', onMouseDown)
-    canvas.addEventListener('mousedown', onMouseDown)
-
     canvas.removeEventListener('mousemove', onMouseMove)
     canvas.addEventListener('mousemove', onMouseMove)
-    canvas.addEventListener('touchmove', removeCameraUrlParams)
     canvas.addEventListener('wheel', removeCameraUrlParams)
 
     canvas.removeEventListener('mouseup', onMouseUp)

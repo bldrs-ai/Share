@@ -58,6 +58,23 @@ describe('Http.js functions', () => {
       )
     })
 
+    it('should handle encoded URI paths', async () => {
+      const pathWithSpaces = 'path with spaces'
+      const argsWithoutEncodedPath = {path: pathWithSpaces, ref: 'main'}
+      const encodedPath = encodeURIComponent(pathWithSpaces)
+      const argsWithEncodedPath = {path: encodedPath, ref: 'main'}
+      await getGitHubResource(repository, testPath, argsWithEncodedPath, false, '')
+      expect(octokit.request).toHaveBeenCalledWith(
+        expect.stringContaining(`GET /repos/{org}/{repo}/${testPath}`),
+        expect.objectContaining({
+          org: repository.orgName,
+          repo: repository.name,
+          ...argsWithoutEncodedPath,
+        }),
+      )
+    })
+
+
     it('should include authorization header when accessToken is provided', async () => {
       const responseMock = {data: 'response data'}
       octokit.request.mockResolvedValue(responseMock)

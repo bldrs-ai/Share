@@ -50,6 +50,8 @@ export async function getGitHubResource(repository, path, args = {}, useCache = 
         org: repository.orgName,
         repo: repository.name,
         ...args,
+        // Octokit will encode the path when it makes the request, so we need to decode it here.
+        path: decodeURI(args.path),
       }),
     )
 
