@@ -19,7 +19,6 @@ async function getManagementApiToken() {
         headers: { 'Content-Type': 'application/json' },
       }
     );
-
     return response.data.access_token; // Short-lived token for Auth0 Management API
   } catch (err) {
     console.error('Error fetching Management API token:', err.message);
@@ -29,7 +28,6 @@ async function getManagementApiToken() {
 
 exports.handler = async (event, context) => {
   // 1. Verify the Stripe webhook signature
-
   console.log("Stripe webhook function invoked!");
   const sig = event.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -47,7 +45,7 @@ exports.handler = async (event, context) => {
 
   console.log("Stripe event type:", stripeEvent.type);
 
-  // 2. Handle the subscription update event
+  // 2. Handle the subscription created event
   if (stripeEvent.type === 'customer.subscription.created') {
     const subscription = stripeEvent.data.object;
     const stripeCustomerId = subscription.customer; // Stripe customer ID
@@ -124,7 +122,7 @@ exports.handler = async (event, context) => {
             
             console.log(`Updated Auth0 user with subscription status: ${newStatus} and customer ID: ${stripeCustomerId}`);
 
-            // 2g. If the user upgraded, optionally revoke refresh tokens
+            // 2g. Optionally, if the user upgraded, you might revoke refresh tokens
             /*if (isPro) {
               try {
                 const revokeResp = await axios.post(
@@ -152,10 +150,69 @@ exports.handler = async (event, context) => {
     } catch (err) {
       console.error('Error retrieving Stripe customer or updating Auth0:', err);
     }
-  } else {
-    console.log(`test: ${JSON.stringify(stripeEvent)}`);
   }
+  // 3. Handle the subscription cancellation event
+  else if (stripeEvent.type === 'customer.subscription.deleted') {
+    const subscription = stripeEvent.data.object;
+    const stripeCustomerId = subscription.customer;
 
+    try {
+      // Retrieve the Stripe customer to get their email
+      const customer = await stripe.customers.retrieve(stripeCustomerId);
+      const customerEmail = customer.email;
+
+      if (!customerEmail) {
+        console.error('No email found on Stripe customer during cancellation.');
+      } else {
+        console.log(`Stripe customer email for cancellation: ${customerEmail}`);
+
+        // Fetch an Auth0 Management API token
+        const mgmtToken = await getManagementApiToken();
+
+        // Query Auth0 for the user by email
+        const auth0UserResp = await axios.get(
+          `https://${process.env.AUTH0_DOMAIN}/api/v2/users-by-email?email=${encodeURIComponent(
+            customerEmail
+          )}`,
+          {
+            headers: {
+              Authorization: `Bearer ${mgmtToken}`,
+            },
+          }
+        );
+
+        const users = auth0UserResp.data;
+        if (!users || users.length === 0) {
+          console.error(`No Auth0 user found for email: ${customerEmail}`);
+        } else {
+          // Assume the first returned user is correct
+          const auth0UserId = users[0].user_id;
+          console.log(`Found Auth0 user ID for cancellation: ${auth0UserId}`);
+
+          // Update the user's app_metadata to reflect the cancellation
+          // Here, we set the status to 'freePendingReauth' 
+          const updateResp = await axios.patch(
+            `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`,
+            {
+              app_metadata: { subscriptionStatus: 'freePendingReauth', stripeCustomerId: stripeCustomerId },
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${mgmtToken}`,
+              },
+            }
+          );
+
+          console.log(`Updated Auth0 user with subscription status: freePendingReauth and customer ID: ${stripeCustomerId}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error processing cancellation for Stripe customer or updating Auth0:', err);
+    }
+  } else {
+    console.log(`Unhandled event type: ${JSON.stringify(stripeEvent)}`);
+  }
 
   console.log("Returning success");
 

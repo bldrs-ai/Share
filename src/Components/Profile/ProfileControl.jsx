@@ -199,7 +199,7 @@ export default function ProfileControl() {
           </Typography>
         </MenuItem>
         <Divider/>
-        <MenuItem onClick={handleThemeToggle}>
+        <MenuItem onClick={handleThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
           {isDay ?
             <NightlightOutlinedIcon className='icon-share'/> :
             <WbSunnyOutlinedIcon className='icon-share'/>

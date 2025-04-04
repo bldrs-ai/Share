@@ -101,8 +101,11 @@ export default function BaseRoutes({testElt = null}) {
           const appData = decodedToken['https://bldrs.ai/app_metadata']
           if (appData) {
             if (appData.subscriptionStatus === 'shareProPendingReauth') {
-              // reauth with updated scope
+              // reauth with updated repo scope
               window.open('/popup-auth?scope=repo', 'authPopup', 'width=600,height=600')
+            } else if (appData.subscriptionStatus === 'freePendingReauth') {
+              // reauth with updated scope (default scope)
+              window.open('/popup-auth', 'authPopup', 'width=600,height=600')
             } else {
               setAppMetadata(appData)
               initializeOctoKitAuthenticated()
