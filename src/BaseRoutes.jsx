@@ -107,7 +107,7 @@ export default function BaseRoutes({testElt = null}) {
             const appData = decodedToken['https://bldrs.ai/app_metadata']
             if (appData) {
               if (appData.subscriptionStatus === 'shareProPendingReauth') {
-                // Instead of immediately calling window.open, show a modal dialog.
+                // Instead of immediately calling window.open we show a modal dialog.
                 setReauthScope('repo')
                 setReauthModalOpen(true)
               } else if (appData.subscriptionStatus === 'freePendingReauth') {
