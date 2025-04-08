@@ -1,13 +1,19 @@
 import React from 'react'
 import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
-import {act, render, screen, renderHook} from '@testing-library/react'
+import {act, render, renderHook, screen} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
 import CameraControl, {
   onHash,
   parseHashParams,
+  WHEEL_DEBOUNCE_WAIT_MS,
 } from './CameraControl'
-import {HASH_PREFIX_CAMERA} from './hashState'
+import {HASH_PREFIX_CAMERA, removeCameraUrlParams} from './hashState'
+
+
+jest.mock('./hashState', () => ({
+  removeCameraUrlParams: jest.fn(),
+}))
 
 
 describe('CameraControl', () => {
@@ -45,6 +51,54 @@ describe('CameraControl', () => {
     const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
     expectCam.setDoTween(true)
     expect(cam).toStrictEqual(expectCam)
+  })
+
+  context('with fake timers', () => {
+    let addEventListenerSpy
+    // Use fake timers so we can fast-forward through the debounce delay
+    beforeAll(() => {
+      document.body.innerHTML = '<canvas></canvas>'
+      addEventListenerSpy = jest.spyOn(HTMLCanvasElement.prototype, 'addEventListener')
+      jest.useFakeTimers()
+    })
+    beforeEach(() => {
+      jest.clearAllMocks()
+    })
+    afterAll(() => {
+      addEventListenerSpy.mockRestore()
+      jest.useRealTimers()
+    })
+
+    it('calls removeCameraUrlParams only once after multiple wheel events', () => {
+      // 1) Render the component
+      render(<ShareMock><CameraControl/></ShareMock>)
+
+      // 2) Verify that our component attached 'wheel' event
+      expect(addEventListenerSpy).toHaveBeenCalledWith('wheel', expect.any(Function))
+
+      // 3) Grab the actual onWheel handler from that spy
+      const wheelCall = addEventListenerSpy.mock.calls.find(
+        ([eventName]) => eventName === 'wheel',
+      )
+      expect(wheelCall).toBeDefined()
+      const onWheel = wheelCall[1]
+
+      // 4) Fire multiple "wheel" events by manually calling the handler
+      act(() => {
+        onWheel({ /* a mock wheel event object if needed */ })
+        onWheel({ /* a second mock wheel event */ })
+        onWheel({ /* a third mock wheel event */ })
+      })
+
+      // At this point, removeCameraUrlParams should NOT be called yet
+      expect(removeCameraUrlParams).not.toHaveBeenCalled()
+
+      // (5) Advance the timers by the debounce wait time
+      act(() => jest.advanceTimersByTime(WHEEL_DEBOUNCE_WAIT_MS))
+
+      // (6) Now the debounce interval has passed, so expect exactly one call
+      expect(removeCameraUrlParams).toHaveBeenCalledTimes(1)
+    })
   })
 })
 
