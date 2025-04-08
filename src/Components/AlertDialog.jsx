@@ -4,6 +4,7 @@ import {NotFoundError} from '../loader/Loader'
 import useStore from '../store/useStore'
 import Dialog from './Dialog'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
+import {trackAlert} from '../utils/alertTracking'
 
 
 /**
@@ -49,12 +50,15 @@ export default function AlertDialog({onClose}) {
  */
 function createAlertReport(a) {
   if (typeof a === 'string') {
+    trackAlert(a)
     return a
   } else if (typeof a === 'object') {
     if (a instanceof NotFoundError) {
+      trackAlert(a.message, a)
       return displayPathAlert(a)
     } else if (a instanceof Error) {
       console.error('General error:', a)
+      trackAlert(a.message, a)
       return `${a}`
     }
   }

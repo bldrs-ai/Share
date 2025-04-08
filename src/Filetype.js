@@ -101,7 +101,7 @@ export async function guessType(path) {
  * Analyzes the file type from a File object.
  *
  * @param {File} file The File object to analyze.
- * @return {string} The result of the `analyzeHeader` function.
+ * @return {Promise<string|null>} A promise that resolves to the file type or null if not recognized.
  */
 export async function guessTypeFromFile(file) {
   debug().log('Filetype#guessTypeFromFile, file:', file)

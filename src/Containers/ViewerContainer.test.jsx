@@ -3,6 +3,7 @@ import {useNavigate} from 'react-router-dom'
 import '@testing-library/jest-dom/extend-expect'
 import {act, render, screen, waitFor} from '@testing-library/react'
 import ViewerContainer from './ViewerContainer'
+import useStore from '../store/useStore'
 
 
 // We will mock out relevant modules (store, guessType, OPFS saving, fallback saving)
@@ -12,13 +13,14 @@ jest.mock('../store/useStore', () => {
   return jest.fn().mockImplementation((selector) => {
     // The store has a variety of keys
     // The ones we need for the tested code are:
-    //   appPrefix, isModelReady, isOpfsAvailable, vh
+    //   appPrefix, isModelReady, isOpfsAvailable, vh, setAlert
     // For simplicity, we can just assume they're all "happy path" default values
     const state = {
       appPrefix: '/app',
       isModelReady: true,
       isOpfsAvailable: true, // or toggle this for specific tests
       vh: 800,
+      setAlert: jest.fn(),
     }
     return selector(state)
   })
@@ -37,6 +39,7 @@ import {saveDnDFileToOpfsFallback} from '../utils/loader'
 
 describe('ViewerContainer', () => {
   const mockNavigate = jest.fn()
+  const mockSetAlert = jest.fn()
 
   beforeAll(() => {
     window.DragEvent = DragEvent
@@ -46,6 +49,17 @@ describe('ViewerContainer', () => {
     jest.clearAllMocks()
     // Make useNavigate() return our mocked `mockNavigate`
     useNavigate.mockReturnValue(mockNavigate)
+    // Make useStore return our mocked setAlert
+    useStore.mockImplementation((selector) => {
+      const state = {
+        appPrefix: '/app',
+        isModelReady: true,
+        isOpfsAvailable: true,
+        vh: 800,
+        setAlert: mockSetAlert,
+      }
+      return selector(state)
+    })
   })
 
   afterAll(() => {
@@ -67,7 +81,9 @@ describe('ViewerContainer', () => {
     const mockEvent = new DragEvent('dragover', {bubbles: true})
     Object.defineProperty(mockEvent, 'preventDefault', {value: jest.fn()})
 
-    dropzone.dispatchEvent(mockEvent)
+    act(() => {
+      dropzone.dispatchEvent(mockEvent)
+    })
     expect(mockEvent.preventDefault).toHaveBeenCalled()
   })
 
@@ -82,10 +98,7 @@ describe('ViewerContainer', () => {
     expect(mockEvent.preventDefault).toHaveBeenCalled()
   })
 
-  test.only('throws error if 0 files are dropped', async () => {
-    // By default in a test environment, unhandled error can appear.
-    // We can either wrap it in a try/catch or mock console.error to check messages.
-
+  test('shows alert if 0 files are dropped', async () => {
     render(<ViewerContainer/>)
     const dropzone = screen.getByTestId('cadview-dropzone')
 
@@ -95,17 +108,13 @@ describe('ViewerContainer', () => {
     Object.defineProperty(mockEvent, 'dataTransfer', {value: dataTransfer})
     Object.defineProperty(mockEvent, 'preventDefault', {value: jest.fn()})
 
-    // Dispatch the event in an async function in an act
-    const doDrop = async () => {
-      await act(() => {
-        dropzone.dispatchEvent(mockEvent)
-      })
-    }
-
-    await expect(doDrop()).rejects.toThrow('File upload initiated but found no data')
+    dropzone.dispatchEvent(mockEvent)
+    await waitFor(() => {
+      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated but found no data')
+    })
   })
 
-  test('throws error if more than 1 file is dropped', async () => {
+  test('shows alert if more than 1 file is dropped', async () => {
     render(<ViewerContainer/>)
     const dropzone = screen.getByTestId('cadview-dropzone')
 
@@ -117,11 +126,13 @@ describe('ViewerContainer', () => {
     Object.defineProperty(mockEvent, 'dataTransfer', {value: dataTransfer})
     Object.defineProperty(mockEvent, 'preventDefault', {value: jest.fn()})
 
-    const doDrop = async () => await dropzone.dispatchEvent(mockEvent)
-    await expect(doDrop()).rejects.toThrowError('File upload initiated but found no data')
+    dropzone.dispatchEvent(mockEvent)
+    await waitFor(() => {
+      expect(mockSetAlert).toHaveBeenCalledWith('File upload initiated for more than 1 file')
+    })
   })
 
-  test('throws error if guessTypeFromFile returns null', async () => {
+  test('shows alert if guessTypeFromFile returns null', async () => {
     guessTypeFromFile.mockResolvedValueOnce(null)
 
     render(<ViewerContainer/>)
@@ -133,11 +144,12 @@ describe('ViewerContainer', () => {
     Object.defineProperty(mockEvent, 'dataTransfer', {value: dataTransfer})
     Object.defineProperty(mockEvent, 'preventDefault', {value: jest.fn()})
 
-    await expect(() => {
-      dropzone.dispatchEvent(mockEvent)
-    }).rejects.toThrowError(
-      `File upload of unknown type: type(${file.type}) name(${file.name}) size(${file.size})`,
-    )
+    dropzone.dispatchEvent(mockEvent)
+    await waitFor(() => {
+      expect(mockSetAlert).toHaveBeenCalledWith(
+        `File upload of unknown type: type(${file.type}) size(${file.size})`,
+      )
+    })
   })
 
   test('saves via OPFS if recognized type and isOpfsAvailable = true', async () => {
@@ -171,31 +183,23 @@ describe('ViewerContainer', () => {
     // Easiest approach is to override the mock in the middle of the test
     // or we can do a specialized mock implementation.
     // We'll do a quick override:
-    jest.mock('../store/useStore', () => {
-      return jest.fn().mockImplementation((selector) => {
-        const state = {
-          appPrefix: '/app',
-          isModelReady: true,
-          isOpfsAvailable: false, // now false
-          vh: 800,
-        }
-        return selector(state)
-      })
+    useStore.mockImplementation((selector) => {
+      const state = {
+        appPrefix: '/app',
+        isModelReady: true,
+        isOpfsAvailable: false, // now false
+        vh: 800,
+        setAlert: mockSetAlert,
+      }
+      return selector(state)
     })
-
-    // Because we've replaced the entire mock, we should re-import the tested component
-    // Typically you'd separate this into another test file or do something like:
-    //   const NewViewerContainer = require('./ViewerContainer').default
-    // but that can get tricky.
-    // For demonstration, let's do it inline:
-    const NewViewerContainer = require('./ViewerContainer').default
 
     guessTypeFromFile.mockResolvedValueOnce('my-recognized-type')
     saveDnDFileToOpfsFallback.mockImplementation((_file, onWritten) => {
       onWritten('myFallbackFileName')
     })
 
-    render(<NewViewerContainer/>)
+    render(<ViewerContainer/>)
     const dropzone = screen.getByTestId('cadview-dropzone')
 
     const file = new File(['some content'], 'test.glb', {type: 'model/gltf-binary'})
