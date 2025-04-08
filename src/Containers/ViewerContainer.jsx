@@ -55,7 +55,9 @@ export default function ViewerContainer() {
 
     const type = await guessTypeFromFile(uploadedFile)
     if (type === null) {
-      throw new Error('File upload of unknown type')
+      throw new Error(
+        `File upload of unknown type: ` +
+        `type(${uploadedFile.type}) name(${uploadedFile.name}) size(${uploadedFile.size})`)
     }
 
     /** @param {string} fileName The filename the upload was given */
