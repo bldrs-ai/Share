@@ -9,6 +9,7 @@ import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {saveDnDFileToOpfsFallback} from '../utils/loader'
+import {trackAlert} from '../utils/alertTracking'
 
 
 /** @return {ReactElement} */
@@ -16,6 +17,7 @@ export default function ViewerContainer() {
   const appPrefix = useStore((state) => state.appPrefix)
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const setAlert = useStore((state) => state.setAlert)
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
   const vh = useStore((state) => state.vh)
   const isMobile = useIsMobile()
@@ -39,23 +41,32 @@ export default function ViewerContainer() {
 
 
   /** Handles file drop into drag-n-drop area */
-  async function handleDrop(event) {
+  async function onDrop(event) {
     event.preventDefault()
-    setIsDragActive(false)
     const files = event.dataTransfer.files
+
     if (files.length === 0) {
-      throw new Error('File upload initiated but found no data')
+      const message = 'File upload initiated but found no data'
+      trackAlert(message)
+      setAlert(message)
+      return
     }
     if (files.length > 1) {
-      throw new Error('File upload initiated for more than 1 file')
+      const message = 'File upload initiated for more than 1 file'
+      trackAlert(message)
+      setAlert(message)
+      return
     }
-
     const uploadedFile = files[0]
-    debug().log('ViewerContainer#handleDrop: uploadedFile', uploadedFile)
 
+    debug().log('ViewerContainer#handleDrop: uploadedFile', uploadedFile)
+    setIsDragActive(false)
     const type = await guessTypeFromFile(uploadedFile)
     if (type === null) {
-      throw new Error('File upload of unknown type')
+      const message = `File upload of unknown type: type(${uploadedFile.type}) size(${uploadedFile.size})`
+      trackAlert(message)
+      setAlert(message)
+      return
     }
 
     /** @param {string} fileName The filename the upload was given */
@@ -91,7 +102,7 @@ export default function ViewerContainer() {
       onDragOver={handleDragOverOrEnter}
       onDragEnter={handleDragOverOrEnter}
       onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDrop={onDrop}
       data-testid='cadview-dropzone'
       data-model-ready={isModelReady}
     />
