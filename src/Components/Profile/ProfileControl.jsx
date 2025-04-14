@@ -41,6 +41,7 @@ export default function ProfileControl() {
   const appMetadata = useStore((state) => state.appMetadata)
   const userEmail = appMetadata?.userEmail || ''
   const stripeCustomerId = appMetadata?.stripeCustomerId || null
+  const setAccessToken = useStore((state) => state.setAccessToken)
 
   useEffect(() => {
     /**
@@ -61,6 +62,7 @@ export default function ProfileControl() {
           .then((token) => {
             // clear the flag so the event doesn't fire again unnecessarily
             localStorage.removeItem('refreshAuth')
+            setAccessToken(token)
           })
           .catch((error) => {
             console.error('Error refreshing token:', error)
