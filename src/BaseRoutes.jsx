@@ -58,9 +58,15 @@ export default function BaseRoutes({testElt = null}) {
   // State for reauthentication modal.
   const [reauthModalOpen, setReauthModalOpen] = useState(false)
   const [reauthScope, setReauthScope] = useState('')
+  const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
   useEffect(() => {
     setAppPrefix(appPrefix)
+
+    if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+      window.store = useStore
+    }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setAppPrefix, appPrefix])
 
   useEffect(() => {

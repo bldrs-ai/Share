@@ -53,3 +53,27 @@ Cypress.Commands.overwrite('percySnapshot', (label) => {
     .viewport(desktopWidth, desktopHeight)
     .percySnapshot({width: 1280})
 })
+
+/**
+ * Inject app‑metadata so ProfileControl shows the right menu item.
+ *
+ * @param {"sharePro"|"free"} tier
+ */
+Cypress.Commands.add('setSubscriptionTier', (tier = 'free') => {
+  cy.window().then((win) => {
+    if (!win.store) {
+      throw new Error(
+        'Zustand store not found on window – make sure win.store is set in test builds.',
+      )
+    }
+
+    const meta = {
+      userEmail: 'cypress@bldrs.ai',
+      stripeCustomerId: tier === 'sharePro' ? 'cus_test_123' : null,
+      subscriptionStatus: tier === 'sharePro' ? 'sharePro' : 'free',
+    }
+
+    win.store.getState().setAppMetadata(meta)
+  })
+})
+

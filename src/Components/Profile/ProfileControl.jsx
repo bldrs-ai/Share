@@ -180,7 +180,7 @@ export default function ProfileControl() {
         </MenuItem>
 
         {isAuthenticated && (
-          <MenuItem onClick={handleSubscriptionClick}>
+          <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
