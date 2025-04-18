@@ -16,7 +16,21 @@ describe('Profile 100: subscription menu items', () => {
   }
 
   context('Authenticated Pro customer', () => {
-    beforeEach(returningUserVisitsHomepageWaitForModel)
+    beforeEach(() => {
+      returningUserVisitsHomepageWaitForModel()
+
+      cy.intercept(
+        {
+          method: 'GET',
+          url: 'https://stripe.portal.msw/mockportal/session/*',
+        },
+        {
+          statusCode: 200,
+          body: '<html><body><h1>Mock Stripe Portal</h1></body></html>',
+          headers: {'content-type': 'text/html'},
+        },
+      ).as('stripePortal')
+    })
 
     it('shows “Manage Subscription” and hides “Upgrade to Pro”', () => {
       cy.setSubscriptionTier('sharePro') // 👈 inject Pro metadata
@@ -24,6 +38,14 @@ describe('Profile 100: subscription menu items', () => {
 
       cy.contains('Manage Subscription').should('be.visible')
       cy.contains('Upgrade to Pro').should('not.exist')
+
+      // click “Manage Subscription” and assert redirect
+      cy.contains('Manage Subscription')
+        .click()
+
+      cy.wait('@stripePortal')
+
+      cy.location('href').should('include', /https:\/\/stripe\.portal\.msw\/mockportal\/session\//)
 
       cy.percySnapshot('Profile – Pro user')
     })
@@ -38,6 +60,12 @@ describe('Profile 100: subscription menu items', () => {
 
       cy.contains('Upgrade to Pro').should('be.visible')
       cy.contains('Manage Subscription').should('not.exist')
+
+      // click “Upgrade to Pro” and assert redirect
+      cy.contains('Upgrade to Pro')
+        .click()
+
+      cy.contains('Mock Subscribe Page').should('be.visible')
 
       cy.percySnapshot('Profile – Free user')
     })

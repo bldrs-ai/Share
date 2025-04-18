@@ -128,9 +128,24 @@ export default function ProfileControl() {
     } else {
       // 2) If there's no stripeCustomerId yet, redirect to the pricing table
       const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
-      window.location.href = subscribeUrl
+      if (useMock) {
+          // in cypress/mock mode, fetch & doc.write so MSW can intercept
+          try {
+            const res = await fetch(subscribeUrl)
+            const html = await res.text()
+            // replace the current document with our stubbed HTML
+            document.open()
+            document.write(html)
+            document.close()
+          } catch (err) {
+            console.error('Error loading mock subscribe page:', err)
+          }
+        } else {
+            // real app: do a normal navigation
+            window.location.href = subscribeUrl
+        }
+      }
     }
-  }
 
 
   // Sync local isDay with MUI theme
