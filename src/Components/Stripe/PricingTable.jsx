@@ -13,8 +13,8 @@ function PricingTable({theme = 'light', userEmail = ''}) {
   // customer-email={userEmail} customer={stripeCustomerId}></potio-pricing-table>)
 
   return (<stripe-pricing-table
-    pricing-table-id={ theme === 'light' ? 'prctbl_1QoVS9LeGkCV6AgY5pcBHXNm' : 'prctbl_1QoZdELeGkCV6AgYT86y4X6O'}
-    publishable-key="pk_test_51QoTe6LeGkCV6AgYfZMrD5CyoFJysYFa2dwoAflwHnY2U1Vj69iGn6eoOtW3HcQtUMK5MHF90UYn0xPJGgAxwW73001sFhhjxS"
+    pricing-table-id={ theme === 'light' ? 'prctbl_1RGSYGLeGkCV6AgYIBMdCREq' : 'prctbl_1RGSaDLeGkCV6AgY4jJULsFq'}
+    publishable-key="pk_live_51QoTe6LeGkCV6AgYMyOqTlFV7M5x4fhUftM4cXi4AhWfMPrksesUEdEj0Z4z14xeL5Mzc2Ja6ruCSwYkWLUEA3jR000dcD2xdw"
     data-theme={theme}
     customer-email={userEmail}
           />)
