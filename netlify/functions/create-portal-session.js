@@ -9,7 +9,7 @@ exports.handler = async (event) => {
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: 'https://deploy-preview-1337--bldrs-share-prod.netlify.app/',
+      return_url: 'https://bldrs.ai/',
     });
 
     return {
