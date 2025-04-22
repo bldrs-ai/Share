@@ -1,6 +1,13 @@
 
+const Sentry = require('@sentry/serverless');
 
-exports.handler = async (event) => {
+Sentry.AWSLambda.init({
+  dsn: process.env.SENTRY_DSN,
+  tracesSampleRate: 1.0,               // adjust based on your needs
+  environment: process.env.NODE_ENV,    // e.g. "production"
+});
+
+exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
   try {
@@ -17,7 +24,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ url: portalSession.url }),
     };
   } catch (error) {
-    console.error(error);
+    Sentry.captureException(err);
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
-};
+});
