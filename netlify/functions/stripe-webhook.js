@@ -1,6 +1,14 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 
+const Sentry = require('@sentry/serverless');
+
+Sentry.AWSLambda.init({
+  dsn: process.env.SENTRY_DSN,
+  tracesSampleRate: 1.0,
+  environment: process.env.NODE_ENV,
+});
+
 /**
  * Fetch an Auth0 Management API token via Client Credentials flow.
  * We'll use this short-lived token to call the Management API.
@@ -21,14 +29,13 @@ async function getManagementApiToken() {
     );
     return response.data.access_token; // Short-lived token for Auth0 Management API
   } catch (err) {
-    console.error('Error fetching Management API token:', err.message);
+    Sentry.captureException(err);
     throw err;
   }
 }
 
-exports.handler = async (event, context) => {
+exports.handler = Sentry.AWSLambda.wrapHandler(async (event, context) => {
   // 1. Verify the Stripe webhook signature
-  console.log("Stripe webhook function invoked!");
   const sig = event.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
   let stripeEvent; 
@@ -36,14 +43,12 @@ exports.handler = async (event, context) => {
   try {
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    Sentry.captureException(err);
     return {
       statusCode: 400,
       body: `Webhook Error: ${err.message}`,
     };
   }
-
-  console.log("Stripe event type:", stripeEvent.type);
 
   // 2. Handle the subscription created event
   if (stripeEvent.type === 'customer.subscription.created') {
@@ -56,9 +61,9 @@ exports.handler = async (event, context) => {
       const customerEmail = customer.email;
 
       if (!customerEmail) {
-        console.error('No email found on Stripe customer.');
+        const err = new Error(`No email found on Stripe customer ${stripeCustomerId}`);
+        Sentry.captureException(err);
       } else {
-        console.log(`Stripe customer email: ${customerEmail}`);
 
         // 2b. Fetch an Auth0 Management API token
         const mgmtToken = await getManagementApiToken();
@@ -77,11 +82,11 @@ exports.handler = async (event, context) => {
 
         const users = auth0UserResp.data;
         if (!users || users.length === 0) {
-          console.error(`No Auth0 user found for email: ${customerEmail}`);
+          const err = new Error(`No Auth0 user found for email: ${customerEmail}`);
+          Sentry.captureException(err);
         } else {
           // Assume the first returned user is correct
           const auth0UserId = users[0].user_id;
-          console.log(`Found Auth0 user ID: ${auth0UserId}`);
 
           // 2d. Determine if the subscription is a pro plan
           let isPro = false;
@@ -119,36 +124,14 @@ exports.handler = async (event, context) => {
                 },
               }
             );
-            
-            console.log(`Updated Auth0 user with subscription status: ${newStatus} and customer ID: ${stripeCustomerId}`);
 
-            // 2g. Optionally, if the user upgraded, you might revoke refresh tokens
-            /*if (isPro) {
-              try {
-                const revokeResp = await axios.post(
-                  `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(
-                    auth0UserId
-                  )}/revoke-refresh-tokens`,
-                  {},
-                  {
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${mgmtToken}`,
-                    },
-                  }
-                );
-                console.log('Revoked refresh tokens for user', auth0UserId, revokeResp.data);
-              } catch (revokeError) {
-                console.error('Error revoking refresh tokens:', revokeError.message);
-              }
-            }*/
           } catch (updateError) {
-            console.error('Error updating Auth0 user metadata:', updateError.message);
+            Sentry.captureException(updateError);
           }
         }
       }
     } catch (err) {
-      console.error('Error retrieving Stripe customer or updating Auth0:', err);
+      Sentry.captureException(err);
     }
   }
   // 3. Handle the subscription cancellation event
@@ -162,9 +145,9 @@ exports.handler = async (event, context) => {
       const customerEmail = customer.email;
 
       if (!customerEmail) {
-        console.error('No email found on Stripe customer during cancellation.');
+        const err = new Error('No email found on Stripe customer during cancellation.');
+        Sentry.captureException(err);
       } else {
-        console.log(`Stripe customer email for cancellation: ${customerEmail}`);
 
         // Fetch an Auth0 Management API token
         const mgmtToken = await getManagementApiToken();
@@ -183,11 +166,11 @@ exports.handler = async (event, context) => {
 
         const users = auth0UserResp.data;
         if (!users || users.length === 0) {
-          console.error(`No Auth0 user found for email: ${customerEmail}`);
+          const err = new Error(`No Auth0 user found for email: ${customerEmail}`);
+          Sentry.captureException(err);
         } else {
           // Assume the first returned user is correct
           const auth0UserId = users[0].user_id;
-          console.log(`Found Auth0 user ID for cancellation: ${auth0UserId}`);
 
           // Update the user's app_metadata to reflect the cancellation
           // Here, we set the status to 'freePendingReauth' 
@@ -203,22 +186,19 @@ exports.handler = async (event, context) => {
               },
             }
           );
-
-          console.log(`Updated Auth0 user with subscription status: freePendingReauth and customer ID: ${stripeCustomerId}`);
         }
       }
     } catch (err) {
-      console.error('Error processing cancellation for Stripe customer or updating Auth0:', err);
+      Sentry.captureException(err);
     }
   } else {
-    console.log(`Unhandled event type: ${JSON.stringify(stripeEvent)}`);
+    const err = new Error(`Unhandled event type: ${JSON.stringify(stripeEvent)}`);
+    Sentry.captureException(err);
   }
-
-  console.log("Returning success");
 
   // Return success so Stripe doesn't retry indefinitely
   return {
     statusCode: 200,
     body: 'Success',
   };
-};
+});

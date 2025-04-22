@@ -3,8 +3,8 @@ const Sentry = require('@sentry/serverless');
 
 Sentry.AWSLambda.init({
   dsn: process.env.SENTRY_DSN,
-  tracesSampleRate: 1.0,               // adjust based on your needs
-  environment: process.env.NODE_ENV,    // e.g. "production"
+  tracesSampleRate: 1.0,
+  environment: process.env.NODE_ENV,
 });
 
 exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
