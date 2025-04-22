@@ -24,7 +24,7 @@ exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       body: JSON.stringify({ url: portalSession.url }),
     };
   } catch (error) {
-    Sentry.captureException(err);
+    Sentry.captureException(error);
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
 });
