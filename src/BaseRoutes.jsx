@@ -1,9 +1,17 @@
-import React, {useEffect} from 'react'
+import {jwtDecode} from 'jwt-decode'
+import React, {useEffect, useState} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
+import Button from '@mui/material/Button'
 import CssBaseline from '@mui/material/CssBaseline'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import {ThemeProvider} from '@mui/material/styles'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from './Auth0/Auth0Proxy'
+import PopupAuth from './Components/Auth/PopupAuth'
+import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
@@ -15,8 +23,6 @@ import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
-import PopupAuth from './Components/Auth/PopupAuth'
-import PopupCallback from './Components/Auth/PopupCallback'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
@@ -40,18 +46,28 @@ export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
-  const basePath = `${installPrefix }/`
+  const basePath = `${installPrefix}/`
   const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
+  const setAppMetadata = useStore((state) => state.setAppMetadata)
+  const theme = useShareTheme()
 
+  // State for reauthentication modal.
+  const [reauthModalOpen, setReauthModalOpen] = useState(false)
+  const [reauthScope, setReauthScope] = useState('')
+  const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
   useEffect(() => {
     setAppPrefix(appPrefix)
-  }, [setAppPrefix, appPrefix])
 
+    if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+      window.store = useStore
+    }
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setAppPrefix, appPrefix])
 
   useEffect(() => {
     const checkAvailability = async () => {
@@ -67,10 +83,8 @@ export default function BaseRoutes({testElt = null}) {
     checkAvailability()
   }, [setIsOpfsAvailable])
 
-
   useEffect(() => {
-    if (location.pathname === installPrefix ||
-        location.pathname === basePath) {
+    if (location.pathname === installPrefix || location.pathname === basePath) {
       const fwdPath = `${appPrefix}`
       debug().log('BaseRoutes#useEffect[], forwarding to: ', fwdPath)
       navWith(navigate, fwdPath)
@@ -82,52 +96,105 @@ export default function BaseRoutes({testElt = null}) {
       getAccessTokenSilently({
         authorizationParams: {
           audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access repo',
+          scope: 'openid profile email offline_access',
         },
-      }).then((token) => {
-        if (token !== '') {
-          initializeOctoKitAuthenticated()
-        } else {
-          initializeOctoKitUnauthenticated()
-        }
-        setAccessToken(token)
-      }).catch((err) => {
-        if (err.error !== 'login_required') {
-          throw err
-        }
+        cacheMode: 'off',
+        useRefreshTokens: true,
       })
-    }
-  }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
-      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
-
-  const theme = useShareTheme()
-  return (
-    <CssBaseline enableColorScheme>
-      <ThemeProvider theme={theme}>
-        <Styles theme={theme}/>
-        <SentryRoutes>
-          {usePageTracking()}
-          <Route path={basePath} element={<Outlet/>}>
-            <Route
-              path='share/*'
-              element={
-                testElt ||
-                  <ShareRoutes
-                    installPrefix={installPrefix}
-                    appPrefix={`${appPrefix}`}
-                  />
+        .then((token) => {
+          if (token !== '') {
+            // Cypress check
+            if (token.access_token && token.access_token === 'mock_access_token') {
+              initializeOctoKitAuthenticated()
+              setAccessToken(token)
+              return
+            }
+            const decodedToken = jwtDecode(token)
+            const appData = decodedToken['https://bldrs.ai/app_metadata']
+            if (appData) {
+              if (appData.subscriptionStatus === 'shareProPendingReauth') {
+                // Instead of immediately calling window.open we show a modal dialog.
+                setReauthScope('repo')
+                setReauthModalOpen(true)
+              } else if (appData.subscriptionStatus === 'freePendingReauth') {
+                setReauthScope('public_repo')
+                setReauthModalOpen(true)
+              } else {
+                setAppMetadata(appData)
+                initializeOctoKitAuthenticated()
+                setAccessToken(token)
               }
-            />
-            <Route path='about' element={<About/>}/>
-            <Route
-              path='blog/*'
-              element={<BlogRoutes/>}
-            />
-          </Route>
-          <Route path='popup-auth' element={<PopupAuth/>}/>
-          <Route path='popup-callback' element={<PopupCallback/>}/>
-        </SentryRoutes>
-      </ThemeProvider>
-    </CssBaseline>
+            }
+          } else {
+            initializeOctoKitUnauthenticated()
+            setAccessToken(token)
+          }
+        })
+        .catch((err) => {
+          if (err.error !== 'login_required') {
+            throw err
+          }
+        })
+    }
+  }, [
+    appPrefix,
+    setAppPrefix,
+    basePath,
+    installPrefix,
+    location,
+    navigate,
+    isLoading,
+    isAuthenticated,
+    getAccessTokenSilently,
+    setAccessToken,
+    setAppMetadata,
+  ])
+
+  return (
+    <>
+      <CssBaseline enableColorScheme>
+        <ThemeProvider theme={theme}>
+          <Styles theme={theme}/>
+          <SentryRoutes>
+            {usePageTracking()}
+            <Route path={basePath} element={<Outlet/>}>
+              <Route
+                path='share/*'
+                element={
+                  testElt || (
+                    <ShareRoutes
+                      installPrefix={installPrefix}
+                      appPrefix={`${appPrefix}`}
+                    />
+                  )
+                }
+              />
+              <Route path='about' element={<About/>}/>
+              <Route path='blog/*' element={<BlogRoutes/>}/>
+            </Route>
+            <Route path='popup-auth' element={<PopupAuth/>}/>
+            <Route path='popup-callback' element={<PopupCallback/>}/>
+          </SentryRoutes>
+        </ThemeProvider>
+      </CssBaseline>
+
+      {/* Reauthentication Modal */}
+      <Dialog open={reauthModalOpen} onClose={() => setReauthModalOpen(false)}>
+        <DialogTitle>Reauthentication Required</DialogTitle>
+        <DialogContent>
+          Your session requires reauthentication with GitHub. Please click the button below to proceed.
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              window.open(`/popup-auth?scope=${reauthScope}`, 'authPopup', 'width=600,height=600')
+              setReauthModalOpen(false)
+            }}
+          >
+            Reauthenticate
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }

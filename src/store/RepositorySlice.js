@@ -11,6 +11,9 @@ export default function createRepositorySlice(set, get) {
     accessToken: '',
     setAccessToken: (token) => set(() => ({accessToken: token})),
 
+    appMetadata: {},
+    setAppMetadata: (metadata) => set({appMetadata: metadata}),
+
     branches: [],
     setBranches: (branches) => set(() => ({issues: branches})),
 

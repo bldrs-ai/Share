@@ -27,9 +27,87 @@ export function initHandlers(defines) {
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
   handlers.push(...githubHandlers(defines, false))
+  handlers.push(...netlifyHandlers())
+  handlers.push(...stripePortalHandlers())
+  handlers.push(...subscribePageHandler())
   return handlers
 }
 
+/**
+ * Handlers for Netlify functions
+ *
+ * @return {Array<object>} handlers
+ */
+function netlifyHandlers() {
+  return [
+    rest.post('/.netlify/functions/create-portal-session', async (req, res, ctx) => {
+      const {stripeCustomerId} = await req.json()
+
+      if (!stripeCustomerId) {
+        const HTTP_BAD_REQUEST = 400
+        return res(
+          ctx.status(HTTP_BAD_REQUEST),
+          ctx.json({error: 'Missing stripeCustomerId'}),
+        )
+      }
+
+      // return a mocked Stripe billing-portal URL
+      const fakeUrl = `https://stripe.portal.msw/mockportal/session/${stripeCustomerId}`
+      return res(
+        ctx.status(httpOk),
+        ctx.json({url: fakeUrl}),
+      )
+    }),
+  ]
+}
+
+/**
+ * Mock out the “/subscribe” page itself.
+ *
+ * @return {Array<object>} handlers
+ */
+function subscribePageHandler() {
+  return [
+    // this will catch GET /subscribe, /subscribe/, or /subscribe?foo=bar
+    rest.get('/subscribe*', (req, res, ctx) => {
+      return res(
+        ctx.status(httpOk),
+        ctx.set('Content-Type', 'text/html'),
+        ctx.body(`
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <title>Mock Subscribe Page</title>
+            </head>
+            <body>
+              <h1>Mock Subscribe Page</h1>
+              <p>Mock Stripe UI.</p>
+              <button id="start-payment">Start Payment</button>
+            </body>
+          </html>
+        `.trim()),
+      )
+    }),
+  ]
+}
+
+
+/**
+ * Catch the client navigating to the fake Stripe portal page.
+ *
+ * @return {Array<object>} handlers
+ */
+function stripePortalHandlers() {
+  return [
+    rest.get('https://stripe.portal.msw/mockportal/session/:stripeCustomerId', (req, res, ctx) => {
+      return res(
+        ctx.status(httpOk),
+        ctx.text('<html><body><h1>Mock Stripe Portal</h1></body></html>'),
+      )
+    }),
+  ]
+}
 
 /**
  * Mock to disable Google Analytics.
