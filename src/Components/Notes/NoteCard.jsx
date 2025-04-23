@@ -14,12 +14,8 @@ import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
-import {
-  addCameraUrlParams,
-  setCameraFromParams,
-  parseHashParams,
-  removeCameraUrlParams,
-} from '../Camera/CameraControl'
+import {addCameraUrlParams, parseHashParams, setCameraFromParams} from '../Camera/CameraControl'
+import {removeCameraUrlParams} from '../Camera/hashState'
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
 import NoteContent from './NoteContent'

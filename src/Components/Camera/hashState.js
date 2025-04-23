@@ -1,5 +1,6 @@
 import {
   removeParamsFromHash as utilsRemoveParamsFromHash,
+  removeHashParams,
 } from '../../utils/location'
 
 
@@ -13,4 +14,10 @@ export const HASH_PREFIX_CAMERA = 'c'
  */
 export function removeParamsFromHash(hash) {
   return utilsRemoveParamsFromHash(hash, HASH_PREFIX_CAMERA)
+}
+
+
+/** Removes camera params from the URL if present */
+export function removeCameraUrlParams() {
+  removeHashParams(window.location, HASH_PREFIX_CAMERA)
 }
