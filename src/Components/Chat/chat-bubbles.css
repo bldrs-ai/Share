@@ -1,0 +1,27 @@
+/* right-side (user) bubble */
+.rce-mbox.right {
+  background-color: var(--mui-primary, #1976d2);
+  color: #fff;                         /* everything in the bubble */
+}
+.rce-mbox.right .rce-mbox-title,
+.rce-mbox.right .rce-mbox-text {
+  color: #fff;                         /* ensure inner text stays white */
+}
+
+/* left-side (bot) bubble */
+.rce-mbox.left {
+  background-color: #f1f1f1;
+  color: #000;
+}
+.rce-mbox.left .rce-mbox-title,
+.rce-mbox.left .rce-mbox-text {
+  color: #000;                         /* dark text on light bubble */
+}
+
+.rce-mbox-left-notch {
+  fill: red;
+}
+
+.rce-mbox-right-notch {
+  fill: red;
+}

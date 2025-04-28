@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1353",
+  "version": "1.0.1369",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -108,6 +108,7 @@
     "postprocessing": "6.29.3",
     "prop-types": "15.8.1",
     "react": "18.2.0",
+    "react-chat-elements": "^12.0.18",
     "react-cosmos": "6.0.0-beta.6",
     "react-cosmos-plugin-webpack": "6.0.0-beta.6",
     "react-dom": "18.2.0",
