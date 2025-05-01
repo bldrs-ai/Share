@@ -71,7 +71,7 @@
     "@babel/plugin-syntax-import-assertions": "7.18.6",
     "@babel/preset-env": "7.18.10",
     "@babel/preset-react": "7.18.6",
-    "@bldrs-ai/conway-web-ifc-adapter": "0.18.886",
+    "@bldrs-ai/conway-web-ifc-adapter": "0.18.902",
     "@bldrs-ai/ifclib": "5.3.3",
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",

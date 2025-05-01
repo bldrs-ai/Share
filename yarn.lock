@@ -2284,20 +2284,20 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.18.886":
-  version "0.18.886"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.18.886.tgz#eafb9ead57531c563062648510c22eb41fb35143"
-  integrity sha512-roreKb248f3W7kSL/Ou97VtvrtvZKJaAerAJ7j7ciRrjtBjbFCS760ObXZZbIZeiMA4VrfyPAL+inJDTMfc3bA==
+"@bldrs-ai/conway-web-ifc-adapter@0.18.902":
+  version "0.18.902"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.18.902.tgz#2b1992490c2c8780fbfb2ceb58dfeb008312d4b6"
+  integrity sha512-tLsSs8XRVe5jK1+j1P0HZXYD/yHjORN178Zel+C/aNH2qnLTQVkrLfAOb57oVjGRXB6hXTav35feFYsRI09lQQ==
   dependencies:
-    "@bldrs-ai/conway" "0.18.886"
+    "@bldrs-ai/conway" "0.18.902"
     "@types/node" "22.5.5"
     gl-matrix "^3.4.3"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.18.886":
-  version "0.18.886"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.18.886.tgz#aa04f73377fb0547872a0e1b6c7576e340c8d3a6"
-  integrity sha512-eSEXML7QgHIHEM5Sc0t8dXdNhH9QW6urq3C+41KYPJ7V/oADLGNaxCZ7IOkJ/8oi/7n+125DR8lsPto4SIFpig==
+"@bldrs-ai/conway@0.18.902":
+  version "0.18.902"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.18.902.tgz#b1bef24bf5d2ac64e3404db14075a5d98dd0f28d"
+  integrity sha512-QwgwdKx1uIDdQbGZ6oRiWKANVGM1fJvwna+jaabjy3dWpAWOp9Lu52iVhnTp4yYCk6QeUW/Qh+hVDSAanxdMZQ==
   dependencies:
     seedrandom "3.0.5"
     three "^0.173.0"
