@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
@@ -41,6 +42,21 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   setCustomViewSettings(customViewSettings) {
     this.viewsManager.setViewSettings(customViewSettings)
+  }
+
+  async getSelectedElementsProps(hits) {
+    const manager = this.IFC.loader.ifcManager
+    // TODO: Update this to use the modelID
+    const modelID = 0
+    const results = []
+    for (const expressID of hits) {
+      const props = await this.IFC.getProperties(modelID, expressID, false, false)
+
+      props.type = manager.getIfcType(modelID, expressID)
+
+      results.push({modelID, expressID, props})
+    }
+    return results
   }
 
   /**
