@@ -29,7 +29,7 @@ export default function FloatingChat() {
   const botBg = theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[200]
   const botText = theme.palette.getContrastText(botBg)
 
-  const MAX_IDS = 15 // threshold for “too big”
+  // eslint-disable max-len
 
   const BASE_SYSTEM_MSG = {
     role: 'system',
@@ -53,7 +53,8 @@ export default function FloatingChat() {
       '    → shorthand for all IDs of a class name, needed for selecting and hiding.',
       '- viewer.IFC.loader.ifcManager.getItemProperties(modelID, expressID)',
       '    → full property map if you need more data',
-      '',
+      '- await viewer.getByFloor(floorNumber)',
+      '    → select or isolate all elements on a floor (floorNumber). If you use this, just return await viewer.getByFloor(whatever floor number you should use). NO OTHER CODE AND DONT WRAP IN A FUNCTION.',
       'Use these in your client_code to build any custom selection. Use 0 for modelID. Do NOT use getAllItemsOfType, and do not map or mutate the result before returning. Just return the function without doing any mapping of the return value.',
       'At the end of client_code, return an array of expressIDs to highlight.',
       'ALWAYS RETURN an assistant_response!',
@@ -64,6 +65,8 @@ export default function FloatingChat() {
       'Always wrap your JSON reply in a ```json … ``` code block and include ONLY JSON—no extra text.',
     ].join('\\n'),
   }
+
+    // eslint-enable max-len
 
   /**
    *
@@ -134,6 +137,12 @@ return
         prompt = [
           BASE_SYSTEM_MSG,
           {role: 'system', content: many ? 'ContextTooLarge' : `Selected elements: ${context}`},
+          {role: 'user', content: content},
+        ]
+      } else {
+        prompt = [
+          BASE_SYSTEM_MSG,
+          {role: 'system', content: 'ContextTooLarge'},
           {role: 'user', content: content},
         ]
       }

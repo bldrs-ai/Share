@@ -59,6 +59,73 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     return results
   }
 
+  async getByFloor(floorNumber) {
+    // 1. get the full project hierarchy (includeProperties for Elevation)
+    const manager = this.IFC.loader.ifcManager
+    const structure = await manager.getSpatialStructure(0, true)
+    const projectNode = Array.isArray(structure) ?
+    structure[0] :
+    structure
+  if (!projectNode) {
+    console.warn('No project node found in spatial structure')
+    return []
+  }
+
+    // helper: pull out every IfcBuildingStorey node
+    /**
+     *
+     */
+    function collectStoreys(node, out = []) {
+      if (node.type === 'IFCBUILDINGSTOREY') {
+out.push(node)
+}
+      for (const c of node.children || []) {
+collectStoreys(c, out)
+}
+      return out
+    }
+
+    // 2. extract & sort by Elevation
+    const storeys = collectStoreys(projectNode)
+      .map((s) => ({
+        id: s.expressID,
+        elev: Number(s.properties?.Elevation?.value ?? 0),
+        node: s,
+      }))
+      .sort((a, b) => a.elev - b.elev)
+
+    // 3. pick the requested floor (1-indexed)
+    const idx = floorNumber - 1
+    if (idx < 0 || idx >= storeys.length) {
+      console.warn(`Floor ${floorNumber} out of range (1–${storeys.length})`)
+      return []
+    }
+    const floorNode = storeys[idx].node
+
+     // 4. collect all expressIDs under this storey via node.children
+    /**
+     *
+     */
+    function collectElements(node) {
+      const out = [];
+      (node.children || []).forEach((child) => {
+        // grab the ID of this child
+        if (typeof child.expressID === 'number') {
+          out.push(child.expressID)
+        }
+        // recurse into its children
+        out.push(...collectElements(child))
+      })
+      return out
+    }
+
+    // 4. get every element on that floor
+    const elementIDs = collectElements(floorNode)
+
+
+    return elementIDs
+  }
+
   /**
    * Loads the given IFC in the current scene.
    *
