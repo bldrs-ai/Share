@@ -47,7 +47,7 @@ export default function BaseRoutes({testElt = null}) {
   const navigate = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix}/`
-  const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
+  const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
@@ -131,7 +131,9 @@ export default function BaseRoutes({testElt = null}) {
           }
         })
         .catch((err) => {
-          if (err.error !== 'login_required') {
+          if (err.error === 'invalid_grant') {
+            logout({returnTo: window.location.origin})
+          } else if (err.error !== 'login_required') {
             throw err
           }
         })
@@ -148,6 +150,7 @@ export default function BaseRoutes({testElt = null}) {
     getAccessTokenSilently,
     setAccessToken,
     setAppMetadata,
+    logout,
   ])
 
   return (
