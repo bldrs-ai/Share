@@ -79,7 +79,13 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
             }
           }
           workerRef.addEventListener('message', listener)
-          opfsWriteModel(tmpUrl, event.target.files[0].name, fileNametmpUrl)
+          const filename = event.target.files[0].name
+          const dotParts = filename.split('.')
+          if (dotParts.length <= 1) {
+            throw new Error('Cannot extract filetype from filename')
+          }
+          const ext = dotParts[dotParts.length - 1]
+          opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
         } else {
           onLoad(fileNametmpUrl)
         }

@@ -235,10 +235,7 @@ export default function CadView({
     try {
       loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
-      // TODO(pablo): useful to have a trace in prod
-      // eslint-disable-next-line no-console
-      console.trace(error)
-      setSnackMessage(`Error: ${error.message}`)
+      setAlert(error)
       return
     } finally {
       setIsModelLoading(false)
