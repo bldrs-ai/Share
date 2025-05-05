@@ -30,6 +30,9 @@ describe('Open 100: Open model dialog', () => {
       cy.get('[data-testid="button_open_file"]').contains('Browse files...')
       cy.percySnapshot()
     })
+    // TODO(pablo): tried a bunch of approaches for testing the open file
+    // w/system dialog but can't get it working in cypress.  Need to get the fix
+    // checked in (#1361), so punting for now.
   })
   context('Returning user visits homepage logged in', () => {
     beforeEach(() => {
