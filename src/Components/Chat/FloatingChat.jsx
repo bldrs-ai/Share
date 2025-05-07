@@ -29,7 +29,7 @@ export default function FloatingChat() {
   const botBg = theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[200]
   const botText = theme.palette.getContrastText(botBg)
 
-  // eslint-disable max-len
+  /* eslint-disable max-len */
 
   const BASE_SYSTEM_MSG = {
     role: 'system',
@@ -66,10 +66,10 @@ export default function FloatingChat() {
     ].join('\\n'),
   }
 
-    // eslint-enable max-len
+  /* eslint-enable max-len */
 
   /**
-   *
+   * @return {string | null} JSON string or nothing if not found
    */
   function safeJsonFromCodeBlock(text) {
     const match = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/i)
@@ -77,26 +77,8 @@ export default function FloatingChat() {
 return null
 }
     try {
- return JSON.parse(match[1])
-} catch {
- return null
-}
-  }
-
-
-  /* helper — pull first {...} JSON inside a ``` block */
-/**
- *
- */
-function extractSelectedIds(text) {
-  const block = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/i)
-  if (!block) {
-return null
-}
-  try {
-    const parsed = JSON.parse(block[1])
-    return Array.isArray(parsed.selectedElements) ? parsed.selectedElements : null
-  } catch {
+    return JSON.parse(match[1])
+    } catch {
     return null
   }
 }
@@ -127,7 +109,6 @@ return
       const selectedProps = await viewer.getSelectedElementsProps(selectedElements)
 
       let context = null
-      const visible = null
       const many = false
       let prompt = null
 
@@ -155,6 +136,8 @@ return
 
       /* 5️⃣ extract JSON payload */
       const payload = safeJsonFromCodeBlock(raw)
+
+      // eslint-disable-next-line no-console
       console.log('LLM response:', payload)
       const assistantText = payload?.assistant_response || raw
 
@@ -169,6 +152,7 @@ return
     if (typeof payload.client_code === 'string') {
       try {
         /* Wrap the code, then invoke any function it defines */
+        // eslint-disable-next-line no-console
         console.log(payload.client_code)
 
 
@@ -301,7 +285,7 @@ return
             <InputBase
               fullWidth value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={async (e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder="Type a message…"
               sx={{
                 color: theme.palette.text.primary,

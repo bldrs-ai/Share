@@ -1,4 +1,3 @@
-import * as THREE from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
@@ -44,6 +43,11 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.viewsManager.setViewSettings(customViewSettings)
   }
 
+  /**
+   *
+   * @param {Array} hits
+   * @return {Array} results
+   */
   async getSelectedElementsProps(hits) {
     const manager = this.IFC.loader.ifcManager
     // TODO: Update this to use the modelID
@@ -59,6 +63,11 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     return results
   }
 
+  /**
+   *
+   * @param {number} floorNumber
+   * @return {Array} structure
+   */
   async getByFloor(floorNumber) {
     // 1. get the full project hierarchy (includeProperties for Elevation)
     const manager = this.IFC.loader.ifcManager
@@ -73,7 +82,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
     // helper: pull out every IfcBuildingStorey node
     /**
-     *
+     * @return {Array} storeys
      */
     function collectStoreys(node, out = []) {
       if (node.type === 'IFCBUILDINGSTOREY') {
@@ -104,7 +113,7 @@ collectStoreys(c, out)
 
      // 4. collect all expressIDs under this storey via node.children
     /**
-     *
+     * @return {Array} elements
      */
     function collectElements(node) {
       const out = [];
