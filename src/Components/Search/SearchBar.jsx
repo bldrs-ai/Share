@@ -15,18 +15,16 @@ import CloseIcon from '@mui/icons-material/Close'
  * file paths
  *
  * @property {string} [placeholder] Text to display when search bar is inactive
- * @property {string} [helperText] Text to display under the TextField
  * @property {boolean} [isGitHubSearch] Strict screening for GH only links
  * @property {Function} [onSuccess] Optional callback when search succeeds
  * @return {ReactElement}
  */
 export default function SearchBar({
-  placeholder = 'Search',
-  helperText = 'Search building or paste model link',
+  placeholder = 'Model query or GitHub model link',
   isGitHubSearch = false,
   onSuccess = null,
 }) {
-  assertDefined(placeholder, helperText, isGitHubSearch)
+  assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -117,7 +115,7 @@ export default function SearchBar({
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder='Search'
+            placeholder={placeholder}
             variant='outlined'
             sx={{
               width: '100%',
