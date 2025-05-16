@@ -2,6 +2,7 @@ import React, {ReactElement, useMemo} from 'react'
 import Markdown from 'react-markdown'
 import useStore from '../../store/useStore'
 import CardContent from '@mui/material/CardContent'
+import Typography from '@mui/material/Typography'
 import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {getHashParamsFromHashStr, getObjectParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
@@ -79,6 +80,11 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
     }
   }
 
+  const headerStyle = {
+    fontWeight: 'bold',
+    margin: '0.5em 0 0.5em 0',
+  }
+
   return (
     <CardContent>
       <Markdown
@@ -92,6 +98,15 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
               {children}
             </a>
           ),
+          h1: ({children}) => <Typography variant='h1' sx={headerStyle}>{children}</Typography>,
+          h2: ({children}) => <Typography variant='h2' sx={headerStyle}>{children}</Typography>,
+          h3: ({children}) => <Typography variant='h3' sx={headerStyle}>{children}</Typography>,
+          h4: ({children}) => <Typography variant='h4' sx={headerStyle}>{children}</Typography>,
+          h5: ({children}) => <Typography variant='h5' sx={headerStyle}>{children}</Typography>,
+          h6: ({children}) => <Typography variant='h6' sx={headerStyle}>{children}</Typography>,
+          p: ({children}) => <Typography variant='body1'>{children}</Typography>,
+          ul: ({children}) => <Typography variant='body1'><ul>{children}</ul></Typography>,
+          ol: ({children}) => <Typography variant='body1'><ol>{children}</ol></Typography>,
         }}
       >
         {noteContentLinksLocalized}

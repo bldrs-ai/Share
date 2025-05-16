@@ -1,4 +1,4 @@
-const drawerWidthInitial = 350
+const drawerWidthInitial = 370
 const drawerHeightInitial = '50vh'
 
 

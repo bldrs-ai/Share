@@ -48,11 +48,25 @@ export const sampleIssues = [
   {
     id: 126,
     title: 'issueTitle_4',
-    body: `issueBody_4. Lorem ipsum dolor sit amet, consectetur adipiscing
-    elit. Fusce tellus odio, dapibus id fermentum quis, suscipit id erat.
-    Pellentesque ipsum. Nulla pulvinar eleifend sem. Nullam varius, turpis
-    et commodo pharetra, est eros bibendum elit, nec luctus magna felis
-    sollicitudin mauris. Integer in mauris eu nibh euismod gravida.
+    body: `# Title 1
+    Foo
+    ## Title 2
+    Bar
+    ### Title 3
+    Baz
+    #### Title 4
+    Qux
+    ##### Title 5
+    Quux
+    ###### Title 6
+    Corge
+    Some text, then a list:
+    1. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+    2. Fusce tellus odio, dapibus id fermentum quis, suscipit id erat.
+    3. Pellentesque ipsum. Nulla pulvinar eleifend sem.
+    4. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec
+    luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod
+    gravida.
     - [cam 1](http://bogus:0/share/v/p/index.ifc#i:;c:-73.467,127.432,94,-27.69,7.071,1.331;)
     `,
   },
