@@ -1158,7 +1158,8 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
 
         // Search for any file in the directory that contains either the etag or commitHash
         for await (const [name, handle] of currentHandle.entries()) {
-          if (handle.kind === 'file' && (name.includes(etag) || (commitHash !== null && name.includes(commitHash)))) {
+          if (handle.kind === 'file' && (name.includes(etag) ||
+           (commitHash !== null && name.includes(commitHash) && name.startsWith(segment)))) {
             return [currentHandle, handle] // Return the handle of the matching file
           }
         }
