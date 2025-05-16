@@ -67,6 +67,7 @@ export function getValidExtension(pathOrExt) {
   if (lastDotNdx !== -1) {
     pathOrExt = pathOrExt.substring(lastDotNdx + 1)
   }
+  pathOrExt = pathOrExt.toLowerCase()
   const match = filetypeRegex.exec(pathOrExt)
   if (!match) {
     throw new FilenameParseError(`pathOrExt(${pathOrExt}) must contain ".${typeRegexStr}" (case-insensitive)`)

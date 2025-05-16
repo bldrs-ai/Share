@@ -1,6 +1,7 @@
 import {
   FilenameParseError,
   analyzeHeaderStr,
+  getValidExtension,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -39,6 +40,15 @@ describe('Filetype', () => {
     }
   })
 
+  it('getValidExtension', () => {
+    for (const ext of supportedTypes) {
+      const extLower = ext.toLowerCase()
+      const extUpper = ext.toUpperCase()
+      expect(getValidExtension(ext)).toBe(extLower)
+      expect(getValidExtension(extLower)).toBe(extLower)
+      expect(getValidExtension(extUpper)).toBe(extLower)
+    }
+  })
 
   it('splitAroundExtension', () => {
     for (const ext of supportedTypes) {
