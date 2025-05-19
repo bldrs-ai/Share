@@ -41,7 +41,7 @@ describe('NotesAndPropertiesDrawer', () => {
     const xResizerEl = notesAndPropsRender.getByTestId(ID_RESIZE_HANDLE_X)
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
-    const expectedWidth = 350 // TODO(pablo): hack, should be window.innerWidth
+    const expectedWidth = 370
     expect(storeHook.result.current.leftDrawerWidth).toBe(expectedWidth)
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)

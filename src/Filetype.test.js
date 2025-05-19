@@ -1,6 +1,7 @@
 import {
   FilenameParseError,
   analyzeHeaderStr,
+  getValidExtension,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -12,17 +13,42 @@ describe('Filetype', () => {
   const unsupportedFiletypes = ['arff', 'zip']
   it('supports only known extensions', () => {
     for (const ext of supportedTypes) {
+      const extLower = ext.toLowerCase()
+      const extUpper = ext.toUpperCase()
       expect(isExtensionSupported(ext)).toBe(true)
+      expect(isExtensionSupported(extLower)).toBe(true)
+      expect(isExtensionSupported(extUpper)).toBe(true)
       const path = `foo/bar/baz.${ext}`
+      const pathLower = `foo/bar/baz.${extLower}`
+      const pathUpper = `foo/bar/baz.${extUpper}`
       expect(pathSuffixSupported(path)).toBe(true)
+      expect(pathSuffixSupported(pathLower)).toBe(true)
+      expect(pathSuffixSupported(pathUpper)).toBe(true)
     }
     for (const ext of unsupportedFiletypes) {
+      const extLower = ext.toLowerCase()
+      const extUpper = ext.toUpperCase()
       expect(isExtensionSupported(ext)).toBe(false)
+      expect(isExtensionSupported(extLower)).toBe(false)
+      expect(isExtensionSupported(extUpper)).toBe(false)
       const path = `foo/bar/baz.${ext}`
+      const pathLower = `foo/bar/baz.${extLower}`
+      const pathUpper = `foo/bar/baz.${extUpper}`
       expect(pathSuffixSupported(path)).toBe(false)
+      expect(pathSuffixSupported(pathLower)).toBe(false)
+      expect(pathSuffixSupported(pathUpper)).toBe(false)
     }
   })
 
+  it('getValidExtension', () => {
+    for (const ext of supportedTypes) {
+      const extLower = ext.toLowerCase()
+      const extUpper = ext.toUpperCase()
+      expect(getValidExtension(ext)).toBe(extLower)
+      expect(getValidExtension(extLower)).toBe(extLower)
+      expect(getValidExtension(extUpper)).toBe(extLower)
+    }
+  })
 
   it('splitAroundExtension', () => {
     for (const ext of supportedTypes) {

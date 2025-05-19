@@ -34,11 +34,7 @@ export default function ControlsGroup() {
         {isSearchEnabled && <SearchControl/>}
         {isSearchEnabled &&
          isSearchBarVisible &&
-         <SearchBar
-           placeholder='Search'
-           helperText='Paste GitHub file link to open the model'
-           onSuccess={() => setIsSearchBarVisible(false)}
-         />}
+         <SearchBar onSuccess={() => setIsSearchBarVisible(false)}/>}
       </Stack>
       <Stack>
         {isNavTreeEnabled && <NavTreeControl/>}
