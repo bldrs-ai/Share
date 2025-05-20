@@ -7,6 +7,7 @@ import {
   safePathSplit,
   testUuid,
   toTitleCase,
+  toKey,
 } from './strings'
 
 
@@ -107,5 +108,11 @@ describe('strings', () => {
     expect(safePathSplit('/a/')).toStrictEqual(['a'])
     expect(safePathSplit('/a/b')).toStrictEqual(['a', 'b'])
     expect(safePathSplit('/a/b/c')).toStrictEqual(['a', 'b', 'c'])
+  })
+
+  it('toKey removes non alphanumerics', () => {
+    expect(toKey('abc')).toBe('abc')
+    expect(toKey('a-b-c')).toBe('abc')
+    expect(toKey('a_b-c.d')).toBe('abcd')
   })
 })
