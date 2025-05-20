@@ -230,7 +230,22 @@ export default function CadView({
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
 
-    const onProgress = (progressMsg) => setSnackMessage(`${loadingMessageBase}: ${progressMsg}`)
+    const onProgress = (progressMsg) => {
+      let msg
+      if (progressMsg && typeof progressMsg === 'object') {
+        const loadedBytes = progressMsg.loaded ?? progressMsg.receivedLength
+        if (Number.isFinite(loadedBytes)) {
+          // eslint-disable-next-line no-magic-numbers
+          const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+          msg = `${loadedMegs} MB`
+        } else {
+          msg = JSON.stringify(progressMsg)
+        }
+      } else {
+        msg = progressMsg
+      }
+      setSnackMessage(`${loadingMessageBase}: ${msg}`)
+    }
     let loadedModel
     try {
       loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
