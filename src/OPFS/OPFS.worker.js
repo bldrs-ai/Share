@@ -1577,3 +1577,39 @@ function safePathSplit(pathStr) {
   }
   return parts
 }
+
+// Export functions when running under Node (e.g. for Jest tests)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    snapshotCache,
+    traverseDirectory,
+    clearCache,
+    deleteAllEntries,
+    fetchLatestCommitHash,
+    fetchRGHUC,
+    fetchAndHeadRequest,
+    computeGitBlobSha1FromHandle,
+    computeGitBlobSha1FromFile,
+    writeTemporaryFileToOPFS,
+    writeTemporaryBase64BlobFileToOPFS,
+    generateMockResponse,
+    base64ToBlob,
+    writeBase64Model,
+    downloadModel,
+    downloadModelToOPFS,
+    writeFileToPath,
+    retrieveFileWithPath,
+    retrieveFileWithPathNew,
+    writeFileToHandle,
+    writeModelToOPFSFromFile,
+    renameFileInOPFS,
+    doesFileExistInOPFS,
+    deleteModelFromOPFS,
+    writeModelToOPFS,
+    readModelFromOPFS,
+    writeFileToOPFS,
+    readFileFromOPFS,
+    assertValues,
+    safePathSplit,
+  }
+}
