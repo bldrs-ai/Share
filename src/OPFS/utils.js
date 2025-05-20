@@ -404,7 +404,6 @@ export function saveDnDFileToOpfs(file, type, callback) {
   let workerRef = null
   workerRef = initializeWorker()
 
-  debug().log('OPFS/utils#saveDnDFileToOpfs: event:', event)
   const tmpUrl = URL.createObjectURL(file)
   debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
   // Post message to the worker to handle the file
