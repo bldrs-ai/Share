@@ -18,11 +18,13 @@ describe('loadLocalFile', () => {
 
     // Mock input change event with a file
     const inputElement = document.querySelector('input[type="file"]')
+    const file = new File(['dummy'], 'test.ifc')
+    Object.defineProperty(inputElement, 'files', {value: [file]})
 
     const event = new Event('change', {bubbles: true})
     inputElement.dispatchEvent(event)
 
-    expect(URL.createObjectURL).toHaveBeenCalledWith(event.target.files[0])
+    expect(URL.createObjectURL).toHaveBeenCalledWith(file)
     expect(onLoad).toHaveBeenCalled()
   })
 

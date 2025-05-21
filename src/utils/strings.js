@@ -23,7 +23,7 @@ export function stoi(s) {
  * @return {string} The converted result
  */
 export function toKey(str) {
-  return str.replace(/[^a-zA-Z0-9]+/, '')
+  return str.replace(/[^a-zA-Z0-9]+/g, '')
 }
 
 

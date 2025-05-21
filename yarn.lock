@@ -2284,20 +2284,20 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.21.911":
-  version "0.21.911"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.21.911.tgz#a7e4f32476d8e1b11285507b791f3ae20c4c6577"
-  integrity sha512-pKU4ZCgdgv+m9MhfS1HzZ0FUAMYW55ZEEB2jYf3plo8TOTUOT+lGM/LdjP+GmjAONHplePxzClaQN3fGJ/9RpA==
+"@bldrs-ai/conway-web-ifc-adapter@0.22.921":
+  version "0.22.921"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.22.921.tgz#adf00edd7366044eca0f20408d03aba1a89aa1f6"
+  integrity sha512-p1dHSdI+MVeyMVpJjtmVR3m/UqbI06VsU7EX/RTnL5GuX0VP3CimeRSS3eiRvk5lbpPxjJLM4QOW92uPehXXnw==
   dependencies:
-    "@bldrs-ai/conway" "0.21.911"
+    "@bldrs-ai/conway" "0.22.921"
     "@types/node" "22.5.5"
     gl-matrix "^3.4.3"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.21.911":
-  version "0.21.911"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.21.911.tgz#ed7ff24aaa5ef7e4d42f82d88cf258f038605846"
-  integrity sha512-/kfWhIs0gckq51bRl5w2A9X1F56W9LPFFKgdFjfxa92LUDaF9AvHeiMLn+mKl51+Vedxw+B8EuK3ZkjDMwcM1g==
+"@bldrs-ai/conway@0.22.921":
+  version "0.22.921"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.22.921.tgz#c138a7a8b8b80f62206185cabdf76327d1fc91b5"
+  integrity sha512-oBkDHu/0GyYC33PIkeck3xWm9VxmMw1N8/xNf8Xjh1Vv8/CI95AZQEkXUaxT6BtJHepsQqcET2LhqoOcLFAGoQ==
   dependencies:
     seedrandom "3.0.5"
     three "^0.173.0"
@@ -12079,9 +12079,9 @@ web-ifc-three@^0.0.118:
     three-mesh-bvh "^0.5.11"
     web-ifc "^0.0.35"
 
-"web-ifc-viewer@file:web-ifc-viewer-1.0.209-bldrs-7.tgz":
+web-ifc-viewer@./web-ifc-viewer-1.0.209-bldrs-7.tgz:
   version "1.0.209-bldrs-2"
-  resolved "file:web-ifc-viewer-1.0.209-bldrs-7.tgz#586235ecfd5f2e09bf8a205845c68dd2c09257c4"
+  resolved "./web-ifc-viewer-1.0.209-bldrs-7.tgz#586235ecfd5f2e09bf8a205845c68dd2c09257c4"
   dependencies:
     camera-controls "^1.33.1"
     dat.gui "^0.7.7"
