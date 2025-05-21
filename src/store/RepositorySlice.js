@@ -21,11 +21,17 @@ export default function createRepositorySlice(set, get) {
     setModelPath: (path) => set(() => ({modelPath: path})),
 
     repository: null,
-    setRepository: (org, repo) => set(() => ({
-      repository: {
-        orgName: org,
-        name: repo,
-      },
-    })),
+    /**
+     * Set or clear the current repository.
+     * Passing falsy values will reset repository to null.
+     *
+     * @param {string?} org Organization name
+     * @param {string?} repo Repository name
+     * @return {void}
+     */
+    setRepository: (org, repo) =>
+      set(() => ({
+        repository: org && repo ? {orgName: org, name: repo} : null,
+      })),
   }
 }
