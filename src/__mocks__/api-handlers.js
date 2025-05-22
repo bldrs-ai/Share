@@ -24,6 +24,7 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
+  handlers.push(...bldrsHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
   handlers.push(...githubHandlers(defines, false))
@@ -32,6 +33,24 @@ export function initHandlers(defines) {
   handlers.push(...subscribePageHandler())
   return handlers
 }
+
+
+/**
+ * Null route prod static icon requests.
+ *
+ * @return {Array<object>} handlers
+ */
+function bldrsHandlers() {
+  return [
+    rest.get('http://bldrs.ai/icons/*', (req, res, ctx) => {
+      return res(
+          ctx.status(httpOk),
+          ctx.text(''),
+      )
+    }),
+  ]
+}
+
 
 /**
  * Handlers for Netlify functions
