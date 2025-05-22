@@ -28,6 +28,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
   const setIsVersionsEnabled = useStore((state) => state.setIsVersionsEnabled)
+  const setIsShareEnabled = useStore((state) => state.setIsShareEnabled)
+  const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
 
@@ -69,14 +71,25 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     if (org && repo) {
       setRepository(org, repo)
       setIsVersionsEnabled(true)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(true)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
+      setIsVersionsEnabled(true)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(true)
     } else {
+      // Local /v/new models have no repository
+      setRepository(null, null)
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(false)
+      setIsNotesEnabled(false)
       debug().warn('No repository set for project!, ', pathPrefix)
     }
   }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
-      setIsVersionsEnabled, setModelPath, setRepository, urlParams])
+      setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
+      setModelPath, setRepository, urlParams])
 
 
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override

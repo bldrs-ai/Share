@@ -60,3 +60,18 @@ describe('IFC slice', () => {
     expect(result.current.viewer).toEqual(viewer)
   })
 })
+
+describe('Repository slice', () => {
+  it('sets and clears repository', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => {
+      result.current.setRepository('testOrg', 'testRepo')
+    })
+    expect(result.current.repository).toEqual({orgName: 'testOrg', name: 'testRepo'})
+
+    act(() => {
+      result.current.setRepository()
+    })
+    expect(result.current.repository).toBeNull()
+  })
+})
