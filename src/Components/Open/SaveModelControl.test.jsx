@@ -1,6 +1,7 @@
 import React from 'react'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import {getOrganizations} from '../../net/github/Organizations'
+import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {
   mockedUseAuth0,
@@ -12,6 +13,9 @@ import {SaveModelControlFixture} from './SaveModelControl.fixture'
 
 jest.mock('../../net/github/Organizations', () => ({
   getOrganizations: jest.fn(),
+}))
+jest.mock('../../net/github/Branches', () => ({
+  getBranches: jest.fn(),
 }))
 
 
@@ -33,15 +37,16 @@ describe('SaveModelControl', () => {
     expect(loginText).toBeInTheDocument()
   })
 
-   it('Renders file selector if the user is logged in', async () => {
+  it('Renders branch selector after selecting a repository', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
     const {getByTestId} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
-    const File = getByTestId('CreateFileId')
-    const Repository = await getByTestId('saveRepository')
-    expect(File).toBeInTheDocument()
-    expect(Repository).toBeInTheDocument()
+    const repoSelect = await getByTestId('saveRepository')
+    fireEvent.change(repoSelect, {target: {value: 0}})
+    const branchSelect = await getByTestId('saveBranch')
+    expect(branchSelect).toBeInTheDocument()
   })
 
   it('Does not fetch repo info on initial render when isSaveModelVisible=false in zustand', async () => {
