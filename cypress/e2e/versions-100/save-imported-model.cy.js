@@ -28,6 +28,8 @@ describe('Versions 100: Save model', () => {
         cy.contains('@cypresstester').click()
         cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()
         cy.contains('test-repo').click()
+        cy.findByLabelText('Branch').eq(0).click()
+        cy.contains('main').click()
         cy.findByLabelText('Enter file name').click().type('save-model-test.ifc')
         cy.percySnapshot(`${percyLabelPrefix} form filled`)
 

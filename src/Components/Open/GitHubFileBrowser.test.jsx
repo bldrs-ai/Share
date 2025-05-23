@@ -13,6 +13,7 @@ describe('GitHubFileBrowser', () => {
     expect(screen.getByText(/Browse files on Github/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Organization/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Repository/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Branch/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/Folder/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/File/i)).toBeInTheDocument()
   })

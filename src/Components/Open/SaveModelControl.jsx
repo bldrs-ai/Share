@@ -9,6 +9,7 @@ import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
+import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
@@ -91,6 +92,10 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   // eslint-disable-next-line no-unused-vars
   const [filesArr, setFilesArr] = useState([''])
   const [foldersArr, setFoldersArr] = useState([''])
+  const [branchesArr, setBranchesArr] = useState([''])
+  const [selectedBranchName, setSelectedBranchName] = useState('')
+  const [requestCreateBranch, setRequestCreateBranch] = useState(false)
+  const [createBranchName, setCreateBranchName] = useState('')
   const [currentPath, setCurrentPath] = useState('')
   const accessToken = useStore((state) => state.accessToken)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
@@ -117,14 +122,14 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         }/${ selectedFileName}`
       }
 
+      const branchName = requestCreateBranch ? createBranchName : branchesArr[selectedBranchName] || 'main'
       fileSave(
           file,
           pathWithFileName,
           selectedFileName,
           orgName,
           repoName,
-          // TODO(oleg): https://github.com/bldrs-ai/Share/issues/1215
-          'main',
+          branchName,
           accessToken,
           isOpfsAvailable,
           setSnackMessage,
@@ -155,6 +160,17 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     // setSelectedFolderName(0); // This will set it to '/'
     const owner = orgNamesArr[selectedOrgName]
     const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
+    const repository = {orgName: owner, name: repoNamesArr[repo]}
+    const branches = await getBranches(repository, accessToken)
+    const branchNames = branches.map((branch) => branch.name)
+    const branchesArrWithSeparator = [
+      ...branchNames,
+      {isSeparator: true},
+      'Create a branch',
+    ]
+    setBranchesArr(branchesArrWithSeparator)
+    setSelectedBranchName(branchNames.length > 0 ? 0 : '')
+    setRequestCreateBranch(false)
 
     // eslint-disable-next-line no-shadow
     const fileNames = files.map((file) => file.name)
@@ -217,6 +233,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     setFoldersArr(foldersArrWithSeparator)
   }
 
+  const selectBranch = (branchIndex) => {
+    const branchName_ = branchesArr[branchIndex]
+    if (branchName_ === 'Create a branch') {
+      setRequestCreateBranch(true)
+    } else {
+      setSelectedBranchName(branchIndex)
+      setRequestCreateBranch(false)
+    }
+  }
+
   return (
     <Dialog
       headerIcon={<SaveOutlinedIcon className='icon-share'/>}
@@ -252,6 +278,34 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                 setSelected={selectRepo}
                 data-testid='saveRepository'
               />
+              <SelectorSeparator
+                label='Branch'
+                list={branchesArr}
+                selected={selectedBranchName}
+                setSelected={selectBranch}
+                data-testid='saveBranch'
+              />
+              {requestCreateBranch && (
+                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                  <TextField
+                    label='Enter branch name'
+                    variant='outlined'
+                    size='small'
+                    onChange={(e) => setCreateBranchName(e.target.value)}
+                    data-testid='CreateBranchId'
+                    sx={{flexGrow: 1}}
+                    onKeyDown={(e) => {
+                      e.stopPropagation()
+                    }}
+                  />
+                  <IconButton
+                    onClick={() => setRequestCreateBranch(false)}
+                    size='small'
+                  >
+                    <ClearIcon className='icon-share'/>
+                  </IconButton>
+                </div>
+              )}
               <SelectorSeparator
                 label={currentPath === '' ? 'Folder' : `Folder: ${currentPath}`}
                 list={foldersArr}
@@ -359,7 +413,7 @@ async function fileSave(
         pathWithFileName,
         file,
         `Created file ${selectedFileName}`,
-        'main',
+        branchName,
         accessToken)
 
     if (commitHash !== null) {
