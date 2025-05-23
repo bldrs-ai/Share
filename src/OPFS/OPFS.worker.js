@@ -1158,7 +1158,8 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
 
         // Search for any file in the directory that contains either the etag or commitHash
         for await (const [name, handle] of currentHandle.entries()) {
-          if (handle.kind === 'file' && (name.includes(etag) || (commitHash !== null && name.includes(commitHash)))) {
+          if (handle.kind === 'file' && (name.includes(etag) ||
+           (commitHash !== null && name.includes(commitHash) && name.startsWith(segment)))) {
             return [currentHandle, handle] // Return the handle of the matching file
           }
         }
@@ -1575,4 +1576,40 @@ function safePathSplit(pathStr) {
     parts.pop()
   }
   return parts
+}
+
+// Export functions when running under Node (e.g. for Jest tests)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    snapshotCache,
+    traverseDirectory,
+    clearCache,
+    deleteAllEntries,
+    fetchLatestCommitHash,
+    fetchRGHUC,
+    fetchAndHeadRequest,
+    computeGitBlobSha1FromHandle,
+    computeGitBlobSha1FromFile,
+    writeTemporaryFileToOPFS,
+    writeTemporaryBase64BlobFileToOPFS,
+    generateMockResponse,
+    base64ToBlob,
+    writeBase64Model,
+    downloadModel,
+    downloadModelToOPFS,
+    writeFileToPath,
+    retrieveFileWithPath,
+    retrieveFileWithPathNew,
+    writeFileToHandle,
+    writeModelToOPFSFromFile,
+    renameFileInOPFS,
+    doesFileExistInOPFS,
+    deleteModelFromOPFS,
+    writeModelToOPFS,
+    readModelFromOPFS,
+    writeFileToOPFS,
+    readFileFromOPFS,
+    assertValues,
+    safePathSplit,
+  }
 }
