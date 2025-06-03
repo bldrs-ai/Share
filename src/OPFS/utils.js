@@ -19,7 +19,7 @@ import debug from '../utils/debug'
  * Write model to OPFS.
  *
  * @param {string} filepath
- * @return {File}
+ * @return {Promise<File>}
  */
 export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
   return new Promise((resolve, reject) => {

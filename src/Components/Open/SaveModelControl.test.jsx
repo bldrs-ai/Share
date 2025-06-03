@@ -1,5 +1,6 @@
 import React from 'react'
-import {act, fireEvent, render, renderHook} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
+import {prettyDOM} from '@testing-library/dom'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
@@ -9,6 +10,7 @@ import {
   mockedUserLoggedOut,
 } from '../../__mocks__/authentication'
 import {SaveModelControlFixture} from './SaveModelControl.fixture'
+import {MOCK_ORGANIZATIONS} from '../../net/github/Organizations.fixture'
 
 
 jest.mock('../../net/github/Organizations', () => ({
@@ -20,11 +22,17 @@ jest.mock('../../net/github/Branches', () => ({
 
 
 describe('SaveModelControl', () => {
-  it('Renders a login message if the user is not logged in', () => {
+  it('Renders a login message if the user is not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId, getByText} = render(<SaveModelControlFixture/>)
+    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
+    getOrganizations.mockResolvedValue([])
+    const {getByTestId, getByText, getByRole} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
+
+    const dialog = await waitFor(() => getByRole('dialog'))
+    expect(dialog).toBeVisible()
+
     const loginTextMatcher = (content, node) => {
       const hasText = (_node) => _node.textContent.includes('log in to Share with your GitHub credentials')
       const nodeHasText = hasText(node)
@@ -40,12 +48,35 @@ describe('SaveModelControl', () => {
   it('Renders branch selector after selecting a repository', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
-    const {getByTestId} = render(<SaveModelControlFixture/>)
+    getOrganizations.mockResolvedValue(MOCK_ORGANIZATIONS.data)
+
+    // Set up store state using renderHook and act
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setAccessToken('test-token')
+      result.current.setOpfsFile(new File(['test'], 'test.ifc', {type: 'application/octet-stream'}))
+    })
+
+    const {getByTestId, getByRole} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
-    const repoSelect = await getByTestId('saveRepository')
-    fireEvent.change(repoSelect, {target: {value: 0}})
-    const branchSelect = await getByTestId('saveBranch')
+
+    // Wait for dialog to be visible
+    const dialog = await waitFor(() => getByRole('dialog'))
+    expect(dialog).toBeVisible()
+
+
+    // Wait for the repository selector to be available and click it
+    const repoSelect = await waitFor(() => getByTestId('saveRepository'))
+    fireEvent.mouseDown(repoSelect)
+
+    // Wait for the organization selector to be available and click it
+    // TODO(pablo): Should select the 'bldrs-ai' organization, but it's not working
+    const orgSelect = await waitFor(() => getByTestId('saveOrganization'))
+    fireEvent.click(orgSelect)
+
+    // Wait for the branch selector to appear
+    const branchSelect = await waitFor(() => getByTestId('saveBranch'))
     expect(branchSelect).toBeInTheDocument()
   })
 

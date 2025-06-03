@@ -40,8 +40,10 @@ export default function SaveModelControl() {
     /** @return {Array<string>} organizations */
     async function fetchOrganizations() {
       const orgs = await getOrganizations(accessToken)
+      console.log('ORGS:', orgs)
       const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
       const orgNames = [...orgNamesFetched, user && user.nickname]
+      console.log('ORGS NAMES:', orgNames)
       setOrgNamesArray(orgNames)
       return orgs
     }
@@ -54,7 +56,7 @@ export default function SaveModelControl() {
 
   return (
     <ControlButton
-      title='Save'
+      title={MSG_SAVE}
       isDialogDisplayed={isSaveModelVisible}
       setIsDialogDisplayed={setIsSaveModelVisible}
       icon={<SaveOutlinedIcon className='icon-share'/>}
@@ -137,6 +139,15 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
             navigate({pathname: pathname})
           },
       )
+      // Store the branch name for subsequent saves
+      if (requestCreateBranch) {
+        // If it was a new branch, add it to the branches array and select it
+        const newBranchesArr = [...branchesArr.slice(0, -2), branchName, {isSeparator: true}, MSG_CREATE_BRANCH]
+        setBranchesArr(newBranchesArr)
+        setSelectedBranchName(newBranchesArr.indexOf(branchName))
+      }
+      // Only hide the create branch text field, keep the branch selector visible
+      setRequestCreateBranch(false)
       setIsDialogDisplayed(false)
     }
   }
@@ -166,7 +177,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     const branchesArrWithSeparator = [
       ...branchNames,
       {isSeparator: true},
-      'Create a branch',
+      MSG_CREATE_BRANCH,
     ]
     setBranchesArr(branchesArrWithSeparator)
     setSelectedBranchName(branchNames.length > 0 ? 0 : '')
@@ -180,7 +191,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     const foldersArrWithSeparator = [
       ...directoryNames, // All the folders
       {isSeparator: true}, // Separator item
-      'Create a folder',
+      MSG_CREATE_FOLDER,
     ]
 
     setFoldersArr([...foldersArrWithSeparator])
@@ -201,7 +212,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       newPath = pathSegments.join('/')
 
       setRequestCreateFolder(false)
-    } else if (selectedFolderName_ === 'Create a folder') {
+    } else if (selectedFolderName_ === MSG_CREATE_FOLDER) {
       newPath = currentPath
       setRequestCreateFolder(true)
     } else {
@@ -227,7 +238,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     const foldersArrWithSeparator = [
       ...navigationOptions, // All the folders
       {isSeparator: true}, // Separator item
-      'Create a folder',
+      MSG_CREATE_FOLDER,
     ]
 
     setFoldersArr(foldersArrWithSeparator)
@@ -235,7 +246,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
   const selectBranch = (branchIndex) => {
     const branchName_ = branchesArr[branchIndex]
-    if (branchName_ === 'Create a branch') {
+    if (branchName_ === MSG_CREATE_BRANCH) {
       setRequestCreateBranch(true)
     } else {
       setSelectedBranchName(branchIndex)
@@ -246,10 +257,10 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   return (
     <Dialog
       headerIcon={<SaveOutlinedIcon className='icon-share'/>}
-      headerText='Save'
+      headerText={MSG_SAVE}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle='Save model'
+      actionTitle={MSG_SAVE_MODEL}
       actionCb={saveFile}
     >
       <Stack
@@ -263,23 +274,23 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         ) : (
           file instanceof File && (
             <Stack>
-              <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
+              <Typography variant='overline' sx={{marginBottom: '6px'}}>{MSG_PROJECTS}</Typography>
               <Selector
-                label='Organization'
+                label={MSG_ORGANIZATION}
                 list={orgNamesArrWithAt}
                 selected={selectedOrgName}
                 setSelected={selectOrg}
                 data-testid='saveOrganization'
               />
               <Selector
-                label='Repository'
+                label={MSG_REPOSITORY}
                 list={repoNamesArr}
                 selected={selectedRepoName}
                 setSelected={selectRepo}
                 data-testid='saveRepository'
               />
               <SelectorSeparator
-                label='Branch'
+                label={MSG_BRANCH}
                 list={branchesArr}
                 selected={selectedBranchName}
                 setSelected={selectBranch}
@@ -288,7 +299,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
               {requestCreateBranch && (
                 <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
                   <TextField
-                    label='Enter branch name'
+                    label={MSG_ENTER_BRANCH_NAME}
                     variant='outlined'
                     size='small'
                     onChange={(e) => setCreateBranchName(e.target.value)}
@@ -307,7 +318,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                 </div>
               )}
               <SelectorSeparator
-                label={currentPath === '' ? 'Folder' : `Folder: ${currentPath}`}
+                label={currentPath === '' ? MSG_FOLDER : `${MSG_FOLDER}: ${currentPath}`}
                 list={foldersArr}
                 selected={selectedFolderName}
                 setSelected={selectFolder}
@@ -316,14 +327,13 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
               {requestCreateFolder && (
                 <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
                   <TextField
-                    label='Enter folder name'
+                    label={MSG_ENTER_FOLDER_NAME}
                     variant='outlined'
                     size='small'
                     onChange={(e) => setCreateFolderName(e.target.value)}
                     data-testid='CreateFolderId'
                     sx={{flexGrow: 1}}
                     onKeyDown={(e) => {
-                      // Stops the event from propagating up to parent elements
                       e.stopPropagation()
                     }}
                   />
@@ -336,7 +346,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                 </div>
               )}
               <TextField
-                label='Enter file name'
+                label={MSG_ENTER_FILE_NAME}
                 variant='outlined'
                 size='small'
                 onChange={(e) => setSelectedFileName(e.target.value)}
@@ -365,7 +375,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
  * @param {Function} setSnackMessage - Function to set a snack message displayed to the user.
  */
 function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
-  setSnackMessage('Model saved successfully!')
+  setSnackMessage(MSG_SAVE_SUCCESS)
   const pauseTimeMs = 5000
   setTimeout(() => setSnackMessage(null), pauseTimeMs)
 
@@ -424,7 +434,7 @@ async function fileSave(
       if (opfsResult) {
         redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
       } else {
-        setSnackMessage('Error: Could not write file to OPFS.')
+        setSnackMessage(MSG_ERROR_OPFS)
         const pauseTimeMs = 5000
         setTimeout(() => setSnackMessage(null), pauseTimeMs)
       }
@@ -432,9 +442,26 @@ async function fileSave(
       redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
     }
     } else {
-      setSnackMessage('Error: Could not commit to GitHub.')
+      setSnackMessage(MSG_ERROR_GITHUB)
       const pauseTimeMs = 5000
       setTimeout(() => setSnackMessage(null), pauseTimeMs)
     }
   }
 }
+
+
+const MSG_BRANCH = 'Branch'
+const MSG_CREATE_BRANCH = 'Create a branch'
+const MSG_CREATE_FOLDER = 'Create a folder'
+const MSG_ENTER_BRANCH_NAME = 'Enter branch name'
+const MSG_ENTER_FOLDER_NAME = 'Enter folder name'
+const MSG_ENTER_FILE_NAME = 'Enter file name'
+const MSG_ERROR_GITHUB = 'Error: Could not commit to GitHub.'
+const MSG_ERROR_OPFS = 'Error: Could not write file to OPFS.'
+const MSG_FOLDER = 'Folder'
+const MSG_ORGANIZATION = 'Organization'
+const MSG_PROJECTS = 'Projects'
+const MSG_SAVE = 'Save'
+const MSG_SAVE_MODEL = 'Save model'
+const MSG_SAVE_SUCCESS = 'Model saved successfully!'
+const MSG_REPOSITORY = 'Repository'
