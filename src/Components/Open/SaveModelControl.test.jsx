@@ -22,10 +22,21 @@ jest.mock('../../net/github/Branches', () => ({
 
 
 describe('SaveModelControl', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
+    getOrganizations.mockResolvedValue(MOCK_ORGANIZATIONS.data)
+    // Reset store state
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => {
+      result.current.setIsSaveModelVisible(false)
+      result.current.setAccessToken(null)
+      result.current.setOpfsFile(null)
+    })
+  })
+
   it('Renders a login message if the user is not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
-    getOrganizations.mockResolvedValue([])
     const {getByTestId, getByText, getByRole} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
@@ -47,9 +58,7 @@ describe('SaveModelControl', () => {
 
   it('Renders branch selector after selecting a repository', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
-    getOrganizations.mockResolvedValue(MOCK_ORGANIZATIONS.data)
-
+    
     // Set up store state using renderHook and act
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
@@ -64,7 +73,6 @@ describe('SaveModelControl', () => {
     // Wait for dialog to be visible
     const dialog = await waitFor(() => getByRole('dialog'))
     expect(dialog).toBeVisible()
-
 
     // Wait for the repository selector to be available and click it
     const repoSelect = await waitFor(() => getByTestId('saveRepository'))
