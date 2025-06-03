@@ -40,10 +40,8 @@ export default function SaveModelControl() {
     /** @return {Array<string>} organizations */
     async function fetchOrganizations() {
       const orgs = await getOrganizations(accessToken)
-      console.log('ORGS:', orgs)
       const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
       const orgNames = [...orgNamesFetched, user && user.nickname]
-      console.log('ORGS NAMES:', orgNames)
       setOrgNamesArray(orgNames)
       return orgs
     }

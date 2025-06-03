@@ -1,6 +1,5 @@
 import React from 'react'
 import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
-import {prettyDOM} from '@testing-library/dom'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
@@ -58,7 +57,6 @@ describe('SaveModelControl', () => {
 
   it('Renders branch selector after selecting a repository', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    
     // Set up store state using renderHook and act
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
