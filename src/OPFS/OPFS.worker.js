@@ -471,9 +471,10 @@ function generateMockResponse(shaHash) {
     'shahash': shaHash,
   })
 
+  const HTTP_OK = 200
   // Create a mock Response object
   const mockResponse = new Response(mockBody, {
-    status: 200,
+    status: HTTP_OK,
     statusText: 'OK',
     headers: mockHeaders,
   })

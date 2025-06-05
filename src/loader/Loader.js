@@ -9,6 +9,7 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
+import {HTTP_NOT_FOUND} from '../net/http'
 import {assert, assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
@@ -217,9 +218,8 @@ async function axiosDownload(path, isFormatText, onProgress) {
     )).data
   } catch (error) {
     if (error.response) {
-      const httpNotFound = 404
       console.warn('error.response.status:', error.response.status)
-      if (error.response.status === httpNotFound) {
+      if (error.response.status === HTTP_NOT_FOUND) {
         throw new NotFoundError('File not found')
       } else {
         throw new Error(`Error response from server: status(${error.response.status}), message(${error.response.data})`)
