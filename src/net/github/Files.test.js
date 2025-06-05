@@ -49,7 +49,7 @@ describe('net/github/Files', () => {
   describe('getFiles', () => {
     it('successfully get files', async () => {
       const res = await getFiles('pablo-mayrgundter', 'Share')
-      expect(res).toEqual(MOCK_FILES)
+      expect(res).toEqual(MOCK_FILES.data)
     })
 
     it('successfully get files and folders', async () => {
