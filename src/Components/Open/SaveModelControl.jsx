@@ -413,36 +413,41 @@ async function fileSave(
   onPathname,
 ) {
   if (file instanceof File) {
-    setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
+    try {
+      setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
 
-    const commitHash = await commitFile(
-        orgName,
-        repoName,
-        pathWithFileName,
-        file,
-        `Created file ${selectedFileName}`,
-        branchName,
-        accessToken)
+      const commitHash = await commitFile(
+          orgName,
+          repoName,
+          pathWithFileName,
+          file,
+          `Created file ${selectedFileName}`,
+          branchName,
+          accessToken)
 
-    if (commitHash !== null) {
-      // save to opfs
-      if (opfsIsAvailable) {
-       const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
+      if (commitHash !== null) {
+        // save to opfs
+        if (opfsIsAvailable) {
+          const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
 
-      if (opfsResult) {
-        redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+          if (opfsResult) {
+            redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+          } else {
+            setSnackMessage(MSG_ERROR_OPFS)
+            const pauseTimeMs = 5000
+            setTimeout(() => setSnackMessage(null), pauseTimeMs)
+          }
+        } else {
+          redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+        }
       } else {
-        setSnackMessage(MSG_ERROR_OPFS)
+        setSnackMessage(MSG_ERROR_GITHUB)
         const pauseTimeMs = 5000
         setTimeout(() => setSnackMessage(null), pauseTimeMs)
       }
-    } else {
-      redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
-    }
-    } else {
-      setSnackMessage(MSG_ERROR_GITHUB)
-      const pauseTimeMs = 5000
-      setTimeout(() => setSnackMessage(null), pauseTimeMs)
+    } catch (error) {
+      setSnackMessage(error.message || MSG_ERROR_GITHUB)
+      throw error // Re-throw to be caught by the Dialog's error handler
     }
   }
 }

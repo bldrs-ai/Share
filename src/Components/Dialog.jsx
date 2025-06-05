@@ -5,6 +5,7 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import {assertDefined} from '../utils/assert'
+import useStore from '../store/useStore'
 import {CloseButton} from './Buttons'
 
 
@@ -31,6 +32,17 @@ export default function Dialog({
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
+  const setAlert = useStore((state) => state.setAlert)
+  // Used eg for SaveModelControl's exceptions, on saveFile, to handle error from
+  // GitHub.
+  const wrappedCb = () => {
+    try {
+      actionCb()
+    } catch (e) {
+      console.error(e)
+      setAlert(e)
+    }
+  }
   const onCloseClick = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
@@ -56,7 +68,7 @@ export default function Dialog({
       {actionTitle === undefined ? null :
        <DialogActions>
          {typeof actionTitle === 'string' ?
-          <Button variant='contained' onClick={actionCb} aria-label='action-button' data-testid='button-dialog-main-action'>
+          <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
             {actionTitle}
           </Button> :
           <>{actionTitle}</>
