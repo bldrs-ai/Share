@@ -22,12 +22,6 @@ jobs:
         with:
           node-version: 18
 
-      - name: Create temporary .npmrc for GitHub Actions
-        run: |
-          echo "@bldrs-ai:registry=https://npm.pkg.github.com" > .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
-
-
       # ChatG: Next two steps are for correct caching and not using out-of-date
       #  versions, for reproducible results
       - name: Cache Cypress and Node Modules
