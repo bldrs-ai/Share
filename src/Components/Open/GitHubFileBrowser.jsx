@@ -8,6 +8,7 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
+import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
@@ -33,11 +34,14 @@ export default function GitHubFileBrowser({
   const [selectedFileIndex, setSelectedFileIndex] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
+  const [branchesArr, setBranchesArr] = useState([''])
+  const [selectedBranchName, setSelectedBranchName] = useState('')
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileIndex]
+  const branchName = branchesArr[selectedBranchName]
 
   const selectOrg = async (org) => {
     setSelectedOrgName(org)
@@ -60,6 +64,11 @@ export default function GitHubFileBrowser({
     setSelectedRepoName(repo)
     const owner = orgNamesArr[selectedOrgName]
     const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
+    const repository = {orgName: owner, name: repoNamesArr[repo]}
+    const branches = await getBranches(repository, accessToken)
+    const branchNames = branches.map((branch) => branch.name)
+    setBranchesArr(branchNames)
+    setSelectedBranchName(branchNames.length > 0 ? branchNames.indexOf('main') >= 0 ? branchNames.indexOf('main') : 0 : '')
 
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
@@ -108,10 +117,14 @@ export default function GitHubFileBrowser({
     setFoldersArr(foldersArrWithSeparator)
   }
 
+  const selectBranch = (branchIdx) => {
+    setSelectedBranchName(branchIdx)
+  }
+
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
-      // TODO(oleg): https://github.com/bldrs-ai/Share/issues/1215
-      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, 'main', `${currentPath}/${fileName}`)})
+      const branch = branchName || 'main'
+      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)})
       setIsDialogDisplayed(false)
     }
   }
@@ -134,6 +147,13 @@ export default function GitHubFileBrowser({
             selected={selectedRepoName}
             setSelected={selectRepo}
             data-testid='openRepository'
+          />
+          <Selector
+            label='Branch'
+            list={branchesArr}
+            selected={selectedBranchName}
+            setSelected={selectBranch}
+            data-testid='openBranch'
           />
           <SelectorSeparator
             label={(currentPath === '') ? 'Folder' :

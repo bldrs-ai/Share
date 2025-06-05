@@ -5,7 +5,7 @@ import {getGitHub} from './Http'
 /**
  * @param {object} repository
  * @param {string} [accessToken]
- * @return {Array}
+ * @return {Promise<Array>}
  */
 export async function getBranches(repository, accessToken = '') {
   assertDefined(...arguments)

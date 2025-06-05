@@ -2,6 +2,13 @@ import {assertDefined} from '../../utils/assert'
 import {checkCache, updateCache} from './Cache'
 import {octokit} from './OctokitExport'
 
+// HTTP Status Codes
+export const HTTP_OK = 200
+export const HTTP_CREATED = 201
+export const HTTP_NOT_MODIFIED = 304
+export const HTTP_NOT_FOUND = 404
+export const HTTP_INTERNAL_SERVER_ERROR = 500
+
 /**
  * Fetch the resource at the given path from GitHub, optionally using cache checks (ETag).
  *
@@ -65,8 +72,7 @@ export async function getGitHubResource(repository, path, args = {}, useCache = 
       isCacheHit,
     }
   } catch (error) {
-    const NOTMODIFIED = 304
-    if (useCache && error.status === NOTMODIFIED) {
+    if (useCache && error.status === HTTP_NOT_MODIFIED) {
       // We got a 304 Not Modified, meaning we can safely use our cached copy
       if (cached) {
         isCacheHit = true
@@ -124,8 +130,7 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
 
     return response
   } catch (error) {
-    const NOTMODIFIED = 304
-    if (error.status === NOTMODIFIED) {
+    if (error.status === HTTP_NOT_MODIFIED) {
       // Handle 304 Not Modified
       // Return cached data if available
       if (cached) {
