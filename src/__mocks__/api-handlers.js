@@ -1,4 +1,12 @@
 import {rest} from 'msw'
+import {
+  HTTP_AUTHORIZATION_REQUIRED,
+  HTTP_BAD_REQUEST,
+  HTTP_CREATED,
+  HTTP_NOT_FOUND,
+  HTTP_NO_CONTENT,
+  HTTP_OK,
+} from '../net/http'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS, MOCK_COMMENTS_POST_DELETION} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
@@ -7,12 +15,6 @@ import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 
-
-const httpOk = 200
-const httpCreated = 201
-const httpNoContent = 204
-const httpAuthorizationRequired = 401
-const httpNotFound = 404
 
 let commentDeleted = false
 
@@ -44,7 +46,7 @@ function bldrsHandlers() {
   return [
     rest.get('http://bldrs.ai/icons/*', (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.text(''),
       )
     }),
@@ -63,7 +65,6 @@ function netlifyHandlers() {
       const {stripeCustomerId} = await req.json()
 
       if (!stripeCustomerId) {
-        const HTTP_BAD_REQUEST = 400
         return res(
           ctx.status(HTTP_BAD_REQUEST),
           ctx.json({error: 'Missing stripeCustomerId'}),
@@ -73,7 +74,7 @@ function netlifyHandlers() {
       // return a mocked Stripe billing-portal URL
       const fakeUrl = `https://stripe.portal.msw/mockportal/session/${stripeCustomerId}`
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({url: fakeUrl}),
       )
     }),
@@ -90,7 +91,7 @@ function subscribePageHandler() {
     // this will catch GET /subscribe, /subscribe/, or /subscribe?foo=bar
     rest.get('/subscribe*', (req, res, ctx) => {
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.set('Content-Type', 'text/html'),
         ctx.body(`
           <!DOCTYPE html>
@@ -121,7 +122,7 @@ function stripePortalHandlers() {
   return [
     rest.get('https://stripe.portal.msw/mockportal/session/:stripeCustomerId', (req, res, ctx) => {
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.text('<html><body><h1>Mock Stripe Portal</h1></body></html>'),
       )
     }),
@@ -137,7 +138,7 @@ function gaHandlers() {
   return [
     rest.get('https://www.google-analytics.com/*', (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json({}),
       )
     }),
@@ -159,7 +160,7 @@ function githubHandlers(defines, authed) {
       const {org, repo} = req.params
       const createdIssues = createMockIssues(org, repo, sampleIssues)
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json(createdIssues),
       )
     }),
@@ -168,18 +169,18 @@ function githubHandlers(defines, authed) {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
-        return res(ctx.status(httpNotFound))
+        return res(ctx.status(HTTP_NOT_FOUND))
       }
 
       if (commentDeleted) {
         commentDeleted = false
         return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json(MOCK_COMMENTS_POST_DELETION.data),
         )
       }
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json(MOCK_COMMENTS.data),
       )
     }),
@@ -200,7 +201,7 @@ function githubHandlers(defines, authed) {
             `${process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
 
         return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json({
             name: 'test-model.ifc',
             path: 'cypresstester/test-repo/test-model.ifc',
@@ -224,7 +225,7 @@ function githubHandlers(defines, authed) {
 
       if (org !== 'bldrs-ai' || repo !== 'Share' || path !== 'README.md') {
         return res(
-            ctx.status(httpNotFound),
+            ctx.status(HTTP_NOT_FOUND),
             ctx.json({
               message: 'Not Found',
               documentation_url: 'https://docs.github.com/rest/reference/repos#get-repository-content',
@@ -241,7 +242,7 @@ function githubHandlers(defines, authed) {
       }
 
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.set({
             'content-type': 'application/json; charset=utf-8',
           }),
@@ -301,7 +302,7 @@ function githubHandlers(defines, authed) {
 
       if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
         return res(
-          ctx.status(httpNotFound),
+          ctx.status(HTTP_NOT_FOUND),
           ctx.json({
             message: 'Not Found',
           }),
@@ -309,7 +310,7 @@ function githubHandlers(defines, authed) {
       }
 
       return res(
-        ctx.status(httpCreated),
+        ctx.status(HTTP_CREATED),
       )
     }),
 
@@ -317,10 +318,10 @@ function githubHandlers(defines, authed) {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
-        return res(ctx.status(httpNotFound))
+        return res(ctx.status(HTTP_NOT_FOUND))
       }
       return res(
-          ctx.status(httpCreated),
+          ctx.status(HTTP_CREATED),
       )
     }),
 
@@ -328,7 +329,7 @@ function githubHandlers(defines, authed) {
       const {org, repo} = req.params
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return res(
-            ctx.status(httpNotFound),
+            ctx.status(HTTP_NOT_FOUND),
             ctx.json({
               message: 'Not Found',
             }),
@@ -336,7 +337,7 @@ function githubHandlers(defines, authed) {
       }
 
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
       )
     }),
 
@@ -344,19 +345,19 @@ function githubHandlers(defines, authed) {
       const {org, repo, commentId} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !commentId) {
-        return res(ctx.status(httpNotFound))
+        return res(ctx.status(HTTP_NOT_FOUND))
       }
 
       commentDeleted = true
 
       return res(
-          ctx.status(httpNoContent),
+          ctx.status(HTTP_NO_CONTENT),
       )
     }),
 
     rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
       )
     }),
 
@@ -365,7 +366,7 @@ function githubHandlers(defines, authed) {
 
       if (!authHeader) {
         return res(
-            ctx.status(httpAuthorizationRequired),
+            ctx.status(HTTP_AUTHORIZATION_REQUIRED),
             ctx.json({
               message: 'Requires authentication',
               documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
@@ -374,21 +375,21 @@ function githubHandlers(defines, authed) {
       }
 
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json(MOCK_ORGANIZATIONS.data),
       )
     }),
 
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, (req, res, ctx) => {
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json(MOCK_USER_REPOSITORIES.data),
     )
     }),
 
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json({
             data: [MOCK_REPOSITORY],
           }),
@@ -397,14 +398,14 @@ function githubHandlers(defines, authed) {
 
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_FILES),
+          ctx.status(HTTP_OK),
+          ctx.json(MOCK_FILES.data),
       )
     }),
 
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, (req, res, ctx) => {
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json(MOCK_BRANCHES.data),
       )
     }),
@@ -414,13 +415,13 @@ function githubHandlers(defines, authed) {
       // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
       if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
         return res(
-          ctx.status(httpNotFound),
+          ctx.status(HTTP_NOT_FOUND),
           ctx.json({sha: 'error'}),
         )
         // Handle non existent file request
       } else if (req.params.owner === 'nonexistentowner' && req.params.repo === 'nonexistentrepo') {
         return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json([]),
         )
         // Handle unauthenticated case
@@ -429,13 +430,13 @@ function githubHandlers(defines, authed) {
 
        if ( requestUrl.includes(GH_BASE_AUTHED)) {
         return res(
-          ctx.status(httpNotFound),
+          ctx.status(HTTP_NOT_FOUND),
           ctx.json({sha: 'error'}),
         )
       } else {
        return res(
-         ctx.status(httpOk),
-         ctx.json(MOCK_COMMITS),
+         ctx.status(HTTP_OK),
+         ctx.json(MOCK_COMMITS.data),
        )
       }
         // Handle authenticated case
@@ -444,20 +445,20 @@ function githubHandlers(defines, authed) {
 
          if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
          return res(
-           ctx.status(httpNotFound),
+           ctx.status(HTTP_NOT_FOUND),
            ctx.json({sha: 'error'}),
          )
        } else {
         return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_COMMITS),
+          ctx.status(HTTP_OK),
+          ctx.json(MOCK_COMMITS.data),
         )
        }
        }
       // For all other cases, return a success response
       return res(
-        ctx.status(httpOk),
-        ctx.json(MOCK_COMMITS),
+        ctx.status(HTTP_OK),
+        ctx.json(MOCK_COMMITS.data),
       )
     }),
 
@@ -469,7 +470,7 @@ function githubHandlers(defines, authed) {
     // octokit.rest.git.getRef
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, (req, res, ctx) => {
       return res(
-          ctx.status(httpOk),
+          ctx.status(HTTP_OK),
           ctx.json({object: {sha: 'parentSha'}}),
       )
     }),
@@ -477,7 +478,7 @@ function githubHandlers(defines, authed) {
     // octokit.rest.git.getCommit
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, (req, res, ctx) => {
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({tree: {sha: 'treeSha'}}),
       )
     }),
@@ -486,11 +487,10 @@ function githubHandlers(defines, authed) {
     rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/blobs`, async (req, res, ctx) => {
       const {content, encoding} = await req.body
       if (content === undefined || encoding === undefined) {
-        const HTTP_BAD_REQUEST = 400
         return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
       }
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({sha: 'blobSha'}),
       )
     }),
@@ -501,11 +501,10 @@ function githubHandlers(defines, authed) {
       const {base_tree, tree} = await req.body
       // eslint-disable-next-line camelcase
       if (base_tree === undefined || tree === undefined) {
-        const HTTP_BAD_REQUEST = 400
         return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
       }
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({sha: 'newTreeSha'}),
       )
     }),
@@ -514,11 +513,10 @@ function githubHandlers(defines, authed) {
     rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits`, async (req, res, ctx) => {
       const {message, tree, parents} = await req.body
       if (message === undefined || tree === undefined || parents === undefined) {
-        const HTTP_BAD_REQUEST = 400
         return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
       }
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({sha: 'newCommitSha'}),
       )
     }),
@@ -527,11 +525,10 @@ function githubHandlers(defines, authed) {
     rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/refs/:ref`, async (req, res, ctx) => {
       const {sha} = await req.body
       if (sha === undefined) {
-        const HTTP_BAD_REQUEST = 400
         return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
       }
       return res(
-        ctx.status(httpOk),
+        ctx.status(HTTP_OK),
         ctx.json({sha: 'smth'}),
       )
     }),
