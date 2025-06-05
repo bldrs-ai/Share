@@ -1,6 +1,7 @@
 import {assertDefined} from '../../utils/assert'
+import {HTTP_CREATED, HTTP_NOT_MODIFIED, HTTP_NOT_FOUND} from '../http'
 import {checkCache, updateCache} from './Cache'
-import {getGitHub, getGitHubResource, HTTP_CREATED, HTTP_NOT_MODIFIED, HTTP_NOT_FOUND} from './Http'
+import {getGitHub, getGitHubResource} from './Http'
 import {octokit} from './OctokitExport'
 
 

@@ -1,13 +1,8 @@
 import {assertDefined} from '../../utils/assert'
+import {HTTP_NOT_MODIFIED} from '../http'
 import {checkCache, updateCache} from './Cache'
 import {octokit} from './OctokitExport'
 
-// HTTP Status Codes
-export const HTTP_OK = 200
-export const HTTP_CREATED = 201
-export const HTTP_NOT_MODIFIED = 304
-export const HTTP_NOT_FOUND = 404
-export const HTTP_INTERNAL_SERVER_ERROR = 500
 
 /**
  * Fetch the resource at the given path from GitHub, optionally using cache checks (ETag).

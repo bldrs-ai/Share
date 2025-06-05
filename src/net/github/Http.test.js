@@ -1,3 +1,4 @@
+import {HTTP_INTERNAL_SERVER_ERROR, HTTP_NOT_MODIFIED} from '../http'
 import {
   getGitHubResource,
   getGitHub,
@@ -6,6 +7,7 @@ import {
   deleteGitHub,
   patchGitHub,
 } from './Http'
+
 
 // Mock dependencies
 jest.mock('../../utils/assert', () => ({
@@ -22,6 +24,7 @@ jest.mock('./OctokitExport', () => ({
     request: jest.fn(),
   },
 }))
+
 
 // Import the mocked functions for easy access in tests
 import {checkCache, updateCache} from './Cache'
@@ -103,7 +106,7 @@ describe('Http.js functions', () => {
       const cachedMock = {data: 'cached data', headers: {etag: '12345'}}
       checkCache.mockResolvedValue(cachedMock)
       const error304 = new Error('Not Modified')
-      error304.status = 304
+      error304.status = HTTP_NOT_MODIFIED
       octokit.request.mockRejectedValue(error304)
 
       const result = await getGitHubResource(repository, testPath, args, true, '')
@@ -114,7 +117,7 @@ describe('Http.js functions', () => {
     it('should rethrow error when non-304 error occurs', async () => {
       checkCache.mockResolvedValue(null)
       const error500 = new Error('Server Error')
-      error500.status = 500
+      error500.status = HTTP_INTERNAL_SERVER_ERROR
       octokit.request.mockRejectedValue(error500)
 
       await expect(getGitHubResource(repository, testPath, args, true, '')).rejects.toThrow('Server Error')
@@ -136,7 +139,7 @@ describe('Http.js functions', () => {
       const cachedMock = {data: 'cached data', headers: {etag: 'etag-cached'}}
       checkCache.mockResolvedValue(cachedMock)
       const error304 = new Error('Not Modified')
-      error304.status = 304
+      error304.status = HTTP_NOT_MODIFIED
       octokit.request.mockRejectedValue(error304)
 
       const result = await getGitHub(repository, testPath, args, '')
@@ -146,7 +149,7 @@ describe('Http.js functions', () => {
     it('should rethrow error for non-304 errors', async () => {
       checkCache.mockResolvedValue(null)
       const error500 = new Error('Server Error')
-      error500.status = 500
+      error500.status = HTTP_INTERNAL_SERVER_ERROR
       octokit.request.mockRejectedValue(error500)
 
       await expect(getGitHub(repository, testPath, args, '')).rejects.toThrow('Server Error')
