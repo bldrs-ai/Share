@@ -405,7 +405,7 @@ function githubHandlers(defines, authed) {
     rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, (req, res, ctx) => {
       return res(
         ctx.status(httpOk),
-        ctx.json(MOCK_BRANCHES),
+        ctx.json(MOCK_BRANCHES.data),
       )
     }),
 
