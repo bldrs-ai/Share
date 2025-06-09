@@ -1,5 +1,6 @@
 const path = require('path')
 
+
 /**
  * Black-box integration tests for Bldrs running in an iframe.
  * Bldrs emits messages and receives messages via Matrix Widgets API.
