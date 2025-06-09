@@ -1,5 +1,6 @@
 const path = require('path')
 
+
 /**
  * Black-box integration tests for Bldrs running in an iframe.
  * Bldrs emits messages and receives messages via Matrix Widgets API.
@@ -10,7 +11,7 @@ const path = require('path')
  * framework itself loads the system under test within an iframe. This means
  * that in all these tests Bldrs runs in an iframe which runs in an iframe.
  */
-describe.skip('bldrs inside iframe', () => {
+describe('bldrs inside iframe', () => {
   const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html'
   const KEYCODE_ESC = 27
   const REQUEST_SUCCESS_CODE = 200
