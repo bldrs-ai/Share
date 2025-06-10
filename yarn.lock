@@ -4075,9 +4075,9 @@
   integrity sha512-CS2rOaoQ/eAgAfcTfq6amKG7bsN+EMcgGY4FAFQdvSj2y1ixvOZTUA9mOtCai7E1SYu283XNw7urKK30nP3wkQ==
 
 "@types/events@^3.0.0":
-  version "3.0.0"
-  resolved "https://registry.npmjs.org/@types/events/-/events-3.0.0.tgz"
-  integrity sha512-EaObqwIvayI5a8dCzhFrjKzVwKLxjoG9T6Ppd5CEo07LRKfQ8Yokw54r5+Wq7FaBQ+yXRvQAYPrHwya1/UFt9g==
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/@types/events/-/events-3.0.3.tgz#a8ef894305af28d1fc6d2dfdfc98e899591ea529"
+  integrity sha512-trOc4AAUThEz9hapPtSd7wf5tiQKvTtu5b371UxXdTuqzIh0ArcRspRP0i0Viu+LXstIQ1z96t1nsPxT9ol01g==
 
 "@types/express-serve-static-core@^4.17.33":
   version "4.19.6"
@@ -9125,10 +9125,10 @@ math-intrinsics@^1.1.0:
   resolved "https://registry.yarnpkg.com/math-intrinsics/-/math-intrinsics-1.1.0.tgz#a0dd74be81e2aa5c2f27e65ce283605ee4e2b7f9"
   integrity sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==
 
-matrix-widget-api@1.1.1:
-  version "1.1.1"
-  resolved "https://registry.yarnpkg.com/matrix-widget-api/-/matrix-widget-api-1.1.1.tgz#d3fec45033d0cbc14387a38ba92dac4dbb1be962"
-  integrity sha512-gNSgmgSwvOsOcWK9k2+tOhEMYBiIMwX95vMZu0JqY7apkM02xrOzUBuPRProzN8CnbIALH7e3GAhatF6QCNvtA==
+matrix-widget-api@1.13.1:
+  version "1.13.1"
+  resolved "https://registry.yarnpkg.com/matrix-widget-api/-/matrix-widget-api-1.13.1.tgz#5b1caeed2fc58148bcd2984e0546d2d06a1713ad"
+  integrity sha512-mkOHUVzaN018TCbObfGOSaMW2GoUxOfcxNNlTVx5/HeMk3OSQPQM0C9oEME5Liiv/dBUoSrEB64V8wF7e/gb1w==
   dependencies:
     "@types/events" "^3.0.0"
     events "^3.2.0"

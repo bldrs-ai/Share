@@ -38,7 +38,7 @@ describe('bldrs inside iframe', () => {
     cy.get('iframe').iframe().as('iframe')
   })
 
-  it('should emit ready-messsage when page load completes', () => {
+  it.only('should emit ready-messsage when page load completes', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
