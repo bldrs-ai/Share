@@ -1,9 +1,7 @@
-/* global mxwidgets */
+import * as mxwidgets from 'matrix-widget-api'
 
 
-/**
- * The Bldrs widget.
- */
+/** The Bldrs widget */
 class BldrsWidget {
   creatorUserId = 'ai.bldrs-share'
   id = 'bldrs-share'
@@ -12,9 +10,8 @@ class BldrsWidget {
   waitForIframeLoad = false
 }
 
-/**
- * The Bldrs Widget Driver.
- */
+
+/** The Bldrs Widget Driver */
 class BldrsWidgetDriver {
   /** */
   askOpenID(observer) {
@@ -32,9 +29,7 @@ class BldrsWidgetDriver {
   }
 
   // NOSONAR
-  /**
-   * @return {Promise}
-   */
+  /** @return {Promise} */
   readEventRelations(
       eventId,
       roomId,
@@ -74,12 +69,12 @@ class BldrsWidgetDriver {
   }
 }
 
-/**
- * Message types.
- */
+
+/** Message types */
 const EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS = 'ai.bldrs-share.SelectionChanged'
 const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
 const EVENT_CLIENT_HIDDEN_ELEMENTS = 'ai.bldrs-share.HiddenElements'
+
 
 document.addEventListener('DOMContentLoaded', (domEvent) => {
   const container = document.getElementById('bldrs-widget-iframe')

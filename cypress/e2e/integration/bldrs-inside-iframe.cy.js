@@ -22,7 +22,11 @@ describe('bldrs inside iframe', () => {
    * Copy web page to target directory to make it accessible to cypress.
    */
   before(() => {
-    const fixtures = ['bldrs-inside-iframe.html', 'bldrs-inside-iframe.js']
+    const fixtures = [
+      'bldrs-inside-iframe.html',
+      'bldrs-inside-iframe-bundle.js',
+      'bldrs-inside-iframe-bundle.js.map',
+    ]
     const targetDirectory = 'docs/cypress/static/'
     for (const fixture of fixtures) {
       cy.fixture(fixture, null).then((content) => {
@@ -30,6 +34,7 @@ describe('bldrs inside iframe', () => {
         cy.writeFile(outPath, content)
       })
     }
+    console.log(`Copied bldrs-inside-iframe{.html,-bundle.js,-bundle.js.map} ${targetDirectory}`)
   })
 
   beforeEach(() => {
