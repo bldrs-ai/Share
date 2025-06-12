@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useMemo} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
@@ -32,10 +32,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
+  const widgetApiRef = useRef(null)
 
-  useMemo(() => {
-    if (isAppsEnabled) {
-      new WidgetApi(navigate, searchIndex)
+  useEffect(() => {
+    if (isAppsEnabled && !widgetApiRef.current) {
+      widgetApiRef.current = new WidgetApi(navigate, searchIndex)
     }
   }, [isAppsEnabled, navigate, searchIndex])
 
