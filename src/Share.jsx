@@ -60,7 +60,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
           (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath)) {
+          (!modelPath.gitpath && mp.gitpath) ||
+          (modelPath.srcPath)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
@@ -80,6 +81,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
+    } else if (pathPrefix.startsWith('/share/v/src')) {
+      setRepository('external', 'content')
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(false)
     } else {
       // Local /v/new models have no repository
       setRepository(null, null)
@@ -110,7 +116,12 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 /** @return {ReactElement} */
 function ModelTitle({repository, modelPath}) {
-  const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  let modelName = ''
+  if (modelPath.srcUrl) {
+    modelName = modelPath.srcUrl.split('/').pop() // Get the last part of the URL
+  } else {
+    modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  }
 
   // Check if repository is available and construct the title accordingly
   const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
@@ -175,6 +186,18 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   if (filepath === '') {
     return null
   }
+
+  // New case: raw external URL
+  if (pathPrefix.endsWith('/src') && /^(https?:\/\/)/.test(filepath)) {
+    m = {
+      srcUrl: filepath,
+      gitpath: `external`,
+    }
+    debug().log('Share#getModelPath: is an external source URL:', m)
+    return m
+  }
+
+  // everything else still expects a “file path + optional eltPath”
   let parts
   let extension
   try {
@@ -187,30 +210,32 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
     debug().error(e)
     return null
   }
+
   filepath = `/${parts[0]}${extension}`
+
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // * param is defined in ../Share.jsx, e.g.:
-    //   /v/p/*.  It should be only the filename.
-    // Filepath is a reference rooted in the serving directory.
-    // e.g. /haus.ifc or /ifc-files/haus.ifc
+    // project file case
     m = {
-      filepath: filepath,
+      filepath,
       eltPath: parts[1],
     }
-    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
+    debug().log('Share#getModelPath: is a project file:', m, window.location.hash)
   } else if (pathPrefix.endsWith('/gh')) {
+    // GitHub case
     m = {
       org: urlParams['org'],
       repo: urlParams['repo'],
       branch: urlParams['branch'],
-      filepath: filepath,
+      filepath,
       eltPath: parts[1],
     }
     m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
     m.gitpath = `https://github.com${m.getRepoPath()}`
-    debug().log('Share#getModelPath: is a remote GitHub file: ', m)
+    debug().log('Share#getModelPath: is a remote GitHub file:', m)
   } else {
     throw new Error('Empty view type from pathPrefix')
   }
+
   return m
 }
+
