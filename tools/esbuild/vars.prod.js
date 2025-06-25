@@ -9,7 +9,7 @@ export default {
 
   // served from bldrs.ai in prod, separate server in local dev
   CORS_PROXY_HOST: null,
-  CORS_PROXY_PATH: '/cors-proxy',
+  CORS_PROXY_PATH: '/.netlify/functions/proxy-handler',
 
   // GitHub
   // TODO(pablo): maybe remove? not using anymore

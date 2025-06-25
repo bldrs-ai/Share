@@ -198,7 +198,7 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
         filepath = `${process.env.CORS_PROXY_HOST}${process.env.CORS_PROXY_PATH}?id=${googleFileId}`
       } else {
         // prod
-        filepath = `/cors-proxy?id=${googleFileId}`
+        filepath = `${process.env.CORS_PROXY_PATH}?id=${googleFileId}`
       }
     }
     m = {
