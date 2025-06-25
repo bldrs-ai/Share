@@ -34,6 +34,7 @@ describe('bldrs inside iframe', () => {
         cy.writeFile(outPath, content)
       })
     }
+    // eslint-disable-next-line no-console
     console.log(`Copied bldrs-inside-iframe{.html,-bundle.js,-bundle.js.map} ${targetDirectory}`)
   })
 

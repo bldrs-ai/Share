@@ -19,6 +19,7 @@ esbuild.build({
     '.md': 'text',
   },
 }).then((result) => {
+  // eslint-disable-next-line no-console
   console.log(`Build succeeded.`)
 }).catch((err) => {
   console.error(`Build failed:`, err)

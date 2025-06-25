@@ -77,12 +77,12 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
         />
       </Route>
       <Route
-        path='v/src/*'
+        path='v/u/*'
         element={
           <Share
             installPrefix={installPrefix}
             appPrefix={appPrefix}
-            pathPrefix={`${appPrefix}/v/src`}
+            pathPrefix={`${appPrefix}/v/u`}
           />
         }
       />

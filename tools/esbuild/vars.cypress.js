@@ -7,6 +7,9 @@ export default {
   AUTH0_DOMAIN: 'https://bldrs.us.auth0.com.msw',
   OAUTH2_CLIENT_ID: 'cypresstestaudience',
 
+  // served from bldrs.ai in prod, separate server in local dev
+  CORS_PROXY_HOST: 'http://localhost:8090',
+
   // GitHub
   GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com.msw',

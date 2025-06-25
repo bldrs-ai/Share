@@ -1,3 +1,4 @@
+/* eslint-disable */
 const __create = Object.create
 const __defProp = Object.defineProperty
 const __getOwnPropDesc = Object.getOwnPropertyDescriptor

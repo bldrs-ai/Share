@@ -1,4 +1,5 @@
 import * as mxwidgets from 'matrix-widget-api'
+import debug from '../../src/utils/debug'
 
 
 /** The Bldrs widget */
@@ -120,7 +121,7 @@ document.addEventListener('DOMContentLoaded', (domEvent) => {
   listenToApiAction(
     EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS,
     (ev) => {
-      console.log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS:', ev)
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS:', ev)
       txtLastMsg.value = JSON.stringify(ev.detail ?? '')
     },
   )
@@ -128,7 +129,7 @@ document.addEventListener('DOMContentLoaded', (domEvent) => {
   listenToApiAction(
     EVENT_CLIENT_MODEL_LOADED,
     (ev) => {
-      console.log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_MODEL_LOADED:', ev)
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_MODEL_LOADED:', ev)
       txtLastMsg.value = JSON.stringify(ev.detail ?? '')
     },
   )
@@ -136,7 +137,7 @@ document.addEventListener('DOMContentLoaded', (domEvent) => {
   listenToApiAction(
     EVENT_CLIENT_HIDDEN_ELEMENTS,
     (ev) => {
-      console.log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_HIDDEN_ELEMENTS:', ev)
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_HIDDEN_ELEMENTS:', ev)
       txtLastMsg.value = JSON.stringify(ev.detail ?? '')
     },
   )
@@ -152,9 +153,9 @@ document.addEventListener('DOMContentLoaded', (domEvent) => {
   /** */
   function listenToApiAction(actionName, callback) {
     api.on(`action:${actionName}`, (e) => {
-      console.log('bldrs-inside-iframe#listenToApiAction, event:', e)
+      debug().log('bldrs-inside-iframe#listenToApiAction, event:', e)
       if (e.type === 'DOMContentLoaded') {
-        console.log('bldrs-inside-iframe#listenToApiAction, ignoring event of type DOMContentLoaded')
+        debug().log('bldrs-inside-iframe#listenToApiAction, ignoring event of type DOMContentLoaded')
         return
       }
       e.preventDefault()

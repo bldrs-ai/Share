@@ -81,7 +81,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
-    } else if (pathPrefix.startsWith('/share/v/src')) {
+    } else if (pathPrefix.startsWith('/share/v/u')) {
       setRepository('external', 'content')
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
@@ -187,13 +187,24 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
     return null
   }
 
-  // New case: raw external URL
-  if (pathPrefix.endsWith('/src') && /^(https?:\/\/)/.test(filepath)) {
+  if (pathPrefix.endsWith('/u') && /^(https?:\/\/)/.test(filepath)) {
+    // For now, only support Google Drive files.
+    const googleDriveRegex = new RegExp('https://drive.google.com/file/d/(?<id>[^/]+)/view')
+    const matchParts = googleDriveRegex.exec(filepath)
+    if (matchParts?.groups?.id) {
+      const googleFileId = matchParts.groups.id
+      if (process.env.CORS_PROXY_HOST !== null) {
+        // eg for localhost dev
+        filepath = `${process.env.CORS_PROXY_HOST}${process.env.CORS_PROXY_PATH}?id=${googleFileId}`
+      } else {
+        // prod
+        filepath = `/cors-proxy?id=${googleFileId}`
+      }
+    }
     m = {
       srcUrl: filepath,
       gitpath: `external`,
     }
-    debug().log('Share#getModelPath: is an external source URL:', m)
     return m
   }
 
