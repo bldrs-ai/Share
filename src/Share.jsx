@@ -10,6 +10,7 @@ import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
 import {testUuid} from './utils/strings'
 import {splitAroundExtension} from './Filetype'
+import {processExternalUrl, processProjectFile, processGitHubFile} from './utils/urlHelpers'
 
 
 /**
@@ -177,7 +178,7 @@ export function navToDefault(navigate, appPrefix) {
  *       'org': 'a',
  *       ...
  *     }
- * @return {object}
+ * @return {object|null} Null will result in a redirect to the index file.
  */
 export function getModelPath(installPrefix, pathPrefix, urlParams) {
   // TODO: combine modelPath methods into class.
@@ -187,28 +188,15 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
     return null
   }
 
-  if (pathPrefix.endsWith('/u') && /^(https?:\/\/)/.test(filepath)) {
-    // For now, only support Google Drive files.
-    const googleDriveRegex = new RegExp('https://drive.google.com/file/d/(?<id>[^/]+)/view')
-    const matchParts = googleDriveRegex.exec(filepath)
-    if (matchParts?.groups?.id) {
-      const googleFileId = matchParts.groups.id
-      if (process.env.CORS_PROXY_HOST !== null) {
-        // eg for localhost dev
-        filepath = `${process.env.CORS_PROXY_HOST}${process.env.CORS_PROXY_PATH}?id=${googleFileId}`
-      } else {
-        // prod
-        filepath = `${process.env.CORS_PROXY_PATH}?id=${googleFileId}`
-      }
+  if (pathPrefix.endsWith('/u')) {
+    const externalResult = processExternalUrl(filepath)
+    if (externalResult) {
+      return externalResult
     }
-    m = {
-      srcUrl: filepath,
-      gitpath: `external`,
-    }
-    return m
+    return null
   }
 
-  // everything else still expects a “file path + optional eltPath”
+  // everything else still expects a "file path + optional eltPath"
   let parts
   let extension
   try {
@@ -226,22 +214,11 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
 
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // project file case
-    m = {
-      filepath,
-      eltPath: parts[1],
-    }
+    m = processProjectFile(filepath, parts[1])
     debug().log('Share#getModelPath: is a project file:', m, window.location.hash)
   } else if (pathPrefix.endsWith('/gh')) {
     // GitHub case
-    m = {
-      org: urlParams['org'],
-      repo: urlParams['repo'],
-      branch: urlParams['branch'],
-      filepath,
-      eltPath: parts[1],
-    }
-    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
-    m.gitpath = `https://github.com${m.getRepoPath()}`
+    m = processGitHubFile(filepath, parts[1], urlParams)
     debug().log('Share#getModelPath: is a remote GitHub file:', m)
   } else {
     throw new Error('Empty view type from pathPrefix')

@@ -1,31 +1,68 @@
 import express from 'express'
-import {handler} from './functions/proxy-handler.js'
+import proxyHandler from './functions/proxy-handler.js'
 
 
 const app = express()
 
+app.get('/.netlify/functions/proxy-handler', async (req, res) => {
+  // Build a Web standard Request object from the incoming Express req
+  const origin = req.headers.origin
+  const url = new URL(`http://localhost${req.originalUrl}`)
+  const headers = new Headers({origin})
+  
+  const request = new Request(url.toString(), {
+    method: 'GET',
+    headers,
+  })
 
-/**
- * Pass the query params to the handler used by netlify, and respond with
- * the result.
- */
-app.get('/cors-proxy', async (req, res) => {
-  const event = {
-    queryStringParameters: req.query,
-    headers: {
-      origin: req.headers.origin,
-    },
+  const response = await proxyHandler(request)
+
+  // Copy headers
+  response.headers.forEach((value, key) => {
+    res.setHeader(key, value)
+  })
+
+  res.status(response.status)
+
+  if (response.body) {
+    const reader = response.body.getReader()
+    const stream = new ReadableStream({
+      async start(controller) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          controller.enqueue(value)
+        }
+        controller.close()
+      },
+    })
+
+    const nodeStream = await streamToNodeReadable(stream)
+    nodeStream.pipe(res)
+  } else {
+    const bodyText = await response.text()
+    res.send(bodyText)
   }
-  const result = await handler(event)
-  res.status(result.statusCode).set(result.headers)
-  const resultMaybeDecoded = result.isBase64Encoded ? Buffer.from(result.body, 'base64') : result.body
-  res.send(resultMaybeDecoded)
 })
+
+
+async function streamToNodeReadable(webStream) {
+  const { Readable } = await import('stream')
+  const reader = webStream.getReader()
+  return new Readable({
+    async read() {
+      const { done, value } = await reader.read()
+      if (done) {
+        this.push(null)
+      } else {
+        this.push(Buffer.from(value))
+      }
+    },
+  })
+}
 
 
 const HTTP_PORT = 8090
 app.listen(HTTP_PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`Dev server running on http://localhost:${HTTP_PORT}`)
 })
-

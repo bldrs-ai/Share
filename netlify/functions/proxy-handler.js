@@ -1,40 +1,42 @@
 /**
- * Proxy handler for Google Drive files.
- *
- * @param {object} event - The event object.
- * @param {object} event.queryStringParameters - The query string parameters.
- * @param {string} event.queryStringParameters.id - The file ID.
- * @return {Promise<object>} - The response object.
+ * This function is used to proxy requests to Google Drive.
+ * It is used to bypass the CORS policy of Google Drive.
+ * It is also used to compress the response from Google Drive.
+ * It is also used to cache the response from Google Drive.
+ * It is also used to serve the response from Google Drive.
  */
-export async function handler(event) {
-  const {id} = event.queryStringParameters
+export default async (req) => {
+  const url = new URL(req.url)
+  const id = url.searchParams.get('id')
   if (!id) {
-    return {
-      statusCode: 400,
-      body: 'Missing file ID',
-    }
+    return new Response('Missing file ID', {status: 400})
   }
-  const downloadUrl = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download`
-  // Would be nice to stream this, but Netlify limits streaming size to 20MB for now (beta, Jun'25).
-  // https://docs.netlify.com/functions/get-started/?fn-language=ts
-  const driveResponse = await fetch(downloadUrl)
-  const buffer = await driveResponse.arrayBuffer()
-  const contentType = driveResponse.headers.get('content-type') || 'application/octet-stream'
-  const origin = event.headers.origin
-  const isAllowedOrigin = (
+
+  const origin = req.headers.get('origin') || ''
+  const isAllowedOrigin =
     origin === 'https://bldrs.ai' ||
     origin === 'http://localhost:8080' ||
     /^https:\/\/deploy-preview-\d+--bldrs-share\.netlify\.app$/.test(origin)
-  )
-  const HTTP_OK = 200
-  return {
-    statusCode: HTTP_OK,
+
+  const downloadUrl = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download`
+
+  const driveResponse = await fetch(downloadUrl, {
     headers: {
-      'Content-Type': contentType,
-      'Access-Control-Allow-Origin': isAllowedOrigin ? origin : 'https://bldrs.ai',
+      'Accept-Encoding': 'gzip, deflate, br',
     },
-    // Should b64 for Netlify: https://docs.netlify.com/functions/lambda-compatibility/?fn-language=ts
-    body: Buffer.from(buffer).toString('base64'),
-    isBase64Encoded: true,
+  })
+
+  if (!driveResponse.ok) {
+    return new Response('Failed to fetch file from Google Drive', {status: 502})
   }
+
+  const headers = new Headers(driveResponse.headers)
+  headers.set('Access-Control-Allow-Origin', isAllowedOrigin ? origin : 'https://bldrs.ai')
+  headers.set('Access-Control-Allow-Headers', 'Content-Type')
+  headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS')
+
+  return new Response(driveResponse.body, {
+    status: driveResponse.status,
+    headers,
+  })
 }

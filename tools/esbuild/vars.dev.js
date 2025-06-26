@@ -10,4 +10,7 @@ export default {
   THREE_PDB_IS_ENABLED: false,
   PLATFORM: 'web',
   FORCE_SINGLE_THREAD: 'false',
+
+  // served from bldrs.ai in prod, separate server in local dev
+  CORS_PROXY_HOST: 'http://localhost:8090',
 }
