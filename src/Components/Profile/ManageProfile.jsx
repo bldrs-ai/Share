@@ -85,16 +85,13 @@ return
             return
           }
 
-          // 2. Get a *primary* access-token (for /userinfo check) – this tab already
-          //    has one in memory or can fetch a fresh one silently
-          const primaryToken = await getAccessTokenSilently({
-            authorizationParams: {
-              audience: 'https://api.github.com/', // or your proxy
-              scope: 'openid profile email offline_access',
-            },
-            useRefreshTokens: true,
-            cacheMode: 'on',
-          })
+          const primaryToken = localStorage.getItem('primaryUserToken')
+
+          if (!primaryToken) {
+            console.error('No primaryToken found')
+            return
+          }
+
 
           // 3. Call the Netlify function
           await fetch('/.netlify/functions/link-accounts', {
@@ -105,6 +102,11 @@ return
             },
            body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
           })
+
+          // 4. Clear the localStorage items
+          localStorage.removeItem('linkStatus')
+          localStorage.removeItem('secondaryIdToken')
+          localStorage.removeItem('primaryUserToken')
         }
       }
       window.addEventListener('storage', handleStorageEvent)
@@ -112,10 +114,19 @@ return
     })
 
   /** Link a new provider via Auth0 popup then POST to Management API */
-  const handleLink = (connection) => {
+  const handleLink = async (connection) => {
     try {
       localStorage.setItem('linkStatus', 'inProgress')
       recentConnection = connection
+      // 1️⃣  Grab a user-info token for the GitHub session
+      const primaryToken = await getAccessTokenSilently({
+        scope: 'openid profile email', // no audience ⇒ /userinfo
+        cacheMode: 'off', // force fresh
+        useRefreshTokens: true,
+      })
+
+      // 2️⃣  Stash it so the storage handler can use it later
+      localStorage.setItem('primaryUserToken', primaryToken)
       window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
     } catch (err) {
       console.error('Linking failed', err)
