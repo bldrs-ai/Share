@@ -95,7 +95,8 @@ export default function BaseRoutes({testElt = null}) {
     } else if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
         authorizationParams: {
-          audience: 'https://api.github.com/',
+          audience: 'https://bldrs.us.auth0.com/userinfo',
+          // audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
         cacheMode: 'off',

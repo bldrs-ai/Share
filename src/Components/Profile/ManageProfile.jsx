@@ -1,3 +1,4 @@
+import {jwtDecode} from 'jwt-decode'
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import {
@@ -51,7 +52,8 @@ import GoogleIcon from '@mui/icons-material/Google'
 const CUSTOM_CLAIM = 'https://bldrs.ai/identities'
 
 const ManageProfile = ({open, onClose}) => {
-  const {user, isAuthenticated, getAccessTokenSilently} = useAuth0()
+  // eslint-disable-next-line no-unused-vars
+  const {user, isAuthenticated, getAccessTokenSilently, getIdTokenClaims} = useAuth0()
   const [linkedIdentities, setLinkedIdentities] = useState([])
   const [loading, setLoading] = useState(true)
   // const accessToken = useStore((state) => state.accessToken)
@@ -92,16 +94,35 @@ return
             return
           }
 
+          const decodedToken = jwtDecode(primaryToken)
+          const primaryUserId = decodedToken.sub // e.g. "github|17447690"
+
+          // 3) Call Auth0 to link accounts
+          const linkResp = await fetch(
+            `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(primaryUserId)}/identities`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${primaryToken}`,
+              },
+              body: {link_with: secondaryIdToken},
+            },
+          )
+
+          // eslint-disable-next-line no-unused-vars
+          const linkData = await linkResp.text()
+          // console.log('Link response:', linkData)
+
 
           // 3. Call the Netlify function
-          await fetch('/.netlify/functions/link-accounts', {
+         /* await fetch('/.netlify/functions/link-accounts', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
              'Authorization': `Bearer ${primaryToken}`, // <-- the JWT above
             },
            body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
-          })
+          })*/
 
           // 4. Clear the localStorage items
           localStorage.removeItem('linkStatus')
@@ -118,8 +139,8 @@ return
     try {
       localStorage.setItem('linkStatus', 'inProgress')
       recentConnection = connection
-      // 1️⃣  Grab a user-info token for the GitHub session
       const primaryToken = await getAccessTokenSilently({
+        audience: 'https://bldrs.us.auth0.com/userinfo',
         scope: 'openid profile email', // no audience ⇒ /userinfo
         cacheMode: 'off', // force fresh
         useRefreshTokens: true,
