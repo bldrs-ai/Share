@@ -15,6 +15,7 @@ function PopupAuth() {
   useEffect(() => {
     // Extract scope from the query parameters
     const params = new URLSearchParams(window.location.search)
+    const connection = params.get('connection') || 'github'
 
     if (params.get('scope')) {
       const scope = params.get('scope')
@@ -24,7 +25,7 @@ function PopupAuth() {
         authorizationParams: {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
-          connection: 'github',
+          connection: connection,
           connection_scope: scope,
         },
      })
@@ -34,7 +35,7 @@ function PopupAuth() {
         authorizationParams: {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
-          connection: 'github',
+          connection: connection,
         },
       })
     }

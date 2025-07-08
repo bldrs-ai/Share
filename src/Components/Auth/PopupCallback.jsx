@@ -13,11 +13,17 @@ function PopupCallback() {
      *
      */
     async function processCallback() {
+       if (localStorage.getItem('linkStatus') === 'inProgress') {
+        // If linking is in progress, set the status to 'linked' to trigger the
+        // ManageProfile modal in the main window.
+        localStorage.setItem('linkStatus', 'linked')
+      } else {
+        localStorage.setItem('refreshAuth', 'true')
+      }
+
       // Wait for Auth0 to handle the redirect callback
       await handleRedirectCallback()
-      // Now that Auth0 has processed the callback and written tokens to storage,
-      // set our flag and close the popup.
-      localStorage.setItem('refreshAuth', 'true')
+
       window.close()
     }
     processCallback()

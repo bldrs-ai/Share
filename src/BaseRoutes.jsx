@@ -190,7 +190,7 @@ export default function BaseRoutes({testElt = null}) {
         <DialogActions>
           <Button
             onClick={() => {
-              window.open(`/popup-auth?scope=${reauthScope}`, 'authPopup', 'width=600,height=600')
+              window.open(`/popup-auth?scope=${reauthScope}&connection=github`, 'authPopup', 'width=600,height=600')
               setReauthModalOpen(false)
             }}
           >
