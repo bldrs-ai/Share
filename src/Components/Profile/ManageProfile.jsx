@@ -19,7 +19,6 @@ import {
 } from '@mui/material'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import GoogleIcon from '@mui/icons-material/Google'
-import useStore from '../../store/useStore'
 
 /**
  * ManageProfile.jsx
@@ -55,8 +54,8 @@ const ManageProfile = ({open, onClose}) => {
   const {user, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const [linkedIdentities, setLinkedIdentities] = useState([])
   const [loading, setLoading] = useState(true)
-  const accessToken = useStore((state) => state.accessToken)
-  const setAccessToken = useStore((state) => state.setAccessToken)
+  // const accessToken = useStore((state) => state.accessToken)
+  // const setAccessToken = useStore((state) => state.setAccessToken)
   // eslint-disable-next-line no-unused-vars
   let recentConnection = null
 
@@ -77,37 +76,35 @@ return
       /**
        * Listen for changes in localStorage
        */
-      function handleStorageEvent(event) {
+      async function handleStorageEvent(event) {
         if (event.key === 'linkStatus' && event.newValue === 'linked') {
-          // When linking is in progress, open the ManageProfile modal
-          // When login is detected, refresh the auth state
-          getAccessTokenSilently(
-            {
-            authorizationParams: {
-            // audience: recentConnection === 'github' ? 'https://api.github.com/' : 'https://www.googleapis.com/oauth2/v3/userinfo',
-            audience: 'https://api.github.com/',
-            scope: 'openid profile email offline_access',
-          },
-          cacheMode: 'on',
-          useRefreshTokens: true,
-        })
-            .then(async (token) => {
-              // clear the flag so the event doesn't fire again unnecessarily
-              localStorage.removeItem('linkStatus')
-              await fetch('/.netlify/functions/link-accounts', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${accessToken}`, // from getAccessTokenSilently
-                },
-                body: JSON.stringify({token}), // ID token from popup
-              })
+          // 1. Pull the secondary ID token that the popup stored
+          const secondaryIdToken = localStorage.getItem('secondaryIdToken')
+          if (!secondaryIdToken) {
+            console.error('No secondaryIdToken found')
+            return
+          }
 
-              setAccessToken(token)
-            })
-            .catch((error) => {
-              console.error('Error refreshing token:', error)
-            })
+          // 2. Get a *primary* access-token (for /userinfo check) – this tab already
+          //    has one in memory or can fetch a fresh one silently
+          const primaryToken = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: 'https://api.github.com/', // or your proxy
+              scope: 'openid profile email offline_access',
+            },
+            useRefreshTokens: true,
+            cacheMode: 'on',
+          })
+
+          // 3. Call the Netlify function
+          await fetch('/.netlify/functions/link-accounts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+             'Authorization': `Bearer ${primaryToken}`, // <-- the JWT above
+            },
+           body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
+          })
         }
       }
       window.addEventListener('storage', handleStorageEvent)
