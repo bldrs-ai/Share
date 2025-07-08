@@ -113,7 +113,7 @@ exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       {
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${mgmtToken}`,
+          Authorization: `Bearer ${primaryToken}`,
         },
       },
     );
