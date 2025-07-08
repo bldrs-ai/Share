@@ -57,6 +57,7 @@ const ManageProfile = ({open, onClose}) => {
   const [loading, setLoading] = useState(true)
   const accessToken = useStore((state) => state.accessToken)
   const setAccessToken = useStore((state) => state.setAccessToken)
+  // eslint-disable-next-line no-unused-vars
   let recentConnection = null
 
   /**
@@ -83,7 +84,8 @@ return
           getAccessTokenSilently(
             {
             authorizationParams: {
-            audience: recentConnection === 'github' ? 'https://api.github.com/' : 'https://www.googleapis.com/oauth2/v3/userinfo',
+            // audience: recentConnection === 'github' ? 'https://api.github.com/' : 'https://www.googleapis.com/oauth2/v3/userinfo',
+            audience: 'https://api.github.com/',
             scope: 'openid profile email offline_access',
           },
           cacheMode: 'on',
