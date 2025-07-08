@@ -33,8 +33,8 @@ async function getManagementApiToken() {
     const resp = await axios.post(
       `https://${process.env.AUTH0_DOMAIN}/oauth/token`,
       {
-        client_id: process.env.MGMT_CLIENT_ID,
-        client_secret: process.env.MGMT_CLIENT_SECRET,
+        client_id: process.env.AUTH0_CLIENT_ID,
+        client_secret: process.env.AUTH0_CLIENT_SECRET,
         audience: `https://${process.env.AUTH0_DOMAIN}/api/v2/`,
         grant_type: 'client_credentials',
       },
