@@ -2,7 +2,7 @@
 /**
  *
  */
-export async function askLLM({messages, model = 'mistralai/mistral-7b-instruct'}) {
+export async function askLLM({messages, model = 'mistralai/mistral-7b-instruct', apiKey} ) {
   const url = 'https://openrouter.ai/api/v1/chat/completions'
 
   const body = {
@@ -17,7 +17,7 @@ export async function askLLM({messages, model = 'mistralai/mistral-7b-instruct'}
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       // OpenRouter wants these two for routing / analytics:
       'HTTP-Referer': location.origin, // your public URL in prod
       'X-Title': 'Bldrs Viewer Chat', // short app name

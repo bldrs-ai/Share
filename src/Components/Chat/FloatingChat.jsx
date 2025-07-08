@@ -28,6 +28,7 @@ export default function FloatingChat() {
   const userText = theme.palette.primary.contrastText
   const botBg = theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[200]
   const botText = theme.palette.getContrastText(botBg)
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_api_key') ?? '')
 
   /* eslint-disable max-len */
 
@@ -85,10 +86,14 @@ return null
 
   /* ---------------- main callback ---------------- */
   const handleSend = async () => {
+      if (!apiKey || apiKey === '') { // ← guard early
+        alert('Please enter your OpenRouter API key first.')
+        return
+      }
     const content = input.trim()
     if (!content) {
-return
-}
+      return
+    }
     setInput('')
 
     /* access the global setter once */
@@ -128,10 +133,11 @@ return
         ]
       }
 
-      /* 4️⃣ LLM request */
+      /* … unchanged code … */
       const raw = await askLLM({
         model: 'deepseek/deepseek-chat-v3-0324:free',
         messages: prompt,
+        apiKey, // ← pass it through
       })
 
       /* 5️⃣ extract JSON payload */
@@ -243,6 +249,26 @@ return
             <IconButton onClick={() => setIsOpen(false)} sx={{color: 'inherit'}}>
               <CloseIcon/>
             </IconButton>
+          </Box>
+
+          {/* API-key row – add right under the header */}
+          <Box sx={{display: 'flex', gap: 1, p: 1, borderBottom: (theme_) => `1px solid ${theme_.palette.divider}`}}>
+            <InputBase
+              fullWidth
+              value={apiKey}
+              placeholder="Paste your OpenRouter API Key…"
+              onChange={(e) => {
+                setApiKey(e.target.value)
+                localStorage.setItem('openrouter_api_key', e.target.value)
+              }}
+              sx={{
+                fontSize: 14,
+                backgroundColor: (theme__) => theme__.palette.mode === 'dark' ?
+                  'rgba(255,255,255,0.08)' :
+                  'rgba(0,0,0,0.04)',
+                borderRadius: 2, px: 2, py: 1,
+              }}
+            />
           </Box>
 
           {/* messages */}
