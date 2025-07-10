@@ -1,4 +1,4 @@
-import {jwtDecode} from 'jwt-decode'
+// import {jwtDecode} from 'jwt-decode'
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import {
@@ -94,23 +94,20 @@ return
             return
           }
 
-          const decodedToken = jwtDecode(primaryToken)
-          const primaryUserId = decodedToken.sub // e.g. "github|17447690"
+          // console.log(`Linking accounts: primary token ${primaryToken} with secondary token ${secondaryIdToken}`)
 
-          // 3) Call Auth0 to link accounts
-          const linkResp = await fetch(
-            `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(primaryUserId)}/identities`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${primaryToken}`,
-              },
-              body: {link_with: secondaryIdToken},
+          // 3. Call the Netlify function
+          await fetch('/.netlify/functions/link-accounts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+             'Authorization': `Bearer ${primaryToken}`, // <-- the JWT above
             },
-          )
+           body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
+          })
 
-          // eslint-disable-next-line no-unused-vars
-          const linkData = await linkResp.text()
+
+          // const linkData = await linkResp.text()
           // console.log('Link response:', linkData)
 
 
@@ -140,8 +137,8 @@ return
       localStorage.setItem('linkStatus', 'inProgress')
       recentConnection = connection
       const primaryToken = await getAccessTokenSilently({
-        audience: 'https://bldrs.us.auth0.com/userinfo',
-        scope: 'openid profile email', // no audience ⇒ /userinfo
+        audience: 'https://api.github.com/',
+        scope: 'openid profile email offline_access', // no audience ⇒ /userinfo
         cacheMode: 'off', // force fresh
         useRefreshTokens: true,
       })

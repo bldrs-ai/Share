@@ -103,17 +103,22 @@ exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       return { statusCode: 401, body: 'Unable to resolve primary user' };
     }
 
+    const { sub } = JSON.parse(atob(secondaryIdToken.split('.')[1]));
+    const [provider, user_id] = sub.split('|');
+
+
+
     // 2) Obtain Management‑API token (client credentials)
     const mgmtToken = await getManagementApiToken();
 
     // 3) Call Auth0 to link accounts
     const linkResp = await axios.post(
       `https://${process.env.AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(primaryUserId)}/identities`,
-      { link_with: secondaryIdToken },
+      { provider: provider, user_id: user_id },
       {
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${primaryToken}`,
+          Authorization: `Bearer ${mgmtToken}`,
         },
       },
     );

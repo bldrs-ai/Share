@@ -61,8 +61,8 @@ export default function ProfileControl() {
         getAccessTokenSilently(
           {
           authorizationParams: {
-            audience: 'https://bldrs.us.auth0.com/userinfo',
-          // audience: 'https://api.github.com/',
+            // audience: 'https://bldrs.us.auth0.com/userinfo',
+           audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
         cacheMode: 'on',
