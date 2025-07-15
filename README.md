@@ -1,5 +1,9 @@
 # Bldrs Share
-Bldrs Share is a high-performance browser-based application for CAD & BIM model viewing, sharing and collaboration.  Share is built on open-source standards for speed, accuracy, and flexibility.  Designed for real-time teamwork, Bldrs Share empowers teams to effortlessly share detailed models and collaborate seamlessly from any device.
+Bldrs Share is a high-performance browser-based application for CAD & BIM model
+viewing, sharing and collaboration.  Share is built on open-source standards for
+speed, accuracy, and flexibility.  Designed for real-time teamwork, Bldrs Share
+empowers teams to effortlessly share detailed models and collaborate seamlessly
+from any device.
 
 ![image](https://github.com/user-attachments/assets/89c98fba-0057-45f2-a02a-161ced37f88c)
 
