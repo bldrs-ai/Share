@@ -164,7 +164,7 @@
     "node-fetch": "2"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "msw": {
     "workerDirectory": "public"
