@@ -2284,20 +2284,20 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.22.921":
-  version "0.22.921"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.22.921.tgz#adf00edd7366044eca0f20408d03aba1a89aa1f6"
-  integrity sha512-p1dHSdI+MVeyMVpJjtmVR3m/UqbI06VsU7EX/RTnL5GuX0VP3CimeRSS3eiRvk5lbpPxjJLM4QOW92uPehXXnw==
+"@bldrs-ai/conway-web-ifc-adapter@0.23.940":
+  version "0.23.940"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.23.940.tgz#b824dcf61d3c175a846a00f5c931947214c2d0bb"
+  integrity sha512-1JerFycCVj8pQtHDSNPYj9zQqp7IoMgVgIABNqY8F7m4mocLw2UFPpf+MTXKdJnoy5Fb3GXJmJrhXsLV7jcY4w==
   dependencies:
-    "@bldrs-ai/conway" "0.22.921"
+    "@bldrs-ai/conway" "0.23.940"
     "@types/node" "22.5.5"
-    gl-matrix "^3.4.3"
+    gl-matrix "3.4.3"
     typescript "5.6.2"
 
-"@bldrs-ai/conway@0.22.921":
-  version "0.22.921"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.22.921.tgz#c138a7a8b8b80f62206185cabdf76327d1fc91b5"
-  integrity sha512-oBkDHu/0GyYC33PIkeck3xWm9VxmMw1N8/xNf8Xjh1Vv8/CI95AZQEkXUaxT6BtJHepsQqcET2LhqoOcLFAGoQ==
+"@bldrs-ai/conway@0.23.940":
+  version "0.23.940"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-0.23.940.tgz#5230c6bcac973cb9c0cc9f1b0c71b482f7d5d737"
+  integrity sha512-oP/FJaMXF5DXZpqNylEnd0U+gFMg7Vmlg3vdmxZO3RImQvSACjBgSOZG9OJeUO9AjvVLOdgFP88kUvJ7nqB6pA==
   dependencies:
     seedrandom "3.0.5"
     three "^0.173.0"
@@ -7266,7 +7266,7 @@ getpass@^0.1.1:
   dependencies:
     assert-plus "^1.0.0"
 
-gl-matrix@^3.4.3:
+gl-matrix@3.4.3:
   version "3.4.3"
   resolved "https://registry.yarnpkg.com/gl-matrix/-/gl-matrix-3.4.3.tgz#fc1191e8320009fd4d20e9339595c6041ddc22c9"
   integrity sha512-wcCp8vu8FT22BnvKVPjXa/ICBWRq/zjFfdofZy1WSpQZpphblv12/bOQLBC1rMM7SGOFS9ltVmKOHil5+Ml7gA==
