@@ -7,11 +7,16 @@ export default {
   // TODO(pablo): using null in prod to return to window.location.origin
   OAUTH2_REDIRECT_URI: null,
 
+  // served from bldrs.ai in prod, separate server in local dev
+  CORS_PROXY_HOST: null,
+  CORS_PROXY_PATH: '/.netlify/functions/proxy-handler',
+
   // GitHub
   // TODO(pablo): maybe remove? not using anymore
   GITHUB_API_TOKEN: null,
   GITHUB_BASE_URL: 'https://git.bldrs.dev/p/gh',
   GITHUB_BASE_URL_UNAUTHENTICATED: 'https://api.github.com',
+
 
   NODE_ENV: 'production',
 

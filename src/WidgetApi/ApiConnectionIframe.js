@@ -8,11 +8,14 @@ import AbstractApiConnection from './ApiConnection'
 export default class ApiConnectionIframe extends AbstractApiConnection {
   widgetId = 'bldrs-share'
   matrixWidgetApi = null
+  started = false
 
   /** constructor */
   constructor() {
     super()
-    this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId)
+    this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId, {
+      waitForIframeLoad: false, // ⬅ turn off the automatic path
+    })
     this.matrixWidgetApi.requestCapabilities([MatrixCapabilities.AlwaysOnScreen])
   }
 
@@ -58,12 +61,16 @@ export default class ApiConnectionIframe extends AbstractApiConnection {
   /** Starts the Matrix API message transprot */
   start() {
     debug().log('ApiConnectionIframe#send: start & sendContentLoaded!')
-    this.matrixWidgetApi.start()
-    this.matrixWidgetApi.sendContentLoaded()
+    if (!this.started) {
+      this.matrixWidgetApi.start()
+      this.matrixWidgetApi.sendContentLoaded()
+      this.started = true
+    }
   }
 
   /** Stops the Matrix API message transport */
   stop() {
     this.matrixWidgetApi.stop()
+    this.started = false
   }
 }

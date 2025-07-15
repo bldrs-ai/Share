@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useMemo} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
@@ -10,6 +10,7 @@ import {disablePageReloadApprovalCheck} from './utils/event'
 import {navWith} from './utils/navigate'
 import {testUuid} from './utils/strings'
 import {splitAroundExtension} from './Filetype'
+import {processExternalUrl, processProjectFile, processGitHubFile} from './utils/urlHelpers'
 
 
 /**
@@ -32,10 +33,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
+  const widgetApiRef = useRef(null)
 
-  useMemo(() => {
-    if (isAppsEnabled) {
-      new WidgetApi(navigate, searchIndex)
+  useEffect(() => {
+    if (isAppsEnabled && !widgetApiRef.current) {
+      widgetApiRef.current = new WidgetApi(navigate, searchIndex)
     }
   }, [isAppsEnabled, navigate, searchIndex])
 
@@ -59,7 +61,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
           (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath)) {
+          (!modelPath.gitpath && mp.gitpath) ||
+          (modelPath.srcPath)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
@@ -79,6 +82,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
+    } else if (pathPrefix.startsWith('/share/v/u')) {
+      setRepository('external', 'content')
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(false)
     } else {
       // Local /v/new models have no repository
       setRepository(null, null)
@@ -109,7 +117,12 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 /** @return {ReactElement} */
 function ModelTitle({repository, modelPath}) {
-  const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  let modelName = ''
+  if (modelPath.srcUrl) {
+    modelName = modelPath.srcUrl.split('/').pop() // Get the last part of the URL
+  } else {
+    modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  }
 
   // Check if repository is available and construct the title accordingly
   const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
@@ -165,7 +178,7 @@ export function navToDefault(navigate, appPrefix) {
  *       'org': 'a',
  *       ...
  *     }
- * @return {object}
+ * @return {object|null} Null will result in a redirect to the index file.
  */
 export function getModelPath(installPrefix, pathPrefix, urlParams) {
   // TODO: combine modelPath methods into class.
@@ -174,6 +187,16 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   if (filepath === '') {
     return null
   }
+
+  if (pathPrefix.endsWith('/u')) {
+    const externalResult = processExternalUrl(filepath)
+    if (externalResult) {
+      return externalResult
+    }
+    return null
+  }
+
+  // everything else still expects a "file path + optional eltPath"
   let parts
   let extension
   try {
@@ -186,30 +209,21 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
     debug().error(e)
     return null
   }
+
   filepath = `/${parts[0]}${extension}`
+
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // * param is defined in ../Share.jsx, e.g.:
-    //   /v/p/*.  It should be only the filename.
-    // Filepath is a reference rooted in the serving directory.
-    // e.g. /haus.ifc or /ifc-files/haus.ifc
-    m = {
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
+    // project file case
+    m = processProjectFile(filepath, parts[1])
+    debug().log('Share#getModelPath: is a project file:', m, window.location.hash)
   } else if (pathPrefix.endsWith('/gh')) {
-    m = {
-      org: urlParams['org'],
-      repo: urlParams['repo'],
-      branch: urlParams['branch'],
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
-    m.gitpath = `https://github.com${m.getRepoPath()}`
-    debug().log('Share#getModelPath: is a remote GitHub file: ', m)
+    // GitHub case
+    m = processGitHubFile(filepath, parts[1], urlParams)
+    debug().log('Share#getModelPath: is a remote GitHub file:', m)
   } else {
     throw new Error('Empty view type from pathPrefix')
   }
+
   return m
 }
+

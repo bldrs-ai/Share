@@ -7,6 +7,8 @@ let GITHUB_BASE_URL_UNAUTHENTICATED = null
  * @property {function(string): Promise<boolean>} checkCacheRaw Function to check the cache.
  */
 
+/* global FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemSyncAccessHandle */
+
 /* global importScripts, CacheModule */
 importScripts('./Cache.js')
 
@@ -76,6 +78,7 @@ self.addEventListener('message', async (event) => {
   }
 })
 
+
 /**
  * Return directory snapshot of OPFS cache
  */
@@ -88,8 +91,13 @@ async function snapshotCache() {
   self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure})
 }
 
+
 /**
  * Given a directory handle, traverse the directory
+ *
+ * @param {FileSystemDirectoryHandle} dirHandle - The directory handle to traverse.
+ * @param {string} [path] - The path to the directory.
+ * @return {Promise<string>} The directory structure as a string.
  */
 async function traverseDirectory(dirHandle, path = '') {
   let entries = ''
@@ -104,6 +112,7 @@ async function traverseDirectory(dirHandle, path = '') {
   return entries
 }
 
+
 /**
  * Clear OPFS cache
  */
@@ -115,8 +124,12 @@ async function clearCache() {
   self.postMessage({completed: true, event: 'clear'})
 }
 
+
 /**
  * Delete all entries for a given directory handle
+ *
+ * @param {FileSystemDirectoryHandle} dirHandle - The directory handle to delete all entries from.
+ * @return {Promise<void>}
  */
 async function deleteAllEntries(dirHandle) {
   for await (const [name, handle] of dirHandle.entries()) {
@@ -129,9 +142,17 @@ async function deleteAllEntries(dirHandle) {
   }
 }
 
-// Function to fetch the latest commit hash
+
 /**
+ * Fetch the latest commit hash
  *
+ * @param {string} baseURL - The base URL to fetch the latest commit hash from.
+ * @param {string} owner - The owner of the repository.
+ * @param {string} repo - The repository name.
+ * @param {string} filePath - The path to the file.
+ * @param {string} accessToken - The access token to use for the request.
+ * @param {string} branch - The branch to fetch the latest commit hash from.
+ * @return {Promise<string>} The latest commit hash.
  */
 async function fetchLatestCommitHash(baseURL, owner, repo, filePath, accessToken, branch) {
   const url = `${baseURL}/repos/${owner}/${repo}/commits?sha=${branch}&path=${filePath}`
@@ -155,8 +176,12 @@ async function fetchLatestCommitHash(baseURL, owner, repo, filePath, accessToken
   return latestCommitHash
 }
 
+
 /**
+ * Fetch the final URL and make a HEAD request
  *
+ * @param {string} modelUrl - The URL to fetch the model from.
+ * @return {Promise<Response>} The response from the request.
  */
 async function fetchRGHUC(modelUrl) {
   try {
@@ -174,8 +199,13 @@ async function fetchRGHUC(modelUrl) {
   }
 }
 
+
 /**
  * Fetch the final URL and make a HEAD request
+ *
+ * @param {string} jsonUrl - The URL to fetch the JSON from.
+ * @param {string} etag_ - The ETag to use for the request.
+ * @return {Promise<Response>} The response from the request.
  */
 async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
   try {
@@ -213,10 +243,9 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
   }
 }
 
-/* eslint-disable jsdoc/no-undefined-types */
+
 /**
  * Computes the Git blob SHA-1 hash for a given File.
- *
  *
  * @param {FileSystemFileHandle} file - The File object to compute the SHA-1 hash for.
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
@@ -259,7 +288,6 @@ async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
   }
 }
 
-/* eslint-enable jsdoc/no-undefined-types */
 
 /**
  * Computes the Git blob SHA-1 hash for a given File.
@@ -297,9 +325,14 @@ async function computeGitBlobSha1FromFile(file) {
 }
 
 
-// Function to write temporary file to OPFS (Origin Private File System)
 /**
+ * Write temporary file to OPFS (Origin Private File System)
  *
+ * @param {Response} response - The response from the request.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} _etag - The ETag to use for the request.
+ * @param {Function} onProgress - The function to call when the progress changes.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -401,9 +434,14 @@ async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onPro
   }
 }
 
-// Function to write temporary file to OPFS (Origin Private File System)
+
 /**
+ * Write temporary file to OPFS (Origin Private File System)
  *
+ * @param {Blob} blob - The blob to write to the file.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} _etag - The ETag to use for the request.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -482,6 +520,7 @@ function generateMockResponse(shaHash) {
   return mockResponse
 }
 
+
 /**
  * @return {Blob} The Blob object created from the base64 string.
  */
@@ -497,8 +536,15 @@ function base64ToBlob(base64, mimeType = 'application/octet-stream') {
   return new Blob([bytes], {type: mimeType})
 }
 
+
 /**
+ * Write base64 model to OPFS (Origin Private File System)
  *
+ * @param {string} content - The content to write to the file.
+ * @param {string} shaHash - The SHA hash to use for the request.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner of the repository.
+ * @param {string} repo - The repository name.
  */
 async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
   let _etag = null
@@ -606,8 +652,19 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
   }
 }
 
+
 /**
+ * Download model to OPFS (Origin Private File System)
  *
+ * @param {string} objectUrl - The URL to fetch the model from.
+ * @param {string} shaHash - The SHA hash to use for the request.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner of the repository.
+ * @param {string} repo - The repository name.
+ * @param {string} branch - The branch to fetch the latest commit hash from.
+ * @param {string} accessToken - The access token to use for the request.
+ * @param {Function} onProgress - The function to call when the progress changes.
+ * @return {Promise<void>}
  */
 async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
   let _etag = null
@@ -871,8 +928,15 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   }
 }
 
+
 /**
+ * Retrieve file with path
  *
+ * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
+ * @param {string} filePath - The path to the file.
+ * @param {string} commitHash - The commit hash to use for the request.
+ * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -1050,7 +1114,13 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
 }
 
 /**
- * writeFileToPath
+ * Write file to path
+ *
+ * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
+ * @param {string} filePath - The path to the file.
+ * @param {string} etag - The ETag to use for the request.
+ * @param {string} commitHash - The commit hash to use for the request.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
   const pathSegments = safePathSplit(filePath)
@@ -1088,7 +1158,13 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
 
 
 /**
+ * Retrieve file with path
  *
+ * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
+ * @param {string} filePath - The path to the file.
+ * @param {string} commitHash - The commit hash to use for the request.
+ * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
   const pathSegments = safePathSplit(filePath)
@@ -1126,7 +1202,14 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
 }
 
 /**
+ * Retrieve file with path
  *
+ * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
+ * @param {string} filePath - The path to the file.
+ * @param {string} etag - The ETag to use for the request.
+ * @param {string} commitHash - The commit hash to use for the request.
+ * @param {boolean} create - Whether to create the file if it doesn't exist.
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
   const pathSegments = safePathSplit(filePath)
@@ -1174,7 +1257,11 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
 }
 
 /**
+ * Write file to handle
  *
+ * @param {FileSystemSyncAccessHandle} blobAccessHandle - The blob access handle.
+ * @param {File} modelFile - The model file.
+ * @return {Promise<boolean>} True if the file was written successfully, false otherwise.
  */
 async function writeFileToHandle(blobAccessHandle, modelFile) {
   try {
@@ -1198,8 +1285,15 @@ async function writeFileToHandle(blobAccessHandle, modelFile) {
   }
 }
 
+
 /**
+ * Write model to OPFS from file
  *
+ * @param {File} modelFile - The model file.
+ * @param {string} objectKey - The object key to use for the request.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner of the repository.
+ * @param {string} repo - The repository name.
  */
 async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -1235,9 +1329,14 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
   }
 }
 
-// Function to rename the file in OPFS
+
 /**
+ * Rename file in OPFS
  *
+ * @param {FileSystemDirectoryHandle} parentDirectory - The parent directory handle.
+ * @param {FileSystemFileHandle} fileHandle - The file handle to rename.
+ * @param {string} newFileName - The new file name.
+ * @return {Promise<FileSystemFileHandle>} The new file handle.
  */
 async function renameFileInOPFS(parentDirectory, fileHandle, newFileName) {
   const newFileHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
@@ -1285,17 +1384,18 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   }
 }
 
+
 /**
  * This function navigates to the model location in OPFS and deletes it.
  * If any parent folders or the file do not exist, it will return 'notexist'.
  * If it successfully deletes the file, it will return 'deleted'.
  *
- * @param {*} commitHash
- * @param {*} originalFilePath
- * @param {*} owner
- * @param {*} repo
- * @param {*} branch
- * @return {string} postmessage specifying operation status
+ * @param {string} commitHash - The commit hash to use for the request.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner of the repository.
+ * @param {string} repo - The repository name.
+ * @param {string} branch - The branch to use for the request.
+ * @return {Promise<void>}
  */
 async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -1367,8 +1467,14 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   self.postMessage({completed: true, event: 'deleted', commitHash: commitHash})
 }
 
+
 /**
+ * Write model to OPFS
  *
+ * @param {string} objectUrl - The URL to fetch the model from.
+ * @param {string} objectKey - The object key to use for the request.
+ * @param {string} originalFileName - The name of the original file.
+ * @return {Promise<void>}
  */
 async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
   try {
@@ -1424,8 +1530,12 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
   }
 }
 
+
 /**
+ * Read model from OPFS
  *
+ * @param {string} objectKey - The object key to use for the request.
+ * @return {Promise<void>}
  */
 async function readModelFromOPFS(objectKey) {
   try {
@@ -1459,8 +1569,13 @@ async function readModelFromOPFS(objectKey) {
   }
 }
 
+
 /**
+ * Write file to OPFS
  *
+ * @param {string} objectUrl - The URL to fetch the file from.
+ * @param {string} fileName - The name of the file.
+ * @return {Promise<void>}
  */
 async function writeFileToOPFS(objectUrl, fileName) {
   try {
@@ -1510,8 +1625,12 @@ async function writeFileToOPFS(objectUrl, fileName) {
   }
 }
 
+
 /**
+ * Read file from OPFS
  *
+ * @param {string} fileName - The name of the file.
+ * @return {Promise<void>}
  */
 async function readFileFromOPFS(fileName) {
   try {
@@ -1545,9 +1664,9 @@ async function readFileFromOPFS(fileName) {
 /**
  * Checks that each named param is defined and returns the object for chaining.
  *
- * @param {any} obj Variable length arguments to assert are defined.
+ * @param {{[key: string]: any}} obj Variable length arguments to assert are defined.
  * @param {Array<string>} keys That was passed in
- * @return {any} obj That object that was passed in, if valid
+ * @return {{[key: string]: any}} obj That object that was passed in, if valid
  * @throws If any argument is not defined.
  */
 function assertValues(obj, keys) {
@@ -1560,13 +1679,12 @@ function assertValues(obj, keys) {
 }
 
 
-// From utils/strings
 /**
  * Split str on / and remove empty string as first or last array elt if they are
  * present.
  *
- * @param {string} pathStr
- * @return {string}
+ * @param {string} pathStr - The path to split.
+ * @return {string[]} The path segments.
  */
 function safePathSplit(pathStr) {
   const parts = pathStr.split('/')

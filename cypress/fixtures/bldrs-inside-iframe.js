@@ -1,11 +1,8 @@
-// TODO(pablo): just including this to fix lint.  Not sure why wasn't
-// being used.
-import mxwidgets from 'matrix-widget-api'
+import * as mxwidgets from 'matrix-widget-api'
+import debug from '../../src/utils/debug'
 
 
-/**
- * The Bldrs widget.
- */
+/** The Bldrs widget */
 class BldrsWidget {
   creatorUserId = 'ai.bldrs-share'
   id = 'bldrs-share'
@@ -14,9 +11,8 @@ class BldrsWidget {
   waitForIframeLoad = false
 }
 
-/**
- * The Bldrs Widget Driver.
- */
+
+/** The Bldrs Widget Driver */
 class BldrsWidgetDriver {
   /** */
   askOpenID(observer) {
@@ -34,9 +30,7 @@ class BldrsWidgetDriver {
   }
 
   // NOSONAR
-  /**
-   * @return {Promise}
-   */
+  /** @return {Promise} */
   readEventRelations(
       eventId,
       roomId,
@@ -76,14 +70,14 @@ class BldrsWidgetDriver {
   }
 }
 
-/**
- * Message types.
- */
+
+/** Message types */
 const EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS = 'ai.bldrs-share.SelectionChanged'
 const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
 const EVENT_CLIENT_HIDDEN_ELEMENTS = 'ai.bldrs-share.HiddenElements'
 
-document.addEventListener('DOMContentLoaded', (event) => {
+
+document.addEventListener('DOMContentLoaded', (domEvent) => {
   const container = document.getElementById('bldrs-widget-iframe')
   const bldrsWidget = new BldrsWidget()
   bldrsWidget.url = `${location.protocol}//${location.host}`
@@ -125,24 +119,27 @@ document.addEventListener('DOMContentLoaded', (event) => {
   // })
 
   listenToApiAction(
-      EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS,
-      (ev) => {
-        txtLastMsg.value = JSON.stringify(ev.detail ?? '')
-      },
+    EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS,
+    (ev) => {
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS:', ev)
+      txtLastMsg.value = JSON.stringify(ev.detail ?? '')
+    },
   )
 
   listenToApiAction(
-      EVENT_CLIENT_MODEL_LOADED,
-      (ev) => {
-        txtLastMsg.value = JSON.stringify(ev.detail ?? '')
-      },
+    EVENT_CLIENT_MODEL_LOADED,
+    (ev) => {
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_MODEL_LOADED:', ev)
+      txtLastMsg.value = JSON.stringify(ev.detail ?? '')
+    },
   )
 
   listenToApiAction(
-      EVENT_CLIENT_HIDDEN_ELEMENTS,
-      (ev) => {
-        txtLastMsg.value = JSON.stringify(ev.detail ?? '')
-      },
+    EVENT_CLIENT_HIDDEN_ELEMENTS,
+    (ev) => {
+      debug().log('bldrs-inside-iframe#listenToApiAction, EVENT_CLIENT_HIDDEN_ELEMENTS:', ev)
+      txtLastMsg.value = JSON.stringify(ev.detail ?? '')
+    },
   )
 
   btnSendMessage.addEventListener('click', () => {
@@ -155,15 +152,20 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
   /** */
   function listenToApiAction(actionName, callback) {
-    api.on(`action:${actionName}`, (ev) => {
-      event.preventDefault()
+    api.on(`action:${actionName}`, (e) => {
+      debug().log('bldrs-inside-iframe#listenToApiAction, event:', e)
+      if (e.type === 'DOMContentLoaded') {
+        debug().log('bldrs-inside-iframe#listenToApiAction, ignoring event of type DOMContentLoaded')
+        return
+      }
+      e.preventDefault()
       messagesReceivedCount++
       if (callback) {
-        callback(ev)
+        callback(e)
       }
-      api.transport.reply(event.detail, {})
+      api.transport.reply(e.detail, {})
       txtMessagesCount.innerText = messagesReceivedCount
-      txtLastMessageReceivedAction.innerText = event.detail.action
+      txtLastMessageReceivedAction.innerText = e.detail.action
     })
   }
 })
