@@ -4,7 +4,7 @@ import prod from './vars.prod.js'
 
 
 // Exported for testing only
-/** @return {Object<string,string>} */
+/** @return {{[key: string]: string}} */
 export function zipEnvWithConfig(config) {
   const defines = {}
   Object.keys(config).forEach((name) => {
