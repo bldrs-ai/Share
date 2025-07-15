@@ -376,12 +376,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 async function findLoader(pathname, viewer) {
   let extension
   try {
-    if (true) {
-      // HACK for testing
-      extension = 'ifc'
-    } else {
-      extension = Filetype.getValidExtension(pathname)
-    }
+    extension = Filetype.getValidExtension(pathname)
     debug().log('Loader#findLoader, extension:', extension)
   } catch (e) {
     // TODO(pablo): need to think thru a better way to do content sniffing
