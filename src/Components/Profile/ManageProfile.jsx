@@ -52,8 +52,7 @@ import GoogleIcon from '@mui/icons-material/Google'
 const CUSTOM_CLAIM = 'https://bldrs.ai/identities'
 
 const ManageProfile = ({open, onClose}) => {
-  // eslint-disable-next-line no-unused-vars
-  const {user, isAuthenticated, getAccessTokenSilently, getIdTokenClaims} = useAuth0()
+  const {user, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const [linkedIdentities, setLinkedIdentities] = useState([])
   const [loading, setLoading] = useState(true)
   // const accessToken = useStore((state) => state.accessToken)
@@ -80,52 +79,17 @@ return
        */
       async function handleStorageEvent(event) {
         if (event.key === 'linkStatus' && event.newValue === 'linked') {
-          // 1. Pull the secondary ID token that the popup stored
-          const secondaryIdToken = localStorage.getItem('secondaryIdToken')
-          if (!secondaryIdToken) {
-            console.error('No secondaryIdToken found')
-            return
-          }
-
-          const primaryToken = localStorage.getItem('primaryUserToken')
-
-          if (!primaryToken) {
-            console.error('No primaryToken found')
-            return
-          }
-
-          // console.log(`Linking accounts: primary token ${primaryToken} with secondary token ${secondaryIdToken}`)
-
-          // 3. Call the Netlify function
-          await fetch('/.netlify/functions/link-accounts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-             'Authorization': `Bearer ${primaryToken}`, // <-- the JWT above
-            },
-           body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
-          })
-
           // 4. Clear the localStorage items
           localStorage.removeItem('linkStatus')
-          localStorage.removeItem('secondaryIdToken')
-          localStorage.removeItem('primaryUserToken')
 
-          const WAIT_FOR = 1500 // ms
-
-          // Give the browser a tick so the new cookie is readable
-          setTimeout(async () => {
-            try {
-              await getAccessTokenSilently({
-                audience: 'https://api.github.com/',
-                scope: 'openid profile email offline_access',
-                cacheMode: 'off', // force from Auth0
-                useRefreshTokens: true,
-              })
-            } catch (e) {
-              console.error('Failed to refresh token after linking:', e)
-            }
-          }, WAIT_FOR)
+          await getAccessTokenSilently({
+            authorizationParams: {
+              audience: 'https://api.github.com/',
+              scope: 'openid profile email offline_access',
+            },
+            cacheMode: 'off',
+            useRefreshTokens: true,
+          })
         }
       }
       window.addEventListener('storage', handleStorageEvent)
@@ -135,7 +99,6 @@ return
   /** Link a new provider via Auth0 popup then POST to Management API */
   const handleLink = async (connection) => {
     try {
-      localStorage.setItem('linkStatus', 'inProgress')
       recentConnection = connection
       const primaryToken = await getAccessTokenSilently({
         audience: 'https://api.github.com/',
@@ -144,9 +107,10 @@ return
         useRefreshTokens: true,
       })
 
+      localStorage.setItem('linkStatus', 'inProgress')
+
       // 2️⃣  Stash it so the storage handler can use it later
-      localStorage.setItem('primaryUserToken', primaryToken)
-      window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
+      window.open(`/popup-auth?connection=${connection}&linkToken=${encodeURIComponent(primaryToken)}`, 'authPopup', 'width=600,height=600')
     } catch (err) {
       console.error('Linking failed', err)
     }

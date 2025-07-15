@@ -17,15 +17,6 @@ function PopupCallback() {
       await handleRedirectCallback() // waits until tokens are cached
 
       if (localStorage.getItem('linkStatus') === 'inProgress') {
-        // If linking is in progress, set the status to 'linked' to trigger the
-        // ManageProfile modal in the main window.
-        // Grab the *ID token* that represents the newly-authenticated identity
-        const idClaims = await getIdTokenClaims() // from @auth0/auth0-spa-js
-        const secondaryId = idClaims.__raw // the raw JWT string
-
-        // Stash it for the opener
-        localStorage.setItem('secondaryIdToken', secondaryId)
-
         // Signal main tab that linking should happen
         localStorage.setItem('linkStatus', 'linked')
       } else {

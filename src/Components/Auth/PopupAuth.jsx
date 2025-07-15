@@ -16,6 +16,7 @@ function PopupAuth() {
     // Extract scope from the query parameters
     const params = new URLSearchParams(window.location.search)
     const connection = params.get('connection') || 'github'
+    const linkToken = params.get('linkToken') // ← NEW
 
     if (params.get('scope')) {
       const scope = params.get('scope')
@@ -27,6 +28,7 @@ function PopupAuth() {
           scope: 'openid profile email offline_access',
           connection: connection,
           connection_scope: scope,
+          ...(linkToken && {linkToken}), // ← forward it
         },
      })
     } else {
@@ -36,6 +38,7 @@ function PopupAuth() {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
           connection: connection,
+          ...(linkToken && {linkToken}), // ← forward it
         },
       })
     }
