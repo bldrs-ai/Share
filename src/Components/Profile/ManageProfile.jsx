@@ -107,19 +107,12 @@ return
           })
 
 
-          // const linkData = await linkResp.text()
-          // console.log('Link response:', linkData)
-
-
-          // 3. Call the Netlify function
-         /* await fetch('/.netlify/functions/link-accounts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-             'Authorization': `Bearer ${primaryToken}`, // <-- the JWT above
-            },
-           body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
-          })*/
+          await getAccessTokenSilently({
+          audience: 'https://api.github.com/',
+          scope: 'openid profile email offline_access',
+          cacheMode: 'off', // force fresh
+          useRefreshTokens: true,
+        })
 
           // 4. Clear the localStorage items
           localStorage.removeItem('linkStatus')
