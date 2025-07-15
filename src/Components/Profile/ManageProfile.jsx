@@ -106,18 +106,26 @@ return
            body: JSON.stringify({secondaryIdToken}), // <-- what backend expects
           })
 
-
-          await getAccessTokenSilently({
-          audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access',
-          cacheMode: 'off', // force fresh
-          useRefreshTokens: true,
-        })
-
           // 4. Clear the localStorage items
           localStorage.removeItem('linkStatus')
           localStorage.removeItem('secondaryIdToken')
           localStorage.removeItem('primaryUserToken')
+
+          const WAIT_FOR = 1500 // ms
+
+          // Give the browser a tick so the new cookie is readable
+          setTimeout(async () => {
+            try {
+              await getAccessTokenSilently({
+                audience: 'https://api.github.com/',
+                scope: 'openid profile email offline_access',
+                cacheMode: 'off', // force from Auth0
+                useRefreshTokens: true,
+              })
+            } catch (e) {
+              console.error('Failed to refresh token after linking:', e)
+            }
+          }, WAIT_FOR)
         }
       }
       window.addEventListener('storage', handleStorageEvent)
