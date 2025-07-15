@@ -63,6 +63,26 @@ async function getUserIdFromToken(userToken) {
 }
 
 /**
+ * Decode a JWT payload safely in Node _or_ the browser.
+ * @param {string} jwt  A full JWT string (xxx.yyy.zzz)
+ * @returns {object}    The parsed JSON payload
+ */
+function decodeJwtPayload(jwt) {
+  const b64Url = jwt.split('.')[1];            // yyy
+  const b64    = b64Url
+                   .replace(/-/g, '+')
+                   .replace(/_/g, '/')
+                   .padEnd(b64Url.length + (4 - b64Url.length % 4) % 4, '=');
+
+  // Node: Buffer exists.  Browser: atob exists.
+  const json = typeof Buffer !== 'undefined'
+                 ? Buffer.from(b64, 'base64').toString('utf8')
+                 : atob(b64);
+
+  return JSON.parse(json);
+}
+
+/**
  * Netlify handler
  */
 exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
@@ -103,7 +123,8 @@ exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
       return { statusCode: 401, body: 'Unable to resolve primary user' };
     }
 
-    const { sub } = JSON.parse(atob(secondaryIdToken.split('.')[1]));
+    // usage inside link-accounts.js
+    const { sub } = decodeJwtPayload(secondaryIdToken);   // "google-oauth2|1037…"
     const [provider, user_id] = sub.split('|');
 
 
