@@ -1,7 +1,7 @@
 /**
  * Delete all properties defined in the given object.
  *
- * @param {Object<any, any>} obj The object whose properties to delete.
+ * @param {{[key: string]: any}} obj The object whose properties to delete.
  */
 export function deleteProperties(obj) {
   Object.keys(obj).forEach((key) => delete obj[key])
@@ -9,7 +9,7 @@ export function deleteProperties(obj) {
 
 
 /**
- * @param {object} obj
+ * @param {{[key: string]: any}} obj
  * @return {boolean} True iff val is an object
  */
 export function isObject(obj) {
@@ -23,10 +23,10 @@ export function isObject(obj) {
  * Call the given visitorCb on each property in the object.
  * Recurse on a property's value if it is an object.
  *
- * @param {Object<any, any>} obj The object to visit
+ * @param {{[key: string]: any}} obj The object to visit
  * @param {Function} visitorCb Called with visitorCb(obj, propName, value)
  */
-export function visitRecursive(obj, visitorCb, seen = new Set) {
+export function visitRecursive(obj, visitorCb, seen = new Set()) {
   seen.add(obj)
   for (const prop in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, prop)) {
@@ -43,21 +43,21 @@ export function visitRecursive(obj, visitorCb, seen = new Set) {
 /**
  * Delete this property from the object, recursively.
  *
- * @param {Object<any, any>} obj The object to visit
+ * @param {{[key: string]: any}} obj The object to visit
  * @param {string} propName The property to delete
  */
 export function deletePropertyRecursive(obj, propName) {
   visitRecursive(
       obj,
       /**
-       * @param {Object<any, any>} o
-       * @param {Object<any, any>} k
-       * @param {Object<any, any>} v
+       * @param {any} o
+       * @param {string} k
+       * @param {any} v
        */
       (o, k, v) => {
         if (k === propName) {
           if (Array.isArray(o)) {
-            o[k] = undefined
+            /** @type {any} */ (o)[k] = undefined
           } else {
             delete o[k]
           }
@@ -70,21 +70,21 @@ export function deletePropertyRecursive(obj, propName) {
 /**
  * Delete matching string values from the object, recursively.
  *
- * @param {Object<any, any>} obj The object to visit
+ * @param {{[key: string]: any}} obj The object to visit
  * @param {RegExp} regex The regex to test values with
  */
 export function deleteStringValueMatchRecursive(obj, regex) {
   visitRecursive(
       obj,
       /**
-       * @param {Object<any, any>} o
-       * @param {Object<any, any>} k
-       * @param {Object<any, any>} v
+       * @param {any} o
+       * @param {string} k
+       * @param {any} v
        */
       (o, k, v) => {
         if (typeof v === 'string' && v.match(regex)) {
           if (Array.isArray(o)) {
-            o[k] = undefined
+            /** @type {any} */ (o)[k] = undefined
           } else {
             delete o[k]
           }
@@ -97,9 +97,9 @@ export function deleteStringValueMatchRecursive(obj, regex) {
 /**
  * Filter object
  *
- * @param {object} obj
+ * @param {{[key: string]: any}} obj
  * @param {Function} callback
- * @return {object}
+ * @return {{[key: string]: any}}
  */
 export function filterObject(obj, callback) {
   return Object.fromEntries(Object.entries(obj).
@@ -110,8 +110,8 @@ export function filterObject(obj, callback) {
 /**
  * Clone object in depth
  *
- * @param {object} obj
- * @return {object}
+ * @param {{[key: string]: any}} obj
+ * @return {{[key: string]: any}}
  */
 export function deepCloneObject(obj) {
   const clonedObj = JSON.parse(JSON.stringify(obj))

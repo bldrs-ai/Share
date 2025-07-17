@@ -55,7 +55,7 @@ module.exports = {
     'indent': ['off', 2], // TODO(pablo): there's too many to fix right now
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',
-    'jsdoc/newline-after-description': 'error',
+    'jsdoc/tag-lines': [2, 'any', {startLines: 1}],
     'jsdoc/require-param': 'off',
     'jsdoc/require-param-description': 'off',
     'jsdoc/require-param-type': 'off',

@@ -4,12 +4,11 @@ import {useAuth0 as useAuth0Original} from '@auth0/auth0-react'
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
-/* eslint-disable jsdoc/no-undefined-types*/
 /**
  * Mock function
  *
- *
- * @return {DetailedResponse | string}
+ * @param {{detailedResponse: boolean}} [options] If true, returns a detailed response object.
+ * @return {{access_token: string, id_token: string, expires_in: number, token_type: string, scope: string} | string}
  */
 function mockGetAccessTokenSilently(options) {
   if (options && options.detailedResponse) {
@@ -27,8 +26,22 @@ function mockGetAccessTokenSilently(options) {
   return 'mock_access_token'
 }
 
-/* eslint-enable jsdoc/no-undefined-types*/
-
+/**
+ * @type {{
+ * name: string,
+ * nickname: string,
+ * picture: string,
+ * updated_at: string,
+ * email: string,
+ * email_verified: boolean,
+ * iss: string,
+ * aud: string,
+ * iat: number,
+ * exp: number,
+ * sub: string,
+ * sid: string,
+ * nonce: string}}
+ */
 export const mockGitHubUser = {
   name: 'Unit Testing',
   nickname: 'cypresstester',
@@ -48,7 +61,9 @@ export const mockGitHubUser = {
 }
 
 /**
+ * Mock implementation of loginWithPopup
  *
+ * @return {void}
  */
 function mockLoginWithPopup() {
   MockAuth0Context._currentValue.isAuthenticated = true
@@ -56,7 +71,9 @@ function mockLoginWithPopup() {
 }
 
 /**
+ * Mock implementation of loginWithRedirect
  *
+ * @return {void}
  */
 function mockLoginWithRedirect() {
   MockAuth0Context._currentValue.isAuthenticated = true
@@ -64,13 +81,31 @@ function mockLoginWithRedirect() {
 }
 
 /**
+ * Mock implementation of logout
  *
+ * @return {void}
  */
 function mockLogout() {
   MockAuth0Context._currentValue.isAuthenticated = false
 }
 
-// Mock implementation of Auth0Context
+/**
+ * Mock implementation of Auth0Context
+ *
+ * @type {{
+ * error: any,
+ * isAuthenticated: boolean,
+ * isLoading: boolean,
+ * user: any,
+ * getAccessTokenSilently: () => string,
+ * getAccessTokenWithPopup: () => string,
+ * getIdTokenClaims: () => any,
+ * loginWithRedirect: () => void,
+ * loginWithPopup: () => void,
+ * logout: () => void,
+ * handleRedirectCallback: () => void,
+ * }}
+ */
 export const MockAuth0Context = React.createContext({
   error: undefined,
   isAuthenticated: false,

@@ -1,5 +1,6 @@
 const path = require('path')
 
+
 /**
  * Black-box integration tests for Bldrs running in an iframe.
  * Bldrs emits messages and receives messages via Matrix Widgets API.
@@ -10,7 +11,7 @@ const path = require('path')
  * framework itself loads the system under test within an iframe. This means
  * that in all these tests Bldrs runs in an iframe which runs in an iframe.
  */
-describe.skip('bldrs inside iframe', () => {
+describe('bldrs inside iframe', () => {
   const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html'
   const KEYCODE_ESC = 27
   const REQUEST_SUCCESS_CODE = 200
@@ -21,7 +22,11 @@ describe.skip('bldrs inside iframe', () => {
    * Copy web page to target directory to make it accessible to cypress.
    */
   before(() => {
-    const fixtures = ['bldrs-inside-iframe.html', 'bldrs-inside-iframe.js']
+    const fixtures = [
+      'bldrs-inside-iframe.html',
+      'bldrs-inside-iframe-bundle.js',
+      'bldrs-inside-iframe-bundle.js.map',
+    ]
     const targetDirectory = 'docs/cypress/static/'
     for (const fixture of fixtures) {
       cy.fixture(fixture, null).then((content) => {
@@ -29,10 +34,13 @@ describe.skip('bldrs inside iframe', () => {
         cy.writeFile(outPath, content)
       })
     }
+    // eslint-disable-next-line no-console
+    console.log(`Copied bldrs-inside-iframe{.html,-bundle.js,-bundle.js.map} ${targetDirectory}`)
   })
 
   beforeEach(() => {
     cy.clearCookies()
+    cy.setCookie('isFirstTime', '1')
     cy.visit(SYSTEM_UNDER_TEST)
     cy.get('iframe').iframe().as('iframe')
   })
@@ -62,7 +70,9 @@ describe.skip('bldrs inside iframe', () => {
     cy.get('#btnSendMessage').click()
     cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
     // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
-    cy.get('@iframe').contains('span', modelRootNodeName).should('exist')
+    cy.get('@iframe').find('[data-testid="control-button-navigation"]').click()
+
+    cy.get('@iframe').findByText(modelRootNodeName).should('exist')
     // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
@@ -85,11 +95,12 @@ describe.skip('bldrs inside iframe', () => {
     const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
-    cy.get('@iframe').findByText(/bldrs/i).click()
-    cy.get('@iframe').findByText(/build/i).click()
-    cy.get('@iframe').findByText(/every/i).click()
-    cy.get('@iframe').findByText(/thing/i).click()
-    cy.get('@iframe').findAllByText(/together/i).first().click()
+    cy.get('@iframe').find('[data-testid="control-button-navigation"]').click()
+    cy.get('@iframe').findByText('Bldrs').click()
+    cy.get('@iframe').findByText('Build').click()
+    cy.get('@iframe').findByText('Every').click()
+    cy.get('@iframe').findByText('Thing').click()
+    cy.get('@iframe').findAllByText('Together').first().click()
 
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       const msg = JSON.parse($txtLastMsg.val())
@@ -117,7 +128,7 @@ describe.skip('bldrs inside iframe', () => {
     })
   })
 
-  it('should hide UI components when UIComponentsVisibility-message emitted', () => {
+  it.skip('should hide UI components when UIComponentsVisibility-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UIComponentsVisibility')
     const msg = {
@@ -135,7 +146,7 @@ describe.skip('bldrs inside iframe', () => {
   })
 
 
-  it('should suppress about dialog SuppressAboutDialogHandler message with true value emitted', () => {
+  it.skip('should suppress about dialog SuppressAboutDialogHandler message with true value emitted', () => {
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
     const msg = {
       isSuppressed: true,
@@ -147,7 +158,7 @@ describe.skip('bldrs inside iframe', () => {
   })
 
 
-  it('should not suppress about dialog SuppressAboutDialogHandler message with false value emitted', () => {
+  it.skip('should not suppress about dialog SuppressAboutDialogHandler message with false value emitted', () => {
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
     const msg = {
       isSuppressed: false,
@@ -247,7 +258,7 @@ describe.skip('bldrs inside iframe', () => {
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
 
     // send a hide elements message
-    cy.get('@iframe').findByRole('tree', {label: 'IFC Navigator'}).click()
+    cy.get('@iframe').find('[data-testid="control-button-navigation"]').click()
     cy.get('@iframe').findByTestId('hide-icon').should('exist')
     cy.get('@iframe').findByTestId('hide-icon').click()
 

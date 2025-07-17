@@ -3,10 +3,26 @@
   <head>
     <meta charset="utf-8">
     <title>Bldrs running inside an iframe</title>
-    <script type="text/javascript" src="https://unpkg.com/matrix-widget-api@1.1.1/dist/api.js"></script>
 
     <!-- initializes & wires up all messages -->
-    <script type="text/javascript" src="bldrs-inside-iframe.js"></script>
+    <script type="module" src="bldrs-inside-iframe-bundle.js"></script>
+    <style type="text/css"> 
+
+    .d-flex{
+      display: flex;
+    }
+ 
+    .msg-info div {
+      padding:4px;
+      margin: 2px;
+      border-radius: 5px;
+      background-color: #c7c7c7;
+    }
+
+    .send-actions > * {
+     margin-right: 0.5rem;
+    }
+    </style>
   </head>
 
   <!--
@@ -50,24 +66,5 @@
       width="90%" 
       height="90%">
     </iframe>
-
-    <style> 
-
-    .d-flex{
-      display: flex;
-    }
- 
-    .msg-info div {
-      padding:4px;
-      margin: 2px;
-      border-radius: 5px;
-      background-color: #c7c7c7;
-    }
-
-    .send-actions > * {
-     margin-right: 0.5rem;
-    }
-
-    </style>
   </body>
 </html>

@@ -178,7 +178,7 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
-    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
@@ -249,7 +249,8 @@ export default function CadView({
     }
     let loadedModel
     try {
-      loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+      loadedModel = await load(filepath, viewer, onProgress,
+        (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
       setAlert(error)
       return
