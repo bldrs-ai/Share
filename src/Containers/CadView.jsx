@@ -44,6 +44,7 @@ export default function CadView({
   // Begin useStore //
 
   const accessToken = useStore((state) => state.accessToken)
+  const hasGitHubIdentity = useStore((state) => state.hasGithubIdentity)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
@@ -151,7 +152,7 @@ export default function CadView({
       return
     }
 
-    if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
+    if (isAuthLoading || (!isAuthLoading && isAuthenticated && ( accessToken === '' && hasGitHubIdentity ))) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }
@@ -538,7 +539,7 @@ export default function CadView({
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
-          (isAuthenticated && accessToken !== '') ||
+          (isAuthenticated && ( accessToken !== '' || !hasGitHubIdentity )) ||
           (!isAuthLoading && !isAuthenticated) && isOpfsAvailable !== null) {
         (async () => {
           await onViewer()
