@@ -1,6 +1,6 @@
 // import {jwtDecode} from 'jwt-decode'
 import React, {useEffect, useState} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {
   Dialog,
   DialogContent,
@@ -21,11 +21,15 @@ import {
 import GitHubIcon from '@mui/icons-material/GitHub'
 import GoogleIcon from '@mui/icons-material/Google'
 
+
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
+const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+
 /**
  * ManageProfile.jsx
  * -----------------------------------------------------
- * A sleek MUI-based account settings modal that shows basic profile
- * information and lets users link / unlink additional social providers.
+ * A modal that shows basic profile information and lets
+ * users link additional social providers.
  *
  * Identities Strategy (no dedicated backend):
  * -------------------------------------------------
@@ -41,12 +45,10 @@ import GoogleIcon from '@mui/icons-material/Google'
  *
  * 2.  In the SPA we read that claim from `user` provided by `@auth0/auth0-react`.
  *
- * 3.  Linking / Unlinking still requires Auth0 Management API calls.  If you’re
- *     comfortable exposing short‑lived tokens client‑side, grant the app the
- *     following scopes and call the endpoints directly:
+ * 3.  Linking / Unlinking still requires Auth0 Management API calls.
+ *     Grant the app the following scopes and call the endpoints directly:
  *       • read:current_user
  *       • update:current_user_identities
- *     Otherwise keep the server endpoints and proxy the calls.
  */
 
 const CUSTOM_CLAIM = 'https://bldrs.ai/identities'
@@ -65,8 +67,8 @@ const ManageProfile = ({open, onClose}) => {
    */
   useEffect(() => {
     if (!isAuthenticated) {
-return
-}
+      return
+    }
 
     const identitiesClaim = user?.[CUSTOM_CLAIM] || user?.identities || []
     setLinkedIdentities(identitiesClaim)
@@ -98,6 +100,15 @@ return
 
   /** Link a new provider via Auth0 popup then POST to Management API */
   const handleLink = async (connection) => {
+    if (useMock) {
+      // Simulate linking in mock environment
+      setLinkedIdentities((prev) => [
+        ...prev,
+        {provider: connection, user_id: `mock-${connection}-123`},
+      ])
+
+      return
+    }
     try {
       recentConnection = connection
       const primaryToken = await getAccessTokenSilently({
@@ -169,7 +180,10 @@ return
                     {isConnected ? (
                       <Chip label="Connected" color="success" size="small"/>
                     ) : (
-                      <Button variant="outlined" size="small" onClick={() => handleLink(provider.id)}>
+                      <Button variant="outlined" size="small"
+                      data-testid={`authorize-${provider.id}`}
+                      onClick={() => handleLink(provider.id)}
+                      >
                         Authorize
                       </Button>
                     )}

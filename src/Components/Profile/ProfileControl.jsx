@@ -86,7 +86,7 @@ export default function ProfileControl() {
 
   const handleLogin = (connection) => {
     if (useMock) {
-      loginWithRedirect()
+      loginWithRedirect(connection)
     } else {
       window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
     }
