@@ -17,7 +17,9 @@ import {
   NightlightOutlined as NightlightOutlinedIcon,
   WbSunnyOutlined as WbSunnyOutlinedIcon,
   PaymentOutlined,
+  AccountCircleOutlined,
 } from '@mui/icons-material'
+import ManageProfile from './ManageProfile' // adjust path if needed
 
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
@@ -43,6 +45,12 @@ export default function ProfileControl() {
   const stripeCustomerId = appMetadata?.stripeCustomerId || null
   const setAccessToken = useStore((state) => state.setAccessToken)
 
+  const [showManageProfile, setShowManageProfile] = useState(false)
+
+  const handleManageProfileClick = () => {
+    setShowManageProfile(true)
+  }
+
   useEffect(() => {
     /**
      * Listen for changes in localStorage
@@ -53,7 +61,8 @@ export default function ProfileControl() {
         getAccessTokenSilently(
           {
           authorizationParams: {
-          audience: 'https://api.github.com/',
+            // audience: 'https://bldrs.us.auth0.com/userinfo',
+           audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
         cacheMode: 'on',
@@ -75,18 +84,18 @@ export default function ProfileControl() {
 
   const onCloseClick = () => setAnchorEl(null)
 
-  const handleLogin = () => {
+  const handleLogin = (connection) => {
     if (useMock) {
-      loginWithRedirect()
+      loginWithRedirect(connection)
     } else {
-      window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+      window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
     }
   }
 
   // Login
-  const onLoginClick = () => {
+  const onLoginClick = (connection) => {
     onCloseClick()
-    handleLogin()
+    handleLogin(connection)
   }
 
   // Logout
@@ -176,7 +185,7 @@ export default function ProfileControl() {
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
         sx={{transform: 'translateX(-1em)'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
+        <MenuItem onClick={isAuthenticated ? onLogoutClick : () => onLoginClick('github')} data-testid='login-with-github'>
           {isAuthenticated ? (
             <>
               <LogoutOutlinedIcon/>
@@ -194,6 +203,24 @@ export default function ProfileControl() {
           )}
         </MenuItem>
 
+        {!isAuthenticated && (
+          <MenuItem onClick={() => onLoginClick('google-oauth2')} data-testid='login-with-google'>
+            <LoginOutlinedIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
+              Log in with Google
+            </Typography>
+          </MenuItem>
+        )}
+
+        {isAuthenticated && (
+          <MenuItem onClick={handleManageProfileClick} data-testid="manage-profile">
+            <AccountCircleOutlined/>
+            <Typography sx={{marginLeft: '10px'}} variant="overline">
+              Manage Profile
+            </Typography>
+          </MenuItem>
+        )}
+
         {isAuthenticated && (
           <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
@@ -202,6 +229,9 @@ export default function ProfileControl() {
             </Typography>
           </MenuItem>
         )}
+
+        <ManageProfile open={showManageProfile} onClose={() => setShowManageProfile(false)}/>
+
 
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>

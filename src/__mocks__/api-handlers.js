@@ -142,6 +142,12 @@ function gaHandlers() {
           ctx.json({}),
       )
     }),
+
+    rest.post('https://www.google-analytics.com/*', (req, res, ctx) => {
+      return res(
+        ctx.status(HTTP_OK),
+      )
+    }),
   ]
 }
 

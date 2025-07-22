@@ -49,6 +49,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix}/`
   const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
+  const setHasGithubIdentity = useStore((state) => state.setHasGithubIdentity)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
@@ -95,7 +96,8 @@ export default function BaseRoutes({testElt = null}) {
     } else if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
         authorizationParams: {
-          audience: 'https://api.github.com/',
+          // audience: 'https://bldrs.us.auth0.com/userinfo',
+           audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
         cacheMode: 'off',
@@ -107,6 +109,7 @@ export default function BaseRoutes({testElt = null}) {
             if (token.access_token && token.access_token === 'mock_access_token') {
               initializeOctoKitAuthenticated()
               setAccessToken(token)
+              setHasGithubIdentity(true)
               return
             }
             const decodedToken = jwtDecode(token)
@@ -121,8 +124,22 @@ export default function BaseRoutes({testElt = null}) {
                 setReauthModalOpen(true)
               } else {
                 setAppMetadata(appData)
-                initializeOctoKitAuthenticated()
-                setAccessToken(token)
+
+                const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
+
+                if (identities.length > 0) {
+                  const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
+
+                  if (hasGitHubIdentity) {
+                    initializeOctoKitAuthenticated()
+                    setAccessToken(token)
+                    setHasGithubIdentity(true)
+                  } else {
+                    initializeOctoKitUnauthenticated()
+                    setAccessToken('')
+                    setHasGithubIdentity(false)
+                  }
+                }
               }
             }
           } else {
@@ -150,6 +167,7 @@ export default function BaseRoutes({testElt = null}) {
     getAccessTokenSilently,
     setAccessToken,
     setAppMetadata,
+    setHasGithubIdentity,
     logout,
   ])
 
@@ -190,7 +208,7 @@ export default function BaseRoutes({testElt = null}) {
         <DialogActions>
           <Button
             onClick={() => {
-              window.open(`/popup-auth?scope=${reauthScope}`, 'authPopup', 'width=600,height=600')
+              window.open(`/popup-auth?scope=${reauthScope}&connection=github`, 'authPopup', 'width=600,height=600')
               setReauthModalOpen(false)
             }}
           >
