@@ -177,6 +177,8 @@ export async function load(
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
 
+  model.type = loader.type
+
   return model
 }
 
@@ -471,6 +473,8 @@ async function findLoader(pathname, viewer) {
     */
     default: throw new Error(`Unsupported filetype; ${extension}`)
   }
+  // Reported to GA
+  loader.type = extension
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
 

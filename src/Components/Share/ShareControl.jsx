@@ -84,6 +84,17 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, location, model, viewer, viewer?.clipper])
 
+  // Track when share dialog is opened
+  useEffect(() => {
+    if (model && isDialogDisplayed) {
+      window.gtag('event', 'share', {
+        method: 'url',
+        content_type: model.type || 'unknown',
+        item_id: window.location.path,
+      })
+    }
+  }, [isDialogDisplayed, model])
+
 
   const onCopy = (event) => {
     setIsLinkCopied(true)
