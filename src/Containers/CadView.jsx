@@ -6,10 +6,10 @@ import {useTheme} from '@mui/material/styles'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
+import {gtag} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
-import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
@@ -207,11 +207,26 @@ export default function CadView({
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
+    let lastSent = 0
+    /** Debounced function to track model interaction for GA. */
+    function trackModelInteraction() {
+      const now = Date.now()
+      const debounceWaitMs = 10000
+      if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
+        gtag('model_interact', {
+          interaction_type: 'rotate_or_zoom',
+        })
+        lastSent = now
+      }
+    }
+
+    const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
     // Our visual testing waits until animations are finished to take screenshot
     // Would like to use zero but doesn't work
     // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
-    viewer.IFC.context.ifcCamera.cameraControls.addEventListener('rest', () => {
+    cameraControls.addEventListener('rest', () => {
       setIsCameraAtRest(true)
+      trackModelInteraction()
     })
   }
 
@@ -221,6 +236,7 @@ export default function CadView({
    *
    * @param {string} filepath
    * @param {string} gitpath to use for constructing API endpoints
+   * @return {object} loaded model
    */
   async function loadModel(filepath, gitpath) {
     const loadingMessageBase = `Loading ${filepath}`
@@ -285,9 +301,9 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    Analytics.recordEvent('select_content', {
-      content_type: 'ifc_model',
-      item_id: filepath,
+    gtag('select_content', {
+      content_type: 'ifc',
+      content_id: filepath,
     })
 
     return loadedModel
@@ -397,7 +413,7 @@ export default function CadView({
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      Analytics.recordEvent('search', {
+      gtag('search', {
         search_term: query,
       })
     } else {

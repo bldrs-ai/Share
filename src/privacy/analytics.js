@@ -1,4 +1,3 @@
-import ReactGA from 'react-ga4'
 import Cookies from 'js-cookie'
 import {assertDefined} from '../utils/assert'
 import Expires from './Expires'
@@ -6,7 +5,6 @@ import Expires from './Expires'
 
 const COOKIE_NAME = 'isAnalyticsAllowed'
 const DEFAULT_VALUE = true
-const GA_ID = 'G-GRLNVMZRGW'
 
 
 /** @return {boolean} */
@@ -25,22 +23,12 @@ export function setIsAllowed(allowed) {
 }
 
 
-/** Conditionally initialize GA only when allowed and on access. */
-let isInitialized = false
-
 /**
- * @param {string} actionName
- * @param {object} additionalConfigInfo
+ * @param {string} eventName
+ * @param {object} parameters
  */
-export function recordEvent(actionName, additionalConfigInfo) {
-  assertDefined(actionName)
-  // TODO(pablo): re-enable after prod freeze bug fixed.
-  const enableGA = false
-  if (enableGA && isAllowed()) {
-    if (!isInitialized) {
-      ReactGA.initialize(GA_ID)
-      isInitialized = true
-    }
-    ReactGA.event(actionName, additionalConfigInfo)
+export function gtag(eventName, parameters) {
+  if (isAllowed() && window.gtag) {
+    window.gtag('event', eventName, parameters)
   }
 }

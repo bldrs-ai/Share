@@ -10,6 +10,7 @@ import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {gtag} from '../privacy/analytics'
 import {assert, assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
@@ -176,6 +177,8 @@ export async function load(
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
+
+  model.type = loader.type
 
   return model
 }
@@ -471,6 +474,8 @@ async function findLoader(pathname, viewer) {
     */
     default: throw new Error(`Unsupported filetype; ${extension}`)
   }
+  // Reported to GA
+  loader.type = extension
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
 
@@ -518,6 +523,18 @@ function newIfcLoader(viewer) {
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
       this.context.fitToFrame()
+      const stats = this.loader.ifcManager.ifcAPI.getStatistics(0)
+      gtag('model_load_stats', {
+        geometry_memory: stats.getGeometryMemory(),
+        geometry_time: stats.getGeometryTime(),
+        getLoadStatus: stats.getLoadStatus(),
+        getOriginatingSystem: stats.getOriginatingSystem(),
+        getPreprocessorVersion: stats.getPreprocessorVersion(),
+        ifc_version: stats.getVersion(),
+        parse_time: stats.getParseTime(),
+        total_time: stats.getTotalTime(),
+        version: this.loader.ifcManager.ifcAPI.getConwayVersion(),
+      })
       return ifcModel
     } catch (err) {
       console.error(err)

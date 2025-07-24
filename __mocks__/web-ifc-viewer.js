@@ -76,6 +76,19 @@ const impl = {
         applyWebIfcConfig: jest.fn(),
         ifcAPI: {
           GetCoordinationMatrix: jest.fn(),
+          getConwayVersion: jest.fn(),
+          getStatistics: jest.fn(() => {
+            return {
+              getGeometryMemory: jest.fn(),
+              getGeometryTime: jest.fn(),
+              getLoadStatus: jest.fn(),
+              getOriginatingSystem: jest.fn(),
+              getParseTime: jest.fn(),
+              getPreprocessorVersion: jest.fn(),
+              getTotalTime: jest.fn(),
+              getVersion: jest.fn(),
+            }
+          }),
         },
         parser: {},
         setupCoordinationMatrix: jest.fn(),
