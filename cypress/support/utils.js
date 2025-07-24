@@ -109,6 +109,8 @@ export function auth0Login(connection = 'github') {
   cy.get('[data-testid="control-button-profile"]').click()
   cy.log('simulating login')
 
+  cy.get('[data-testid="menu-open-login-dialog"]').click()
+
   if (connection === 'github') {
     cy.get('[data-testid="login-with-github"]').click()
   } else {

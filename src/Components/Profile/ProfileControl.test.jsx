@@ -39,10 +39,10 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const LoginWithGithub = await findByTestId('login-with-github')
+    const Login = await findByTestId('menu-open-login-dialog')
     const JoinGithub = await findByText('Join GitHub')
     const BldrsWiki = await findByText('Bldrs Wiki')
-    expect(LoginWithGithub).toBeInTheDocument()
+    expect(Login).toBeInTheDocument()
     expect(JoinGithub).toBeInTheDocument()
     expect(BldrsWiki).toBeInTheDocument()
   })

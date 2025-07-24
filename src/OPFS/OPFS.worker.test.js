@@ -223,7 +223,7 @@ class DirectoryHandle {
 
   /* eslint-enable require-await */
   /* eslint-disable jsdoc/require-yields */
-  /* eslint-disable jsdoc/valid-types */
+
 
   /**
    * Async iterator for entries in this directory.

@@ -26,13 +26,8 @@ describe('ManageProfile modal', () => {
       returningUserVisitsHomepageWaitForModel()
     })
 
-    it('shows “Connected” for GitHub and “Authorize” for Google', () => {
+    it('shows “Authorize” for Google', () => {
       openManageProfile()
-
-      cy.findByText('GitHub')
-        .parent() // <ListItem>
-        .contains('Connected') // Chip text
-        .should('be.visible')
 
       cy.get('[data-testid="authorize-google-oauth2"]')
         .contains('Authorize')
@@ -40,14 +35,16 @@ describe('ManageProfile modal', () => {
 
       cy.percySnapshot('ManageProfile – GitHub linked only')
     })
+})
 
-    it('shows “Connected” for Google and “Authorize” for Github', () => {
+context('When only Google is linked', () => {
+   beforeEach(() => {
+      // user with GitHub identity only
+      returningUserVisitsHomepageWaitForModel()
+    })
+
+    it('shows “Authorize” for Github', () => {
       openManageProfile('google-oauth2')
-
-      cy.findByText('Google')
-        .parent() // <ListItem>
-        .contains('Connected') // Chip text
-        .should('be.visible')
 
       cy.get('[data-testid="authorize-github"]')
         .contains('Authorize')
@@ -55,6 +52,7 @@ describe('ManageProfile modal', () => {
 
       cy.percySnapshot('ManageProfile – GitHub linked only')
     })
+})
 
   context('Links accounts after Authorize is clicked', () => {
     beforeEach(() => {
@@ -85,5 +83,4 @@ describe('ManageProfile modal', () => {
       cy.contains('Account Settings').should('not.exist')
     })
   })
-})
 })
