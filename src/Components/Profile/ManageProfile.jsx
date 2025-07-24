@@ -75,8 +75,7 @@ return
      *
      */
     async function handleStorageEvent(event) {
-      if ((event.key === 'linkStatus' && event.newValue === 'linked') ||
-          (event.key === 'unlinkStatus' && event.newValue === 'unlinked')) {
+      if ((event.key === 'linkStatus' && event.newValue === 'linked')) {
         localStorage.removeItem(event.key)
         await refreshUser()
       }
@@ -168,8 +167,7 @@ const handleUnlink = async (connection) => {
       throw new Error(text || `Unlink failed: status ${response.status}`)
     }
 
-    // 4) Trigger the storage listener so the UI refreshes
-    localStorage.setItem('unlinkStatus', 'unlinked')
+    await refreshUser() // Refresh user state after unlink
   } catch (err) {
     console.error('Unlink failed', err)
   }
