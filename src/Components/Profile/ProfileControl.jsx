@@ -26,6 +26,7 @@ import {
   AccountCircleOutlined,
 } from '@mui/icons-material'
 import {TooltipIconButton} from '../Buttons'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import ManageProfile from './ManageProfile'
 
@@ -36,7 +37,7 @@ const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
 /**
  *
  */
-function LoginDialog({open, onClose, onLogin}) {
+function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle
@@ -65,20 +66,22 @@ function LoginDialog({open, onClose, onLogin}) {
           >
             GitHub
           </Button>
-          <Button
-            fullWidth
-            variant="outlined"
-            startIcon={<GoogleIcon/>}
-            onClick={() => onLogin('google-oauth2')}
-            data-testid="login-with-google"
-            sx={{
-              'borderColor': 'divider',
-              'color': 'text.primary',
-              '&:hover': {borderColor: 'text.primary'},
-            }}
-          >
-            Google
-          </Button>
+          {(isGoogleEnabled || useMock) && (
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<GoogleIcon/>}
+              onClick={() => onLogin('google-oauth2')}
+              data-testid="login-with-google"
+              sx={{
+                'borderColor': 'divider',
+                'color': 'text.primary',
+                '&:hover': {borderColor: 'text.primary'},
+              }}
+            >
+              Google
+            </Button>
+          )}
         </Stack>
       </DialogContent>
     </Dialog>
@@ -105,6 +108,7 @@ export default function ProfileControl() {
   const setAccessToken = useStore((state) => state.setAccessToken)
 
   const [showManageProfile, setShowManageProfile] = useState(false)
+  const isGoogleEnabled = useExistInFeature('google-auth')
 
   const handleManageProfileClick = () => {
     setShowManageProfile(true)
@@ -301,6 +305,7 @@ export default function ProfileControl() {
         open={loginDialogOpen}
         onClose={() => setLoginDialogOpen(false)}
         onLogin={onLoginClick}
+        isGoogleEnabled={isGoogleEnabled}
       />
     </>
   )

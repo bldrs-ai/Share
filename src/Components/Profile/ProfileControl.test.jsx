@@ -3,6 +3,12 @@ import {fireEvent, render} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {ThemeCtx} from '../../theme/Theme.fixture'
 import LoginMenu from './ProfileControl'
+import {MemoryRouter} from 'react-router-dom'
+
+
+export const withRouter = (ui, {route = '/'} = {}) => (
+  <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+)
 
 
 jest.mock('../../store/useStore', () => {
@@ -35,7 +41,7 @@ const useStoreMock = require('../../store/useStore').default
 describe('ProfileControl', () => {
   it('renders the login button when not logged in, and other links', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -49,7 +55,7 @@ describe('ProfileControl', () => {
 
   it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -59,7 +65,7 @@ describe('ProfileControl', () => {
 
   it('renders the theme selection', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -69,7 +75,7 @@ describe('ProfileControl', () => {
 
   it('renders the night theme when selected', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
     const dayThemeButton = await findByText('Night theme')
@@ -81,7 +87,7 @@ describe('ProfileControl', () => {
 
   it('renders users avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByAltText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByAltText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const avatarImage = await findByAltText('Unit Testing')
     expect(avatarImage).toBeInTheDocument()
   })
@@ -94,7 +100,7 @@ describe('ProfileControl', () => {
       subscriptionStatus: 'sharePro',
     })
 
-    const {findByTestId, queryByTestId} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, queryByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -110,7 +116,7 @@ describe('ProfileControl', () => {
       subscriptionStatus: 'free',
     })
 
-    const {findByTestId, queryByTestId} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const {findByTestId, queryByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
