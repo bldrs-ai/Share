@@ -522,6 +522,8 @@ function newIfcLoader(viewer) {
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
       this.context.fitToFrame()
+      console.log('loader:', this.loader)
+      console.log('statistics:', this.loader.ifcManager.ifcAPI.getStatistics(0))
       return ifcModel
     } catch (err) {
       console.error(err)

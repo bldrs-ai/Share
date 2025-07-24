@@ -206,17 +206,12 @@ export default function CadView({
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
-    const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
-
     let lastSent = 0
-    /**
-     * Track model interaction.
-     */
+    /** Debounced function to track model interaction for GA. */
     function trackModelInteraction() {
       const now = Date.now()
       const debounceWaitMs = 10000
       if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
-        // eslint-disable-next-line no-console
         window.gtag('event', 'model_interact', {
           interaction_type: 'rotate_or_zoom',
         })
@@ -224,12 +219,13 @@ export default function CadView({
       }
     }
 
+    const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
     // Our visual testing waits until animations are finished to take screenshot
     // Would like to use zero but doesn't work
     // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
     cameraControls.addEventListener('rest', () => {
       setIsCameraAtRest(true)
-      trackModelInteraction()
+      // trackModelInteraction()
     })
   }
 
