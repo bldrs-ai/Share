@@ -6,6 +6,7 @@ import {useTheme} from '@mui/material/styles'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
+import {gtag} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
@@ -212,7 +213,7 @@ export default function CadView({
       const now = Date.now()
       const debounceWaitMs = 10000
       if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
-        window.gtag('event', 'model_interact', {
+        gtag('model_interact', {
           interaction_type: 'rotate_or_zoom',
         })
         lastSent = now
@@ -225,7 +226,7 @@ export default function CadView({
     // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
     cameraControls.addEventListener('rest', () => {
       setIsCameraAtRest(true)
-      // trackModelInteraction()
+      trackModelInteraction()
     })
   }
 
@@ -300,7 +301,7 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    window.gtag('event', 'select_content', {
+    gtag('select_content', {
       content_type: 'ifc',
       content_id: filepath,
     })
@@ -412,7 +413,7 @@ export default function CadView({
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      window.gtag('event', 'search', {
+      gtag('search', {
         search_term: query,
       })
     } else {

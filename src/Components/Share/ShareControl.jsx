@@ -2,6 +2,7 @@ import React, {ReactElement, createRef, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
 import {useLocation} from 'react-router'
+import {gtag} from '../../privacy/analytics'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -87,7 +88,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   // Track when share dialog is opened
   useEffect(() => {
     if (model && isDialogDisplayed) {
-      window.gtag('event', 'share', {
+      gtag('share', {
         method: 'url',
         content_type: model.type || 'unknown',
         item_id: window.location.path,

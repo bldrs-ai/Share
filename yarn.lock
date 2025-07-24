@@ -2284,10 +2284,10 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway-web-ifc-adapter@0.23.940-1":
-  version "0.23.940-1"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.23.940-1.tgz#57f7dd26cc6dad90eb9b8a63e6a918d0a3e8ab8d"
-  integrity sha512-IEgAYZI6dv29Y8Ts5M4B5r4IXzI1jMsdOxS3UQGkunTjRX2KlocQOtrWgSyfK4/p7wWobmu4O3aU6RWKwthpUA==
+"@bldrs-ai/conway-web-ifc-adapter@0.23.940-2":
+  version "0.23.940-2"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway-web-ifc-adapter/-/conway-web-ifc-adapter-0.23.940-2.tgz#027566e8b008dcc5c1fd58b3d730618213cf8c68"
+  integrity sha512-H6fOMarFljezCXd/ug1Ojc35wqkfojDJPxjcdE8aQTvmVMPkqp8rlLxeYr0vORxQohQk2+CuVGxsX2AirsNdUw==
   dependencies:
     "@bldrs-ai/conway" "0.23.940"
     "@types/node" "22.5.5"
@@ -10536,11 +10536,6 @@ react-feature-flags@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/react-feature-flags/-/react-feature-flags-1.0.0.tgz#9ebef632876d1ef8fcc29f429a4d24f9cd7c8147"
   integrity sha512-KBFUkXjF7ifGWEQr2Ida4LdAtKGDOwFdTRlXipWxGP9a43vUBxP6IscpYQofGjlzlBcgmFKuzubcVheB6NliEg==
-
-react-ga4@2.1.0:
-  version "2.1.0"
-  resolved "https://registry.yarnpkg.com/react-ga4/-/react-ga4-2.1.0.tgz#56601f59d95c08466ebd6edfbf8dede55c4678f9"
-  integrity sha512-ZKS7PGNFqqMd3PJ6+C2Jtz/o1iU9ggiy8Y8nUeksgVuvNISbmrQtJiZNvC/TjDsqD0QlU5Wkgs7i+w9+OjHhhQ==
 
 react-helmet-async@1.3.0:
   version "1.3.0"
