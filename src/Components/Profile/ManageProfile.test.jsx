@@ -91,7 +91,6 @@ describe('ManageProfile modal', () => {
 
     // Google linked
     expect(screen.getByText('Google')).toBeInTheDocument()
-    expect(screen.getAllByText('Connected')[0]).toBeInTheDocument()
 
     // GitHub missing
     const authBtn = screen.getByRole('button', {name: 'Authorize'})

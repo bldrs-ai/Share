@@ -64,11 +64,8 @@ context('When only Google is linked', () => {
       openManageProfile()
       cy.get('[data-testid="authorize-google-oauth2"]').click()
 
-      // UI now shows Connected
-      cy.contains('Google')
-        .parent()
-        .contains('Connected')
-        .should('be.visible')
+      // UI now shows unlink button
+      cy.get('[data-testid="unlink-google-oauth2"]').should('be.visible')
 
       cy.percySnapshot('ManageProfile – Both providers linked')
     })
