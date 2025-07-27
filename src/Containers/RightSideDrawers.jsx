@@ -90,7 +90,7 @@ export default function RightSideDrawers() {
     }, [isAppsVisible])
 
   // Hardcoded width for now
-  const availableWidth = 1200
+  const availableWidth = 2000
 
   return (
     <Stack direction='row' sx={{flexShrink: 0, overflow: 'hidden'}}>
