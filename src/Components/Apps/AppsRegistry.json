@@ -2,8 +2,15 @@
   {
     "appName": "ExampleApp",
     "description": "Events Logger",
-    "image": "//bldrs.ai/icons/LogoBWithDomain.svg",
+    "image": "//localhost:8080/icons/LogoBWithDomain.svg",
     "action": "/widgets/event-logger.html",
-    "icon": "//bldrs.ai/icons/LogoB.svg"
+    "icon": "//localhost:8080/icons/LogoB.svg"
+  },
+  {
+    "appName": "Create App",
+    "description": "AI Create",
+    "image": "//localhost:8080/icons/CreateApp.svg",
+    "action": "http://localhost:5174/",
+    "icon": "//localhost:8080/icons/CreateApp.svg"
   }
 ]
