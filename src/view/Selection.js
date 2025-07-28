@@ -28,6 +28,7 @@ export default class Selection {
    * @param {object} item
    * @param {boolean} focusSelection
    * @param {boolean} removePrevious
+   * @return {Promise<{modelID: number, id: number}|null>}
    */
   async pick(item, focusSelection = false, removePrevious = true) {
     const mesh = item.object

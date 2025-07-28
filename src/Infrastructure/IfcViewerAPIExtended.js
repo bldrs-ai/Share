@@ -48,7 +48,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    *
    * @param {string} url IFC as URL.
    * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
-   * @param {Function(event)} onProgress (optional) a callback function to report on downloading progress
+   * @param {Function} onProgress (optional) a callback function to report on downloading progress
    * @param {Function} onError (optional) a callback function to report on loading errors
    * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
    * @return {IfcModel} ifcModel object

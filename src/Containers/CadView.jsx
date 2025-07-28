@@ -6,7 +6,7 @@ import {useTheme} from '@mui/material/styles'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtag} from '../privacy/analytics'
+import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
@@ -17,6 +17,7 @@ import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
+import {addProperties} from '../utils/objects'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -213,7 +214,7 @@ export default function CadView({
       const now = Date.now()
       const debounceWaitMs = 10000
       if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
-        gtag('model_interact', {
+        gtagEvent('model_interact', {
           interaction_type: 'rotate_or_zoom',
         })
         lastSent = now
@@ -301,10 +302,15 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    gtag('select_content', {
-      content_type: 'ifc',
+    const selectContentObj = {
+      content_type: loadedModel.type || 'undefined',
       content_id: filepath,
-    })
+    }
+    // TODO(pablo): currently only IFC/STEP are populated with stats.
+    if (loadedModel.loadStats) {
+      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
+    }
+    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }
@@ -413,7 +419,7 @@ export default function CadView({
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      gtag('search', {
+      gtagEvent('search', {
         search_term: query,
       })
     } else {

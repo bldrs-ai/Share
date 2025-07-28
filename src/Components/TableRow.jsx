@@ -15,8 +15,8 @@ import SubmitIcon from '@mui/icons-material/Done'
  * @param {object} props Component properties.
  * @param {string} props.heading The non-editable heading displayed in the table row.
  * @param {string} props.subtext The editable content of the table row.
- * @param {('input'|'select')} [props.inputType='input'] The type of input component.
- * @param {Array<string>} [props.options=[]] The options for the select component.
+ * @param {('input'|'select')} [props.inputType] The type of input component.
+ * @param {Array<string>} [props.options] The options for the select component.
  * @return {object} The rendered component.
  */
 export default function CustomTableRow({heading, subtext, inputType = 'input', options = []}) {
