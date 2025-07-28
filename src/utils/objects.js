@@ -1,3 +1,6 @@
+import {assertDefined} from './assert'
+
+
 /**
  * Delete all properties defined in the given object.
  *
@@ -140,6 +143,8 @@ export function prefixObjectKeys(obj, prefix) {
  * @return {{[key: string]: any}} the target object
  */
 export function addProperties(target, source, prefix = '') {
+  assertDefined(target, 'target')
+  assertDefined(source, 'source')
   Object.assign(target, prefixObjectKeys(source, prefix))
   return target
 }

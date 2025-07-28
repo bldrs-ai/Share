@@ -306,7 +306,11 @@ export default function CadView({
       content_type: loadedModel.type || 'undefined',
       content_id: filepath,
     }
-    gtagEvent('select_content', addProperties(selectContentObj, loadedModel.loadStats, 'stats_'))
+    // TODO(pablo): currently only IFC/STEP are populated with stats.
+    if (loadedModel.loadStats) {
+      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
+    }
+    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }
