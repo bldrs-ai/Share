@@ -1,4 +1,4 @@
-/** @jest-environment node */
+/** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 
 global.importScripts = jest.fn()
 global.self = {addEventListener: jest.fn(), postMessage: jest.fn()}
@@ -227,12 +227,12 @@ class DirectoryHandle {
 
   /* eslint-enable require-await */
   /* eslint-disable jsdoc/require-yields */
-  /* eslint-disable jsdoc/valid-types */
+
 
   /**
    * Async iterator for entries in this directory.
    *
-   * @return {AsyncGenerator<[string, FileHandle|DirectoryHandle]>}
+   * @return {any}
    */
   async* entries() {
     for (const [name, handle] of this.entriesMap.entries()) {

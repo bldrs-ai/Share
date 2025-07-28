@@ -409,7 +409,7 @@ export function stripHashParams(location, name, paramKeys = []) {
         continue // Skip this set entirely if no paramKeys and matches prefix
       }
 
-      // eslint-disable-next-line jsdoc/no-undefined-types
+
       /** @type {Record<string, any>} */
       const objectSet = getObjectParams(set)
       paramKeys.forEach((paramKey) => {
