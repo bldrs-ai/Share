@@ -117,3 +117,29 @@ export function deepCloneObject(obj) {
   const clonedObj = JSON.parse(JSON.stringify(obj))
   return clonedObj
 }
+
+
+/**
+ * Non-mutating prefix object keys.
+ *
+ * @param {{[key: string]: any}} obj
+ * @param {string} prefix
+ * @return {{[key: string]: any}}
+ */
+export function prefixObjectKeys(obj, prefix) {
+  return Object.fromEntries(Object.entries(obj).map(([key, val]) => [prefix + key, val]))
+}
+
+
+/**
+ * Add properties to the target object, optionally prefixing the source object keys.
+ *
+ * @param {{[key: string]: any}} target
+ * @param {{[key: string]: any}} source
+ * @param {string} prefix Optional prefix to add to the source object keys
+ * @return {{[key: string]: any}} the target object
+ */
+export function addProperties(target, source, prefix = '') {
+  Object.assign(target, prefixObjectKeys(source, prefix))
+  return target
+}
