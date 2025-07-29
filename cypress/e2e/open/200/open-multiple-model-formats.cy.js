@@ -36,7 +36,7 @@ describe('Open 200: Open Models in multiple formats', () => {
     })
   })
 
-  it.only('Loads OBJ - Screen', () => {
+  it('Loads OBJ - Screen', () => {
     doTest({
       urlPath: '/share/v/gh/bldrs-ai/test-models/main/obj/Bunny.obj',
       filePath: 'test-models/obj/Bunny.obj',
