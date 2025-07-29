@@ -42,6 +42,3 @@ Start using Bldrs Share today to transform your CAD workflows. Join our communit
 - Join us on [Bldrs Discord](https://discord.gg/9SxguBkFfQ)
 - Follow us on [X @bldrs_ai](https://x.com/bldrs_ai)
 - Connect with us on [LinkedIn](https://www.linkedin.com/company/bldrs-ai/)
-
-## Donations 
-If you use Bldrs for private hosting, please contribute to the [Bldrs Open Collective project](https://opencollective.com/bldrs).
