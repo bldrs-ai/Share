@@ -36,12 +36,8 @@ Develop your Digital Twin lifecycle systems on our extensible platform and high-
 Start using Bldrs Share today to transform your CAD workflows. Join our community, explore the documentation, and contribute to the development of next-generation open standard CAD tooling.
 
 ### Getting Started
-- Visit our [wiki](https://github.com/bldrs-ai/Share/wiki) for Share's Design, Developer Guide and instructions for Hosting your models.
+- Visit our [wiki](https://github.com/bldrs-ai/Share/wiki) for Share's Design, Developer Guide and instructions for hosting your models.
   - See our [Conway engine](https://github.com/bldrs-ai/conway) repository
-- [Project/Sprints](https://github.com/orgs/bldrs-ai/projects?query=is%3Aopen&type=beta) tracks our bi-weekly development planning
 - Join us on [Bldrs Discord](https://discord.gg/9SxguBkFfQ)
 - Follow us on [X @bldrs_ai](https://x.com/bldrs_ai)
 - Connect with us on [LinkedIn](https://www.linkedin.com/company/bldrs-ai/)
-
-## Donations 
-If you use Bldrs for private hosting, please contribute to the [Bldrs Open Collective project](https://opencollective.com/bldrs).
