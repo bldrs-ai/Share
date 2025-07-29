@@ -55,7 +55,7 @@ jobs:
       - uses: cypress-io/github-action@v5
         with:
           browser: chrome
-          command: yarn cy
+          command: yarn cy-parallel
         env:
           # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
           GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh

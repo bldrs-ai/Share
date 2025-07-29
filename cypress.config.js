@@ -12,6 +12,7 @@ module.exports = import('./tools/esbuild/vars.cypress.js').then(({
       screenshotOnRunFailure: false,
       video: false,
       pageLoadTimeout: 15000,
+      trashAssetsBeforeRuns: false,
       setupNodeEvents(on, config) {
         on('task', {
           log(message) {
