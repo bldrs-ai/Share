@@ -130,6 +130,27 @@ if [ -s "$FINAL_FAILURES_FILE" ]; then
     echo ""
     echo "The following specs failed after retry:"
     cat "$FINAL_FAILURES_FILE"
+    echo ""
+    echo "=== ERROR LOGS FOR FAILED SPECS ==="
+    while read -r failed_epic; do
+        echo ""
+        echo "--- $failed_epic ---"
+        echo "Main log:"
+        if [ -f "$LOGS_DIR/${failed_epic}_retry.log" ]; then
+            cat "$LOGS_DIR/${failed_epic}_retry.log"
+        else
+            cat "$LOGS_DIR/${failed_epic}.log"
+        fi
+        echo ""
+        echo "Error log:"
+        if [ -f "$LOGS_DIR/${failed_epic}_retry.log.err" ]; then
+            cat "$LOGS_DIR/${failed_epic}_retry.log.err"
+        else
+            cat "$LOGS_DIR/${failed_epic}.log.err"
+        fi
+        echo ""
+    done < "$FINAL_FAILURES_FILE"
+    echo "=== END ERROR LOGS ==="
     rm -f $FINAL_FAILURES_FILE
     exit 1
 else
