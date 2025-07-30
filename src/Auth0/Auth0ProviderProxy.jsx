@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {Auth0Provider as OriginalAuth0Provider} from '@auth0/auth0-react'
-import {MockAuth0Context, mockGitHubUser} from './Auth0Proxy'
+import {MockAuth0Context, mockGitHubUser, mockGoogleUser} from './Auth0Proxy'
  // Adjust the import path
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
@@ -56,10 +56,10 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
   }
 
   // Simulate the login functionality
-  const loginWithRedirect = () => {
+  const loginWithRedirect = (connection) => {
     setState({
       isAuthenticated: true,
-      user: mockGitHubUser,
+      user: connection === 'github' ? mockGitHubUser : mockGoogleUser,
       token: 'mock_access_token',
     })
 

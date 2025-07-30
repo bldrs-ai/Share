@@ -105,10 +105,17 @@ export function waitForModel() {
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
  * the login process.
  */
-export function auth0Login() {
+export function auth0Login(connection = 'github') {
   cy.get('[data-testid="control-button-profile"]').click()
   cy.log('simulating login')
-  cy.get('[data-testid="login-with-github"]').click()
+
+  cy.get('[data-testid="menu-open-login-dialog"]').click()
+
+  if (connection === 'github') {
+    cy.get('[data-testid="login-with-github"]').click()
+  } else {
+    cy.get('[data-testid="login-with-google"]').click()
+  }
   cy.contains('span', 'Log out').should('exist')
   cy.get('[data-testid="control-button-profile"]').realClick()
 }
