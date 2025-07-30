@@ -15,7 +15,6 @@ import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
-import usePageTracking from './hooks/usePageTracking'
 import About from './pages/About'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
@@ -177,7 +176,6 @@ export default function BaseRoutes({testElt = null}) {
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
           <SentryRoutes>
-            {usePageTracking()}
             <Route path={basePath} element={<Outlet/>}>
               <Route
                 path='share/*'

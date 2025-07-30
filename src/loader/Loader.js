@@ -177,6 +177,9 @@ export async function load(
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
 
+  // Used for GA stats
+  model.type = loader.type
+
   return model
 }
 
@@ -471,6 +474,8 @@ async function findLoader(pathname, viewer) {
     */
     default: throw new Error(`Unsupported filetype; ${extension}`)
   }
+  // Reported to GA
+  loader.type = extension
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
 
@@ -518,6 +523,19 @@ function newIfcLoader(viewer) {
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
       this.context.fitToFrame()
+      const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
+      const loadStats = {
+        loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
+        geometryMemory: statsApi.getGeometryMemory(),
+        geometryTime: statsApi.getGeometryTime(),
+        ifcVersion: statsApi.getVersion(),
+        loadStatus: statsApi.getLoadStatus(),
+        originatingSystem: statsApi.getOriginatingSystem(),
+        preprocessorVersion: statsApi.getPreprocessorVersion(),
+        parseTime: statsApi.getParseTime(),
+        totalTime: statsApi.getTotalTime(),
+      }
+      ifcModel.loadStats = loadStats
       return ifcModel
     } catch (err) {
       console.error(err)

@@ -1,8 +1,12 @@
-/** @jest-environment node */
+/** @jest-environment node */ // eslint-disable-line jsdoc/check-tag-names
 
 global.importScripts = jest.fn()
 global.self = {addEventListener: jest.fn(), postMessage: jest.fn()}
-global.navigator = {storage: {getDirectory: jest.fn()}}
+Object.defineProperty(global, 'navigator', {
+  value: {storage: {getDirectory: jest.fn()}},
+  writable: true,
+  configurable: true,
+})
 global.CacheModule = {
   checkCacheRaw: jest.fn(),
   updateCacheRaw: jest.fn(),
@@ -228,7 +232,7 @@ class DirectoryHandle {
   /**
    * Async iterator for entries in this directory.
    *
-   * @return {AsyncGenerator<[string, FileHandle|DirectoryHandle]>}
+   * @return {any}
    */
   async* entries() {
     for (const [name, handle] of this.entriesMap.entries()) {

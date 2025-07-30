@@ -96,7 +96,11 @@ export default function NoteCardCreate({
     setComments(newComments)
   }
 
-  /** create new comment based on the selected note Id*/
+  /**
+   * Create new comment based on the selected note Id.
+   *
+   * @return {Promise<any>}
+   */
   async function createNewComment() {
     assertStringNotEmpty(body)
     const commentPayload = {
