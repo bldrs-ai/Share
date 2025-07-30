@@ -64,7 +64,8 @@ export default function CadView({
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewer = useStore((state) => state.setViewer)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const viewer = useStore((state) => state.viewer)
 
   // AppSlice
@@ -650,12 +651,19 @@ export default function CadView({
   // looking at.
   // TODO(pablo): add render testing
   useEffect(() => {
-    const isDrawerOpen = isNotesVisible || isAppsVisible
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100vw - ${sidebarWidth}px)` : '100vw'
+      if (isNotesVisible && isAppsVisible) {
+        viewer.container.style.width = `calc(100vw - ${rightDrawerWidth + appsDrawerWidth}px)`
+      } else if (isNotesVisible) {
+        viewer.container.style.width = `calc(100vw - ${rightDrawerWidth}px)`
+      } else if (isAppsVisible) {
+        viewer.container.style.width = `calc(100vw - ${appsDrawerWidth}px)`
+      } else {
+        viewer.container.style.width = '100vw'
+      }
       viewer.context.resize()
     }
-  }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
+  }, [isNotesVisible, isAppsVisible, isMobile, viewer, rightDrawerWidth, appsDrawerWidth])
 
   useEffect(() => {
     const setViewportHeight = () => {
