@@ -9,6 +9,7 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
+import {initializeWasm, opfsExportToGlb} from '../OPFS/OPFSService'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {assert, assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
@@ -536,6 +537,52 @@ function newIfcLoader(viewer) {
         totalTime: statsApi.getTotalTime(),
       }
       ifcModel.loadStats = loadStats
+
+      const aggregatedGeometry = this.loader.ifcManager.ifcAPI.getAggregatedGeometry()
+      console.log(`aggregatedGeometry:`, aggregatedGeometry)
+      const chunks = aggregatedGeometry?.chunks
+      const geometryPtr = aggregatedGeometry?.geometry.$$?.ptr
+      const materialsPtr = aggregatedGeometry?.materials.$$?.ptr
+      if (!geometryPtr) {
+throw new Error('Could not find pointer on geometry object')
+}
+      if (!materialsPtr) {
+throw new Error('Could not find pointer on materials object')
+}
+
+      // Initialize Conway WASM in OPFS worker and export to GLB if available
+      if (this.loader.ifcManager.ifcAPI && typeof initializeWasm === 'function') {
+        try {
+          console.log('Initializing Conway WASM module in worker...')
+          const wasmModule = this.loader.ifcManager.ifcAPI.getWasmModule()
+          // Initialize Conway WASM module in the worker and wait for completion
+          const wasmInitialized = await initializeWasm('/static/js/ConwayGeomWasmWebMT.js', wasmModule)
+
+          if (wasmInitialized) {
+            console.log('Conway WASM successfully initialized in worker')
+
+            // Export to GLB if we have geometry
+            if (aggregatedGeometry) {
+              // Extract file info for GLB export
+              const fileNameNoExtension = 'exported_model' // TODO: get from actual file path
+              const owner = 'bldrs-ai' // TODO: get from context or path
+              const repo = 'BldrsLocalStorage' // TODO: get from context
+              const branch = 'V1' // TODO: get from context
+              const filePath = 'glb_exports' // TODO: get from context
+
+              console.log('Exporting aggregated geometry to GLB via OPFS worker...')
+
+              // Export to GLB using Conway in the worker
+              opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath)
+            }
+          } else {
+            console.error('Conway WASM initialization failed')
+          }
+        } catch (error) {
+          console.error('Failed to initialize Conway WASM or export GLB:', error)
+        }
+      }
+
       return ifcModel
     } catch (err) {
       console.error(err)

@@ -16,7 +16,8 @@ let workerRef = null
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker('/OPFS.Worker.js')
+    workerRef = new Worker(new URL('./OPFS.worker.js', import.meta.url), {type: 'module'})
+
 
     workerRef.postMessage({
       command: 'initializeWorker',
@@ -26,6 +27,52 @@ export function initializeWorker() {
   }
 
   return workerRef
+}
+
+
+/**
+ * Initializes the Conway WASM module in the worker.
+ *
+ * This function initializes Conway in the worker by sending the module path.
+ * The worker will dynamically import and initialize Conway with pthread support.
+ *
+ * @param {string} wasmModulePath - Path to the Conway WASM module (optional)
+ * @return {Promise<boolean>} Promise that resolves to true when WASM is initialized, false on error
+ */
+export async function initializeWasm(wasmModulePath = '/static/js/ConwayGeomWasmWebMT.js', wasmModule) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return Promise.resolve(false)
+  }
+
+  return new Promise((resolve, reject) => {
+    // Set up a one-time message listener for the initialization response
+    const handleMessage = (event) => {
+      if (event.data.event === 'wasmInitialized') {
+        workerRef.removeEventListener('message', handleMessage)
+        resolve(true)
+      } else if (event.data.event === 'wasmInitError') {
+        workerRef.removeEventListener('message', handleMessage)
+        console.error('WASM initialization error:', event.data.error)
+        reject(new Error(event.data.error))
+      }
+    }
+
+    workerRef.addEventListener('message', handleMessage)
+
+    // Send the initialization command - worker will handle all Conway imports internally
+    workerRef.postMessage({
+      command: 'initializeWasm',
+      wasmModulePath: wasmModulePath,
+      memory: (globalThis).ConwaySharedMemory, // Use the buffer directly for shared memory
+    })
+
+    // Optional: Add a timeout to prevent hanging indefinitely
+    setTimeout(() => {
+      workerRef.removeEventListener('message', handleMessage)
+      reject(new Error('WASM initialization timeout'))
+    }, 30000) // 30 second timeout
+  })
 }
 
 
@@ -351,6 +398,38 @@ export function opfsSnapshotCache() {
 
   workerRef.postMessage({
     command: 'snapshotCache',
+  })
+}
+
+/**
+ * Exports aggregated geometry to GLB format and stores in OPFS.
+ *
+ * This function sends aggregated geometry data to the worker for conversion to GLB format
+ * using the Conway geometry converter. The Conway module should be initialized in the worker first.
+ *
+ * @param {object} aggregatedGeometry - The aggregated geometry data from the IFC model
+ * @param {string} fileNameNoExtension - The base filename without extension
+ * @param {string} owner - The owner of the repository
+ * @param {string} repo - The repository name
+ * @param {string} branch - The branch name
+ * @param {string} filePath - The original IFC file path
+ */
+export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+
+  workerRef.postMessage({
+    command: 'exportToGlb',
+    geometryPtr: geometryPtr,
+    materialsPtr: materialsPtr,
+    chunks: chunks,
+    fileNameNoExtension: fileNameNoExtension,
+    owner: owner,
+    repo: repo,
+    branch: branch,
+    filePath: filePath,
   })
 }
 
