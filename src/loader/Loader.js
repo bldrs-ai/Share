@@ -350,14 +350,12 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     throw new Error('Loader could not read model')
   }
 
-  console.log('model before fixupCb', model)
   if (fixupCb) {
     model = fixupCb(model, viewer)
   }
-  console.log('model after fixupCb', model)
 
   // TODO(pablo): generalize our handling to multi-mesh
-  if (false && model.geometry === undefined) {
+  if (model.geometry === undefined) {
     assertDefined(model.children)
     // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
     for (let i = 0, n = model.children.length; i < n; i++) {

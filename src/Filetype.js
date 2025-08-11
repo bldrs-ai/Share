@@ -80,6 +80,9 @@ export function getValidExtension(pathOrExt) {
 // File header magic is clear by this offset
 const HEADER_LIMIT = 1024
 
+// GLB binary format magic number ("glTF" in little-endian)
+const GLB_MAGIC_NUMBER = 0x46546C67
+
 
 /**
  * @param {string} path
@@ -123,6 +126,16 @@ export async function guessTypeFromFile(file) {
  * @return {string} type
  */
 export function analyzeHeader(headerBuffer) {
+  // Check for GLB binary format first (binary files won't decode properly as UTF-8)
+  const view = new DataView(headerBuffer)
+  if (headerBuffer.byteLength >= 4) {
+    // GLB files start with magic number ("glTF" in ASCII)
+    const magic = view.getUint32(0, true) // little-endian
+    if (magic === GLB_MAGIC_NUMBER) {
+      return 'glb'
+    }
+  }
+
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
