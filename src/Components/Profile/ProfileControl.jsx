@@ -35,7 +35,9 @@ const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
 
 /**
+ * Login dialog component with provider selection
  *
+ * @return {React.Component} Dialog component for login
  */
 function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
   return (
