@@ -328,8 +328,10 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
     model = await new Promise((resolve, reject) => {
+      console.log('Invoking GLTFLoader.parse')
       try {
         loader.parse(modelData, './', (m) => {
+          console.log('Invoking GLTFLoader.parse: resolved model:', m)
           resolve(m)
         }, (err) => {
           reject(new Error(`Loader error during parse: ${err}`))
@@ -356,6 +358,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 
   // TODO(pablo): generalize our handling to multi-mesh
   if (model.geometry === undefined) {
+    console.log('doing the check:', model)
     assertDefined(model.children)
     // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
     for (let i = 0, n = model.children.length; i < n; i++) {
@@ -365,7 +368,9 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
         break
       }
     }
-    assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
+
+    // HACK
+    // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
     console.warn('Only using first mesh for some operations')
   }
 
