@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {
   Dialog,
@@ -33,9 +33,7 @@ const providerMeta = {
 const NETLIFY_UNLINK_ENDPOINT = '/.netlify/functions/unlink-identity'
 
 /**
- * ManageProfile component for managing user profile and linked provider identities
  *
- * @return {React.Component} Dialog component for profile management
  */
 export default function ManageProfile({open, onClose}) {
   const {user, isAuthenticated, getAccessTokenSilently} = useAuth0()
@@ -44,17 +42,6 @@ export default function ManageProfile({open, onClose}) {
 
   const primaryProviderId = user?.sub?.split('|')[0]
   const primaryProvider = primaryProviderId ? providerMeta[primaryProviderId] : undefined
-
-  const refreshUser = useCallback(async () => {
-    try {
-      await getAccessTokenSilently({authorizationParams:
-        {audience: 'https://api.github.com/', scope:
-          'openid profile email offline_access'},
-          cacheMode: 'off', useRefreshTokens: true})
-    } catch (err) {
- console.error('Error refreshing user after link/unlink', err)
-}
-  }, [getAccessTokenSilently])
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -74,7 +61,18 @@ return
     }
     window.addEventListener('storage', handleStorageEvent)
     return () => window.removeEventListener('storage', handleStorageEvent)
-  }, [refreshUser])
+  }, [])
+
+  const refreshUser = async () => {
+    try {
+      await getAccessTokenSilently({authorizationParams:
+        {audience: 'https://api.github.com/', scope:
+          'openid profile email offline_access'},
+          cacheMode: 'off', useRefreshTokens: true})
+    } catch (err) {
+ console.error('Error refreshing user after link/unlink', err)
+}
+  }
 
   const handleLink = async (connection) => {
     if (useMock) {
