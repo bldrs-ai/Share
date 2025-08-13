@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useTheme} from '@mui/material/styles'
 import {
   Avatar,
@@ -13,6 +12,11 @@ import {
   Stack,
   Button,
 } from '@mui/material'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
+import {TooltipIconButton} from '../Buttons'
+import ManageProfile from './ManageProfile'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
   GitHub as GitHubIcon,
@@ -25,21 +29,20 @@ import {
   PaymentOutlined,
   AccountCircleOutlined,
 } from '@mui/icons-material'
-import {TooltipIconButton} from '../Buttons'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
-import useStore from '../../store/useStore'
-import ManageProfile from './ManageProfile'
 
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
 
+
 /**
+ * Login dialog component with provider selection
  *
+ * @return {ReactElement} Dialog component for login
  */
 function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth='xs'>
       <DialogTitle
         sx={{
           textAlign: 'center',
@@ -54,10 +57,10 @@ function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
         <Stack spacing={2} mt={2}>
           <Button
             fullWidth
-            variant="outlined"
+            variant='outlined'
             startIcon={<GitHubIcon/>}
             onClick={() => onLogin('github')}
-            data-testid="login-with-github"
+            data-testid='login-with-github'
             sx={{
               'borderColor': 'divider',
               'color': 'text.primary',
@@ -69,10 +72,10 @@ function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
           {(isGoogleEnabled || useMock) && (
             <Button
               fullWidth
-              variant="outlined"
+              variant='outlined'
               startIcon={<GoogleIcon/>}
               onClick={() => onLogin('google-oauth2')}
-              data-testid="login-with-google"
+              data-testid='login-with-google'
               sx={{
                 'borderColor': 'divider',
                 'color': 'text.primary',
@@ -217,14 +220,14 @@ export default function ProfileControl() {
   return (
     <>
       <TooltipIconButton
-        title="Profile"
+        title='Profile'
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
           isAuthenticated ? <Avatar alt={user?.name} src={user?.picture}/> : <AccountBoxOutlinedIcon/>
         }
-        variant="control"
-        placement="bottom"
-        dataTestId="control-button-profile"
+        variant='control'
+        placement='bottom'
+        dataTestId='control-button-profile'
       />
 
       <Menu
@@ -242,10 +245,10 @@ export default function ProfileControl() {
               setLoginDialogOpen(true)
               onCloseMenu()
             }}
-            data-testid="menu-open-login-dialog"
+            data-testid='menu-open-login-dialog'
           >
             <LoginOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant="overline">
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Log in
             </Typography>
           </MenuItem>
@@ -254,16 +257,16 @@ export default function ProfileControl() {
         {isAuthenticated && (
           <MenuItem onClick={onLogoutClick}>
             <LogoutOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant="overline">
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Log out
             </Typography>
           </MenuItem>
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleManageProfileClick} data-testid="manage-profile">
+          <MenuItem onClick={handleManageProfileClick} data-testid='manage-profile'>
             <AccountCircleOutlined/>
-            <Typography sx={{marginLeft: '10px'}} variant="overline">
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Manage Profile
             </Typography>
           </MenuItem>
@@ -272,7 +275,7 @@ export default function ProfileControl() {
         {isAuthenticated && (
           <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
-            <Typography sx={{marginLeft: '10px'}} variant="overline">
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
             </Typography>
           </MenuItem>
@@ -282,20 +285,20 @@ export default function ProfileControl() {
 
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant="overline">
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
             Join GitHub
           </Typography>
         </MenuItem>
         <MenuItem onClick={() => window.open('https://github.com/bldrs-ai/Share/wiki', '_blank')}>
           <InfoOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant="overline">
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
             Bldrs Wiki
           </Typography>
         </MenuItem>
         <Divider/>
         <MenuItem onClick={handleThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
           {isDay ? <NightlightOutlinedIcon/> : <WbSunnyOutlinedIcon/>}
-          <Typography sx={{marginLeft: '10px'}} variant="overline">
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
             {isDay ? 'Night' : 'Day'} theme
           </Typography>
         </MenuItem>

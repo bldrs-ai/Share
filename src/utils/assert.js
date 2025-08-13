@@ -55,10 +55,15 @@ export function areDefinedAndNotNull(...args) {
  * @throws If any argument is not defined.
  */
 export function assertDefined(...args) {
-  if (!areDefinedAndNotNull(args)) {
-    throw new Error('Args are not defined and not null')
+  for (const ndx in args) {
+    if (Object.prototype.hasOwnProperty.call(args, ndx)) {
+      const arg = args[ndx]
+      if (!isDefinedAndNotNull(arg)) {
+        throw new Error(`Arg ${ndx} is not defined`)
+      }
+    }
   }
-  return args
+  return true
 }
 
 

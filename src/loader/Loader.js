@@ -369,7 +369,8 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     // TODO(pablo): temporarily removed to get glb working, but seems to work
     // pretty well.  This involved hardening other uses of .geometry
     // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
-    console.warn('Could not identify default mesh to use for some operations')
+    // This is too chatty.
+    // console.warn('Could not identify default mesh to use for some operations')
   }
 
   return model

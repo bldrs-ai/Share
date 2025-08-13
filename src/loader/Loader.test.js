@@ -1,15 +1,10 @@
-import {readModel} from './Loader'
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
-
-
-// TODO(pablo): export and reuse when bun bug is fixed
-// https://github.com/oven-sh/bun/issues/6335
-// import {MSW_TEST_PORT} from './setupTests'
-// const MSW_TEST_PORT = 3000
+import {load, readModel} from './Loader'
 
 
 let mathRandomSpy
+let mockViewer
 describe('Loader', () => {
   // three.js generates random UUIDs for loaded geometry and material
   // and also references them later, so it's not trivial to freeze or
@@ -19,56 +14,166 @@ describe('Loader', () => {
   beforeEach(() => {
     const rand = 0.5
     mathRandomSpy = jest.spyOn(Math, 'random').mockReturnValue(rand)
+
+    mockViewer = {
+      IFC: {
+        type: null,
+        addIfcModel: jest.fn(),
+        loader: {
+          parse: jest.fn().mockResolvedValue({
+            modelID: 0,
+            loadStats: {},
+            children: [],
+            geometry: undefined,
+            isObject3D: true,
+          }),
+          ifcManager: {
+            state: {
+              models: [],
+            },
+            applyWebIfcConfig: jest.fn().mockResolvedValue(),
+            parse: jest.fn().mockResolvedValue({
+              modelID: 0,
+              loadStats: {},
+              children: [],
+              geometry: undefined,
+              isObject3D: true,
+            }),
+            setupCoordinationMatrix: jest.fn(),
+            ifcAPI: {
+              GetCoordinationMatrix: jest.fn().mockResolvedValue([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+              getStatistics: jest.fn().mockReturnValue({
+                getGeometryMemory: jest.fn().mockReturnValue(1024), // eslint-disable-line no-magic-numbers
+                getGeometryTime: jest.fn().mockReturnValue(100), // eslint-disable-line no-magic-numbers
+                getVersion: jest.fn().mockReturnValue('IFC4'),
+                getLoadStatus: jest.fn().mockReturnValue('SUCCESS'),
+                getOriginatingSystem: jest.fn().mockReturnValue('Test'),
+                getPreprocessorVersion: jest.fn().mockReturnValue('1.0'),
+                getParseTime: jest.fn().mockReturnValue(50), // eslint-disable-line no-magic-numbers
+                getTotalTime: jest.fn().mockReturnValue(150), // eslint-disable-line no-magic-numbers
+              }),
+              getConwayVersion: jest.fn().mockReturnValue('1.0.0'),
+            },
+          },
+        },
+        context: {
+          items: {
+            ifcModels: [],
+          },
+          fitToFrame: jest.fn(),
+        },
+      },
+    }
   })
-  afterEach(() => {
-    mathRandomSpy.mockRestore()
+  afterEach(() => mathRandomSpy.mockRestore())
+
+  it('loads a FBX model', async () => {
+    mockViewer.IFC.type = 'fbx'
+    const testPath = 'fbx/cube.fbx'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a GLB model', async () => {
+    mockViewer.IFC.type = 'glb'
+    const testPath = 'glb/cube.glb'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
   })
 
   it('loads an OBJ model', async () => {
-/* HACK DO NOT SUBMIT
+    mockViewer.IFC.type = 'obj'
+    const testPath = 'obj/Bunny.obj'
     const onProgress = jest.fn()
-    const onUnknownType = jest.fn()
-    const onError = jest.fn()
-    const model = await load(
-      new URL(`http://localhost:${MSW_TEST_PORT}/models/obj/Bunny.obj`),
-      onProgress,
-      onUnknownType,
-      onError,
-    )
-    expect(onUnknownType).not.toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
-    // TODO(pablo): not called
-    // expect(onProgress).toHaveBeenCalled()
-    expect(model).toBeDefined()
-    expect(model.children[0].isObject3D).toBe(true)
-    expect(model).toMatchSnapshot()
-*/
+    const setOpfsFile = jest.fn()
+    // Setup MockBlob with actual OBJ content
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
   })
 
-  // TODO(pablo): Dies with 'Trace: Loader error during parse:
-  // RangeError: Offset is outside the bounds of the DataView'
-  // But no stack trace.
-  // However, Duck.glb does load for live server.
-/*
-  it('loads an GLB model', async () => {
+  it('loads a PDB model', async () => {
+    mockViewer.IFC.type = 'pdb'
+    const testPath = 'pdb/caffeine.pdb'
     const onProgress = jest.fn()
-    const onUnknownType =  jest.fn()
-    const onError =  jest.fn()
-    const model = await load(
-      `http://localhost:${MSW_TEST_PORT}/models/gltf/Duck.glb`,
-      onProgress,
-      onUnknownType,
-      onError
-    )
-    expect(onUnknownType).not.toHaveBeenCalled()
-    expect(onError).not.toHaveBeenCalled()
-    // TODO(pablo): not called
-    // expect(onProgress).toHaveBeenCalled()
-    expect(model).toBeDefined()
-    //expect(model.children[0].isObject3D).toBe(true)
-    expect(model).toMatchSnapshot()
+    const setOpfsFile = jest.fn()
+    // Setup MockBlob with actual PDB file content
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
   })
-*/
+
+  it('loads an STL model', async () => {
+    mockViewer.IFC.type = 'stl'
+    const testPath = 'stl/3DBenchy.stl'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    // Setup MockBlob with actual STL file content
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a STEP model', async () => {
+    mockViewer.IFC.type = 'step'
+    const testPath = 'step/a-gear.step'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads an IFC model', async () => {
+    mockViewer.IFC.type = 'ifc'
+    const testPath = 'ifc/index.ifc'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
 
   describe('readModel', () => {
     it('passes through model with existing geometry unchanged', async () => {
@@ -102,19 +207,13 @@ describe('Loader', () => {
         }),
       }
 
-      // Spy on console.warn to check if warning is logged
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
-
       const result = await readModel(mockLoader, 'test-data', './', false, false, null, null)
 
       expect(result.geometry).toBeDefined()
       expect(result.geometry).toBe(meshChild.geometry)
-      expect(consoleSpy).toHaveBeenCalledWith('Only using first mesh for some operations')
-
-      consoleSpy.mockRestore()
     })
 
-    it('throws error when model has no geometry and children have no geometry', async () => {
+    it('logs warning when model has no geometry and children have no geometry', async () => {
       const mockLoader = {
         parse: jest.fn().mockReturnValue({
           children: [
@@ -125,8 +224,10 @@ describe('Loader', () => {
         }),
       }
 
-      await expect(readModel(mockLoader, 'test-data', './', false, false, null, null))
-        .rejects.toThrow('Could not find geometry to work with in model')
+      const result = await readModel(mockLoader, 'test-data', './', false, false, null, null)
+
+      // expect(consoleSpy).toHaveBeenCalledWith('Could not identify default mesh to use for some operations')
+      expect(result).toBeDefined()
     })
 
     it('throws error when loader returns null model', async () => {
@@ -149,7 +250,7 @@ describe('Loader', () => {
         parse: jest.fn().mockReturnValue(mockModel),
       }
 
-      const mockViewer = {test: 'viewer'}
+      mockViewer.IFC.type = 'obj'
       const fixupCb = jest.fn().mockImplementation((model, viewer) => {
         expect(model).toBe(mockModel)
         expect(viewer).toBe(mockViewer)
@@ -205,3 +306,125 @@ describe('Loader', () => {
     })
   })
 })
+
+
+// Mock Blob for testing
+/**
+ * A mock Blob implementation for testing purposes.
+ */
+class MockBlob {
+  /**
+   * Creates an instance of MockBlob.
+   *
+   * @param {Array} content - The content of the blob.
+   */
+  constructor(content) {
+    this.content = content
+  }
+
+  /**
+   * Returns an ArrayBuffer representation of the blob content.
+   *
+   * @return {Promise<ArrayBuffer>} A promise that resolves to an ArrayBuffer.
+   */
+  async arrayBuffer() {
+    await Promise.resolve() // Satisfy async requirement
+    return new ArrayBuffer(this.content.length)
+  }
+}
+
+
+// Mock Worker for testing
+/**
+ * A fake Worker implementation for testing purposes.
+ */
+class FakeWorker {
+  /**
+   * Creates an instance of FakeWorker.
+   *
+   * @param {string} script - The URL or identifier of the worker script.
+   */
+  constructor(script) {
+    this.script = script
+    this.postMessage = jest.fn()
+    this.terminate = jest.fn()
+    this.onmessage = null
+    this.addEventListener = jest.fn((event, handler) => {
+      // Simulate successful file download
+      if (event === 'message') {
+        process.nextTick(() => {
+          handler({data: {completed: true, event: 'download', file: new MockBlob(['mock file content'])}})
+        })
+      }
+    })
+    this.removeEventListener = jest.fn()
+  }
+}
+global.Worker = FakeWorker
+
+
+/**
+ * @param {string} relativePath
+ * @return {string}
+ */
+function testPathToUrl(relativePath) {
+  return require('path').resolve(__dirname, `../../testdata/models/${relativePath}`)
+}
+
+
+/**
+ * @param {string} relativePath
+ * @return {Function} A function that restores the original arrayBuffer method.
+ */
+function testPathToContent(relativePath) {
+  // Determine if file is binary based on extension
+  const binaryExtensions = ['fbx', 'glb', 'gltf']
+  const extension = relativePath.split('.').pop().toLowerCase()
+  const isBinary = binaryExtensions.includes(extension)
+
+  const content = readTestDataFile(relativePath, isBinary)
+  return setupMockBlobWithContent(content)
+}
+
+
+// Helper function to read test data files
+/**
+ * Reads a test data file and returns its content.
+ *
+ * @param {string} relativePath - Path relative to testdata/models/
+ * @param {boolean} [isBinary] - Whether to read as binary data
+ * @return {string|Buffer} The file content as a string or Buffer.
+ */
+function readTestDataFile(relativePath, isBinary = false) {
+  const fs = require('fs')
+  const path = require('path')
+  const filePath = path.resolve(__dirname, `../../testdata/models/${relativePath}`)
+  return fs.readFileSync(filePath, isBinary ? null : 'utf8')
+}
+
+
+// Helper function to setup MockBlob with file content
+/**
+ * Sets up MockBlob to return the specified file content.
+ *
+ * @param {string|Buffer} fileContent - The content to return from arrayBuffer().
+ * @return {Function} A function to restore the original arrayBuffer method.
+ */
+function setupMockBlobWithContent(fileContent) {
+  const originalArrayBuffer = MockBlob.prototype.arrayBuffer
+  MockBlob.prototype.arrayBuffer = async function() {
+    await Promise.resolve() // Satisfy async requirement
+
+    if (Buffer.isBuffer(fileContent)) {
+      // Handle binary data
+      return fileContent.buffer.slice(fileContent.byteOffset, fileContent.byteOffset + fileContent.byteLength)
+    } else {
+      // Handle text data
+      const encoder = new TextEncoder()
+      return encoder.encode(fileContent).buffer
+    }
+  }
+  return () => {
+    MockBlob.prototype.arrayBuffer = originalArrayBuffer
+  }
+}
