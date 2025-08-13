@@ -131,7 +131,7 @@ describe('Loader', () => {
 
   it('loads an STL model', async () => {
     mockViewer.IFC.type = 'stl'
-    const testPath = 'stl/3DBenchy.stl'
+    const testPath = 'stl/cube.stl'
     const onProgress = jest.fn()
     const setOpfsFile = jest.fn()
     // Setup MockBlob with actual STL file content
