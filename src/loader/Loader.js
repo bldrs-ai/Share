@@ -10,7 +10,7 @@ import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
-import {assert, assertDefined} from '../utils/assert'
+import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
@@ -345,6 +345,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     debug().log(`sync loader(->) parsing data:`, loader, modelData)
     model = loader.parse(modelData, basePath)
   }
+
   if (!model) {
     throw new Error('Loader could not read model')
   }
@@ -364,8 +365,12 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
         break
       }
     }
-    assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
-    console.warn('Only using first mesh for some operations')
+
+    // TODO(pablo): temporarily removed to get glb working, but seems to work
+    // pretty well.  This involved hardening other uses of .geometry
+    // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
+    // This is too chatty.
+    // console.warn('Could not identify default mesh to use for some operations')
   }
 
   return model
