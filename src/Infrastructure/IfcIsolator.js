@@ -4,10 +4,10 @@ import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
 import {BlendFunction} from 'postprocessing'
+import {isDefinedAndNotNull} from '../utils/assert'
 
-/**
- *  Provides hiding, unhiding, isolation, and unisolation functionalities
- */
+
+/** Provides hiding, unhiding, isolation, and unisolation functionalities */
 export default class IfcIsolator {
   subsetCustomId = 'Bldrs::Share::Isolator'
   revealSubsetCustomId = 'Bldrs::Share::HiddenElements'
@@ -58,6 +58,9 @@ export default class IfcIsolator {
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
+    if (!isDefinedAndNotNull(ifcModel.geometry)) {
+      return
+    }
     if (ifcModel.geometry && ifcModel.geometry.attributes) {
       this.visualElementsIds = [...new Set(ifcModel.geometry.attributes.expressID.array)]
     } else if (ifcModel.expressID) {

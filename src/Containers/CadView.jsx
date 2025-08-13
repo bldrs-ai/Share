@@ -12,7 +12,7 @@ import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined} from '../utils/assert'
+import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
@@ -368,8 +368,9 @@ export default function CadView({
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
         const geom = mesh.geometry
-        if (!geom.index) {
-          throw new Error('Geometry does not have index information.')
+        if (!areDefinedAndNotNull(geom, geom.index)) {
+          // throw new Error('Geometry does not have index information.')
+          return
         }
         const geoIndex = geom.index.array
         const IdAttrName = 'expressID'
@@ -488,10 +489,6 @@ export default function CadView({
         if (enabledFeatures) {
           path += `?feature=${enabledFeatures}`
         }
-        // TODO(pablo): without a log before nav, some page crashes simply blank
-        // the screen and leave no trace
-        // eslint-disable-next-line no-console
-        console.log('navigate:', pathIds, elementPath, path)
         navWith(
           navigate,
           path,

@@ -10,7 +10,7 @@ import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
-import {assert, assertDefined} from '../utils/assert'
+import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
@@ -328,10 +328,8 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
     model = await new Promise((resolve, reject) => {
-      console.log('Invoking GLTFLoader.parse')
       try {
         loader.parse(modelData, './', (m) => {
-          console.log('Invoking GLTFLoader.parse: resolved model:', m)
           resolve(m)
         }, (err) => {
           reject(new Error(`Loader error during parse: ${err}`))
@@ -358,7 +356,6 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 
   // TODO(pablo): generalize our handling to multi-mesh
   if (model.geometry === undefined) {
-    console.log('doing the check:', model)
     assertDefined(model.children)
     // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
     for (let i = 0, n = model.children.length; i < n; i++) {
@@ -369,9 +366,10 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
       }
     }
 
-    // HACK
+    // TODO(pablo): temporarily removed to get glb working, but seems to work
+    // pretty well.  This involved hardening other uses of .geometry
     // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
-    console.warn('Only using first mesh for some operations')
+    console.warn('Could not identify default mesh to use for some operations')
   }
 
   return model

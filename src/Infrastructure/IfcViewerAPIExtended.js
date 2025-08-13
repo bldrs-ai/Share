@@ -5,6 +5,7 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
+import {areDefinedAndNotNull} from '../utils/assert'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -101,6 +102,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {number[]} expressIds express Ids of the elements
    */
   async setSelection(modelID, expressIds, focusSelection) {
+    if (this.IFC.type !== 'ifc') {
+      debug().warn('setSelection is not supported for this type of model')
+      return
+    }
     this._selectedExpressIds = expressIds
     const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
@@ -137,7 +142,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
       return
     }
     const id = this.getPickedItemId(found)
-    if (this.isolator.canBePickedInScene(id)) {
+    if (this.IFC.type === 'ifc' && this.isolator.canBePickedInScene(id)) {
       await this.IFC.selector.preselection.pick(found)
       this.highlightPreselection()
     }
@@ -190,7 +195,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   getPickedItemId(picked) {
     const mesh = picked.object
-    if (picked.faceIndex === undefined) {
+    if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }
     const ifcManager = this.IFC

@@ -1,4 +1,7 @@
 import {Mesh} from 'three'
+import {areDefinedAndNotNull} from '../utils/assert'
+
+
 // From https://github.com/ThatOpen/web-ifc-viewer/blob/master/viewer/src/components/ifc/selection/selection.ts
 
 /** Highlights selected elements */
@@ -33,7 +36,7 @@ export default class Selection {
   async pick(item, focusSelection = false, removePrevious = true) {
     const mesh = item.object
     let tmp
-    if (item.faceIndex === undefined ||
+    if (!areDefinedAndNotNull(mesh.geometry, item.faceIndex) ||
         ((tmp = this.selectedFaces[mesh.modelID]) === null ||
          tmp === undefined ? undefined : tmp.has(item.faceIndex))) {
       return null
