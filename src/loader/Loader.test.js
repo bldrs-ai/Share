@@ -2,6 +2,20 @@ import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
 import {load, readModel} from './Loader'
 
+// Mock DRACOLoader to avoid HTTP requests in tests
+jest.mock('three/examples/jsm/loaders/DRACOLoader', () => {
+  const MockDRACOLoader = jest.fn().mockImplementation(() => ({
+    setDecoderPath: jest.fn(),
+    setDecoderConfig: jest.fn(),
+    onError: null,
+    onProgress: null,
+    preload: jest.fn().mockResolvedValue(),
+    decodeDracoFile: jest.fn().mockResolvedValue(new ArrayBuffer(0)),
+    decodeDracoBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(0)),
+  }))
+  return {DRACOLoader: MockDRACOLoader}
+})
+
 
 let mathRandomSpy
 let mockViewer
@@ -94,6 +108,67 @@ describe('Loader', () => {
       expect(model).toMatchSnapshot()
     } finally {
       restoreArrayBuffer()
+    }
+  })
+
+  it('detects Draco compression in GLB file', () => {
+    const testPath = 'glb/cube-draco.glb'
+    const content = readTestDataFile(testPath, true) // Read as binary (returns Buffer)
+    const {detectDracoCompression} = require('./glb')
+
+    // Convert Buffer to ArrayBuffer for the detection function
+    const arrayBuffer = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength)
+
+    // Test that our Draco detection function can process the file
+    const isDracoCompressed = detectDracoCompression(arrayBuffer)
+
+    // The file should be detected as Draco compressed
+    expect(isDracoCompressed).toBe(true)
+  })
+
+  it('loads a GLB (draco) model', async () => {
+    // Mock the createGltfLoader function to avoid HTTP requests for Draco decoder
+    const {createGltfLoader} = require('./glb')
+    const originalCreateGltfLoader = createGltfLoader
+    
+    // Create a mock loader that simulates successful Draco decompression
+    const mockLoader = {
+      parse: jest.fn().mockImplementation((data, path, onLoad) => {
+        // Simulate successful parsing with a mock model
+        const mockModel = {
+          scenes: [{
+            children: [{
+              geometry: new BufferGeometry(),
+              material: new Material(),
+              isObject3D: true,
+            }],
+          }],
+        }
+        onLoad(mockModel)
+      }),
+      setDRACOLoader: jest.fn(),
+    }
+    
+    // Mock the createGltfLoader function
+    jest.doMock('./glb', () => ({
+      ...jest.requireActual('./glb'),
+      createGltfLoader: jest.fn().mockReturnValue(mockLoader),
+    }))
+
+    mockViewer.IFC.type = 'glb'
+    const testPath = 'glb/cube-draco.glb'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+      // Restore original function
+      jest.doMock('./glb', () => jest.requireActual('./glb'))
     }
   })
 

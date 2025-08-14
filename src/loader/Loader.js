@@ -1,6 +1,6 @@
 import axios from 'axios'
 import {BufferAttribute, Matrix4, Mesh, Object3D} from 'three'
-import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
+
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader'
@@ -17,7 +17,7 @@ import {parseGitHubPath} from '../utils/location'
 import {testUuid} from '../utils/strings'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
-import glbToThree from './glb'
+import {createGltfLoader, glbToThree} from './glb'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
@@ -81,7 +81,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer, onProgress)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -381,7 +381,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
  * @param {string} pathname
  * @return {Function|undefined}
  */
-async function findLoader(pathname, viewer) {
+async function findLoader(pathname, viewer, onProgress) {
   let extension
   try {
     extension = Filetype.getValidExtension(pathname)
@@ -449,7 +449,7 @@ async function findLoader(pathname, viewer) {
     }
     case 'glb':
     case 'gltf': {
-      loader = newGltfLoader()
+      loader = createGltfLoader(onProgress)
       fixupCb = glbToThree
       break
     }
@@ -482,18 +482,6 @@ async function findLoader(pathname, viewer) {
   // Reported to GA
   loader.type = extension
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
-}
-
-
-/**
- * @return {GLTFLoader} With DRACO codec enabled
- */
-function newGltfLoader() {
-  const loader = new GLTFLoader
-  const dracoLoader = new DRACOLoader
-  dracoLoader.setDecoderPath('./node_modules/three/examples/jsm/libs/draco/')
-  loader.setDRACOLoader(dracoLoader)
-  return loader
 }
 
 

@@ -5,7 +5,7 @@ const WARN = 2 // Use this as default for prod.  Should never see these messages
 const INFO = 1
 const DEBUG = 0
 /* eslint-enable no-unused-vars */
-let DEBUG_LEVEL = WARN
+let DEBUG_LEVEL = DEBUG
 
 
 /**

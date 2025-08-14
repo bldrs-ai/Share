@@ -29,6 +29,27 @@ export default function makePlugins(root, buildDir) {
       src: assetsDir,
       dest: buildDir,
     }),
+    {
+      name: 'external-three-draco-loader',
+      setup(build) {
+        build.onResolve({
+          filter: /^three\/examples\/jsm\/loaders\/DRACOLoader\.js$/,
+        }, () => ({
+          path: '/vendor/three/examples/jsm/loaders/DRACOLoader.js',
+          external: true, // emit an ESM import to this URL
+        }))
+      },
+    },
+    {
+      name: 'external-draco-libs',
+      setup(b) {
+        b.onResolve({filter: /node_modules\/three\/examples\/js\/libs\/draco\//},
+                    () => {
+                      console.log('onResolve draco')
+                      return ({external: true})
+                    })
+      },
+    },
   ]
 
   // Conditionally include webIfcShimAliasPlugin
