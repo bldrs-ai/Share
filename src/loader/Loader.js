@@ -221,7 +221,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
       {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
-        onDownloadProgress: (event) => onProgressHandler(event, onProgress),
+        onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),
       },
     )).data
   } catch (error) {
@@ -537,7 +537,7 @@ function newIfcLoader(viewer) {
     }
     try {
       if (onProgress) {
-        onProgress('Configuring IFC loader...')
+        onProgress('Configuring loader...')
       }
       await this.loader.ifcManager.applyWebIfcConfig({
         COORDINATE_TO_ORIGIN: true,
@@ -545,7 +545,7 @@ function newIfcLoader(viewer) {
       })
 
       if (onProgress) {
-        onProgress('Parsing IFC geometry...')
+        onProgress('Parsing model geometry...')
       }
       const ifcModel = await this.loader.parse(buffer, onProgress)
       this.addIfcModel(ifcModel)
@@ -602,7 +602,7 @@ function newIfcLoader(viewer) {
  * @param {Event} progressEvent
  * @param {Function} onProgress
  */
-function onProgressHandler(progressEvent, onProgress) {
+function onDownloadProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
     const loadedBytes = progressEvent.loaded
     // eslint-disable-next-line no-magic-numbers

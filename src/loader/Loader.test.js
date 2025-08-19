@@ -322,8 +322,8 @@ describe('Loader', () => {
         expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
         expect(progressCalls).toContain('Reading file data...')
-        expect(progressCalls).toContain('Configuring IFC loader...')
-        expect(progressCalls).toContain('Parsing IFC geometry...')
+        expect(progressCalls).toContain('Configuring loader...')
+        expect(progressCalls).toContain('Parsing model geometry...')
         expect(progressCalls).toContain('Setting up coordinate system...')
         expect(progressCalls).toContain('Fitting model to frame...')
         expect(progressCalls).toContain('Gathering model statistics...')
@@ -351,8 +351,8 @@ describe('Loader', () => {
         expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
         expect(progressCalls).toContain('Reading file data...')
-        expect(progressCalls).toContain('Configuring IFC loader...')
-        expect(progressCalls).toContain('Parsing IFC geometry...')
+        expect(progressCalls).toContain('Configuring loader...')
+        expect(progressCalls).toContain('Parsing model geometry...')
         expect(progressCalls).toContain('Setting up coordinate system...')
         expect(progressCalls).toContain('Fitting model to frame...')
         expect(progressCalls).toContain('Gathering model statistics...')
@@ -431,12 +431,12 @@ describe('Loader', () => {
         parse: jest.fn().mockImplementation((buffer, progressCallback) => {
           // This simulates what happens in the newIfcLoader.parse method
           if (progressCallback) {
-            progressCallback('Configuring IFC loader...')
+            progressCallback('Configuring loader...')
           }
 
           // Mock the internal loader call
           if (progressCallback) {
-            progressCallback('Parsing IFC geometry...')
+            progressCallback('Parsing model geometry...')
           }
 
           // Simulate Conway calling back with progress
@@ -462,8 +462,8 @@ describe('Loader', () => {
       expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress)
 
       // Verify that all expected progress messages were called
-      expect(onProgress).toHaveBeenCalledWith('Configuring IFC loader...')
-      expect(onProgress).toHaveBeenCalledWith('Parsing IFC geometry...')
+      expect(onProgress).toHaveBeenCalledWith('Configuring loader...')
+      expect(onProgress).toHaveBeenCalledWith('Parsing model geometry...')
       expect(onProgress).toHaveBeenCalledWith('Test progress from Conway')
       expect(onProgress).toHaveBeenCalledWith('Setting up coordinate system...')
       expect(onProgress).toHaveBeenCalledWith('Fitting model to frame...')
