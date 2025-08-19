@@ -8,8 +8,8 @@ cypress/downloads
 cypress/e2e/logs
 
 # playwright
-playwright-report
-test-results
+# /playwright-report
+# /test-results
 
 /coverage
 
