@@ -305,6 +305,210 @@ describe('Loader', () => {
       )
     })
   })
+
+  describe('Progress updates', () => {
+    it('calls onProgress with correct messages for IFC loading', async () => {
+      mockViewer.IFC.type = 'ifc'
+      const testPath = 'ifc/index.ifc'
+      const onProgress = jest.fn()
+      const setOpfsFile = jest.fn()
+      const restoreArrayBuffer = testPathToContent(testPath)
+
+      try {
+        await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+
+        // Verify progress messages are called in correct order
+        const progressCalls = onProgress.mock.calls.map((call) => call[0])
+        expect(progressCalls).toContain('Determining file type...')
+        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Reading file data...')
+        expect(progressCalls).toContain('Configuring IFC loader...')
+        expect(progressCalls).toContain('Parsing IFC geometry...')
+        expect(progressCalls).toContain('Setting up coordinate system...')
+        expect(progressCalls).toContain('Fitting model to frame...')
+        expect(progressCalls).toContain('Gathering model statistics...')
+        expect(progressCalls).toContain('Model loaded successfully!')
+
+        // Ensure onProgress was called multiple times
+        expect(onProgress).toHaveBeenCalledTimes(9)
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+    it('calls onProgress with correct messages for STEP async loading', async () => {
+      // Test STEP format which is async IFC-type loading
+      mockViewer.IFC.type = 'step'
+      const testPath = 'step/a-gear.step'
+      const onProgress = jest.fn()
+      const setOpfsFile = jest.fn()
+      const restoreArrayBuffer = testPathToContent(testPath)
+
+      try {
+        await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+
+        const progressCalls = onProgress.mock.calls.map((call) => call[0])
+        expect(progressCalls).toContain('Determining file type...')
+        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Reading file data...')
+        expect(progressCalls).toContain('Configuring IFC loader...')
+        expect(progressCalls).toContain('Parsing IFC geometry...')
+        expect(progressCalls).toContain('Setting up coordinate system...')
+        expect(progressCalls).toContain('Fitting model to frame...')
+        expect(progressCalls).toContain('Gathering model statistics...')
+        expect(progressCalls).toContain('Model loaded successfully!')
+
+        // Verify that progress was called multiple times for IFC-type loading
+        expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(9)
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+    it('calls onProgress with correct messages for synchronous loading', async () => {
+      mockViewer.IFC.type = 'obj'
+      const onProgress = jest.fn()
+      const setOpfsFile = jest.fn()
+      const restoreArrayBuffer = testPathToContent('obj/Bunny.obj')
+
+      try {
+        await load(testPathToUrl('obj/Bunny.obj'), mockViewer, onProgress, true, setOpfsFile, '')
+
+        const progressCalls = onProgress.mock.calls.map((call) => call[0])
+        expect(progressCalls).toContain('Determining file type...')
+        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Reading file data...')
+        expect(progressCalls).toContain('Decoding text data...')
+        expect(progressCalls).toContain('Processing model data...')
+        expect(progressCalls).toContain('Applying model fixups...')
+        expect(progressCalls).toContain('Converting model format...')
+
+        expect(onProgress).toHaveBeenCalledTimes(7)
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+    it('calls onProgress for binary file processing without text decoding', async () => {
+      mockViewer.IFC.type = 'stl'
+      const onProgress = jest.fn()
+      const setOpfsFile = jest.fn()
+      const restoreArrayBuffer = testPathToContent('stl/cube.stl')
+
+      try {
+        await load(testPathToUrl('stl/cube.stl'), mockViewer, onProgress, true, setOpfsFile, '')
+
+        const progressCalls = onProgress.mock.calls.map((call) => call[0])
+        expect(progressCalls).toContain('Determining file type...')
+        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Reading file data...')
+        // Should NOT contain 'Decoding text data...' for binary files
+        expect(progressCalls).not.toContain('Decoding text data...')
+        expect(progressCalls).toContain('Processing model data...')
+        expect(progressCalls).toContain('Applying model fixups...')
+        expect(progressCalls).toContain('Converting model format...')
+
+        expect(onProgress).toHaveBeenCalledTimes(6)
+      } finally {
+        restoreArrayBuffer()
+      }
+    })
+
+    it('passes onProgress to IFC loader parse method', async () => {
+      const mockModel = {
+        modelID: 0,
+        loadStats: {},
+        children: [],
+        geometry: undefined,
+        isObject3D: true,
+      }
+
+      const onProgress = jest.fn()
+
+      // Test readModel directly with a mock IFC loader structure
+      // This simulates the newIfcLoader function structure from Loader.js
+      const mockIfcLoader = {
+        parse: jest.fn().mockImplementation((buffer, progressCallback) => {
+          // This simulates what happens in the newIfcLoader.parse method
+          if (progressCallback) {
+            progressCallback('Configuring IFC loader...')
+          }
+
+          // Mock the internal loader call
+          if (progressCallback) {
+            progressCallback('Parsing IFC geometry...')
+          }
+
+          // Simulate Conway calling back with progress
+          if (progressCallback) {
+            progressCallback('Test progress from Conway')
+          }
+
+          // Mock the rest of the IFC loading process
+          if (progressCallback) {
+            progressCallback('Setting up coordinate system...')
+            progressCallback('Fitting model to frame...')
+            progressCallback('Gathering model statistics...')
+            progressCallback('Model loaded successfully!')
+          }
+
+          return mockModel
+        }),
+      }
+
+      const result = await readModel(mockIfcLoader, 'test-buffer', './', true, true, mockViewer, null, onProgress)
+
+      expect(result).toBe(mockModel)
+      expect(mockIfcLoader.parse).toHaveBeenCalledWith('test-buffer', onProgress)
+
+      // Verify that all expected progress messages were called
+      expect(onProgress).toHaveBeenCalledWith('Configuring IFC loader...')
+      expect(onProgress).toHaveBeenCalledWith('Parsing IFC geometry...')
+      expect(onProgress).toHaveBeenCalledWith('Test progress from Conway')
+      expect(onProgress).toHaveBeenCalledWith('Setting up coordinate system...')
+      expect(onProgress).toHaveBeenCalledWith('Fitting model to frame...')
+      expect(onProgress).toHaveBeenCalledWith('Gathering model statistics...')
+      expect(onProgress).toHaveBeenCalledWith('Model loaded successfully!')
+
+      // Verify total number of progress calls
+      expect(onProgress).toHaveBeenCalledTimes(7)
+    })
+
+    it('handles missing onProgress callback gracefully', async () => {
+      const mockModel = {
+        geometry: new BufferGeometry(),
+        isObject3D: true,
+      }
+
+      const mockLoader = {
+        parse: jest.fn().mockReturnValue(mockModel),
+      }
+
+      // Should not throw when onProgress is not provided
+      const result = await readModel(mockLoader, 'test-data', './', false, false, null, null, null)
+      expect(result).toBe(mockModel)
+    })
+
+    it('calls onProgress for fixup operations', async () => {
+      const mockModel = {
+        geometry: new BufferGeometry(),
+        isObject3D: true,
+      }
+
+      const mockLoader = {
+        parse: jest.fn().mockReturnValue(mockModel),
+      }
+
+      const onProgress = jest.fn()
+      const fixupCb = jest.fn().mockReturnValue(mockModel)
+
+      await readModel(mockLoader, 'test-data', './', false, false, mockViewer, fixupCb, onProgress)
+
+      expect(onProgress).toHaveBeenCalledWith('Processing model data...')
+      expect(onProgress).toHaveBeenCalledWith('Applying model fixups...')
+      expect(fixupCb).toHaveBeenCalled()
+    })
+  })
 })
 
 
