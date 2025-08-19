@@ -33,7 +33,6 @@
     "cy-percy": "./tools/cy-percy.sh",
     "cy-spec": "cypress run --browser chrome --spec",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
-    "e2e": "playwright test --config=tools/playwright/playwright.config.js",
     "husky-init": "husky install",
     "lint": "yarn lint-src && yarn lint-tools",
     "lint-src": "yarn eslint src && yarn typecheck",
@@ -61,6 +60,7 @@
     "test": "yarn test-tools && yarn test-src",
     "test-src": "jest --config tools/jest/jest.config.js",
     "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
+    "test-flows": "playwright test --config=tools/playwright/playwright.config.js",
     "typecheck": "tsc -p tools/tsconfig.json",
     "update-version": "./scripts/updateVersion.mjs"
   },
