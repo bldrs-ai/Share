@@ -27,9 +27,9 @@ export default defineConfig({
     // don’t record unless failure
     trace: 'retain-on-failure',
     // same for video
-    video: 'retain-on-failure',
+    // video: 'retain-on-failure',
     // same for screenshots
-    screenshot: 'only-on-failure',
+    // screenshot: 'only-on-failure',
   },
   // Configure projects for major browsers.
   projects: [
@@ -42,6 +42,8 @@ export default defineConfig({
   webServer: {
     command: 'yarn serve',
     url: 'http://localhost:8080',
-    reuseExistingServer: false,
+    // True: use the dev server you start separately
+    // False: playwright will start its own with `yarn dev`
+    reuseExistingServer: true,
   },
 })
