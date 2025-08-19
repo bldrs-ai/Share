@@ -315,3 +315,6 @@ export default function ExampleComponent({title, onClose}) {
 - **CI/CD**: All PRs must pass linting
 - **IDE integration**: Configure your editor to show ESLint warnings
 - **Auto-fix**: Use `yarn lint --fix` for automatic corrections
+
+- style is looking good!  remember 2 spaces after imports and always have a newline at EOF
+- for playwright and cypress tests avoid specifying timeouts (use the default), or keep them short eg 5 seconds.

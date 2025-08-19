@@ -1,4 +1,4 @@
-import {rest} from 'msw'
+import {http, passthrough} from 'msw'
 import {
   HTTP_AUTHORIZATION_REQUIRED,
   HTTP_BAD_REQUEST,
@@ -26,6 +26,7 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
+  handlers.push(...workersAndWasmPassthru())
   handlers.push(...bldrsHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
@@ -38,17 +39,32 @@ export function initHandlers(defines) {
 
 
 /**
+ * Let requests for web workers, wasm and related files to passthru.
+ *
+ * @return {Array<object>} handlers
+ */
+function workersAndWasmPassthru() {
+  return [
+    http.get(/\.worker(\.m?js)?$/, () => passthrough()),
+    http.get(/\/Cache\.js$/, () => passthrough()),
+    http.get(/\.wasm$/i, () => passthrough()),
+    http.get(/ConwayGeom/i, () => passthrough()),
+  ]
+}
+
+
+/**
  * Null route prod static icon requests.
  *
  * @return {Array<object>} handlers
  */
 function bldrsHandlers() {
   return [
-    rest.get('http://bldrs.ai/icons/*', (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.text(''),
-      )
+    http.get('http://bldrs.ai/icons/*', () => {
+      return new Response('', {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'text/plain'},
+      })
     }),
   ]
 }
@@ -61,21 +77,27 @@ function bldrsHandlers() {
  */
 function netlifyHandlers() {
   return [
-    rest.post('/.netlify/functions/create-portal-session', async (req, res, ctx) => {
-      const {stripeCustomerId} = await req.json()
+    http.post('/.netlify/functions/create-portal-session', async ({request}) => {
+      const {stripeCustomerId} = await request.json()
 
       if (!stripeCustomerId) {
-        return res(
-          ctx.status(HTTP_BAD_REQUEST),
-          ctx.json({error: 'Missing stripeCustomerId'}),
+        return new Response(
+          JSON.stringify({error: 'Missing stripeCustomerId'}),
+          {
+            status: HTTP_BAD_REQUEST,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
       // return a mocked Stripe billing-portal URL
       const fakeUrl = `https://stripe.portal.msw/mockportal/session/${stripeCustomerId}`
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({url: fakeUrl}),
+      return new Response(
+        JSON.stringify({url: fakeUrl}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
   ]
@@ -89,11 +111,8 @@ function netlifyHandlers() {
 function subscribePageHandler() {
   return [
     // this will catch GET /subscribe, /subscribe/, or /subscribe?foo=bar
-    rest.get('/subscribe*', (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.set('Content-Type', 'text/html'),
-        ctx.body(`
+    http.get('/subscribe*', () => {
+      return new Response(`
           <!DOCTYPE html>
           <html lang="en">
             <head>
@@ -106,8 +125,10 @@ function subscribePageHandler() {
               <button id="start-payment">Start Payment</button>
             </body>
           </html>
-        `.trim()),
-      )
+        `.trim(), {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'text/html'},
+      })
     }),
   ]
 }
@@ -120,11 +141,11 @@ function subscribePageHandler() {
  */
 function stripePortalHandlers() {
   return [
-    rest.get('https://stripe.portal.msw/mockportal/session/:stripeCustomerId', (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.text('<html><body><h1>Mock Stripe Portal</h1></body></html>'),
-      )
+    http.get('https://stripe.portal.msw/mockportal/session/:stripeCustomerId', () => {
+      return new Response('<html><body><h1>Mock Stripe Portal</h1></body></html>', {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'text/html'},
+      })
     }),
   ]
 }
@@ -136,17 +157,20 @@ function stripePortalHandlers() {
  */
 function gaHandlers() {
   return [
-    rest.get('https://www.google-analytics.com/*', (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json({}),
+    http.get('https://www.google-analytics.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.post('https://www.google-analytics.com/*', (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-      )
+    http.post('https://www.google-analytics.com/*', () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
   ]
 }
@@ -162,38 +186,47 @@ function githubHandlers(defines, authed) {
   const GH_BASE_AUTHED = defines.GITHUB_BASE_URL
   const GH_BASE_UNAUTHED = defines.GITHUB_BASE_URL_UNAUTHENTICATED
   return [
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, (req, res, ctx) => {
-      const {org, repo} = req.params
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
+      const {org, repo} = params
       const createdIssues = createMockIssues(org, repo, sampleIssues)
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json(createdIssues),
+      return new Response(
+        JSON.stringify(createdIssues),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
-      const {org, repo, issueNumber} = req.params
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, ({params}) => {
+      const {org, repo, issueNumber} = params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
-        return res(ctx.status(HTTP_NOT_FOUND))
+        return new Response(null, {status: HTTP_NOT_FOUND})
       }
 
       if (commentDeleted) {
         commentDeleted = false
-        return res(
-          ctx.status(HTTP_OK),
-          ctx.json(MOCK_COMMENTS_POST_DELETION.data),
+        return new Response(
+          JSON.stringify(MOCK_COMMENTS_POST_DELETION.data),
+          {
+            status: HTTP_OK,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json(MOCK_COMMENTS.data),
+      return new Response(
+        JSON.stringify(MOCK_COMMENTS.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/contents/:path`, (req, res, ctx) => {
-      const {org, repo, path} = req.params
-      const ref = req.url.searchParams.get('ref')
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/contents/:path`, ({params, request}) => {
+      const {org, repo, path} = params
+      const ref = new URL(request.url).searchParams.get('ref')
 
       if ((org === 'cypresstester') ||
            (org === 'Swiss-Property-AG' &&
@@ -206,9 +239,8 @@ function githubHandlers(defines, authed) {
         const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
             `${process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
 
-        return res(
-          ctx.status(HTTP_OK),
-          ctx.json({
+        return new Response(
+          JSON.stringify({
             name: 'test-model.ifc',
             path: 'cypresstester/test-repo/test-model.ifc',
             sha: '1fc13089c8851fd9c5d39cda54788823a8606564',
@@ -226,16 +258,23 @@ function githubHandlers(defines, authed) {
               html: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
             },
           }),
+          {
+            status: HTTP_OK,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
       if (org !== 'bldrs-ai' || repo !== 'Share' || path !== 'README.md') {
-        return res(
-            ctx.status(HTTP_NOT_FOUND),
-            ctx.json({
-              message: 'Not Found',
-              documentation_url: 'https://docs.github.com/rest/reference/repos#get-repository-content',
-            }),
+        return new Response(
+          JSON.stringify({
+            message: 'Not Found',
+            documentation_url: 'https://docs.github.com/http/reference/repos#get-repository-content',
+          }),
+          {
+            status: HTTP_NOT_FOUND,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
@@ -247,12 +286,8 @@ function githubHandlers(defines, authed) {
         downloadURL += '?token=TESTTOKENFORNEWBRANCH'
       }
 
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.set({
-            'content-type': 'application/json; charset=utf-8',
-          }),
-          ctx.json({
+      return new Response(
+        JSON.stringify({
             name: 'README.md',
             path: 'README.md',
             sha: 'a5dd511780350dfbf2374196d8f069114a7d9205',
@@ -299,172 +334,221 @@ function githubHandlers(defines, authed) {
               git: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
               html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
             },
-          }),
+        }),
+        {
+          status: HTTP_OK,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        },
       )
     }),
 
-    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, (req, res, ctx) => {
-      const {org, repo} = req.params
+    http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
+      const {org, repo} = params
 
       if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
-        return res(
-          ctx.status(HTTP_NOT_FOUND),
-          ctx.json({
+        return new Response(
+          JSON.stringify({
             message: 'Not Found',
           }),
+          {
+            status: HTTP_NOT_FOUND,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
-      return res(
-        ctx.status(HTTP_CREATED),
-      )
+      return new Response(null, {
+        status: HTTP_CREATED,
+      })
     }),
 
-    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
-      const {org, repo, issueNumber} = req.params
+    http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, ({params}) => {
+      const {org, repo, issueNumber} = params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
-        return res(ctx.status(HTTP_NOT_FOUND))
+        return new Response(null, {status: HTTP_NOT_FOUND})
       }
-      return res(
-          ctx.status(HTTP_CREATED),
-      )
+      return new Response(null, {
+        status: HTTP_CREATED,
+      })
     }),
 
-    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, (req, res, ctx) => {
-      const {org, repo} = req.params
+    http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
+      const {org, repo} = params
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
-        return res(
-            ctx.status(HTTP_NOT_FOUND),
-            ctx.json({
-              message: 'Not Found',
-            }),
+        return new Response(
+          JSON.stringify({
+            message: 'Not Found',
+          }),
+          {
+            status: HTTP_NOT_FOUND,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
-      return res(
-          ctx.status(HTTP_OK),
-      )
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
 
-    rest.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
-      const {org, repo, commentId} = req.params
+    http.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, ({params}) => {
+      const {org, repo, commentId} = params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !commentId) {
-        return res(ctx.status(HTTP_NOT_FOUND))
+        return new Response(null, {status: HTTP_NOT_FOUND})
       }
 
       commentDeleted = true
 
-      return res(
-          ctx.status(HTTP_NO_CONTENT),
-      )
+      return new Response(null, {
+        status: HTTP_NO_CONTENT,
+      })
     }),
 
-    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-      )
+    http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/orgs`, (req, res, ctx) => {
-      const authHeader = req.headers.get('authorization')
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/orgs`, ({request}) => {
+      const authHeader = request.headers.get('authorization')
 
       if (!authHeader) {
-        return res(
-            ctx.status(HTTP_AUTHORIZATION_REQUIRED),
-            ctx.json({
-              message: 'Requires authentication',
-              documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
-            }),
+        return new Response(
+          JSON.stringify({
+            message: 'Requires authentication',
+            documentation_url: 'https://docs.github.com/http/reference/orgs#list-organizations-for-the-authenticated-user',
+          }),
+          {
+            status: HTTP_AUTHORIZATION_REQUIRED,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       }
 
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json(MOCK_ORGANIZATIONS.data),
+      return new Response(
+        JSON.stringify(MOCK_ORGANIZATIONS.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json(MOCK_USER_REPOSITORIES.data),
-    )
-    }),
-
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json({
-            data: [MOCK_REPOSITORY],
-          }),
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, () => {
+      return new Response(
+        JSON.stringify(MOCK_USER_REPOSITORIES.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json(MOCK_FILES.data),
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
+      return new Response(
+        JSON.stringify({
+          data: [MOCK_REPOSITORY],
+        }),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json(MOCK_BRANCHES.data),
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, () => {
+      return new Response(
+        JSON.stringify(MOCK_FILES.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, () => {
+      return new Response(
+        JSON.stringify(MOCK_BRANCHES.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
 
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, (req, res, ctx) => {
-      // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
-      if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
-        return res(
-          ctx.status(HTTP_NOT_FOUND),
-          ctx.json({sha: 'error'}),
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, ({params, request}) => {
+      // Directly check params for 'failurecaseowner' and 'failurecaserepo'
+      if (params.owner === 'failurecaseowner' && params.repo === 'failurecaserepo') {
+        return new Response(
+          JSON.stringify({sha: 'error'}),
+          {
+            status: HTTP_NOT_FOUND,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
         // Handle non existent file request
-      } else if (req.params.owner === 'nonexistentowner' && req.params.repo === 'nonexistentrepo') {
-        return res(
-          ctx.status(HTTP_OK),
-          ctx.json([]),
+      } else if (params.owner === 'nonexistentowner' && params.repo === 'nonexistentrepo') {
+        return new Response(
+          JSON.stringify([]),
+          {
+            status: HTTP_OK,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
         // Handle unauthenticated case
-      } else if (req.params.owner === 'unauthedcaseowner' && req.params.repo === 'unauthedcaserepo' ) {
-       const requestUrl = req.url.toString()
+      } else if (params.owner === 'unauthedcaseowner' && params.repo === 'unauthedcaserepo' ) {
+       const requestUrl = request.url.toString()
 
        if ( requestUrl.includes(GH_BASE_AUTHED)) {
-        return res(
-          ctx.status(HTTP_NOT_FOUND),
-          ctx.json({sha: 'error'}),
+        return new Response(
+          JSON.stringify({sha: 'error'}),
+          {
+            status: HTTP_NOT_FOUND,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
       } else {
-       return res(
-         ctx.status(HTTP_OK),
-         ctx.json(MOCK_COMMITS.data),
+       return new Response(
+         JSON.stringify(MOCK_COMMITS.data),
+         {
+           status: HTTP_OK,
+           headers: {'Content-Type': 'application/json'},
+         },
        )
       }
         // Handle authenticated case
-      } else if (req.params.owner === 'authedcaseowner' && req.params.repo === 'authedcaserepo' ) {
-        const requestUrl = req.url.toString()
+      } else if (params.owner === 'authedcaseowner' && params.repo === 'authedcaserepo' ) {
+        const requestUrl = request.url.toString()
 
          if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
-         return res(
-           ctx.status(HTTP_NOT_FOUND),
-           ctx.json({sha: 'error'}),
+         return new Response(
+           JSON.stringify({sha: 'error'}),
+           {
+             status: HTTP_NOT_FOUND,
+             headers: {'Content-Type': 'application/json'},
+           },
          )
        } else {
-        return res(
-          ctx.status(HTTP_OK),
-          ctx.json(MOCK_COMMITS.data),
+        return new Response(
+          JSON.stringify(MOCK_COMMITS.data),
+          {
+            status: HTTP_OK,
+            headers: {'Content-Type': 'application/json'},
+          },
         )
        }
        }
       // For all other cases, return a success response
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json(MOCK_COMMITS.data),
+      return new Response(
+        JSON.stringify(MOCK_COMMITS.data),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
@@ -473,69 +557,111 @@ function githubHandlers(defines, authed) {
      * used to indicate missing args, tho we're not sure what actual
      * GH returns for the various cases. */
 
-    // octokit.rest.git.getRef
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, (req, res, ctx) => {
-      return res(
-          ctx.status(HTTP_OK),
-          ctx.json({object: {sha: 'parentSha'}}),
+    // octokit.http.git.getRef
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, () => {
+      return new Response(
+        JSON.stringify({object: {sha: 'parentSha'}}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    // octokit.rest.git.getCommit
-    rest.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, (req, res, ctx) => {
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({tree: {sha: 'treeSha'}}),
+    // octokit.http.git.getCommit
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, () => {
+      return new Response(
+        JSON.stringify({tree: {sha: 'treeSha'}}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    // octokit.rest.git.createBlob
-    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/blobs`, async (req, res, ctx) => {
-      const {content, encoding} = await req.body
+    // octokit.http.git.createBlob
+    http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/blobs`, async ({request}) => {
+      const {content, encoding} = await request.json()
       if (content === undefined || encoding === undefined) {
-        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+        return new Response(
+          JSON.stringify({success: false}),
+          {
+            status: HTTP_BAD_REQUEST,
+            headers: {'Content-Type': 'application/json'},
+          },
+        )
       }
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({sha: 'blobSha'}),
+      return new Response(
+        JSON.stringify({sha: 'blobSha'}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    // octokit.rest.git.createTree
-    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/trees`, async (req, res, ctx) => {
+    // octokit.http.git.createTree
+    http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/trees`, async ({request}) => {
       // eslint-disable-next-line camelcase
-      const {base_tree, tree} = await req.body
+      const {base_tree, tree} = await request.json()
       // eslint-disable-next-line camelcase
       if (base_tree === undefined || tree === undefined) {
-        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+        return new Response(
+          JSON.stringify({success: false}),
+          {
+            status: HTTP_BAD_REQUEST,
+            headers: {'Content-Type': 'application/json'},
+          },
+        )
       }
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({sha: 'newTreeSha'}),
+      return new Response(
+        JSON.stringify({sha: 'newTreeSha'}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    // octokit.rest.git.createCommit
-    rest.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits`, async (req, res, ctx) => {
-      const {message, tree, parents} = await req.body
+    // octokit.http.git.createCommit
+    http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits`, async ({request}) => {
+      const {message, tree, parents} = await request.json()
       if (message === undefined || tree === undefined || parents === undefined) {
-        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+        return new Response(
+          JSON.stringify({success: false}),
+          {
+            status: HTTP_BAD_REQUEST,
+            headers: {'Content-Type': 'application/json'},
+          },
+        )
       }
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({sha: 'newCommitSha'}),
+      return new Response(
+        JSON.stringify({sha: 'newCommitSha'}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
 
-    // octokit.rest.git.updateRef
-    rest.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/refs/:ref`, async (req, res, ctx) => {
-      const {sha} = await req.body
+    // octokit.http.git.updateRef
+    http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/refs/:ref`, async ({request}) => {
+      const {sha} = await request.json()
       if (sha === undefined) {
-        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+        return new Response(
+          JSON.stringify({success: false}),
+          {
+            status: HTTP_BAD_REQUEST,
+            headers: {'Content-Type': 'application/json'},
+          },
+        )
       }
-      return res(
-        ctx.status(HTTP_OK),
-        ctx.json({sha: 'smth'}),
+      return new Response(
+        JSON.stringify({sha: 'smth'}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
       )
     }),
   ]

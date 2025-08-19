@@ -14,7 +14,7 @@
 // ***********************************************************
 
 import 'cypress-real-events/support'
-import {rest} from 'msw'
+import {http} from 'msw'
 import {initWorker} from '../../src/__mocks__/browser'
 import './commands'
 
@@ -48,16 +48,17 @@ before(() => {
   worker.start({
     onUnhandledRequest: 'warn',
   })
-  worker.printHandlers()
+  // Note: printHandlers() was removed in MSW 2.x
+  // Use browser dev tools network tab to debug requests instead
 
   // MSW catch-all to print all
   worker.use(
-    rest.all('*', (req, res, ctx) => {
-      const urlStr = `${req.url}`
+    http.all('*', ({request}) => {
+      const urlStr = request.url
       if (urlStr.includes('undefined')) {
-        cy.task('log', `cypress/support/e2e#before MSW catch-all: Found undefined in: ${req.method} ${req.url}`)
+        cy.task('log', `cypress/support/e2e#before MSW catch-all: Found undefined in: ${request.method} ${request.url}`)
       }
-      return req.passthrough() // Allow the request to continue
+      // Allow the request to pass through (no explicit passthrough needed in MSW 2.x)
     }),
   )
 })
