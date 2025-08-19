@@ -81,6 +81,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
+  onProgress('Determining file type...')
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -91,6 +92,7 @@ export async function load(
 
   let modelData
   if (isOpfsAvailable) {
+    onProgress('Preparing file download...')
     // download to file using caching system or else...
     let file
     if (isUploadedFile) {
@@ -153,8 +155,10 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
+    onProgress('Reading file data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
+      onProgress('Decoding text data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
@@ -168,9 +172,10 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
+  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
 
   if (!isIfc) {
+    onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
@@ -319,9 +324,10 @@ function convertToShareModel(model, viewer) {
  * @param {boolean} isIfc
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
+ * @param {Function} [onProgress] progress callback for IFC loading
  * @return {object}
  */
-export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
+export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -340,9 +346,19 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     })
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
-    model = await loader.parse(modelData, basePath)
+    if (isIfc && onProgress) {
+      model = await loader.parse(modelData, onProgress)
+    } else {
+      if (onProgress) {
+        onProgress('Parsing model data...')
+      }
+      model = await loader.parse(modelData, basePath)
+    }
   } else {
     debug().log(`sync loader(->) parsing data:`, loader, modelData)
+    if (onProgress) {
+      onProgress('Processing model data...')
+    }
     model = loader.parse(modelData, basePath)
   }
 
@@ -351,6 +367,9 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   }
 
   if (fixupCb) {
+    if (onProgress) {
+      onProgress('Applying model fixups...')
+    }
     model = fixupCb(model, viewer)
   }
 
@@ -517,17 +536,36 @@ function newIfcLoader(viewer) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
     try {
+      if (onProgress) {
+        onProgress('Configuring IFC loader...')
+      }
       await this.loader.ifcManager.applyWebIfcConfig({
         COORDINATE_TO_ORIGIN: true,
         USE_FAST_BOOLS: true,
       })
+
+      if (onProgress) {
+        onProgress('Parsing IFC geometry...')
+      }
       const ifcModel = await this.loader.parse(buffer, onProgress)
       this.addIfcModel(ifcModel)
+
+      if (onProgress) {
+        onProgress('Setting up coordinate system...')
+      }
       // eslint-disable-next-line new-cap
       const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
+
+      if (onProgress) {
+        onProgress('Fitting model to frame...')
+      }
       this.context.fitToFrame()
+
+      if (onProgress) {
+        onProgress('Gathering model statistics...')
+      }
       const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
       const loadStats = {
         loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
@@ -541,6 +579,10 @@ function newIfcLoader(viewer) {
         totalTime: statsApi.getTotalTime(),
       }
       ifcModel.loadStats = loadStats
+
+      if (onProgress) {
+        onProgress('Model loaded successfully!')
+      }
       return ifcModel
     } catch (err) {
       console.error(err)
