@@ -1,13 +1,9 @@
 import {excludedNodeModules} from './common.js'
 
 
-global.TextEncoder = global.TextEncoder || require('util').TextEncoder
-global.TextDecoder = global.TextDecoder || require('util').TextDecoder
-
-
 export default {
   verbose: false,
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jest-fixed-jsdom',
   testPathIgnorePatterns: [],
   rootDir: '../../',
   roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
