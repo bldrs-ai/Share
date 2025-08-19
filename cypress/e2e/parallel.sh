@@ -3,7 +3,7 @@
 # yarn cy-build
 
 # Set default concurrency if not specified
-NUM_PARALLEL=${NUM_PARALLEL:-4}
+NUM_PARALLEL=${NUM_PARALLEL:-2}
 
 LOGS_DIR=cypress/e2e/logs
 mkdir -p $LOGS_DIR
