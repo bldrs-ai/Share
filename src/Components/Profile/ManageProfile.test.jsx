@@ -57,8 +57,7 @@ beforeEach(() => {
   getAccessTokenSilently = jest
     .fn()
     .mockResolvedValue('primary.jwt')
-    // eslint-disable-next-line no-empty-function
-  jest.spyOn(window, 'open').mockImplementation(() => {})
+    jest.spyOn(window, 'open').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -73,7 +72,6 @@ describe('ManageProfile modal', () => {
       user: baseUser,
       isAuthenticated: false, // keeps loading=true
     })
-    // eslint-disable-next-line no-empty-function
     render(<ManageProfile open={true} onClose={() => {}}/>, {wrapper: ThemeCtx})
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })

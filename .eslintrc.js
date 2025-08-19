@@ -15,9 +15,17 @@ module.exports = {
     'plugin:jsdoc/recommended',
     'plugin:cypress/recommended',
   ],
-  overrides: [{
-    files: ['*.js', '*.mjs', '*.jsx'],
-  }],
+  overrides: [
+    {
+      files: ['*.js', '*.mjs', '*.jsx'],
+    },
+    {
+      files: ['*.test.js', '*.test.jsx'],
+      rules: {
+        'no-empty-function': ['error', {allow: ['arrowFunctions']}],
+      },
+    },
+  ],
   parser: '@babel/eslint-parser',
   parserOptions: {
     babelOptions: {

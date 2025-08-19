@@ -172,7 +172,6 @@ describe('Http.js functions', () => {
     it('should timeout if request does not complete', async () => {
       // Simulate a never-resolving request
       jest.useFakeTimers()
-      // eslint-disable-next-line no-empty-function
       octokit.request.mockImplementation(() => new Promise(() => {}))
 
       const promise = getGitHubNoCache(repository, simplePath, args, '')
