@@ -26,7 +26,7 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
-  handlers.push(...workersAndWasmPassthru())
+  handlers.push(...workersAndWasmPassthrough())
   handlers.push(...bldrsHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
@@ -39,16 +39,21 @@ export function initHandlers(defines) {
 
 
 /**
- * Let requests for web workers, wasm and related files to passthru.
+ * Let requests for web workers, wasm and related files to passthrough.
  *
  * @return {Array<object>} handlers
  */
-function workersAndWasmPassthru() {
+function workersAndWasmPassthrough() {
   return [
-    http.get(/\.worker(\.m?js)?$/, () => passthrough()),
+    // Caching + OPFS
     http.get(/\/Cache\.js$/, () => passthrough()),
-    http.get(/\.wasm$/i, () => passthrough()),
-    http.get(/ConwayGeom/i, () => passthrough()),
+    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
+    // Conway
+    http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
+    http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
+    // Icons
+    http.get(/\/favicon\.ico$/, () => passthrough()),
+    http.get(/\/icons/, () => passthrough()),
   ]
 }
 
@@ -171,6 +176,16 @@ function gaHandlers() {
       return new Response(null, {
         status: HTTP_OK,
       })
+    }),
+
+    http.get('https://www.googletagmanager.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
     }),
   ]
 }
@@ -374,8 +389,8 @@ function githubHandlers(defines, authed) {
     }),
 
     http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
-      const {org, repo} = params
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
+      const {org, repo, issueNumber} = params
+      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return new Response(
           JSON.stringify({
             message: 'Not Found',
@@ -387,9 +402,18 @@ function githubHandlers(defines, authed) {
         )
       }
 
-      return new Response(null, {
-        status: HTTP_OK,
-      })
+      return new Response(
+        JSON.stringify({
+          id: parseInt(issueNumber),
+          number: parseInt(issueNumber),
+          state: 'closed',
+          state_reason: 'completed',
+        }),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
     }),
 
     http.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, ({params}) => {
