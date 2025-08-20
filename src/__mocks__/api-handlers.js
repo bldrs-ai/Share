@@ -26,7 +26,7 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
-  handlers.push(...workersAndWasmPassthru())
+  handlers.push(...workersAndWasmPassthrough())
   handlers.push(...bldrsHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
@@ -39,16 +39,20 @@ export function initHandlers(defines) {
 
 
 /**
- * Let requests for web workers, wasm and related files to passthru.
+ * Let requests for web workers, wasm and related files to passthrough.
  *
  * @return {Array<object>} handlers
  */
-function workersAndWasmPassthru() {
+function workersAndWasmPassthrough() {
   return [
-    http.get(/\.worker(\.m?js)?$/, () => passthrough()),
+    // Caching + OPFS
     http.get(/\/Cache\.js$/, () => passthrough()),
-    http.get(/\.wasm$/i, () => passthrough()),
-    http.get(/ConwayGeom/i, () => passthrough()),
+    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
+    // Conway
+    http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
+    http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
+    // Icons
+    http.get(/\/icons/, () => passthrough()),
   ]
 }
 
