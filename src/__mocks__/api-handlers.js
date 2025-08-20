@@ -52,6 +52,7 @@ function workersAndWasmPassthrough() {
     http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
     http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
     // Icons
+    http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
   ]
 }
@@ -175,6 +176,16 @@ function gaHandlers() {
       return new Response(null, {
         status: HTTP_OK,
       })
+    }),
+
+    http.get('https://www.googletagmanager.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
     }),
   ]
 }
