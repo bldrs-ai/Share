@@ -80,9 +80,9 @@ export async function getIssueComments(repository, issueNumber, accessToken = ''
 export async function updateIssue(repository, issueNumber, title, body, accessToken) {
   assertDefined(...arguments)
   const args = {
-    issue_number: issueNumber,
+    issueNumber,
     body,
     title,
   }
-  return await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
+  return await patchGitHub(repository, 'issues/{issueNumber}', args, accessToken)
 }

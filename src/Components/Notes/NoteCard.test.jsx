@@ -121,11 +121,21 @@ describe('NoteCard', () => {
 
     const deleteItem = within(noteMenu).getByText('Delete')
     expect(deleteItem).toBeVisible()
-    expect(fireEvent.click(deleteItem)).toBe(true)
+    await act(async () => {
+      fireEvent.click(deleteItem)
+      // Wait a bit for async operations to complete
+      const ASYNC_DELAY_MS = 100
+      await new Promise((resolve) => setTimeout(resolve, ASYNC_DELAY_MS))
+    })
 
-    expect(fireEvent.click(noteMenuButton)).toBe(true)
-    const editItem = within(noteMenu).getByText('Edit')
+    // Re-open the menu to test Edit functionality
+    const noteMenuButtonAfterDelete = getByTestId('note-menu-button')
+    expect(fireEvent.click(noteMenuButtonAfterDelete)).toBe(true)
+    const noteMenuAfterDelete = getByTestId('note-menu')
+    const editItem = within(noteMenuAfterDelete).getByText('Edit')
     expect(editItem).toBeVisible()
-    expect(fireEvent.click(editItem)).toBe(true)
+    act(() => {
+      fireEvent.click(editItem)
+    })
   })
 })

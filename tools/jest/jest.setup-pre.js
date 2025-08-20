@@ -6,7 +6,7 @@ const {initServer} = require('../../src/__mocks__/server')
 
 const server = initServer(getAndExportEnvVars())
 
-server.listen({onUnhandledRequest: 'warn'})
+server.listen({onUnhandledRequest: 'error'})
 
 /** @return {object} msw server */
 export function getServer() {

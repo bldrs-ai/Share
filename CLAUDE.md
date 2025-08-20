@@ -318,3 +318,4 @@ export default function ExampleComponent({title, onClose}) {
 
 - style is looking good!  remember 2 spaces after imports and always have a newline at EOF
 - for playwright and cypress tests avoid specifying timeouts (use the default), or keep them short eg 5 seconds.
+- always follow style rules as you go, and run yarn lint on the files you modify to identify style fixes to make

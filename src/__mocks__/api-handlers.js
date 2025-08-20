@@ -389,8 +389,8 @@ function githubHandlers(defines, authed) {
     }),
 
     http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
-      const {org, repo} = params
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
+      const {org, repo, issueNumber} = params
+      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return new Response(
           JSON.stringify({
             message: 'Not Found',
@@ -402,9 +402,18 @@ function githubHandlers(defines, authed) {
         )
       }
 
-      return new Response(null, {
-        status: HTTP_OK,
-      })
+      return new Response(
+        JSON.stringify({
+          id: parseInt(issueNumber),
+          number: parseInt(issueNumber),
+          state: 'closed',
+          state_reason: 'completed',
+        }),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
     }),
 
     http.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, ({params}) => {
