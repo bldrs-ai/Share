@@ -1,5 +1,6 @@
 import debug from '../utils/debug'
 import {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} from '../net/github/OctokitExport'
+import {workerRef_} from './OPFSWorkerRef.js'
 
 // TODO(pablo): probably don't need global state, can
 // pass worker refs as needed.
@@ -12,17 +13,43 @@ let workerRef = null
  * instance using the specified script path ('/OPFS.Worker.js'). This ensures that only one
  * instance of the worker is created and reused across the application, optimizing resource usage.
  *
- * @return {Worker} The reference to the initialized web worker.
+ * @return {Promise<Worker>} The reference to the initialized web worker once it confirms readiness.
  */
-export function initializeWorker() {
+export async function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker(new URL('./OPFS.worker.js', import.meta.url), {type: 'module'})
+    workerRef = workerRef_
 
 
-    workerRef.postMessage({
-      command: 'initializeWorker',
-      GITHUB_BASE_URL_AUTHED: GITHUB_BASE_URL_AUTHED,
-      GITHUB_BASE_URL_UNAUTHED: GITHUB_BASE_URL_UNAUTHED,
+    // Return a promise that resolves when worker acknowledges initialization
+    await new Promise((resolve, reject) => {
+      const onMessage = (event) => {
+        if (event?.data?.event === 'workerInitialized' && event?.data?.completed === true) {
+          workerRef.removeEventListener('message', onMessage)
+          resolve()
+        }
+      }
+      const onError = (err) => {
+        // eslint-disable-next-line no-unused-expressions
+        workerRef && workerRef.removeEventListener('message', onMessage)
+        reject(err)
+      }
+      workerRef.addEventListener('message', onMessage)
+      workerRef.addEventListener('error', onError, {once: true})
+
+      // Fire initialization command
+      workerRef.postMessage({
+        command: 'initializeWorker',
+        GITHUB_BASE_URL_AUTHED: GITHUB_BASE_URL_AUTHED,
+        GITHUB_BASE_URL_UNAUTHED: GITHUB_BASE_URL_UNAUTHED,
+      })
+
+      // Failsafe timeout
+      const TIMEOUT = 10000
+      setTimeout(() => {
+        // eslint-disable-next-line no-unused-expressions
+        workerRef && workerRef.removeEventListener('message', onMessage)
+        reject(new Error('Worker initialization timeout'))
+      }, TIMEOUT)
     })
   }
 
@@ -30,6 +57,7 @@ export function initializeWorker() {
 }
 
 
+/* eslint-disable require-await, default-param-last */
 /**
  * Initializes the Conway WASM module in the worker.
  *
@@ -68,12 +96,14 @@ export async function initializeWasm(wasmModulePath = '/static/js/ConwayGeomWasm
     })
 
     // Optional: Add a timeout to prevent hanging indefinitely
+    const TIMEOUT = 30000
     setTimeout(() => {
       workerRef.removeEventListener('message', handleMessage)
       reject(new Error('WASM initialization timeout'))
-    }, 30000) // 30 second timeout
+    }, TIMEOUT)
   })
 }
+/* eslint-enable require-await, default-param-last */
 
 
 /**
@@ -126,13 +156,16 @@ export function opfsWriteFile(objectUrl, fileName) {
  * @param {string} originalFileName The original file name for the model in the repository
  * @param {string} commitHash The commit hash associated with the model data
  */
-export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
+export function opfsWriteModel(owner, repo, path, objectUrl, originalFileName, commitHash) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
   }
   workerRef.postMessage({
     command: 'writeObjectModel',
+    owner: owner,
+    repo: repo,
+    path: path,
     objectUrl: objectUrl,
     objectKey: commitHash,
     originalFileName: originalFileName,
@@ -361,7 +394,7 @@ export function opfsReadFile(fileName) {
  *
  * @param {string} modelKey - The key associated with the model to be read from storage
  */
-export function opfsReadModel(modelKey) {
+export function opfsReadModel(owner, repo, branch, modelKey) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -369,6 +402,9 @@ export function opfsReadModel(modelKey) {
 
   workerRef.postMessage({
     command: 'readModelFromStorage',
+    owner: owner,
+    repo: repo,
+    branch: branch,
     modelKey: modelKey,
   })
 }
@@ -414,7 +450,7 @@ export function opfsSnapshotCache() {
  * @param {string} branch - The branch name
  * @param {string} filePath - The original IFC file path
  */
-export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath) {
+export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -430,6 +466,7 @@ export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExt
     repo: repo,
     branch: branch,
     filePath: filePath,
+    opfsFilename: opfsFilename,
   })
 }
 

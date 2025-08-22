@@ -18,6 +18,10 @@ const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
 // mock createObjectURL
 global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+// In your test file, put this FIRST (hoisted by Jest):
+jest.mock('../../OPFS/OPFSService.js', () => ({
+  initializeWorker: () => null, // fix import.meta
+}))
 
 jest.mock('../../OPFS/utils', () => {
   const actualUtils = jest.requireActual('../../OPFS/utils')

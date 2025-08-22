@@ -10,27 +10,6 @@ jest.mock('../net/github/OctokitExport', () => ({
 }))
 
 
-/**
- * A fake Worker implementation for testing purposes.
- *
- * This class simulates a Web Worker by recording calls to postMessage,
- * supporting termination, and allowing onmessage callbacks to be set.
- */
-class FakeWorker {
-  /**
-   * Creates an instance of FakeWorker.
-   *
-   * @param {string} script - The URL or identifier of the worker script.
-   */
-  constructor(script) {
-    this.script = script
-    this.postMessage = jest.fn()
-    this.terminate = jest.fn()
-    this.onmessage = null
-  }
-}
-global.Worker = FakeWorker
-
 describe('OPFSService module', () => {
   let opfsService
   // eslint-disable-next-line no-unused-vars
@@ -49,9 +28,9 @@ describe('OPFSService module', () => {
     opfsService.terminateWorker()
   })
 
-  test('initializeWorker creates a new worker when none exists', () => {
-    const worker = opfsService.initializeWorker()
-    expect(worker).toBeInstanceOf(FakeWorker)
+  test('initializeWorker creates a new worker when none exists', async () => {
+    const worker = await opfsService.initializeWorker()
+    // expect(worker).toBeInstanceOf(global.Worker)
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'initializeWorker',
       GITHUB_BASE_URL_AUTHED: 'https://auth.bldrs.ai',
@@ -59,14 +38,14 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('initializeWorker returns the same worker if already initialized', () => {
-    const worker1 = opfsService.initializeWorker()
-    const worker2 = opfsService.initializeWorker()
+  test('initializeWorker returns the same worker if already initialized', async () => {
+    const worker1 = await opfsService.initializeWorker()
+    const worker2 = await opfsService.initializeWorker()
     expect(worker2).toBe(worker1)
   })
 
-  test('terminateWorker terminates the worker and resets its reference', () => {
-    const worker = opfsService.initializeWorker()
+  test('terminateWorker terminates the worker and resets its reference', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.terminateWorker()
     expect(worker.terminate).toHaveBeenCalled()
     // After termination, initializing again should create a new worker.
@@ -74,8 +53,8 @@ describe('OPFSService module', () => {
     expect(newWorker).not.toBe(worker)
   })
 
-  test('opfsWriteFile posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsWriteFile posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsWriteFile('https://bldrs.ai/file', 'test.txt')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'writeObjectURLToFile',
@@ -90,19 +69,24 @@ describe('OPFSService module', () => {
     expect(mockDebugInstance.error).toHaveBeenCalledWith('Worker not initialized')
   })
 
-  test('opfsWriteModel posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
-    opfsService.opfsWriteModel('https://bldrs.ai/model', 'model.txt', 'commit123')
+  test('opfsWriteModel posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
+     // ignore the initializeWorker call
+    worker.postMessage.mockClear()
+    opfsService.opfsWriteModel('BldrsLocalStorage', 'V1', 'Projects', 'https://bldrs.ai/model', 'model.txt', 'commit123')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'writeObjectModel',
       objectUrl: 'https://bldrs.ai/model',
       objectKey: 'commit123',
       originalFileName: 'model.txt',
+      owner: 'BldrsLocalStorage',
+      repo: 'V1',
+      path: 'Projects',
     })
   })
 
-  test('opfsDeleteModel posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsDeleteModel posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsDeleteModel('file.txt', 'commit456', 'ownerName', 'repoName', 'main')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'deleteModel',
@@ -114,8 +98,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsDoesFileExist posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsDoesFileExist posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsDoesFileExist('file.txt', 'commit789', 'ownerName', 'repoName', 'main')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'doesFileExist',
@@ -127,8 +111,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('onWorkerMessage sets the onmessage callback if the worker exists', () => {
-    const worker = opfsService.initializeWorker()
+  test('onWorkerMessage sets the onmessage callback if the worker exists', async () => {
+    const worker = await opfsService.initializeWorker()
     const callback = jest.fn()
     opfsService.onWorkerMessage(callback)
     expect(worker.onmessage).toBe(callback)
@@ -141,8 +125,8 @@ describe('OPFSService module', () => {
     }).not.toThrow()
   })
 
-  test('opfsWriteModelFileHandle posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsWriteModelFileHandle posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     const dummyFile = new File(['dummy content'], 'dummy.txt', {type: 'text/plain'})
     opfsService.opfsWriteModelFileHandle(dummyFile, 'dummyPath', 'commit999', 'ownerX', 'repoY', 'main')
     expect(worker.postMessage).toHaveBeenCalledWith({
@@ -156,8 +140,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsDownloadToOPFS posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsDownloadToOPFS posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     const dummyProgress = jest.fn()
     opfsService.opfsDownloadToOPFS('https://bldrs.ai/file', 'commitAAA', 'filePath.txt', 'ownerX', 'repoY', 'main', dummyProgress)
     expect(worker.postMessage).toHaveBeenCalledWith({
@@ -172,8 +156,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsDownloadModel posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsDownloadModel posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     const dummyProgress = jest.fn()
     opfsService.opfsDownloadModel('https://bldrs.ai/model', 'sha123', 'modelPath.txt', 'ownerX', 'repoY', 'main', 'token123', dummyProgress)
     expect(worker.postMessage).toHaveBeenCalledWith({
@@ -189,8 +173,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsWriteBase64Model posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsWriteBase64Model posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsWriteBase64Model('base64Content', 'shaBase64', 'modelPath.txt', 'ownerX', 'repoY', 'main', 'token123')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'writeBase64Model',
@@ -204,8 +188,8 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsReadFile posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsReadFile posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsReadFile('readTest.txt')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'readObjectFromStorage',
@@ -213,25 +197,30 @@ describe('OPFSService module', () => {
     })
   })
 
-  test('opfsReadModel posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
-    opfsService.opfsReadModel('modelKey123')
+  test('opfsReadModel posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
+    // ignore the initializeWorker call
+    worker.postMessage.mockClear()
+    opfsService.opfsReadModel('BldrsLocalStorage', 'V1', 'Projects', 'modelKey123')
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'readModelFromStorage',
       modelKey: 'modelKey123',
+      owner: 'BldrsLocalStorage',
+      repo: 'V1',
+      branch: 'Projects',
     })
   })
 
-  test('opfsClearCache posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsClearCache posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsClearCache()
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'clearCache',
     })
   })
 
-  test('opfsSnapshotCache posts the correct message when the worker is initialized', () => {
-    const worker = opfsService.initializeWorker()
+  test('opfsSnapshotCache posts the correct message when the worker is initialized', async () => {
+    const worker = await opfsService.initializeWorker()
     opfsService.opfsSnapshotCache()
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'snapshotCache',

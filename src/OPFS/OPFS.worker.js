@@ -12,20 +12,30 @@ let conwayModule = null
 
 /* global FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemSyncAccessHandle */
 
-/* global importScripts, Cache */
-let Cache
+let CacheModule
 
 /**
  *
  */
-async function ensureCacheLoaded() {
-  if (!Cache) {
-    const mod = await import('../net/github/Cache.js')
-    Cache = mod.default ?? mod // UMD/ESM interop
+export async function ensureCacheLoaded() {
+  if (CacheModule) {
+return
+}
+
+  // Adjust this path to where it’s actually served.
+  // If it's truly at the server root as you said:
+  const url = new URL('/Cache.js', self.location.origin).href
+  await import(/* webpackIgnore: true */ url)
+
+  // UMD attaches to global `self`
+  CacheModule = self.CacheModule
+  if (!CacheModule) {
+    throw new Error('Cache.js loaded but did not set self.CacheModule')
   }
 }
 
 const dynamicImport = new Function( 'module', 'return import(module)' )
+// eslint-disable-next-line no-unused-vars
 let geometryConvertor = null
 
 self.addEventListener('message', async (event) => {
@@ -37,10 +47,13 @@ self.addEventListener('message', async (event) => {
 
       GITHUB_BASE_URL_AUTHENTICATED = GITHUB_BASE_URL_AUTHED
       GITHUB_BASE_URL_UNAUTHENTICATED = GITHUB_BASE_URL_UNAUTHED
+      // Notify main thread that the worker finished its basic initialization
+      self.postMessage({completed: true, event: 'workerInitialized'})
     } else if (event.data.command === 'initializeWasm') {
       const {wasmModulePath, memory} = assertValues(event.data, ['wasmModulePath', 'memory'])
 
       try {
+        // eslint-disable-next-line no-console
         console.log('Importing Conway WASM module in worker:', wasmModulePath)
 
         // Use dynamic import instead of importScripts for ES6 modules
@@ -71,10 +84,12 @@ self.addEventListener('message', async (event) => {
           config.mainScriptUrlOrBlob = '/static/js/ConwayGeomWasmWebMT.js'
 
           // Initialize Conway with proper config
+          // eslint-disable-next-line new-cap
           ConwayGeomWasm(config).then((wasmModule) => {
             // Initialize the geometry processor
             // const initialized = wasmModule.initializeGeometryProcessor()
             conwayModule = wasmModule
+            // eslint-disable-next-line no-console
             console.log('Conway WASM module initialized in worker with pthread support:', conwayModule)
             geometryConvertor = new GeometryConvertor(conwayModule)
             self.postMessage({completed: true, event: 'wasmInitialized'})
@@ -90,10 +105,27 @@ self.addEventListener('message', async (event) => {
         self.postMessage({error: `Failed to import Conway: ${error.message}`, event: 'wasmInitError'})
       }
     } else if (event.data.command === 'exportToGlb') {
-      const {geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath} =
-      assertValues(event.data, ['geometryPtr', 'materialsPtr', 'chunks', 'fileNameNoExtension', 'owner', 'repo', 'branch', 'filePath'])
+      const {geometryPtr,
+         materialsPtr,
+         chunks,
+         fileNameNoExtension,
+         owner,
+         repo,
+         branch,
+         filePath,
+         opfsFilename} =
+      assertValues(event.data,
+        ['geometryPtr',
+          'materialsPtr',
+          'chunks',
+          'fileNameNoExtension',
+          'owner',
+          'repo',
+          'branch',
+          'filePath',
+          'opfsFilename'])
 
-      await exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath)
+      await exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename)
     } else if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
       assertValues(event.data, ['objectUrl', 'fileName'])
@@ -102,19 +134,19 @@ self.addEventListener('message', async (event) => {
       const {fileName} = assertValues(event.data, ['fileName'])
       await readFileFromOPFS(fileName)
     } else if (event.data.command === 'writeObjectModel') {
-      const {objectUrl, objectKey, originalFileName} =
+      const {owner, repo, path, objectUrl, objectKey, originalFileName} =
           assertValues(event.data,
-              ['objectUrl', 'objectKey', 'originalFileName'])
+              ['owner', 'repo', 'path', 'objectUrl', 'objectKey', 'originalFileName'])
 
-      writeModelToOPFS(objectUrl, objectKey, originalFileName)
+      writeModelToOPFS(owner, repo, path, objectUrl, objectKey, originalFileName)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
       const {file, objectKey, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
               ['file', 'objectKey', 'originalFilePath', 'owner', 'repo', 'branch'])
       writeModelToOPFSFromFile(file, objectKey, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'readModelFromStorage') {
-      const {modelKey} = assertValues(event.data, ['modelKey'])
-      await readModelFromOPFS(modelKey)
+      const {owner, repo, branch, modelKey} = assertValues(event.data, ['owner', 'repo', 'branch', 'modelKey'])
+      await readModelFromOPFS(owner, repo, branch, modelKey)
     } else if (event.data.command === 'downloadToOPFS') {
       const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
           assertValues(event.data,
@@ -209,15 +241,17 @@ async function clearCache() {
  * @param {string} branch - The branch name
  * @param {string} filePath - The original file path
  */
-async function exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath) {
+async function exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename) {
   if (!conwayModule) {
 throw new Error('Conway WASM module not initialized.')
 }
 
   const startTimeGlb = Date.now()
   try {
+    // eslint-disable-next-line no-console
     console.log('Converting geometry to GLB using Conway in worker...')
 
+    // eslint-disable-next-line no-shadow
     const geometryConvertor = new GeometryConvertor(conwayModule)
 
     for await (const glbResult of geometryConvertor.toGltfs(
@@ -225,8 +259,8 @@ throw new Error('Conway WASM module not initialized.')
       materialsPtr,
       chunks,
       true, // isGlb
-      true, // outputDraco (you called it "merge" in a comment but passing true)
-      `${fileNameNoExtension}_export`,
+      false, // outputDraco (you called it "merge" in a comment but passing true)
+      filePath,
     )) {
       if (!glbResult?.success) {
         self.postMessage({error: 'GLB generation unsuccessful', event: 'glbExportError'})
@@ -238,17 +272,20 @@ throw new Error('Conway WASM module not initialized.')
         continue
       }
 
-      for (let i = 0; i < glbResult.bufferUris.size(); i++) {
-        const uri = glbResult.bufferUris.get(i)
+    for (let i = 0; i < glbResult.bufferUris.size(); i++) {
+        // const uri = glbResult.bufferUris.get(i)
         const managedBuffer = conwayModule.getUint8Array(glbResult.buffers.get(i))
 
         try {
           // Write the GLB file to OPFS (copy off the shared heap!)
-          const cacheKey = `${owner}/${repo}/${branch}/${uri}`
-          const [, glbFileHandle] = await writeFileToPath(
+      // Use directory from filePath (if any) but use opfsFilename for actual filename
+      const lastSlash = (filePath || '').lastIndexOf('/')
+      const dir = lastSlash >= 0 ? (filePath || '').slice(0, lastSlash) : ''
+      const glbBase = opfsFilename || ((filePath || '').split('/').pop() || 'model').replace(/\.[^/.]+$/, '')
+      const cacheKey = [owner, repo, branch, dir, `${glbBase}.glb`].filter(Boolean).join('/')
+          const [, glbFileHandle] = await writeFileToExactPath(
             await navigator.storage.getDirectory(),
             cacheKey,
-            '.glb',
           )
 
           const copy = new Uint8Array(managedBuffer.byteLength)
@@ -258,7 +295,8 @@ throw new Error('Conway WASM module not initialized.')
           await writable.write(copy)
           await writable.close()
 
-          console.log(`GLB file written to OPFS: ${uri}`)
+          // eslint-disable-next-line no-console
+          console.log(`GLB file written to OPFS: ${cacheKey}`)
         } catch (err) {
           console.error('Error writing GLB:', err)
           self.postMessage({error: `Error writing GLB file: ${err.message}`, event: 'glbExportError'})
@@ -713,7 +751,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
   const opfsRoot = await navigator.storage.getDirectory()
   const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
 
-  const cached = false // TODO- fix cache await Cache.checkCacheRaw(cacheKey)
+  const cached = await CacheModule.checkCacheRaw(cacheKey)
 
   const cacheExist = cached && cached.headers
 
@@ -766,7 +804,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
           if (newResult !== null) {
             const mockResponse = generateMockResponse(shaHash)
             // Update cache with new data
-            await Cache.updateCacheRaw(cacheKey, mockResponse, _commitHash)
+            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
             const updatedBlobFile = await newResult.getFile()
 
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -781,7 +819,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
 
           const mockResponse = generateMockResponse(shaHash)
 
-          await Cache.updateCacheRaw(cacheKey, mockResponse, null)
+          await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
           // get commit hash
           const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
@@ -795,7 +833,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
             if (newResult !== null) {
               // Update cache with new data
               const clonedResponse = generateMockResponse(shaHash)
-              await Cache.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
+              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
               const updatedBlobFile = await newResult.getFile()
 
               self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -833,7 +871,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   const opfsRoot = await navigator.storage.getDirectory()
   const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
 
-  const cached = false // TODO- fix cacheawait Cache.checkCacheRaw(cacheKey)
+  const cached = await CacheModule.checkCacheRaw(cacheKey)
 
   const cacheExist = cached && cached.headers
 
@@ -859,6 +897,19 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
     // TODO: There is a race condition where someone can load a file unauthed and log in and refresh
     // the page before the file is renamed with the commit hash. This would cause a duplicate file
     // to be stored in OPFS
+
+      // GLB-first: try to find a previously exported GLB and return it immediately
+      try {
+        // eslint-disable-next-line no-unused-vars
+        const [glbDirHandle, glbFileHandle] = await retrieveFileWithPathNew(opfsRoot, cacheKey, shaHash, null, false, true)
+        if (glbFileHandle) {
+          const blobFile = await glbFileHandle.getFile()
+          self.postMessage({completed: true, event: 'exists', file: blobFile})
+          return
+        }
+      } catch (_) {
+        // ignore and continue with normal IFC logic
+      }
 
     try {
       [modelDirectoryHandle, modelBlobFileHandle] = await
@@ -893,7 +944,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
           if (newResult !== null) {
             const mockResponse = generateMockResponse(shaHash)
             // Update cache with new data
-            await Cache.updateCacheRaw(cacheKey, mockResponse, _commitHash)
+            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
             const updatedBlobFile = await newResult.getFile()
 
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -908,7 +959,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 
           const mockResponse = generateMockResponse(shaHash)
 
-          await Cache.updateCacheRaw(cacheKey, mockResponse, null)
+          await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
           // get commit hash
           const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
@@ -922,7 +973,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
             if (newResult !== null) {
               // Update cache with new data
               const clonedResponse = generateMockResponse(shaHash)
-              await Cache.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
+              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
               const updatedBlobFile = await newResult.getFile()
 
               self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -967,7 +1018,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 
           if (newResult !== null) {
             // Update cache with new data
-            await Cache.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+            await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
             const updatedBlobFile = await newResult.getFile()
 
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -1004,7 +1055,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 
                 if (newResult !== null) {
                   // Update cache with new data
-                  await Cache.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+                  await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
                   const updatedBlobFile = await newResult.getFile()
 
                   self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -1014,14 +1065,14 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
           } catch (error_) {
             // expected if file not found - invalidate cache and try again
             console.warn('File not found in cache, invalidating cache and request again with no etag')
-            await Cache.deleteCache(cacheKey)
+            await CacheModule.deleteCache(cacheKey)
             downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
             return
           }
         }
 
         console.warn('File not found in cache, invalidating cache and request again with no etag')
-        await Cache.deleteCache(cacheKey)
+        await CacheModule.deleteCache(cacheKey)
         downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
         return
       }
@@ -1054,7 +1105,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
         console.log('SHA match found in OPFS')
         // we already have this file, just delete the one we downloaded and update the cached response.
         const newResponse = proxyResponse.clone()
-        await Cache.updateCacheRaw(cacheKey, newResponse, commitHash)
+        await CacheModule.updateCacheRaw(cacheKey, newResponse, commitHash)
         modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
         return
       }
@@ -1065,7 +1116,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 
   // Update cache with new data
   const clonedResponse = proxyResponse.clone()
-  await Cache.updateCacheRaw(cacheKey, clonedResponse, null)
+  await CacheModule.updateCacheRaw(cacheKey, clonedResponse, null)
 
   // TODO: get commit hash
   const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
@@ -1078,7 +1129,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 
     if (newResult !== null) {
       // Update cache with new data
-      await Cache.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+      await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
       const updatedBlobFile = await newResult.getFile()
 
       self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
@@ -1314,6 +1365,42 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
   }
 }
 
+/**
+ * Write file to an exact path (no etag/commitHash suffix).
+ *
+ * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
+ * @param {string} filePath - The full path to the file (directories will be created).
+ * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
+ */
+async function writeFileToExactPath(rootHandle, filePath) {
+  const pathSegments = safePathSplit(filePath)
+  let currentHandle = rootHandle
+
+  for (let i = 0; i < pathSegments.length; i++) {
+    const segment = pathSegments[i]
+    const isLastSegment = i === pathSegments.length - 1
+
+    if (!isLastSegment) {
+      try {
+        currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
+      } catch (error) {
+        const workerMessage = `Error getting/creating directory handle for segment(${segment}): ${error}.`
+        self.postMessage({error: workerMessage})
+        return [null, null]
+      }
+    } else {
+      try {
+        const fileHandle = await currentHandle.getFileHandle(segment, {create: true})
+        return [currentHandle, fileHandle]
+      } catch (error) {
+        const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
+        self.postMessage({error: workerMessage})
+        return [null, null]
+      }
+    }
+  }
+}
+
 
 /**
  * Retrieve file with path
@@ -1369,7 +1456,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
  * @param {boolean} create - Whether to create the file if it doesn't exist.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
+async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false, searchGLB = false) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1399,10 +1486,20 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
         }
 
         // Search for any file in the directory that contains either the etag or commitHash
-        for await (const [name, handle] of currentHandle.entries()) {
-          if (handle.kind === 'file' && (name.includes(etag) ||
-           (commitHash !== null && name.includes(commitHash) && name.startsWith(segment)))) {
-            return [currentHandle, handle] // Return the handle of the matching file
+        if (searchGLB ) {
+          for await (const [name, handle] of currentHandle.entries()) {
+            if (handle.kind === 'file' && (name.includes(etag) ||
+            (commitHash !== null && name.includes(commitHash) && name.startsWith(segment) && name.endsWith('.glb')))) {
+              return [currentHandle, handle] // Return the handle of the matching file
+            }
+          }
+        } else {
+          // Non-GLB search: prefer hashed/etag files matching segment base and not .glb
+          for await (const [name, handle] of currentHandle.entries()) {
+            if (handle.kind === 'file' && (name.includes(etag) ||
+            (commitHash !== null && name.includes(commitHash) && name.startsWith(segment) && !name.endsWith('.glb')))) {
+              return [currentHandle, handle] // Return the handle of the matching file
+            }
           }
         }
 
@@ -1478,7 +1575,7 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
     if (await writeFileToHandle(blobAccessHandle, modelFile)) {
       // Update cache with new data
       const mockResponse = generateMockResponse(computedShaHash)
-      await Cache.updateCacheRaw(cacheKey, mockResponse, objectKey)
+      await CacheModule.updateCacheRaw(cacheKey, mockResponse, objectKey)
       self.postMessage({completed: true, event: 'write'})
     }
   } catch (error) {
@@ -1634,32 +1731,24 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {string} originalFileName - The name of the original file.
  * @return {Promise<void>}
  */
-async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
+async function writeModelToOPFS(owner, repo, path, objectUrl, objectKey, originalFileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
-
-    let newFolderHandle = null
-
-    // Get folder handle
-    try {
-      newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, {create: true})
-    } catch (error) {
-      const workerMessage = `Error getting folder handle for ${objectKey}: ${error}`
-      self.postMessage({error: workerMessage})
-      return
-    }
-
-    // Get a file handle in the folder for the model
+    let blobAccessHandle = null
+    const cacheKey = `${owner}/${repo}/${path}/${objectKey}`
+    let modelDirectoryHandle = null
     let modelBlobFileHandle = null
 
-    // Get file handle for file blob
-    try {
-      modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, {create: true})
-    } catch (error) {
-      const workerMessage = `Error getting file handle for ${objectKey}: ${error}`
-      self.postMessage({error: workerMessage})
-      return
-    }
+      try {
+    // eslint-disable-next-line no-unused-vars
+    [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToExactPath(opfsRoot, cacheKey)
+    // Create FileSystemSyncAccessHandle on the file.
+    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+  } catch (error) {
+    const workerMessage = `Error getting file handle for ${originalFileName}: ${error}`
+    self.postMessage({error: workerMessage})
+    return
+  }
 
     // Fetch the file from the object URL
     const response = await fetch(objectUrl)
@@ -1668,9 +1757,6 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
     const fileArrayBuffer = await fileBuffer.arrayBuffer()
 
     try {
-      // Create FileSystemSyncAccessHandle on the file.
-      const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
-
       // Write buffer at the beginning of the file
       await blobAccessHandle.write(fileArrayBuffer, {at: 0})
       // Close the access handle when done
@@ -1695,32 +1781,43 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
  * @param {string} objectKey - The object key to use for the request.
  * @return {Promise<void>}
  */
-async function readModelFromOPFS(objectKey) {
+async function readModelFromOPFS(owner, repo, branch, modelKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
+    const cacheKey = `${owner}/${repo}/${branch}/${modelKey}`
 
-    // Try to access an existing model folder
-    let modelFolderHandle = null
-    try {
-      modelFolderHandle = await opfsRoot.getDirectoryHandle(objectKey)
-    } catch (error) {
-      const errorMessage = `Folder ${objectKey} not found: ${error}`
-      self.postMessage({error: errorMessage})
-      return // Exit if the file is not found
+    const parts = safePathSplit(cacheKey)
+    if (parts.length === 0) {
+      self.postMessage({error: 'Invalid cacheKey path'})
+      return
     }
 
-    // Try to access model blob
+    // Traverse directories without creating them
+    let currentDir = opfsRoot
+    for (let i = 0; i < parts.length - 1; i++) {
+      const segment = parts[i]
+      try {
+        currentDir = await currentDir.getDirectoryHandle(segment, {create: false})
+      } catch (error) {
+        const errorMessage = `Folder ${parts.slice(0, i + 1).join('/')} not found: ${error}`
+        self.postMessage({error: errorMessage})
+        return
+      }
+    }
+
+    // Get the file handle for the last segment
+    const fileName = parts[parts.length - 1]
+    let fileHandle
     try {
-      const blobFileHandle = await modelFolderHandle.getFileHandle(objectKey)
-
-      const blobFile = await blobFileHandle.getFile()
-
-      self.postMessage({completed: true, event: 'read', file: blobFile})
+      fileHandle = await currentDir.getFileHandle(fileName)
     } catch (error) {
-      const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
+      const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
       self.postMessage({error: errorMessage})
       return
     }
+
+    const file = await fileHandle.getFile()
+    self.postMessage({completed: true, event: 'read', file})
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
     self.postMessage({error: errorMessage})
@@ -1891,13 +1988,29 @@ if (typeof module !== 'undefined' && module.exports) {
   }
 }
 
-
+/**
+ * Converts geometry data to GLTF format.
+ */
 class GeometryConvertor {
+  /**
+   *
+   * @param {*} wasmModule
+   */
   constructor(wasmModule) {
     this.wasmModule = wasmModule
   }
 
-  // async generator so callers can `for await (...)`
+  /**
+   * Converts geometry data to GLTF format.
+   *
+   * @param {*} geometryPtr
+   * @param {*} materialsPtr
+   * @param {*} chunks
+   * @param {*} isGlb
+   * @param {*} outputDraco
+   * @param {*} fileUri
+   * @return
+   */
   async* toGltfs(geometryPtr, materialsPtr, chunks, isGlb, outputDraco, fileUri) {
     if (!this.wasmModule) {
 return
@@ -1918,7 +2031,7 @@ return
           geometryPtr,
           materialsPtr,
           isGlb,
-          false,
+          outputDraco,
           chunkUri,
           chunk.offset,
           chunk.count,
@@ -1930,6 +2043,18 @@ return
     }
   }
 
+  /* eslint-disable default-param-last */
+  /**
+   *
+   * @param {*} geometry
+   * @param {*} materials
+   * @param {*} isGlb
+   * @param {*} outputDraco
+   * @param {*} fileUri
+   * @param {*} geometryOffset
+   * @param {*} geometryCount
+   * @return
+   */
   toGltf(geometry, materials, isGlb, outputDraco, fileUri, geometryOffset = 0, geometryCount /* don’t default: ptrs don’t have size() */) {
     const noResults = {success: false, bufferUris: undefined, buffers: undefined}
     if (!this.wasmModule) {
@@ -1946,4 +2071,6 @@ return noResults
       geometryCount,
     )
   }
+
+   /* eslint-enable default-param-last */
 }

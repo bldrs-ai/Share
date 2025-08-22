@@ -85,7 +85,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
             throw new Error('Cannot extract filetype from filename')
           }
           const ext = dotParts[dotParts.length - 1]
-          opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
+          opfsWriteModel('BldrsLocalStorage', 'V1', 'Projects', tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
         } else {
           onLoad(fileNametmpUrl)
         }

@@ -68,7 +68,7 @@ describe('OPFS Test Suite', () => {
       // Assert the expected outcomes
       expect(result).toEqual(mockFile)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
-      expect(OPFSService.opfsReadModel).toHaveBeenCalledWith('file.ifc') // Since you manipulate the filepath in the function
+      expect(OPFSService.opfsReadModel).toHaveBeenCalledWith('owner', 'repo', 'branch', 'file.ifc')
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
     })

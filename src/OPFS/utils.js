@@ -22,8 +22,9 @@ import debug from '../utils/debug'
  * @return {Promise<File>}
  */
 export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       // Listener for messages from the worker
       const listener = (workerEvent) => {
@@ -55,8 +56,9 @@ export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHas
  * @return {File}
  */
 export function getModelFromOPFS(owner, repo, branch, filepath) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
@@ -70,13 +72,15 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
         } else if (event.data.completed) {
           debug().log('Worker finished retrieving file')
           const file = event.data.file
+          // eslint-disable-next-line no-console
+          console.log(`file name: ${file.name}`)
           workerRef.removeEventListener('message', listener) // Remove the event listener
           resolve(file) // Resolve the promise with the file
         }
       }
 
       workerRef.addEventListener('message', listener)
-      opfsReadModel(filepath)
+      opfsReadModel(owner, repo, branch, filepath)
     } else {
       reject(new Error('Worker initialization failed'))
     }
@@ -107,9 +111,9 @@ export function downloadToOPFS(
       owner,
       repo,
       branch)
-
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       // Listener for messages from the worker
       const listener = (event) => {
@@ -132,6 +136,8 @@ export function downloadToOPFS(
             debug().warn('Commit exists in OPFS.')
           }
           const file = event.data.file
+          // eslint-disable-next-line no-console
+          console.log(`file name: ${file.name}`)
           workerRef.removeEventListener('message', listener) // Remove the event listener
           resolve(file) // Resolve the promise with the file
         }
@@ -169,8 +175,9 @@ export function writeBase64Model(
   branch,
   setOpfsFile) {
   assertDefined(content, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile)
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       // Listener for messages from the worker
       const listener = (event) => {
@@ -185,6 +192,8 @@ export function writeBase64Model(
             debug().warn('Commit exists in OPFS.')
           }
           const file = event.data.file
+          // eslint-disable-next-line no-console
+          console.log(`file name: ${file.name}`)
           if (event.data.event === 'renamed' || event.data.event === 'exists') {
             workerRef.removeEventListener('message', listener) // Remove the event listener
             if (file instanceof File) {
@@ -229,8 +238,9 @@ export function downloadModel(
   setOpfsFile,
   onProgress) {
   assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       // Listener for messages from the worker
       const listener = (event) => {
@@ -253,6 +263,8 @@ export function downloadModel(
             debug().warn('Commit exists in OPFS.')
           }
           const file = event.data.file
+          // eslint-disable-next-line no-console
+          console.log(`file name: ${file.name}`)
           if (event.data.event === 'renamed' || event.data.event === 'exists') {
             workerRef.removeEventListener('message', listener) // Remove the event listener
             if (file instanceof File) {
@@ -295,8 +307,9 @@ export function downloadModel(
  *     resolve to false, respectively.
  */
 function makePromise(callback, originalFilePath, commitHash, owner, repo, branch, eventStatus) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const workerRef = await initializeWorker()
     if (workerRef !== null) {
       // Listener for messages from the worker
       const listener = (event) => {
@@ -399,10 +412,10 @@ export function deleteFileFromOPFS(
  * @param {string} type As defined in Filetype.
  * @param {Function} callback Not optional since all known flows require it.
  */
-export function saveDnDFileToOpfs(file, type, callback) {
+export async function saveDnDFileToOpfs(file, type, callback) {
   assertDefined(file, type, callback)
   let workerRef = null
-  workerRef = initializeWorker()
+  workerRef = await initializeWorker()
 
   const tmpUrl = URL.createObjectURL(file)
   debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
@@ -436,7 +449,7 @@ export function saveDnDFileToOpfs(file, type, callback) {
   const originalFilename = file.name
   const filename = `${fileNametmpUrl}.${type}`
   debug().log('OPFS/utils#saveDnDFileToOpfs: calling opfsWriteModel with typed filename:', filename)
-  opfsWriteModel(tmpUrl, originalFilename, filename)
+  opfsWriteModel(`BldrsLocalStorage`, `V1`, `Projects`, tmpUrl, originalFilename, filename)
 }
 
 /**
@@ -448,6 +461,9 @@ export function saveDnDFileToOpfs(file, type, callback) {
  * @return {boolean}
  */
 export async function checkOPFSAvailability() {
+  let workerRef = null
+  // eslint-disable-next-line no-unused-vars
+  workerRef = await initializeWorker()
   if ('FileSystemDirectoryHandle' in window) {
     try {
       await navigator.storage.getDirectory()

@@ -19,6 +19,9 @@ export default {
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
+    // Redirect any import of OPFSWorkerRef(.js/ts/tsx) to a stub
+  '(?:^|[/\\\\])OPFSWorkerRef(?:\\.(?:js|mjs|ts|tsx))?$':
+    '<rootDir>/__mocks__/OPFSWorkerRef.stub.js',
   },
   moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node', 'mjs'],
   setupFilesAfterEnv: [
