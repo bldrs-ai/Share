@@ -533,7 +533,7 @@ function newIfcLoader(viewer) {
     onError,
   ) {
     if (this.context.items.ifcModels.length !== 0) {
-      throw new Error('Model cannot be loaded.  A model is already present')
+      console.error('Model cannot be loaded.  A model is already present')
     }
     try {
       if (onProgress) {
