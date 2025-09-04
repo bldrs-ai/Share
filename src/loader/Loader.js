@@ -126,7 +126,8 @@ export async function load(
         }
 
         if (isBase64) {
-         file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          if (!file) throw new Error('null file')
         } else {
           debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
           file = await downloadModel(
@@ -139,6 +140,10 @@ export async function load(
             branch,
             setOpfsFile,
             onProgress)
+          if (!file) {
+            console.error('NULL FILE:', file)
+            throw new Error('null file:')
+          }
         }
       } else {
         const opfsFilename = pathUrl.pathname
@@ -151,6 +156,7 @@ export async function load(
           'V1',
           'Projects',
           onProgress)
+        if (!file) throw new Error('null file')
       }
     }
     debug().log('Loader#load: File from OPFS:', file)
