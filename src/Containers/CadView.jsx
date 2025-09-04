@@ -153,7 +153,8 @@ export default function CadView({
       return
     }
 
-    if (isAuthLoading || (!isAuthLoading && isAuthenticated && ( accessToken === '' && hasGitHubIdentity ))) {
+    if (isAuthLoading || (!isAuthLoading &&
+      (isAuthenticated && ( accessToken === '' && !hasGitHubIdentity )))) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }
