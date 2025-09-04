@@ -147,7 +147,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
         {openButtonPosition && (
           <OnboardingHighlight
             position={openButtonPosition}
-            text="Open models here"
+            text="Open models"
             arrowDirection="bottom-right"
           />
         )}
@@ -156,7 +156,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
         {shareButtonPosition && (
           <OnboardingHighlight
             position={shareButtonPosition}
-            text="Share model with team"
+            text="Share model"
             arrowDirection="bottom-left"
           />
         )}

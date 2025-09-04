@@ -111,8 +111,8 @@ describe('OnboardingOverlay', () => {
     const {getByText} = renderOverlay()
 
     await waitFor(() => {
-      expect(getByText('Open models here')).toBeInTheDocument()
-      expect(getByText('Share model with team')).toBeInTheDocument()
+      expect(getByText('Open models')).toBeInTheDocument()
+      expect(getByText('Share model')).toBeInTheDocument()
     })
   })
 
