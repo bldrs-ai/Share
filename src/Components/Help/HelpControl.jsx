@@ -6,9 +6,9 @@ import ListItemText from '@mui/material/ListItemText'
 import SvgIcon from '@mui/material/SvgIcon'
 import Stack from '@mui/material/Stack'
 import useStore from '../../store/useStore'
-import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
+import {TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
-import {HASH_PREFIX_HELP} from './hashState'
+import OnboardingOverlay from '../Onboarding/OnboardingOverlay'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -39,26 +39,58 @@ export default function HelpControl() {
   const isHelpVisible = useStore((state) => state.isHelpVisible)
   const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
   const setIsHelpTooltipsVisible = useStore((state) => state.setIsHelpTooltipsVisible)
+  const isOnboardingOverlayVisible = useStore((state) => state.isOnboardingOverlayVisible)
+  const setIsOnboardingOverlayVisible = useStore((state) => state.setIsOnboardingOverlayVisible)
+
+  const [shouldShowHelpAfterOnboarding, setShouldShowHelpAfterOnboarding] = useState(false)
+
+  // Handle Help button click - always show onboarding first
+  const handleHelpClick = () => {
+    if (!isOnboardingOverlayVisible) {
+      // Show onboarding overlay first
+      setIsOnboardingOverlayVisible(true)
+      setShouldShowHelpAfterOnboarding(true)
+    } else {
+      // Toggle help dialog if overlay is already visible
+      setIsHelpVisible(!isHelpVisible)
+    }
+  }
+
+  // Handle onboarding overlay close - then show help dialog
+  const handleOnboardingClose = () => {
+    setIsOnboardingOverlayVisible(false)
+    if (shouldShowHelpAfterOnboarding) {
+      setShouldShowHelpAfterOnboarding(false)
+      setIsHelpVisible(true)
+    }
+  }
 
   useEffect(() => {
     setIsHelpTooltipsVisible(isHelpVisible)
   }, [isHelpVisible, setIsHelpTooltipsVisible])
 
   return (
-    <ControlButtonWithHashState
-      title={'Help'}
-      icon={<HelpOutlineIcon className='icon-share'/>}
-      isDialogDisplayed={isHelpVisible}
-      setIsDialogDisplayed={setIsHelpVisible}
-      hashPrefix={HASH_PREFIX_HELP}
-      placement='top'
-      dataTestId={testId}
-    >
+    <>
+      <TooltipIconButton
+        title={'Help'}
+        onClick={handleHelpClick}
+        icon={<HelpOutlineIcon className='icon-share'/>}
+        selected={isHelpVisible}
+        variant='control'
+        color='success'
+        size='small'
+        placement='top'
+        dataTestId={testId}
+      />
       <HelpDialog
         isDialogDisplayed={isHelpVisible}
         setIsDialogDisplayed={setIsHelpVisible}
       />
-    </ControlButtonWithHashState>
+      <OnboardingOverlay
+        isVisible={isOnboardingOverlayVisible}
+        onClose={handleOnboardingClose}
+      />
+    </>
   )
 }
 
