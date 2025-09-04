@@ -190,7 +190,7 @@ export function writeBase64Model(
             if (file instanceof File) {
               setOpfsFile(file)
             } else {
-              debug().error('Retrieved object is not of type File.')
+              console.error('Retrieved object is not of type File.')
             }
           }
           resolve(file) // Resolve the promise with the file
@@ -247,10 +247,11 @@ export function downloadModel(
             }) // Custom progress event
           }
         } else if (event.data.completed) {
+          console.log(`worker completed (${event.data.event}):`, event.data.file)
           if (event.data.event === 'download') {
-            debug().warn('Worker finished downloading file')
+            debug().log('Worker finished downloading file')
           } else if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
+            debug().log('Commit exists in OPFS.')
           }
           const file = event.data.file
           if (event.data.event === 'renamed' || event.data.event === 'exists') {
@@ -258,9 +259,10 @@ export function downloadModel(
             if (file instanceof File) {
               setOpfsFile(file)
             } else {
-              debug().error('Retrieved object is not of type File.')
+              console.error('Retrieved object is not of type File.')
             }
           }
+          if (file === undefined) console.error('Null file, even tho completed')
           resolve(file) // Resolve the promise with the file
         }
       }
@@ -268,6 +270,7 @@ export function downloadModel(
     } else {
       reject(new Error('Worker initialization failed'))
     }
+    console.log('OPFS/utils#downloadModel: calling opfsDownloadModel')
     opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
   })
 }

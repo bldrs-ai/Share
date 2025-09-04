@@ -667,6 +667,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
  * @return {Promise<void>}
  */
 async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+  console.log('OPFS.worker#downloadModel')
   let _etag = null
   let commitHash = null
   let cleanEtag = null
@@ -717,7 +718,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
       if (modelBlobFileHandle !== null ) {
         // Display model
         const blobFile = await modelBlobFileHandle.getFile()
-
+        console.log('OPFS.worker#downloadModel, file:', blobFile)
         self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
 
         if (commitHash !== null) {
@@ -737,7 +738,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
             // Update cache with new data
             await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
             const updatedBlobFile = await newResult.getFile()
-
+            console.log('OPFS.worker#downloadModel, file:', updatedBlobFile)
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
           }
         }
@@ -766,7 +767,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
               const clonedResponse = generateMockResponse(shaHash)
               await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
               const updatedBlobFile = await newResult.getFile()
-
+              console.log('OPFS.worker#downloadModel, file:', updatedBlobFile)
               self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
               return
             }
@@ -792,7 +793,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
       if (modelBlobFileHandle !== null ) {
         // Display model
         const blobFile = await modelBlobFileHandle.getFile()
-
+        console.log('OPFS.worker#downloadModel, file:', blobFile)
         self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
 
         if (commitHash !== null) {
@@ -811,7 +812,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
             // Update cache with new data
             await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
             const updatedBlobFile = await newResult.getFile()
-
+            console.log('OPFS.worker#downloadModel, file:', updatedBlobFile)
             self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
           }
         }
@@ -826,7 +827,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
             if (modelBlobFileHandle !== null ) {
               // Display model and get commitHash
               const blobFile = await modelBlobFileHandle.getFile()
-
+              console.log('OPFS.worker#downloadModel, file:', blobFile)
               self.postMessage({completed: true, event: 'download', file: blobFile})
 
               // TODO: get commit hash here
@@ -848,7 +849,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
                   // Update cache with new data
                   await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
                   const updatedBlobFile = await newResult.getFile()
-
+                  console.log('OPFS.worker#downloadModel, file:', updatedBlobFile)
                   self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
                 }
               }
@@ -922,7 +923,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
       // Update cache with new data
       await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
       const updatedBlobFile = await newResult.getFile()
-
+      console.log('OPFS.worker#downloadModel, file:', updatedBlobFile)
       self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
     }
   }
@@ -1377,6 +1378,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
     opfsRoot, cacheKey, null, commitHash, false,
   )
 
+  console.log('doesFileExistInOPFS')
   if (modelBlobFileHandle !== null ) {
     self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
   } else {
@@ -1410,6 +1412,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   }
 
   if (ownerFolderHandle === null) {
+    console.log('deleteModelFromOPFS 1')
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
     return
   }
@@ -1422,6 +1425,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   }
 
   if (repoFolderHandle === null) {
+    console.log('deleteModelFromOPFS 2')
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
     return
   }
