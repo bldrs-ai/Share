@@ -1,4 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
+import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Fade from '@mui/material/Fade'
 import Paper from '@mui/material/Paper'
@@ -6,6 +7,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import {useTheme} from '@mui/material/styles'
 import FileUploadIcon from '@mui/icons-material/FileUpload'
+import useStore from '../../store/useStore'
+import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../utils/dragAndDrop'
 
 
 /**
@@ -18,6 +21,13 @@ import FileUploadIcon from '@mui/icons-material/FileUpload'
 export default function OnboardingOverlay({isVisible, onClose}) {
   const [openButtonPosition, setOpenButtonPosition] = useState(null)
   const [shareButtonPosition, setShareButtonPosition] = useState(null)
+  const [isDragActive, setIsDragActive] = useState(false)
+
+  // Store state and navigation
+  const appPrefix = useStore((state) => state.appPrefix)
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const setAlert = useStore((state) => state.setAlert)
+  const navigate = useNavigate()
 
   // Find actual button positions when overlay becomes visible
   useEffect(() => {
@@ -51,6 +61,21 @@ export default function OnboardingOverlay({isVisible, onClose}) {
     }
   }, [isVisible])
 
+  /** Handles file drop into drag-n-drop area */
+  const handleDrop = async (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDragActive(false)
+    await handleFileDrop(
+      event,
+      navigate,
+      appPrefix,
+      isOpfsAvailable,
+      setAlert,
+      () => onClose(true), // onSuccess callback - close overlay and skip help dialog
+    )
+  }
+
   if (!isVisible) {
     return null
   }
@@ -58,7 +83,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
   const handleOverlayClick = (event) => {
     // Only close if clicking the overlay background, not the highlights
     if (event.target === event.currentTarget) {
-      onClose()
+      onClose(false) // Regular close - don't skip help dialog
     }
   }
 
@@ -66,13 +91,29 @@ export default function OnboardingOverlay({isVisible, onClose}) {
     <Fade in={isVisible} timeout={300}>
       <Box
         onClick={handleOverlayClick}
+        onDragOver={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          handleDragOverOrEnter(event, setIsDragActive)
+        }}
+        onDragEnter={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          handleDragOverOrEnter(event, setIsDragActive)
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          handleDragLeave(event, setIsDragActive)
+        }}
+        onDrop={handleDrop}
         sx={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          backgroundColor: isDragActive ? 'rgba(0, 100, 200, 0.3)' : 'rgba(0, 0, 0, 0.5)',
           zIndex: 9999,
           pointerEvents: 'auto',
           margin: '0 !important',
@@ -81,6 +122,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
           marginRight: '0 !important',
           marginTop: '0 !important',
           marginBottom: '0 !important',
+          transition: 'background-color 0.2s ease',
           // Create cutout mask for button positions - single mask with multiple holes
           ...(openButtonPosition && shareButtonPosition && {
             WebkitMask: `
@@ -133,21 +175,22 @@ export default function OnboardingOverlay({isVisible, onClose}) {
           <Stack spacing={3} alignItems='center'>
             <FileUploadIcon
               sx={{
-                fontSize: '4rem',
+                fontSize: '42rem',
                 color: '#ffffff',
                 filter: 'drop-shadow(0px 0px 10px rgba(255,255,255,0.3))',
               }}
             />
             <Typography
-              variant='h4'
+              variant='h1'
               sx={{
                 fontWeight: 600,
-                color: '#ffffff',
+                color: isDragActive ? '#00ff88' : '#ffffff',
                 textShadow: '2px 2px 8px rgba(0,0,0,0.8)',
                 letterSpacing: '0.5px',
+                transition: 'color 0.2s ease',
               }}
             >
-              Drag and drop models into page to open
+              {isDragActive ? 'Drop your file here!' : 'Drag and drop models into page to open'}
             </Typography>
             <Typography
               variant='body1'

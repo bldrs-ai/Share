@@ -56,12 +56,15 @@ export default function HelpControl() {
     }
   }
 
-  // Handle onboarding overlay close - then show help dialog
-  const handleOnboardingClose = () => {
+  // Handle onboarding overlay close - then show help dialog unless file was processed
+  const handleOnboardingClose = (skipHelp = false) => {
     setIsOnboardingOverlayVisible(false)
-    if (shouldShowHelpAfterOnboarding) {
+    if (shouldShowHelpAfterOnboarding && !skipHelp) {
       setShouldShowHelpAfterOnboarding(false)
       setIsHelpVisible(true)
+    } else if (shouldShowHelpAfterOnboarding) {
+      // Reset flag even if skipping help
+      setShouldShowHelpAfterOnboarding(false)
     }
   }
 
