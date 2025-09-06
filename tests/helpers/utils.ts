@@ -3,9 +3,10 @@ import {readFile} from 'fs/promises'
 import {join} from 'path'
 
 
-let port = 0
-let nonce = ''
-let fixturesDir = join(__dirname, '..', '..', 'cypress', 'fixtures')
+const fixturesDir = join(__dirname, '..', '..', 'cypress', 'fixtures')
+
+// Context-specific state to avoid concurrency issues
+const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
 
 
 /**
@@ -22,6 +23,9 @@ export async function clearState(context: BrowserContext) {
  * Playwright equivalent of cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'})
  */
 export async function interceptIndex(page: Page) {
+  // Unroute any existing handlers first to avoid conflicts
+  await page.unroute('**/index.ifc')
+  
   await page.route('**/index.ifc', async (route) => {
     try {
       const fixtureData = await readFile(`${fixturesDir}/index.ifc`, 'utf-8')
@@ -49,6 +53,11 @@ export async function interceptBounce(page: Page) {
     '**/share/v/p/index.ifc/*',
     '**/share/v/p/index.ifc?*',
   ]
+
+  // Unroute existing handlers first to avoid conflicts
+  for (const pattern of patterns) {
+    await page.unroute(pattern)
+  }
 
   for (const pattern of patterns) {
     await page.route(pattern, async (route) => {
@@ -155,9 +164,9 @@ export async function waitForModel(page: Page) {
   const canvas = viewerContainer.locator('canvas')
   await expect(canvas).toBeVisible()
 
-  // Wait for model ready attribute
-  const modelReadyElement = page.locator('[data-model-ready="true"]')
-  await expect(modelReadyElement).toBeVisible({timeout: 10000})
+  // Wait for model ready attribute on dropzone (matching working homepage test)
+  const dropzone = page.getByTestId('cadview-dropzone')
+  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 10000})
   
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
@@ -192,18 +201,20 @@ export async function auth0Login(page: Page, connection: 'github' | 'google' = '
 
 
 /**
- * Sets a new value for the global port variable
+ * Sets a new value for the context-specific port variable
  */
-export function setPort(newPort: number) {
-  port = newPort
+export function setPort(context: BrowserContext, newPort: number) {
+  const state = contextState.get(context) || {port: 0, nonce: ''}
+  state.port = newPort
+  contextState.set(context, state)
 }
 
 
 /**
- * Retrieves the current value of the global port variable
+ * Retrieves the current value of the context-specific port variable
  */
-export function getPort(): number {
-  return port
+export function getPort(context: BrowserContext): number {
+  return contextState.get(context)?.port || 8080
 }
 
 
@@ -226,14 +237,21 @@ export function base64EncodePayload(payload: Record<string, any>): string {
  * Sets up Playwright route intercepts for handling authentication.
  * Playwright equivalent of setupAuthenticationIntercepts from Cypress.
  */
-export async function setupAuthenticationIntercepts(page: Page) {
+export async function setupAuthenticationIntercepts(page: Page, context: BrowserContext) {
+  // Unroute existing handlers first to avoid conflicts
+  await page.unroute('**/authorize*')
+  await page.unroute('**/oauth/token*')
+  
   // Intercept the /authorize request
   await page.route('**/authorize*', async (route) => {
     const url = new URL(route.request().url())
     const queryParams = new URLSearchParams(url.search)
 
     // Extract the 'nonce' and 'state' parameters
-    nonce = queryParams.get('nonce') || ''
+    const nonce = queryParams.get('nonce') || ''
+    const contextStateObj = contextState.get(context) || {port: 8080, nonce: ''}
+    contextStateObj.nonce = nonce
+    contextState.set(context, contextStateObj)
     const state = queryParams.get('state') || ''
 
     console.log('[PLAYWRIGHT] 200 **/authorize', route.request().url())
@@ -249,7 +267,7 @@ export async function setupAuthenticationIntercepts(page: Page) {
   <body>
     <script type="text/javascript">
       (function(window, document) {
-        var targetOrigin = "http://localhost:${port}";
+        var targetOrigin = "http://localhost:${getPort(context)}";
         var webMessageRequest = {};
         var authorizationResponse = {
           type: "authorization_response",
@@ -303,7 +321,7 @@ export async function setupAuthenticationIntercepts(page: Page) {
       exp: exp,
       sub: 'github|11111111',
       sid: 'cypresssession-abcdef',
-      nonce: nonce,
+      nonce: contextState.get(context)?.nonce || nonce,
     }
 
     // Encode the updated payload
@@ -332,7 +350,7 @@ export async function setupAuthenticationIntercepts(page: Page) {
  */
 export async function homepageSetupWithAuth(page: Page, context: BrowserContext) {
   await homepageSetup(page, context)
-  await setupAuthenticationIntercepts(page)
+  await setupAuthenticationIntercepts(page, context)
 }
 
 
