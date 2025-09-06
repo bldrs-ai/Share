@@ -3,20 +3,18 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
   waitForModel,
-} from './helpers/utils'
+} from '../../../tests/helpers/utils'
 
 
 /**
  * Profile 100: Theme - migrated from Cypress
+ *
  * {@link https://github.com/bldrs-ai/Share/issues/1070}
  */
 test.describe('Profile 100: Theme', () => {
-  test.beforeEach(async ({page, context}) => {
-    await homepageSetup(page, context)
-  })
-
   test.describe('Returning user visits homepage', () => {
     test.beforeEach(async ({page, context}) => {
+      await homepageSetup(page, context)
       await returningUserVisitsHomepageWaitForModel(page, context)
     })
 
@@ -35,7 +33,6 @@ test.describe('Profile 100: Theme', () => {
       test('Night theme active - Screen', async ({page}) => {
         // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
         await expect(page.getByTestId('cadview-dropzone')).toBeVisible()
-        
         // Verify night theme is active by checking theme button
         await page.getByTestId('control-button-profile').click()
         await expect(page.getByTestId('change-theme-to-day')).toBeVisible()
@@ -51,7 +48,6 @@ test.describe('Profile 100: Theme', () => {
         test('Day theme active - Screen', async ({page}) => {
           // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
           await expect(page.getByTestId('cadview-dropzone')).toBeVisible()
-          
           // Verify day theme is active by checking theme button
           await page.getByTestId('control-button-profile').click()
           await expect(page.getByTestId('change-theme-to-night')).toBeVisible()

@@ -1,18 +1,19 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, Page, BrowserContext} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
   waitForModel,
   waitForElementStable,
-} from './helpers/utils'
+} from '../../../tests/helpers/utils'
 
 
 /**
  * Cutplane functionality tests - migrated from Cypress
+ *
  * From https://github.com/bldrs-ai/Share/issues/1106
  */
-test.describe('view 100: Cutplanes', () => {
+test.describe('Cutplanes', () => {
   // Flatten setup to reduce timing issues
   async function setupModelWithCutplanes(page: Page, context: BrowserContext) {
     await homepageSetup(page, context)
