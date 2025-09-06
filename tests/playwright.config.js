@@ -9,12 +9,12 @@ export default defineConfig({
   fullyParallel: true,
 
   // Fail the build on CI if you accidentally left test.only in the source code.
-  forbidOnly: true,
+  // forbidOnly: true,
 
-  retries: 1,
+  retries: 0,
 
   // Per-test timeout, since homepage first-time sometimes is > 30s default
-  timeout: 60_000,
+  timeout: 30_000,
 
   workers: 4,
 

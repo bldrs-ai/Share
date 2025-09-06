@@ -1,18 +1,20 @@
 import {test, expect} from '@playwright/test'
-import {homepageReady} from './helpers/homepage'
+import {homepageSetup, returningUserVisitsHomepageWaitForModel} from './helpers/utils'
 
 
 test.describe('Homepage', () => {
-  test.beforeEach('Homepage loads successfully', async ({page}) => {
-    await homepageReady(page)
+  test.beforeEach(async ({page, context}) => {
+    await homepageSetup(page, context)
   })
 
+  test.describe('View model', () => {
+    test.beforeEach(async ({page, context}) => {
+      await returningUserVisitsHomepageWaitForModel(page, context)
+    })
 
-  test('homepage loads', async ({page}) => {
-    // Check the title contains something
-    await expect(page).toHaveTitle(/About — bldrs.ai/i)
-
-    // Or check that a root element is visible
-    await expect(page.getByText('Welcome to Bldrs - Share!')).toBeVisible()
+    test('about button is visible', async ({page}) => {
+      // Or check that a root element is visible
+      await expect(page.getByTestId('control-button-about')).toBeVisible()
+    })
   })
 })

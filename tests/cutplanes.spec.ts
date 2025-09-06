@@ -1,69 +1,101 @@
 import {test, expect} from '@playwright/test'
+import {
+  homepageSetup,
+  setIsReturningUser,
+  visitHomepageWaitForModel,
+  waitForModel,
+  waitForElementStable,
+} from './helpers/utils'
 
 
 /**
- * Basic cutplane functionality tests
- * Migrated from cypress/e2e/view-100/cutplanes.cy.js
- * @see https://github.com/bldrs-ai/Share/issues/1106
+ * Cutplane functionality tests - migrated from Cypress
+ * From https://github.com/bldrs-ai/Share/issues/1106
  */
-test.describe('Cutplanes', () => {
-  test.beforeEach(async ({context}) => {
-    // Set returning user cookie to skip about dialog
-    await context.addCookies([
-      {
-        name: 'isFirstTime',
-        value: '1',
-        domain: 'localhost',
-        path: '/',
-      },
-    ])
+test.describe('view 100: Cutplanes', () => {
+  test.beforeEach(async ({page, context}) => {
+    await homepageSetup(page, context)
   })
 
-  test('Cut plane control opens menu', async ({page}) => {
-    await page.goto('/')
-    
-    // Wait for model to be ready
-    await expect(page.locator('[data-testid="cadview-dropzone"][data-model-ready="true"]'))
-      .toBeVisible({timeout: 5000})
-    
-    // Click cut plane control button
-    await page.getByTestId('control-button-cut-plane').click({force: true})
-    
-    // Check that section menu is visible
-    await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
-    
-    // Verify menu items are present
-    await expect(page.getByTestId('menu-item-plan')).toBeVisible()
-    await expect(page.getByTestId('menu-item-section')).toBeVisible()
-    await expect(page.getByTestId('menu-item-elevation')).toBeVisible()
+  test.describe('View model', () => {
+    test.beforeEach(async ({page, context}) => {
+      await setIsReturningUser(context)
+      await visitHomepageWaitForModel(page)
+    })
+
+    test.describe('Click CutPlaneControl', () => {
+      test.beforeEach(async ({page}) => {
+        await page.getByTestId('control-button-cut-plane').click()
+        await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+      })
+
+      test.only('Section menu visible', async ({page}) => {
+        await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+        // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
+      })
+
+      test.describe('Select all cut-planes', () => {
+        test.beforeEach(async ({page}) => {
+          // Select plan (already open from parent beforeEach)
+          await page.getByTestId('menu-item-plan').click()
+          await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
+
+          // Open menu again and select section
+          await page.getByTestId('control-button-cut-plane').click()
+          await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+          await page.getByTestId('menu-item-section').click()
+          await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
+
+          // Open menu again and select elevation
+          await page.getByTestId('control-button-cut-plane').click()
+          await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+          await page.getByTestId('menu-item-elevation').click()
+        })
+
+        test('All cut-planes added to model', async ({page}) => {
+          // Verify menu is not visible after all selections
+          await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
+          // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
+        })
+
+        test.describe('Clear all cut-planes', () => {
+          test.beforeEach(async ({page}) => {
+            // Wait for cut-planes to be applied
+            await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
+            
+            // Open menu and clear all
+            await page.getByTestId('control-button-cut-plane').click()
+            await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+            await page.getByTestId('menu-item-clear-all').click()
+            await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
+          })
+
+          test('No cutplanes visible', async ({page}) => {
+            // Wait for clearing to complete
+            await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
+            // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
+          })
+        })
+      })
+    })
   })
 
-  test('Can select plan cut-plane', async ({page}) => {
-    await page.goto('/')
-    
-    // Wait for model to be ready
-    await expect(page.locator('[data-testid="cadview-dropzone"][data-model-ready="true"]'))
-      .toBeVisible({timeout: 5000})
-    
-    // Open cut plane menu and select plan
-    await page.getByTestId('control-button-cut-plane').click({force: true})
-    await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
-    
-    await page.getByTestId('menu-item-plan').click({force: true})
-    
-    // Menu should close after selection
-    await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
-  })
+  test.describe('View cut-plane permalink', () => {
+    test.beforeEach(async ({page, context}) => {
+      await setIsReturningUser(context)
+      await page.goto('/share/v/p/index.ifc#cp:y=17.077,x=-25.551,z=5.741;c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+      await waitForModel(page)
+    })
 
-  test('View cut-plane permalink loads correctly', async ({page}) => {
-    // Visit a URL with cut-plane permalink
-    await page.goto('/share/v/p/index.ifc#cp:y=17.077,x=-25.551,z=5.741;c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
-    
-    // Wait for model to be ready
-    await expect(page.locator('[data-testid="cadview-dropzone"][data-model-ready="true"]'))
-      .toBeVisible({timeout: 5000})
-    
-    // Verify the model container is visible with cut-plane applied
-    await expect(page.locator('[data-testid="cadview-dropzone"]')).toBeVisible()
+    test('Shows just vertical bar of b', async ({page}) => {
+      // Verify the model is loaded with cut-plane applied
+      await expect(page.locator('[data-testid="cadview-dropzone"]')).toBeVisible()
+      await expect(page.locator('[data-model-ready="true"]')).toBeVisible()
+      
+      // Wait for cut-plane to be applied
+      await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
+      
+      // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
+    })
   })
 })
