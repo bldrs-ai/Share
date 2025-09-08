@@ -45,15 +45,15 @@ export default function ProfileControl() {
   } = useAuth0()
   const theme = useTheme()
 
-  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false)
+  const [isLoginDialogDisplayed, setIsLoginDialogDisplayed] = useState(false)
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
-  const [showManageProfile, setShowManageProfile] = useState(false)
+  const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
   const userEmail = appMetadata?.userEmail || ''
   const stripeCustomerId = appMetadata?.stripeCustomerId || null
 
-  const handleManageProfileClick = () => setShowManageProfile(true)
+  const onManageProfileClick = () => setIsManageProfileOpen(true)
 
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function ProfileControl() {
 
   const onLoginClick = (connection) => {
     handleLogin(connection)
-    setIsLoginDialogOpen(false)
+    setIsLoginDialogDisplayed(false)
     onCloseMenu()
   }
 
@@ -111,12 +111,12 @@ export default function ProfileControl() {
     onCloseMenu()
   }
 
-  const handleThemeToggle = () => {
+  const onThemeToggle = () => {
     theme.toggleColorMode()
     onCloseMenu()
   }
 
-  const handleSubscriptionClick = async () => {
+  const onSubscriptionClick = async () => {
     onCloseMenu()
     const themeParam = isDay ? 'light' : 'dark'
 
@@ -189,7 +189,7 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
-              setIsLoginDialogOpen(true)
+              setIsLoginDialogDisplayed(true)
               onCloseMenu()
             }}
             data-testid='menu-open-login-dialog'
@@ -211,7 +211,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleManageProfileClick} data-testid='manage-profile'>
+          <MenuItem onClick={onManageProfileClick} data-testid='manage-profile'>
             <AccountCircleOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Manage Profile
@@ -220,7 +220,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
+          <MenuItem onClick={onSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
@@ -228,7 +228,10 @@ export default function ProfileControl() {
           </MenuItem>
         )}
 
-        <ManageProfile open={showManageProfile} onClose={() => setShowManageProfile(false)}/>
+        <ManageProfile
+          isDialogDisplayed={isManageProfileOpen}
+          setIsDialogDisplayed={(isDisplayed) => setIsManageProfileOpen(isDisplayed)}
+        />
 
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
@@ -243,7 +246,7 @@ export default function ProfileControl() {
           </Typography>
         </MenuItem>
         <Divider/>
-        <MenuItem onClick={handleThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
+        <MenuItem onClick={onThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
           {isDay ? <NightlightOutlinedIcon/> : <WbSunnyOutlinedIcon/>}
           <Typography sx={{marginLeft: '10px'}} variant='overline'>
             {isDay ? 'Night' : 'Day'} theme
@@ -252,8 +255,8 @@ export default function ProfileControl() {
       </Menu>
 
       <LoginDialog
-        isDialogOpen={isLoginDialogOpen}
-        onClose={() => setIsLoginDialogOpen(false)}
+        isDialogDisplayed={isLoginDialogDisplayed}
+        setIsDialogDisplayed={(isDisplayed) => setIsLoginDialogDisplayed(isDisplayed)}
         onLogin={onLoginClick}
         isGoogleEnabled={isGoogleEnabled}
       />

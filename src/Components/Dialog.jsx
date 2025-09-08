@@ -48,6 +48,11 @@ export default function Dialog({
     <MuiDialog
       open={isDialogDisplayed}
       onClose={onCloseClick}
+      fullWidth
+      maxWidth='xs'
+      // There's a warning without this due to a bug in MUI Dialog. When the dialog
+      // is closed, the transition animation is not played.
+      closeAfterTransition={false}
       data-testid={props['data-testid'] || 'mui-dialog'}
     >
       <DialogTitle
@@ -64,7 +69,7 @@ export default function Dialog({
         {headerText}
       </DialogTitle>
       <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
-      <DialogContent>{children}</DialogContent>
+      <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
        <DialogActions>
          {typeof actionTitle === 'string' ?
