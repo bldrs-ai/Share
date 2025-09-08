@@ -28,12 +28,16 @@ export function initHandlers(defines) {
   const handlers = []
   handlers.push(...workersAndWasmPassthru())
   handlers.push(...bldrsHandlers())
-  handlers.push(...gaHandlers())
-  handlers.push(...githubHandlers(defines, true))
-  handlers.push(...githubHandlers(defines, false))
   handlers.push(...netlifyHandlers())
-  handlers.push(...stripePortalHandlers())
   handlers.push(...subscribePageHandler())
+  handlers.push(...stripePortalHandlers())
+  handlers.push(...githubApiHandlers(defines, true))
+  handlers.push(...githubApiHandlers(defines, false))
+  handlers.push(...gaHandlers())
+  // Pass through paths that are served by static assets or playwright fixtures
+  handlers.push(http.get('/share/v/p/*', () => passthrough()))
+  handlers.push(http.get('/share/v/gh/*', () => passthrough()))
+  handlers.push(http.get('https://rawgit.bldrs.dev.msw/model/*', () => passthrough()))
   return handlers
 }
 
@@ -60,10 +64,18 @@ function workersAndWasmPassthru() {
  */
 function bldrsHandlers() {
   return [
+    // Let /share/v/p paths pass through as they're served as static assets from the SPA
+    http.get('/share/v/p/*', () => passthrough()),
     http.get('http://bldrs.ai/icons/*', () => {
       return new Response('', {
         status: HTTP_OK,
         headers: {'Content-Type': 'text/plain'},
+      })
+    }),
+    http.get(/\/favicon\.ico$/, () => {
+      return new Response('', {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'image/x-icon'},
       })
     }),
   ]
@@ -150,31 +162,6 @@ function stripePortalHandlers() {
   ]
 }
 
-/**
- * Mock to disable Google Analytics.
- *
- * @return {Array<object>} handlers
- */
-function gaHandlers() {
-  return [
-    http.get('https://www.google-analytics.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
-
-    http.post('https://www.google-analytics.com/*', () => {
-      return new Response(null, {
-        status: HTTP_OK,
-      })
-    }),
-  ]
-}
-
 
 /**
  * Static stubs GitHub orgs, repos, issues.
@@ -182,7 +169,7 @@ function gaHandlers() {
  * @param {object} defines todo implementation
  * @return {Array<object>} handlers
  */
-function githubHandlers(defines, authed) {
+function githubApiHandlers(defines, authed) {
   const GH_BASE_AUTHED = defines.GITHUB_BASE_URL
   const GH_BASE_UNAUTHED = defines.GITHUB_BASE_URL_UNAUTHENTICATED
   return [
@@ -663,6 +650,32 @@ function githubHandlers(defines, authed) {
           headers: {'Content-Type': 'application/json'},
         },
       )
+    }),
+  ]
+}
+
+
+/**
+ * Mock to disable Google Analytics.
+ *
+ * @return {Array<object>} handlers
+ */
+function gaHandlers() {
+  return [
+    http.get('https://*.google-analytics.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+
+    http.post('https://*.google-analytics.com/*', () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
   ]
 }

@@ -25,6 +25,8 @@ export default defineConfig({
     // video: 'retain-on-failure',
     // same for screenshots
     // screenshot: 'only-on-failure',
+    // For live debugging
+    // launchOptions: {devtools: true},
   },
   // Configure projects for major browsers.
   projects: [
