@@ -153,7 +153,7 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
         <Typography variant='subtitle1' gutterBottom>Additional Provider Connections</Typography>
         {loading ? (
             <ListItem>
-              <Box display='flex' justifyContent='center' disableGutters sx={{width: '100%', py: 3}}>
+              <Box display='flex' justifyContent='center' sx={{width: '100%', py: 3}}>
                 <CircularProgress size={28}/>
               </Box>
             </ListItem>
