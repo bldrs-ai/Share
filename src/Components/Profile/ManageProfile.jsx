@@ -12,6 +12,7 @@ import {
   Chip,
   Divider,
 } from '@mui/material'
+import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import Dialog from '../Dialog'
 import {useMock} from './ProfileControl'
@@ -45,6 +46,8 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
                                     cacheMode: 'off', useRefreshTokens: true})
     } catch (err) {
       console.error('Error refreshing user after link/unlink', err)
+      // report in sentry
+      captureException(err)
     }
   }, [getAccessTokenSilently])
 
@@ -85,6 +88,8 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
                   'authPopup', 'width=600,height=600')
     } catch (err) {
       console.error('Linking failed', err)
+      // report in sentry
+      captureException(err)
     }
   }
 
@@ -118,6 +123,8 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
       await refreshUser()
     } catch (err) {
       console.error('Unlink failed', err)
+      // report in sentry
+      captureException(err)
     }
   }
 
