@@ -15,6 +15,7 @@ import {
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
+import {Themes} from '../../theme/Theme'
 import {TooltipIconButton} from '../Buttons'
 import ManageProfile from './ManageProfile'
 import {
@@ -26,6 +27,8 @@ import {
   LogoutOutlined as LogoutOutlinedIcon,
   NightlightOutlined as NightlightOutlinedIcon,
   WbSunnyOutlined as WbSunnyOutlinedIcon,
+  SettingsBrightnessOutlined as SettingsBrightnessOutlinedIcon,
+  CheckOutlined as CheckOutlinedIcon,
   PaymentOutlined,
   AccountCircleOutlined,
 } from '@mui/icons-material'
@@ -170,10 +173,6 @@ export default function ProfileControl() {
     onCloseMenu()
   }
 
-  const handleThemeToggle = () => {
-    theme.toggleColorMode()
-    onCloseMenu()
-  }
 
   const handleSubscriptionClick = async () => {
     onCloseMenu()
@@ -296,11 +295,44 @@ export default function ProfileControl() {
           </Typography>
         </MenuItem>
         <Divider/>
-        <MenuItem onClick={handleThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
-          {isDay ? <NightlightOutlinedIcon/> : <WbSunnyOutlinedIcon/>}
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.Day)
+            onCloseMenu()
+          }}
+          data-testid='set-theme-day'
+        >
+          <WbSunnyOutlinedIcon/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            {isDay ? 'Night' : 'Day'} theme
+            Day theme
           </Typography>
+          {!theme.isSystemMode && isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.Night)
+            onCloseMenu()
+          }}
+          data-testid='set-theme-night'
+        >
+          <NightlightOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Night theme
+          </Typography>
+          {!theme.isSystemMode && !isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.System)
+            onCloseMenu()
+          }}
+          data-testid='set-theme-system'
+        >
+          <SettingsBrightnessOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Use system theme
+          </Typography>
+          {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
       </Menu>
 
