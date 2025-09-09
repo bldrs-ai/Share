@@ -3,6 +3,7 @@ import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
+import {captureException} from '@sentry/react'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -127,9 +128,13 @@ export default function CadView({
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
-      const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.primary.sceneBackground))
+      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
+      if (!sceneBackground) {
+        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
+        console.error(error.message)
+        captureException(error)
+      }
+      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
