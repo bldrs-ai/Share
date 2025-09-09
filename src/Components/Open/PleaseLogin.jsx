@@ -11,14 +11,14 @@ export default function PleaseLogin() {
   const theme = useTheme()
   return (
     <Paper
-    data-testid={'container-please-login'}
-    sx={{
-      width: '94%',
-      textAlign: 'left',
-      borderRadius: '.5em',
-      backgroundColor: theme.palette.secondary.main,
-      padding: '.5em 1em',
-    }}
+      data-testid='container-please-login'
+      sx={{
+        width: '100%',
+        textAlign: 'left',
+        padding: '1em',
+        borderRadius: '.5em',
+        backgroundColor: theme.palette.secondary.main,
+      }}
     >
       <Typography variant={'caption'}>
         Host your model on GitHub and log in to Share with your GitHub credentials to access and share your library of projects
