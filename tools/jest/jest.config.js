@@ -4,7 +4,9 @@ import {excludedNodeModules} from './common.js'
 export default {
   verbose: false,
   testEnvironment: 'jest-fixed-jsdom',
-  testPathIgnorePatterns: [],
+  testPathIgnorePatterns: [
+    '<rootDir>/src/.*\\.spec\\.(ts|js)$', // Exclude Playwright spec files in src/
+  ],
   rootDir: '../../',
   roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
   transform: {

@@ -3,20 +3,15 @@ import {defineConfig, devices} from '@playwright/test'
 
 export default defineConfig({
   // Look for test files in the "tests" directory, relative to this configuration file.
-  testDir: '.',
+  testDir: '..',
+
+  testMatch: [
+    'tests/**/*.spec.ts',
+    'src/**/*.spec.ts',
+  ],
 
   // Run all tests in parallel.
   fullyParallel: true,
-
-  // Fail the build on CI if you accidentally left test.only in the source code.
-  forbidOnly: true,
-
-  retries: 1,
-
-  // Per-test timeout, since homepage first-time sometimes is > 30s default
-  timeout: 60_000,
-
-  workers: 4,
 
   // Reporter to use
   reporter: [['list']], // just list, no HTML
@@ -40,10 +35,8 @@ export default defineConfig({
   ],
   // Run your local dev server before starting the tests.
   webServer: {
-    command: 'yarn serve',
+    command: 'yarn test-flows-serve',
     url: 'http://localhost:8080',
-    // True: use the dev server you start separately
-    // False: playwright will start its own with `yarn dev`
     reuseExistingServer: true,
   },
 })

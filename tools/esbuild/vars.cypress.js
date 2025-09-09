@@ -21,6 +21,7 @@ export default {
 
   // Testing
   MSW_IS_ENABLED: true,
+  ESBUILD_WATCH: false,
   // On to enable screenshot testing
   // https://www.browserstack.com/docs/percy/common-issue/canvas-elements-not-captured
   THREE_PDB_IS_ENABLED: true,
