@@ -23,25 +23,21 @@ import DiscordIcon from './Discord.svg'
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   return (
     <Dialog
-      headerIcon={null}
-      headerText={(
-        <>
-          <Link href='/'>
-            <LogoBWithDomain
-              sx={{
-                width: '144px',
-                height: '144px',
-              }}
-            />
-          </Link>
-          {ABOUT_MISSION}
-        </>
-      )}
+      headerText={ABOUT_MISSION}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
+      headerIcon={
+        <Link href='/'>
+          <LogoBWithDomain
+            sx={{
+              width: '144px',
+              height: '144px',
+            }}
+          />
+        </Link>
+      }
       actionTitle='OK'
       actionCb={onClose}
-      data-testid='about-dialog'
     >
       <AboutContent/>
     </Dialog>

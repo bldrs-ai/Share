@@ -7,15 +7,18 @@ import {
   auth0Login,
 } from '../../support/utils'
 
-/* ─────────── shared helpers ─────────── */
-const openManageProfile = (connection = 'github') => {
+
+/**
+ * Open the Manage Profile dialog
+ *
+ * @param {string} connection - The connection to login with
+ */
+function openManageProfile(connection = 'github') {
   auth0Login(connection) // mocked login
   cy.get('[data-testid="control-button-profile"]').click()
   cy.get('[data-testid="manage-profile"]').click()
-  cy.contains('Account Settings') // modal open
+  cy.get('[data-testid="dialog-manage-profile"]').should('be.visible')
 }
-
-/* ─────────────────────────────────────── */
 
 describe('ManageProfile modal', () => {
   beforeEach(homepageSetup)
@@ -76,8 +79,8 @@ context('When only Google is linked', () => {
 
     it('hides the dialog when Close clicked', () => {
       openManageProfile()
-      cy.contains('button', 'Close').click()
-      cy.contains('Account Settings').should('not.exist')
+      cy.get('[data-testid="button-close-dialog-manage-profile"]').click()
+      cy.get('[data-testid="dialog-manage-profile"]').should('not.exist')
     })
   })
 })

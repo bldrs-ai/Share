@@ -4,7 +4,7 @@ import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import {assertDefined} from '../utils/assert'
+import {assertDefined, assertString} from '../utils/assert'
 import useStore from '../store/useStore'
 import {CloseButton} from './Buttons'
 
@@ -32,6 +32,10 @@ export default function Dialog({
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
+  assertString(headerText)
+  if (props['data-testid']) {
+    throw new Error(`data-testid is not allowed on Dialog component`)
+  }
   const setAlert = useStore((state) => state.setAlert)
   // Used eg for SaveModelControl's exceptions, on saveFile, to handle error from
   // GitHub.
@@ -44,6 +48,7 @@ export default function Dialog({
     }
   }
   const onCloseClick = () => setIsDialogDisplayed(false)
+  const dataTestIdSuffix = headerText.toLowerCase().replaceAll(' ', '-')
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -53,7 +58,8 @@ export default function Dialog({
       // There's a warning without this due to a bug in MUI Dialog. When the dialog
       // is closed, the transition animation is not played.
       closeAfterTransition={false}
-      data-testid={props['data-testid'] || 'mui-dialog'}
+      // Use safe headerText for data-testid
+      data-testid={`dialog-${dataTestIdSuffix}`}
     >
       <DialogTitle
         variant='h1'
@@ -68,7 +74,7 @@ export default function Dialog({
         {headerIcon && headerIcon}
         {headerText}
       </DialogTitle>
-      <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
+      <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
       <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
        <DialogActions>
