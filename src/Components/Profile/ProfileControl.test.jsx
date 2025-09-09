@@ -78,14 +78,14 @@ describe('ProfileControl', () => {
     expect(systemTheme).toBeInTheDocument()
   })
 
-  it('shows checkmark next to Day theme when Day theme is selected', async () => {
+  it('shows checkmark next to System theme by default', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {findByTestId, getByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const dayThemeItem = getByTestId('set-theme-day')
-    const checkIcon = dayThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]')
+    const systemThemeItem = getByTestId('set-theme-system')
+    const checkIcon = systemThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]')
 
     expect(checkIcon).toBeInTheDocument()
   })
