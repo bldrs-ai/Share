@@ -45,7 +45,7 @@ function renderDlg(authOverrides = {}, open = true, onClose = jest.fn()) {
   })
 
   return render(
-    <ManageProfile open={open} onClose={onClose}/>,
+    <ManageProfile isDialogDisplayed={open} setIsDialogDisplayed={onClose}/>,
     {wrapper: ThemeCtx},
   )
 }
@@ -72,7 +72,7 @@ describe('ManageProfile modal', () => {
       user: baseUser,
       isAuthenticated: false, // keeps loading=true
     })
-    render(<ManageProfile open={true} onClose={() => {}}/>, {wrapper: ThemeCtx})
+    render(<ManageProfile isDialogDisplayed={true} setIsDialogDisplayed={() => {}}/>, {wrapper: ThemeCtx})
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 

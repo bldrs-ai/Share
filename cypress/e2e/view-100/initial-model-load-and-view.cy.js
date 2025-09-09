@@ -43,7 +43,7 @@ describe('view 100: Initial model load and view', () => {
       })
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
         cy.title().should('eq', 'About — bldrs.ai')
         cy.percySnapshot()
       })
@@ -58,20 +58,18 @@ describe('view 100: Initial model load and view', () => {
       beforeEach(visitHomepageWaitForModel)
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
         cy.percySnapshot()
       })
 
       context('Close about dialog', () => {
         beforeEach(() => {
-          cy.get('[data-testid="about-dialog"]').should('exist')
-          // Close About
-          cy.get('button[aria-label="action-button"]')
-            .click()
+          cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
+          cy.get('[data-testid="button-close-dialog-build-every-thing-together"]').click()
         })
 
         it('AboutDialog not visible, model visible - Screen', () => {
-          cy.get('body').find('[data-testid="about-dialog"]').should('not.exist')
+          cy.get('body').find('[data-testid="dialog-build-every-thing-together"]').should('not.exist')
           cy.percySnapshot()
         })
       })

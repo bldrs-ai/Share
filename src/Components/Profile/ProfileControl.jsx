@@ -1,27 +1,23 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useTheme} from '@mui/material/styles'
 import {
   Avatar,
   Menu,
   MenuItem,
   Typography,
   Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  Stack,
-  Button,
 } from '@mui/material'
+import {useTheme} from '@mui/material/styles'
+import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {TooltipIconButton} from '../Buttons'
+import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
+  AccountCircleOutlined,
   GitHub as GitHubIcon,
-  Google as GoogleIcon,
   InfoOutlined as InfoOutlinedIcon,
   LoginOutlined as LoginOutlinedIcon,
   LogoutOutlined as LogoutOutlinedIcon,
@@ -30,69 +26,8 @@ import {
   SettingsBrightnessOutlined as SettingsBrightnessOutlinedIcon,
   CheckOutlined as CheckOutlinedIcon,
   PaymentOutlined,
-  AccountCircleOutlined,
 } from '@mui/icons-material'
 
-
-const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
-const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
-
-
-/**
- * Login dialog component with provider selection
- *
- * @return {ReactElement} Dialog component for login
- */
-function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth='xs'>
-      <DialogTitle
-        sx={{
-          textAlign: 'center',
-          fontWeight: 600,
-          fontSize: {xs: '1.25rem', sm: '1.5rem'},
-          pb: 0,
-        }}
-      >
-        Sign in with
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} mt={2}>
-          <Button
-            fullWidth
-            variant='outlined'
-            startIcon={<GitHubIcon/>}
-            onClick={() => onLogin('github')}
-            data-testid='login-with-github'
-            sx={{
-              'borderColor': 'divider',
-              'color': 'text.primary',
-              '&:hover': {borderColor: 'text.primary'},
-            }}
-          >
-            GitHub
-          </Button>
-          {(isGoogleEnabled || useMock) && (
-            <Button
-              fullWidth
-              variant='outlined'
-              startIcon={<GoogleIcon/>}
-              onClick={() => onLogin('google-oauth2')}
-              data-testid='login-with-google'
-              sx={{
-                'borderColor': 'divider',
-                'color': 'text.primary',
-                '&:hover': {borderColor: 'text.primary'},
-              }}
-            >
-              Google
-            </Button>
-          )}
-        </Stack>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 /**
  * ProfileControl contains the option to log in/log out and theme control
@@ -100,25 +35,29 @@ function LoginDialog({open, onClose, onLogin, isGoogleEnabled}) {
  * @return {ReactElement}
  */
 export default function ProfileControl() {
-  const [anchorEl, setAnchorEl] = useState(null)
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
-  const isMenuVisible = Boolean(anchorEl)
-
-  const theme = useTheme()
-  const {isAuthenticated, logout, user} = useAuth0()
-  const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
-  const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
+  const isGoogleEnabled = useStore((state) => state.isGoogleEnabled)
   const appMetadata = useStore((state) => state.appMetadata)
-  const userEmail = appMetadata?.userEmail || ''
-  const stripeCustomerId = appMetadata?.stripeCustomerId || null
   const setAccessToken = useStore((state) => state.setAccessToken)
 
-  const [showManageProfile, setShowManageProfile] = useState(false)
-  const isGoogleEnabled = useExistInFeature('google-auth')
+  const {
+    getAccessTokenSilently,
+    isAuthenticated,
+    loginWithRedirect,
+    logout,
+    user,
+  } = useAuth0()
+  const theme = useTheme()
 
-  const handleManageProfileClick = () => {
-    setShowManageProfile(true)
-  }
+  const [isLoginDialogDisplayed, setIsLoginDialogDisplayed] = useState(false)
+  const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
+  const [anchorEl, setAnchorEl] = useState(null)
+  const isMenuVisible = Boolean(anchorEl)
+  const userEmail = appMetadata?.userEmail || ''
+  const stripeCustomerId = appMetadata?.stripeCustomerId || null
+
+  const onManageProfileClick = () => setIsManageProfileOpen(true)
+
 
   useEffect(() => {
     /**
@@ -140,6 +79,8 @@ export default function ProfileControl() {
           })
           .catch((error) => {
             console.error('Error refreshing token:', error)
+            // report in sentry
+            captureException(error)
           })
       }
     }
@@ -159,7 +100,7 @@ export default function ProfileControl() {
 
   const onLoginClick = (connection) => {
     handleLogin(connection)
-    setLoginDialogOpen(false)
+    setIsLoginDialogDisplayed(false)
     onCloseMenu()
   }
 
@@ -174,7 +115,7 @@ export default function ProfileControl() {
   }
 
 
-  const handleSubscriptionClick = async () => {
+  const onSubscriptionClick = async () => {
     onCloseMenu()
     const themeParam = isDay ? 'light' : 'dark'
 
@@ -190,9 +131,13 @@ export default function ProfileControl() {
           window.location.href = data.url
         } else {
           console.error('No portal URL returned:', data)
+          // report in sentry
+          captureException(new Error('No portal URL returned:', data))
         }
       } catch (err) {
         console.error('Error creating portal session:', err)
+        // report in sentry
+        captureException(err)
       }
     } else {
       const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
@@ -205,6 +150,8 @@ export default function ProfileControl() {
           document.close()
         } catch (err) {
           console.error('Error loading mock subscribe page:', err)
+          // report in sentry
+          captureException(err)
         }
       } else {
         window.location.href = subscribeUrl
@@ -241,7 +188,7 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
-              setLoginDialogOpen(true)
+              setIsLoginDialogDisplayed(true)
               onCloseMenu()
             }}
             data-testid='menu-open-login-dialog'
@@ -263,7 +210,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleManageProfileClick} data-testid='manage-profile'>
+          <MenuItem onClick={onManageProfileClick} data-testid='manage-profile'>
             <AccountCircleOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Manage Profile
@@ -272,7 +219,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
+          <MenuItem onClick={onSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
@@ -280,7 +227,10 @@ export default function ProfileControl() {
           </MenuItem>
         )}
 
-        <ManageProfile open={showManageProfile} onClose={() => setShowManageProfile(false)}/>
+        <ManageProfile
+          isDialogDisplayed={isManageProfileOpen}
+          setIsDialogDisplayed={(isDisplayed) => setIsManageProfileOpen(isDisplayed)}
+        />
 
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
@@ -337,11 +287,14 @@ export default function ProfileControl() {
       </Menu>
 
       <LoginDialog
-        open={loginDialogOpen}
-        onClose={() => setLoginDialogOpen(false)}
+        isDialogDisplayed={isLoginDialogDisplayed}
+        setIsDialogDisplayed={(isDisplayed) => setIsLoginDialogDisplayed(isDisplayed)}
         onLogin={onLoginClick}
         isGoogleEnabled={isGoogleEnabled}
       />
     </>
   )
 }
+
+
+export const useMock = process.env.OAUTH2_CLIENT_ID === 'cypresstestaudience'

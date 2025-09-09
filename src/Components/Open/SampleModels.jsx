@@ -46,12 +46,20 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
     closeDialog()
   }
 
+  const stackSx = {
+    // center the content of the stack
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
+
   return (
     <Grid
       container
       spacing={2}
       justifyContent='center'
       alignItems='center'
+      sx={stackSx}
+      data-testid={`dialog-open-model-samples`}
     >
       {Object.keys(modelPath).map((model, i) => (
         <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>
@@ -65,7 +73,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
             variant='sampleModel'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
             color='primary'
-            data-testid='sample-model-chip'
+            data-testid={`sample-model-chip-${i}`}
           />
         </Grid>
       ))}
