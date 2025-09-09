@@ -70,25 +70,37 @@ export default function OpenModelDialog({
         <Stack
           spacing={1}
           direction='column'
-          justifyContent='center'
-          alignItems='center'
-          sx={{padding: '1em 0em', maxWidth: '18.5em'}}
+          sx={{
+            mt: 2,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          data-testid={`dialog-open-model-tabs-stack`}
         >
         { currentTab === 0 &&
-          <Stack spacing={1} sx={{width: '92%'}}>
-            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
-              Browse files...
-            </Button>
-            {!isMobile &&
-              <Typography
-                variant='caption'
-              >
-                Drag and Drop files into viewport to open
-              </Typography>}
+          <Stack data-testid='dialog-open-model-local' spacing={1}>
+              {!isMobile &&
+                <>
+                  <Typography
+                    variant='caption'
+                  >
+                    Drag and Drop files into viewport to open
+                  </Typography>
+                  <Typography
+                    variant='caption'
+                    sx={{textAlign: 'center', color: 'text.secondary'}}
+                  >
+                    — or —
+                  </Typography>
+                </>
+             }
+             <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
+               Browse files...
+             </Button>
           </Stack>
         }
         { currentTab === 1 &&
-          <>
+          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
             <TextField
               label='GitHub Model URL'
               value={name}
@@ -108,12 +120,12 @@ export default function OpenModelDialog({
                setIsDialogDisplayed={setIsDialogDisplayed}
              />}
             {!isAuthenticated && <PleaseLogin/>}
-          </>
+          </Stack>
         }
         { currentTab === 2 &&
           <SampleModels
-          navigate={navigate}
-          setIsDialogDisplayed={setIsDialogDisplayed}
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
           />
         }
         </Stack>
