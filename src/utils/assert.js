@@ -59,7 +59,7 @@ export function assertDefined(...args) {
     if (Object.prototype.hasOwnProperty.call(args, ndx)) {
       const arg = args[ndx]
       if (!isDefinedAndNotNull(arg)) {
-        throw new Error(`Arg ${ndx} is not defined`)
+        throw new Error(`Arg ${ndx} is not defined or is null (zero-based index)`)
       }
     }
   }

@@ -471,11 +471,22 @@ function githubHandlers(defines, authed) {
       )
     }),
 
-    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/:org/repos`, ({params}) => {
+      const {org} = params
+      // Mock response for any organization, but only provide data for bldrs-ai
+      if (org === 'bldrs-ai') {
+        return new Response(
+          JSON.stringify([MOCK_REPOSITORY]),
+          {
+            status: HTTP_OK,
+            headers: {'Content-Type': 'application/json'},
+          },
+        )
+      }
+      
+      // Return empty array for other orgs
       return new Response(
-        JSON.stringify({
-          data: [MOCK_REPOSITORY],
-        }),
+        JSON.stringify([]),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},
