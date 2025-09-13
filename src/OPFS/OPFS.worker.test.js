@@ -336,6 +336,6 @@ test('snapshotCache posts directory snapshot', async () => {
   expect(self.postMessage).toHaveBeenCalledWith({
     completed: true,
     event: 'snapshot',
-    directoryStructure: '/foo.txt\n',
+    directoryStructure: '/foo.txt\tsize=0\thash=da39a3ee5e6b4b0d3255bfef95601890afd80709',
   })
 })
