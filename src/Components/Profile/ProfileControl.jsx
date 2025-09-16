@@ -294,7 +294,8 @@ export default function ProfileControl() {
             try {
               await clearOPFSCache()
             } catch (err) {
-              console.warn('Clear OPFS cache failed (reloading anyway)', err)
+              console.error('Clear OPFS cache failed (reloading anyway)', err)
+              captureException(err)
             } finally {
               window.location.reload()
             }
