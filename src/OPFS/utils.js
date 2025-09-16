@@ -355,8 +355,10 @@ export function doesFileExistInOPFS(
  *
  * @return {boolean}
  */
-export function snapshotOPFS() {
-  return makePromise(opfsSnapshotCache, null, null, null, null, null, 'snapshot')
+export function snapshotOPFS(previewWindow = 0) {
+  // Wrap opfsSnapshotCache so makePromise still receives a callback with standard signature
+  const callback = () => opfsSnapshotCache(previewWindow)
+  return makePromise(callback, null, null, null, null, null, 'snapshot')
 }
 
 /**

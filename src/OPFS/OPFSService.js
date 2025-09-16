@@ -341,9 +341,11 @@ export function opfsClearCache() {
 }
 
 /**
- * Retrives a directory snapshot of the opfs cache.
+ * Retrieves a directory snapshot of the OPFS cache.
+ *
+ * @param {number} [previewWindow] Number of leading bytes per file to include (0 = disabled).
  */
-export function opfsSnapshotCache() {
+export function opfsSnapshotCache(previewWindow = 0) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -351,6 +353,7 @@ export function opfsSnapshotCache() {
 
   workerRef.postMessage({
     command: 'snapshotCache',
+    previewWindow: previewWindow,
   })
 }
 

@@ -26,7 +26,9 @@ import {
   SettingsBrightnessOutlined as SettingsBrightnessOutlinedIcon,
   CheckOutlined as CheckOutlinedIcon,
   PaymentOutlined,
+  CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
+import {clearOPFSCache} from '../../OPFS/utils'
 
 
 /**
@@ -283,6 +285,27 @@ export default function ProfileControl() {
             Use system theme
           </Typography>
           {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+
+        <Divider/>
+        <MenuItem
+          onClick={async () => {
+            onCloseMenu()
+            try {
+              await clearOPFSCache()
+            } catch (err) {
+              console.error('Clear OPFS cache failed (reloading anyway)', err)
+              captureException(err)
+            } finally {
+              window.location.reload()
+            }
+          }}
+          data-testid='clear-local-cache'
+        >
+          <CleaningServicesOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Clear Local Cache
+          </Typography>
         </MenuItem>
       </Menu>
 
