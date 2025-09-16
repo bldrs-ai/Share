@@ -1405,16 +1405,16 @@ async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts =
   // If the target exists, decide whether to overwrite or bail.
   if (overwrite) {
     try {
- await parentDirectory.removeEntry(newFileName)
-} catch (_) {
+      await parentDirectory.removeEntry(newFileName)
+    } catch (_) {
 
-}
+    }
   } else {
     try {
       const existing = await parentDirectory.getFileHandle(newFileName, {create: false})
       if (existing) {
-throw new DOMException('Target exists', 'InvalidModificationError')
-}
+        throw new DOMException('Target exists', 'InvalidModificationError')
+      }
     } catch (_) {/* NotFound: fine */}
   }
 
