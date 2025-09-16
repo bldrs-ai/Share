@@ -121,26 +121,101 @@ export default function pdbToThree(pdb, viewer) {
 }
 
 
+// Element symbol -> full name (organized by periods)
+const ELEMENT_NAME = {
+  // Period 1
+  H: 'Hydrogen', He: 'Helium',
+
+  // Period 2
+  Li: 'Lithium', Be: 'Beryllium', B: 'Boron', C: 'Carbon', N: 'Nitrogen', O: 'Oxygen', F: 'Fluorine', Ne: 'Neon',
+
+  // Period 3
+  Na: 'Sodium', Mg: 'Magnesium', Al: 'Aluminum', Si: 'Silicon', P: 'Phosphorus', S: 'Sulfur', Cl: 'Chlorine', Ar: 'Argon',
+
+  // Period 4
+  K: 'Potassium', Ca: 'Calcium', Sc: 'Scandium', Ti: 'Titanium', V: 'Vanadium', Cr: 'Chromium', Mn: 'Manganese',
+  Fe: 'Iron', Co: 'Cobalt', Ni: 'Nickel', Cu: 'Copper', Zn: 'Zinc', Ga: 'Gallium', Ge: 'Germanium', As: 'Arsenic',
+  Se: 'Selenium', Br: 'Bromine', Kr: 'Krypton',
+
+  // Period 5
+  Rb: 'Rubidium', Sr: 'Strontium', Y: 'Yttrium', Zr: 'Zirconium', Nb: 'Niobium', Mo: 'Molybdenum', Tc: 'Technetium',
+  Ru: 'Ruthenium', Rh: 'Rhodium', Pd: 'Palladium', Ag: 'Silver', Cd: 'Cadmium', In: 'Indium', Sn: 'Tin', Sb: 'Antimony',
+  Te: 'Tellurium', I: 'Iodine', Xe: 'Xenon',
+
+  // Period 6
+  Cs: 'Cesium', Ba: 'Barium', La: 'Lanthanum', Ce: 'Cerium', Pr: 'Praseodymium', Nd: 'Neodymium', Pm: 'Promethium',
+  Sm: 'Samarium', Eu: 'Europium', Gd: 'Gadolinium', Tb: 'Terbium', Dy: 'Dysprosium', Ho: 'Holmium', Er: 'Erbium',
+  Tm: 'Thulium', Yb: 'Ytterbium', Lu: 'Lutetium', Hf: 'Hafnium', Ta: 'Tantalum', W: 'Tungsten', Re: 'Rhenium',
+  Os: 'Osmium', Ir: 'Iridium', Pt: 'Platinum', Au: 'Gold', Hg: 'Mercury', Tl: 'Thallium', Pb: 'Lead', Bi: 'Bismuth',
+  Po: 'Polonium', At: 'Astatine', Rn: 'Radon',
+
+  // Period 7
+  Fr: 'Francium', Ra: 'Radium', Ac: 'Actinium', Th: 'Thorium', Pa: 'Protactinium', U: 'Uranium', Np: 'Neptunium',
+  Pu: 'Plutonium', Am: 'Americium', Cm: 'Curium', Bk: 'Berkelium', Cf: 'Californium', Es: 'Einsteinium', Fm: 'Fermium',
+  Md: 'Mendelevium', No: 'Nobelium', Lr: 'Lawrencium', Rf: 'Rutherfordium', Db: 'Dubnium', Sg: 'Seaborgium',
+  Bh: 'Bohrium', Hs: 'Hassium', Mt: 'Meitnerium', Ds: 'Darmstadtium', Rg: 'Roentgenium', Cn: 'Copernicium',
+  Nh: 'Nihonium', Fl: 'Flerovium', Mc: 'Moscovium', Lv: 'Livermorium', Ts: 'Tennessine', Og: 'Oganesson',
+}
+
+
+// Valid element symbols for quick membership tests
+const VALID_SYMBOL = new Set(Object.keys(ELEMENT_NAME))
+
+
 /**
+ * Normalize the element symbol.
+ *
+ * @param {string} raw
+ * @return {string}
+ */
+function normalizeElementSymbol(raw) {
+  if (!raw) {
+    return 'C'
+  }
+  let s = String(raw).trim()
+  if (!s) {
+    return 'C'
+  }
+
+  // Common PDB quirks:
+  // - All caps coming from atom names: "CA", "CB", "CG", "OD1", "NE2"...
+  // - Real two-letter elements have lowercase second letter: "Fe", "Zn", "Cl", ...
+  // Strategy:
+  //   1) If s is >=2 and second char is uppercase OR digit -> likely an atom name, take first letter.
+  if (s.length >= 2 && (/[A-Z0-9]/).test(s[1])) {
+    s = s[0]
+  }
+
+  // Canonical case: First letter uppercase, rest lowercase
+  s = s[0].toUpperCase() + (s.length > 1 ? s.slice(1).toLowerCase() : '')
+
+  // If still not a valid symbol, fall back to first letter only
+  if (!VALID_SYMBOL.has(s)) {
+    s = s[0]
+  }
+
+  // Map deuterium/tritium to hydrogen
+  if (s === 'D' || s === 'T') {
+    return 'H'
+  }
+
+  return s
+}
+
+
+/**
+ * Lookup the name of an atom by its ID.
+ *
  * @param {object} json
  * @param {number} id
  * @return {string}
  */
 function lookupName(json, id) {
-  let name = 'unknown'
-  if (json.atoms && id < json.atoms.length && json.atoms[id].length === 5) {
-    const elementCode = json.atoms[id][4]
-    switch (elementCode) {
-      case 'H': name = 'Hydrogen'; break
-      case 'C': name = 'Carbon'; break
-      case 'N': name = 'Nitrogen'; break
-      case 'O': name = 'Oxygen'; break
-      case 'P': name = 'Phosphorus'; break
-      case 'S': name = 'Sulfur'; break
-      default: name = 'unknown'
-    }
+  let symbol = 'C'
+  if (json.atoms && id < json.atoms.length && json.atoms[id].length >= 5) {
+    symbol = normalizeElementSymbol(json.atoms[id][4])
   }
-  return name
+  return ELEMENT_NAME[symbol] || 'Unknown'
 }
 
 
