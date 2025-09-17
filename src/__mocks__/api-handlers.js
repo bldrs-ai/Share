@@ -27,14 +27,33 @@ let commentDeleted = false
 export function initHandlers(defines) {
   const handlers = []
   handlers.push(...workersAndWasmPassthrough())
-  handlers.push(...bldrsHandlers())
+  handlers.push(...iconHandlers())
+  handlers.push(...prodDetectHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
   handlers.push(...githubHandlers(defines, false))
   handlers.push(...netlifyHandlers())
   handlers.push(...stripePortalHandlers())
   handlers.push(...subscribePageHandler())
+  handlers.push(...installEsbuildHotReloadHandler())
   return handlers
+}
+
+
+/**
+ * Passthru for esbuild hot-reload plugin
+ *
+ * @return {Array<object>} handlers
+ */
+function installEsbuildHotReloadHandler() {
+  if (process.env.ESBUILD_WATCH) {
+    return [
+      http.get(/\/esbuild/, () => passthrough()),
+    ]
+  } else {
+    // Not enabled in cypress
+    return []
+  }
 }
 
 
@@ -51,9 +70,6 @@ function workersAndWasmPassthrough() {
     // Conway
     http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
     http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
-    // Icons
-    http.get(/\/favicon\.ico$/, () => passthrough()),
-    http.get(/\/icons/, () => passthrough()),
   ]
 }
 
@@ -63,11 +79,33 @@ function workersAndWasmPassthrough() {
  *
  * @return {Array<object>} handlers
  */
-function bldrsHandlers() {
+function iconHandlers() {
   return [
-    http.get('http://bldrs.ai/icons/*', () => {
+    // Icons
+    http.get(/\/favicon\.ico$/, () => passthrough()),
+    http.get(/\/icons/, () => passthrough()),
+    http.get('http://bldrs.ai/icons/*', ({request}) => {
+      console.error('Found absolute ref to prod:', request.url)
       return new Response('', {
-        status: HTTP_OK,
+        status: HTTP_BAD_REQUEST,
+        headers: {'Content-Type': 'text/plain'},
+      })
+    }),
+  ]
+}
+
+
+/**
+ * Detect and error on absolute refs to prod.
+ *
+ * @return {Array<object>} handlers
+ */
+function prodDetectHandlers() {
+  return [
+    http.get('http://bldrs.ai/*', ({request}) => {
+      console.error('Found absolute ref to prod:', request.url)
+      return new Response('', {
+        status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
       })
     }),
@@ -389,8 +427,8 @@ function githubHandlers(defines, authed) {
     }),
 
     http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
-      const {org, repo, issueNumber} = params
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
+      const {org, repo} = params
+      if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return new Response(
           JSON.stringify({
             message: 'Not Found',
@@ -402,18 +440,9 @@ function githubHandlers(defines, authed) {
         )
       }
 
-      return new Response(
-        JSON.stringify({
-          id: parseInt(issueNumber),
-          number: parseInt(issueNumber),
-          state: 'closed',
-          state_reason: 'completed',
-        }),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
 
     http.delete(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/comments/:commentId`, ({params}) => {
@@ -483,7 +512,7 @@ function githubHandlers(defines, authed) {
           },
         )
       }
-      
+
       // Return empty array for other orgs
       return new Response(
         JSON.stringify([]),

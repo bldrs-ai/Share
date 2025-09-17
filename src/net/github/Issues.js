@@ -84,5 +84,5 @@ export async function updateIssue(repository, issueNumber, title, body, accessTo
     body,
     title,
   }
-  return await patchGitHub(repository, 'issues/{issueNumber}', args, accessToken)
+  return await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
 }

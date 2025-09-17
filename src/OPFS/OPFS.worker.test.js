@@ -29,6 +29,31 @@ if (typeof crypto === 'undefined') {
   global.crypto = require('crypto').webcrypto
 }
 
+// Minimal polyfills for Node test environment
+if (typeof DOMException === 'undefined') {
+  global.DOMException = class DOMException extends Error {
+    /** Construct DOMException */
+    constructor(message, name = 'Error') {
+      super(message)
+      this.name = name
+    }
+  }
+}
+
+if (typeof WritableStream === 'undefined') {
+  // Node >=16 provides web streams in 'stream/web'
+  try {
+    global.WritableStream = require('stream/web').WritableStream
+  } catch (_) {
+    // Fallback no-op polyfill (satisfies type surface for tests that don't actually use pipe)
+    global.WritableStream = class WritableStream {
+      /** Construct WritableStream */
+      // eslint-disable-next-line no-useless-constructor, no-empty-function, require-jsdoc
+      constructor() {}
+    }
+  }
+}
+
 const worker = require('./OPFS.worker.js')
 
 /**
@@ -127,28 +152,42 @@ class FileHandle {
    */
   async createWritable() {
     const handle = this
-    return {
+    // Implement as a real WritableStream so ReadableStream.pipeTo works
+    let chunks = []
+    return new WritableStream({
       /**
-       * Overwrites the file with the provided data.
+       * Write a chunk to the stream
        *
-       * @param {Blob|ArrayBuffer} data - Data to write to the file.
-       * @return {Promise<void>}
+       * @param {any} data
        */
       async write(data) {
-        const arr = data instanceof ArrayBuffer ?
-          new Uint8Array(data) :
-          new Uint8Array(await data.arrayBuffer())
-        handle.data = arr
+        if (data instanceof ArrayBuffer) {
+          chunks.push(new Uint8Array(data))
+        } else if (ArrayBuffer.isView(data)) {
+          chunks.push(new Uint8Array(data.buffer, data.byteOffset, data.byteLength))
+        } else if (typeof Blob !== 'undefined' && data instanceof Blob) {
+          const arr = new Uint8Array(await data.arrayBuffer())
+          chunks.push(arr)
+        } else {
+          const enc = new TextEncoder()
+          chunks.push(enc.encode(String(data)))
+        }
       },
-      /**
-       * Closes the writable stream.
-       *
-       * @return {Promise<void>}
-       */
+      /** Finalize and persist into handle.data */
       async close() {
-        await Promise.resolve()
+        const total = chunks.reduce((sum, a) => sum + a.length, 0)
+        const out = new Uint8Array(total)
+        let offset = 0
+        for (const a of chunks) {
+          out.set(a, offset)
+          offset += a.length
+        }
+        handle.data = out
       },
-    }
+      async abort() {
+        chunks = []
+      },
+    })
   }
 }
 
@@ -336,6 +375,107 @@ test('snapshotCache posts directory snapshot', async () => {
   expect(self.postMessage).toHaveBeenCalledWith({
     completed: true,
     event: 'snapshot',
-    directoryStructure: '/foo.txt\n',
+    directoryStructure: '/foo.txt\tsize=0\thash=da39a3ee5e6b4b0d3255bfef95601890afd80709',
   })
+})
+
+// ------------------------------------------------------------
+// renameFileInOPFS tests
+// ------------------------------------------------------------
+
+test('renameFileInOPFS falls back to stream copy+delete when move is unavailable', async () => {
+  const oldHandle = await rootDir.getFileHandle('old.txt', {create: true})
+  oldHandle.data = new Uint8Array(Buffer.from('hello'))
+
+  const newHandle = await worker.renameFileInOPFS(rootDir, oldHandle, 'new.txt')
+
+  // old should be gone
+  await expect(rootDir.getFileHandle('old.txt', {create: false})).rejects.toThrow('not found')
+  // new should exist with same contents
+  const f = await newHandle.getFile()
+  expect(await f.text()).toBe('hello')
+})
+
+test('renameFileInOPFS uses native two-arg move when available', async () => {
+  const handle = await rootDir.getFileHandle('twoarg.txt', {create: true})
+  handle.data = new Uint8Array(Buffer.from('two-arg'))
+
+  // Attach a native-like two-arg move(dir, newName)
+  /* eslint-disable no-invalid-this */
+  /* eslint-disable require-await */
+  handle.move = jest.fn(async function(dir, newName) {
+    // simulate moving inside same dir: update map and handle name
+    dir.entriesMap.delete(this.name)
+    this.name = newName
+    dir.entriesMap.set(newName, this)
+  })
+  /* eslint-enable require-await */
+
+  const renamed = await worker.renameFileInOPFS(rootDir, handle, 'renamed.txt')
+  expect(handle.move).toHaveBeenCalled()
+
+  // old should be gone, new present
+  await expect(rootDir.getFileHandle('twoarg.txt', {create: false})).rejects.toThrow('not found')
+  const f = await renamed.getFile()
+  expect(f.name).toBe('renamed.txt')
+  expect(await f.text()).toBe('two-arg')
+})
+
+test('renameFileInOPFS supports single-arg move(newName) variant (Chromium style)', async () => {
+  const handle = await rootDir.getFileHandle('single.txt', {create: true})
+  handle.data = new Uint8Array(Buffer.from('one-arg'))
+
+  // First call with 2 args should throw TypeError("Not enough arguments"), then single-arg works
+  // eslint-disable-next-line require-await
+  handle.move = jest.fn(async function(a, b) {
+    if (typeof b !== 'undefined') {
+      throw new TypeError('Not enough arguments')
+    }
+    const newName = a
+    const dir = rootDir
+    dir.entriesMap.delete(this.name)
+    this.name = newName
+    dir.entriesMap.set(newName, this)
+  })
+  /* eslint-enable no-invalid-this */
+
+  const renamed = await worker.renameFileInOPFS(rootDir, handle, 'onlyname.txt')
+  expect(handle.move).toHaveBeenCalledTimes(2)
+
+  await expect(rootDir.getFileHandle('single.txt', {create: false})).rejects.toThrow('not found')
+  const f = await renamed.getFile()
+  expect(f.name).toBe('onlyname.txt')
+  expect(await f.text()).toBe('one-arg')
+})
+
+test('renameFileInOPFS overwrite true removes existing destination before rename', async () => {
+  // Existing destination file
+  const existing = await rootDir.getFileHandle('dest.txt', {create: true})
+  existing.data = new Uint8Array(Buffer.from('old'))
+  // Source file
+  const src = await rootDir.getFileHandle('src.txt', {create: true})
+  src.data = new Uint8Array(Buffer.from('new'))
+
+  // No native move: triggers stream fallback; overwrite will remove existing first
+  const dest = await worker.renameFileInOPFS(rootDir, src, 'dest.txt', {overwrite: true})
+
+  // Ensure only one dest remains, with "new" contents
+  const file = await dest.getFile()
+  expect(await file.text()).toBe('new')
+  await expect(rootDir.getFileHandle('src.txt', {create: false})).rejects.toThrow('not found')
+})
+
+test('renameFileInOPFS falls back to copy+delete when native move throws', async () => {
+  /* eslint-disable require-await */
+  const src = await rootDir.getFileHandle('boom.txt', {create: true})
+  src.data = new Uint8Array(Buffer.from('boom'))
+  src.move = jest.fn(async () => {
+    throw new Error('some engine issue')
+  })
+
+  const dest = await worker.renameFileInOPFS(rootDir, src, 'ok.txt')
+  const file = await dest.getFile()
+  expect(await file.text()).toBe('boom')
+  await expect(rootDir.getFileHandle('boom.txt', {create: false})).rejects.toThrow('not found')
+  /* eslint-enable require-await */
 })
