@@ -2,15 +2,16 @@ import esbuild from 'esbuild'
 import config from './common.js'
 import {createProxyServer} from './proxy.js'
 import {log} from './utils.js'
+import defines from './defines.js'
 
 
 const ctx = await esbuild.context(config)
 
-// Watch rebuilds docs/ which can interfere with cypress
-if (process.env.ESBUILD_WATCH === 'true') {
+if (defines['process.env.ESBUILD_WATCH'] === 'true') {
   await ctx.watch()
+} else {
+  console.warn('Esbuild hot reload DISABLED', process.env.ESBUILD_WATCH)
 }
-
 
 /**
  * "It's not possible to hook into esbuild's local server to customize
