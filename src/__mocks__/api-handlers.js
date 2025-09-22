@@ -26,9 +26,9 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
+  handlers.push(...prodDetectHandlers())
   handlers.push(...workersAndWasmPassthrough())
   handlers.push(...iconHandlers())
-  handlers.push(...prodDetectHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
   handlers.push(...githubHandlers(defines, false))
@@ -41,19 +41,20 @@ export function initHandlers(defines) {
 
 
 /**
- * Passthru for esbuild hot-reload plugin
+ * Detect and error on absolute refs to prod.
  *
  * @return {Array<object>} handlers
  */
-function installEsbuildHotReloadHandler() {
-  if (process.env.ESBUILD_WATCH) {
-    return [
-      http.get(/\/esbuild/, () => passthrough()),
-    ]
-  } else {
-    // Not enabled in cypress
-    return []
-  }
+function prodDetectHandlers() {
+  return [
+    http.get('http://bldrs.ai/*', ({request}) => {
+      console.error('Found absolute ref to prod:', request.url)
+      return new Response('', {
+        status: HTTP_BAD_REQUEST,
+        headers: {'Content-Type': 'text/plain'},
+      })
+    }),
+  ]
 }
 
 
@@ -85,24 +86,6 @@ function iconHandlers() {
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
     http.get('http://bldrs.ai/icons/*', ({request}) => {
-      console.error('Found absolute ref to prod:', request.url)
-      return new Response('', {
-        status: HTTP_BAD_REQUEST,
-        headers: {'Content-Type': 'text/plain'},
-      })
-    }),
-  ]
-}
-
-
-/**
- * Detect and error on absolute refs to prod.
- *
- * @return {Array<object>} handlers
- */
-function prodDetectHandlers() {
-  return [
-    http.get('http://bldrs.ai/*', ({request}) => {
       console.error('Found absolute ref to prod:', request.url)
       return new Response('', {
         status: HTTP_BAD_REQUEST,
@@ -192,6 +175,7 @@ function stripePortalHandlers() {
     }),
   ]
 }
+
 
 /**
  * Mock to disable Google Analytics.
@@ -428,6 +412,7 @@ function githubHandlers(defines, authed) {
 
     http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
       const {org, repo} = params
+
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return new Response(
           JSON.stringify({
@@ -500,22 +485,11 @@ function githubHandlers(defines, authed) {
       )
     }),
 
-    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/:org/repos`, ({params}) => {
-      const {org} = params
-      // Mock response for any organization, but only provide data for bldrs-ai
-      if (org === 'bldrs-ai') {
-        return new Response(
-          JSON.stringify([MOCK_REPOSITORY]),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
-      }
-
-      // Return empty array for other orgs
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
       return new Response(
-        JSON.stringify([]),
+        JSON.stringify({
+          data: [MOCK_REPOSITORY],
+        }),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},
@@ -542,7 +516,6 @@ function githubHandlers(defines, authed) {
         },
       )
     }),
-
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, ({params, request}) => {
       // Directly check params for 'failurecaseowner' and 'failurecaserepo'
@@ -729,4 +702,21 @@ function githubHandlers(defines, authed) {
       )
     }),
   ]
+}
+
+
+/**
+ * Passthru for esbuild hot-reload plugin
+ *
+ * @return {Array<object>} handlers
+ */
+function installEsbuildHotReloadHandler() {
+  if (process.env.ESBUILD_WATCH) {
+    return [
+      http.get(/\/esbuild/, () => passthrough()),
+    ]
+  } else {
+    // Not enabled in cypress
+    return []
+  }
 }
