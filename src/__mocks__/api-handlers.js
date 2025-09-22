@@ -86,7 +86,6 @@ function iconHandlers() {
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
     http.get('http://bldrs.ai/icons/*', ({request}) => {
-      console.error('Found absolute ref to prod:', request.url)
       return new Response('', {
         status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
