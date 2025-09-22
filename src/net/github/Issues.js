@@ -80,7 +80,7 @@ export async function getIssueComments(repository, issueNumber, accessToken = ''
 export async function updateIssue(repository, issueNumber, title, body, accessToken) {
   assertDefined(...arguments)
   const args = {
-    issueNumber,
+    issue_number: issueNumber,
     body,
     title,
   }

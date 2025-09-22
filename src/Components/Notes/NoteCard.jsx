@@ -2,21 +2,27 @@ import React, {ReactElement, useState, useEffect, useRef} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
+import NoteBodyEdit from './NoteBodyEdit'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {deleteComment, updateComment} from '../../net/github/Comments'
-import {closeIssue, updateIssue} from '../../net/github/Issues'
+import {updateComment} from '../../net/github/Comments'
+import {
+  closeIssue,
+  updateIssue,
+  // TODO(pablo): deleteComment as deleteCommentGitHub,
+} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {addCameraUrlParams, parseHashParams, setCameraFromParams} from '../Camera/CameraControl'
-import {HASH_PREFIX_CAMERA, removeCameraUrlParams} from '../Camera/hashState'
+import {removeCameraUrlParams} from '../Camera/hashState'
+import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
-import NoteBodyEdit from './NoteBodyEdit'
 import NoteContent from './NoteContent'
+import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
-import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
+import {deleteComment} from '../../net/github/Comments'
 
 
 /**
@@ -53,6 +59,8 @@ export default function NoteCard({
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
