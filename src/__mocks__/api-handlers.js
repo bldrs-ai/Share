@@ -710,7 +710,8 @@ function githubHandlers(defines, authed) {
  * @return {Array<object>} handlers
  */
 function installEsbuildHotReloadHandler() {
-  if (process.env.ESBUILD_WATCH) {
+  const ESBUILD_WATCH = (typeof process !== 'undefined' && process.env?.ESBUILD_WATCH)
+  if (ESBUILD_WATCH) {
     return [
       http.get(/\/esbuild/, () => passthrough()),
     ]
