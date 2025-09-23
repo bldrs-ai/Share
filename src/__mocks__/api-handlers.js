@@ -26,29 +26,51 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
-  handlers.push(...workersAndWasmPassthru())
-  handlers.push(...bldrsHandlers())
+  handlers.push(...prodDetectHandlers())
+  handlers.push(...workersAndWasmPassthrough())
+  handlers.push(...iconHandlers())
   handlers.push(...gaHandlers())
   handlers.push(...githubHandlers(defines, true))
   handlers.push(...githubHandlers(defines, false))
   handlers.push(...netlifyHandlers())
   handlers.push(...stripePortalHandlers())
   handlers.push(...subscribePageHandler())
+  handlers.push(...installEsbuildHotReloadHandler())
   return handlers
 }
 
 
 /**
- * Let requests for web workers, wasm and related files to passthru.
+ * Detect and error on absolute refs to prod.
  *
  * @return {Array<object>} handlers
  */
-function workersAndWasmPassthru() {
+function prodDetectHandlers() {
   return [
-    http.get(/\.worker(\.m?js)?$/, () => passthrough()),
+    http.get('http://bldrs.ai/*', ({request}) => {
+      console.error('Found absolute ref to prod:', request.url)
+      return new Response('', {
+        status: HTTP_BAD_REQUEST,
+        headers: {'Content-Type': 'text/plain'},
+      })
+    }),
+  ]
+}
+
+
+/**
+ * Let requests for web workers, wasm and related files to passthrough.
+ *
+ * @return {Array<object>} handlers
+ */
+function workersAndWasmPassthrough() {
+  return [
+    // Caching + OPFS
     http.get(/\/Cache\.js$/, () => passthrough()),
-    http.get(/\.wasm$/i, () => passthrough()),
-    http.get(/ConwayGeom/i, () => passthrough()),
+    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
+    // Conway
+    http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
+    http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
   ]
 }
 
@@ -58,11 +80,14 @@ function workersAndWasmPassthru() {
  *
  * @return {Array<object>} handlers
  */
-function bldrsHandlers() {
+function iconHandlers() {
   return [
-    http.get('http://bldrs.ai/icons/*', () => {
+    // Icons
+    http.get(/\/favicon\.ico$/, () => passthrough()),
+    http.get(/\/icons/, () => passthrough()),
+    http.get('http://bldrs.ai/icons/*', ({request}) => {
       return new Response('', {
-        status: HTTP_OK,
+        status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
       })
     }),
@@ -150,6 +175,7 @@ function stripePortalHandlers() {
   ]
 }
 
+
 /**
  * Mock to disable Google Analytics.
  *
@@ -171,6 +197,16 @@ function gaHandlers() {
       return new Response(null, {
         status: HTTP_OK,
       })
+    }),
+
+    http.get('https://www.googletagmanager.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
     }),
   ]
 }
@@ -375,6 +411,7 @@ function githubHandlers(defines, authed) {
 
     http.patch(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber`, ({params}) => {
       const {org, repo} = params
+
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return new Response(
           JSON.stringify({
@@ -478,7 +515,6 @@ function githubHandlers(defines, authed) {
         },
       )
     }),
-
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, ({params, request}) => {
       // Directly check params for 'failurecaseowner' and 'failurecaserepo'
@@ -665,4 +701,22 @@ function githubHandlers(defines, authed) {
       )
     }),
   ]
+}
+
+
+/**
+ * Passthru for esbuild hot-reload plugin
+ *
+ * @return {Array<object>} handlers
+ */
+function installEsbuildHotReloadHandler() {
+  const ESBUILD_WATCH = (typeof process !== 'undefined' && process.env?.ESBUILD_WATCH)
+  if (ESBUILD_WATCH) {
+    return [
+      http.get(/\/esbuild/, () => passthrough()),
+    ]
+  } else {
+    // Not enabled in cypress
+    return []
+  }
 }

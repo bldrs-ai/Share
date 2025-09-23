@@ -13,6 +13,7 @@
 // https://on.cypress.io/configuration
 // ***********************************************************
 
+import 'cypress-fail-fast'
 import 'cypress-real-events/support'
 import {http} from 'msw'
 import {initWorker} from '../../src/__mocks__/browser'
@@ -61,6 +62,19 @@ before(() => {
       // Allow the request to pass through (no explicit passthrough needed in MSW 2.x)
     }),
   )
+})
+
+
+const MS_PER_SEC = 1000
+const SECS_PER_MIN = 60
+const MS_PER_MIN = SECS_PER_MIN * MS_PER_SEC
+const MAX_RUNTIME_MINS = 20
+const MAX_RUNTIME_MS = MAX_RUNTIME_MINS * MS_PER_MIN
+const startTime = Date.now()
+beforeEach(() => {
+  if (Date.now() - startTime > MAX_RUNTIME_MS) {
+    throw new Error(`Exceeded max suite runtime of ${MAX_RUNTIME_MINS} minutes`)
+  }
 })
 
 

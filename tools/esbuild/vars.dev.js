@@ -13,4 +13,7 @@ export default {
 
   // served from bldrs.ai in prod, separate server in local dev
   CORS_PROXY_HOST: 'http://localhost:8090',
+
+  // Esbuild hot-reload
+  ESBUILD_WATCH: true,
 }

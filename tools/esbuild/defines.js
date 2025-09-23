@@ -3,8 +3,20 @@ import cypress from './vars.cypress.js'
 import prod from './vars.prod.js'
 
 
-// Exported for testing only
-/** @return {{[key: string]: string}} */
+/**
+ * We configure our esbuild from a combination of file-based defines, imported
+ * here, and process.env overrides for CLI ergonomics.
+ */
+
+
+/**
+ * This brings in overrides from process.env for the config vars we have already
+ * defined.
+ *
+ * Exported for testing only.
+ *
+ * @return {{[key: string]: string}}
+ */
 export function zipEnvWithConfig(config) {
   const defines = {}
   Object.keys(config).forEach((name) => {
@@ -21,9 +33,10 @@ export function zipEnvWithConfig(config) {
 }
 
 
-// Exported for testing only
 /**
  * Convert simple env var strings to js types
+ *
+ * Exported for testing only.
  *
  * @return {boolean|number|string}
  */
