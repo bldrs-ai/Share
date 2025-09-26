@@ -2,6 +2,7 @@ import React, {ReactElement, useState} from 'react'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
+import {navigateToModel} from '../../utils/navigate'
 
 
 /**
@@ -23,7 +24,8 @@ export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}
       6: '/share/v/gh/bldrs-ai/test-models/main/fbx/samba-dancing.fbx#c:-1.016,129.356,253.729,0,90.107,2.409',
     }
     disablePageReloadApprovalCheck()
-    navigate({pathname: modelPath[e.target.value]})
+    // navigate({pathname: modelPath[e.target.value]})
+    navigateToModel({pathname: modelPath[e.target.value]}, navigate)
     closeDialog()
   }
 

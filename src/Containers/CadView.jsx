@@ -11,6 +11,7 @@ import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {isOutOfMemoryError} from '../utils/oom'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
@@ -134,6 +135,9 @@ export default function CadView({
         console.error(error.message)
         captureException(error)
       }
+      /* while (true) {
+        initViewer(pathPrefix, sceneBackground || '#abcdef')
+      }*/
       const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
       setViewer(initializedViewer)
     }
@@ -187,13 +191,30 @@ export default function CadView({
     debug().log('CadView#onViewer: modelPath:', modelPath)
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
+    let isOOM = false
     try {
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
-      setAlert(e)
+       if (isOutOfMemoryError(e)) {
+         isOOM = true
+      }
+      if (isOOM) {
+        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
+        setAlert({
+          type: 'oom',
+          message: 'We ran out of memory attempting to load this model. ' +
+            'Try opening it on a desktop browser with more memory or ' +
+            'refresh the page.',
+        })
+      } else {
+        setAlert(e)
+      }
+
+      console.error(e)
+      captureException(e)
       return
     }
-    if (!tmpModelRef) {
+    if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
@@ -275,6 +296,11 @@ export default function CadView({
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
+      if (isOutOfMemoryError(error)) {
+            error.isOutOfMemory = true
+            throw error
+        }
+
       setAlert(error)
       return
     } finally {

@@ -16,6 +16,8 @@ import Sheenstock from '../../assets/icons/Sheenstock.svg'
  * @return {ReactElement}
  */
 export default function SampleModels({navigate, setIsDialogDisplayed}) {
+  // Lazy import to avoid circulars in tests
+  const {navigateToModel} = require('../../utils/navigate')
   const [, setSelected] = useState('')
   const iconsStyle = {height: '1.6em'}
   const modelPath = {
@@ -42,7 +44,8 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
 
   const handleSelect = (modelName, closeDialog) => {
     setSelected(modelName)
-    navigate({pathname: modelPath[modelName]})
+    // navigate({pathname: modelPath[modelName]})
+    navigateToModel({pathname: modelPath[modelName]}, navigate)
     closeDialog()
   }
 
