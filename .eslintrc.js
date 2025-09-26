@@ -60,7 +60,7 @@ module.exports = {
     'eqeqeq': ['error', 'always'],
     'func-call-spacing': ['error', 'never'],
     'import/newline-after-import': ['error', {count: 2}],
-    'indent': ['off', 2], // TODO(pablo): there's too many to fix right now
+    'indent': ['error', 2],
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',
     'jsdoc/tag-lines': [2, 'any', {startLines: 1}],

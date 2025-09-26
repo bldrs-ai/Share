@@ -4,9 +4,9 @@ import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
 import Typography from '@mui/material/Typography'
 import AlertDialog from '../Components/AlertDialog'
-import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
+import {navToDefault} from '../utils/routes'
 import CloseIcon from '@mui/icons-material/Close'
 
 

@@ -62,7 +62,7 @@ export async function load(
   const isLocallyHostedFile = path.indexOf('/') === 0
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
-    debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
+    debug(true).log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
     if (isLocallyHostedFile) {
       derefPath = path
       shaHash = ''
@@ -71,17 +71,17 @@ export async function load(
       [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     }
   } else if (isLocallyHostedFile) {
-    debug().log('Loader#load: locally hosted file')
+    debug(true).log('Loader#load: locally hosted file')
     shaHash = ''
   } else {
-    debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
+    debug(true).log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
     [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress('Determining file type...')
+  onProgress(`Determining file type for ${path}...`)
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -164,6 +164,8 @@ export async function load(
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
+    derefPath = `${derefPath}&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`
+    console.log('Using GDRIVE path:', derefPath)
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }

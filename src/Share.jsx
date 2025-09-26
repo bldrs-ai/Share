@@ -1,16 +1,12 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
-import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
 import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
-import {disablePageReloadApprovalCheck} from './utils/event'
-import {navWith} from './utils/navigate'
-import {testUuid} from './utils/strings'
-import {splitAroundExtension} from './Filetype'
-import {processExternalUrl, processProjectFile, processGitHubFile} from './utils/urlHelpers'
+import {navToDefault} from './utils/navigate'
+import {handleRoute} from './utils/routes'
 
 
 /**
@@ -23,7 +19,7 @@ import {processExternalUrl, processProjectFile, processGitHubFile} from './utils
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
-  const urlParams = useParams()
+  const routeParams = useParams()
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
@@ -43,7 +39,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 
   /**
-   * On a change to urlParams, setting a new model path will clear the
+   * On a change to routeParams, setting a new model path will clear the
    * scene and load the new model IFC.  If there's not a valid IFC,
    * the helper will redirect to the index file.
    *
@@ -53,7 +49,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   useEffect(() => {
     /** A demux to help forward to the index file, load a new model or do nothing. */
     const onChangeUrlParams = (() => {
-      const mp = getModelPath(installPrefix, pathPrefix, urlParams)
+      const mp = handleRoute(pathPrefix, routeParams)
       if (mp === null) {
         navToDefault(navigate, appPrefix)
         return
@@ -70,7 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     onChangeUrlParams()
 
     // TODO(pablo): currently expect these to both be defined.
-    const {org, repo} = urlParams
+    const {org, repo} = routeParams
     if (org && repo) {
       setRepository(org, repo)
       setIsVersionsEnabled(true)
@@ -82,7 +78,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
-    } else if (pathPrefix.startsWith('/share/v/u')) {
+    } else if (
+      pathPrefix.startsWith('/share/v/u') || // generic url
+        pathPrefix === '/share/v/g' // google
+    ) {
+      console.log('Model path is generic external URL:', modelPath)
       setRepository('external', 'content')
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
@@ -97,10 +97,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     }
   }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
       setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
-      setModelPath, setRepository, urlParams])
+      setModelPath, setRepository, routeParams])
 
-
-  // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
   return (
     modelPath &&
     <>
@@ -133,97 +131,3 @@ function ModelTitle({repository, modelPath}) {
     </Helmet>
   )
 }
-
-
-/**
- * Navigate to index.ifc with nice camera setting.
- *
- * @param {Function} navigate
- * @param {string} appPrefix
- */
-export function navToDefault(navigate, appPrefix) {
-  // TODO: probe for index.ifc
-  const mediaSizeTabletWith = 900
-  disablePageReloadApprovalCheck()
-  const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
-  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
-  navWith(navigate, defaultPath, {
-    search: location.search,
-    hash: cameraHash,
-  })
-}
-
-
-/**
- * Returns a reference to a model file.  For use by IfcViewerAPIExtended.load.
- *
- * Format is either a reference within this project's serving directory:
- *   {filepath: '/file.ifc'}
- *
- * or a global GitHub path:
- *   {gitpath: 'http://host/share/v/gh/bldrs-ai/Share/main/index.ifc'}
- *
- * or an uploaded path:
- *   {filepath: '/xxxx-xxxx-xxxx-xxxx'}
- *
- * @param {string} installPrefix e.g. /share
- * @param {string} pathPrefix e.g. /share/v/p
- * @param {object} urlParams e.g.:
- *     .../:org/:repo/:branch/ with .../a/b/c/d
- *   becomes:
- *     {
- *       '*': 'a/b/c/d',
- *       'org': 'a',
- *       ...
- *     }
- * @return {object|null} Null will result in a redirect to the index file.
- */
-export function getModelPath(installPrefix, pathPrefix, urlParams) {
-  // TODO: combine modelPath methods into class.
-  let m = null
-  let filepath = urlParams['*']
-  if (filepath === '') {
-    return null
-  }
-
-  if (pathPrefix.endsWith('/u')) {
-    const externalResult = processExternalUrl(filepath)
-    if (externalResult) {
-      return externalResult
-    }
-    return null
-  }
-
-  // everything else still expects a "file path + optional eltPath"
-  let parts
-  let extension
-  try {
-    ({parts, extension} = splitAroundExtension(filepath))
-  } catch (e) {
-    if (testUuid(filepath)) {
-      return {filepath, extension: null}
-    }
-    alert(`Unsupported filetype: ${filepath}`)
-    debug().error(e)
-    return null
-  }
-
-  filepath = `/${parts[0]}${extension}`
-
-  if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // project file case
-    m = processProjectFile(filepath, parts[1])
-    debug().log('Share#getModelPath: is a project file:', m, window.location.hash)
-  } else if (pathPrefix.endsWith('/gh')) {
-    // GitHub case
-    m = processGitHubFile(filepath, parts[1], urlParams)
-    debug().log('Share#getModelPath: is a remote GitHub file:', m)
-  } else {
-    throw new Error('Empty view type from pathPrefix')
-  }
-
-  return m
-}
-

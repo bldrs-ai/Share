@@ -1,3 +1,28 @@
+import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+import {disablePageReloadApprovalCheck} from './event'
+
+
+/**
+ * Navigate to index.ifc with nice camera setting.
+ *
+ * @param {Function} navigate
+ * @param {string} appPrefix
+ */
+export function navToDefault(navigate, appPrefix) {
+  // TODO: probe for index.ifc
+  const mediaSizeTabletWith = 900
+  disablePageReloadApprovalCheck()
+  const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
+  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
+        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
+        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+  navWith(navigate, defaultPath, {
+    search: location.search,
+    hash: cameraHash,
+  })
+}
+
+
 /**
  * Helper for calling navigate that will append search query to path,
  * if present, before appending an optional hash.

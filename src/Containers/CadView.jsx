@@ -184,7 +184,7 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
 
-    debug().log('CadView#onViewer: modelPath:', modelPath)
+    debug(true).log('CadView#onViewer: modelPath:', modelPath)
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     try {
@@ -272,8 +272,8 @@ export default function CadView({
     }
     let loadedModel
     try {
-      loadedModel = await load(filepath, viewer, onProgress,
-        (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
+      // HACK(pablo): used to disable opfs for external models.. why?
+      loadedModel = await load(filepath, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
       setAlert(error)
       return
