@@ -44,7 +44,6 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
 
   const handleSelect = (modelName, closeDialog) => {
     setSelected(modelName)
-    // navigate({pathname: modelPath[modelName]})
     navigateToModel({pathname: modelPath[modelName]}, navigate)
     closeDialog()
   }

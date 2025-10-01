@@ -110,7 +110,6 @@ export default function OpenModelDialog({
                 const ghPath = event.target.value
                 if (looksLikeLink(ghPath)) {
                   setIsDialogDisplayed(false)
-                  // navigate(githubUrlOrPathToSharePath(ghPath))
                   navigateToModel(githubUrlOrPathToSharePath(ghPath), navigate)
                 }
               }}
