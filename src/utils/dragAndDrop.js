@@ -1,9 +1,9 @@
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {disablePageReloadApprovalCheck} from './event'
+import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
 import {saveDnDFileToOpfsFallback} from './loader'
-import {trackAlert} from './alertTracking'
 import debug from './debug'
 
 
