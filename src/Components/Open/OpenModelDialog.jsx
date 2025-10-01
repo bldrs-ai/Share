@@ -9,6 +9,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
+import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
@@ -43,8 +44,9 @@ export default function OpenModelDialog({
 
   const openFile = () => {
     const onLoad = (filename) => {
+      // Use full reload when opening a new local file
       disablePageReloadApprovalCheck()
-      navigate(`${appPrefix}/v/new/${filename}`)
+      navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
@@ -108,7 +110,7 @@ export default function OpenModelDialog({
                 const ghPath = event.target.value
                 if (looksLikeLink(ghPath)) {
                   setIsDialogDisplayed(false)
-                  navigate(githubUrlOrPathToSharePath(ghPath))
+                  navigateToModel(githubUrlOrPathToSharePath(ghPath), navigate)
                 }
               }}
             />

@@ -22,22 +22,33 @@ export default function AlertDialog({onClose}) {
     onClose()
   }
 
+  const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
+  const refresh = () => {
+    try {
+ window.location.reload()
+} catch (_) {/* noop */}
+  }
+  const actionCb = isOom ? refresh : onCloseInner
+  const actionTitle = isOom ? 'Refresh' : 'Reset'
   return (
     <Dialog
-      headerText='Error'
+      headerText={isOom ? 'Out of Memory' : 'Error'}
       isDialogDisplayed={alert !== null}
       setIsDialogDisplayed={onCloseInner}
-      actionCb={onCloseInner}
+      actionCb={actionCb}
       headerIcon={<ErrorOutlineIcon className='icon-share'/>}
-      actionTitle='Reset'
+      actionTitle={actionTitle}
     >
       <p>
         {createAlertReport(alert)}<br/>
-        For more help contact us on our{' '}
-        <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
-          Discord
-        </Link>{' '}
-        for help
+        {!isOom && (
+          <>For more help contact us on our{' '}
+            <Link href='https://discord.gg/9SxguBkFfQ' target='_blank' rel='noopener noreferrer'>
+              Discord
+            </Link>{' '}
+            for help
+          </>
+        )}
       </p>
     </Dialog>
   )
@@ -49,11 +60,17 @@ export default function AlertDialog({onClose}) {
  * @return {ReactElement}
  */
 function createAlertReport(a) {
+  if (a === null) {
+    return ''
+  }
   if (typeof a === 'string') {
     trackAlert(a)
     return a
   } else if (typeof a === 'object') {
-    if (a instanceof NotFoundError) {
+    if (a && a.type === 'oom') {
+      trackAlert(a.message, a)
+      return a.message
+    } else if (a instanceof NotFoundError) {
       trackAlert(a.message, a)
       return displayPathAlert(a)
     } else if (a instanceof Error) {

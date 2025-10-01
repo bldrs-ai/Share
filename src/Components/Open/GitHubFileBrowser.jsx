@@ -4,6 +4,7 @@ import Button from '@mui/material/Button'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
@@ -124,7 +125,7 @@ export default function GitHubFileBrowser({
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
       const branch = branchName || 'main'
-      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)})
+      navigateToModel({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)}, navigate)
       setIsDialogDisplayed(false)
     }
   }

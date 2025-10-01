@@ -1,8 +1,9 @@
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
 import {disablePageReloadApprovalCheck} from './event'
-import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
+import {navigateToModel} from './navigate'
+import {saveDnDFileToOpfsFallback} from './loader'
 import debug from './debug'
 
 
@@ -57,7 +58,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   function onWritten(fileName) {
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
-    navigate(`${appPrefix}/v/new/${fileName}`)
+    navigateToModel(`${appPrefix}/v/new/${fileName}`, navigate)
     if (onSuccess) {
       onSuccess(fileName)
     }
