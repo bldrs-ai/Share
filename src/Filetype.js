@@ -42,7 +42,7 @@ export function isExtensionSupported(ext) {
 
 
 /**
- * @param {string} strWithSuffix
+ * @param {string} pathWithSuffix
  * @return {boolean} Is supported
  */
 export function pathSuffixSupported(pathWithSuffix) {
@@ -86,8 +86,7 @@ const GLB_MAGIC_NUMBER = 0x46546C67
 
 /**
  * @param {string} path
- * @param {string} type
- * @return {string} The result of the `analyzeHeader` function.
+ * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file.
  */
 export async function guessType(path) {
   debug(true).log('Filetype#guessType, path:', path)
@@ -123,7 +122,7 @@ export async function guessTypeFromFile(file) {
  * Attempts to guess the filetype by inspecting the given headerBuffer
  *
  * @param {ArrayBuffer} headerBuffer
- * @return {string} type
+ * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
   // Check for GLB binary format first (binary files won't decode properly as UTF-8)
@@ -145,8 +144,8 @@ export function analyzeHeader(headerBuffer) {
 /**
  * Attempts to guess the filetype by inspecting the given header string
  *
- * @param {string} headerStr
- * @return {string} type
+ * @param {string} header
+ * @return {string|null} type
  */
 export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)

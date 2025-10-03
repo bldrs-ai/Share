@@ -165,7 +165,7 @@ export async function load(
     }
   } else {
     derefPath = `${derefPath}&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`
-    console.log('Using GDRIVE path:', derefPath)
+    debug(true).log('Using GDRIVE path:', derefPath)
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }

@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import {navToDefault} from '../utils/routes'
+import {navToDefault} from '../utils/navigate'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -34,9 +34,9 @@ export default function AlertAndSnackbar() {
       setDuration(null)
     } else {
       assert(typeof snackMessage.text === 'string' && snackMessage.text.length > 0,
-             'snackMessage.text must be valid string')
+        'snackMessage.text must be valid string')
       assert(typeof snackMessage.autoDismiss === 'boolean' && snackMessage.autoDismiss,
-             'snackMessage.autoDismiss must be true')
+        'snackMessage.autoDismiss must be true')
       setText(snackMessage.text)
       const dismissTimeMs = 5000
       setDuration(dismissTimeMs)

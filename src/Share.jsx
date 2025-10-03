@@ -6,7 +6,7 @@ import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
 import {navToDefault} from './utils/navigate'
-import {handleRoute} from './utils/routes'
+import {handleRoute} from './routes/routes'
 
 
 /**
@@ -82,7 +82,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       pathPrefix.startsWith('/share/v/u') || // generic url
         pathPrefix === '/share/v/g' // google
     ) {
-      console.log('Model path is generic external URL:', modelPath)
+      debug(true).log('Model path is generic external URL:', modelPath)
       setRepository('external', 'content')
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
