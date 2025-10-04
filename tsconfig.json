@@ -1,0 +1,33 @@
+{
+  "extends": "@tsconfig/recommended/tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "src/utils/assert.js",
+    "src/utils/assert.test.js",
+    "src/utils/location.js",
+    "src/utils/location.test.js",
+    "src/utils/math.js",
+    "src/utils/math.test.js",
+    "src/utils/objects.js",
+    "src/utils/strings.js",
+    "src/utils/strings.test.js",
+    "tools/**/*.ts"
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "allowJs": true,
+    "checkJs": true,
+    "target": "ES2021",
+    "jsx": "react-jsx",
+    "lib": ["es2019", "dom"],
+    "module": "es6",
+    "moduleResolution": "node",
+    "noEmit": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "pretty": false,
+    "strict": true,
+    "strictNullChecks": true,
+    "types": ["jest", "@testing-library/jest-dom"]
+  }
+}

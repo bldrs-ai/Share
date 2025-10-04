@@ -26,7 +26,7 @@ import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
- * @param {string} path Either a url or filepath
+ * @param {string|URL} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
  * @param {Function} onProgress
  * @param {boolean} setOpfsFile
@@ -43,6 +43,10 @@ export async function load(
   accessToken = '',
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+  // HACK: pathArg can be a URL or a string
+  if (path instanceof URL) {
+    path = path.toString()
+  }
   debug().log('Loader#load: in with path:', path)
 
   // Test for uploaded first
@@ -60,7 +64,7 @@ export async function load(
   let isCacheHit
   let isBase64
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
-  const isLocallyHostedFile = path.indexOf('/') === 0
+  const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
     debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
@@ -82,7 +86,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress('Determining file type...')
+  onProgress(`Determining file type...`)
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -120,7 +124,6 @@ export async function load(
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
-
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
         if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
@@ -156,15 +159,19 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
-    onProgress('Reading file data...')
+    onProgress('Reading model data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
-      onProgress('Decoding text data...')
+      onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
+    onProgress('Downloading model data...')
+    // HACK(pablo): this should be passed from the src/routes/google
+    const apiKey = process.env.GOOGLE_API_KEY
+    derefPath = `${derefPath}&key=${apiKey}`
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }

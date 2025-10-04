@@ -70,7 +70,10 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
-  const activePalette = mode === Themes.Day ? day : night
+
+  // Ensure we have a valid mode, default to Day if undefined
+  const validMode = mode || Themes.Day
+  const activePalette = validMode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
     typography: getTypography(),
@@ -98,7 +101,7 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
       Preferences.setTheme(newMode)
     },
     isSystemMode: originalMode === Themes.System,
-    currentMode: originalMode,
+    currentMode: originalMode || Themes.System,
     addThemeChangeListener: (onChangeCb) => {
       themeChangeListeners[onChangeCb] = onChangeCb
     },
