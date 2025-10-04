@@ -58,8 +58,8 @@ export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL):
  */
 function getDownloadUrl(fileId: string): URL {
   assertDefined(fileId)
-  const GOOGLE_API_KEY = 'AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ'
-  return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`)
+  const apiKey = process.env.GOOGLE_API_KEY
+  return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`)
 }
 
 
