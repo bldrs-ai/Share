@@ -41,15 +41,18 @@ describe('processGoogleUrl', () => {
     }
 
     Object.keys(idPatternMap).forEach((id) => {
-      const url = expandUrl(id, idPatternMap)
-      it(`should extract file ID from ${url}`, () => {
-        const u = new URL(url)
-        const result = processGoogleUrl(u)
+      const maybeGoogleUrlStr = expandUrl(id, idPatternMap)
+      it(`should extract file ID from ${maybeGoogleUrlStr}`, () => {
+        const originalUrl = new URL(`http://bldrs.test/share/v/u/${maybeGoogleUrlStr}`)
+        const maybeGoogleUrl = new URL(maybeGoogleUrlStr)
+        const result = processGoogleUrl(originalUrl, maybeGoogleUrl)
+        const downloadUrl = new URL(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${process.env.GOOGLE_API_KEY}`)
         expect(result).toEqual({
+          originalUrl,
           kind: 'provider',
           provider: 'google',
           fileId: id,
-          sourceUrl: u,
+          downloadUrl,
         })
       })
     })
@@ -63,9 +66,11 @@ describe('processGoogleUrl', () => {
       'https://drive.google.com/drive/my-drive',
       'https://drive.google.com/file/d/invalid-id-format/view',
     ]
-    invalidUrls.forEach((url) => {
-      it(`should return null for ${url || 'empty string'}`, () => {
-        const result = processGoogleUrl(new URL(url))
+    invalidUrls.forEach((urlStr) => {
+      it(`should return null for ${urlStr || 'empty string'}`, () => {
+        const originalUrl = new URL(`http://bldrs.test/share/v/u/${urlStr}`)
+        const maybeGoogleUrl = new URL(urlStr)
+        const result = processGoogleUrl(originalUrl, maybeGoogleUrl)
         expect(result).toBeNull()
       })
     })

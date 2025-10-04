@@ -14,7 +14,7 @@ import {handleRoute} from './routes/routes'
  *
  * @property {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
  * @property {string} appPrefix e.g. /share is the prefix for this component.
- * @property {string} pathPrefix e.g. v/p for CadView, currently the only child.
+ * @property {string} pathPrefix The full path prefix, e.g. /share/v/p for /share/v/p/index.ifc.
  * @return {ReactElement}
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
@@ -57,8 +57,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       if (modelPath === null ||
           (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
           (modelPath.gitpath && modelPath.gitpath !== mp.gitpath) ||
-          (!modelPath.gitpath && mp.gitpath) ||
-          (modelPath.srcPath)) {
+          (!modelPath.gitpath && mp.gitpath)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
@@ -73,7 +72,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
     } else if (pathPrefix.startsWith('/share/v/p')) {
-      debug().log('Setting default repo pablo-mayrgundter/Share')
+      debug(true).log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
@@ -82,7 +81,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       pathPrefix.startsWith('/share/v/u') || // generic url
         pathPrefix === '/share/v/g' // google
     ) {
-      debug(true).log('Model path is generic external URL:', modelPath)
+      debug(true).log('Model path is external URL:', modelPath)
       setRepository('external', 'content')
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)
@@ -116,18 +115,32 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 /** @return {ReactElement} */
 function ModelTitle({repository, modelPath}) {
   let modelName = ''
-  if (modelPath.srcUrl) {
-    modelName = modelPath.srcUrl.split('/').pop() // Get the last part of the URL
-  } else {
-    modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  switch (modelPath.kind) {
+    case 'provider':
+      switch (modelPath.provider) {
+        case 'google':
+          modelName = 'Google Drive file'
+          break
+        case 'github':
+          // Check if repository is available and construct the title accordingly
+          modelName = modelPath.repository ?
+            `GitHub: ${modelPath.filepath} - ${modelPath.repository.name}/${modelPath.repository.orgName}` :
+            modelPath.filepath // Local file
+          break
+        default:
+          modelName = modelPath.provider
+      }
+      break
+    case 'srcUrl':
+      modelName = modelPath.filepath.split('/').pop() // Get the last part of the URL
+      break
+    default:
+      modelName = 'Loading...'
   }
-
-  // Check if repository is available and construct the title accordingly
-  const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
 
   return (
     <Helmet>
-      <title>{title}</title>
+      <title>{modelName}</title>
     </Helmet>
   )
 }

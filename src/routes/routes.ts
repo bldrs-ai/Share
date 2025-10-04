@@ -1,29 +1,14 @@
-import {splitAroundExtension} from '../Filetype'
+import {splitAroundExtensionRemoveFirstSlash} from '../Filetype'
 import debug from '../utils/debug'
 import {testUuid} from '../utils/strings'
-import processGitHubFile, {GitHubFileResult, GitHubRouteParams} from './github'
-import {GoogleFileResult, processGoogleDriveUrl} from './google'
+import processGithubParams, {isGithubParams, GithubParams, GithubResult} from './github'
+import processGoogleUrl, {GoogleResult} from './google'
 
 
 /**
- * Converts a filepath requested path to a model spec object.
+ * Converts routes to route results.
  *
- * Format is either a reference within this project's serving directory:
- *   {filepath: '/file.ifc'}
- *
- * or an uploaded path:
- *   {filepath: '/xxxx-xxxx-xxxx-xxxx'}
- *
- * or a global GitHub path:
- *   {gitpath: 'http://host/share/v/gh/bldrs-ai/Share/main/index.ifc'}
- *
- * or a Google file ID:
- *   {google: '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO'}
- *
- * or a URL:
- *   {url: 'http://host.com/file.ifc'}
- *
- * @param pathPrefix e.g. /share
+ * @param pathPrefix e.g. /share/v/p or /share/v/new or /share/v/gh or /share/v/u
  * @param routeParams e.g.:
  *     .../:org/:repo/:branch/ with .../a/b/c/d
  *   becomes:
@@ -32,54 +17,43 @@ import {GoogleFileResult, processGoogleDriveUrl} from './google'
  *       'org': 'a',
  *       ...
  *     }
- * @return Null will result in a redirect to the index file.
- * Exported for testing only.
+ * @return RouteResult or null
  */
 export function handleRoute(pathPrefix: string, routeParams: RouteParams): RouteResult | null {
+  const originalUrl = new URL(pathPrefix, window.location.origin)
   let m: RouteResult = null
-  let filepath: string = routeParams['*']
+  // See ShareRoutes.jsx for filepath, here for quick reference, it's the '*' in each route:
+  // - Hosted project file: /share/v/p/*
+  // - New file via DnD or Open: /share/v/new/*
+  // - GitHub file: /share/v/gh/:org/:repo/:branch/*
+  // - Generic URL: /share/v/u/*
+  const filepath: string = routeParams['*'] || ''
   if (filepath === '') {
     return null
   }
 
+  // Hosted project file or new file via DnD or Open
+  if (pathPrefix.endsWith('/p')) {
+    m = processFile(originalUrl, filepath)
+  }
+
+  // New file via DnD or Open
+  if (pathPrefix.endsWith('new')) {
+    testUuid(filepath)
+    m = processFile(originalUrl, filepath)
+  }
+
+  // GitHub file
+  if (pathPrefix.endsWith('/gh')) {
+    if (isGithubParams(routeParams)) {
+      m = processGithubParams(originalUrl, filepath, routeParams as GithubParams) as GithubResult
+      debug().log('Share#handleRoute: is a remote GitHub file:', m)
+    }
+  }
+
+  // Generic URL
   if (pathPrefix.endsWith('/u')) {
-    const urlOrGoogleId = processExternalUrl(filepath)
-    if (urlOrGoogleId) {
-      if (urlOrGoogleId !== filepath) {
-        return {google: urlOrGoogleId}
-      }
-      // Otherwise it's a url
-      return {url: urlOrGoogleId}
-    }
-    return null
-  }
-
-  // everything else still expects a "file path + optional eltPath"
-  let parts: string[]
-  let extension: string
-  try {
-    ({parts, extension} = splitAroundExtension(filepath))
-  } catch (e) {
-    if (testUuid(filepath)) {
-      return {filepath, eltPath: null}
-    }
-    alert(`Unsupported filetype: ${filepath}`)
-    debug().error(e)
-    return null
-  }
-
-  filepath = `/${parts[0]}${extension}`
-
-  if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // project file case
-    m = processProjectFile(filepath, parts[1])
-    debug().log('Share#handleRoute: is a project file:', m, window.location.hash)
-  } else if (pathPrefix.endsWith('/gh')) {
-    // GitHub case
-    m = processGitHubFile(filepath, parts[1], routeParams as GitHubRouteParams)
-    debug().log('Share#handleRoute: is a remote GitHub file:', m)
-  } else {
-    throw new Error('Empty view type from pathPrefix')
+    return processExternalUrl(originalUrl, filepath)
   }
 
   return m
@@ -87,42 +61,52 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
 
 
 /**
- * Processes a URL filepath for external content, currently supporting Google Drive.
+ * Processes a local file path (/new and /p pathPrefixes).
  *
- * @param filepath - The URL to process
- * @return The original URL, a Google File ID or null.
+ * @param originalUrl
+ * @param filepath - The embedded file path to process
+ * @return Object with original URL, download URL, filepath and eltPath
  */
-export function processExternalUrl(filepath: string): string | null {
-  try {
-    new URL(filepath)
-  } catch {
-    return null
+export function processFile(originalUrl: URL, filepath: string): FileResult {
+  debug().log('routes#processFile: is a local file:', filepath)
+  const {parts, extension} = splitAroundExtensionRemoveFirstSlash(filepath)
+  filepath = `${parts[0]}${extension}`
+  const downloadUrl = new URL(filepath, originalUrl.origin)
+  return {
+    originalUrl,
+    downloadUrl,
+    kind: 'file',
+    filepath,
+    ...(parts[1] ? {eltPath: `${parts[1]}`} : {}),
   }
-  // For now, only support public Google Drive files, so just need their ID
-  const googleResult = processGoogleDriveUrl(filepath)
-  if (googleResult) {
-    return googleResult.fileId
-  }
-  // If not Google Drive, return the original URL
-  return filepath
 }
 
 
 /**
- * Processes a project file path for local files (/new and /p pathPrefixes).
+ * Processes a URL filepath for external content, currently supporting Google Drive.
  *
- * @param filepath - The file path to process
- * @param eltPath - Optional element path
- * @return Object with filepath and eltPath
+ * @param originalUrl
+ * @param maybeUrlParam - The embedded file path to process, should be a URL
+ * @return The original URL, a Google File ID or null.
  */
-export function processProjectFile(filepath: string, eltPath: string | undefined): FileResult {
-  return {
-    sourceUrl: new URL(filepath),
-    kind: 'file',
-    filepath,
-    ...(eltPath ? {eltPath} : {}),
+export function processExternalUrl(originalUrl: URL, maybeUrlParamStr: string): GoogleResult | UrlResult | null {
+  let urlParam: URL
+  try {
+    urlParam = new URL(maybeUrlParamStr)
+  } catch {
+    return null
   }
+  const result: GoogleResult = processGoogleUrl(originalUrl, urlParam) as GoogleResult
+  if (result) {
+    return result
+  }
+  return {
+    originalUrl,
+    downloadUrl: urlParam,
+    kind: 'url',
+  } as UrlResult
 }
+
 
 // Types
 // Everything from useParams is string | undefined.
@@ -132,7 +116,8 @@ export type BaseParams = Record<string, string | undefined> & {
 }
 
 export interface BaseResult {
-  sourceUrl: URL
+  originalUrl: URL
+  downloadUrl: URL
 }
 
 export interface FileResult extends BaseResult {
@@ -145,6 +130,13 @@ export interface UrlResult extends BaseResult {
   kind: 'url'
 }
 
+// For external providers like GitHub or Google Drive
 export interface ProviderResult extends BaseResult {
   kind: 'provider'
 }
+
+export type RouteParams = BaseParams & {
+  '*': string | undefined
+}
+
+export type RouteResult = FileResult | UrlResult | GithubResult | GoogleResult | null

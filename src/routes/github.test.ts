@@ -2,79 +2,87 @@ import processGitHubFile from './github'
 
 
 describe('processGitHubFile', () => {
-  it('should process GitHub file paths correctly', () => {
-    const urlParams = {
-      org: 'test-org',
-      repo: 'test-repo',
-      branch: 'main',
-    }
-    const result = processGitHubFile('/path/to/file.ifc', 'element/path', urlParams)
+  const org = 'test-org'
+  const repo = 'test-repo'
+  const branch = 'test-branch'
+  const filepath = `path/to/file.ifc`
+  const eltPath = '1/2/3'
 
+  it('org, repo, branch and filepath', () => {
+    const originalUrl = new URL(`http://bldrs.ai/share/v/gh/${org}/${repo}/${branch}/${filepath}`)
+    const urlParams = {
+      'org': org,
+      'repo': repo,
+      'branch': branch,
+      '*': filepath,
+    }
+    const result = processGitHubFile(originalUrl, filepath, urlParams)
+    const downloadUrl = new URL(`https://github.com/${org}/${repo}/${branch}/${filepath}`)
     expect(result).toEqual({
-      org: 'test-org',
-      repo: 'test-repo',
-      branch: 'main',
-      filepath: '/path/to/file.ifc',
-      eltPath: 'element/path',
+      originalUrl,
+      downloadUrl,
+      kind: 'provider',
+      provider: 'github',
+      org,
+      repo,
+      branch,
+      filepath,
       getRepoPath: expect.any(Function),
-      gitpath: 'https://github.com/test-org/test-repo/main/path/to/file.ifc',
+      gitpath: downloadUrl.toString(),
     })
   })
 
-  it('should handle GitHub files without element path', () => {
-    const urlParams = {
-      org: 'test-org',
-      repo: 'test-repo',
-      branch: 'develop',
-    }
-    const result = processGitHubFile('/path/to/file.ifc', null, urlParams)
 
+  it('org, repo, branch and filepath with elts', () => {
+    const filepathWithElts = `${filepath}/${eltPath}`
+    const originalUrl = new URL(`http://bldrs.ai/share/v/gh/${org}/${repo}/${branch}/${filepathWithElts}`)
+    const urlParams = {
+      'org': org,
+      'repo': repo,
+      'branch': branch,
+      '*': filepathWithElts,
+    }
+    const result = processGitHubFile(originalUrl, filepathWithElts, urlParams)
+    const downloadUrl = new URL(`https://github.com/${org}/${repo}/${branch}/${filepath}`)
     expect(result).toEqual({
-      org: 'test-org',
-      repo: 'test-repo',
-      branch: 'develop',
-      filepath: '/path/to/file.ifc',
-      eltPath: null,
+      originalUrl,
+      downloadUrl,
+      kind: 'provider',
+      provider: 'github',
+      org,
+      repo,
+      branch,
+      filepath,
+      eltPath,
       getRepoPath: expect.any(Function),
-      gitpath: 'https://github.com/test-org/test-repo/develop/path/to/file.ifc',
+      gitpath: downloadUrl.toString(),
     })
   })
 
-  it('should generate correct getRepoPath function', () => {
-    const urlParams = {
-      org: 'test-org',
-      repo: 'test-repo',
-      branch: 'main',
-    }
-    const result = processGitHubFile('/path/to/file.ifc', 'element', urlParams)
-
-    expect(result.getRepoPath()).toBe('/test-org/test-repo/main/path/to/file.ifc')
-  })
-
-  it('should handle various branch names', () => {
+  it('org, repo and various branch names', () => {
     const branches = ['main', 'develop', 'feature/new-feature', 'v1.0.0']
-    branches.forEach((branch) => {
+    branches.forEach((branchName) => {
+      const originalUrl = new URL(`http://bldrs.ai/share/v/gh/${org}/${repo}/${branchName}/${filepath}`)
       const urlParams = {
-        org: 'test-org',
-        repo: 'test-repo',
-        branch,
+        'org': org,
+        'repo': repo,
+        'branch': branchName,
+        '*': filepath,
       }
-      const result = processGitHubFile('/file.ifc', 'element', urlParams)
-      expect(result.branch).toBe(branch)
-      expect(result.gitpath).toBe(`https://github.com/test-org/test-repo/${branch}/file.ifc`)
+      const result = processGitHubFile(originalUrl, filepath, urlParams)
+      const downloadUrl = new URL(`https://github.com/${org}/${repo}/${branchName}/${filepath}`)
+      expect(result).toEqual({
+        originalUrl,
+        downloadUrl,
+        kind: 'provider',
+        provider: 'github',
+        org,
+        repo,
+        branch: branchName,
+        filepath,
+        getRepoPath: expect.any(Function),
+        gitpath: downloadUrl.toString(),
+      })
     })
-  })
-
-  it('should handle special characters in org and repo names', () => {
-    const urlParams = {
-      org: 'test-org-name',
-      repo: 'test-repo-name',
-      branch: 'main',
-    }
-    const result = processGitHubFile('/path/to/file.ifc', 'element', urlParams)
-
-    expect(result.org).toBe('test-org-name')
-    expect(result.repo).toBe('test-repo-name')
-    expect(result.gitpath).toBe('https://github.com/test-org-name/test-repo-name/main/path/to/file.ifc')
   })
 })

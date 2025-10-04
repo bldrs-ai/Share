@@ -177,6 +177,11 @@ export function analyzeHeaderStr(header) {
  * TODO(pablo): deprecated.  The behavior wasn't defined enough to be used
  * consistently between src/Share and src/Filetype.
  *
+ * example:
+ * - 'asdf.ifc/1234' -> {parts: ['asdf', '1234'], extension: '.ifc'}
+ * - 'asdf.ifc' -> {parts: ['asdf'], extension: '.ifc'}
+ * - 'asdf' -> throws FilenameParseError
+ *
  * @deprecated
  * @param {string} filepath
  * @return {{parts: Array.<string>, extension: string}}
@@ -189,6 +194,21 @@ export function splitAroundExtension(filepath) {
   }
   const parts = filepath.split(fileSuffixRegex)
   return {parts, extension: match[0]}
+}
+
+
+/**
+ * Split around extension and remove the first slash.
+ *
+ * @param {string} filepath
+ * @return {{parts: Array.<string>, extension: string}}
+ */
+export function splitAroundExtensionRemoveFirstSlash(filepath) {
+  const {parts, extension} = splitAroundExtension(filepath)
+  if (parts[1].startsWith('/')) {
+    parts[1] = parts[1].slice(1)
+  }
+  return {parts, extension}
 }
 
 

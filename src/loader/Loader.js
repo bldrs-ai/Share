@@ -25,7 +25,7 @@ import xyzToThree from './xyz'
 
 
 /**
- * @param {string} path Either a url or filepath
+ * @param {string|URL} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
  * @param {Function} onProgress
  * @param {boolean} setOpfsFile
@@ -42,6 +42,10 @@ export async function load(
   accessToken = '',
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
+  // HACK: pathArg can be a URL or a string
+  if (path instanceof URL) {
+    path = path.toString()
+  }
   debug().log('Loader#load: in with path:', path)
 
   // Test for uploaded first
@@ -59,10 +63,10 @@ export async function load(
   let isCacheHit
   let isBase64
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
-  const isLocallyHostedFile = path.indexOf('/') === 0
+  const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
-    debug(true).log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
+    debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
     if (isLocallyHostedFile) {
       derefPath = path
       shaHash = ''
@@ -71,10 +75,10 @@ export async function load(
       [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     }
   } else if (isLocallyHostedFile) {
-    debug(true).log('Loader#load: locally hosted file')
+    debug().log('Loader#load: locally hosted file')
     shaHash = ''
   } else {
-    debug(true).log('Loader#load: download2', path, accessToken, isOpfsAvailable);
+    debug().log('Loader#load: download2', path, accessToken, isOpfsAvailable);
     // For logged in, you'll get a sha hash back.  otherwise null/undef
     [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable)
     debug().log('Loader#load: download2 DEREFERENCE', derefPath)
@@ -97,10 +101,10 @@ export async function load(
     let file
     if (isUploadedFile) {
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      file = getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
     } else if (isLocallyHostedFile) {
       debug().log('Loader#load: local file:', path)
-      file = await downloadToOPFS(
+      file = downloadToOPFS(
         path,
         path,
         'bldrs-ai',
@@ -119,9 +123,8 @@ export async function load(
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
-
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
-        if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
+        if (isCacheHit && !(doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
         }
 
@@ -155,17 +158,17 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
-    onProgress('Reading file data...')
+    onProgress('Reading model data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
-      onProgress('Decoding text data...')
+      onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
+    onProgress('Downloading model data...')
     derefPath = `${derefPath}&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`
-    debug(true).log('Using GDRIVE path:', derefPath)
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }

@@ -1,34 +1,31 @@
+import {assertDefined} from '../utils/assert'
 import type {ProviderResult} from './routes'
 
 
 /**
  * Processes a Google Drive URL and returns the fileId if found.
  *
+ * @param originalUrl
  * @param maybeGoogleUrl - The Google Drive URL to process
  * @return Object with provider and fileId
  */
-export default function processGoogleUrl(maybeGoogleUrl: URL): GoogleResult | null {
-  let u: URL
-  try {
-    u = new URL(maybeGoogleUrl)
-  } catch {
-    return null
-  }
-  if (!/\.google\.com$/i.test(u.hostname) && u.hostname !== 'www.googleapis.com') {
+export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL): GoogleResult | null {
+  if (!/\.google\.com$/i.test(maybeGoogleUrl.hostname) &&
+      maybeGoogleUrl.hostname !== 'www.googleapis.com') {
     return null
   }
 
   let fileId: string | null = null
   let pathMatch
-  if ((pathMatch = u.pathname.match(/\/file\/d\/([A-Za-z0-9_-]{10,})/))) {
+  if ((pathMatch = maybeGoogleUrl.pathname.match(/\/file\/d\/([A-Za-z0-9_-]{10,})\/.*/))) {
     // Handle https://drive.google.com/file/d/0B1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ
     fileId = pathMatch[1]
-  } else if ((pathMatch = u.pathname.match(/\/drive\/v3\/files\/([A-Za-z0-9_-]{10,})/))) {
+  } else if ((pathMatch = maybeGoogleUrl.pathname.match(/\/drive\/v3\/files\/([A-Za-z0-9_-]{10,})/))) {
     // Handle https://www.googleapis.com/drive/v3/files/0B1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ
     fileId = pathMatch[1]
-  } else if (u.pathname.startsWith('/uc')) {
+  } else if (maybeGoogleUrl.pathname.startsWith('/uc')) {
     // handle https://drive.google.com/uc?id=4sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO&export=download
-    fileId = u.searchParams.get('id')
+    fileId = maybeGoogleUrl.searchParams.get('id')
   } else {
     return null
   }
@@ -37,18 +34,32 @@ export default function processGoogleUrl(maybeGoogleUrl: URL): GoogleResult | nu
     return null
   }
 
-  const rk = u.searchParams.get('resourcekey') || undefined
+  const rk = maybeGoogleUrl.searchParams.get('resourcekey') || undefined
   const rkOk = rk && isValidDriveResourceKey(rk) ? rk : undefined
 
   const result: GoogleResult = {
-    sourceUrl: new URL(maybeGoogleUrl),
+    originalUrl,
     kind: 'provider',
     provider: 'google',
     fileId,
+    downloadUrl: getDownloadUrl(fileId),
     ...(rkOk ? {resourceKey: rkOk} : {}),
   }
 
   return result
+}
+
+
+/**
+ * Gets the download URL for a Google Drive file.
+ *
+ * @param fileId - The Google Drive file ID.
+ * @return The download URL.
+ */
+function getDownloadUrl(fileId: string): URL {
+  assertDefined(fileId)
+  const GOOGLE_API_KEY = 'AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ'
+  return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`)
 }
 
 
@@ -90,5 +101,6 @@ const DRIVE_RESOURCE_KEY_RE = /^[A-Za-z0-9]{1,3}-[A-Za-z0-9_-]{6,}$/
 export interface GoogleResult extends ProviderResult {
   provider: 'google'
   fileId: string
+  downloadUrl: URL
   resourceKey?: string
 }

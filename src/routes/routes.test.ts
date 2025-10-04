@@ -1,20 +1,32 @@
 import {GithubResult} from './github'
-import {
-  handleRoute,
-  RouteParams,
-  ProjectFileResult,
-} from './routes'
+import {handleRoute, type RouteParams, type FileResult} from './routes'
 
 
+// Test one of each kind of route.There's more detailed tests in the github and google tests.
 describe('routes', () => {
+  const pathPrefixProject = 'share/v/p'
   context('with project-local route', () => {
+    it('extracts filepath', () => {
+      const routeParams: RouteParams = {'*': 'file.ifc'}
+      const result = handleRoute(`/${pathPrefixProject}`, routeParams) as FileResult
+      expect(result).toStrictEqual({
+        originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.ifc`),
+        downloadUrl: new URL(`http://bldrs.test/file.ifc`),
+        kind: 'file',
+        filepath: 'file.ifc',
+      })
+    })
+
     context('with selected element', () => {
       it('extracts filepath and eltPath correctly', () => {
-        const routeParams: RouteParams = {'*': 'as_Ifcdf.ifc/1234'}
-        const result = handleRoute('/share/v/p', routeParams) as ProjectFileResult
+        const routeParams: RouteParams = {'*': 'file.ifc/1234'}
+        const result = handleRoute(`/${pathPrefixProject}`, routeParams) as FileResult
         expect(result).toStrictEqual({
-          filepath: '/as_Ifcdf.ifc',
-          eltPath: '/1234',
+          originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.ifc/1234`),
+          downloadUrl: new URL(`http://bldrs.test/file.ifc`),
+          kind: 'file',
+          filepath: 'file.ifc',
+          eltPath: '1234',
         })
       })
 
@@ -22,59 +34,70 @@ describe('routes', () => {
         for (const ext of [
           'ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc',
         ]) {
-          const inPath = `as_${ext}df.${ext}/1234`
+          const inPath = `file.${ext}/1234`
           const routeParams: RouteParams = {'*': inPath}
-          const result = handleRoute('/share/v/p', routeParams) as ProjectFileResult
+          const result = handleRoute(`/${pathPrefixProject}`, routeParams) as FileResult
           expect(result).toStrictEqual({
-            filepath: `/as_${ext}df.${ext}`,
-            eltPath: '/1234',
+            originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.${ext}/1234`),
+            downloadUrl: new URL(`http://bldrs.test/file.${ext}`),
+            kind: 'file',
+            filepath: `file.${ext}`,
+            eltPath: '1234',
           })
         }
       })
     })
   })
 
-  context.only('with gh route', () => {
+  context('with gh route', () => {
+    const pathPrefixGh = 'share/v/gh'
     it('extracts filepath, eltPath and gitpath correctly', () => {
-      const routeParams: RouteParams = {
-        '*': 'as_Ifcdf.ifc/1234',
-        'org': 'the-org',
-        'repo': 'the-repo',
-        'branch': 'the-branch',
+      const org = 'test-org'
+      const repo = 'test-repo'
+      const branch = 'test-branch'
+      const filepath = `path/to/file.ifc`
+      const eltPath = '1/2/3'
+      const originalUrl = new URL(`http://bldrs.test/${pathPrefixGh}/${org}/${repo}/${branch}/${filepath}`)
+      const urlParams = {
+        'org': org,
+        'repo': repo,
+        'branch': branch,
+        '*': `${filepath}/${eltPath}`,
       }
-      const route = handleRoute('/share/v/gh', routeParams) as GithubResult
-      expect(route.filepath).toEqual('/as_Ifcdf.ifc')
-      expect(route.eltPath).toEqual('/1234')
-      expect(route.org).toEqual('the-org')
-      expect(route.repo).toEqual('the-repo')
-      expect(route.branch).toEqual('the-branch')
-      expect(route.getRepoPath()).toEqual('/the-org/the-repo/the-branch/as_Ifcdf.ifc')
-      expect(route.gitpath).toEqual('https://github.com/the-org/the-repo/the-branch/as_Ifcdf.ifc')
+      const route = handleRoute(`/${pathPrefixGh}`, urlParams) as GithubResult | null
+      expect(route).toEqual({
+        originalUrl,
+        downloadUrl: new URL(`http://github.com/${org}/${repo}/${branch}/${filepath}`),
+        kind: 'provider',
+        provider: 'github',
+        org,
+        repo,
+        branch,
+        filepath,
+        eltPath,
+        getRepoPath: expect.any(Function),
+        gitpath: `https://github.com/${org}/${repo}/${branch}/${filepath}`,
+      })
     })
   })
 
-  context.skip('with url route', () => {
+  context('with url route', () => {
+    const pathPrefixUrl = 'share/v/u'
     context('with Google urls', () => {
       it('extracts filepath and eltPath', () => {
-        const fileId = 'abcdEFG1234-XYZ'
-        let routeParams: RouteParams = {
-          '*': `${fileId}`,
+        const fileId = '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO' // Valid Google Drive file ID (28 chars)
+        const originalUrl = new URL(`http://bldrs.test/${pathPrefixUrl}/https://drive.google.com/file/d/${fileId}/view`)
+        const routeParams: RouteParams = {
+          '*': `https://drive.google.com/file/d/${fileId}/view`,
         }
-        let route = handleRoute(
-          '/share/v/u/https://drive.google.com/file/d/(?<id>[^/]+)/view',
-          routeParams,
-        )
-        // Note: This test is skipped and may need type fixes when enabled
-        // URL routes return {url: string} or {google: string}, not filepath/eltPath
-        expect(route).toBeDefined()
-        routeParams = {
-          '*': `${fileId}`,
-        }
-        route = handleRoute(
-          'https://www.googleapis.com/drive/v3/files/(?<id>[^/])',
-          routeParams,
-        )
-        expect(route).toBeDefined()
+        const route = handleRoute(`/${pathPrefixUrl}`, routeParams)
+        expect(route).toEqual({
+          originalUrl: new URL(`http://bldrs.test/${pathPrefixUrl}/https://drive.google.com/file/d/${fileId}/view`),
+          downloadUrl: new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`),
+          kind: 'provider',
+          provider: 'google',
+          fileId,
+        })
       })
     })
   })

@@ -41,5 +41,4 @@ export default {
     '.tsx': 'tsx',
   },
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
-  tsconfig: 'tools/tsconfig.json',
 }

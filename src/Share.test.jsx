@@ -9,9 +9,9 @@ test('Share', () => {
     <MockRoutes
       contentElt={
         <Share
-          installPrefix={'/'}
-          appPrefix={'share'}
-          pathPrefix={'v/p'}
+          installPrefix='/'
+          appPrefix='share'
+          pathPrefix='share/v/p'
         />}
     />)
   expect(getByText(/BLDRS/i)).toBeInTheDocument()

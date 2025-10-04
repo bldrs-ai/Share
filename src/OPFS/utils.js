@@ -90,7 +90,7 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  *
  * @param {string} filepath
  * @param {string} commitHash
- * @return {File}
+ * @return {Promise<File>}
  */
 export function downloadToOPFS(
     objectUrl,
