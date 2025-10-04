@@ -85,7 +85,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress(`Determining file type for ${path}...`)
+  onProgress(`Determining file type...`)
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -101,10 +101,10 @@ export async function load(
     let file
     if (isUploadedFile) {
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
     } else if (isLocallyHostedFile) {
       debug().log('Loader#load: local file:', path)
-      file = downloadToOPFS(
+      file = await downloadToOPFS(
         path,
         path,
         'bldrs-ai',
@@ -124,7 +124,7 @@ export async function load(
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
-        if (isCacheHit && !(doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
+        if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
         }
 
@@ -168,7 +168,9 @@ export async function load(
     }
   } else {
     onProgress('Downloading model data...')
-    derefPath = `${derefPath}&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`
+    // HACK(pablo): this should be passed from the src/routes/google
+    const apiKey = process.env.GOOGLE_API_KEY
+    derefPath = `${derefPath}&key=${apiKey}`
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }

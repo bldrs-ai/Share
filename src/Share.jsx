@@ -71,17 +71,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
-    } else if (pathPrefix.startsWith('/share/v/p')) {
-      debug(true).log('Setting default repo pablo-mayrgundter/Share')
+    } else if (pathPrefix.startsWith('share/v/p')) {
+      debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
     } else if (
-      pathPrefix.startsWith('/share/v/u') || // generic url
-        pathPrefix === '/share/v/g' // google
+      pathPrefix.startsWith('share/v/u') || // generic url
+        pathPrefix === 'share/v/g' // google
     ) {
-      debug(true).log('Model path is external URL:', modelPath)
+      debug().log('Model path is external URL:', modelPath)
       setRepository('external', 'content')
       setIsVersionsEnabled(false)
       setIsShareEnabled(true)

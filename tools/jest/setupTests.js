@@ -32,3 +32,9 @@ afterAll(() => server.close())
 
 // Like cypress
 global.context = describe
+
+// Mock scrollIntoView for tests since it's not available in jsdom
+// Only mock if we're in a DOM environment (not in Web Workers)
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollIntoView = jest.fn()
+}

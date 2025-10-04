@@ -86,14 +86,16 @@ describe('routes', () => {
     context('with Google urls', () => {
       it('extracts filepath and eltPath', () => {
         const fileId = '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO' // Valid Google Drive file ID (28 chars)
-        const originalUrl = new URL(`http://bldrs.test/${pathPrefixUrl}/https://drive.google.com/file/d/${fileId}/view`)
         const routeParams: RouteParams = {
           '*': `https://drive.google.com/file/d/${fileId}/view`,
         }
         const route = handleRoute(`/${pathPrefixUrl}`, routeParams)
+        const originalUrl = new URL(`http://bldrs.test/${pathPrefixUrl}/https://drive.google.com/file/d/${fileId}/view`)
+        const testApiKey = process.env.GOOGLE_API_KEY
+        const downloadUrl = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${testApiKey}`)
         expect(route).toEqual({
-          originalUrl: new URL(`http://bldrs.test/${pathPrefixUrl}/https://drive.google.com/file/d/${fileId}/view`),
-          downloadUrl: new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=AIzaSyDBunWqj2zJAqXxJ6wV9BfSd-8DvJaKNpQ`),
+          originalUrl,
+          downloadUrl,
           kind: 'provider',
           provider: 'google',
           fileId,
