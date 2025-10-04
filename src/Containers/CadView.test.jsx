@@ -353,6 +353,26 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+  it('sets OOM alert object when loader throws out-of-memory error', async () => {
+    // Spy on load (indirectly invoked through loadModel -> load) to throw OOM
+    const oomErr = new Error('Out of memory: wasm memory allocate failed')
+    oomErr.isOutOfMemory = true
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+ throw oomErr
+})
+
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      const alert = result.current.alert
+      expect(alert).toBeTruthy()
+      expect(alert.type).toBe('oom')
+      expect(alert.message.toLowerCase()).toContain('out of memory')
+    })
+  })
+
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'

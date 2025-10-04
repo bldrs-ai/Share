@@ -19,6 +19,7 @@ import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 
 
 /**
@@ -134,7 +135,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           isOpfsAvailable,
           setSnackMessage,
           (pathname) => {
-            navigate({pathname: pathname})
+            navigateToModel({pathname}, navigate)
           },
       )
       // Store the branch name for subsequent saves

@@ -19,6 +19,7 @@ import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -186,13 +187,30 @@ export default function CadView({
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
     let tmpModelRef
+    let isOOM = false
     try {
       tmpModelRef = await loadModel(modelPath)
     } catch (e) {
-      setAlert(e)
+       if (isOutOfMemoryError(e)) {
+         isOOM = true
+      }
+      if (isOOM) {
+        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
+        setAlert({
+          type: 'oom',
+          message: 'We ran out of memory attempting to load this model. ' +
+            'Try opening it on a desktop browser with more memory or ' +
+            'refresh the page.',
+        })
+      } else {
+        setAlert(e)
+      }
+
+      console.error(e)
+      captureException(e)
       return
     }
-    if (!tmpModelRef) {
+    if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
@@ -277,6 +295,11 @@ export default function CadView({
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
+      if (isOutOfMemoryError(error)) {
+            error.isOutOfMemory = true
+            throw error
+        }
+
       setAlert(error)
       return
     } finally {

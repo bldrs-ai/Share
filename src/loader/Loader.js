@@ -22,6 +22,7 @@ import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
+import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
@@ -179,7 +180,24 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+  let model
+  try {
+    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+  } catch (e) {
+    if (isOutOfMemoryError(e)) {
+      e.isOutOfMemory = true
+    }
+    throw e
+  }
+
+  if (model === null || model === undefined) {
+    // If loader captured a last error, surface that
+    const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
+    if (isOutOfMemoryError(lastErr)) {
+      lastErr.isOutOfMemory = true
+    }
+    throw lastErr
+  }
 
   if (!isIfc) {
     onProgress('Converting model format...')
@@ -531,6 +549,8 @@ function newGltfLoader() {
  */
 function newIfcLoader(viewer) {
   const loader = viewer.IFC
+  // Track last IFC parse error (especially when parse returns null)
+  loader.ifcLastError = null
   // Loader is web-ifc-viewer/viewer/src/components/ifc/ifc-manager.ts
   // It internally uses web-ifc-three/Loader
   // Hot patch buffer-based parse alternative.
@@ -592,6 +612,12 @@ function newIfcLoader(viewer) {
       }
       return ifcModel
     } catch (err) {
+      loader.ifcLastError = err
+      // Rethrow OOM so callers can present a tailored UX message.
+      if (isOutOfMemoryError(err)) {
+        err.isOutOfMemory = true // tag for convenience
+        throw err
+      }
       console.error(err)
       if (onError) {
         onError(err)
