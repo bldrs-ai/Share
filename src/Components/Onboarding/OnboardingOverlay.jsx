@@ -80,17 +80,10 @@ export default function OnboardingOverlay({isVisible, onClose}) {
     return null
   }
 
-  const handleOverlayClick = (event) => {
-    // Only close if clicking the overlay background, not the highlights
-    if (event.target === event.currentTarget) {
-      onClose(false) // Regular close - don't skip help dialog
-    }
-  }
-
   return (
     <Fade in={isVisible} timeout={300}>
       <Box
-        onClick={handleOverlayClick}
+        onClick={() => onClose(false)}
         onDragOver={(event) => {
           event.preventDefault()
           event.stopPropagation()

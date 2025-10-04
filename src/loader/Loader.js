@@ -169,9 +169,6 @@ export async function load(
     }
   } else {
     onProgress('Downloading model data...')
-    // HACK(pablo): this should be passed from the src/routes/google
-    const apiKey = process.env.GOOGLE_API_KEY
-    derefPath = `${derefPath}&key=${apiKey}`
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }
