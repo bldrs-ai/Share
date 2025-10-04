@@ -46,7 +46,8 @@ describe('processGoogleUrl', () => {
         const originalUrl = new URL(`http://bldrs.test/share/v/u/${maybeGoogleUrlStr}`)
         const maybeGoogleUrl = new URL(maybeGoogleUrlStr)
         const result = processGoogleUrl(originalUrl, maybeGoogleUrl)
-        const downloadUrl = new URL(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${process.env.GOOGLE_API_KEY}`)
+        const apiKey = process.env.GOOGLE_API_KEY
+        const downloadUrl = new URL(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&key=${apiKey}`)
         expect(result).toEqual({
           originalUrl,
           kind: 'provider',
