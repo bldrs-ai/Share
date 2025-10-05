@@ -13,6 +13,7 @@ on:
 
 jobs:
   cypress-run:
+    timeout-minutes: 15
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
     environment: cypress
     steps:
