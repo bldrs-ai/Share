@@ -39,11 +39,14 @@ jobs:
 
       - name: Try to download claim
         id: dl
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: runner-claim
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.run_id }}
           path: ./claim
-          if-no-files-found: ignore
+          repository: ${{ github.repository }}
 
       - name: Decide
         id: decide
