@@ -22,9 +22,6 @@ on:
         required: false
         type: string
         default: yarn cy-parallel
-    secrets:
-      # inherit repo/org secrets so your job has what it needs
-      inherit: true
 
 permissions:
   contents: read
