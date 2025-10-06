@@ -13,7 +13,12 @@ on:
 
 jobs:
   cypress-run:
-    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
+    timeout-minutes: 20
+    concurrency:
+      group: cypress-group
+      cancel-in-progress: true
+    # Prefer our custom runner but if it's unavail (e.g. no quota) fallback on free runner
+    runs-on: [ubuntu-22.04-8vcpu-32gb-300gbssd, ubuntu-latest]
     environment: cypress
     steps:
       - uses: actions/checkout@v4
