@@ -2,69 +2,68 @@ name: End-to-end Tests (cypress)
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
   pull_request:
-    branches:
-      - main
-
+    branches: [main]
   workflow_dispatch:
 
+# Avoid piling up runs for the same commit/PR
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  cypress-run:
-    timeout-minutes: 20
-    concurrency:
-      group: cypress-group
-      cancel-in-progress: true
-    # Prefer our custom runner but if it's unavail (e.g. no quota) fallback on free runner
-    runs-on: [ubuntu-22.04-8vcpu-32gb-300gbssd, ubuntu-latest]
-    environment: cypress
+  try-big:
+    name: Try big runner first
+    uses: ./.github/workflows/reusable-cypress.yml
+    with:
+      runner: ubuntu-22.04-8vcpu-32gb-300gbssd
+      timeout_minutes: 20
+      browser: chrome
+      command: yarn cy-parallel
+    secrets: inherit
+
+  check-claim:
+    name: Wait & decide fallback
+    runs-on: ubuntu-latest
+    # Run in parallel with try-big so we don't block on capacity
+    timeout-minutes: 10
+    outputs:
+      should_run_fallback: ${{ steps.decide.outputs.should_run_fallback }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Grace period before checking (tune as needed)
+        run: sleep 300
 
-      - uses: actions/setup-node@v4
+      - name: Try to download claim
+        id: dl
+        uses: actions/download-artifact@v4
         with:
-          node-version: 20
+          name: runner-claim
+          path: ./claim
+          if-no-files-found: ignore
 
-      # ChatG: Next two steps are for correct caching and not using out-of-date
-      #  versions, for reproducible results
-      - name: Cache Cypress and Node Modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/Cypress
-            node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-
-            
-      - name: Clear Cypress Cache
-        run: npx cypress cache prune
+      - name: Decide
+        id: decide
+        run: |
+          if [ -f "./claim/claim.txt" ]; then
+            echo "Big runner already started; no fallback."
+            echo "should_run_fallback=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No claim found; run fallback."
+            echo "should_run_fallback=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      # Use exact lock file to ensure reproducible install
-      - run: yarn install --frozen-lockfile
-
-      - name: Install Cypress Binary
-        run: npx cypress install
-
-      - name: Verify Cypress Installation
-        run: npx cypress info
-
-      - run: yarn cy-build
-        # Ensure your build script correctly outputs to the ./docs directory
-        env:
-          NODE_ENV: production
-          SHARE_CONFIG: cypress
-
-      - uses: cypress-io/github-action@v5
-        with:
-          browser: chrome
-          command: yarn cy-parallel
-        env:
-          # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
-          GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
-          GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
-          RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
-          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
-          MSW_IS_ENABLED: true
+  fallback:
+    name: Fallback on ubuntu-latest
+    needs: [check-claim]
+    if: ${{ needs.check-claim.outputs.should_run_fallback == 'true' }}
+    uses: ./.github/workflows/reusable-cypress.yml
+    with:
+      runner: ubuntu-latest
+      timeout_minutes: 25
+      browser: chrome
+      command: yarn cy-parallel
+    secrets: inherit
