@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1575",
+  "version": "1.0.1582",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "yarn build-conway",
+    "build-prod": "SHARE_CONFIG=prod yarn build",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-conway-debug": "yarn clean && yarn build-share-conway && yarn build-share-copy-wasm-conway-profile && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
