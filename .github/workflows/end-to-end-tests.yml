@@ -23,7 +23,7 @@ jobs:
       runner: ubuntu-22.04-8vcpu-32gb-300gbssd
       timeout_minutes: 20
       browser: chrome
-      command: yarn cy-parallel
+      command: yarn cy
     secrets: inherit
 
   cypress-watchdog:
@@ -73,5 +73,5 @@ jobs:
       runner: ubuntu-latest
       timeout_minutes: 25
       browser: chrome
-      command: yarn cy-parallel
+      command: yarn cy
     secrets: inherit
