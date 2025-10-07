@@ -31,6 +31,6 @@ jobs:
         run: |
           echo Running tests
           yarn install
-          yarn build
+          yarn build-prod
           yarn lint
           yarn test
