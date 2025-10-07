@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  try-big:
-    name: Try big runner first
+  cypress-run:
+    name: Run cypress on dedicated runner
     uses: ./.github/workflows/reusable-cypress.yml
     with:
       runner: ubuntu-22.04-8vcpu-32gb-300gbssd
@@ -26,18 +26,18 @@ jobs:
       command: yarn cy-parallel
     secrets: inherit
 
-  check-claim:
-    name: Wait & decide fallback
+  cypress-watchdog:
+    name: Watchdog checking cypress is running on dedicated runner
     runs-on: ubuntu-latest
-    # Run in parallel with try-big so we don't block on capacity
+    # Run in parallel with cypress-run so we don't block on capacity
     timeout-minutes: 10
     outputs:
       should_run_fallback: ${{ steps.decide.outputs.should_run_fallback }}
     steps:
-      - name: Grace period before checking (tune as needed)
-        run: sleep 300
+      - name: Waiting until check
+        run: sleep 300 # 5 minutes
 
-      - name: Try to download claim
+      - name: Download cypress-run claim
         id: dl
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -52,17 +52,17 @@ jobs:
         id: decide
         run: |
           if [ -f "./claim/claim.txt" ]; then
-            echo "Big runner already started; no fallback."
+            echo "Cypress is running fine."
             echo "should_run_fallback=false" >> "$GITHUB_OUTPUT"
           else
-            echo "No claim found; run fallback."
+            echo "Cypress is stuck; running fallback."
             echo "should_run_fallback=true" >> "$GITHUB_OUTPUT"
           fi
 
-  fallback:
-    name: Fallback on ubuntu-latest
-    needs: [check-claim]
-    if: ${{ needs.check-claim.outputs.should_run_fallback == 'true' }}
+  cypress-fallback:
+    name: Fallback run of cypress on github shared runner
+    needs: [cypress-watchdog]
+    if: ${{ needs.cypress-watchdog.outputs.should_run_fallback == 'true' }}
     uses: ./.github/workflows/reusable-cypress.yml
     with:
       runner: ubuntu-latest
