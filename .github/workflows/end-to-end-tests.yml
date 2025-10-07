@@ -17,8 +17,7 @@ permissions:
   actions: read
 
 jobs:
-  cypress-run:
-    name: Run cypress on dedicated runner
+  cypress-dedicated:
     uses: ./.github/workflows/reusable-cypress.yml
     with:
       runner: ubuntu-22.04-8vcpu-32gb-300gbssd
@@ -28,13 +27,12 @@ jobs:
     secrets: inherit
 
   cypress-watchdog:
-    name: Watchdog checking cypress is running on dedicated runner
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       should_run_fallback: ${{ steps.decide.outputs.should_run_fallback }}
     steps:
-      - name: Polling for 5 minutes every 10s
+      - name: Polling for 2 minutes every 10s
         id: poll-cypress-started
         shell: bash
         env:
@@ -42,7 +40,7 @@ jobs:
         run: |
           echo "Polling for 'runner-claim' artifact on run ${{ github.run_id }}..."
           found="false"
-          for i in {1..30}; do
+          for i in {1..12}; do
             echo "Attempt $i..."
             # 👇 restrict to THIS workflow run
             if gh api \
@@ -67,9 +65,7 @@ jobs:
             echo "should_run_fallback=true" >> "$GITHUB_OUTPUT"
           fi
   
-
   cypress-fallback:
-    name: Fallback run of cypress on github shared runner
     needs: [cypress-watchdog]
     if: ${{ needs.cypress-watchdog.outputs.should_run_fallback == 'true' }}
     uses: ./.github/workflows/reusable-cypress.yml

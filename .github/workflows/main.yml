@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install, lint, and test
+      - name: Install, build, lint, and test
         run: |
           echo Running tests
           yarn install
