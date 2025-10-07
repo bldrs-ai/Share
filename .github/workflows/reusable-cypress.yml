@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   cypress-run:
-    name: Cypress on ${{ inputs.runner }}
+    name: run on ${{ inputs.runner }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
 

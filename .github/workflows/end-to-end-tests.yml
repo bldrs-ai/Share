@@ -1,4 +1,4 @@
-name: e2e flows (cypress)
+name: flows
 
 on:
   push:

@@ -27,10 +27,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install, build, lint, and test
-        run: |
-          echo Running tests
-          yarn install
-          yarn build-prod
-          yarn lint
-          yarn test
+      - run: yarn install
+
+      - run: yarn build-prod
+
+      - run: yarn lint
+
+      - run: yarn test
