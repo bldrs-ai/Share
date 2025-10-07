@@ -14,6 +14,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   cypress-run:
@@ -29,35 +30,43 @@ jobs:
   cypress-watchdog:
     name: Watchdog checking cypress is running on dedicated runner
     runs-on: ubuntu-latest
-    # Run in parallel with cypress-run so we don't block on capacity
     timeout-minutes: 10
     outputs:
       should_run_fallback: ${{ steps.decide.outputs.should_run_fallback }}
     steps:
-      - name: Waiting until check
-        run: sleep 300 # 5 minutes
-
-      - name: Download cypress-run claim
-        id: dl
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: runner-claim
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.run_id }}
-          path: ./claim
-          repository: ${{ github.repository }}
+      - name: Polling for 5 minutes every 10s
+        id: poll-cypress-started
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Polling for 'runner-claim' artifact on run ${{ github.run_id }}..."
+          found="false"
+          for i in {1..30}; do
+            echo "Attempt $i..."
+            # 👇 restrict to THIS workflow run
+            if gh api \
+              repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+              --jq 'any(.artifacts[]?; .name == "runner-claim")' | grep -q true; then
+              echo "Found runner-claim artifact!"
+              found="true"
+              break
+            fi
+            sleep 10
+          done
+          echo "claim_found=$found" >> "$GITHUB_OUTPUT"
 
       - name: Decide
         id: decide
         run: |
-          if [ -f "./claim/claim.txt" ]; then
-            echo "Cypress is running fine."
+          if [[ "${{ steps.poll-cypress-started.outputs.claim_found }}" == "true" ]]; then
+            echo "Cypress is running on the big runner; skip fallback."
             echo "should_run_fallback=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Cypress is stuck; running fallback."
+            echo "No claim detected; run fallback."
             echo "should_run_fallback=true" >> "$GITHUB_OUTPUT"
           fi
+  
 
   cypress-fallback:
     name: Fallback run of cypress on github shared runner
