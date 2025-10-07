@@ -1,4 +1,4 @@
-name: End-to-end Tests (cypress)
+name: flow-tests
 
 on:
   push:
@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
     environment: cypress
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -56,7 +57,7 @@ jobs:
       - uses: cypress-io/github-action@v5
         with:
           browser: chrome
-          command: yarn cy-parallel
+          command: yarn cy
         env:
           # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
           GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh

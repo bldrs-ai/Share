@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1588",
+  "version": "1.0.1582",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "yarn build-conway",
+    "build-prod": "SHARE_CONFIG=prod yarn build",
     "build-conway": "yarn clean && yarn build-share-conway",
     "build-conway-debug": "yarn clean && yarn build-share-conway && yarn build-share-copy-wasm-conway-profile",
     "build-webifc": "yarn clean && yarn build-share-webifc",
@@ -71,7 +72,7 @@
     "@babel/plugin-syntax-import-assertions": "7.18.6",
     "@babel/preset-env": "7.18.10",
     "@babel/preset-react": "7.18.6",
-    "@bldrs-ai/conway-web-ifc-adapter": "0.23.940-2",
+    "@bldrs-ai/conway-web-ifc-adapter": "0.23.954",
     "@bldrs-ai/ifclib": "5.3.3",
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",
