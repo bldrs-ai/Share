@@ -1,77 +1,66 @@
-name: flows
+name: flow-tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
   workflow_dispatch:
 
-# Avoid piling up runs for the same commit/PR
-concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-  actions: read
-
 jobs:
-  cypress-dedicated:
-    uses: ./.github/workflows/reusable-cypress.yml
-    with:
-      runner: ubuntu-22.04-8vcpu-32gb-300gbssd
-      timeout_minutes: 20
-      browser: chrome
-      command: yarn cy
-    secrets: inherit
-
-  cypress-watchdog:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      should_run_fallback: ${{ steps.decide.outputs.should_run_fallback }}
+  cypress-run:
+    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
+    environment: cypress
+    timeout-minutes: 20
     steps:
-      - name: Polling for 2 minutes every 10s
-        id: poll-cypress-started
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Polling for 'runner-claim' artifact on run ${{ github.run_id }}..."
-          found="false"
-          for i in {1..12}; do
-            echo "Attempt $i..."
-            # 👇 restrict to THIS workflow run
-            if gh api \
-              repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
-              --jq 'any(.artifacts[]?; .name == "runner-claim")' | grep -q true; then
-              echo "Found runner-claim artifact!"
-              found="true"
-              break
-            fi
-            sleep 10
-          done
-          echo "claim_found=$found" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
 
-      - name: Decide
-        id: decide
-        run: |
-          if [[ "${{ steps.poll-cypress-started.outputs.claim_found }}" == "true" ]]; then
-            echo "Cypress is running on the big runner; skip fallback."
-            echo "should_run_fallback=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "No claim detected; run fallback."
-            echo "should_run_fallback=true" >> "$GITHUB_OUTPUT"
-          fi
-  
-  cypress-fallback:
-    needs: [cypress-watchdog]
-    if: ${{ needs.cypress-watchdog.outputs.should_run_fallback == 'true' }}
-    uses: ./.github/workflows/reusable-cypress.yml
-    with:
-      runner: ubuntu-latest
-      timeout_minutes: 25
-      browser: chrome
-      command: yarn cy
-    secrets: inherit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ChatG: Next two steps are for correct caching and not using out-of-date
+      #  versions, for reproducible results
+      - name: Cache Cypress and Node Modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/Cypress
+            node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+            
+      - name: Clear Cypress Cache
+        run: npx cypress cache prune
+
+      # Use exact lock file to ensure reproducible install
+      - run: yarn install --frozen-lockfile
+
+      - name: Install Cypress Binary
+        run: npx cypress install
+
+      - name: Verify Cypress Installation
+        run: npx cypress info
+
+      - run: yarn cy-build
+        # Ensure your build script correctly outputs to the ./docs directory
+        env:
+          NODE_ENV: production
+          SHARE_CONFIG: cypress
+
+      - uses: cypress-io/github-action@v5
+        with:
+          browser: chrome
+          command: yarn cy
+        env:
+          # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
+          GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
+          GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
+          RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
+          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
+          MSW_IS_ENABLED: true
