@@ -224,6 +224,7 @@ describe('OPFSService module', () => {
     opfsService.opfsSnapshotCache()
     expect(worker.postMessage).toHaveBeenCalledWith({
       command: 'snapshotCache',
+      previewWindow: 0,
     })
   })
 })

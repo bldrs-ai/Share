@@ -4,7 +4,7 @@ import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navWithSearchParamRemoved} from '../../utils/navigate'
+import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
 import CloseIcon from '@mui/icons-material/Close'
@@ -68,7 +68,7 @@ export default function SearchBar({
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
         disablePageReloadApprovalCheck()
-        navigate(modelPath, {replace: true})
+        navigateToModel(modelPath, navigate)
         if (onSuccess) {
           onSuccess()
         }

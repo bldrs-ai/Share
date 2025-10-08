@@ -15,15 +15,25 @@ import {
 jest.mock('../OPFS/OPFSService.js')
 
 describe('OPFS Test Suite', () => {
+  let consoleWarnMock
+
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks()
+
+    // Mock console.warn to prevent console output and capture warnings
+    consoleWarnMock = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
     // Setup or reset mock implementations before each test
     OPFSService.initializeWorker.mockReturnValue({
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
     })
+  })
+
+  afterEach(() => {
+    // Restore console.warn after each test
+    consoleWarnMock.mockRestore()
   })
 
   describe('writeSavedGithubModelOPFS', () => {
@@ -43,6 +53,9 @@ describe('OPFS Test Suite', () => {
           .toHaveBeenCalledWith('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
+
+      // Verify no console warnings were triggered for this operation
+      expect(consoleWarnMock).not.toHaveBeenCalled()
     })
   })
 
@@ -369,10 +382,11 @@ describe('OPFS Test Suite', () => {
 
   describe('snapshotOPFS', () => {
     it('should resolve true if the snapshot was retrieved', async () => {
+      const mockDirectoryStructure = 'mock-directory-structure'
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
-          // Simulate successful file deletion
-          process.nextTick(() => handler({data: {completed: true, event: 'snapshot', directoryStructure: []}}))
+          // Simulate successful snapshot operation
+          process.nextTick(() => handler({data: {completed: true, event: 'snapshot', directoryStructure: mockDirectoryStructure}}))
         }),
         removeEventListener: jest.fn(),
       }
@@ -384,6 +398,9 @@ describe('OPFS Test Suite', () => {
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
+
+      // Assert that console.warn was called with the expected directory structure
+      expect(consoleWarnMock).toHaveBeenCalledWith(`OPFS Directory Structure:\n${mockDirectoryStructure}`)
     })
   })
 
@@ -391,7 +408,7 @@ describe('OPFS Test Suite', () => {
     it('should resolve true if the OPFS cache was cleared', async () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
-          // Simulate successful file deletion
+          // Simulate successful cache clear operation
           process.nextTick(() => handler({data: {completed: true, event: 'clear'}}))
         }),
         removeEventListener: jest.fn(),
@@ -404,6 +421,9 @@ describe('OPFS Test Suite', () => {
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
+
+      // Assert that console.warn was called with the expected cache clear message
+      expect(consoleWarnMock).toHaveBeenCalledWith('OPFS cache cleared.')
     })
   })
 })

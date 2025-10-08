@@ -1,4 +1,4 @@
-import {setupWorker} from 'msw'
+import {setupWorker} from 'msw/browser'
 import {initHandlers} from './api-handlers'
 
 

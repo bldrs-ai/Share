@@ -45,7 +45,7 @@ function renderDlg(authOverrides = {}, open = true, onClose = jest.fn()) {
   })
 
   return render(
-    <ManageProfile open={open} onClose={onClose}/>,
+    <ManageProfile isDialogDisplayed={open} setIsDialogDisplayed={onClose}/>,
     {wrapper: ThemeCtx},
   )
 }
@@ -57,8 +57,7 @@ beforeEach(() => {
   getAccessTokenSilently = jest
     .fn()
     .mockResolvedValue('primary.jwt')
-    // eslint-disable-next-line no-empty-function
-  jest.spyOn(window, 'open').mockImplementation(() => {})
+    jest.spyOn(window, 'open').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -73,8 +72,7 @@ describe('ManageProfile modal', () => {
       user: baseUser,
       isAuthenticated: false, // keeps loading=true
     })
-    // eslint-disable-next-line no-empty-function
-    render(<ManageProfile open={true} onClose={() => {}}/>, {wrapper: ThemeCtx})
+    render(<ManageProfile isDialogDisplayed={true} setIsDialogDisplayed={() => {}}/>, {wrapper: ThemeCtx})
     expect(screen.getByRole('progressbar')).toBeInTheDocument()
   })
 

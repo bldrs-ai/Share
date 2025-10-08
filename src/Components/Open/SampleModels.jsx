@@ -16,6 +16,8 @@ import Sheenstock from '../../assets/icons/Sheenstock.svg'
  * @return {ReactElement}
  */
 export default function SampleModels({navigate, setIsDialogDisplayed}) {
+  // Lazy import to avoid circulars in tests
+  const {navigateToModel} = require('../../utils/navigate')
   const [, setSelected] = useState('')
   const iconsStyle = {height: '1.6em'}
   const modelPath = {
@@ -42,8 +44,14 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
 
   const handleSelect = (modelName, closeDialog) => {
     setSelected(modelName)
-    navigate({pathname: modelPath[modelName]})
+    navigateToModel({pathname: modelPath[modelName]}, navigate)
     closeDialog()
+  }
+
+  const stackSx = {
+    // center the content of the stack
+    justifyContent: 'center',
+    alignItems: 'center',
   }
 
   return (
@@ -52,6 +60,8 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
       spacing={2}
       justifyContent='center'
       alignItems='center'
+      sx={stackSx}
+      data-testid={`dialog-open-model-samples`}
     >
       {Object.keys(modelPath).map((model, i) => (
         <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>
@@ -65,7 +75,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
             variant='sampleModel'
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
             color='primary'
-            data-testid='sample-model-chip'
+            data-testid={`sample-model-chip-${i}`}
           />
         </Grid>
       ))}

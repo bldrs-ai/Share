@@ -424,9 +424,11 @@ export function opfsClearCache() {
 }
 
 /**
- * Retrives a directory snapshot of the opfs cache.
+ * Retrieves a directory snapshot of the OPFS cache.
+ *
+ * @param {number} [previewWindow] Number of leading bytes per file to include (0 = disabled).
  */
-export function opfsSnapshotCache() {
+export function opfsSnapshotCache(previewWindow = 0) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -434,6 +436,7 @@ export function opfsSnapshotCache() {
 
   workerRef.postMessage({
     command: 'snapshotCache',
+    previewWindow: previewWindow,
   })
 }
 
@@ -449,8 +452,20 @@ export function opfsSnapshotCache() {
  * @param {string} repo - The repository name
  * @param {string} branch - The branch name
  * @param {string} filePath - The original IFC file path
+ * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
  */
-export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename) {
+export function opfsExportToGlb(
+  geometryPtr,
+  materialsPtr,
+  chunks,
+  fileNameNoExtension,
+  owner,
+  repo,
+  branch,
+  filePath,
+  opfsFilename,
+  serializedGeometryProperties,
+) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -467,6 +482,7 @@ export function opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExt
     branch: branch,
     filePath: filePath,
     opfsFilename: opfsFilename,
+    serializedGeometryProperties: serializedGeometryProperties,
   })
 }
 

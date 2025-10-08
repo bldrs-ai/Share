@@ -3,6 +3,7 @@ import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
+import {captureException} from '@sentry/react'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -12,12 +13,13 @@ import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined} from '../utils/assert'
+import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -127,9 +129,13 @@ export default function CadView({
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
-      const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.primary.sceneBackground))
+      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
+      if (!sceneBackground) {
+        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
+        console.error(error.message)
+        captureException(error)
+      }
+      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
@@ -153,7 +159,8 @@ export default function CadView({
       return
     }
 
-    if (isAuthLoading || (!isAuthLoading && isAuthenticated && ( accessToken === '' && hasGitHubIdentity ))) {
+    if (isAuthLoading || (!isAuthLoading &&
+      (isAuthenticated && ( accessToken === '' && !hasGitHubIdentity )))) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }
@@ -181,13 +188,30 @@ export default function CadView({
     debug().log('CadView#onViewer: modelPath:', modelPath)
     const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
+    let isOOM = false
     try {
       tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
     } catch (e) {
-      setAlert(e)
+       if (isOutOfMemoryError(e)) {
+         isOOM = true
+      }
+      if (isOOM) {
+        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
+        setAlert({
+          type: 'oom',
+          message: 'We ran out of memory attempting to load this model. ' +
+            'Try opening it on a desktop browser with more memory or ' +
+            'refresh the page.',
+        })
+      } else {
+        setAlert(e)
+      }
+
+      console.error(e)
+      captureException(e)
       return
     }
-    if (!tmpModelRef) {
+    if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
@@ -269,6 +293,11 @@ export default function CadView({
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
+      if (isOutOfMemoryError(error)) {
+            error.isOutOfMemory = true
+            throw error
+        }
+
       setAlert(error)
       return
     } finally {
@@ -368,8 +397,9 @@ export default function CadView({
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
         const geom = mesh.geometry
-        if (!geom.index) {
-          throw new Error('Geometry does not have index information.')
+        if (!areDefinedAndNotNull(geom, geom.index)) {
+          // throw new Error('Geometry does not have index information.')
+          return
         }
         const geoIndex = geom.index.array
         const IdAttrName = 'expressID'
@@ -488,10 +518,6 @@ export default function CadView({
         if (enabledFeatures) {
           path += `?feature=${enabledFeatures}`
         }
-        // TODO(pablo): without a log before nav, some page crashes simply blank
-        // the screen and leave no trace
-        // eslint-disable-next-line no-console
-        console.log('navigate:', pathIds, elementPath, path)
         navWith(
           navigate,
           path,

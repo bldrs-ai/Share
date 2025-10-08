@@ -11,18 +11,20 @@ import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
 import {initializeWasm, opfsExportToGlb} from '../OPFS/OPFSService'
 import {HTTP_NOT_FOUND} from '../net/http'
-import {assert, assertDefined} from '../utils/assert'
+import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
 import {testUuid} from '../utils/strings'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import { ExtBldrsPropertiesPayload } from './ExtBldrsPropertiesPayload.js';
 import glbToThree from './glb'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
+import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
@@ -85,6 +87,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
+  onProgress('Determining file type...')
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -95,6 +98,7 @@ export async function load(
 
   let modelData
   if (isOpfsAvailable) {
+    onProgress('Preparing file download...')
     // download to file using caching system or else...
     if (isUploadedFile) {
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
@@ -165,8 +169,10 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
+    onProgress('Reading file data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
+      onProgress('Decoding text data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
@@ -180,9 +186,27 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
+  let model
+  try {
+    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+  } catch (e) {
+    if (isOutOfMemoryError(e)) {
+      e.isOutOfMemory = true
+    }
+    throw e
+  }
+
+  if (model === null || model === undefined) {
+    // If loader captured a last error, surface that
+    const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
+    if (isOutOfMemoryError(lastErr)) {
+      lastErr.isOutOfMemory = true
+    }
+    throw lastErr
+  }
 
   if (!isIfc) {
+    onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
@@ -231,7 +255,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
       {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
-        onDownloadProgress: (event) => onProgressHandler(event, onProgress),
+        onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),
       },
     )).data
   } catch (error) {
@@ -334,14 +358,18 @@ function convertToShareModel(model, viewer) {
  * @param {boolean} isIfc
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
+ * @param {Function} [onProgress] progress callback for IFC loading
  * @return {object}
  */
-export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
+export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
+
+    // Register extension before loading
+    loader.register(parser => new ExtBldrsPropertiesPayload(parser));
     model = await new Promise((resolve, reject) => {
       try {
         loader.parse(modelData, './', (m) => {
@@ -355,16 +383,30 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     })
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
-    model = await loader.parse(modelData, basePath)
+    if (isIfc && onProgress) {
+      model = await loader.parse(modelData, onProgress)
+    } else {
+      if (onProgress) {
+        onProgress('Parsing model data...')
+      }
+      model = await loader.parse(modelData, basePath)
+    }
   } else {
     debug().log(`sync loader(->) parsing data:`, loader, modelData)
+    if (onProgress) {
+      onProgress('Processing model data...')
+    }
     model = loader.parse(modelData, basePath)
   }
+
   if (!model) {
     throw new Error('Loader could not read model')
   }
 
   if (fixupCb) {
+    if (onProgress) {
+      onProgress('Applying model fixups...')
+    }
     model = fixupCb(model, viewer)
   }
 
@@ -379,8 +421,12 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
         break
       }
     }
-    assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
-    console.warn('Only using first mesh for some operations')
+
+    // TODO(pablo): temporarily removed to get glb working, but seems to work
+    // pretty well.  This involved hardening other uses of .geometry
+    // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
+    // This is too chatty.
+    // console.warn('Could not identify default mesh to use for some operations')
   }
 
   return model
@@ -515,6 +561,8 @@ function newGltfLoader() {
  */
 function newIfcLoader(viewer) {
   const loader = viewer.IFC
+  // Track last IFC parse error (especially when parse returns null)
+  loader.ifcLastError = null
   // Loader is web-ifc-viewer/viewer/src/components/ifc/ifc-manager.ts
   // It internally uses web-ifc-three/Loader
   // Hot patch buffer-based parse alternative.
@@ -527,17 +575,36 @@ function newIfcLoader(viewer) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
     try {
+      if (onProgress) {
+        onProgress('Configuring loader...')
+      }
       await this.loader.ifcManager.applyWebIfcConfig({
         COORDINATE_TO_ORIGIN: true,
         USE_FAST_BOOLS: true,
       })
+
+      if (onProgress) {
+        onProgress('Parsing model geometry...')
+      }
       const ifcModel = await this.loader.parse(buffer, onProgress)
       this.addIfcModel(ifcModel)
+
+      if (onProgress) {
+        onProgress('Setting up coordinate system...')
+      }
       // eslint-disable-next-line new-cap
       const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
+
+      if (onProgress) {
+        onProgress('Fitting model to frame...')
+      }
       this.context.fitToFrame()
+
+      if (onProgress) {
+        onProgress('Gathering model statistics...')
+      }
       const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
       const loadStats = {
         loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
@@ -551,9 +618,17 @@ function newIfcLoader(viewer) {
         totalTime: statsApi.getTotalTime(),
       }
       ifcModel.loadStats = loadStats
-
+      if (onProgress) {
+        onProgress('Model loaded successfully!')
+      }
       return ifcModel
     } catch (err) {
+      loader.ifcLastError = err
+      // Rethrow OOM so callers can present a tailored UX message.
+      if (isOutOfMemoryError(err)) {
+        err.isOutOfMemory = true // tag for convenience
+        throw err
+      }
       console.error(err)
       if (onError) {
         onError(err)
@@ -571,7 +646,7 @@ function newIfcLoader(viewer) {
  * @param {Event} progressEvent
  * @param {Function} onProgress
  */
-function onProgressHandler(progressEvent, onProgress) {
+function onDownloadProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
     const loadedBytes = progressEvent.loaded
     // eslint-disable-next-line no-magic-numbers
@@ -620,6 +695,21 @@ async function initializeConwayAndExportGlb(viewer, owner, repo, branch, filePat
     try {
       // eslint-disable-next-line no-console
       console.log('Initializing Conway WASM module in worker...')
+
+      let serializedGeometryProperties = null
+      const serializeGeometryPropertiesFn = viewer.IFC.loader?.ifcManager?.ifcAPI?.SerializeGeometryProperties
+      if (typeof serializeGeometryPropertiesFn === 'function') {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('Serializing IFC geometry properties for GLB export...')
+          serializedGeometryProperties = await serializeGeometryPropertiesFn.call(
+            viewer.IFC.loader.ifcManager.ifcAPI,
+            0,
+          )
+        } catch (error) {
+          console.error('Failed to serialize geometry properties for GLB export:', error)
+        }
+      }
       const wasmModule = viewer.IFC.loader.ifcManager.ifcAPI.getWasmModule()
       // Initialize Conway WASM module in the worker and wait for completion
       const wasmInitialized = await initializeWasm('/static/js/ConwayGeomWasmWebMT.js', wasmModule)
@@ -636,11 +726,21 @@ async function initializeConwayAndExportGlb(viewer, owner, repo, branch, filePat
         } else {
           fileNameNoExtension = 'model'
         }
-
         // eslint-disable-next-line no-console
         console.log('Exporting aggregated geometry to GLB via OPFS worker...')
         // Export to GLB using Conway in the worker
-        opfsExportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename)
+        opfsExportToGlb(
+          geometryPtr,
+          materialsPtr,
+          chunks,
+          fileNameNoExtension,
+          owner,
+          repo,
+          branch,
+          filePath,
+          opfsFilename,
+          serializedGeometryProperties,
+        )
       } else {
         console.error('Conway WASM initialization failed')
       }

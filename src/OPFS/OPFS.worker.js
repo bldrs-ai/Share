@@ -87,7 +87,7 @@ self.addEventListener('message', async (event) => {
           // eslint-disable-next-line new-cap
           ConwayGeomWasm(config).then((wasmModule) => {
             // Initialize the geometry processor
-            // const initialized = wasmModule.initializeGeometryProcessor()
+           // const initialized = wasmModule.initializeGeometryProcessor()
             conwayModule = wasmModule
             // eslint-disable-next-line no-console
             console.log('Conway WASM module initialized in worker with pthread support:', conwayModule)
@@ -124,8 +124,20 @@ self.addEventListener('message', async (event) => {
           'branch',
           'filePath',
           'opfsFilename'])
+      const serializedGeometryProperties = event.data.serializedGeometryProperties || null
 
-      await exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename)
+      await exportToGlb(
+        geometryPtr,
+        materialsPtr,
+        chunks,
+        fileNameNoExtension,
+        owner,
+        repo,
+        branch,
+        filePath,
+        opfsFilename,
+        serializedGeometryProperties,
+      )
     } else if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
       assertValues(event.data, ['objectUrl', 'fileName'])
@@ -177,7 +189,9 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'clearCache') {
       await clearCache()
     } else if (event.data.command === 'snapshotCache') {
-      await snapshotCache()
+      // Optional previewWindow parameter specifies how many leading bytes to include per file
+      const previewWindow = Number.isFinite(event.data.previewWindow) ? event.data.previewWindow : parseInt(event.data.previewWindow, 10)
+      await snapshotCache(Number.isFinite(previewWindow) && previewWindow > 0 ? previewWindow : 0)
     }
   } catch (error) {
     self.postMessage({error: error.message})
@@ -188,13 +202,18 @@ self.addEventListener('message', async (event) => {
 /**
  * Return directory snapshot of OPFS cache
  */
-async function snapshotCache() {
+/**
+ * Return directory snapshot of OPFS cache including optional preview bytes per file.
+ *
+ * @param {number} [previewWindow] Number of leading bytes (per file) to include as hex via traverseDirectory.
+ */
+async function snapshotCache(previewWindow = 0) {
   const opfsRoot = await navigator.storage.getDirectory()
 
-  const directoryStructure = await traverseDirectory(opfsRoot)
+  const directoryStructure = await traverseDirectory(opfsRoot, '', previewWindow)
 
   // Send the directory structure as a message to the main thread
-  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure})
+  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure.trimEnd()})
 }
 
 
@@ -205,14 +224,67 @@ async function snapshotCache() {
  * @param {string} [path] - The path to the directory.
  * @return {Promise<string>} The directory structure as a string.
  */
-async function traverseDirectory(dirHandle, path = '') {
+/**
+ * Recursively traverse a directory and build a textual snapshot including file size, hash, and optional first bytes.
+ *
+ * Format (tab separated):
+ *   <path>/<filename>\tsize=<bytes>\thash=<sha1>\tfirst<N>="<ascii>"
+ * Directories end with a trailing slash and have no size/hash fields.
+ *
+ * @param {FileSystemDirectoryHandle} dirHandle Root / current directory handle.
+ * @param {string} [path] Current relative path (internal use).
+ * @param {number} [previewLength] If > 0 include the first N bytes of each file in hex.
+ * @return {Promise<string>} Accumulated textual listing.
+ */
+async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
   let entries = ''
+
+  // Helper: compute SHA-1 hash (raw file contents, not Git blob format) and optional preview
+  /**
+   * @return {Promise<string>}
+   */
+  async function describeFile(file) {
+    let hashHex = 'error'
+    try {
+      const buffer = await file.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest('SHA-1', buffer)
+      // eslint-disable-next-line no-magic-numbers
+      hashHex = [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    } catch (e) {
+      // swallow; hashHex already set to 'error'
+    }
+
+    let preview = ''
+    if (previewLength > 0 && file.size >= previewLength) {
+      try {
+        const slice = file.slice(0, previewLength)
+        const sliceBuf = await slice.arrayBuffer()
+        const bytes = new Uint8Array(sliceBuf)
+        // Map bytes to printable ASCII, replace others with '.'
+        // eslint-disable-next-line no-magic-numbers
+        const ascii = Array.from(bytes, (b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('')
+        // Escape quotes and backslashes for safer single-line output
+        const escaped = ascii.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        preview = `\tfirst${previewLength}="${escaped}"`
+      } catch (e) {
+        preview = `\tfirst${previewLength}="error"`
+      }
+    }
+    return `size=${file.size}\thash=${hashHex}${preview}`
+  }
+
   for await (const [name, handle] of dirHandle.entries()) {
     if (handle.kind === 'directory') {
       entries += `${path}/${name}/\n`
-      entries += await traverseDirectory(handle, `${path}/${name}`)
+      entries += await traverseDirectory(handle, `${path}/${name}`, previewLength)
     } else if (handle.kind === 'file') {
-      entries += `${path}/${name}\n`
+      try {
+        const file = await handle.getFile()
+        const desc = await describeFile(file)
+        entries += `${path}/${name}\t${desc}\n`
+      } catch (e) {
+        entries += `${path}/${name}\tsize=0\thash=error\n`
+      }
     }
   }
   return entries
@@ -240,13 +312,45 @@ async function clearCache() {
  * @param {string} repo - The repository name
  * @param {string} branch - The branch name
  * @param {string} filePath - The original file path
+ * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
  */
-async function exportToGlb(geometryPtr, materialsPtr, chunks, fileNameNoExtension, owner, repo, branch, filePath, opfsFilename) {
+async function exportToGlb(
+  geometryPtr,
+  materialsPtr,
+  chunks,
+  fileNameNoExtension,
+  owner,
+  repo,
+  branch,
+  filePath,
+  opfsFilename,
+  serializedGeometryProperties,
+) {
   if (!conwayModule) {
 throw new Error('Conway WASM module not initialized.')
 }
 
   const startTimeGlb = Date.now()
+  const opfsRoot = await navigator.storage.getDirectory()
+  const lastSlash = (filePath || '').lastIndexOf('/')
+  const dir = lastSlash >= 0 ? (filePath || '').slice(0, lastSlash) : ''
+  const sanitizedOpfsBase = (opfsFilename || '').replace(/\.[^/.]+$/, '')
+  const fallbackBase = (fileNameNoExtension || '').replace(/\.[^/.]+$/, '') ||
+    ((filePath || '').split('/').pop() || 'model').replace(/\.[^/.]+$/, '')
+  const glbBase = sanitizedOpfsBase || fallbackBase || 'model'
+  const basePathParts = [owner, repo, branch]
+  if (dir) {
+    basePathParts.push(dir)
+  }
+  const glbCacheKey = [...basePathParts, `${glbBase}.glb`].filter(Boolean).join('/')
+  let serializedPropertiesJson = null
+  if (serializedGeometryProperties && typeof serializedGeometryProperties === 'object') {
+    serializedPropertiesJson = JSON.stringify(serializedGeometryProperties)
+  }
+  const propertiesCacheKey = serializedPropertiesJson ?
+    [...basePathParts, `${glbBase}.properties.json`].filter(Boolean).join('/') :
+    null
+
   try {
     // eslint-disable-next-line no-console
     console.log('Converting geometry to GLB using Conway in worker...')
@@ -261,8 +365,10 @@ throw new Error('Conway WASM module not initialized.')
       true, // isGlb
       false, // outputDraco (you called it "merge" in a comment but passing true)
       filePath,
+      serializedPropertiesJson,
     )) {
       if (!glbResult?.success) {
+        console.log('GLB result indicates failure:', glbResult)
         self.postMessage({error: 'GLB generation unsuccessful', event: 'glbExportError'})
         continue
       }
@@ -278,14 +384,9 @@ throw new Error('Conway WASM module not initialized.')
 
         try {
           // Write the GLB file to OPFS (copy off the shared heap!)
-      // Use directory from filePath (if any) but use opfsFilename for actual filename
-      const lastSlash = (filePath || '').lastIndexOf('/')
-      const dir = lastSlash >= 0 ? (filePath || '').slice(0, lastSlash) : ''
-      const glbBase = opfsFilename || ((filePath || '').split('/').pop() || 'model').replace(/\.[^/.]+$/, '')
-      const cacheKey = [owner, repo, branch, dir, `${glbBase}.glb`].filter(Boolean).join('/')
           const [, glbFileHandle] = await writeFileToExactPath(
-            await navigator.storage.getDirectory(),
-            cacheKey,
+            opfsRoot,
+            glbCacheKey,
           )
 
           const copy = new Uint8Array(managedBuffer.byteLength)
@@ -296,7 +397,7 @@ throw new Error('Conway WASM module not initialized.')
           await writable.close()
 
           // eslint-disable-next-line no-console
-          console.log(`GLB file written to OPFS: ${cacheKey}`)
+          console.log(`GLB file written to OPFS: ${glbCacheKey}`)
         } catch (err) {
           console.error('Error writing GLB:', err)
           self.postMessage({error: `Error writing GLB file: ${err.message}`, event: 'glbExportError'})
@@ -306,6 +407,22 @@ throw new Error('Conway WASM module not initialized.')
       // free native containers if these are emscripten objects
       glbResult.bufferUris?.delete?.()
       glbResult.buffers?.delete?.()
+    }
+
+    if (propertiesCacheKey && serializedPropertiesJson) {
+      try {
+        const [, propertiesFileHandle] = await writeFileToExactPath(opfsRoot, propertiesCacheKey)
+        if (!propertiesFileHandle) {
+          throw new Error('Unable to obtain properties file handle')
+        }
+        const writableProps = await propertiesFileHandle.createWritable()
+        await writableProps.write(new Blob([serializedPropertiesJson], {type: 'application/json'}))
+        await writableProps.close()
+        // eslint-disable-next-line no-console
+        console.log(`GLB properties written to OPFS: ${propertiesCacheKey}`)
+      } catch (err) {
+        console.error('Error writing GLB properties:', err)
+      }
     }
 
     self.postMessage({
@@ -1584,29 +1701,72 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
   }
 }
 
-
+/* eslint-disable no-empty */
 /**
- * Rename file in OPFS
+ * Rename (or move) a file inside OPFS with cross-browser support.
  *
- * @param {FileSystemDirectoryHandle} parentDirectory - The parent directory handle.
- * @param {FileSystemFileHandle} fileHandle - The file handle to rename.
- * @param {string} newFileName - The new file name.
- * @return {Promise<FileSystemFileHandle>} The new file handle.
+ * @param {FileSystemDirectoryHandle} parentDirectory - current containing directory
+ * @param {FileSystemFileHandle} fileHandle - file to rename
+ * @param {string} newFileName - new name (same directory)
+ * @param {{overwrite?: boolean}} [opts]
+ * @return {Promise<FileSystemFileHandle>}
  */
-async function renameFileInOPFS(parentDirectory, fileHandle, newFileName) {
-  const newFileHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
+async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts = {}) {
+  const {overwrite = true} = opts
 
-  // Copy the contents of the old file to the new file
-  const oldFile = await fileHandle.getFile()
-  const writable = await newFileHandle.createWritable()
-  await writable.write(await oldFile.arrayBuffer())
-  await writable.close()
+  // If the target exists, decide whether to overwrite or bail.
+  if (overwrite) {
+    try {
+      await parentDirectory.removeEntry(newFileName)
+    } catch (_) {
 
-  // Remove the old file
-  await parentDirectory.removeEntry(fileHandle.name)
+    }
+  } else {
+    try {
+      const existing = await parentDirectory.getFileHandle(newFileName, {create: false})
+      if (existing) {
+        throw new DOMException('Target exists', 'InvalidModificationError')
+      }
+    } catch (_) {/* NotFound: fine */}
+  }
 
-  return newFileHandle
+  // Prefer native move(): Safari/Firefox/Chromium support it for OPFS.
+  // Safari requires two args: (targetDirHandle, newName).
+  if (typeof fileHandle?.move === 'function') {
+    try {
+      await fileHandle.move(parentDirectory, newFileName) // works across browsers
+      return parentDirectory.getFileHandle(newFileName, {create: false})
+    } catch (err) {
+      // If some engine only accepts 1-arg rename, try that before falling back.
+      if (err instanceof TypeError || /Not enough arguments/i.test(err?.message || '')) {
+        try {
+          await fileHandle.move(newFileName) // Chromium-style single-arg rename
+          return parentDirectory.getFileHandle(newFileName, {create: false})
+        } catch {/* fall through to copy/delete */}
+      }
+      // If a SyncAccessHandle is open elsewhere, close it before retrying.
+      // (Callers: ensure any createSyncAccessHandle() has been .close()'d.)
+    }
+  }
+
+  // Fallback: stream copy + delete (avoids large ArrayBuffer on iOS).
+  const srcFile = await fileHandle.getFile()
+  const destHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
+  const readable = srcFile.stream()
+  const writable = await destHandle.createWritable()
+  await readable.pipeTo(writable) // closes writable on completion
+
+  try {
+    if (typeof fileHandle.remove === 'function') {
+      await fileHandle.remove()
+    } else {
+      await parentDirectory.removeEntry(fileHandle.name)
+    }
+  } catch (_) {/* If delete fails, you still have the new copy. */}
+
+  return destHandle
 }
+/* eslint-enable no-empty */
 
 
 /**
@@ -1627,12 +1787,32 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null;
 
-  // eslint-disable-next-line no-unused-vars
+
   [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(
     opfsRoot, cacheKey, null, commitHash, false,
   )
 
   if (modelBlobFileHandle !== null ) {
+    try {
+      const file = await modelBlobFileHandle.getFile()
+      if (file.size === 0) {
+        // Delete zero-byte files and treat as not existing
+        try {
+          if (typeof modelBlobFileHandle.remove === 'function') {
+            await modelBlobFileHandle.remove()
+          } else if (modelDirectoryHandle) {
+            await modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
+          }
+        } catch (_) {/* ignore deletion errors */}
+
+        self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+        return
+      }
+    } catch (_) {/* if we cannot read the file, treat as not existing */
+      self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+      return
+    }
+
     self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
   } else {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
@@ -2011,7 +2191,7 @@ class GeometryConvertor {
    * @param {*} fileUri
    * @return
    */
-  async* toGltfs(geometryPtr, materialsPtr, chunks, isGlb, outputDraco, fileUri) {
+  async* toGltfs(geometryPtr, materialsPtr, chunks, isGlb, outputDraco, fileUri, propertiesJson = null) {
     if (!this.wasmModule) {
 return
 }
@@ -2035,6 +2215,7 @@ return
           chunkUri,
           chunk.offset,
           chunk.count,
+          propertiesJson,
         ),
       )
 
@@ -2055,13 +2236,22 @@ return
    * @param {*} geometryCount
    * @return
    */
-  toGltf(geometry, materials, isGlb, outputDraco, fileUri, geometryOffset = 0, geometryCount /* don’t default: ptrs don’t have size() */) {
+  toGltf(
+      geometry,
+      materials,
+      isGlb,
+      outputDraco,
+      fileUri,
+      geometryOffset = 0,
+      geometryCount /* don’t default: ptrs don’t have size() */,
+      propertiesJson = null,
+  ) {
     const noResults = {success: false, bufferUris: undefined, buffers: undefined}
     if (!this.wasmModule) {
 return noResults
 }
 
-    return this.wasmModule.geometryToGltfPtr(
+    const args = [
       geometry,
       materials,
       isGlb,
@@ -2069,7 +2259,12 @@ return noResults
       fileUri,
       geometryOffset,
       geometryCount,
-    )
+    ]
+    if (propertiesJson !== null && propertiesJson !== undefined) {
+      args.push(propertiesJson)
+    }
+
+    return this.wasmModule.geometryToGltfPtr(...args)
   }
 
    /* eslint-enable default-param-last */
