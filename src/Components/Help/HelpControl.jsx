@@ -40,6 +40,7 @@ export default function HelpControl() {
   const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
   const setIsHelpTooltipsVisible = useStore((state) => state.setIsHelpTooltipsVisible)
   const isOnboardingOverlayVisible = useStore((state) => state.isOnboardingOverlayVisible)
+  const onboardingOverlaySource = useStore((state) => state.onboardingOverlaySource)
   const setIsOnboardingOverlayVisible = useStore((state) => state.setIsOnboardingOverlayVisible)
 
   const [shouldShowHelpAfterOnboarding, setShouldShowHelpAfterOnboarding] = useState(false)
@@ -48,7 +49,7 @@ export default function HelpControl() {
   const handleHelpClick = () => {
     if (!isOnboardingOverlayVisible) {
       // Show onboarding overlay first
-      setIsOnboardingOverlayVisible(true)
+      setIsOnboardingOverlayVisible(true, 'help')
       setShouldShowHelpAfterOnboarding(true)
     } else {
       // Toggle help dialog if overlay is already visible
@@ -89,10 +90,12 @@ export default function HelpControl() {
         isDialogDisplayed={isHelpVisible}
         setIsDialogDisplayed={setIsHelpVisible}
       />
-      <OnboardingOverlay
-        isVisible={isOnboardingOverlayVisible}
-        onClose={handleOnboardingClose}
-      />
+      {onboardingOverlaySource === 'help' && (
+        <OnboardingOverlay
+          isVisible={isOnboardingOverlayVisible}
+          onClose={handleOnboardingClose}
+        />
+      )}
     </>
   )
 }

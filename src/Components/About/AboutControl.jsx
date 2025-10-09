@@ -20,6 +20,7 @@ export default function AboutControl() {
   const setIsAboutVisible = useStore((state) => state.setIsAboutVisible)
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const isOnboardingOverlayVisible = useStore((state) => state.isOnboardingOverlayVisible)
+  const onboardingOverlaySource = useStore((state) => state.onboardingOverlaySource)
   const setIsOnboardingOverlayVisible = useStore((state) => state.setIsOnboardingOverlayVisible)
 
   // Track if we should show onboarding when About dialog closes
@@ -38,7 +39,7 @@ export default function AboutControl() {
       // Small delay to ensure AboutDialog is fully closed
       const overlayDelay = 300
       const timer = setTimeout(() => {
-        setIsOnboardingOverlayVisible(true)
+        setIsOnboardingOverlayVisible(true, 'about')
         setShouldShowOnboardingAfterAbout(false) // Reset the flag
       }, overlayDelay)
       return () => clearTimeout(timer)
@@ -78,10 +79,12 @@ export default function AboutControl() {
           onClose={handleDialogClose}
         />
       </ControlButtonWithHashState>
-      <OnboardingOverlay
-        isVisible={isOnboardingOverlayVisible}
-        onClose={handleOnboardingClose}
-      />
+      {onboardingOverlaySource === 'about' && (
+        <OnboardingOverlay
+          isVisible={isOnboardingOverlayVisible}
+          onClose={handleOnboardingClose}
+        />
+      )}
     </>
   )
 }
