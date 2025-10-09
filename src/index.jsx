@@ -11,7 +11,7 @@ import {
   matchRoutes,
 } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
+import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
