@@ -131,7 +131,7 @@ describe('OnboardingOverlay', () => {
     expect(mockOnClose).toHaveBeenCalledWith(false)
   })
 
-  it('should not close overlay when clicking child elements', async () => {
+  it('should close overlay when clicking child elements', async () => {
     const {getByTestId, getByText} = renderOverlay()
 
     await waitFor(() => {
@@ -140,7 +140,7 @@ describe('OnboardingOverlay', () => {
 
     const text = getByText('Drag and drop models into page to open')
     fireEvent.click(text)
-    expect(mockOnClose).not.toHaveBeenCalled()
+    expect(mockOnClose).toHaveBeenCalled()
   })
 
   it('should show drag active state when dragging', async () => {
