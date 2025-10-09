@@ -2,13 +2,12 @@ name: flow-tests
 
 on:
   push:
-    branches:
-      - main
-
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - 'README.md'
   pull_request:
-    branches:
-      - main
-
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
