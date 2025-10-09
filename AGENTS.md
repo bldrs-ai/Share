@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file defines autonomous and semi-autonomous agents used in this repository.
 
 ## Development Commands
 
@@ -132,9 +132,9 @@ This application is a comprehensive CAD/BIM collaboration platform with advanced
 
 ### General Principles
 - Follow Google Style Guide as the base standard
-- All style rules are enforced automatically via ESLint
 - Use `yarn lint` to check for style violations
 - Use `yarn typecheck` for TypeScript validation
+- All style rules are enforced automatically via ESLint
 
 ### File Layout and Organization
 
