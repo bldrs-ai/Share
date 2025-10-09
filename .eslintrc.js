@@ -25,6 +25,32 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
+    // --- TS / TSX
+    {
+      files: ['*.ts', '*.tsx'],
+      parser: '@typescript-eslint/parser',
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {jsx: true},
+        // If you later want type-aware rules, set:
+        // project: './tsconfig.json',
+        // tsconfigRootDir: __dirname,
+      },
+      plugins: ['@typescript-eslint'],
+      extends: [
+        'eslint:recommended',
+        'plugin:@typescript-eslint/recommended',
+        // For stricter, type-aware rules (requires parserOptions.project):
+        // 'plugin:@typescript-eslint/recommended-type-checked',
+      ],
+      // Optional: turn off/adjust rules that duplicate TS checks or clash
+      rules: {
+        'jsdoc/require-param-type': 'off',
+        'jsdoc/require-returns-type': 'off',
+        'jsdoc/no-types': 'error',
+      },
+    },
   ],
   parser: '@babel/eslint-parser',
   parserOptions: {
@@ -120,10 +146,12 @@ module.exports = {
     'yoda': 'error',
   },
   settings: {
-    react: {
-      version: '17.0.2',
+    'react': {version: 'detect'},
+    'import/resolver': {
+      node: {extensions: ['.js', '.jsx', '.ts', '.tsx']},
+      typescript: {}, // so eslint-plugin-import resolves TS paths/aliases
     },
-    jsdoc: {
+    'jsdoc': {
       tagNamePreference: {
         returns: 'return',
       },

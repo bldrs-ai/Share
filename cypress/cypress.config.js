@@ -2,7 +2,7 @@ const {defineConfig} = require('cypress')
 const failFast = require('cypress-fail-fast/plugin')
 
 
-module.exports = import('./tools/esbuild/vars.cypress.js').then(({
+module.exports = import('../tools/esbuild/vars.cypress.js').then(({
   default: vars,
 }) => {
   return defineConfig({
