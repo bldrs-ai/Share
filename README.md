@@ -17,7 +17,7 @@ Open your models on any device in our browser-based viewer.
 - Navigate and search elements, crop with section planes
 - Property editing, save changes locally (early access)
 - Powerful data slice-n-dice, csv export (early access)
-- Open standards: IFC 2x3&4, STL, OBJ;  STEP (early access)
+- Open standards: IFC 2x3&4, STL, OBJ;  STEP (early access: https://github.com/bldrs-ai/conway-viewer-demo)
 
 ### Frictionless workflows for cross-functional teams
 Share models at the office and on the go.  Powered by GitHub.
