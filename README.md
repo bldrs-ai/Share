@@ -7,8 +7,8 @@ from any device.
 
 ![image](https://github.com/user-attachments/assets/89c98fba-0057-45f2-a02a-161ced37f88c)
 
+![Build](https://github.com/bldrs-ai/Share/actions/workflows/main.yml/badge.svg)
 [![](https://img.shields.io/discord/853953158560743424.svg?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/9SxguBkFfQ "Join the Discord chat at https://discord.gg/9SxguBkFfQ")
-[![This project is using Percy.io for visual regression testing.](https://percy.io/static/images/percy-badge.svg)](https://percy.io/8fe2b2f1/share)
 
 ## Features
 ### Fast and easy access to your models for free
