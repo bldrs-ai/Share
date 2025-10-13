@@ -37,5 +37,8 @@ export default {
   plugins: plugins,
   loader: {
     '.md': 'text',
+    '.ts': 'ts',
+    '.tsx': 'tsx',
   },
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 }
