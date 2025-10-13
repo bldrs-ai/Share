@@ -37,7 +37,6 @@ const newTestLocation = () => ({
     length: 0,
     contains: jest.fn(),
     item: jest.fn(),
-    [Symbol.iterator]: jest.fn(),
   },
   hash: '',
   href: 'http://localhost/#',

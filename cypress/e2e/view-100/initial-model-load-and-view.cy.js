@@ -64,12 +64,14 @@ describe('view 100: Initial model load and view', () => {
 
       context('Close about dialog', () => {
         beforeEach(() => {
-          cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
-          cy.get('[data-testid="button-close-dialog-build-every-thing-together"]').click()
+          cy.get('[data-testid="dialog-build-every-thing-together"]').should('be.visible')
+          cy.get('[data-testid="button-dialog-main-action"]').should('be.visible').click()
         })
 
-        it('AboutDialog not visible, model visible - Screen', () => {
+        it('AboutDialog not visible, onboarding overlay closes, model visible - Screen', () => {
           cy.get('body').find('[data-testid="dialog-build-every-thing-together"]').should('not.exist')
+          cy.get('[data-testid="onboarding-overlay"]').should('be.visible').click()
+          cy.get('body').find('[data-testid="onboarding-overlay"]').should('not.exist')
           cy.percySnapshot()
         })
       })

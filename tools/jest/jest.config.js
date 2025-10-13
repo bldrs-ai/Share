@@ -18,6 +18,7 @@ export default {
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
   },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'node'],
   setupFilesAfterEnv: [
     '<rootDir>/tools/jest/setupTests.js',
     '<rootDir>/tools/jest/setupNodeFetch.cjs',
