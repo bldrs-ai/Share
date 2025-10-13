@@ -51,4 +51,7 @@ export default {
   THREE_PDB_IS_ENABLED: false,
   PLATFORM: 'web',
   FORCE_SINGLE_THREAD: 'false',
+
+  // Esbuild hot-reload
+  ESBUILD_WATCH: false,
 }

@@ -27,6 +27,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsVersionsEnabled = useStore((state) => state.setIsVersionsEnabled)
   const setIsShareEnabled = useStore((state) => state.setIsShareEnabled)
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
+//  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
   const widgetApiRef = useRef(null)
@@ -49,6 +50,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   useEffect(() => {
     /** A demux to help forward to the index file, load a new model or do nothing. */
     const onChangeUrlParams = (() => {
+      debug().log('pathPrefix: ', pathPrefix)
       const mp = handleRoute(pathPrefix, routeParams)
       if (mp === null) {
         navToDefault(navigate, appPrefix)
@@ -67,19 +69,20 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = routeParams
     if (org && repo) {
+      debug().log(`Requested repo: ${org}/${repo}`)
       setRepository(org, repo)
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
-    } else if (pathPrefix.startsWith('share/v/p')) {
+    } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
       setIsVersionsEnabled(true)
       setIsShareEnabled(true)
       setIsNotesEnabled(true)
     } else if (
-      pathPrefix.startsWith('share/v/u') || // generic url
-        pathPrefix === 'share/v/g' // google
+      pathPrefix.startsWith('/share/v/u') || // generic url
+        pathPrefix === '/share/v/g' // google
     ) {
       debug().log('Model path is external URL:', modelPath)
       setRepository('external', 'content')
@@ -87,12 +90,12 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsShareEnabled(true)
       setIsNotesEnabled(false)
     } else {
+      debug().warn('No repository set for project!, ', pathPrefix)
       // Local /v/new models have no repository
       setRepository(null, null)
       setIsVersionsEnabled(false)
       setIsShareEnabled(false)
       setIsNotesEnabled(false)
-      debug().warn('No repository set for project!, ', pathPrefix)
     }
   }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
       setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
