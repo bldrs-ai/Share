@@ -24,24 +24,13 @@ jobs:
         with:
           node-version: 20
           cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
 
-      # ChatG: Next two steps are for correct caching and not using out-of-date
-      #  versions, for reproducible results
-      - name: Cache Playwright
-        id: pw-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
             
       # Use exact lock file to ensure reproducible install
       - run: yarn install --frozen-lockfile
-
-      # Only install browsers (and OS deps) if cache missed
-      - name: Install Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
 
       # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
       - name: Run Playwright tests
