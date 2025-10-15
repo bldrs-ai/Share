@@ -13,7 +13,9 @@ on:
 jobs:
   playwright-run:
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
-    environment: cypress
+    # Make sure this matches the version in package.json to get the cache right and APIs matched
+    container: mcr.microsoft.com/playwright:v1.54.2-jammy
+    # environment: cypress
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
