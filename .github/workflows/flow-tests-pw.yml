@@ -38,12 +38,6 @@ jobs:
       - name: Install Playwright browsers (incl. OS deps)
         run: npx playwright install --with-deps chromium
 
-      - run: yarn cy-build
-        # Ensure your build script correctly outputs to the ./docs directory
-        env:
-          NODE_ENV: production
-          SHARE_CONFIG: playwright
-
       # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
       - name: Run Playwright tests
         run: npx playwright test --reporter=github
