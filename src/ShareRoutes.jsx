@@ -87,7 +87,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
         }
       />
       <Route
-        path='v/g/:id/*'
+        path='v/g/*'
         element={
           <Share
             installPrefix={installPrefix}

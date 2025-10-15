@@ -1,4 +1,5 @@
 import {GithubResult} from './github'
+import {GoogleResult} from './google'
 import {handleRoute, type RouteParams, type FileResult} from './routes'
 
 
@@ -100,6 +101,44 @@ describe('routes', () => {
           provider: 'google',
           fileId,
         })
+      })
+    })
+  })
+
+  context('with g route', () => {
+    it('handles id', () => {
+      const pathPrefixG = 'share/v/g'
+      const fileId = '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO' // Valid Google Drive file ID (28 chars)
+      const routeParams: RouteParams = {
+        '*': fileId,
+      }
+      const originalUrl = new URL(`http://bldrs.test/${pathPrefixG}/${fileId}`)
+      const route = handleRoute(`/${pathPrefixG}`, routeParams) as GoogleResult
+      const testApiKey = process.env.GOOGLE_API_KEY
+      expect(route).toEqual({
+        originalUrl,
+        downloadUrl: new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${testApiKey}`),
+        kind: 'provider',
+        provider: 'google',
+        fileId,
+      })
+    })
+
+    it('handles url', () => {
+      const pathPrefixG = 'share/v/g'
+      const fileId = '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO' // Valid Google Drive file ID (28 chars)
+      const originalUrl = new URL(`http://bldrs.test/${pathPrefixG}/https://drive.google.com/file/d/${fileId}/view`)
+      const routeParams: RouteParams = {
+        '*': `https://drive.google.com/file/d/${fileId}/view`,
+      }
+      const route = handleRoute(`/${pathPrefixG}`, routeParams) as GoogleResult
+      const testApiKey = process.env.GOOGLE_API_KEY
+      expect(route).toEqual({
+        originalUrl,
+        downloadUrl: new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${testApiKey}`),
+        kind: 'provider',
+        provider: 'google',
+        fileId,
       })
     })
   })

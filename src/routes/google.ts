@@ -7,7 +7,7 @@ import type {ProviderResult} from './routes'
  *
  * @param originalUrl
  * @param maybeGoogleUrl - The Google Drive URL to process
- * @return Object with provider and fileId
+ * @return Result or null
  */
 export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL): GoogleResult | null {
   if (!/\.google\.com$/i.test(maybeGoogleUrl.hostname) &&
@@ -42,11 +42,31 @@ export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL):
     kind: 'provider',
     provider: 'google',
     fileId,
-    downloadUrl: getDownloadUrl(fileId),
+    downloadUrl: getGoogleDownloadUrl(fileId),
     ...(rkOk ? {resourceKey: rkOk} : {}),
   }
 
   return result
+}
+
+
+/**
+ * Processes a Google Drive file ID and returns the result.
+ *
+ * @param fileId - The Google Drive file ID.
+ * @return Result or null
+ */
+export function processGoogleFileId(originalUrl: URL, fileId: string): GoogleResult | null {
+  if (!isValidDriveId(fileId)) {
+    return null
+  }
+  return {
+    originalUrl,
+    kind: 'provider',
+    provider: 'google',
+    fileId,
+    downloadUrl: getGoogleDownloadUrl(fileId),
+  }
 }
 
 
@@ -56,7 +76,7 @@ export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL):
  * @param fileId - The Google Drive file ID.
  * @return The download URL.
  */
-function getDownloadUrl(fileId: string): URL {
+function getGoogleDownloadUrl(fileId: string): URL {
   assertDefined(fileId)
   const apiKey = process.env.GOOGLE_API_KEY
   return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`)
