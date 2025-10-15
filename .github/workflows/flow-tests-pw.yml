@@ -29,8 +29,9 @@ jobs:
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
             
-      # Use exact lock file to ensure reproducible install
-      - run: yarn install --frozen-lockfile
+      # Use exact lock file to ensure reproducible install and cached node_modules
+      # since we're hashing on yarn.lock anyways
+      - run: yarn install --frozen-lockfile --prefer-offline
 
       # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
       - name: Run Playwright tests
