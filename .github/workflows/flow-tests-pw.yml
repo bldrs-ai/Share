@@ -21,45 +21,61 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'yarn'
 
       # ChatG: Next two steps are for correct caching and not using out-of-date
       #  versions, for reproducible results
-      - name: Cache Cypress and Node Modules
-        uses: actions/cache@v3
+      - name: Cache Playwright
+        uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/Cypress
-            node_modules
-          key: node-modules-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
-          restore-keys: |
-            node-modules-${{ runner.os }}-
+            ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
             
-      - name: Clear Cypress Cache
-        run: npx cypress cache prune
-
       # Use exact lock file to ensure reproducible install
       - run: yarn install --frozen-lockfile
 
-      - name: Install Cypress Binary
-        run: npx cypress install
-
-      - name: Verify Cypress Installation
-        run: npx cypress info
+      - name: Install Playwright browsers (incl. OS deps)
+        run: npx playwright install --with-deps chromium
 
       - run: yarn cy-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
           NODE_ENV: production
-          SHARE_CONFIG: cypress
+          SHARE_CONFIG: playwright
 
-      - uses: cypress-io/github-action@v5
+      # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=github
+
+      # Always upload the HTML report (handy to debug failures)
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          browser: chrome
-          command: yarn cy
-        env:
-          # Ensure this matches the cypress build value in tools/esbuild/vars.cypress.js
-          GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
-          GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
-          RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
-          RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
-          MSW_IS_ENABLED: true
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+      # Optionally upload traces from failed tests
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7
+        # Ensure you have trace: 'on-first-retry' (or similar) in playwright.config.ts
+
+      # Useful diagnostic
+      - name: Playwright Info
+        if: failure()
+        run: npx playwright --version
+
+    env:
+      # Keep your app env similar to Cypress job (adjust as needed for tests/MSW)
+      GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
+      GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
+      RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
+      RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
+      MSW_IS_ENABLED: true
