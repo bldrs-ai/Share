@@ -26,6 +26,7 @@ jobs:
       # ChatG: Next two steps are for correct caching and not using out-of-date
       #  versions, for reproducible results
       - name: Cache Playwright
+        id: pw-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -35,7 +36,9 @@ jobs:
       # Use exact lock file to ensure reproducible install
       - run: yarn install --frozen-lockfile
 
+      # Only install browsers (and OS deps) if cache missed
       - name: Install Playwright browsers (incl. OS deps)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
       # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
