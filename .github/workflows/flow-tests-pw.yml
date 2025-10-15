@@ -37,7 +37,7 @@ jobs:
       - run: yarn install --frozen-lockfile
 
       # Only install browsers (and OS deps) if cache missed
-      - name: Install Playwright browsers (incl. OS deps)
+      - name: Install Playwright browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
