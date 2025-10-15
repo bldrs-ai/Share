@@ -42,8 +42,11 @@ export default defineConfig({
   ],
   // Run your local dev server before starting the tests.
   webServer: {
-    command: 'yarn serve',
+    command: 'yarn serve-pw',
     url: 'http://localhost:8080',
+    env: {
+      SHARE_CONFIG: 'playwright',
+    },
     // True: use the dev server you start separately
     // False: playwright will start its own with `yarn dev`
     reuseExistingServer: true,
