@@ -1,4 +1,4 @@
-name: flow-tests
+name: flow-tests-pw
 
 on:
   push:
