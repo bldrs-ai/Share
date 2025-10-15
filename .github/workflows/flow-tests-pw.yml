@@ -40,7 +40,7 @@ jobs:
 
       # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
       - name: Run Playwright tests
-        run: npx playwright test --reporter=github
+        run: yarn test-flows --reporter=github
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report

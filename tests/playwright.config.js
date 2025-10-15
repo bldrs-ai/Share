@@ -6,7 +6,8 @@ export default defineConfig({
   testDir: '..',
 
   testMatch: [
-    'tests/**/*.spec.ts',
+    // For now just run tests that have been moved over to src
+    // 'tests/**/*.spec.ts',
     'src/**/*.spec.ts',
   ],
 
