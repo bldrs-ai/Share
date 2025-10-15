@@ -17,7 +17,7 @@ export default defineConfig({
   retries: 1,
 
   // Per-test timeout, since homepage first-time sometimes is > 30s default
-  timeout: 60_000,
+  timeout: 20_000,
 
   workers: 4,
 

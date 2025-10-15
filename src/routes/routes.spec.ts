@@ -22,8 +22,10 @@ test.describe('Routes', () => {
     ])
   })
 
+
+  // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
   // GitHub route (/gh)
-  test('GitHub route (/gh) processes URL correctly', async ({page}) => {
+  test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
     const ghInterceptPattern = new RegExp('https://rawgit\\.bldrs\\.dev/model/bldrs-ai/Share/main/public/index\\.ifc')
     const ghResponseUrlStr = 'https://rawgit.bldrs.dev/model/bldrs-ai/Share/main/public/index.ifc'
     const response = await registerIntercept({
