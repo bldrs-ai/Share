@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  cypress-run:
+  playwright-run:
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
     environment: cypress
     timeout-minutes: 20
@@ -74,8 +74,6 @@ jobs:
 
     env:
       # Keep your app env similar to Cypress job (adjust as needed for tests/MSW)
-      GITHUB_BASE_URL: https://git.bldrs.dev.cy/p/gh
-      GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.cy
-      RAW_GIT_PROXY_URL_NEW: https://rawgit.bldrs.dev.cy/model
-      RAW_GIT_PROXY_URL: https://rawgit.bldrs.dev.cy/r
+      GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
+      GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
       MSW_IS_ENABLED: true
