@@ -4,7 +4,6 @@ import {excludedNodeModules} from './common.js'
 export default {
   verbose: false,
   testEnvironment: 'jest-fixed-jsdom',
-  testPathIgnorePatterns: [],
   rootDir: '../../',
   roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
   transform: {
@@ -12,8 +11,12 @@ export default {
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
     '\\.md$': '<rootDir>/tools/jest/mdTransform.js',
   },
+  testPathIgnorePatterns: [
+    '.*\\.spec\\.[jt]s$',
+  ],
   transformIgnorePatterns: [
     `/node_modules/(?!${excludedNodeModules}/)`,
+    '.*\\.spec\\.[jt]s$',
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',

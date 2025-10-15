@@ -27,6 +27,8 @@ import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
  * @return RouteResult or null
  */
 export function handleRoute(pathPrefix: string, routeParams: RouteParams): RouteResult | null {
+  debug().log('Share#handleRoute: is a remote GitHub file:', pathPrefix, routeParams)
+
   const originalUrl = new URL(pathPrefix, window.location.origin)
   let result: RouteResult = null
   // See ShareRoutes.jsx for filepath, here for quick reference, it's the '*' in each route:
