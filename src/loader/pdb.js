@@ -116,7 +116,6 @@ export default function pdbToThree(pdb, viewer) {
   root.type = 'Molecule'
   root.Name = {value: 'Molecule'}
   root.LongName = {value: 'Molecule'}
-
   return root
 }
 

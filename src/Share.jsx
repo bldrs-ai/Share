@@ -24,11 +24,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const model = useStore((state) => state.model)
   const setIsVersionsEnabled = useStore((state) => state.setIsVersionsEnabled)
   const setIsShareEnabled = useStore((state) => state.setIsShareEnabled)
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
-//  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
-  const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
   const widgetApiRef = useRef(null)
 
@@ -97,14 +96,15 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsShareEnabled(false)
       setIsNotesEnabled(false)
     }
-  }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
+  }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
       setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
       setModelPath, setRepository, routeParams])
 
+  const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (
     modelPath &&
     <>
-      <ModelTitle repository={repository} modelPath={modelPath}/>
+      <PageTitle modelPath={modelPath} modelName={modelName} isUploadedFile={model?.isUploadedFile}/>
       <CadView
         installPrefix={installPrefix}
         appPrefix={appPrefix}
@@ -115,35 +115,48 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 }
 
 
-/** @return {ReactElement} */
-function ModelTitle({repository, modelPath}) {
-  let modelName = ''
+/**
+ * @param {object} modelPath The model path from routes
+ * @param {string|undefined} modelName The model name extracted from loader and set on store.model
+ * @param {boolean} isUploadedFile Whether the model is an uploaded file
+ * @return {ReactElement}
+ */
+function PageTitle({modelPath, modelName, isUploadedFile}) {
+  let titleStr = ''
+  const modelPathFilename = modelPath.filepath.split('/').pop()
   switch (modelPath.kind) {
+    case 'file':
+      if (isUploadedFile) {
+        titleStr = `New: ${modelName}`
+      } else {
+        titleStr = `${modelName || modelPathFilename}`
+      }
+      break
     case 'provider':
       switch (modelPath.provider) {
         case 'google':
-          modelName = 'Google Drive file'
+          titleStr = `Google: ${modelName || 'file'}`
           break
         case 'github':
-          // Check if repository is available and construct the title accordingly
-          modelName = modelPath.repository ?
-            `GitHub: ${modelPath.filepath} - ${modelPath.repository.name}/${modelPath.repository.orgName}` :
-            modelPath.filepath // Local file
+          if (modelName === undefined) {
+            modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
+          }
+          titleStr = `GitHub: ${modelName}`
           break
         default:
-          modelName = modelPath.provider
+          titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
       }
       break
     case 'srcUrl':
-      modelName = modelPath.filepath.split('/').pop() // Get the last part of the URL
+      titleStr = modelName || modelPathFilename
       break
     default:
-      modelName = 'Loading...'
+      titleStr = `Loading...`
   }
 
   return (
     <Helmet>
-      <title>{modelName}</title>
+      <title>{titleStr}</title>
     </Helmet>
   )
 }

@@ -1,6 +1,5 @@
 import {splitAroundExtensionRemoveFirstSlash} from '../Filetype'
 import debug from '../utils/debug'
-import {testUuid} from '../utils/strings'
 import processGithubParams, {isGithubParams, GithubParams, GithubResult} from './github'
 import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
 
@@ -48,7 +47,6 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
 
   // New file via DnD or Open
   if (pathPrefix.endsWith('new')) {
-    testUuid(filepath)
     result = processFile(originalUrl, filepath)
   }
 
@@ -96,6 +94,7 @@ export function processFile(originalUrl: URL, filepath: string): FileResult {
     originalUrl,
     downloadUrl,
     kind: 'file',
+    isUploadedFile: originalUrl.pathname.startsWith('/share/v/new'),
     filepath,
     ...(parts[1] ? {eltPath: `${parts[1]}`} : {}),
   }
@@ -138,10 +137,13 @@ export type BaseParams = Record<string, string | undefined> & {
 export interface BaseResult {
   originalUrl: URL
   downloadUrl: URL
+  mimeType?: string
+  title?: string
 }
 
 export interface FileResult extends BaseResult {
   kind: 'file'
+  isUploadedFile: boolean
   filepath: string
   eltPath?: string
 }

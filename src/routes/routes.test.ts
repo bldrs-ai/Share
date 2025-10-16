@@ -14,6 +14,7 @@ describe('routes', () => {
         originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.ifc`),
         downloadUrl: new URL(`http://bldrs.test/file.ifc`),
         kind: 'file',
+        isUploadedFile: false,
         filepath: 'file.ifc',
       })
     })
@@ -26,6 +27,7 @@ describe('routes', () => {
           originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.ifc/1234`),
           downloadUrl: new URL(`http://bldrs.test/file.ifc`),
           kind: 'file',
+          isUploadedFile: false,
           filepath: 'file.ifc',
           eltPath: '1234',
         })
@@ -42,10 +44,28 @@ describe('routes', () => {
             originalUrl: new URL(`http://bldrs.test/${pathPrefixProject}/file.${ext}/1234`),
             downloadUrl: new URL(`http://bldrs.test/file.${ext}`),
             kind: 'file',
+            isUploadedFile: false,
             filepath: `file.${ext}`,
             eltPath: '1234',
           })
         }
+      })
+    })
+  })
+
+  context('with new route', () => {
+    const pathPrefixNew = 'share/v/new'
+    it('handles local file', () => {
+      const blobId = 'AA77535-D1B6-49A9-915B-41343B08BF83'
+      const filename = `${blobId}.ifc`
+      const routeParams: RouteParams = {'*': filename}
+      const result = handleRoute(`/${pathPrefixNew}`, routeParams) as FileResult
+      expect(result).toStrictEqual({
+        originalUrl: new URL(`http://bldrs.test/${pathPrefixNew}/${filename}`),
+        downloadUrl: new URL(`blob:${blobId}`),
+        kind: 'file',
+        isUploadedFile: true,
+        filepath: filename,
       })
     })
   })

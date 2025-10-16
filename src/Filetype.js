@@ -15,6 +15,7 @@ export const supportedTypes = [
   'step',
   'stl',
   'stp',
+  'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`

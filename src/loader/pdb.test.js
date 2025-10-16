@@ -17,13 +17,17 @@ const DNA_BOND_LENGTH_2 = 2.8
 jest.mock('three', () => ({
   IcosahedronGeometry: jest.fn().mockImplementation(() => ({})),
   BoxGeometry: jest.fn().mockImplementation(() => ({})),
-  Group: jest.fn().mockImplementation(() => ({
-    add: jest.fn(),
-    type: '',
-    Name: {value: ''},
-    LongName: {value: ''},
-    getPropertySets: jest.fn(() => []),
-  })),
+  Group: jest.fn().mockImplementation(() => {
+    const children = []
+    return {
+      add: jest.fn((child) => children.push(child)),
+      type: '',
+      Name: {value: ''},
+      LongName: {value: ''},
+      getPropertySets: jest.fn(() => []),
+      children,
+    }
+  }),
   Vector3: jest.fn().mockImplementation((x = 0, y = 0, z = 0) => ({
     x, y, z,
     negate: jest.fn().mockReturnThis(),
@@ -37,16 +41,19 @@ jest.mock('three', () => ({
     r, g, b,
   })),
   MeshPhongMaterial: jest.fn().mockImplementation(() => ({})),
-  Mesh: jest.fn().mockImplementation(() => ({
-    position: {copy: jest.fn(), multiplyScalar: jest.fn(), lerp: jest.fn(), lookAt: jest.fn()},
-    scale: {multiplyScalar: jest.fn(), set: jest.fn()},
-    lookAt: jest.fn(),
-    type: '',
-    expressID: 0,
-    modelID: 0,
-    Name: {value: ''},
-    LongName: {value: ''},
-  })),
+  Mesh: jest.fn().mockImplementation(() => {
+    const mesh = {
+      position: {copy: jest.fn(), multiplyScalar: jest.fn(), lerp: jest.fn(), lookAt: jest.fn()},
+      scale: {multiplyScalar: jest.fn(), set: jest.fn()},
+      lookAt: jest.fn(),
+      type: '',
+      expressID: 0,
+      modelID: 0,
+      Name: {value: ''},
+      LongName: {value: ''},
+    }
+    return mesh
+  }),
   BufferGeometry: jest.fn().mockImplementation(() => ({
     setAttribute: jest.fn(),
     computeBoundingBox: jest.fn(),
@@ -90,6 +97,105 @@ describe('PDB Loader', () => {
       expect(result.Name.value).toBe('Molecule')
       expect(result.LongName.value).toBe('Molecule')
       expect(result.getPropertySets()).toEqual([])
+    })
+
+    test('should set Name and LongName on atom meshes during fixup', () => {
+      const pdb = {
+        geometryAtoms: createMockGeometry(3),
+        geometryBonds: createMockGeometry(0),
+        json: {
+          atoms: [
+            ['ATOM', 1, 'CA', 'ALA', 'C'],
+            ['ATOM', 2, 'N', 'ALA', 'N'],
+            ['ATOM', 3, 'O', 'ALA', 'O'],
+          ],
+        },
+      }
+
+      pdbToThree(pdb, mockViewer)
+
+      // Mesh should be called 3 times for atoms
+      expect(Mesh).toHaveBeenCalledTimes(3)
+
+      // Get all the mesh instances created
+      const meshInstances = Mesh.mock.results.map((result) => result.value)
+
+      // Verify each mesh has Name and LongName set correctly
+      expect(meshInstances[0].Name.value).toBe('Carbon')
+      expect(meshInstances[0].LongName.value).toBe('Carbon')
+
+      expect(meshInstances[1].Name.value).toBe('Nitrogen')
+      expect(meshInstances[1].LongName.value).toBe('Nitrogen')
+
+      expect(meshInstances[2].Name.value).toBe('Oxygen')
+      expect(meshInstances[2].LongName.value).toBe('Oxygen')
+    })
+
+    test('should set Name and LongName correctly for various elements during fixup', () => {
+      const testCases = [
+        {element: 'H', expectedName: 'Hydrogen'},
+        {element: 'Fe', expectedName: 'Iron'},
+        {element: 'Zn', expectedName: 'Zinc'},
+        {element: 'P', expectedName: 'Phosphorus'},
+        {element: 'S', expectedName: 'Sulfur'},
+        {element: 'Ca', expectedName: 'Calcium'},
+      ]
+
+      testCases.forEach(({element, expectedName}) => {
+        jest.clearAllMocks()
+
+        const pdb = {
+          geometryAtoms: createMockGeometry(1),
+          geometryBonds: createMockGeometry(0),
+          json: {
+            atoms: [
+              ['ATOM', 1, 'CA', 'ALA', element],
+            ],
+          },
+        }
+
+        pdbToThree(pdb, mockViewer)
+
+        const meshInstance = Mesh.mock.results[0].value
+        expect(meshInstance.Name.value).toBe(expectedName)
+        expect(meshInstance.LongName.value).toBe(expectedName)
+      })
+    })
+
+    test('should set Name and LongName to Unknown for invalid elements during fixup', () => {
+      const pdb = {
+        geometryAtoms: createMockGeometry(1),
+        geometryBonds: createMockGeometry(0),
+        json: {
+          atoms: [
+            ['ATOM', 1, 'CA', 'ALA', 'XX'],
+          ],
+        },
+      }
+
+      pdbToThree(pdb, mockViewer)
+
+      const meshInstance = Mesh.mock.results[0].value
+      expect(meshInstance.Name.value).toBe('Unknown')
+      expect(meshInstance.LongName.value).toBe('Unknown')
+    })
+
+    test('should set Name and LongName to Carbon for missing element data during fixup', () => {
+      const pdb = {
+        geometryAtoms: createMockGeometry(1),
+        geometryBonds: createMockGeometry(0),
+        json: {
+          atoms: [
+            ['ATOM', 1, 'CA', 'ALA'],
+          ],
+        },
+      }
+
+      pdbToThree(pdb, mockViewer)
+
+      const meshInstance = Mesh.mock.results[0].value
+      expect(meshInstance.Name.value).toBe('Carbon')
+      expect(meshInstance.LongName.value).toBe('Carbon')
     })
 
     test('should process atoms and create meshes', () => {

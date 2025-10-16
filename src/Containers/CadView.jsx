@@ -230,6 +230,7 @@ export default function CadView({
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
 
+    modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
