@@ -22,7 +22,6 @@ test.describe('Routes', () => {
     ])
   })
 
-
   // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
   // GitHub route (/gh)
   test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
@@ -38,7 +37,6 @@ test.describe('Routes', () => {
 
     expect(response.status()).toBe(HTTP_OK)
   })
-
 
   const mockFileId = '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'
   const gapiPattern = new RegExp(`https://www\\.googleapis\\.com/drive/v3/files/${mockFileId}($|\\?)`)
@@ -80,6 +78,37 @@ test.describe('Routes', () => {
       responseUrlStr: `https://www.googleapis.com/drive/v3/files/${mockFileId}`,
       fixtureFilename: 'index.ifc',
       gotoPath: `/share/v/g/${googleDriveUrlStr}`,
+    })
+
+    expect(response.status()).toBe(HTTP_OK)
+  })
+
+  // New file route (/new)
+  test('New file route (/new) processes uploaded file', async ({page}) => {
+    // Pattern to match the local file request for a newly uploaded file
+    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+
+    const response = await registerIntercept({
+      page,
+      intereceptPattern: newFilePattern,
+      responseUrlStr: 'http://localhost',
+      fixtureFilename: 'index.ifc',
+      gotoPath: `/share/v/new/index.ifc`,
+    })
+
+    expect(response.status()).toBe(HTTP_OK)
+  })
+
+  // New file route with element path
+  test('New file route (/new) processes uploaded file with element path', async ({page}) => {
+    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+
+    const response = await registerIntercept({
+      page,
+      intereceptPattern: newFilePattern,
+      responseUrlStr: 'http://localhost',
+      fixtureFilename: 'index.ifc',
+      gotoPath: `/share/v/new/index.ifc/1/2/3`,
     })
 
     expect(response.status()).toBe(HTTP_OK)

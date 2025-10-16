@@ -123,7 +123,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  */
 function PageTitle({modelPath, modelName, isUploadedFile}) {
   let titleStr = ''
-  const modelPathFilename = modelPath.filepath.split('/').pop()
+  const modelPathFilename = modelPath.filepath?.split('/').pop()
   switch (modelPath.kind) {
     case 'file':
       if (isUploadedFile) {

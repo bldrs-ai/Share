@@ -42,29 +42,22 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
 
   // Hosted project file or new file via DnD or Open
   if (pathPrefix.endsWith('/p')) {
+    // hosted project file
     result = processFile(originalUrl, filepath)
-  }
-
-  // New file via DnD or Open
-  if (pathPrefix.endsWith('new')) {
+  } else if (pathPrefix.endsWith('/new')) {
+    // new file via DnD or Open
     result = processFile(originalUrl, filepath)
-  }
-
-  // GitHub file
-  if (pathPrefix.endsWith('/gh')) {
+  } else if (pathPrefix.endsWith('/gh')) {
+    // github file
     if (isGithubParams(routeParams)) {
       result = processGithubParams(originalUrl, filepath, routeParams as GithubParams) as GithubResult
       debug().log('Share#handleRoute: is a remote GitHub file:', result)
     }
-  }
-
-  // Generic URL
-  if (pathPrefix.endsWith('/u')) {
+  } else if (pathPrefix.endsWith('/u')) {
+    // generic url
     return processExternalUrl(originalUrl, filepath)
-  }
-
-  // Shortcut to Google Drive file
-  if (pathPrefix.endsWith('/g')) {
+  } else if (pathPrefix.endsWith('/g')) {
+    // shortcut to google drive file id or url
     if (filepath.startsWith('http')) {
       result = processGoogleUrl(originalUrl, new URL(filepath)) as GoogleResult
       debug().log('Share#handleRoute: is a remote Google Drive file url:', result)

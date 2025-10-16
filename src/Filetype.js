@@ -90,7 +90,7 @@ const GLB_MAGIC_NUMBER = 0x46546C67
  * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file.
  */
 export async function guessType(path) {
-  debug(true).log('Filetype#guessType, path:', path)
+  debug().log('Filetype#guessType, path:', path)
   const response = await axios.get(path, {
     headers: {
       Range: `bytes=0-${HEADER_LIMIT}`,
