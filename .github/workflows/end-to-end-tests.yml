@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'yarn'
 
       # ChatG: Next two steps are for correct caching and not using out-of-date
       #  versions, for reproducible results
@@ -29,14 +30,10 @@ jobs:
         with:
           path: |
             ~/.cache/Cypress
-            node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
           restore-keys: |
             node-modules-${{ runner.os }}-
             
-      - name: Clear Cypress Cache
-        run: npx cypress cache prune
-
       # Use exact lock file to ensure reproducible install
       - run: yarn install --frozen-lockfile
 

@@ -44,7 +44,7 @@ export default function NotesControl() {
   // Fetch issues/notes
   useEffect(() => {
     if (isNotesVisible) {
-      if (!model) {
+      if (!model || !repository) {
         return
       }
 
@@ -53,7 +53,7 @@ export default function NotesControl() {
         return
       }
 
-       // Clear markers each time useEffect is called
+      // Clear markers each time useEffect is called
       // writeMarkers(null)
 
       (async () => {
@@ -86,14 +86,15 @@ export default function NotesControl() {
           setNotes(newNotes)
           toggleSynchSidebar()
           writeMarkers(tempMarker ? [tempMarker, ...allMarkers] : allMarkers)
-          toggleIsLoadingNotes()
         } catch (e) {
           setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
+        } finally {
+          toggleIsLoadingNotes()
         }
       })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNotesVisible, model, isCreateNoteVisible, selectedNoteId])
+  }, [isNotesVisible, model, repository, isCreateNoteVisible, selectedNoteId])
 
   /**
    * Parses a temporary marker if no markers are active

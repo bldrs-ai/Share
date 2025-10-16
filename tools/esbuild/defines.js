@@ -1,5 +1,6 @@
 import dev from './vars.dev.js'
 import cypress from './vars.cypress.js'
+import playwright from './vars.playwright.js'
 import prod from './vars.prod.js'
 
 
@@ -66,6 +67,7 @@ let config
 switch (process.env.SHARE_CONFIG) {
   case 'dev': config = dev; break
   case 'cypress': config = cypress; break
+  case 'playwright': config = playwright; break
   case 'prod': // fallthru
   default: config = prod; break
 }

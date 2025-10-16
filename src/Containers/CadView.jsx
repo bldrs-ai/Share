@@ -186,11 +186,10 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
-    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
     let isOOM = false
     try {
-      tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
+      tmpModelRef = await loadModel(modelPath)
     } catch (e) {
        if (isOutOfMemoryError(e)) {
          isOOM = true
@@ -221,6 +220,7 @@ export default function CadView({
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
 
+    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
@@ -230,6 +230,7 @@ export default function CadView({
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
 
+    modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
@@ -260,11 +261,13 @@ export default function CadView({
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
-   * @param {string} filepath
+   * @param {object} routeResult
    * @param {string} gitpath to use for constructing API endpoints
    * @return {object} loaded model
    */
-  async function loadModel(filepath, gitpath) {
+  async function loadModel(routeResult) {
+    const filepath = routeResult.downloadUrl || routeResult.filepath
+    const gitpath = routeResult.gitpath
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
@@ -562,6 +565,12 @@ export default function CadView({
    * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
    */
   function updateLoadedFileInfo(modelUrlStr) {
+    setLoadedFileInfo({
+      source: 'share', info: {
+        url: 'Foo',
+      },
+    })
+    /*
     const githubRegex = /(raw.githubusercontent|github.com)/gi
     if (modelUrlStr.indexOf('/') === 0) {
       setLoadedFileInfo({
@@ -572,6 +581,7 @@ export default function CadView({
     } else if (githubRegex.test(modelUrlStr)) {
       setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
     }
+    */
   }
 
 

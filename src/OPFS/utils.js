@@ -90,7 +90,7 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  *
  * @param {string} filepath
  * @param {string} commitHash
- * @return {File}
+ * @return {Promise<File>}
  */
 export function downloadToOPFS(
     objectUrl,
@@ -337,7 +337,7 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 export function doesFileExistInOPFS(
     originalFilePath,
@@ -353,7 +353,7 @@ export function doesFileExistInOPFS(
 /**
  * Prints a snapshot of the OPFS directory structure
  *
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 export function snapshotOPFS(previewWindow = 0) {
   // Wrap opfsSnapshotCache so makePromise still receives a callback with standard signature
@@ -379,7 +379,7 @@ export function clearOPFSCache() {
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 export function deleteFileFromOPFS(
     originalFilePath,

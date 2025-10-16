@@ -29,14 +29,15 @@ export default class PlaceMark extends EventDispatcher {
     super()
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
-    // Assign the camera to the global window object for Cypress testing
+    // HACK(pablo): Assign the camera to the global window object for Cypress testing
     if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
-    if (!window.markerScene) {
-      window.markerScene = {}
-    }
+      if (!window.markerScene) {
+        window.markerScene = {}
+      }
       window.markerScene.domElement = _domElement
       window.markerScene.camera = _camera
     }
+
     const _scene = context.getScene()
     const _raycaster = new Raycaster()
     let _objects = []
@@ -142,16 +143,14 @@ export default class PlaceMark extends EventDispatcher {
     this.disposePlaceMarks = () => {
       // Remove all place marks from the scene
       if (_placeMarks) {
-      _placeMarks.forEach((placemark) => {
-        _scene.remove(placemark)
-        if (placemark.material.map) {
-          placemark.material.map.dispose()
-        }
-        placemark.material.dispose()
-      })
-      _placeMarks.length = 0
-
-      // Dispose of any other resources if necessary
+        _placeMarks.forEach((placemark) => {
+          _scene.remove(placemark)
+          if (placemark.material.map) {
+            placemark.material.map.dispose()
+          }
+          placemark.material.dispose()
+        })
+        _placeMarks.length = 0
       }
     }
 

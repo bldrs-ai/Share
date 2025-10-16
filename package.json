@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1606",
+  "version": "1.0.1646",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -45,6 +45,9 @@
     "serve": "run-script-os",
     "serve:win32": "set SHARE_CONFIG=dev && set serveHttps=false && yarn serve-share-conway",
     "serve:linux:darwin": "SHARE_CONFIG=dev serveHttps=false yarn serve-share-conway",
+    "serve-pw": "run-script-os",
+    "serve-pw:win32": "set SHARE_CONFIG=playwright && set serveHttps=false && yarn serve-share-conway",
+    "serve-pw:linux:darwin": "SHARE_CONFIG=playwright serveHttps=false yarn serve-share-conway",
     "serve-prod-https": "run-script-os",
     "serve-prod-https:win32": "set SHARE_CONFIG=prod && set serveHttps=true && yarn serve-share-conway",
     "serve-prod-https:linux:darwin": "SHARE_CONFIG=prod serveHttps=true yarn serve-share-conway",

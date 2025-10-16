@@ -360,7 +360,6 @@ describe('CadView', () => {
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw oomErr
     })
-
     // mock console.error and check that it was called
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
     // mock captureException and check that it was called

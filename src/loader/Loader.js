@@ -26,7 +26,7 @@ import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
- * @param {string} path Either a url or filepath
+ * @param {string|URL} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
  * @param {Function} onProgress
  * @param {boolean} setOpfsFile
@@ -43,8 +43,12 @@ export async function load(
   accessToken = '',
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
-  debug().log('Loader#load: in with path:', path)
+  // HACK: pathArg can be a URL or a string
+  if (path instanceof URL) {
+    path = path.toString()
+  }
 
+  // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
   const isUploadedFile = testUuid(path)
@@ -60,7 +64,7 @@ export async function load(
   let isCacheHit
   let isBase64
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
-  const isLocallyHostedFile = path.indexOf('/') === 0
+  const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
     debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
@@ -82,7 +86,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress('Determining file type...')
+  onProgress(`Determining file type...`)
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -120,7 +124,6 @@ export async function load(
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
-
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
         if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
@@ -156,15 +159,16 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
-    onProgress('Reading file data...')
+    onProgress('Reading model data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
-      onProgress('Decoding text data...')
+      onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
+    onProgress('Downloading model data...')
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }
@@ -191,6 +195,10 @@ export async function load(
     }
     throw lastErr
   }
+
+  model.isUploadedFile = isUploadedFile
+  // Used for automatic naming, page title and other areas that need a mime type.
+  model.mimeType = loader.type
 
   if (!isIfc) {
     onProgress('Converting model format...')
@@ -273,12 +281,13 @@ function convertToShareModel(model, viewer) {
    * `type` properties to each.
    *
    * @param {Object3D} model
+   * @param {number} depth
    */
-  function recursiveDecorate(obj3d) {
+  function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || {value: 'Object'}
-    obj3d.LongName = obj3d.LongName || {value: 'Object'}
+    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
+    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
     const id = objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     if (obj3d.geometry) {
@@ -308,16 +317,26 @@ function convertToShareModel(model, viewer) {
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
-      obj3d.children.forEach((m) => recursiveDecorate(m))
+      obj3d.children.forEach((m) => recursiveDecorate(m, depth + 1))
     }
   }
+
   recursiveDecorate(model)
 
   // Override for root
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
-  model.Name = model.Name || {value: 'Model'}
-  model.LongName = model.LongName || {value: 'Model'}
+  model.Name = model.Name || {value: `${model.mimeType} model`}
+  model.LongName = model.LongName || {value: `${model.mimeType} model`}
+  // This is used for page title and other areas that need a model name, so if it's not
+  // useful, set to undefined and we'll use the modelPath later instead.
+  if (model.name === undefined || model.name === null || model.name === '') {
+    model.name = model.LongName?.value ?? model.Name?.value
+    if (model.name === undefined || model.name === null || model.name === '') {
+      model.name = undefined
+    }
+  }
+
   // model.ifcManager = viewer.IFC
   model.ifcManager = viewer.IFC.loader.ifcManager
   model.ifcManager.getSpatialStructure = (modelId, flatten) => {
@@ -587,6 +606,7 @@ function newIfcLoader(viewer) {
         onProgress('Gathering model statistics...')
       }
       const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
+      ifcModel.name = statsApi.projectName ?? undefined
       const loadStats = {
         loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
         geometryMemory: statsApi.getGeometryMemory(),
