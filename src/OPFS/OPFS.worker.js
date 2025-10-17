@@ -125,6 +125,7 @@ self.addEventListener('message', async (event) => {
           'filePath',
           'opfsFilename'])
       const serializedGeometryProperties = event.data.serializedGeometryProperties || null
+      const elementTypesMap = event.data.elementTypesMap || null
 
       await exportToGlb(
         geometryPtr,
@@ -137,6 +138,7 @@ self.addEventListener('message', async (event) => {
         filePath,
         opfsFilename,
         serializedGeometryProperties,
+        elementTypesMap,
       )
     } else if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
@@ -313,6 +315,7 @@ async function clearCache() {
  * @param {string} branch - The branch name
  * @param {string} filePath - The original file path
  * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
+ * @param {Array} [elementTypesMap] Array of element type groupings with expressID/name metadata
  */
 async function exportToGlb(
   geometryPtr,
@@ -325,6 +328,7 @@ async function exportToGlb(
   filePath,
   opfsFilename,
   serializedGeometryProperties,
+  elementTypesMap,
 ) {
   if (!conwayModule) {
 throw new Error('Conway WASM module not initialized.')
@@ -351,6 +355,18 @@ throw new Error('Conway WASM module not initialized.')
     [...basePathParts, `${glbBase}.properties.json`].filter(Boolean).join('/') :
     null
 
+  let elementTypesJson = null
+  if (Array.isArray(elementTypesMap) && elementTypesMap.length > 0) {
+    try {
+      elementTypesJson = JSON.stringify(elementTypesMap)
+    } catch (error) {
+      console.error('Failed to serialize element types map for GLB export:', error)
+    }
+  }
+  const elementTypesCacheKey = elementTypesJson ?
+    [...basePathParts, `${glbBase}.elementTypes.json`].filter(Boolean).join('/') :
+    null
+
   try {
     // eslint-disable-next-line no-console
     console.log('Converting geometry to GLB using Conway in worker...')
@@ -366,6 +382,7 @@ throw new Error('Conway WASM module not initialized.')
       false, // outputDraco (you called it "merge" in a comment but passing true)
       filePath,
       serializedPropertiesJson,
+      elementTypesJson,
     )) {
       if (!glbResult?.success) {
         console.log('GLB result indicates failure:', glbResult)
@@ -422,6 +439,22 @@ throw new Error('Conway WASM module not initialized.')
         console.log(`GLB properties written to OPFS: ${propertiesCacheKey}`)
       } catch (err) {
         console.error('Error writing GLB properties:', err)
+      }
+    }
+
+    if (elementTypesCacheKey && elementTypesJson) {
+      try {
+        const [, elementTypesFileHandle] = await writeFileToExactPath(opfsRoot, elementTypesCacheKey)
+        if (!elementTypesFileHandle) {
+          throw new Error('Unable to obtain element types file handle')
+        }
+        const writableElementTypes = await elementTypesFileHandle.createWritable()
+        await writableElementTypes.write(new Blob([elementTypesJson], {type: 'application/json'}))
+        await writableElementTypes.close()
+        // eslint-disable-next-line no-console
+        console.log(`Element types map written to OPFS: ${elementTypesCacheKey}`)
+      } catch (err) {
+        console.error('Error writing element types map:', err)
       }
     }
 
@@ -2191,7 +2224,16 @@ class GeometryConvertor {
    * @param {*} fileUri
    * @return
    */
-  async* toGltfs(geometryPtr, materialsPtr, chunks, isGlb, outputDraco, fileUri, propertiesJson = null) {
+  async* toGltfs(
+      geometryPtr,
+      materialsPtr,
+      chunks,
+      isGlb,
+      outputDraco,
+      fileUri,
+      propertiesJson = null,
+      elementTypesJson = null,
+  ) {
     if (!this.wasmModule) {
 return
 }
@@ -2216,6 +2258,7 @@ return
           chunk.offset,
           chunk.count,
           propertiesJson,
+          elementTypesJson,
         ),
       )
 
@@ -2237,14 +2280,15 @@ return
    * @return
    */
   toGltf(
-      geometry,
-      materials,
-      isGlb,
-      outputDraco,
-      fileUri,
-      geometryOffset = 0,
-      geometryCount /* don’t default: ptrs don’t have size() */,
-      propertiesJson = null,
+    geometry,
+    materials,
+    isGlb,
+    outputDraco,
+    fileUri,
+    geometryOffset = 0,
+    geometryCount /* don’t default: ptrs don’t have size() */,
+    propertiesJson = null,
+    elementTypesJson = null,
   ) {
     const noResults = {success: false, bufferUris: undefined, buffers: undefined}
     if (!this.wasmModule) {
@@ -2262,6 +2306,9 @@ return noResults
     ]
     if (propertiesJson !== null && propertiesJson !== undefined) {
       args.push(propertiesJson)
+    }
+    if (elementTypesJson !== null && elementTypesJson !== undefined) {
+      args.push(elementTypesJson)
     }
 
     return this.wasmModule.geometryToGltfPtr(...args)

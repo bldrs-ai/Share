@@ -453,6 +453,7 @@ export function opfsSnapshotCache(previewWindow = 0) {
  * @param {string} branch - The branch name
  * @param {string} filePath - The original IFC file path
  * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
+ * @param {Array} [elementTypesMap] Array of element type groupings with expressID/name metadata
  */
 export function opfsExportToGlb(
   geometryPtr,
@@ -465,6 +466,7 @@ export function opfsExportToGlb(
   filePath,
   opfsFilename,
   serializedGeometryProperties,
+  elementTypesMap,
 ) {
   if (!workerRef) {
     debug().error('Worker not initialized')
@@ -483,6 +485,7 @@ export function opfsExportToGlb(
     filePath: filePath,
     opfsFilename: opfsFilename,
     serializedGeometryProperties: serializedGeometryProperties,
+    elementTypesMap: elementTypesMap,
   })
 }
 

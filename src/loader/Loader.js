@@ -25,6 +25,8 @@ import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isOutOfMemoryError} from '../utils/oom'
+import {reifyName} from '@bldrs-ai/ifclib'
+import useStore from '../store/useStore'
 
 
 /**
@@ -211,13 +213,17 @@ export async function load(
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
-  } else if (isOpfsAvailable) {
-    debug().log('Loader#load: model is IFC, saving to GLB in background:', model)
-    await initializeConwayAndExportGlb(viewer, owner, repo, branch, filePath, file.name)
   }
 
   // Used for GA stats
   model.type = loader.type
+  model.exportContext = {
+    owner,
+    repo,
+    branch,
+    filePath,
+    opfsFilename: file?.name ?? null,
+  }
 
   return model
 }
@@ -672,7 +678,15 @@ export class NotFoundError extends Error {
 /**
  *
  */
-async function initializeConwayAndExportGlb(viewer, owner, repo, branch, filePath, opfsFilename) {
+export async function initializeConwayAndExportGlb({
+  viewer,
+  owner,
+  repo,
+  branch,
+  filePath,
+  opfsFilename,
+  elementTypesMap,
+}) {
   // Gather aggregated geometry and validate pointers
   const aggregatedGeometry = viewer.IFC.loader?.ifcManager?.ifcAPI?.getAggregatedGeometry()
 
@@ -683,6 +697,38 @@ async function initializeConwayAndExportGlb(viewer, owner, repo, branch, filePat
   const chunks = aggregatedGeometry?.chunks
   const geometryPtr = aggregatedGeometry?.geometry?.$$?.ptr
   const materialsPtr = aggregatedGeometry?.materials?.$$?.ptr
+
+  /*const collections = aggregatedGeometry.geometry
+  const count = collections?.size?.() ?? 0
+  if (count > 0 && elementTypesMap?.length) {
+    const expressIdToName = new Map()
+    elementTypesMap.forEach((typeGroup) => {
+      typeGroup.elements?.forEach((element) => {
+        const expressId = element?.expressID
+        if (expressId === undefined || expressId === null) {
+          return
+        }
+        const longName = element?.LongName?.value ?? element?.LongName ?? null
+        const shortName = element?.Name?.value ?? element?.Name ?? null
+        const label = (longName || shortName)
+        if (label) {
+          expressIdToName.set(expressId, label)
+        }
+      })
+    })
+
+    if (expressIdToName.size > 0 && typeof collections.get === 'function') {
+      for (let i = 0; i < count; i++) {
+        const collection = collections.get(i)
+        const expressId = collection?.expressID ?? collection?.name
+        const label = expressIdToName.get(expressId)
+        if (label && collection) {
+          collection.name = label
+        }
+      }
+    }
+  }*/
+
   if (!geometryPtr) {
     throw new Error('Could not find pointer on geometry object')
   }
@@ -740,6 +786,7 @@ async function initializeConwayAndExportGlb(viewer, owner, repo, branch, filePat
           filePath,
           opfsFilename,
           serializedGeometryProperties,
+          elementTypesMap,
         )
       } else {
         console.error('Conway WASM initialization failed')

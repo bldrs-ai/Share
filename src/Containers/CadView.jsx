@@ -10,7 +10,7 @@ import {onHash} from '../Components/Camera/CameraControl'
 import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
-import {load} from '../loader/Loader'
+import {load, initializeConwayAndExportGlb} from '../loader/Loader'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
@@ -115,6 +115,7 @@ export default function CadView({
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  const opfsFile = useStore((state) => state.opfsFile)
   const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
@@ -360,6 +361,7 @@ export default function CadView({
       return
     }
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+
     debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
@@ -372,8 +374,57 @@ export default function CadView({
     const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
+    const tmpElementTypeMap = groupElementsByTypes(rootElt)
+    console.log(`elementTypesMap: ${JSON.stringify(tmpElementTypeMap)}`)
+        if (m.type === 'ifc' && isOpfsAvailable && viewer?.IFC?.loader?.ifcManager?.ifcAPI) {
+      const defaultOwner = 'BldrsLocalStorage'
+      const defaultRepo = 'V1'
+      const defaultBranch = 'Projects'
+
+      const exportContext = m.exportContext || {}
+
+      const owner = exportContext.owner ?? modelPath?.org ?? defaultOwner
+      const repo = exportContext.repo ?? modelPath?.repo ?? defaultRepo
+      const branch = exportContext.branch ?? modelPath?.branch ?? defaultBranch
+
+      let filePath = exportContext.filePath
+      if (!filePath) {
+        if (modelPath?.gitpath && modelPath.gitpath !== 'external') {
+          filePath = typeof modelPath.getRepoPath === 'function' ?
+            modelPath.getRepoPath() :
+            modelPath?.filepath ?? null
+        } else if (modelPath?.srcUrl) {
+          try {
+            const url = new URL(modelPath.srcUrl)
+            filePath = url.pathname
+          } catch (error) {
+            console.warn('CadView#onModel: Failed to derive filePath from srcUrl', error)
+            filePath = modelPath.srcUrl
+          }
+        } else {
+          filePath = modelPath?.filepath ?? null
+        }
+      }
+
+      const opfsFilename = exportContext.opfsFilename ?? opfsFile?.name ?? null
+
+      try {
+        await initializeConwayAndExportGlb({
+          viewer,
+          owner,
+          repo,
+          branch,
+          filePath,
+          opfsFilename,
+          elementTypesMap: tmpElementTypeMap,
+        })
+      } catch (error) {
+        console.error('CadView#onModel: Failed to export GLB via Conway', error)
+        captureException(error)
+      }
+    }
     setRootElement(rootElt)
-    setElementTypesMap(groupElementsByTypes(rootElt))
+    setElementTypesMap(tmpElementTypeMap)
   }
 
 
