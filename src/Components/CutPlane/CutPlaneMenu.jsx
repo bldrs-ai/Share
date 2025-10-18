@@ -296,21 +296,21 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
   const finiteOffset = floatStrTrim(offset)
 
   switch (direction) {
-  case 'x':
-    normal = new Vector3(-1, 0, 0)
-    planeOffsetX = finiteOffset
-    break
-  case 'y':
-    normal = new Vector3(0, -1, 0)
-    planeOffsetY = finiteOffset
-    break
-  case 'z':
-    normal = new Vector3(0, 0, -1)
-    planeOffsetZ = finiteOffset
-    break
-  default:
-    normal = new Vector3(0, 1, 0)
-    break
+    case 'x':
+      normal = new Vector3(-1, 0, 0)
+      planeOffsetX = finiteOffset
+      break
+    case 'y':
+      normal = new Vector3(0, -1, 0)
+      planeOffsetY = finiteOffset
+      break
+    case 'z':
+      normal = new Vector3(0, 0, -1)
+      planeOffsetZ = finiteOffset
+      break
+    default:
+      normal = new Vector3(0, 1, 0)
+      break
   }
 
   const modelCenterOffset =

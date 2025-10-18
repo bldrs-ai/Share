@@ -106,15 +106,15 @@ export default function HorizonResizerButton({
     const resizer = resizerRef.current
     const onTouchStart = (e) => {
       switch (e.touches.length) {
-      case 1: // one finger
-        startResizing(true)
-        break
-      case 2: // two finger
-        break
-      case 3: // three finger
-        break
-      default:
-        break
+        case 1: // one finger
+          startResizing(true)
+          break
+        case 2: // two finger
+          break
+        case 3: // three finger
+          break
+        default:
+          break
       }
     }
     const onTouchEnd = () => {
@@ -122,15 +122,15 @@ export default function HorizonResizerButton({
     }
     const onTouchMove = (e) => {
       switch (e.touches.length) {
-      case 1: // one finger
-        resize(e.touches[0])
-        break
-      case 2: // two finger
-        break
-      case 3: // three finger
-        break
-      default:
-        break
+        case 1: // one finger
+          resize(e.touches[0])
+          break
+        case 2: // two finger
+          break
+        case 3: // three finger
+          break
+        default:
+          break
       }
     }
     resizer.addEventListener('touchstart', onTouchStart)

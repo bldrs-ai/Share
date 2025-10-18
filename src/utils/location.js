@@ -4,7 +4,7 @@ import debug from './debug'
 
 
 // Init
-/** @type {Object<string, Function>} */
+/** @type {Record<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
   // console.log('HASH CHANGE: ', window.location.hash)

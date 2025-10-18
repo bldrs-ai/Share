@@ -462,56 +462,56 @@ async function findLoader(pathname, viewer) {
   let loader
   let fixupCb
   switch (extension) {
-  case 'bld': {
-    loader = new BLDLoader(viewer)
-    isFormatText = true
-    break
-  }
-  case 'fbx': {
-    loader = new FBXLoader()
-    break
-  }
-  case 'step':
-  case 'stp':
-  case 'ifc': {
-    loader = newIfcLoader(viewer)
-    isLoaderAsync = true
-    // TODO(pablo): true should work but currently causes IFCLoader to fail
-    isFormatText = false
-    isIfc = true
-    break
-  }
-  case 'obj': {
-    loader = new OBJLoader
-    fixupCb = objToThree
-    isFormatText = true
-    break
-  }
-  case 'pdb': {
-    loader = new PDBLoader
-    fixupCb = pdbToThree
-    isFormatText = true
-    break
-  }
-  case 'stl': {
-    loader = new STLLoader
-    fixupCb = stlToThree
-    isFormatText = false
-    break
-  }
-  case 'xyz': {
-    loader = new XYZLoader
-    fixupCb = xyzToThree
-    isFormatText = true
-    break
-  }
-  case 'glb':
-  case 'gltf': {
-    loader = newGltfLoader()
-    fixupCb = glbToThree
-    break
-  }
-  /*
+    case 'bld': {
+      loader = new BLDLoader(viewer)
+      isFormatText = true
+      break
+    }
+    case 'fbx': {
+      loader = new FBXLoader()
+      break
+    }
+    case 'step':
+    case 'stp':
+    case 'ifc': {
+      loader = newIfcLoader(viewer)
+      isLoaderAsync = true
+      // TODO(pablo): true should work but currently causes IFCLoader to fail
+      isFormatText = false
+      isIfc = true
+      break
+    }
+    case 'obj': {
+      loader = new OBJLoader
+      fixupCb = objToThree
+      isFormatText = true
+      break
+    }
+    case 'pdb': {
+      loader = new PDBLoader
+      fixupCb = pdbToThree
+      isFormatText = true
+      break
+    }
+    case 'stl': {
+      loader = new STLLoader
+      fixupCb = stlToThree
+      isFormatText = false
+      break
+    }
+    case 'xyz': {
+      loader = new XYZLoader
+      fixupCb = xyzToThree
+      isFormatText = true
+      break
+    }
+    case 'glb':
+    case 'gltf': {
+      loader = newGltfLoader()
+      fixupCb = glbToThree
+      break
+    }
+    /*
     case '3dm': {
       isLoaderAsync = true
       loader = {
@@ -535,7 +535,7 @@ async function findLoader(pathname, viewer) {
       break
     }
     */
-  default: throw new Error(`Unsupported filetype; ${extension}`)
+    default: throw new Error(`Unsupported filetype; ${extension}`)
   }
   // Reported to GA
   loader.type = extension

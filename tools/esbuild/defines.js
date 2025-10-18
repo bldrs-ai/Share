@@ -67,11 +67,11 @@ const str = JSON.stringify
 
 let config
 switch (process.env.SHARE_CONFIG) {
-case 'dev': config = dev; break
-case 'cypress': config = cypress; break
-case 'playwright': config = playwright; break
-case 'prod': // fallthru
-default: config = prod; break
+  case 'dev': config = dev; break
+  case 'cypress': config = cypress; break
+  case 'playwright': config = playwright; break
+  case 'prod': // fallthru
+  default: config = prod; break
 }
 
 // What we're here for

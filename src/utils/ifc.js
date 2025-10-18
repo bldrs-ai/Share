@@ -9,33 +9,33 @@ import {toTitleCase} from './strings'
 export function prettyType(type) {
   const ifcPrefix = 'IFC'
   switch (type) {
-  case 'IFCREINFORCINGBAR': return 'Reinforcing Bar'
-  case 'IFCREINFORCINGMESH': return 'Reinforcing Mesh'
-  case 'IFCTENDONANCHOR': return 'Tendon Anchor'
-  case 'IFCBUILDINGSTOREY': return 'Building Storey'
-  case 'IFCELEMENTASSEMBLY': return 'Element Assembly'
-  case 'IFCBUILDINGELEMENTPART': return 'Building Element Part'
-  case 'IFCELECTRICAPPLIANCE': return 'Electric Appliance'
-  case 'IFCRAMPFLIGHT': return 'Ramp Flight'
-  case 'IFCSANITARYTERMINAL': return 'Sanitary Terminal'
-  case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)'
-  case 'IFCSTAIRFLIGHT': return 'Stair Flight'
-  case 'IFCBUILDINGELEMENTCOMPONENT': return 'Building Element Component'
-  case 'IFCFLOWSEGMENT': return 'Flow Segment'
-  case 'IFCFLOWTERMINAL': return 'Flow Terminal'
-  case 'IFCFLOWFITTING': return 'Flow Fitting'
-  case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)'
-  case 'IFCCURTAINWALL': return 'Curtain Wall'
-  default: {
-    if (!type) {
-      return ''
+    case 'IFCREINFORCINGBAR': return 'Reinforcing Bar'
+    case 'IFCREINFORCINGMESH': return 'Reinforcing Mesh'
+    case 'IFCTENDONANCHOR': return 'Tendon Anchor'
+    case 'IFCBUILDINGSTOREY': return 'Building Storey'
+    case 'IFCELEMENTASSEMBLY': return 'Element Assembly'
+    case 'IFCBUILDINGELEMENTPART': return 'Building Element Part'
+    case 'IFCELECTRICAPPLIANCE': return 'Electric Appliance'
+    case 'IFCRAMPFLIGHT': return 'Ramp Flight'
+    case 'IFCSANITARYTERMINAL': return 'Sanitary Terminal'
+    case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)'
+    case 'IFCSTAIRFLIGHT': return 'Stair Flight'
+    case 'IFCBUILDINGELEMENTCOMPONENT': return 'Building Element Component'
+    case 'IFCFLOWSEGMENT': return 'Flow Segment'
+    case 'IFCFLOWTERMINAL': return 'Flow Terminal'
+    case 'IFCFLOWFITTING': return 'Flow Fitting'
+    case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)'
+    case 'IFCCURTAINWALL': return 'Curtain Wall'
+    default: {
+      if (!type) {
+        return ''
+      }
+      let titleCased = toTitleCase(type.substring(ifcPrefix.length))
+      if (titleCased.endsWith('element')) {
+        titleCased = `${titleCased.replace('element', '')} Element`
+      }
+      return titleCased
     }
-    let titleCased = toTitleCase(type.substring(ifcPrefix.length))
-    if (titleCased.endsWith('element')) {
-      titleCased = `${titleCased.replace('element', '')} Element`
-    }
-    return titleCased
-  }
   }
 }
 

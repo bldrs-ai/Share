@@ -119,32 +119,32 @@ export function parseCoords(url) {
 export async function dereferenceAndProxyDownloadContents(urlStr, accessToken, isOpfsAvailable, useCache = true) {
   const u = new URL(urlStr)
   switch (u.host.toLowerCase()) {
-  case 'github.com':
-    if (!accessToken) {
-      const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL_NEW : process.env.RAW_GIT_PROXY_URL)
+    case 'github.com':
+      if (!accessToken) {
+        const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL_NEW : process.env.RAW_GIT_PROXY_URL)
 
-      // Replace the protocol, host, and hostname in the target
-      u.protocol = proxyUrl.protocol
-      u.host = proxyUrl.host
-      u.hostname = proxyUrl.hostname
+        // Replace the protocol, host, and hostname in the target
+        u.protocol = proxyUrl.protocol
+        u.host = proxyUrl.host
+        u.hostname = proxyUrl.hostname
 
-      // If the port is specified, replace it in the target URL
-      if (proxyUrl.port) {
-        u.port = proxyUrl.port
+        // If the port is specified, replace it in the target URL
+        if (proxyUrl.port) {
+          u.port = proxyUrl.port
+        }
+
+        // If there's a path, *and* it's not just the root, then prepend it to the target URL
+        if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
+          u.pathname = proxyUrl.pathname + u.pathname
+        }
+
+        return [u.toString(), '', false, false]
       }
 
-      // If there's a path, *and* it's not just the root, then prepend it to the target URL
-      if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
-        u.pathname = proxyUrl.pathname + u.pathname
-      }
+      return await getGitHubPathContents(urlStr, accessToken, useCache)
 
-      return [u.toString(), '', false, false]
-    }
-
-    return await getGitHubPathContents(urlStr, accessToken, useCache)
-
-  default:
-    return [urlStr, '', false, false]
+    default:
+      return [urlStr, '', false, false]
   }
 }
 

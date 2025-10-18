@@ -33,14 +33,14 @@ export class IFrameCommunicationChannel {
    */
   messageHandler = (event) => {
     switch (event.data) {
-    case 'getLoadedFile':
-      this.sendMessage(event.data, useStore.getState().loadedFileInfo)
-      break
-    case 'getSelectedElements':
-      this.sendMessage(event.data, useStore.getState().selectedElements)
-      break
-    default:
-      break
+      case 'getLoadedFile':
+        this.sendMessage(event.data, useStore.getState().loadedFileInfo)
+        break
+      case 'getSelectedElements':
+        this.sendMessage(event.data, useStore.getState().selectedElements)
+        break
+      default:
+        break
     }
   }
 

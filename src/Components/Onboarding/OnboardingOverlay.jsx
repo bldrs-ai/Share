@@ -226,40 +226,40 @@ function OnboardingHighlight({position, text, arrowDirection}) {
   const getCalloutPosition = () => {
     const calloutHalfWidth = 100 // Half width of callout for centering
     switch (arrowDirection) {
-    case 'bottom-right':
+      case 'bottom-right':
       // Position callout to the bottom-right of the highlight circle
-      return {
-        top: position.top + calloutOffset,
-        left: position.left, // Anchor on left edge (top-left of callout)
-      }
-    case 'bottom-left':
+        return {
+          top: position.top + calloutOffset,
+          left: position.left, // Anchor on left edge (top-left of callout)
+        }
+      case 'bottom-left':
       // Position callout to the bottom-left of the highlight circle
-      return {
-        top: position.top + calloutOffset,
-        right: window.innerWidth - position.left, // Anchor on right edge (top-right of callout)
-      }
-    case 'bottom':
-      return {
-        top: position.top + calloutOffset,
-        left: position.left - calloutHalfWidth, // Center the callout horizontally
-        transform: 'translateX(0)',
-      }
-    case 'top-left':
-      return {
-        top: position.top + calloutOffset,
-        left: position.left,
-      }
-    case 'top-right':
-      return {
-        top: position.top + calloutOffset,
-        right: position.right,
-      }
-    default:
-      return {
-        top: position.top + calloutOffset,
-        left: position.left - calloutHalfWidth,
-        transform: 'translateX(0)',
-      }
+        return {
+          top: position.top + calloutOffset,
+          right: window.innerWidth - position.left, // Anchor on right edge (top-right of callout)
+        }
+      case 'bottom':
+        return {
+          top: position.top + calloutOffset,
+          left: position.left - calloutHalfWidth, // Center the callout horizontally
+          transform: 'translateX(0)',
+        }
+      case 'top-left':
+        return {
+          top: position.top + calloutOffset,
+          left: position.left,
+        }
+      case 'top-right':
+        return {
+          top: position.top + calloutOffset,
+          right: position.right,
+        }
+      default:
+        return {
+          top: position.top + calloutOffset,
+          left: position.left - calloutHalfWidth,
+          transform: 'translateX(0)',
+        }
     }
   }
 

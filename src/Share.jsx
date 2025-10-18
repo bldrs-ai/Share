@@ -125,33 +125,33 @@ function PageTitle({modelPath, modelName, isUploadedFile}) {
   let titleStr = ''
   const modelPathFilename = modelPath.filepath?.split('/').pop()
   switch (modelPath.kind) {
-  case 'file':
-    if (isUploadedFile) {
-      titleStr = `New: ${modelName}`
-    } else {
-      titleStr = `${modelName || modelPathFilename}`
-    }
-    break
-  case 'provider':
-    switch (modelPath.provider) {
-    case 'google':
-      titleStr = `Google: ${modelName || 'file'}`
-      break
-    case 'github':
-      if (modelName === undefined) {
-        modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
+    case 'file':
+      if (isUploadedFile) {
+        titleStr = `New: ${modelName}`
+      } else {
+        titleStr = `${modelName || modelPathFilename}`
       }
-      titleStr = `GitHub: ${modelName}`
+      break
+    case 'provider':
+      switch (modelPath.provider) {
+        case 'google':
+          titleStr = `Google: ${modelName || 'file'}`
+          break
+        case 'github':
+          if (modelName === undefined) {
+            modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
+          }
+          titleStr = `GitHub: ${modelName}`
+          break
+        default:
+          titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
+      }
+      break
+    case 'srcUrl':
+      titleStr = modelName || modelPathFilename
       break
     default:
-      titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
-    }
-    break
-  case 'srcUrl':
-    titleStr = modelName || modelPathFilename
-    break
-  default:
-    titleStr = `Loading...`
+      titleStr = `Loading...`
   }
 
   return (

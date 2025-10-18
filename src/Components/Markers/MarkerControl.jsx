@@ -347,16 +347,16 @@ export function PlacemarkHandlers() {
     const res = placeMark.onSceneClick(event)
 
     switch (event.button) {
-    case 0:
-      if (event.shiftKey) {
-        await savePlaceMark(res)
-      } else if (res.marker) {
-        selectPlaceMark(res)
-      }
-      break
+      case 0:
+        if (event.shiftKey) {
+          await savePlaceMark(res)
+        } else if (res.marker) {
+          selectPlaceMark(res)
+        }
+        break
       // Add other cases as needed
-    default:
-      break
+      default:
+        break
     }
 
     if (callback) {
@@ -372,12 +372,12 @@ export function PlacemarkHandlers() {
     const res = placeMark.onSceneDoubleClick(event)
 
     switch (event.button) {
-    case 0:
-      await savePlaceMark(res)
-      break
+      case 0:
+        await savePlaceMark(res)
+        break
       // Add other cases as needed
-    default:
-      break
+      default:
+        break
     }
   }
   /**
