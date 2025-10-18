@@ -51,7 +51,7 @@ app.get('/.netlify/functions/proxy-handler', async (req, res) => {
 
 /**
  * @param {ReadableStream} webStream - Web stream to convert
- * @return {Promise<import('stream').Readable>} Node.js readable stream
+ * @return {Promise<Readable>} Node.js readable stream
  */
 async function streamToNodeReadable(webStream) {
   const {Readable} = await import('stream')

@@ -65,7 +65,7 @@ export default function NotesControl() {
           debug().log('Notes#useEffect: issueArr: ', issueArr)
 
           // Accumulate markers from all issues
-          const allMarkers = issueArr.reverse().flatMap((issue, index) => {
+          const allMarkers = issueArr.reverse().flatMap((issue) => {
             newNotes.push({
               index: issueIndex++,
               id: issue.id,
@@ -99,6 +99,7 @@ export default function NotesControl() {
   /**
    * Parses a temporary marker if no markers are active
    *
+   * @param {Array} markers_ - Array of marker objects
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function parseTempMarker(markers_) {
@@ -137,6 +138,7 @@ export default function NotesControl() {
   /**
    * Parses marker from issue
    *
+   * @param {object} issue - The issue object
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function parseMarker(issue) {

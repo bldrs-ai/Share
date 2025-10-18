@@ -10,6 +10,7 @@ import debug from '../utils/debug'
  * Upload a local file for display.
  *
  * @param {Function} onLoad
+ * @param {boolean} testingSkipAutoRemove
  */
 export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
   const viewerContainer = document.getElementById('viewer-container')
@@ -41,6 +42,8 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
  * Upload a local file for display.
  *
  * @param {Function} onLoad
+ * @param {boolean} testingSkipAutoRemove
+ * @param {boolean} testingDisableWebWorker
  */
 export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisableWebWorker = false) {
   const viewerContainer = document.getElementById('viewer-container')

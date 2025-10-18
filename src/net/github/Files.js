@@ -314,6 +314,8 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  * @param {string} repository
  * @param {string} path
  * @param {boolean} useCache
+ * @param {string} ref
+ * @param {string} accessToken
  * @return {Array<string>} [downloadUrl, sha, isCacheHit]
  */
 export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
@@ -380,7 +382,10 @@ export async function getFiles(owner, repo, accessToken = '') {
 /**
  * Retrieves files and folders associated with a repository
  *
- * @param {string} [accessToken]
+ * @param {string} repo
+ * @param {string} owner
+ * @param {string} subfolder
+ * @param {string} accessToken
  * @return {object} the list files and folders in the repo
  */
 export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {

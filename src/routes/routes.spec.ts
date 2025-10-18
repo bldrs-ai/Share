@@ -119,11 +119,12 @@ test.describe('Routes', () => {
 /**
  * Helper to register an intercept and navigate to a route
  *
- * @param page - Playwright page object
- * @param routePattern - Pattern to match for page.route()
- * @param responseUrlStr - URL string to match in waitForResponse()
- * @param fixtureFilename - Fixture file name (relative to cypress/fixtures/)
- * @param gotoPath - Path to navigate to
+ * @param params - Parameters object
+ * @param params.page - Playwright page object
+ * @param params.intereceptPattern - Pattern to match for page.route()
+ * @param params.responseUrlStr - URL string to match in waitForResponse()
+ * @param params.fixtureFilename - Fixture file name (relative to cypress/fixtures/)
+ * @param params.gotoPath - Path to navigate to
  * @return The intercepted response
  */
 async function registerIntercept({

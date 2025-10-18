@@ -152,7 +152,7 @@
   }
 
   /**
-   *
+   * @param {string} key - Cache key
    */
   async function deleteCache(key) {
     const _httpCache = await getCache()
@@ -174,6 +174,7 @@
    *
    * @param {string} key The cache key associated with the request.
    * @param {object} response The HTTP raw response object which includes headers and data.
+   * @param {string} commitHash The commit hash
    */
   async function updateCacheRaw(key, response, commitHash) {
     const _httpCache = await getCache()

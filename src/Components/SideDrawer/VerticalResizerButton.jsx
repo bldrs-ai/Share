@@ -36,7 +36,7 @@ export default function VerticalResizerButton({
 
   const startResizing = useCallback(() => setIsResizing(true), [])
   const stopResizing = useCallback(() => setIsResizing(false), [])
-  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
+  const onResizerDblTap = useDoubleTap(() => setIsExpanded(!isExpanded))
 
   const half = 0.5
   const resize = useCallback(
@@ -104,7 +104,7 @@ export default function VerticalResizerButton({
         break
       }
     }
-    const onTouchEnd = (e) => {
+    const onTouchEnd = () => {
       stopResizing()
     }
     const onTouchMove = (e) => {

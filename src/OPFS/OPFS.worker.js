@@ -123,6 +123,7 @@ async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
 
   // Helper: compute SHA-1 hash (raw file contents, not Git blob format) and optional preview
   /**
+   * @param {File} file - The file to describe
    * @return {Promise<string>}
    */
   async function describeFile(file) {
@@ -307,7 +308,7 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
 /**
  * Computes the Git blob SHA-1 hash for a given File.
  *
- * @param {FileSystemFileHandle} file - The File object to compute the SHA-1 hash for.
+ * @param {FileSystemFileHandle} modelBlobFileHandle - The File handle to compute the SHA-1 hash for.
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
 async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
@@ -582,6 +583,8 @@ function generateMockResponse(shaHash) {
 
 
 /**
+ * @param {string} base64 - The base64 string
+ * @param {string} mimeType - The MIME type
  * @return {Blob} The Blob object created from the base64 string.
  */
 function base64ToBlob(base64, mimeType = 'application/octet-stream') {
@@ -605,6 +608,8 @@ function base64ToBlob(base64, mimeType = 'application/octet-stream') {
  * @param {string} originalFilePath - The path to the file.
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
+ * @param {string} branch - The branch name
+ * @param {string} accessToken - The access token
  */
 async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
   let _etag = null
@@ -947,8 +952,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   console.log('SHA-1 Hash:', computedShaHash)
 
   try {
-    // eslint-disable-next-line no-unused-vars
-    const [modelDirectoryHandle_, modelBlobFileHandle_] = await
+    const [, modelBlobFileHandle_] = await
     retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, null, false)
 
     if (modelBlobFileHandle_ !== null) {
@@ -992,10 +996,13 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 /**
  * Retrieve file with path
  *
- * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
- * @param {string} filePath - The path to the file.
+ * @param {string} objectUrl - The object URL
  * @param {string} commitHash - The commit hash to use for the request.
- * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner
+ * @param {string} repo - The repo name
+ * @param {string} branch - The branch name
+ * @param {Function} onProgress - Progress callback
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
@@ -1354,6 +1361,7 @@ async function writeFileToHandle(blobAccessHandle, modelFile) {
  * @param {string} originalFilePath - The path to the file.
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
+ * @param {string} branch - The branch name
  */
 async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -1389,14 +1397,14 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
   }
 }
 
-/* eslint-disable no-empty */
+
 /**
  * Rename (or move) a file inside OPFS with cross-browser support.
  *
  * @param {FileSystemDirectoryHandle} parentDirectory - current containing directory
  * @param {FileSystemFileHandle} fileHandle - file to rename
  * @param {string} newFileName - new name (same directory)
- * @param {{overwrite?: boolean}} [opts]
+ * @param {object} opts - Options
  * @return {Promise<FileSystemFileHandle>}
  */
 async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts = {}) {
@@ -1407,7 +1415,7 @@ async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts =
     try {
       await parentDirectory.removeEntry(newFileName)
     } catch (_) {
-
+      // Ignore errors if file doesn't exist
     }
   } else {
     try {
@@ -1599,7 +1607,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {string} originalFileName - The name of the original file.
  * @return {Promise<void>}
  */
-async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
+async function writeModelToOPFS(objectUrl, objectKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1787,9 +1795,9 @@ async function readFileFromOPFS(fileName) {
 /**
  * Checks that each named param is defined and returns the object for chaining.
  *
- * @param {{[key: string]: any}} obj Variable length arguments to assert are defined.
+ * @param {Record<string, any>} obj Variable length arguments to assert are defined.
  * @param {Array<string>} keys That was passed in
- * @return {{[key: string]: any}} obj That object that was passed in, if valid
+ * @return {Record<string, any>} obj That object that was passed in, if valid
  * @throws If any argument is not defined.
  */
 function assertValues(obj, keys) {

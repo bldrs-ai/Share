@@ -157,7 +157,7 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
  * model files within a specific owner's repository and branch.
  *
  * @param {File} file The file to be written to the repository
- * @param {string} originalFileName The original name of the file being written
+ * @param {string} originalFilePath The original name of the file being written
  * @param {string} commitHash The commit hash associated with the file write operation
  * @param {string} owner The owner of the repository where the file is to be written
  * @param {string} repo The name of the repository

@@ -16,7 +16,7 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 
 
-const UserProfile = ({size = 'medium'}) => {
+const UserProfile = () => {
   const {user, isAuthenticated, logout} = useAuth0()
   const popupState = usePopupState({
     variant: 'popup',

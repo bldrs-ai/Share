@@ -15,7 +15,7 @@ class BldrsWidget {
 /** The Bldrs Widget Driver */
 class BldrsWidgetDriver {
   /** */
-  askOpenID(observer) {
+  askOpenID() {
     // not implemented yet
   }
 
@@ -25,46 +25,40 @@ class BldrsWidgetDriver {
   }
 
   /** @return {Promise} */
-  navigate(uri) {
+  navigate() {
     return Promise.resolve(undefined)
   }
 
   // NOSONAR
   /** @return {Promise} */
-  readEventRelations(
-    eventId,
-    roomId,
-    relationType,
-    eventType,
-    from,
-    to,
-    limit,
-    direction,
-  ) {
+  readEventRelations() {
     return Promise.resolve(undefined)
   }
 
   /** @return {Promise} */
-  readRoomEvents(eventType, msgtype, limit, roomIds) {
+  readRoomEvents() {
     return Promise.resolve([])
   }
 
   /** @return {Promise} */
-  readStateEvents(eventType, stateKey, limit, roomIds) {
+  readStateEvents() {
     return Promise.resolve([])
   }
 
   /** @return {Promise} */
-  sendEvent(eventType, content, stateKey, roomId) {
+  sendEvent() {
     return Promise.resolve(undefined)
   }
 
   /** @return {Promise} */
-  sendToDevice(eventType, encrypted, contentMap) {
+  sendToDevice() {
     return Promise.resolve(undefined)
   }
 
-  /** @return {Promise} */
+  /**
+   * @param {object} requested - The requested capabilities
+   * @return {Promise} The validated capabilities
+   */
   validateCapabilities(requested) {
     return Promise.resolve(requested)
   }
@@ -77,7 +71,7 @@ const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
 const EVENT_CLIENT_HIDDEN_ELEMENTS = 'ai.bldrs-share.HiddenElements'
 
 
-document.addEventListener('DOMContentLoaded', (domEvent) => {
+document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('bldrs-widget-iframe')
   const bldrsWidget = new BldrsWidget()
   bldrsWidget.url = `${location.protocol}//${location.host}`
@@ -150,7 +144,10 @@ document.addEventListener('DOMContentLoaded', (domEvent) => {
 
   let messagesReceivedCount = 0
 
-  /** */
+  /**
+   * @param {string} actionName - The action name to listen for
+   * @param {Function} callback - Callback function to execute
+   */
   function listenToApiAction(actionName, callback) {
     api.on(`action:${actionName}`, (e) => {
       debug().log('bldrs-inside-iframe#listenToApiAction, event:', e)

@@ -100,7 +100,7 @@ function displayPathAlert(alert) {
 /**
  * Insert the spaces after / _ character to make sure the string breaks correctly
  *
- * @property {string} str error path, usually a long string
+ * @param {string} str error path, usually a long string
  * @return {string} formatted string
  */
 const insertZeroWidthSpaces = (str) => {

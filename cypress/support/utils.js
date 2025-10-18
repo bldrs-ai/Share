@@ -104,6 +104,8 @@ export function waitForModel() {
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
  * the login process.
+ *
+ * @param {string} connection - The authentication connection type (default: 'github')
  */
 export function auth0Login(connection = 'github') {
   cy.get('[data-testid="control-button-profile"]').click()

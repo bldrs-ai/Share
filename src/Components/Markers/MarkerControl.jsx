@@ -223,8 +223,8 @@ export function PlacemarkHandlers() {
         }
       }
 
-      // eslint-disable-next-line no-unused-vars
-      for (const [_, value] of placeMarkGroupMap.entries()) {
+
+      for (const [, value] of placeMarkGroupMap.entries()) {
         if (value.userData.isActive) {
           // set color to active if active
           value.userData.color = value.userData.activeColor
@@ -381,7 +381,7 @@ export function PlacemarkHandlers() {
     }
   }
   /**
-   *
+   * @param {string} id - The marker ID
    */
   function togglePlaceMarkActive(id) {
     const deactivatePlaceMark = () => {

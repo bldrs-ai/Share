@@ -26,7 +26,7 @@ import {interpolateColors, parseColor} from './ColorHelperFunctions'
  * @param {number} rules
  * @return {IfcCustomViewSettings} the view settings
  */
-export async function compileViewRules(api, modelID, rules) {
+export async function compileViewRules(api, modelID) {
   // Apply desired logic on model before loading
   const propRelLines = await api.GetLineIDsWithType(modelID, IFCRELDEFINESBYPROPERTIES)
   const allPropObjects = []

@@ -92,7 +92,6 @@ export default function Properties() {
 /**
  * @param {object} model IFC model
  * @param {object} element IFC element
- * @param {object} classes Styles
  * @param {boolean} expandAll React state expansion toggle
  * @return {Array<ReactElement>} A list of property elts
  */

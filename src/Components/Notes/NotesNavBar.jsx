@@ -32,7 +32,7 @@ export default function NotesNavBar() {
    * Navigation through notes, updating url state token and setting
    * camera if note has attached view
    *
-   * @param {string} 'previous' or 'next'
+   * @param {string} direction 'previous' or 'next'
    */
   function onNavClick(direction) {
     const index = direction === 'next' ? selectedNoteIndex + 1 : selectedNoteIndex - 1

@@ -144,7 +144,7 @@ function TimelineInfo({commit, active}) {
  * with specific styles applied when the MuiTimelineItem-missingOppositeContent
  * class is present.
  */
-const CustomTimelineItem = styled(TimelineItem)(({theme}) => ({
+const CustomTimelineItem = styled(TimelineItem)(() => ({
   '&.MuiTimelineItem-missingOppositeContent': {
     '&::before': {
       padding: 0,

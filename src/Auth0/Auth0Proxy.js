@@ -121,6 +121,7 @@ function mockLoginWithPopup() {
 /**
  * Mock implementation of loginWithRedirect
  *
+ * @param {string} connection - The connection type
  * @return {void}
  */
 function mockLoginWithRedirect(connection) {

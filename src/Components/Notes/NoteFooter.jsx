@@ -25,7 +25,6 @@ import PlaceIcon from '@mui/icons-material/Place'
  * @return {ReactElement}
  */
 export default function NoteFooter({
-  accessToken,
   editMode,
   embeddedCameras,
   id,

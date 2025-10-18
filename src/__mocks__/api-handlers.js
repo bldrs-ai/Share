@@ -22,6 +22,7 @@ let commentDeleted = false
 /**
  * Initialize API handlers, including Google Analytics and GitHub.
  *
+ * @param {object} defines - Configuration defines
  * @return {Array<object>} handlers
  */
 export function initHandlers(defines) {
@@ -85,7 +86,7 @@ function iconHandlers() {
     // Icons
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
-    http.get('http://bldrs.ai/icons/*', ({request}) => {
+    http.get('http://bldrs.ai/icons/*', () => {
       return new Response('', {
         status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
@@ -216,6 +217,7 @@ function gaHandlers() {
  * Static stubs GitHub orgs, repos, issues.
  *
  * @param {object} defines todo implementation
+ * @param {boolean} authed Whether authenticated
  * @return {Array<object>} handlers
  */
 function githubHandlers(defines, authed) {

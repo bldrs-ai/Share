@@ -45,6 +45,7 @@ export function prettyType(type) {
  * types in the given elementTypes map
  *
  * @param {object} element Element tree
+ * @param {Array} elementTypes Element types map
  * @return {Array} element types
  */
 export function groupElementsByTypes(element, elementTypes) {

@@ -29,7 +29,7 @@ import {isOutOfMemoryError} from '../utils/oom'
  * @param {string|URL} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
  * @param {Function} onProgress
- * @param {boolean} setOpfsFile
+ * @param {boolean} isOpfsAvailable
  * @param {Function} setOpfsFile
  * @param {string} accessToken
  * @return {object} The model or undefined
@@ -271,6 +271,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
  * to have it not crash helpers for the main viewer.
  *
  * @param {Mesh} model
+ * @param {object} viewer
  * @return {Mesh}
  */
 function convertToShareModel(model, viewer) {
@@ -280,7 +281,7 @@ function convertToShareModel(model, viewer) {
    * Recursively visit the model and its children to add `expressID` and
    * `type` properties to each.
    *
-   * @param {Object3D} model
+   * @param {Object3D} obj3d
    * @param {number} depth
    */
   function recursiveDecorate(obj3d, depth = 0) {
@@ -339,7 +340,7 @@ function convertToShareModel(model, viewer) {
 
   // model.ifcManager = viewer.IFC
   model.ifcManager = viewer.IFC.loader.ifcManager
-  model.ifcManager.getSpatialStructure = (modelId, flatten) => {
+  model.ifcManager.getSpatialStructure = () => {
     return model
   }
   model.ifcManager.getExpressId = (geom, faceNdx) => {
@@ -435,6 +436,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 
 /**
  * @param {string} pathname
+ * @param {object} viewer
  * @return {Function|undefined}
  */
 async function findLoader(pathname, viewer) {
@@ -557,6 +559,7 @@ function newGltfLoader() {
  * Sets up the IFCLoader to use the wasm module and move the model to
  * the origin on load.
  *
+ * @param {object} viewer
  * @return {object} Loader with parse function
  */
 function newIfcLoader(viewer) {

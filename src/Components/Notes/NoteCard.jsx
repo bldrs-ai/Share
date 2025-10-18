@@ -222,7 +222,7 @@ export default function NoteCard({
       .then(() => {
         setSnackMessage({text: 'The URL path is copied to the clipboard', autoDismiss: true})
       })
-      .catch((err) => {
+      .catch(() => {
         setSnackMessage({text: 'Failed to copy URL', autoDismiss: true})
       })
   }
@@ -231,7 +231,7 @@ export default function NoteCard({
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
    *
-   * @param {number} noteNumber obtained from github issue
+   * @param {number} noteNumberToDelete obtained from github issue
    * @return {Promise<Response>} the response from the server
    */
   async function onDeleteNote(noteNumberToDelete) {

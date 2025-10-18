@@ -25,7 +25,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
     token: '',
   })
 
-  const getAccessTokenSilently = (options) => {
+  const getAccessTokenSilently = () => {
     if (!state.isAuthenticated) {
       // Detailed response based on the options
       setState({
@@ -34,7 +34,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
         token: 'mock_access_token',
       })
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const response = {
         access_token: 'mock_access_token',
         id_token: 'mock_id_token',

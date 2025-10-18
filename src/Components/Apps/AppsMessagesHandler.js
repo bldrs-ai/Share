@@ -47,7 +47,8 @@ export class IFrameCommunicationChannel {
   /**
    * Send any kind of data to the iframe through the MessageChannel
    *
-   * @param {*} data the data to be sent to the iframe
+   * @param {string} action - The action type
+   * @param {*} response - The data to be sent to the iframe
    */
   sendMessage = (action, response) => {
     this.port1.postMessage({action, response})

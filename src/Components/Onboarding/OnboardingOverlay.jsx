@@ -61,7 +61,11 @@ export default function OnboardingOverlay({isVisible, onClose}) {
     }
   }, [isVisible])
 
-  /** Handles file drop into drag-n-drop area */
+  /**
+   * Handles file drop into drag-n-drop area
+   *
+   * @param {Event} event - The drop event
+   */
   const handleDrop = async (event) => {
     event.preventDefault()
     event.stopPropagation()

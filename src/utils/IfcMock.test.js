@@ -118,6 +118,7 @@ export function newMockStringValueElt(label, id = 1) {
  * Create a hirerachy of elements with the given type label.
  *
  * @param {string} label
+ * @param {number} idOffset
  * @return {object} The hirerachy root element
  */
 export function newMockElementHirerachyWithType(label, idOffset = 0) {

@@ -1,7 +1,8 @@
-import {EffectComposer, BlendFunction} from 'postprocessing'
+import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import CustomPostProcessor from './CustomPostProcessor'
+
 
 /**
  *  Overrides the default render functionality in the viewer
@@ -15,7 +16,7 @@ export default class IfcHighlighter {
    * constructs new class
    *
    * @param {IfcContext} context of the viewer
-   * @param {CustomPostProcessor} the post-processor
+   * @param {CustomPostProcessor} postProcessor The post-processor
    */
   constructor(context, postProcessor) {
     this._selectionOutlineEffect = postProcessor.createOutlineEffect({
@@ -37,7 +38,7 @@ export default class IfcHighlighter {
   /**
    * Highlights and outlines meshes in scene
    *
-   * @param {Mesh[]} geometry meshes
+   * @param {Mesh[]} meshes
    */
   setHighlighted(meshes) {
     this._selectionOutlineEffect.setSelection(meshes ?? [])
@@ -46,7 +47,7 @@ export default class IfcHighlighter {
   /**
    * Highlights and outlines meshes in scene
    *
-   * @param {Mesh[]} geometry meshes
+   * @param {Mesh} mesh
    */
   addToHighlighting(mesh) {
     const currentSelection = this._selectionOutlineEffect.getSelection()
@@ -72,7 +73,7 @@ function newUpdateFunction(context, composer) {
    *
    * @param {number} _delta
    */
-  function newUpdateFn(_delta) {
+  function newUpdateFn() {
     // eslint-disable-next-line no-invalid-this
     if (this.blocked || !context) {
       return

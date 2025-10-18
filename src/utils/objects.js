@@ -4,7 +4,7 @@ import {assertDefined} from './assert'
 /**
  * Delete all properties defined in the given object.
  *
- * @param {{[key: string]: any}} obj The object whose properties to delete.
+ * @param {Record<string, any>} obj The object whose properties to delete.
  */
 export function deleteProperties(obj) {
   Object.keys(obj).forEach((key) => delete obj[key])
@@ -12,7 +12,7 @@ export function deleteProperties(obj) {
 
 
 /**
- * @param {{[key: string]: any}} obj
+ * @param {Record<string, any>} obj
  * @return {boolean} True iff val is an object
  */
 export function isObject(obj) {
@@ -26,8 +26,9 @@ export function isObject(obj) {
  * Call the given visitorCb on each property in the object.
  * Recurse on a property's value if it is an object.
  *
- * @param {{[key: string]: any}} obj The object to visit
+ * @param {Record<string, any>} obj The object to visit
  * @param {Function} visitorCb Called with visitorCb(obj, propName, value)
+ * @param {Set<any>} seen Set of already seen objects
  */
 export function visitRecursive(obj, visitorCb, seen = new Set()) {
   seen.add(obj)
@@ -46,7 +47,7 @@ export function visitRecursive(obj, visitorCb, seen = new Set()) {
 /**
  * Delete this property from the object, recursively.
  *
- * @param {{[key: string]: any}} obj The object to visit
+ * @param {Record<string, any>} obj The object to visit
  * @param {string} propName The property to delete
  */
 export function deletePropertyRecursive(obj, propName) {
@@ -73,7 +74,7 @@ export function deletePropertyRecursive(obj, propName) {
 /**
  * Delete matching string values from the object, recursively.
  *
- * @param {{[key: string]: any}} obj The object to visit
+ * @param {Record<string, object>} obj The object to visit
  * @param {RegExp} regex The regex to test values with
  */
 export function deleteStringValueMatchRecursive(obj, regex) {
@@ -100,9 +101,9 @@ export function deleteStringValueMatchRecursive(obj, regex) {
 /**
  * Filter object
  *
- * @param {{[key: string]: any}} obj
+ * @param {Record<string, any>} obj
  * @param {Function} callback
- * @return {{[key: string]: any}}
+ * @return {Record<string, any>}
  */
 export function filterObject(obj, callback) {
   return Object.fromEntries(Object.entries(obj).
@@ -113,8 +114,8 @@ export function filterObject(obj, callback) {
 /**
  * Clone object in depth
  *
- * @param {{[key: string]: any}} obj
- * @return {{[key: string]: any}}
+ * @param {object} obj
+ * @return {object}
  */
 export function deepCloneObject(obj) {
   const clonedObj = JSON.parse(JSON.stringify(obj))
@@ -125,9 +126,9 @@ export function deepCloneObject(obj) {
 /**
  * Non-mutating prefix object keys.
  *
- * @param {{[key: string]: any}} obj
+ * @param {Record<string, any>} obj
  * @param {string} prefix
- * @return {{[key: string]: any}}
+ * @return {Record<string, any>}
  */
 export function prefixObjectKeys(obj, prefix) {
   return Object.fromEntries(Object.entries(obj).map(([key, val]) => [prefix + key, val]))
@@ -137,10 +138,10 @@ export function prefixObjectKeys(obj, prefix) {
 /**
  * Add properties to the target object, optionally prefixing the source object keys.
  *
- * @param {{[key: string]: any}} target
- * @param {{[key: string]: any}} source
+ * @param {Record<string, any>} target
+ * @param {Record<string, any>} source
  * @param {string} prefix Optional prefix to add to the source object keys
- * @return {{[key: string]: any}} the target object
+ * @return {Record<string, any>} the target object
  */
 export function addProperties(target, source, prefix = '') {
   assertDefined(target, 'target')

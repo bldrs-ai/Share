@@ -80,7 +80,11 @@ export default function TabbedPanels({
         isVersionsVisible
 
 
-  /** @return {ReactElement} */
+  /**
+   * @param {string} label - The tab label
+   * @param {Function} onClose - Close handler
+   * @return {ReactElement}
+   */
   function createTabLabel(label, onClose) {
     return (
       <Stack direction='row' alignItems='center'>

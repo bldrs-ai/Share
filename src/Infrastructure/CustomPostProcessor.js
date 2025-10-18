@@ -1,9 +1,8 @@
-import {WebGLRenderer, Camera, Scene} from 'three'
 import {EffectComposer, EffectPass, OutlineEffect, RenderPass} from 'postprocessing'
+import {WebGLRenderer, Scene, Camera} from 'three'
 
-/**
- *  A custom post processor utility
- */
+
+/** A custom post processor utility */
 export default class CustomPostProcessor {
   _composer = null
   _scene = null
@@ -13,9 +12,9 @@ export default class CustomPostProcessor {
   /**
    * Instanciates a new CustomPostProcessor
    *
-   * @param {WebGLRenderer} the renderer
-   * @param {Scene} three.js scene
-   * @param {Camera} the camera
+   * @param {WebGLRenderer} renderer The renderer
+   * @param {Scene} scene Three.js scene
+   * @param {Camera} camera The camera
    */
   constructor(renderer, scene, camera) {
     this._composer = new EffectComposer(renderer)
@@ -36,7 +35,7 @@ export default class CustomPostProcessor {
   /**
    * Creates a new outline effect and adds it to the composer
    *
-   * @param {object} the outline effect options
+   * @param {object} effectOpts The outline effect options
    * @return {OutlineEffect} the outline effect
    */
   createOutlineEffect(effectOpts) {

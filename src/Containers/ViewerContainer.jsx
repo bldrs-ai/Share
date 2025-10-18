@@ -21,7 +21,11 @@ export default function ViewerContainer() {
 
   const navigate = useNavigate()
 
-  /** Handles file drop into drag-n-drop area */
+  /**
+   * Handles file drop into drag-n-drop area
+   *
+   * @param {Event} event - The drop event
+   */
   async function onDrop(event) {
     setIsDragActive(false)
     await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert)

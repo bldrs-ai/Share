@@ -37,7 +37,7 @@ async function getManagementApiToken() {
   }
 }
 
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event, context) => {
+exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   // 1. Verify the Stripe webhook signature
   const sig = event.headers['stripe-signature']
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET

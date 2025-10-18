@@ -23,7 +23,9 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
-  /**  */
+  /**
+   * @param {object} options - Configuration options
+   */
   constructor(options) {
     super(options)
     const renderer = this.context.getRenderer()
@@ -100,6 +102,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    *
    * @param {number} modelID
    * @param {number[]} expressIds express Ids of the elements
+   * @param {boolean} focusSelection Whether to focus on selection
    */
   async setSelection(modelID, expressIds, focusSelection) {
     if (this.IFC.type !== 'ifc') {
@@ -152,7 +155,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   /**
    * applies Preselection effect on an Element by Id
    *
-   * @param {number} modelID
+   * @param {number} modelId
    * @param {number[]} expressIds express Ids of the elements
    */
   async preselectElementsByIds(modelId, expressIds) {

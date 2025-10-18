@@ -37,7 +37,7 @@ export default function HorizonResizerButton({
 
   const startResizing = useCallback(() => setIsResizing(true), [])
   const stopResizing = useCallback(() => setIsResizing(false), [])
-  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
+  const onResizerDblTap = useDoubleTap(() => setIsExpanded(!isExpanded))
 
   useEffect(() => {
     if (isResizing) {
@@ -117,7 +117,7 @@ export default function HorizonResizerButton({
         break
       }
     }
-    const onTouchEnd = (e) => {
+    const onTouchEnd = () => {
       stopResizing()
     }
     const onTouchMove = (e) => {

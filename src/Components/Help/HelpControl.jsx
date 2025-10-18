@@ -236,7 +236,7 @@ const HelpList = ({pageIndex}) => {
 
   return (
     <Stack>
-      {pageContents[pageIndex].map((item, index) => item)}
+      {pageContents[pageIndex].map((item) => item)}
     </Stack>
   )
 }

@@ -35,7 +35,7 @@
     "cy-spec": "cypress run --config-file cypress/cypress.config.js --browser chrome --spec",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
-    "lint": "yarn eslint --fix src cypress netlify tests tools && yarn typecheck",
+    "lint": "yarn eslint src cypress netlify tests tools && yarn typecheck",
     "precommit": "yarn lint && yarn test",
     "serve-https": "run-script-os",
     "serve-https:win32": "set SHARE_CONFIG=dev && set serveHttps=true && yarn serve-share-conway",

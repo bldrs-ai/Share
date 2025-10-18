@@ -14,7 +14,7 @@ class ChangeViewSettingsEventHandler extends ApiEventHandler {
    *
    * @param {object} apiConnection AbstractApiConnection
    */
-  constructor(apiConnection, navigation) {
+  constructor(apiConnection) {
     super()
     this.apiConnection = apiConnection
   }

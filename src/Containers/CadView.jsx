@@ -224,7 +224,7 @@ export default function CadView({
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-      .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+      .filter(([, value]) => value === true).map(([key]) => Number(key))
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
@@ -380,7 +380,11 @@ export default function CadView({
   }
 
 
-  /** Handle double click event on canvas. */
+  /**
+   * Handle double click event on canvas.
+   *
+   * @param {Event} event - The double click event
+   */
   function canvasDoubleClickHandler(event) {
     try {
       if (!event.target || event.target.tagName !== 'CANVAS') {
@@ -500,6 +504,7 @@ export default function CadView({
    * Pick the given items in the scene.
    *
    * @param {Array} resultIDs Array of expressIDs
+   * @param {boolean} updateNavigation Whether to update navigation
    */
   function selectItemsInScene(resultIDs, updateNavigation = true) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
@@ -561,10 +566,8 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
-   *
-   * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
    */
-  function updateLoadedFileInfo(modelUrlStr) {
+  function updateLoadedFileInfo() {
     setLoadedFileInfo({
       source: 'share', info: {
         url: 'Foo',
