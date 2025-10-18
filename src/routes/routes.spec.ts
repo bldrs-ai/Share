@@ -1,6 +1,5 @@
-import {test, expect, Page, Response, Route} from '@playwright/test'
-import fs from 'fs'
-import path from 'path'
+import {test, expect} from '@playwright/test'
+import {registerIntercept} from '../tests/e2e/utils'
 
 
 /**
@@ -22,6 +21,7 @@ test.describe('Routes', () => {
     ])
   })
 
+
   // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
   // GitHub route (/gh)
   test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
@@ -37,6 +37,7 @@ test.describe('Routes', () => {
 
     expect(response.status()).toBe(HTTP_OK)
   })
+
 
   const mockFileId = '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'
   const gapiPattern = new RegExp(`https://www\\.googleapis\\.com/drive/v3/files/${mockFileId}($|\\?)`)
@@ -55,6 +56,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
+
   // Google Drive file ID route (/g)
   test('Google Drive file ID route (/g) processes file ID', async ({page}) => {
     const response = await registerIntercept({
@@ -67,6 +69,7 @@ test.describe('Routes', () => {
 
     expect(response.status()).toBe(HTTP_OK)
   })
+
 
   test('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
     // Mock Google Drive URL format
@@ -82,6 +85,7 @@ test.describe('Routes', () => {
 
     expect(response.status()).toBe(HTTP_OK)
   })
+
 
   // New file route (/new)
   test('New file route (/new) processes uploaded file', async ({page}) => {
@@ -99,6 +103,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
+
   // New file route with element path
   test('New file route (/new) processes uploaded file with element path', async ({page}) => {
     const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
@@ -114,44 +119,3 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 })
-
-
-/**
- * Helper to register an intercept and navigate to a route
- *
- * @param params - Parameters object
- * @param params.page - Playwright page object
- * @param params.intereceptPattern - Pattern to match for page.route()
- * @param params.responseUrlStr - URL string to match in waitForResponse()
- * @param params.fixtureFilename - Fixture file name (relative to cypress/fixtures/)
- * @param params.gotoPath - Path to navigate to
- * @return The intercepted response
- */
-async function registerIntercept({
-  page,
-  intereceptPattern,
-  responseUrlStr,
-  fixtureFilename,
-  gotoPath,
-}: {
-  page: Page,
-  intereceptPattern: RegExp,
-  responseUrlStr: string,
-  fixtureFilename: string,
-  gotoPath: string,
-}): Promise<Response> {
-  await page.route(intereceptPattern, (route: Route) => {
-    route.fulfill({
-      status: 200,
-      body: fs.readFileSync(path.join(__dirname, '..', '..', 'cypress', 'fixtures', fixtureFilename), 'utf8'),
-      contentType: 'application/octet-stream',
-    })
-  })
-
-  const [response] = await Promise.all([
-    page.waitForResponse((r: Response) => r.url().startsWith(responseUrlStr)),
-    page.goto(gotoPath),
-  ])
-
-  return response
-}

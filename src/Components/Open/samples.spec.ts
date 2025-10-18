@@ -3,8 +3,8 @@ import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
-} from '../../../tests/helpers/utils'
-import {setupVirtualPathIntercept, waitForModelReady} from '../../../tests/helpers/models'
+} from '../../tests/e2e/utils'
+import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 
 
 /**
@@ -32,7 +32,7 @@ test.describe('Sample models', () => {
       await expect(page.getByRole('dialog')).toContainText('Samples')
     })
 
-    test.only('Should intercept model requests successfully', async ({page}) => {
+    test('Should intercept model requests successfully', async ({page}) => {
       // Set up the intercept before navigating
       await setupVirtualPathIntercept(
         page,

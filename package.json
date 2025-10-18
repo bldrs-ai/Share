@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1646",
+  "version": "1.0.1659",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -62,7 +62,7 @@
     "test": "yarn test-tools && yarn test-src",
     "test-src": "jest --config tools/jest/jest.config.js",
     "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
-    "test-flows": "playwright test --config=tests/playwright.config.js",
+    "test-flows": "playwright test --config=tools/playwright.config.js",
     "typecheck": "tsc",
     "update-version": "./tools/updateVersion.mjs"
   },
@@ -144,7 +144,7 @@
     "@testing-library/jest-dom": "5.16.5",
     "@testing-library/react": "13.4.0",
     "@tsconfig/recommended": "1.0.1",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "30.0.0",
     "@types/react": "18.0.26",
     "@types/react-dom": "18.0.9",
     "@types/three": "0.146.0",
@@ -174,7 +174,7 @@
     "jsdom": "20.0.3",
     "node-fetch": "2",
     "playwright": "1.54.2",
-    "ts-jest": "^29.4.4"
+    "ts-jest": "29.4.4"
   },
   "engines": {
     "node": ">=20"

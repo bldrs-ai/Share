@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {homepageSetup, returningUserVisitsHomepageWaitForModel} from './helpers/utils'
+import {homepageSetup, returningUserVisitsHomepageWaitForModel} from './tests/e2e/utils'
 
 
 test.describe('Homepage', () => {

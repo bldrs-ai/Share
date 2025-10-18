@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test'
-import {homepageReady} from './helpers/homepage'
+import {visitHomepageWaitForModel} from '../tests/e2e/utils'
 
 
 /**
@@ -21,7 +21,7 @@ test.describe('Navigation', () => {
 
 
   test.beforeEach('Homepage loads successfully', async ({page}) => {
-    await homepageReady(page)
+    await visitHomepageWaitForModel(page)
   })
 
 

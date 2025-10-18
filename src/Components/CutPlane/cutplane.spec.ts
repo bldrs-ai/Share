@@ -5,7 +5,7 @@ import {
   visitHomepageWaitForModel,
   waitForModel,
   waitForElementStable,
-} from '../../../tests/helpers/utils'
+} from '../../tests/e2e/utils'
 
 
 /**

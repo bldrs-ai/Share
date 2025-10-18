@@ -3,7 +3,7 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
   waitForModel,
-} from '../../tests/helpers/utils'
+} from '../tests/e2e/utils'
 
 
 /**

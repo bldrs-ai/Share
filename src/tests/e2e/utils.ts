@@ -1,9 +1,7 @@
-import {Page, BrowserContext, expect} from '@playwright/test'
+import {BrowserContext, Page, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {join} from 'path'
 
-
-const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
 
 // Context-specific state to avoid concurrency issues
 const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
@@ -18,6 +16,50 @@ export async function clearState(context: BrowserContext) {
 }
 
 
+const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'cypress', 'fixtures')
+
+
+/**
+ * Helper to register an intercept and navigate to a route
+ *
+ * @param page - Playwright page object
+ * @param intereceptPattern - Pattern to match for page.route()
+ * @param responseUrlStr - URL string to match in waitForResponse()
+ * @param fixtureFilename - Fixture file name (relative to cypress/fixtures/)
+ * @param gotoPath - Path to navigate to
+ * @return The intercepted response
+ */
+export async function registerIntercept({
+  page,
+  intereceptPattern,
+  responseUrlStr,
+  fixtureFilename,
+  gotoPath,
+}: {
+  page: Page,
+  intereceptPattern: RegExp,
+  responseUrlStr: string,
+  fixtureFilename: string,
+  gotoPath: string,
+}): Promise<Response> {
+  const fixtureBuffer = await readFile(`${FIXTURES_DIR}/${fixtureFilename}`)
+  await page.route(intereceptPattern, (route: Route) => {
+    route.fulfill({
+      status: HTTP_OK,
+      body: fixtureBuffer,
+      contentType: 'application/octet-stream',
+    })
+  })
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r: Response) => r.url().startsWith(responseUrlStr)),
+    page.goto(gotoPath),
+  ])
+
+  return response
+}
+
+
 /**
  * Intercept load of index.ifc to serve fixture data.
  * Playwright equivalent of cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'})
@@ -28,11 +70,11 @@ export async function interceptIndex(page: Page) {
 
   await page.route('**/index.ifc', async (route) => {
     try {
-      const fixtureData = await readFile(`${FIXTURES_DIR}/index.ifc`, 'utf-8')
+      const fixtureBuffer = await readFile(`${FIXTURES_DIR}/index.ifc`)
       await route.fulfill({
-        status: 200,
-        contentType: 'text/plain; charset=utf-8',
-        body: fixtureData,
+        status: HTTP_OK,
+        contentType: 'application/octet-stream',
+        body: fixtureBuffer,
       })
     } catch (error) {
       console.warn('Failed to load index.ifc fixture:', error)
@@ -62,13 +104,11 @@ export async function interceptBounce(page: Page) {
   for (const pattern of patterns) {
     await page.route(pattern, async (route) => {
       try {
-        const fixturePath = `${FIXTURES_DIR}/404.html`
-        const fixtureData = await readFile(fixturePath, 'utf-8')
-
+        const fixtureBuffer = await readFile(`${FIXTURES_DIR}/404.html`)
         await route.fulfill({
           status: 404,
           contentType: 'text/html; charset=utf-8',
-          body: fixtureData,
+          body: fixtureBuffer,
         })
       } catch (error) {
         console.warn('Failed to load 404.html fixture:', error)
@@ -119,9 +159,18 @@ export async function setIsReturningUser(context: BrowserContext) {
 
 /**
  * Visit root path. This will trigger an autoload to /share/v/p/index.ifc
+ * Uses Promise.all to coordinate navigation with response waiting
+ * The flow: / -> /share/v/p/index.ifc (bounce) -> request for index.ifc file
+ *
+ * @param page - Playwright page object
+ * @return The intercepted response
  */
 export async function visitHomepage(page: Page) {
-  await page.goto('/', {waitUntil: 'domcontentloaded'})
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('index.ifc') && r.status() === HTTP_OK),
+    page.goto('/', {waitUntil: 'domcontentloaded'}),
+  ])
+  return response
 }
 
 
@@ -266,7 +315,7 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
 
     // Send back modified response
     await route.fulfill({
-      status: 200,
+      status: HTTP_OK,
       contentType: 'text/html',
       body: `
 <!DOCTYPE html>
@@ -338,7 +387,7 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
 
     // Send back modified response
     await route.fulfill({
-      status: 200,
+      status: HTTP_OK,
       contentType: 'application/json',
       body: JSON.stringify({
         access_token: 'testaccesstoken',
@@ -389,19 +438,33 @@ const MODEL_LOAD_TIMEOUT = 15000
 
 /**
  * Comprehensive model loading verification with network checks
+ * Uses Promise.all pattern like routes.spec.ts for proper synchronization
  *
  * @param page Playwright page object
+ * @param gotoPath Path to navigate to (optional, if not provided just waits for model)
+ * @return The intercepted response if gotoPath provided
  */
-export async function waitForModelWithNetworkCheck(page: Page) {
-  // Set up a promise to track model loading network request
-  const modelLoadPromise = page.waitForResponse(
-    (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
-    {timeout: MODEL_LOAD_TIMEOUT},
-  )
-
-  // Wait for both network response and DOM readiness
-  await Promise.all([
-    modelLoadPromise,
-    waitForModel(page),
-  ])
+export async function waitForModelWithNetworkCheck(page: Page, gotoPath?: string) {
+  if (gotoPath) {
+    // Use Promise.all pattern to coordinate navigation and response
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
+        {timeout: MODEL_LOAD_TIMEOUT},
+      ),
+      page.goto(gotoPath, {waitUntil: 'domcontentloaded'}),
+    ])
+    await waitForModel(page)
+    return response
+  } else {
+    // Just wait for response and DOM readiness
+    const modelLoadPromise = page.waitForResponse(
+      (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
+      {timeout: MODEL_LOAD_TIMEOUT},
+    )
+    await Promise.all([
+      modelLoadPromise,
+      waitForModel(page),
+    ])
+  }
 }

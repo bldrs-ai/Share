@@ -2,13 +2,13 @@ import {defineConfig, devices} from '@playwright/test'
 
 
 export default defineConfig({
-  // Look for test files in the "tests" directory, relative to this configuration file.
-  testDir: '..',
+  // Look for test files in the "src" directory, relative to this configuration file.
+  testDir: '../src',
 
   testMatch: [
+    '**/*.spec.ts',
     // For now just run tests that have been moved over to src
     // 'tests/**/*.spec.ts',
-    'src/**/*.spec.ts',
   ],
 
   // Run all tests in parallel.
@@ -17,7 +17,7 @@ export default defineConfig({
   retries: 1,
 
   // Per-test timeout, since homepage first-time sometimes is > 30s default
-  timeout: 20_000,
+  timeout: 10_000,
 
   workers: 4,
 
