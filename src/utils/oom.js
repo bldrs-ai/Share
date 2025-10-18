@@ -21,8 +21,8 @@ export const OOM_PATTERNS = [
  */
 export function isOutOfMemoryError(err) {
   if (!err) {
-return false
-}
+    return false
+  }
   try {
     const msg = (err && (err.message || err.toString() || ''))?.toLowerCase?.() || ''
     return OOM_PATTERNS.some((p) => msg.includes(p))

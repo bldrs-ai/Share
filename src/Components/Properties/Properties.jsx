@@ -85,7 +85,7 @@ export default function Properties() {
         </Box>
       }
     </Paper>
-)
+  )
 }
 
 
@@ -108,7 +108,7 @@ async function createPsetsList(model, element, expandAll) {
             detail={await createPropertyTable(model, ps, true, 0)}
             expandState={expandAll}
           />
-          )
+        )
       }),
     ),
   ]

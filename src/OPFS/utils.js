@@ -93,20 +93,20 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  * @return {Promise<File>}
  */
 export function downloadToOPFS(
+  objectUrl,
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch,
+  onProgress) {
+  assertDefined(
     objectUrl,
     originalFilePath,
     commitHash,
     owner,
     repo,
-    branch,
-    onProgress) {
-  assertDefined(
-      objectUrl,
-      originalFilePath,
-      commitHash,
-      owner,
-      repo,
-      branch)
+    branch)
 
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
@@ -340,11 +340,11 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
  * @return {Promise<boolean>}
  */
 export function doesFileExistInOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
@@ -382,11 +382,11 @@ export function clearOPFSCache() {
  * @return {Promise<boolean>}
  */
 export function deleteFileFromOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDeleteModel, originalFilePath, commitHash, owner, repo, branch, 'deleted')

@@ -117,7 +117,7 @@ export default class PlaceMark extends EventDispatcher {
           res = dropPlaceMark(event)
         } else {
           res = getIntersectionPlaceMarkInfo()
-         /* if (res.marker) {
+          /* if (res.marker) {
             toggleMarkerSelection(res.marker)
             event.stopPropagation()
             event.preventDefault()

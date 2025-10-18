@@ -97,8 +97,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsNotesEnabled(false)
     }
   }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
-      setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
-      setModelPath, setRepository, routeParams])
+    setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
+    setModelPath, setRepository, routeParams])
 
   const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (
@@ -125,33 +125,33 @@ function PageTitle({modelPath, modelName, isUploadedFile}) {
   let titleStr = ''
   const modelPathFilename = modelPath.filepath?.split('/').pop()
   switch (modelPath.kind) {
-    case 'file':
-      if (isUploadedFile) {
-        titleStr = `New: ${modelName}`
-      } else {
-        titleStr = `${modelName || modelPathFilename}`
-      }
+  case 'file':
+    if (isUploadedFile) {
+      titleStr = `New: ${modelName}`
+    } else {
+      titleStr = `${modelName || modelPathFilename}`
+    }
+    break
+  case 'provider':
+    switch (modelPath.provider) {
+    case 'google':
+      titleStr = `Google: ${modelName || 'file'}`
       break
-    case 'provider':
-      switch (modelPath.provider) {
-        case 'google':
-          titleStr = `Google: ${modelName || 'file'}`
-          break
-        case 'github':
-          if (modelName === undefined) {
-            modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
-          }
-          titleStr = `GitHub: ${modelName}`
-          break
-        default:
-          titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
+    case 'github':
+      if (modelName === undefined) {
+        modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
       }
-      break
-    case 'srcUrl':
-      titleStr = modelName || modelPathFilename
+      titleStr = `GitHub: ${modelName}`
       break
     default:
-      titleStr = `Loading...`
+      titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
+    }
+    break
+  case 'srcUrl':
+    titleStr = modelName || modelPathFilename
+    break
+  default:
+    titleStr = `Loading...`
   }
 
   return (

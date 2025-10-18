@@ -14,8 +14,8 @@ test('MockViewer getProperties', () => {
 
 test('MockViewer getIfcType', () => {
   expect(new MockViewer().IFC.loader.ifcManager
-      .getIfcType(undefined, undefined))
-      .toEqual('IFCELEMENT')
+    .getIfcType(undefined, undefined))
+    .toEqual('IFCELEMENT')
 })
 
 

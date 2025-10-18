@@ -68,13 +68,13 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
           event.preventDefault() // Prevent the default navigation
         }
       } else if (noteHash) {
-          const params = Object.values(getObjectParams(`#${noteHash}`))
+        const params = Object.values(getObjectParams(`#${noteHash}`))
 
-          if (params) {
-            const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
-            setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
-            setSelectedPlaceMarkId(Number(params[0]))
-            event.preventDefault() // Prevent the default navigation
+        if (params) {
+          const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
+          setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
+          setSelectedPlaceMarkId(Number(params[0]))
+          event.preventDefault() // Prevent the default navigation
         }
       }
     }

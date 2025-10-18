@@ -129,14 +129,14 @@ export default function NotesNavBar() {
             size='medium'
             variant='noBackground'
           /> :
-            <TooltipIconButton
-              title='Add a note'
-              onClick={toggleIsCreateNoteVisible}
-              icon={<AddCommentOutlinedIcon className='icon-share'/>}
-              placement='bottom'
-              size='medium'
-              variant='noBackground'
-            />
+          <TooltipIconButton
+            title='Add a note'
+            onClick={toggleIsCreateNoteVisible}
+            icon={<AddCommentOutlinedIcon className='icon-share'/>}
+            placement='bottom'
+            size='medium'
+            variant='noBackground'
+          />
         )}
       </Box>
     </Box>

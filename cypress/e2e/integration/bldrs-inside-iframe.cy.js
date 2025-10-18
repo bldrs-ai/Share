@@ -66,7 +66,7 @@ describe('bldrs inside iframe', () => {
     cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
 
     cy.get('#txtSendMessagePayload').clear()
-        .type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+      .type(JSON.stringify(msg), {parseSpecialCharSequences: false})
     cy.get('#btnSendMessage').click()
     cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
     // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')

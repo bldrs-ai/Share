@@ -68,55 +68,55 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
     return null
   }
   switch (propName) {
-    case 'type':
-    case 'CompositionType':
-    case 'GlobalId':
-    case 'ObjectPlacement':
-    case 'ObjectType':
-    case 'OwnerHistory':
-    case 'PredefinedType':
-    case 'Representation':
-    case 'RepresentationContexts':
-    case 'Representations':
-    case 'Tag':
-    case 'UnitsInContext':
-      debug().warn('prettyProps, skipping prop for propName: ', propName)
+  case 'type':
+  case 'CompositionType':
+  case 'GlobalId':
+  case 'ObjectPlacement':
+  case 'ObjectType':
+  case 'OwnerHistory':
+  case 'PredefinedType':
+  case 'Representation':
+  case 'RepresentationContexts':
+  case 'Representations':
+  case 'Tag':
+  case 'UnitsInContext':
+    debug().warn('prettyProps, skipping prop for propName: ', propName)
+    return null
+  case 'Coordinates':
+  case 'RefLatitude':
+  case 'RefLongitude': return (
+    <Row
+      d1={label}
+      d2={
+        dms(
+          await deref(propValue[0]),
+          await deref(propValue[1]),
+          await deref(propValue[2]))
+      }
+      key={serial}
+    />
+  )
+  case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial}/>
+  case 'Quantities': return await quantities(model, propValue, serial)
+  case 'HasProperties': return await hasProperties(model, propValue, serial)
+  default: {
+    // Not sure where else to put this.. but seems better than handling in deref.
+    if (propValue.type === 0) {
       return null
-    case 'Coordinates':
-    case 'RefLatitude':
-    case 'RefLongitude': return (
+    }
+    return (
       <Row
         d1={label}
         d2={
-          dms(
-              await deref(propValue[0]),
-              await deref(propValue[1]),
-              await deref(propValue[2]))
+          await deref(
+            propValue, model, serial,
+            // TODO(pablo): there's no 4th param in deref
+            async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
         }
         key={serial}
       />
     )
-    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial}/>
-    case 'Quantities': return await quantities(model, propValue, serial)
-    case 'HasProperties': return await hasProperties(model, propValue, serial)
-    default: {
-      // Not sure where else to put this.. but seems better than handling in deref.
-      if (propValue.type === 0) {
-        return null
-      }
-      return (
-        <Row
-          d1={label}
-          d2={
-            await deref(
-              propValue, model, serial,
-              // TODO(pablo): there's no 4th param in deref
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
-          }
-          key={serial}
-        />
-      )
-    }
+  }
   }
 }
 

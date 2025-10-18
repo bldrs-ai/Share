@@ -178,7 +178,7 @@ export default class IfcIsolator {
     const toBeHidden = new Set(selection.concat(this.hiddenIds))
     this.hiddenIds = [...toBeHidden]
     const hiddenIdsObject = Object.fromEntries(
-        this.hiddenIds.map((id) => [id, true]))
+      this.hiddenIds.map((id) => [id, true]))
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
@@ -200,7 +200,7 @@ export default class IfcIsolator {
       const toBeHidden = new Set(toBeHiddenElementIds.concat(this.hiddenIds))
       this.hiddenIds = [...toBeHidden]
       const hiddenIdsObject = Object.fromEntries(
-          this.hiddenIds.map((id) => [id, true]))
+        this.hiddenIds.map((id) => [id, true]))
       useStore.setState({hiddenElements: hiddenIdsObject})
     } else if (Number.isFinite(toBeHiddenElementIds)) {
       if (this.hiddenIds.includes(toBeHiddenElementIds)) {
@@ -235,7 +235,7 @@ export default class IfcIsolator {
       const toBeHidden = new Set(this.hiddenIds.filter((el) => !toBeShown.includes(el)))
       this.hiddenIds = [...toBeHidden]
       const hiddenIdsObject = Object.fromEntries(
-          this.hiddenIds.map((id) => [id, true]))
+        this.hiddenIds.map((id) => [id, true]))
       useStore.setState({hiddenElements: hiddenIdsObject})
     } else if (Number.isFinite(toBeUnhiddenElementIds)) {
       if (this.hiddenIds.includes(toBeUnhiddenElementIds)) {
@@ -366,7 +366,7 @@ export default class IfcIsolator {
     useStore.setState({isTempIsolationModeOn: true})
     this.isolatedIds = selection
     const isolatedIdsObject = Object.fromEntries(
-        this.isolatedIds.map((id) => [id, true]))
+      this.isolatedIds.map((id) => [id, true]))
     useStore.setState({isolatedElements: isolatedIdsObject})
     this.initTemporaryIsolationSubset(selection)
   }

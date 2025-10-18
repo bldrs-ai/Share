@@ -35,9 +35,7 @@
     "cy-spec": "cypress run --config-file cypress/cypress.config.js --browser chrome --spec",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
-    "lint": "yarn lint-src && yarn lint-tools",
-    "lint-src": "yarn eslint src && yarn typecheck",
-    "lint-tools": "yarn eslint cypress tools",
+    "lint": "yarn eslint --fix src cypress netlify tests tools && yarn typecheck",
     "precommit": "yarn lint && yarn test",
     "serve-https": "run-script-os",
     "serve-https:win32": "set SHARE_CONFIG=dev && set serveHttps=true && yarn serve-share-conway",
@@ -66,7 +64,7 @@
     "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
     "test-flows": "playwright test --config=tests/playwright.config.js",
     "typecheck": "tsc",
-    "update-version": "./scripts/updateVersion.mjs"
+    "update-version": "./tools/updateVersion.mjs"
   },
   "dependencies": {
     "@auth0/auth0-react": "2.0.0",

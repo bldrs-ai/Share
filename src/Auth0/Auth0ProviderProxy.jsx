@@ -1,7 +1,7 @@
 import React, {useState} from 'react'
 import {Auth0Provider as OriginalAuth0Provider} from '@auth0/auth0-react'
 import {MockAuth0Context, mockGitHubUser, mockGoogleUser} from './Auth0Proxy'
- // Adjust the import path
+// Adjust the import path
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
@@ -11,12 +11,12 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
   /* eslint-disable react-hooks/rules-of-hooks*/
   if (!useMock) {
     return (
-        <OriginalAuth0Provider
+      <OriginalAuth0Provider
         {...props}
         onRedirectCallback={onRedirectCallback}
-        >
+      >
         {children}
-        </OriginalAuth0Provider>
+      </OriginalAuth0Provider>
     )
   }
   const [state, setState] = useState({
@@ -27,8 +27,8 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
 
   const getAccessTokenSilently = (options) => {
     if (!state.isAuthenticated) {
-       // Detailed response based on the options
-       setState({
+      // Detailed response based on the options
+      setState({
         isAuthenticated: true,
         user: mockGitHubUser,
         token: 'mock_access_token',

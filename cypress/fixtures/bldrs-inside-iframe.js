@@ -32,14 +32,14 @@ class BldrsWidgetDriver {
   // NOSONAR
   /** @return {Promise} */
   readEventRelations(
-      eventId,
-      roomId,
-      relationType,
-      eventType,
-      from,
-      to,
-      limit,
-      direction,
+    eventId,
+    roomId,
+    relationType,
+    eventType,
+    from,
+    to,
+    limit,
+    direction,
   ) {
     return Promise.resolve(undefined)
   }

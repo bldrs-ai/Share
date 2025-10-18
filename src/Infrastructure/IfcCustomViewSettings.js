@@ -35,9 +35,9 @@ export default function IfcCustomViewSettings(defaultColor, expressIdsToColorMap
       api.CreateIfcGuidToExpressIdMapping(modelID)
       const mappedToExpressIds = globalIds.map((pair) => [api.ifcGuidMap.get(modelID).get(pair[0]), pair[1]])
       mappedToExpressIds.filter((pair) => pair[0]) // Remove global ids that weren't found
-          .forEach((pair) => {
-            this.expressIdsToColorMap[pair[0]] = pair[1] // Override the setting in the customViewSettingsObject
-          })
+        .forEach((pair) => {
+          this.expressIdsToColorMap[pair[0]] = pair[1] // Override the setting in the customViewSettingsObject
+        })
       api.ifcGuidMap.delete(modelID)
     }
   }

@@ -13,9 +13,9 @@ describe('NavTree', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {getByTestId} = render(
-        <ShareMock>
-          <NavTreeControl/>
-        </ShareMock>)
+      <ShareMock>
+        <NavTreeControl/>
+      </ShareMock>)
     expect(getByTestId(testLabel)).toBeInTheDocument()
     expect(result.current.isNavTreeVisible).toEqual(false)
   })
@@ -26,9 +26,9 @@ describe('NavTree', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {getByTestId} = render(
-        <ShareMock>
-          <NavTreeControl/>
-        </ShareMock>)
+      <ShareMock>
+        <NavTreeControl/>
+      </ShareMock>)
     const controlButton = getByTestId(testLabel)
     expect(getByTestId(testLabel)).toBeInTheDocument()
     fireEvent.click(controlButton)

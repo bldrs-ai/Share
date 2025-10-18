@@ -77,14 +77,14 @@ export default function Dialog({
       <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
       <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
-       <DialogActions>
-         {typeof actionTitle === 'string' ?
-          <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
-            {actionTitle}
-          </Button> :
-          <>{actionTitle}</>
-         }
-       </DialogActions>
+        <DialogActions>
+          {typeof actionTitle === 'string' ?
+            <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
+              {actionTitle}
+            </Button> :
+            <>{actionTitle}</>
+          }
+        </DialogActions>
       }
     </MuiDialog>
   )

@@ -191,8 +191,8 @@ export default function CadView({
     try {
       tmpModelRef = await loadModel(modelPath)
     } catch (e) {
-       if (isOutOfMemoryError(e)) {
-         isOOM = true
+      if (isOutOfMemoryError(e)) {
+        isOOM = true
       }
       if (isOOM) {
         // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
@@ -224,7 +224,7 @@ export default function CadView({
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+      .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
@@ -297,9 +297,9 @@ export default function CadView({
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
       if (isOutOfMemoryError(error)) {
-            error.isOutOfMemory = true
-            throw error
-        }
+        error.isOutOfMemory = true
+        throw error
+      }
 
       setAlert(error)
       return
@@ -448,8 +448,8 @@ export default function CadView({
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       const types = elementTypesMap
-            .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
-            .map((t) => t.name)
+        .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
+        .map((t) => t.name)
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
@@ -676,7 +676,7 @@ export default function CadView({
         const types = elementTypesMap.filter(
           (t) => t.elements.filter(
             (e) => ids.includes(e.expressID)).length > 0)
-              .map((t) => t.name)
+          .map((t) => t.name)
         if (types.length > 0) {
           setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
@@ -718,11 +718,13 @@ export default function CadView({
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
-      {<ViewerContainer
-         data-testid='cadview-dropzone'
-         data-model-ready={isModelReady}
-         data-is-camera-at-rest={isCameraAtRest}
-       />}
+      {
+        <ViewerContainer
+          data-testid='cadview-dropzone'
+          data-model-ready={isModelReady}
+          data-is-camera-at-rest={isCameraAtRest}
+        />
+      }
       {viewer && (
         <RootLandscape
           pathPrefix={pathPrefix}

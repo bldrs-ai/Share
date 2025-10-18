@@ -25,8 +25,8 @@ export default function AlertDialog({onClose}) {
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const refresh = () => {
     try {
- window.location.reload()
-} catch (_) {/* noop */}
+      window.location.reload()
+    } catch (_) {/* noop */}
   }
   const actionCb = isOom ? refresh : onCloseInner
   const actionTitle = isOom ? 'Refresh' : 'Reset'

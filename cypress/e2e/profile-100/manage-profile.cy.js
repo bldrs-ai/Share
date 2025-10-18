@@ -38,10 +38,10 @@ describe('ManageProfile modal', () => {
 
       cy.percySnapshot('ManageProfile – GitHub linked only')
     })
-})
+  })
 
-context('When only Google is linked', () => {
-   beforeEach(() => {
+  context('When only Google is linked', () => {
+    beforeEach(() => {
       // user with GitHub identity only
       returningUserVisitsHomepageWaitForModel()
     })
@@ -55,7 +55,7 @@ context('When only Google is linked', () => {
 
       cy.percySnapshot('ManageProfile – GitHub linked only')
     })
-})
+  })
 
   context('Links accounts after Authorize is clicked', () => {
     beforeEach(() => {

@@ -46,8 +46,8 @@ export default function Notes() {
 
   const selectedNote =
         (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] :
-        null
+          notes.filter((issue) => issue.id === selectedNoteId)[0] :
+          null
 
   const handleError = (err) => {
     if (!err) {

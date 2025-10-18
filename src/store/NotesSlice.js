@@ -38,11 +38,11 @@ export default function createNotesSlice(set, get) {
       set((state) => ({
         editBodies: {...state.editBodies, [id]: body},
       })),
-      editOriginalBodies: {}, // Track editBody for each NoteCard by id
-      setEditOriginalBody: (id, body) =>
-        set((state) => ({
-          editOriginalBodies: {...state.editOriginalBodies, [id]: body},
-        })),
+    editOriginalBodies: {}, // Track editBody for each NoteCard by id
+    setEditOriginalBody: (id, body) =>
+      set((state) => ({
+        editOriginalBodies: {...state.editOriginalBodies, [id]: body},
+      })),
 
     editModes: {}, // Keeps track of edit modes by NoteCard IDs
     setEditMode: (id, mode) =>

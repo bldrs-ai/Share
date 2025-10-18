@@ -1,8 +1,8 @@
 import '@percy/cypress'
 import {
-    setupVirtualPathIntercept,
-    waitForModelReady,
-  } from '../../../support/models'
+  setupVirtualPathIntercept,
+  waitForModelReady,
+} from '../../../support/models'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -28,7 +28,7 @@ describe('Search 100: GitHub Link', () => {
       )
       cy.get('[data-testid="control-button-search"]').click()
       cy.get('[data-testid="textfield-search-query"]')
-      .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc{enter}')
+        .type('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc{enter}')
     })
 
     // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable

@@ -69,19 +69,19 @@ export default function OpenModelDialog({
         actionCb={(value) => setCurrentTab(value)}
         isScrollable={false}
       />
-        <Stack
-          spacing={1}
-          direction='column'
-          sx={{
-            mt: 2,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-          data-testid={`dialog-open-model-tabs-stack`}
-        >
+      <Stack
+        spacing={1}
+        direction='column'
+        sx={{
+          mt: 2,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+        data-testid={`dialog-open-model-tabs-stack`}
+      >
         { currentTab === 0 &&
           <Stack data-testid='dialog-open-model-local' spacing={1}>
-              {!isMobile &&
+            {!isMobile &&
                 <>
                   <Typography
                     variant='caption'
@@ -95,10 +95,10 @@ export default function OpenModelDialog({
                     — or —
                   </Typography>
                 </>
-             }
-             <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
+            }
+            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
                Browse files...
-             </Button>
+            </Button>
           </Stack>
         }
         { currentTab === 1 &&
@@ -130,7 +130,7 @@ export default function OpenModelDialog({
             setIsDialogDisplayed={setIsDialogDisplayed}
           />
         }
-        </Stack>
+      </Stack>
     </Dialog>
   )
 }

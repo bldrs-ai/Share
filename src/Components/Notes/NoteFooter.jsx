@@ -221,13 +221,13 @@ export default function NoteFooter({
           }
         </Stack>
         <Stack direction='row'>
-           <TooltipIconButton
-             title='Open in Github'
-             size='small'
-             placement='bottom'
-             onClick={isNote ? openGithubIssue : openGithubComment}
-             icon={<GitHubIcon className='icon-share'/>}
-           />
+          <TooltipIconButton
+            title='Open in Github'
+            size='small'
+            placement='bottom'
+            onClick={isNote ? openGithubIssue : openGithubComment}
+            icon={<GitHubIcon className='icon-share'/>}
+          />
 
           {selected &&
            <TooltipIconButton

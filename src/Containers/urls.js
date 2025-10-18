@@ -10,32 +10,32 @@ import {parseGitHubRepositoryUrl} from '../net/github/utils'
 export async function getFinalUrl(url, accessToken) {
   const u = new URL(url)
   switch (u.host.toLowerCase()) {
-    case 'github.com':
-      if (!accessToken) {
-        const proxyUrl = new URL(process.env.RAW_GIT_PROXY_URL)
+  case 'github.com':
+    if (!accessToken) {
+      const proxyUrl = new URL(process.env.RAW_GIT_PROXY_URL)
 
-        // Replace the protocol, host, and hostname in the target
-        u.protocol = proxyUrl.protocol
-        u.host = proxyUrl.host
-        u.hostname = proxyUrl.hostname
+      // Replace the protocol, host, and hostname in the target
+      u.protocol = proxyUrl.protocol
+      u.host = proxyUrl.host
+      u.hostname = proxyUrl.hostname
 
-        // If the port is specified, replace it in the target URL
-        if (proxyUrl.port) {
-          u.port = proxyUrl.port
-        }
-
-        // If there's a path, *and* it's not just the root, then prepend it to the target URL
-        if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
-          u.pathname = proxyUrl.pathname + u.pathname
-        }
-
-        return u.toString()
+      // If the port is specified, replace it in the target URL
+      if (proxyUrl.port) {
+        u.port = proxyUrl.port
       }
 
-      return await getGitHubDownloadUrl(url, accessToken)
+      // If there's a path, *and* it's not just the root, then prepend it to the target URL
+      if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
+        u.pathname = proxyUrl.pathname + u.pathname
+      }
 
-    default:
-      return url
+      return u.toString()
+    }
+
+    return await getGitHubDownloadUrl(url, accessToken)
+
+  default:
+    return url
   }
 }
 

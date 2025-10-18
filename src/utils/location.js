@@ -341,7 +341,7 @@ export function removeParamsFromHash(hashString, name, paramKeys = []) {
     throw new Error('Invalid hash string: must start with "#"')
   }
 
-   // Remove `#` and split by FEATURE_SEP
+  // Remove `#` and split by FEATURE_SEP
   const sets = hashString.substring(1).split(FEATURE_SEP)
   const prefix = `${name}:`
   const newSets = []
@@ -475,7 +475,7 @@ export function removeHashParams(location, name, paramKeys = []) {
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(
-        '', document.title, window.location.pathname + window.location.search)
+      '', document.title, window.location.pathname + window.location.search)
   }
 }
 

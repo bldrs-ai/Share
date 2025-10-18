@@ -35,34 +35,34 @@ export default function PricingDialog({openPricing, handleClosePricing, isDay}) 
         },
       }}
     >
-    <AppBar sx={{position: 'relative'}}>
-      <Toolbar sx={{position: 'relative'}}>
-        {/* Absolutely‐positioned icon on the left */}
-        <IconButton
-          edge='start'
-          color='inherit'
-          onClick={handleClosePricing}
-          aria-label='close'
-          sx={{
-            position: 'absolute',
-            left: 0,
-          }}
-        >
-          <CloseIcon/>
-        </IconButton>
+      <AppBar sx={{position: 'relative'}}>
+        <Toolbar sx={{position: 'relative'}}>
+          {/* Absolutely‐positioned icon on the left */}
+          <IconButton
+            edge='start'
+            color='inherit'
+            onClick={handleClosePricing}
+            aria-label='close'
+            sx={{
+              position: 'absolute',
+              left: 0,
+            }}
+          >
+            <CloseIcon/>
+          </IconButton>
 
-        {/* Centered title in a 100%-width container */}
-        <Typography
-          variant='h3'
-          sx={{
-            width: '100%',
-            textAlign: 'center',
-          }}
-        >
+          {/* Centered title in a 100%-width container */}
+          <Typography
+            variant='h3'
+            sx={{
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
           Manage Subscription
-        </Typography>
-      </Toolbar>
-    </AppBar>
+          </Typography>
+        </Toolbar>
+      </AppBar>
 
       {/* The Stripe Pricing Table. May grow to fill available width/height */}
       <PricingTable theme={isDay ? 'light' : 'dark'}/>

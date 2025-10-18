@@ -86,11 +86,11 @@ export default function NoteCard({
 
   const {user} = useAuth0()
 
-   // Reference to the NoteCard element for scrolling
-   const noteCardRef = useRef(null)
-   const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
+  // Reference to the NoteCard element for scrolling
+  const noteCardRef = useRef(null)
+  const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
 
-   useEffect(() => {
+  useEffect(() => {
     setActiveNoteCardId(id)
     return () => setActiveNoteCardId(null) // Reset when component unmounts
   }, [id, setActiveNoteCardId])
@@ -113,15 +113,15 @@ export default function NoteCard({
 
 
   const embeddedCameraParams = findUrls(body)
-      .filter((url) => {
-        if (url.indexOf('#') === -1) {
-          return false
-        }
-        const encoded = getHashParamsFromHashStr(
-            url.substring(url.indexOf('#') + 1),
-            HASH_PREFIX_CAMERA)
-        return encoded && parseHashParams(encoded)
-      })
+    .filter((url) => {
+      if (url.indexOf('#') === -1) {
+        return false
+      }
+      const encoded = getHashParamsFromHashStr(
+        url.substring(url.indexOf('#') + 1),
+        HASH_PREFIX_CAMERA)
+      return encoded && parseHashParams(encoded)
+    })
 
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const dateParts = date.split('T')
@@ -309,26 +309,26 @@ export default function NoteCard({
 
   return (
     <Card elevation={1} data-testid='note-card' ref={noteCardRef}>
-       <CardHeader
-         title={title}
-         avatar={<Avatar alt={username} src={avatarUrl}/>}
-         sx={{alignItems: 'flex-start'}}
-         subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
-         action={
-           synched && user && user.nickname === username &&
+      <CardHeader
+        title={title}
+        avatar={<Avatar alt={username} src={avatarUrl}/>}
+        sx={{alignItems: 'flex-start'}}
+        subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
+        action={
+          synched && user && user.nickname === username &&
              <NoteMenu
                onEditClick={() => {
-                setEditMode(true)
-                setEditModeGlobal(id, true)
-                setEditBody(body)
-                setEditOriginalBody(id, body)
-                setEditBodyGlobal(id, body) // Update global editBody state
-              }}
+                 setEditMode(true)
+                 setEditModeGlobal(id, true)
+                 setEditBody(body)
+                 setEditOriginalBody(id, body)
+                 setEditBodyGlobal(id, body) // Update global editBody state
+               }}
                onDeleteClick={() => isNote ? onDeleteNote(noteNumber) : onDeleteComment(id)}
                noteNumber={noteNumber}
              />
-         }
-       />
+        }
+      />
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}

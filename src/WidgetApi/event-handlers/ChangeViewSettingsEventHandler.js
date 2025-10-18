@@ -31,9 +31,9 @@ class ChangeViewSettingsEventHandler extends ApiEventHandler {
     }
     const customViewSettings = data.customViewSettings
     const customViewSettingsObject = new IfcCustomViewSettings(
-        customViewSettings.defaultColor,
-        customViewSettings.expressIdsToColorMap,
-        customViewSettings.globalIdsToColorMap,
+      customViewSettings.defaultColor,
+      customViewSettings.expressIdsToColorMap,
+      customViewSettings.globalIdsToColorMap,
     )
     useStore.setState({customViewSettings: customViewSettingsObject})
     return this.apiConnection.successfulResponse({})

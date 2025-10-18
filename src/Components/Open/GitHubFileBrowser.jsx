@@ -132,45 +132,45 @@ export default function GitHubFileBrowser({
   return (
     <Stack data-testid={'stack_gitHub_access_controls'}>
       <Stack>
-          <Typography variant='overline'>
+        <Typography variant='overline'>
             Browse files on Github
-          </Typography>
-          <Selector
-            label='Organization'
-            list={orgNamesArrWithAt}
-            selected={selectedOrgName}
-            setSelected={selectOrg}
-            data-testid='openOrganization'
-          />
-          <Selector
-            label='Repository'
-            list={repoNamesArr}
-            selected={selectedRepoName}
-            setSelected={selectRepo}
-            data-testid='openRepository'
-          />
-          <Selector
-            label='Branch'
-            list={branchesArr}
-            selected={selectedBranchName}
-            setSelected={selectBranch}
-            data-testid='openBranch'
-          />
-          <SelectorSeparator
-            label={(currentPath === '') ? 'Folder' :
-                    `Folder: ${currentPath}`}
-            list={foldersArr}
-            selected={selectedFolderName}
-            setSelected={selectFolder}
-            data-testid='saveFolder'
-          />
-          <Selector
-            label='File'
-            list={filesArr}
-            selected={selectedFileIndex}
-            setSelected={setSelectedFileIndex}
-            data-testid='openFile'
-          />
+        </Typography>
+        <Selector
+          label='Organization'
+          list={orgNamesArrWithAt}
+          selected={selectedOrgName}
+          setSelected={selectOrg}
+          data-testid='openOrganization'
+        />
+        <Selector
+          label='Repository'
+          list={repoNamesArr}
+          selected={selectedRepoName}
+          setSelected={selectRepo}
+          data-testid='openRepository'
+        />
+        <Selector
+          label='Branch'
+          list={branchesArr}
+          selected={selectedBranchName}
+          setSelected={selectBranch}
+          data-testid='openBranch'
+        />
+        <SelectorSeparator
+          label={(currentPath === '') ? 'Folder' :
+            `Folder: ${currentPath}`}
+          list={foldersArr}
+          selected={selectedFolderName}
+          setSelected={selectFolder}
+          data-testid='saveFolder'
+        />
+        <Selector
+          label='File'
+          list={filesArr}
+          selected={selectedFileIndex}
+          setSelected={setSelectedFileIndex}
+          data-testid='openFile'
+        />
       </Stack>
       <Button
         onClick={navigateToFile}

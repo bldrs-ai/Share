@@ -51,21 +51,21 @@ export function visitRecursive(obj, visitorCb, seen = new Set()) {
  */
 export function deletePropertyRecursive(obj, propName) {
   visitRecursive(
-      obj,
-      /**
-       * @param {any} o
-       * @param {string} k
-       * @param {any} v
-       */
-      (o, k, v) => {
-        if (k === propName) {
-          if (Array.isArray(o)) {
-            /** @type {any} */ (o)[k] = undefined
-          } else {
-            delete o[k]
-          }
+    obj,
+    /**
+     * @param {any} o
+     * @param {string} k
+     * @param {any} v
+     */
+    (o, k, v) => {
+      if (k === propName) {
+        if (Array.isArray(o)) {
+          /** @type {any} */ (o)[k] = undefined
+        } else {
+          delete o[k]
         }
-      },
+      }
+    },
   )
 }
 
@@ -78,21 +78,21 @@ export function deletePropertyRecursive(obj, propName) {
  */
 export function deleteStringValueMatchRecursive(obj, regex) {
   visitRecursive(
-      obj,
-      /**
-       * @param {any} o
-       * @param {string} k
-       * @param {any} v
-       */
-      (o, k, v) => {
-        if (typeof v === 'string' && v.match(regex)) {
-          if (Array.isArray(o)) {
-            /** @type {any} */ (o)[k] = undefined
-          } else {
-            delete o[k]
-          }
+    obj,
+    /**
+     * @param {any} o
+     * @param {string} k
+     * @param {any} v
+     */
+    (o, k, v) => {
+      if (typeof v === 'string' && v.match(regex)) {
+        if (Array.isArray(o)) {
+          /** @type {any} */ (o)[k] = undefined
+        } else {
+          delete o[k]
         }
-      },
+      }
+    },
   )
 }
 
@@ -106,7 +106,7 @@ export function deleteStringValueMatchRecursive(obj, regex) {
  */
 export function filterObject(obj, callback) {
   return Object.fromEntries(Object.entries(obj).
-      filter(([key, val]) => callback(val, key)))
+    filter(([key, val]) => callback(val, key)))
 }
 
 
