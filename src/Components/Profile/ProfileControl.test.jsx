@@ -16,8 +16,8 @@ jest.mock('../../store/useStore', () => {
   const storeState = {
     appMetadata: null,
     setAppMetadata: (data) => {
- storeState.appMetadata = data
-},
+      storeState.appMetadata = data
+    },
     setAccessToken: jest.fn(),
   }
   // This is the mock implementation of the useStore hook

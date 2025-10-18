@@ -97,8 +97,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       setIsNotesEnabled(false)
     }
   }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
-      setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
-      setModelPath, setRepository, routeParams])
+    setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
+    setModelPath, setRepository, routeParams])
 
   const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (

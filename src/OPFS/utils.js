@@ -18,7 +18,12 @@ import debug from '../utils/debug'
 /**
  * Write model to OPFS.
  *
- * @param {string} filepath
+ * @param {File} modelFile - The model file
+ * @param {string} originalFilePath - Original file path
+ * @param {string} commitHash - Commit hash
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
  * @return {Promise<File>}
  */
 export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
@@ -51,7 +56,10 @@ export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHas
 /**
  * Retrieve model from OPFS.
  *
- * @param {string} filepath
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
+ * @param {string} filepath - File path
  * @return {File}
  */
 export function getModelFromOPFS(owner, repo, branch, filepath) {
@@ -88,25 +96,30 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  * Download model to OPFS if it doesn't already exist
  * with a matching commit hash.
  *
- * @param {string} filepath
- * @param {string} commitHash
+ * @param {string} objectUrl - Object URL
+ * @param {string} originalFilePath - Original file path
+ * @param {string} commitHash - Commit hash
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
+ * @param {Function} onProgress - Progress callback
  * @return {Promise<File>}
  */
 export function downloadToOPFS(
+  objectUrl,
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch,
+  onProgress) {
+  assertDefined(
     objectUrl,
     originalFilePath,
     commitHash,
     owner,
     repo,
-    branch,
-    onProgress) {
-  assertDefined(
-      objectUrl,
-      originalFilePath,
-      commitHash,
-      owner,
-      repo,
-      branch)
+    branch)
 
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
@@ -340,11 +353,11 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
  * @return {Promise<boolean>}
  */
 export function doesFileExistInOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
@@ -353,6 +366,7 @@ export function doesFileExistInOPFS(
 /**
  * Prints a snapshot of the OPFS directory structure
  *
+ * @param {number} previewWindow - Preview window size
  * @return {Promise<boolean>}
  */
 export function snapshotOPFS(previewWindow = 0) {
@@ -382,11 +396,11 @@ export function clearOPFSCache() {
  * @return {Promise<boolean>}
  */
 export function deleteFileFromOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDeleteModel, originalFilePath, commitHash, owner, repo, branch, 'deleted')

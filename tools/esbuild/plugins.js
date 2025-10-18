@@ -6,7 +6,11 @@ import {isWebIfcShimEnabled} from './defines.js'
 import {log} from './utils.js'
 
 
-/** @return {object} */
+/**
+ * @param {string} root - Root directory
+ * @param {string} buildDir - Build directory
+ * @return {object}
+ */
 export default function makePlugins(root, buildDir) {
   const assetsDir = path.resolve(root, 'public')
 

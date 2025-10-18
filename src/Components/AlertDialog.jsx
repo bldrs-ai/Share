@@ -25,8 +25,8 @@ export default function AlertDialog({onClose}) {
   const isOom = alert && typeof alert === 'object' && alert.type === 'oom'
   const refresh = () => {
     try {
- window.location.reload()
-} catch (_) {/* noop */}
+      window.location.reload()
+    } catch (_) {/* noop */}
   }
   const actionCb = isOom ? refresh : onCloseInner
   const actionTitle = isOom ? 'Refresh' : 'Reset'
@@ -100,7 +100,7 @@ function displayPathAlert(alert) {
 /**
  * Insert the spaces after / _ character to make sure the string breaks correctly
  *
- * @property {string} str error path, usually a long string
+ * @param {string} str error path, usually a long string
  * @return {string} formatted string
  */
 const insertZeroWidthSpaces = (str) => {

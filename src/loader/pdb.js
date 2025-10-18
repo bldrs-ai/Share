@@ -228,7 +228,11 @@ const TOL = 1.15 // 15% slack over sum of covalent radii
 const MIN_DIST = 0.4 // ignore ultra-short distances (<0.4 Å)
 
 
-/** Infer bonds if PDBLoader didn't populate geometryBonds (no CONECT). */
+/**
+ * Infer bonds if PDBLoader didn't populate geometryBonds (no CONECT).
+ *
+ * @param {object} pdb - The PDB object
+ */
 function ensureBondsIfMissing(pdb) {
   const gAtoms = pdb.geometryAtoms
   const gBonds = pdb.geometryBonds

@@ -23,6 +23,7 @@ export function addHashParams(location, params) {
 
 
 /**
+ * @param {object} location - The location object
  * @return {object} params
  */
 export function getHashParams(location) {

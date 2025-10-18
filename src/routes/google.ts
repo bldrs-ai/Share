@@ -5,7 +5,7 @@ import type {ProviderResult} from './routes'
 /**
  * Processes a Google Drive URL and returns the fileId if found.
  *
- * @param originalUrl
+ * @param originalUrl - The original URL
  * @param maybeGoogleUrl - The Google Drive URL to process
  * @return Result or null
  */
@@ -53,6 +53,7 @@ export default function processGoogleUrl(originalUrl: URL, maybeGoogleUrl: URL):
 /**
  * Processes a Google Drive file ID and returns the result.
  *
+ * @param originalUrl - The original URL
  * @param fileId - The Google Drive file ID.
  * @return Result or null
  */

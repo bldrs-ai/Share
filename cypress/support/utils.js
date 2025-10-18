@@ -104,6 +104,8 @@ export function waitForModel() {
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
  * the login process.
+ *
+ * @param {string} connection - The authentication connection type (default: 'github')
  */
 export function auth0Login(connection = 'github') {
   cy.get('[data-testid="control-button-profile"]').click()
@@ -156,9 +158,9 @@ export function base64EncodePayload(payload) {
   const jsonString = JSON.stringify(payload)
   // Convert the JSON string to a Base64Url encoded string
   const base64UrlString = btoa(jsonString)
-      .replace(/\+/g, '-') // Convert '+' to '-'
-      .replace(/\//g, '_') // Convert '/' to '_'
-      .replace(/=+$/, '') // Remove trailing '='
+    .replace(/\+/g, '-') // Convert '+' to '-'
+    .replace(/\//g, '_') // Convert '/' to '_'
+    .replace(/=+$/, '') // Remove trailing '='
   return base64UrlString
 }
 

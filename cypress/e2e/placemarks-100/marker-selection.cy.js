@@ -2,9 +2,9 @@ import '@percy/cypress'
 import {Raycaster, Vector2, Vector3} from 'three'
 import {TITLE_NOTES} from '../../../src/Components/Notes/component'
 import {homepageSetup,
-   returningUserVisitsHomepageWaitForModel,
-   auth0Login,
-  } from '../../support/utils'
+  returningUserVisitsHomepageWaitForModel,
+  auth0Login,
+} from '../../support/utils'
 import {MOCK_MARKERS} from '../../../src/Components/Markers/Marker.fixture'
 
 
@@ -87,22 +87,22 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
       it.skip('should click a marker link with a camera coordinate in it and the camera should change', () => {
         auth0Login()
         cy.get('[data-testid="list-notes"]')
-        .children()
-        .eq(5) // Select the 6th child (0-based index)
-        .click() // Click the element
+          .children()
+          .eq(5) // Select the 6th child (0-based index)
+          .click() // Click the element
 
         // Intercept the hyperlink click to prevent navigation
         cy.get('a[href*="#m:-18,20.289,-3.92,1,0,0;c:71.225,28.586,-45.341,-33,15,-5.613"]')
-        .should('exist') // Ensure the link exists
-        .then(($link) => {
+          .should('exist') // Ensure the link exists
+          .then(($link) => {
           // Attach a click handler to prevent default behavior
-          cy.wrap($link).invoke('on', 'click', (event) => {
-            event.preventDefault() // Prevent the redirect
-          })
+            cy.wrap($link).invoke('on', 'click', (event) => {
+              event.preventDefault() // Prevent the redirect
+            })
 
-          // Now click the hyperlink
-          cy.wrap($link).click()
-        })
+            // Now click the hyperlink
+            cy.wrap($link).click()
+          })
 
         cy.percySnapshot()
       })
@@ -111,18 +111,18 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
       it('should add a placemark to the scene, and make sure the placemark appends to and exists in the right issue', () => {
         auth0Login()
         cy.get('[data-testid="list-notes"]')
-        .children()
-        .eq(4) // Select the 5th child (0-based index)
-        .click() // Click the element
+          .children()
+          .eq(4) // Select the 5th child (0-based index)
+          .click() // Click the element
 
         cy.get('[placeholder="Leave a comment ..."]')
-        .type('test')
-        .should('have.value', 'test') // Assert that the textbox contains the test input
+          .type('test')
+          .should('have.value', 'test') // Assert that the textbox contains the test input
 
         // Select the "Place Mark" button
         cy.get('[data-testid="Place Mark"]')
-        .filter(':not(:disabled)') // Select only the enabled "Place Mark" button
-        .click() // Click the enabled button
+          .filter(':not(:disabled)') // Select only the enabled "Place Mark" button
+          .click() // Click the enabled button
 
 
         // Get the canvas element and calculate the click position for placing the marker

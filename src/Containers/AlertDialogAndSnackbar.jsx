@@ -58,7 +58,7 @@ export default function AlertAndSnackbar() {
         autoHideDuration={duration}
         sx={{marginBottom: '-.3em'}}
         open={isSnackOpen}
-        onClose={(event, reason) => setIsSnackOpen(false)}
+        onClose={() => setIsSnackOpen(false)}
         action={
           <IconButton
             onClick={() => setIsSnackOpen(false)}

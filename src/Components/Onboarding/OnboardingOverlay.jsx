@@ -61,7 +61,11 @@ export default function OnboardingOverlay({isVisible, onClose}) {
     }
   }, [isVisible])
 
-  /** Handles file drop into drag-n-drop area */
+  /**
+   * Handles file drop into drag-n-drop area
+   *
+   * @param {Event} event - The drop event
+   */
   const handleDrop = async (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -223,13 +227,13 @@ function OnboardingHighlight({position, text, arrowDirection}) {
     const calloutHalfWidth = 100 // Half width of callout for centering
     switch (arrowDirection) {
       case 'bottom-right':
-        // Position callout to the bottom-right of the highlight circle
+      // Position callout to the bottom-right of the highlight circle
         return {
           top: position.top + calloutOffset,
           left: position.left, // Anchor on left edge (top-left of callout)
         }
       case 'bottom-left':
-        // Position callout to the bottom-left of the highlight circle
+      // Position callout to the bottom-left of the highlight circle
         return {
           top: position.top + calloutOffset,
           right: window.innerWidth - position.left, // Anchor on right edge (top-right of callout)

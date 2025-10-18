@@ -89,9 +89,9 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
         d1={label}
         d2={
           dms(
-              await deref(propValue[0]),
-              await deref(propValue[1]),
-              await deref(propValue[2]))
+            await deref(propValue[0]),
+            await deref(propValue[1]),
+            await deref(propValue[2]))
         }
         key={serial}
       />
@@ -100,7 +100,7 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
     case 'Quantities': return await quantities(model, propValue, serial)
     case 'HasProperties': return await hasProperties(model, propValue, serial)
     default: {
-      // Not sure where else to put this.. but seems better than handling in deref.
+    // Not sure where else to put this.. but seems better than handling in deref.
       if (propValue.type === 0) {
         return null
       }

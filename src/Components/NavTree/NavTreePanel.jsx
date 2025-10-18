@@ -176,6 +176,10 @@ export default function NavTreePanel({
 /**
  * Get visible nodes
  *
+ * @param {Array} treeData - The tree data
+ * @param {Array} expandedNodeIds - IDs of expanded nodes
+ * @param {boolean} isNavTree - Whether this is a nav tree
+ * @param {object} model - The model object
  * @return {Array} nodes
  */
 function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
@@ -183,6 +187,9 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
 
   /**
    * traverse nodes
+   *
+   * @param {object} node - The node to traverse
+   * @param {number} depth - Current depth
    */
   function traverse(node, depth) {
     visibleNodes.push({node, depth})
@@ -197,6 +204,7 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
   /**
    * map the spatial nodes
    *
+   * @param {object} node - The node to map
    * @return {object} node
    */
   function mapSpatialNode(node) {

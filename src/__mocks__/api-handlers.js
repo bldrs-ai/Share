@@ -22,6 +22,7 @@ let commentDeleted = false
 /**
  * Initialize API handlers, including Google Analytics and GitHub.
  *
+ * @param {object} defines - Configuration defines
  * @return {Array<object>} handlers
  */
 export function initHandlers(defines) {
@@ -85,7 +86,7 @@ function iconHandlers() {
     // Icons
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
-    http.get('http://bldrs.ai/icons/*', ({request}) => {
+    http.get('http://bldrs.ai/icons/*', () => {
       return new Response('', {
         status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
@@ -216,6 +217,7 @@ function gaHandlers() {
  * Static stubs GitHub orgs, repos, issues.
  *
  * @param {object} defines todo implementation
+ * @param {boolean} authed Whether authenticated
  * @return {Array<object>} handlers
  */
 function githubHandlers(defines, authed) {
@@ -273,7 +275,7 @@ function githubHandlers(defines, authed) {
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
         const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
-            `${process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
+          `${process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
 
         return new Response(
           JSON.stringify({
@@ -324,16 +326,16 @@ function githubHandlers(defines, authed) {
 
       return new Response(
         JSON.stringify({
-            name: 'README.md',
-            path: 'README.md',
-            sha: 'a5dd511780350dfbf2374196d8f069114a7d9205',
-            size: 1359,
-            url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
-            html_url: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
-            git_url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
-            download_url: downloadURL,
-            type: 'file',
-            content: 'U2hhcmUgaXMgYSB3ZWItYmFzZWQgQklNICYgQ0FEIGludGVncmF0aW9uIGVu\n' +
+          name: 'README.md',
+          path: 'README.md',
+          sha: 'a5dd511780350dfbf2374196d8f069114a7d9205',
+          size: 1359,
+          url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
+          html_url: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
+          git_url: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
+          download_url: downloadURL,
+          type: 'file',
+          content: 'U2hhcmUgaXMgYSB3ZWItYmFzZWQgQklNICYgQ0FEIGludGVncmF0aW9uIGVu\n' +
               'dmlyb25tZW50IGZyb20gW2JsZHJzLmFpXShodHRwczovL2JsZHJzLmFpLyku\n' +
               'CgotICpPcGVuKiBhbnkgSUZDIG1vZGVsIG9uIGdpdGh1YiBieSBwYXN0aW5n\n' +
               'IGludG8gdGhlIHNlYXJjaGJhciwgb3IgdXBsb2FkaW5nIGZyb20geW91ciBs\n' +
@@ -364,12 +366,12 @@ function githubHandlers(defines, authed) {
               'YmxkcnMtYWkvU2hhcmUvd2lraS9EZXNpZ24pCi0gW0RldmVsb3BlciBHdWlk\n' +
               'ZV0oaHR0cHM6Ly9naXRodWIuY29tL2JsZHJzLWFpL1NoYXJlL3dpa2kvRGV2\n' +
               'Oi1HdWlkZSkK\n',
-            encoding: 'base64',
-            links: {
-              self: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
-              git: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
-              html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
-            },
+          encoding: 'base64',
+          links: {
+            self: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
+            git: `${GH_BASE_UNAUTHED}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
+            html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
+          },
         }),
         {
           status: HTTP_OK,
@@ -537,47 +539,47 @@ function githubHandlers(defines, authed) {
         )
         // Handle unauthenticated case
       } else if (params.owner === 'unauthedcaseowner' && params.repo === 'unauthedcaserepo' ) {
-       const requestUrl = request.url.toString()
+        const requestUrl = request.url.toString()
 
-       if ( requestUrl.includes(GH_BASE_AUTHED)) {
-        return new Response(
-          JSON.stringify({sha: 'error'}),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
-      } else {
-       return new Response(
-         JSON.stringify(MOCK_COMMITS.data),
-         {
-           status: HTTP_OK,
-           headers: {'Content-Type': 'application/json'},
-         },
-       )
-      }
+        if ( requestUrl.includes(GH_BASE_AUTHED)) {
+          return new Response(
+            JSON.stringify({sha: 'error'}),
+            {
+              status: HTTP_NOT_FOUND,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        } else {
+          return new Response(
+            JSON.stringify(MOCK_COMMITS.data),
+            {
+              status: HTTP_OK,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        }
         // Handle authenticated case
       } else if (params.owner === 'authedcaseowner' && params.repo === 'authedcaserepo' ) {
         const requestUrl = request.url.toString()
 
-         if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
-         return new Response(
-           JSON.stringify({sha: 'error'}),
-           {
-             status: HTTP_NOT_FOUND,
-             headers: {'Content-Type': 'application/json'},
-           },
-         )
-       } else {
-        return new Response(
-          JSON.stringify(MOCK_COMMITS.data),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
-       }
-       }
+        if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
+          return new Response(
+            JSON.stringify({sha: 'error'}),
+            {
+              status: HTTP_NOT_FOUND,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        } else {
+          return new Response(
+            JSON.stringify(MOCK_COMMITS.data),
+            {
+              status: HTTP_OK,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        }
+      }
       // For all other cases, return a success response
       return new Response(
         JSON.stringify(MOCK_COMMITS.data),

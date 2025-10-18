@@ -74,7 +74,7 @@ export function handleRoute(pathPrefix: string, routeParams: RouteParams): Route
 /**
  * Processes a local file path (/new and /p pathPrefixes).
  *
- * @param originalUrl
+ * @param originalUrl - The original URL
  * @param filepath - The embedded file path to process
  * @return Object with original URL, download URL, filepath and eltPath
  */
@@ -97,8 +97,8 @@ export function processFile(originalUrl: URL, filepath: string): FileResult {
 /**
  * Processes a URL filepath for external content, currently supporting Google Drive.
  *
- * @param originalUrl
- * @param maybeUrlParam - The embedded file path to process, should be a URL
+ * @param originalUrl - The original URL
+ * @param maybeUrlParamStr - The embedded file path to process, should be a URL
  * @return The original URL, a Google File ID or null.
  */
 export function processExternalUrl(originalUrl: URL, maybeUrlParamStr: string): GoogleResult | UrlResult | null {

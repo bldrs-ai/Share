@@ -8,10 +8,10 @@ import IfcColor from './IfcColor'
  */
 export function parseColor(hexColor) {
   const parsed = hexColor.substr(1).split(/(?=(?:..)*$)/)
-      // eslint-disable-next-line no-magic-numbers
-      .map((a) => parseInt(a, 16) / 256)
-      // eslint-disable-next-line no-magic-numbers
-      .map((a) => Math.round(a * 1000) / 1000)
+  // eslint-disable-next-line no-magic-numbers
+    .map((a) => parseInt(a, 16) / 256)
+  // eslint-disable-next-line no-magic-numbers
+    .map((a) => Math.round(a * 1000) / 1000)
   return new IfcColor(...parsed)
 }
 

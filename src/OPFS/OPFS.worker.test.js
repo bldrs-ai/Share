@@ -16,7 +16,13 @@ global.CacheModule = {
 if (typeof File === 'undefined') {
   const {Blob} = require('buffer')
   global.File = class File extends Blob {
-    /** Construct File */
+    /**
+     * Construct File
+     *
+     * @param {Array} parts - File parts
+     * @param {string} name - File name
+     * @param {object} options - Options
+     */
     constructor(parts, name, options = {}) {
       super(parts, options)
       this.name = name
@@ -32,7 +38,12 @@ if (typeof crypto === 'undefined') {
 // Minimal polyfills for Node test environment
 if (typeof DOMException === 'undefined') {
   global.DOMException = class DOMException extends Error {
-    /** Construct DOMException */
+    /**
+     * Construct DOMException
+     *
+     * @param {string} message - Error message
+     * @param {string} name - Error name
+     */
     constructor(message, name = 'Error') {
       super(message)
       this.name = name
@@ -87,9 +98,7 @@ class FileHandle {
   /**
    * Creates a synchronous access handle for this file.
    *
-   * @return {Promise<{getSize: function(): Promise<number>, read: function(ArrayBuffer, object):
-   * Promise<void>, write: function(ArrayBuffer | Uint8Array, object):
-   *  Promise<number>, close: function(): Promise<void>}>}
+   * @return {Promise<object>}
    */
   async createSyncAccessHandle() {
     const handle = this
@@ -148,7 +157,7 @@ class FileHandle {
   /**
    * Creates a writable stream to overwrite this file's data.
    *
-   * @return {Promise<{write: function(Blob|ArrayBuffer): Promise<void>, close: function(): Promise<void>}>}
+   * @return {Promise<object>}
    */
   async createWritable() {
     const handle = this
@@ -210,7 +219,7 @@ class DirectoryHandle {
    * Gets a handle for a subdirectory.
    *
    * @param {string} name - Subdirectory name.
-   * @param {{create?: boolean}} [options] - Options for handle retrieval.
+   * @param {object} options - Options for handle retrieval.
    * @return {Promise<DirectoryHandle>}
    * @throws {Error} If the directory does not exist and create is false.
    */
@@ -234,7 +243,7 @@ class DirectoryHandle {
    * Gets a handle for a file in this directory.
    *
    * @param {string} name - File name.
-   * @param {{create?: boolean}} [options] - Options for handle retrieval.
+   * @param {object} options - Options for handle retrieval.
    * @return {Promise<FileHandle>}
    * @throws {Error} If the file does not exist and create is false.
    */
@@ -335,8 +344,8 @@ test('retrieveFileWithPathNew matches file starting with segment', async () => {
   const folder = await rootDir.getDirectoryHandle('folder', {create: true})
   await folder.getFileHandle('model.ifc.etag.commit', {create: true})
   await folder.getFileHandle('other.ifc.etag.commit', {create: true})
-  // eslint-disable-next-line no-unused-vars
-  const [_dir, handle] = await worker.retrieveFileWithPathNew(
+
+  const [, handle] = await worker.retrieveFileWithPathNew(
     rootDir,
     'folder/model.ifc',
     'etag',

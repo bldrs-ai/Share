@@ -63,7 +63,7 @@ export default function ProfileControl() {
 
   useEffect(() => {
     /**
-     *
+     * @param {Event} event - The storage event
      */
     function handleStorageEvent(event) {
       if (event.key === 'refreshAuth' && event.newValue === 'true') {

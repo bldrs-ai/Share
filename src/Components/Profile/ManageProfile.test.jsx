@@ -57,7 +57,7 @@ beforeEach(() => {
   getAccessTokenSilently = jest
     .fn()
     .mockResolvedValue('primary.jwt')
-    jest.spyOn(window, 'open').mockImplementation(() => {})
+  jest.spyOn(window, 'open').mockImplementation(() => {})
 })
 
 afterEach(() => {

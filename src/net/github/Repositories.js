@@ -24,7 +24,8 @@ export async function getRepositories(org, accessToken = '') {
 /**
  * Retrieves repositories associated with the authenticated user
  *
- * @param {string} [accessToken]
+ * @param {string} accessToken
+ * @param {string} org
  * @return {Promise} the list of repositories
  */
 export async function getUserRepositories(accessToken = '', org = '') {

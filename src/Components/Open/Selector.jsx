@@ -15,7 +15,6 @@ import {disablePageReloadApprovalCheck} from '../../utils/event'
  * @return {ReactElement}
  */
 export default function Selector({
-  setIsDialogDisplayed,
   label,
   selected,
   setSelected,

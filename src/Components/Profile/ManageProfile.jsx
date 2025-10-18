@@ -43,7 +43,7 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
       await getAccessTokenSilently({authorizationParams:
                                     {audience: 'https://api.github.com/', scope:
                                      'openid profile email offline_access'},
-                                    cacheMode: 'off', useRefreshTokens: true})
+      cacheMode: 'off', useRefreshTokens: true})
     } catch (err) {
       console.error('Error refreshing user after link/unlink', err)
       // report in sentry
@@ -85,7 +85,7 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
         })
       localStorage.setItem('linkStatus', 'inProgress')
       window.open(`/popup-auth?connection=${connection}&linkToken=${encodeURIComponent(primaryToken)}`,
-                  'authPopup', 'width=600,height=600')
+        'authPopup', 'width=600,height=600')
     } catch (err) {
       console.error('Linking failed', err)
       // report in sentry
@@ -159,48 +159,48 @@ export default function ManageProfile({isDialogDisplayed, setIsDialogDisplayed})
         <Divider sx={{mb: 2}}/>
         <Typography variant='subtitle1' gutterBottom>Additional Provider Connections</Typography>
         {loading ? (
-            <ListItem>
-              <Box display='flex' justifyContent='center' sx={{width: '100%', py: 3}}>
-                <CircularProgress size={28}/>
-              </Box>
-            </ListItem>
-          ) : (
-            providers.map((provider) => {
-              if (provider.id === primaryProviderId) {
-                return null
-              }
-              const identity = linkedIdentities.find((id) => id.provider === provider.id)
-              const isConnected = Boolean(identity)
-              const connectedEmail = identity?.profileData?.email
-              return (
-                <ListItem key={provider.id} divider disableGutters sx={{width: '100%'}}>
-                  <Box display='flex' alignItems='center' width='100%'>
-                    <ListItemAvatar><Avatar>{provider.icon}</Avatar></ListItemAvatar>
-                    <ListItemText
-                      primary={provider.name}
-                      secondary={isConnected ? (connectedEmail ? `Connected as ${connectedEmail}` : 'Connected') : 'Not connected'}
-                      secondaryTypographyProps={{color: 'text.secondary'}}
-                    />
-                    {isConnected ? (
-                      <Button variant='outlined'
-                        size='small'
-                        sx={buttonSx}
-                        onClick={() => onUnlinkClick(provider.id)} data-testid={`unlink-${provider.id}`}
-                      >Unlink
-                      </Button>
-                    ) : (
-                      <Button variant='outlined'
-                        size='small'
-                        sx={buttonSx}
-                        onClick={() => onLinkClick(provider.id)} data-testid={`authorize-${provider.id}`}
-                      >Authorize
-                      </Button>
-                    )}
-                  </Box>
-                </ListItem>
-              )
-            })
-          )
+          <ListItem>
+            <Box display='flex' justifyContent='center' sx={{width: '100%', py: 3}}>
+              <CircularProgress size={28}/>
+            </Box>
+          </ListItem>
+        ) : (
+          providers.map((provider) => {
+            if (provider.id === primaryProviderId) {
+              return null
+            }
+            const identity = linkedIdentities.find((id) => id.provider === provider.id)
+            const isConnected = Boolean(identity)
+            const connectedEmail = identity?.profileData?.email
+            return (
+              <ListItem key={provider.id} divider disableGutters sx={{width: '100%'}}>
+                <Box display='flex' alignItems='center' width='100%'>
+                  <ListItemAvatar><Avatar>{provider.icon}</Avatar></ListItemAvatar>
+                  <ListItemText
+                    primary={provider.name}
+                    secondary={isConnected ? (connectedEmail ? `Connected as ${connectedEmail}` : 'Connected') : 'Not connected'}
+                    secondaryTypographyProps={{color: 'text.secondary'}}
+                  />
+                  {isConnected ? (
+                    <Button variant='outlined'
+                      size='small'
+                      sx={buttonSx}
+                      onClick={() => onUnlinkClick(provider.id)} data-testid={`unlink-${provider.id}`}
+                    >Unlink
+                    </Button>
+                  ) : (
+                    <Button variant='outlined'
+                      size='small'
+                      sx={buttonSx}
+                      onClick={() => onLinkClick(provider.id)} data-testid={`authorize-${provider.id}`}
+                    >Authorize
+                    </Button>
+                  )}
+                </Box>
+              </ListItem>
+            )
+          })
+        )
         }
       </List>
     </Dialog>

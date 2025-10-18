@@ -25,9 +25,9 @@ describe('ElementsControl', () => {
 
   it('should render CutPlaneMenu component when isIsolate is false', () => {
     const {queryByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const cutPlaneMenuButton = queryByTitle('Section')
     expect(cutPlaneMenuButton).toBeInTheDocument()
@@ -39,9 +39,9 @@ describe('ElementsControl', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {queryByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const clearButton = queryByTitle('Clear')
     fireEvent.click(clearButton)
@@ -54,9 +54,9 @@ describe('ElementsControl', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
@@ -65,9 +65,9 @@ describe('ElementsControl', () => {
 
   it('should toggle the isolation mode when Isolate button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const isolateButton = getByTitle('Isolate')
     fireEvent.click(isolateButton)
@@ -76,9 +76,9 @@ describe('ElementsControl', () => {
 
   it('should trigger unHideAllElements when Show all button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
@@ -89,9 +89,9 @@ describe('ElementsControl', () => {
 
   it('should trigger hideSelectedElements when Hide button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
@@ -100,9 +100,9 @@ describe('ElementsControl', () => {
 
   it('should trigger deselectItems prop function when Clear button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const clearButton = getByTitle('Clear')
     fireEvent.click(clearButton)

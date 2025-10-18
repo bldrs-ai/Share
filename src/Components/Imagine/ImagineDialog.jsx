@@ -140,7 +140,11 @@ export default function ImagineDialog({
 }
 
 
-/** @param {string} dataUrl The screenshot */
+/**
+ * @param {string} dataUrl The screenshot
+ * @param {string} prompt The prompt text
+ * @param {Function} onReady Callback when ready
+ */
 function sendToWarhol(dataUrl, prompt, onReady) {
   const base64Content = dataUrl.split(',')[1]
 

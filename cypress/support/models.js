@@ -3,7 +3,8 @@
  * interceptTag created for the bounce page as `${interceptTag}-bounce`
  *
  * @param {string} path Like /bldrs-ai/test-models/blob/main/step/gear.step.ifc
- * @param {string} tag Like 'loadGear'
+ * @param {string} fixturePath Path to the fixture file
+ * @param {string} interceptTag Like 'loadGear'
  */
 export function setupVirtualPathIntercept(path, fixturePath, interceptTag) {
   const sharePrefix = '/share/v/gh'

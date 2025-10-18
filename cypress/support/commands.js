@@ -36,10 +36,10 @@ import 'cypress-react-router/add-commands'
  */
 Cypress.Commands.add('iframe', {prevSubject: 'element'}, ($iframe, callback = () => {}) => {
   return cy
-      .wrap($iframe)
-      .should((iframe) => expect(iframe.contents().find('body')).to.exist)
-      .then((iframe) => cy.wrap(iframe.contents().find('body')))
-      .within({}, callback)
+    .wrap($iframe)
+    .should((iframe) => expect(iframe.contents().find('body')).to.exist)
+    .then((iframe) => cy.wrap(iframe.contents().find('body')))
+    .within({}, callback)
 })
 
 

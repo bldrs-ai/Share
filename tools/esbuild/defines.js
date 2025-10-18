@@ -16,7 +16,8 @@ import prod from './vars.prod.js'
  *
  * Exported for testing only.
  *
- * @return {{[key: string]: string}}
+ * @param {object} config - Configuration object
+ * @return {object}
  */
 export function zipEnvWithConfig(config) {
   const defines = {}
@@ -37,6 +38,7 @@ export function zipEnvWithConfig(config) {
 /**
  * Convert simple env var strings to js types
  *
+ * @param {string} envStr - Environment variable string
  * Exported for testing only.
  *
  * @return {boolean|number|string}

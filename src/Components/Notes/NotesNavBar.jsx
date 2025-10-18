@@ -32,7 +32,7 @@ export default function NotesNavBar() {
    * Navigation through notes, updating url state token and setting
    * camera if note has attached view
    *
-   * @param {string} 'previous' or 'next'
+   * @param {string} direction 'previous' or 'next'
    */
   function onNavClick(direction) {
     const index = direction === 'next' ? selectedNoteIndex + 1 : selectedNoteIndex - 1
@@ -129,14 +129,14 @@ export default function NotesNavBar() {
             size='medium'
             variant='noBackground'
           /> :
-            <TooltipIconButton
-              title='Add a note'
-              onClick={toggleIsCreateNoteVisible}
-              icon={<AddCommentOutlinedIcon className='icon-share'/>}
-              placement='bottom'
-              size='medium'
-              variant='noBackground'
-            />
+          <TooltipIconButton
+            title='Add a note'
+            onClick={toggleIsCreateNoteVisible}
+            icon={<AddCommentOutlinedIcon className='icon-share'/>}
+            placement='bottom'
+            size='medium'
+            variant='noBackground'
+          />
         )}
       </Box>
     </Box>

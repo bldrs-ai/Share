@@ -125,18 +125,18 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
       const branchName = requestCreateBranch ? createBranchName : branchesArr[selectedBranchName] || 'main'
       fileSave(
-          file,
-          pathWithFileName,
-          selectedFileName,
-          orgName,
-          repoName,
-          branchName,
-          accessToken,
-          isOpfsAvailable,
-          setSnackMessage,
-          (pathname) => {
-            navigateToModel({pathname}, navigate)
-          },
+        file,
+        pathWithFileName,
+        selectedFileName,
+        orgName,
+        repoName,
+        branchName,
+        accessToken,
+        isOpfsAvailable,
+        setSnackMessage,
+        (pathname) => {
+          navigateToModel({pathname}, navigate)
+        },
       )
       // Store the branch name for subsequent saves
       if (requestCreateBranch) {
@@ -418,13 +418,13 @@ async function fileSave(
       setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
 
       const commitHash = await commitFile(
-          orgName,
-          repoName,
-          pathWithFileName,
-          file,
-          `Created file ${selectedFileName}`,
-          branchName,
-          accessToken)
+        orgName,
+        repoName,
+        pathWithFileName,
+        file,
+        `Created file ${selectedFileName}`,
+        branchName,
+        accessToken)
 
       if (commitHash !== null) {
         // save to opfs

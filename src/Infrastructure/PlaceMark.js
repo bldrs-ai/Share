@@ -25,7 +25,7 @@ export default class PlaceMark extends EventDispatcher {
    *     element, camera, and scene.
    * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
-  constructor({context, postProcessor}) {
+  constructor({context}) {
     super()
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
@@ -117,7 +117,7 @@ export default class PlaceMark extends EventDispatcher {
           res = dropPlaceMark(event)
         } else {
           res = getIntersectionPlaceMarkInfo()
-         /* if (res.marker) {
+          /* if (res.marker) {
             toggleMarkerSelection(res.marker)
             event.stopPropagation()
             event.preventDefault()
@@ -128,7 +128,7 @@ export default class PlaceMark extends EventDispatcher {
       return res
     }
 
-    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/, active}) => {
+    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/}) => {
       return new Promise((resolve, reject) => {
         if (!normal) {
           reject(new Error('Normal vector is not defined.'))
@@ -217,7 +217,7 @@ export default class PlaceMark extends EventDispatcher {
         })
     }
 
-    const createCircleTexture = (fillColor) => {
+    const createCircleTexture = () => {
       const sW = 24
       const sH = 24
       // Base color should be white. Dynamic coloring tints the base color, so

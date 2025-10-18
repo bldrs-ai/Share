@@ -14,8 +14,8 @@ export function navToDefault(navigate, appPrefix) {
   disablePageReloadApprovalCheck()
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+    `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
+    `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
   navWith(navigate, defaultPath, {
     search: location.search,
     hash: cameraHash,
@@ -55,7 +55,7 @@ export function navWith(navigate, path, options = {
  * Navigate to a model path with a full page reload to free memory.
  * During unit tests, falls back to SPA navigate to avoid jsdom reloads.
  *
- * @param {string|{pathname:string, search?:string, hash?:string}} target Destination path or location-like object
+ * @param {string|object} target Destination path or location-like object
  * @param {Function} [navigate] Optional react-router navigate for test fallback
  */
 export function navigateToModel(target, navigate) {

@@ -17,7 +17,7 @@ describe('Open 100: Open model dialog', () => {
   context('First time user visits homepage not logged in', () => {
     beforeEach(() => {
       returningUserVisitsHomepageWaitForModel()
-        cy.get('[data-testid="control-button-open"]').click()
+      cy.get('[data-testid="control-button-open"]').click()
     })
 
     it('Sample tab to be selected and Momentum sample model chip to be visible', () => {
@@ -62,5 +62,5 @@ describe('Open 100: Open model dialog', () => {
       waitForModelReady(interceptTag)
       cy.percySnapshot()
     })
-})
+  })
 })

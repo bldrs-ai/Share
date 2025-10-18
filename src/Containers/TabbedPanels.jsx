@@ -80,7 +80,11 @@ export default function TabbedPanels({
         isVersionsVisible
 
 
-  /** @return {ReactElement} */
+  /**
+   * @param {string} label - The tab label
+   * @param {Function} onClose - Close handler
+   * @return {ReactElement}
+   */
   function createTabLabel(label, onClose) {
     return (
       <Stack direction='row' alignItems='center'>
@@ -115,45 +119,45 @@ export default function TabbedPanels({
   const panelsMap = {
     apps: isAppsEnabled && isAppsVisible ?
       {
-          label: createTabLabel('Apps', () => setIsAppsVisible(false)),
-          panel: !selectedApp ? <AppsPanel/> : <AppPanel itemJson={selectedApp}/>,
-        } :
+        label: createTabLabel('Apps', () => setIsAppsVisible(false)),
+        panel: !selectedApp ? <AppsPanel/> : <AppPanel itemJson={selectedApp}/>,
+      } :
       null,
     nav: isNavTreeEnabled && isNavTreeVisible ?
       {
-          label: createTabLabel('Nav', () => setIsNavTreeVisible(false)),
-          panel: model && rootElement && (
-            <NavTreePanel
-              model={model}
-              pathPrefix={
-                pathPrefix + (
-                  modelPath.gitpath ?
-                    modelPath.getRepoPath() :
-                    modelPath.filepath
-                )
-              }
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-            />
-          ),
-        } :
+        label: createTabLabel('Nav', () => setIsNavTreeVisible(false)),
+        panel: model && rootElement && (
+          <NavTreePanel
+            model={model}
+            pathPrefix={
+              pathPrefix + (
+                modelPath.gitpath ?
+                  modelPath.getRepoPath() :
+                  modelPath.filepath
+              )
+            }
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+        ),
+      } :
       null,
     notes: isNotesEnabled && isNotesVisible ?
       {
-          label: createTabLabel('Notes', () => setIsNotesVisible(false)),
-          panel: <NotesPanel/>,
-        } :
+        label: createTabLabel('Notes', () => setIsNotesVisible(false)),
+        panel: <NotesPanel/>,
+      } :
       null,
     props: isPropertiesEnabled && isPropertiesVisible ?
       {
-          label: createTabLabel('Props', () => setIsPropertiesVisible(false)),
-          panel: <PropertiesPanel/>,
-        } :
+        label: createTabLabel('Props', () => setIsPropertiesVisible(false)),
+        panel: <PropertiesPanel/>,
+      } :
       null,
     versions: isVersionsEnabled && isVersionsVisible ?
       {
-          label: createTabLabel('Versions', () => setIsVersionsVisible(false)),
-          panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
-        } :
+        label: createTabLabel('Versions', () => setIsVersionsVisible(false)),
+        panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
+      } :
       null,
   }
 

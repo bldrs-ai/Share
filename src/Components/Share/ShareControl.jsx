@@ -97,7 +97,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   }, [isDialogDisplayed, model])
 
 
-  const onCopy = (event) => {
+  const onCopy = () => {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(window.location)
     urlTextFieldRef.current.select()

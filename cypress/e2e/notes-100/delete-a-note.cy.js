@@ -11,12 +11,12 @@ describe('edit a note', () => {
       auth0Login()
     })
     it('Correct project to be loaded into the viewport and side drawer to be open - Screen', () => {
-        cy.get('[data-testid="control-button-notes"]').click()
-        cy.get(`:nth-child(1) > [data-testid="note-card"] [data-testid="note-menu-button"]`).click()
-        cy.percySnapshot()
-        cy.get('.MuiList-root > [tabindex="-1"]').click()
-        // ToDo: the final check with the deleted note disappearing from the list
-        // will be implemented when Pablo finished the github store mock
-      })
+      cy.get('[data-testid="control-button-notes"]').click()
+      cy.get(`:nth-child(1) > [data-testid="note-card"] [data-testid="note-menu-button"]`).click()
+      cy.percySnapshot()
+      cy.get('.MuiList-root > [tabindex="-1"]').click()
+      // ToDo: the final check with the deleted note disappearing from the list
+      // will be implemented when Pablo finished the github store mock
+    })
   })
 })

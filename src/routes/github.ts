@@ -5,7 +5,7 @@ import type {ProviderResult, BaseParams} from './routes'
 /**
  * Processes a GitHub file path for remote repository files.
  *
- * @param originalUrl
+ * @param originalUrl - The original URL
  * @param filepath - The file path within the repository
  * @param routeParams - URL parameters containing org, repo, branch
  * @return Route object

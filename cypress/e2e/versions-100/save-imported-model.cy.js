@@ -13,7 +13,7 @@ describe('Versions 100: Save model', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
 
     it('Save button not visible',
-       () => cy.findByTestId('Save', {timeout: 10000}).should('not.exist'))
+      () => cy.findByTestId('Save', {timeout: 10000}).should('not.exist'))
 
     context('User login', () => {
       beforeEach(auth0Login)

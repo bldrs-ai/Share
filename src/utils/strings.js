@@ -83,15 +83,15 @@ export function findUrls(str) {
  */
 export function findMarkdownUrls(str, prefix) {
   const markdownUrls = findUrls(str)
-      .filter((url) => {
-        if (url.indexOf('#') === -1) {
-          return false
-        }
-        const encoded = getHashParamsFromHashStr(
-            url.substring(url.indexOf('#') + 1),
-            prefix)
-        return !!encoded
-      })
+    .filter((url) => {
+      if (url.indexOf('#') === -1) {
+        return false
+      }
+      const encoded = getHashParamsFromHashStr(
+        url.substring(url.indexOf('#') + 1),
+        prefix)
+      return !!encoded
+    })
   return markdownUrls
 }
 
@@ -148,10 +148,10 @@ export function testUuid(str) {
  */
 export function toTitleCase(str) {
   return str.replace(
-      /\w\S*/g,
-      function(txt) {
-        return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
-      })
+    /\w\S*/g,
+    function(txt) {
+      return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+    })
 }
 
 

@@ -9,7 +9,7 @@ import {useTheme} from '@mui/material/styles'
  *
  * @return {ReactElement}
  */
-export default function AboutDescription({setIsDialogDisplayed}) {
+export default function AboutDescription() {
   const theme = useTheme()
 
   return (

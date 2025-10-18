@@ -39,8 +39,8 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToCommit(index) {
     const sha = commits[index].sha
     if (modelPath) {
-  const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
-  navigateToModel({pathname: commitPath}, navigate)
+      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      navigateToModel({pathname: commitPath}, navigate)
     }
   }
 
@@ -49,8 +49,8 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToMain() {
     if (modelPath) {
       // TODO(pablo): should not hardcode to 'main'
-  const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
-  navigateToModel({pathname: mainPath}, navigate)
+      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
+      navigateToModel({pathname: mainPath}, navigate)
     }
   }
 

@@ -66,7 +66,7 @@ export default function BaseRoutes({testElt = null}) {
     if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
       window.store = useStore
     }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setAppPrefix, appPrefix])
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export default function BaseRoutes({testElt = null}) {
       getAccessTokenSilently({
         authorizationParams: {
           // audience: 'https://bldrs.us.auth0.com/userinfo',
-           audience: 'https://api.github.com/',
+          audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
         cacheMode: 'off',

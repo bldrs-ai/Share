@@ -26,7 +26,7 @@ describe('About', () => {
     })
     it('about dialog is not displayed', () => {
       cy.findByRole('dialog', {timeout: 300000})
-          .should('not.exist')
+        .should('not.exist')
     })
   })
 })
