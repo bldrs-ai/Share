@@ -46,8 +46,8 @@ export default function Notes() {
 
   const selectedNote =
         (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] :
-        null
+          notes.filter((issue) => issue.id === selectedNoteId)[0] :
+          null
 
   const handleError = (err) => {
     if (!err) {
@@ -184,6 +184,7 @@ export default function Notes() {
   /**
    * Gets a marker given a marker ID
    *
+   * @param {string} id - The marker ID
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function getMarkerById(id) {

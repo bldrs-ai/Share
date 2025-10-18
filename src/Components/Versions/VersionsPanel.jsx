@@ -3,6 +3,7 @@ import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 import {TooltipIconButton} from '../Buttons'
 import Panel from '../SideDrawer/Panel'
 import VersionsTimeline from './VersionsTimeline'
@@ -38,9 +39,8 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToCommit(index) {
     const sha = commits[index].sha
     if (modelPath) {
-      const commitPath =
-            navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
-      navigate({pathname: commitPath})
+      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      navigateToModel({pathname: commitPath}, navigate)
     }
   }
 
@@ -49,9 +49,8 @@ export default function VersionsPanel({filePath, currentRef}) {
   function navigateToMain() {
     if (modelPath) {
       // TODO(pablo): should not hardcode to 'main'
-      const mainPath =
-            navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
-      navigate({pathname: mainPath})
+      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
+      navigateToModel({pathname: mainPath}, navigate)
     }
   }
 

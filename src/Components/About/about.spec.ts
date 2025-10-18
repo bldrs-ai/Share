@@ -17,11 +17,11 @@ test.describe('View 100: About Dialog', () => {
   })
 
   test.describe('First time user visits homepage', () => {
-    test.beforeEach(async ({page, context}) => {
-      await visitHomepageWaitForModel(page, context)
+    test.beforeEach(async ({page}) => {
+      await visitHomepageWaitForModel(page)
     })
 
-    test('about dialog is displayed', async ({page, context}) => {
+    test('about dialog is displayed', async ({page}) => {
       // Check that the about dialog is visible
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
@@ -36,7 +36,7 @@ test.describe('View 100: About Dialog', () => {
       await returningUserVisitsHomepageWaitForModel(page, context)
     })
 
-    test('about dialog is not displayed', async ({page, context}) => {
+    test('about dialog is not displayed', async ({page}) => {
       // Check that the about dialog is not visible
       const dialog = page.getByRole('dialog')
       await expect(dialog).not.toBeVisible()

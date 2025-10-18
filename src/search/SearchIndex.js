@@ -54,8 +54,8 @@ export default class SearchIndex {
     const description = Ifc.getDescription(elt)
     if (description) {
       this.indexElementByStringSet(this.eltsByGlobalId,
-          this.tokenize(description),
-          elt)
+        this.tokenize(description),
+        elt)
     }
 
     // Recurse.

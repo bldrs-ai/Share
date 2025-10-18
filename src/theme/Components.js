@@ -1,5 +1,6 @@
 /**
- * @param {object} Mui color palette.
+ * @param {object} palette Mui color palette.
+ * @param {object} typography Typography settings
  * @return {object} Mui component overrides.
  */
 export function getComponentOverrides(palette, typography) {

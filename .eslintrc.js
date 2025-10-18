@@ -25,6 +25,33 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
+    // --- TS / TSX
+    {
+      files: ['*.ts', '*.tsx'],
+      parser: '@typescript-eslint/parser',
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {jsx: true},
+        // If you later want type-aware rules, set:
+        // project: './tsconfig.json',
+        // tsconfigRootDir: __dirname,
+      },
+      plugins: ['@typescript-eslint'],
+      extends: [
+        'eslint:recommended',
+        'plugin:@typescript-eslint/recommended',
+        // For stricter, type-aware rules (requires parserOptions.project):
+        // 'plugin:@typescript-eslint/recommended-type-checked',
+      ],
+      // Optional: turn off/adjust rules that duplicate TS checks or clash
+      rules: {
+        'jsdoc/require-param-type': 'off',
+        'jsdoc/require-returns-type': 'off',
+        'jsdoc/no-types': 'error',
+        'valid-jsdoc': 'off',
+      },
+    },
   ],
   parser: '@babel/eslint-parser',
   parserOptions: {
@@ -60,7 +87,7 @@ module.exports = {
     'eqeqeq': ['error', 'always'],
     'func-call-spacing': ['error', 'never'],
     'import/newline-after-import': ['error', {count: 2}],
-    'indent': ['off', 2], // TODO(pablo): there's too many to fix right now
+    'indent': ['error', 2, {SwitchCase: 1}],
     'jsdoc/check-param-names': 'off',
     'jsdoc/check-types': 'error',
     'jsdoc/tag-lines': [2, 'any', {startLines: 1}],
@@ -95,8 +122,7 @@ module.exports = {
     'no-undef-init': 'error',
     'no-unneeded-ternary': 'error',
     'no-unused-expressions': 'error',
-    // TODO(pablo): cleanup fails and enable
-    // 'no-unused-vars': ['error', {varsIgnorePattern: '_'}],
+    'no-unused-vars': 'error',
     'no-useless-call': 'error',
     'no-useless-computed-key': 'error',
     'no-useless-concat': 'error',
@@ -112,18 +138,20 @@ module.exports = {
     'react/jsx-tag-spacing': ['error', {beforeSelfClosing: 'never'}],
     'react/prop-types': 'off',
     'react/self-closing-comp': 'error',
-    // TODO(pablo): re-enable.. got this down to 10.  'react-compiler/react-compiler': 'error',
+    // 'react-compiler/react-compiler': 'error',
     'require-await': 'error',
     'semi': ['error', 'never'],
     'space-infix-ops': ['error'],
-    'valid-jsdoc': 'off',
+    'valid-jsdoc': 'error',
     'yoda': 'error',
   },
   settings: {
-    react: {
-      version: '17.0.2',
+    'react': {version: 'detect'},
+    'import/resolver': {
+      node: {extensions: ['.js', '.jsx', '.ts', '.tsx']},
+      typescript: {}, // so eslint-plugin-import resolves TS paths/aliases
     },
-    jsdoc: {
+    'jsdoc': {
       tagNamePreference: {
         returns: 'return',
       },

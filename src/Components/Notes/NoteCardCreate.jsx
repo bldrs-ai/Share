@@ -153,12 +153,12 @@ export default function NoteCardCreate({
               inputProps={{maxLength: 256}}
             />}
           avatar={
-          isAuthenticated ?
-            <Avatar
-              alt={user.name}
-              src={user.picture}
-            /> :
-            <Avatar alt={username} src={avatarUrl}/>
+            isAuthenticated ?
+              <Avatar
+                alt={user.name}
+                src={user.picture}
+              /> :
+              <Avatar alt={username} src={avatarUrl}/>
           }
         />
       }

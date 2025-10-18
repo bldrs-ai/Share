@@ -18,7 +18,13 @@ export default function Tabs({tabLabels, currentTab, actionCb, isScrollable = fa
     actionCb(newValue)
   }
   return (
-    <MuiTabs value={value} onChange={handleChange} centered variant={isScrollable ? 'scrollable' : 'fullWidth'}>
+    <MuiTabs
+      value={value}
+      onChange={handleChange}
+      centered
+      variant={isScrollable ? 'scrollable' : 'standard'}
+      data-testid={`tabs-${tabLabels.join('-').toLowerCase().replaceAll(' ', '-')}`}
+    >
       {tabLabels.map((tab) => <Tab key={tab} label={tab} data-testid={`tab-${tab.toLowerCase()}`}/>)}
     </MuiTabs>
   )

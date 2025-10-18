@@ -38,8 +38,8 @@ export default function AppsSideDrawer({setDrawerWidth}) {
           data-testid='AppsSideDrawer-OverflowYAuto'
         >
           {!selectedApp ?
-           <AppsPanel/> :
-           <AppPanel itemJson={selectedApp}/>
+            <AppsPanel/> :
+            <AppPanel itemJson={selectedApp}/>
           }
         </Box>
       </Box>

@@ -5,9 +5,9 @@ import {
   returningUserVisitsHomepageWaitForModel,
 } from '../../support/utils'
 import {
-    setupVirtualPathIntercept,
-    waitForModelReady,
-  } from '../../support/models'
+  setupVirtualPathIntercept,
+  waitForModelReady,
+} from '../../support/models'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1154}*/

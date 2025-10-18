@@ -12,7 +12,7 @@ class ApiEventHandler {
    *
    * @param {object} data the event associated data
    */
-  handle(data) {
+  handle() {
   // do something on event.
   }
 }

@@ -15,6 +15,9 @@ import {
  */
 test.describe('Cutplanes', () => {
   // Flatten setup to reduce timing issues
+  /**
+   *
+   */
   async function setupModelWithCutplanes(page: Page, context: BrowserContext) {
     await homepageSetup(page, context)
     await setIsReturningUser(context)
@@ -23,7 +26,7 @@ test.describe('Cutplanes', () => {
 
   test('Section menu visible', async ({page, context}) => {
     await setupModelWithCutplanes(page, context)
-    
+
     // Click cut-plane control and verify menu
     await page.getByTestId('control-button-cut-plane').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
@@ -31,7 +34,7 @@ test.describe('Cutplanes', () => {
 
   test('All cut-planes added to model', async ({page, context}) => {
     await setupModelWithCutplanes(page, context)
-    
+
     // Open cut-plane menu and select plan
     await page.getByTestId('control-button-cut-plane').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
@@ -48,14 +51,14 @@ test.describe('Cutplanes', () => {
     await page.getByTestId('control-button-cut-plane').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
     await page.getByTestId('menu-item-elevation').click()
-    
+
     // Verify menu is not visible after all selections
     await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
   })
 
   test('No cutplanes visible after clear all', async ({page, context}) => {
     await setupModelWithCutplanes(page, context)
-    
+
     // Add all cut-planes first
     await page.getByTestId('control-button-cut-plane').click()
     await page.getByTestId('menu-item-plan').click()
@@ -63,16 +66,16 @@ test.describe('Cutplanes', () => {
     await page.getByTestId('menu-item-section').click()
     await page.getByTestId('control-button-cut-plane').click()
     await page.getByTestId('menu-item-elevation').click()
-    
+
     // Wait for cut-planes to be applied
     await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
-    
+
     // Open menu and clear all
     await page.getByTestId('control-button-cut-plane').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
     await page.getByTestId('menu-item-clear-all').click()
     await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
-    
+
     // Wait for clearing to complete
     await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
   })

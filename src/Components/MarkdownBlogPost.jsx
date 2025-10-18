@@ -18,19 +18,19 @@ export default function MarkdownBlogPost({title, dateline, markdownContent}) {
     <BlogPostLayout title={title} dateline={dateline}>
       <ReactMarkdown
         components={{
-          h1: ({node, ...props}) => (
+          h1: ({...props}) => (
             <Typography variant='h1' gutterBottom {...props}/>
           ),
-          h2: ({node, ...props}) => (
+          h2: ({...props}) => (
             <Typography variant='h2' gutterBottom {...props}/>
           ),
-          h3: ({node, ...props}) => (
+          h3: ({...props}) => (
             <Typography variant='h3' gutterBottom {...props}/>
           ),
-          p: ({node, ...props}) => (
+          p: ({...props}) => (
             <Typography variant='body1' paragraph {...props}/>
           ),
-          a: ({node, ...props}) => <Link {...props}/>,
+          a: ({...props}) => <Link {...props}/>,
           // etc. for other elements (img, blockquote, etc.)
         }}
       >

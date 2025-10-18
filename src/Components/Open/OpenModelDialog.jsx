@@ -9,6 +9,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
+import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
@@ -43,8 +44,9 @@ export default function OpenModelDialog({
 
   const openFile = () => {
     const onLoad = (filename) => {
+      // Use full reload when opening a new local file
       disablePageReloadApprovalCheck()
-      navigate(`${appPrefix}/v/new/${filename}`)
+      navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
@@ -67,28 +69,40 @@ export default function OpenModelDialog({
         actionCb={(value) => setCurrentTab(value)}
         isScrollable={false}
       />
-        <Stack
-          spacing={1}
-          direction='column'
-          justifyContent='center'
-          alignItems='center'
-          sx={{padding: '1em 0em', maxWidth: '18.5em'}}
-        >
+      <Stack
+        spacing={1}
+        direction='column'
+        sx={{
+          mt: 2,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+        data-testid={`dialog-open-model-tabs-stack`}
+      >
         { currentTab === 0 &&
-          <Stack spacing={1} sx={{width: '92%'}}>
-            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
-              Browse files...
-            </Button>
+          <Stack data-testid='dialog-open-model-local' spacing={1}>
             {!isMobile &&
-              <Typography
-                variant='caption'
-              >
-                Drag and Drop files into viewport to open
-              </Typography>}
+                <>
+                  <Typography
+                    variant='caption'
+                  >
+                    Drag and Drop files into viewport to open
+                  </Typography>
+                  <Typography
+                    variant='caption'
+                    sx={{textAlign: 'center', color: 'text.secondary'}}
+                  >
+                    — or —
+                  </Typography>
+                </>
+            }
+            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
+               Browse files...
+            </Button>
           </Stack>
         }
         { currentTab === 1 &&
-          <>
+          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
             <TextField
               label='GitHub Model URL'
               value={name}
@@ -96,7 +110,7 @@ export default function OpenModelDialog({
                 const ghPath = event.target.value
                 if (looksLikeLink(ghPath)) {
                   setIsDialogDisplayed(false)
-                  navigate(githubUrlOrPathToSharePath(ghPath))
+                  navigateToModel(githubUrlOrPathToSharePath(ghPath), navigate)
                 }
               }}
             />
@@ -108,15 +122,15 @@ export default function OpenModelDialog({
                setIsDialogDisplayed={setIsDialogDisplayed}
              />}
             {!isAuthenticated && <PleaseLogin/>}
-          </>
+          </Stack>
         }
         { currentTab === 2 &&
           <SampleModels
-          navigate={navigate}
-          setIsDialogDisplayed={setIsDialogDisplayed}
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
           />
         }
-        </Stack>
+      </Stack>
     </Dialog>
   )
 }

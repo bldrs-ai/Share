@@ -67,7 +67,7 @@ function onLoad(location, cameraControls, viewer) {
     canvas.addEventListener('mousemove', onMouseMove)
 
     // https://stackoverflow.com/questions/3515446/jquery-mousewheel-detecting-when-the-wheel-stops/28371047#28371047
-    const onWheel = (e) => {
+    const onWheel = () => {
       clearTimeout(document.wheeling)
       document.wheeling = setTimeout(() => {
         document.wheeling = undefined

@@ -21,11 +21,11 @@ export default function ControlButtonFixture() {
         dialog={
           <div style={{border: 'solid 1px black'}}>
             {isDisplayed ?
-             <div>
-               <h1>Controlled component</h1>
-               <button onClick={() => setIsDisplayed(false)}>Close</button>
-             </div> :
-             null}
+              <div>
+                <h1>Controlled component</h1>
+                <button onClick={() => setIsDisplayed(false)}>Close</button>
+              </div> :
+              null}
           </div>
         }
         placement={'left'}

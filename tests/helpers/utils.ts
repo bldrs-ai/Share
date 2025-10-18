@@ -3,7 +3,7 @@ import {readFile} from 'fs/promises'
 import {join} from 'path'
 
 
-const fixturesDir = join(__dirname, '..', '..', 'cypress', 'fixtures')
+const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
 
 // Context-specific state to avoid concurrency issues
 const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
@@ -25,10 +25,10 @@ export async function clearState(context: BrowserContext) {
 export async function interceptIndex(page: Page) {
   // Unroute any existing handlers first to avoid conflicts
   await page.unroute('**/index.ifc')
-  
+
   await page.route('**/index.ifc', async (route) => {
     try {
-      const fixtureData = await readFile(`${fixturesDir}/index.ifc`, 'utf-8')
+      const fixtureData = await readFile(`${FIXTURES_DIR}/index.ifc`, 'utf-8')
       await route.fulfill({
         status: 200,
         contentType: 'text/plain; charset=utf-8',
@@ -62,9 +62,9 @@ export async function interceptBounce(page: Page) {
   for (const pattern of patterns) {
     await page.route(pattern, async (route) => {
       try {
-        const fixturePath = `${fixturesDir}/404.html`
+        const fixturePath = `${FIXTURES_DIR}/404.html`
         const fixtureData = await readFile(fixturePath, 'utf-8')
-        
+
         await route.fulfill({
           status: 404,
           contentType: 'text/html; charset=utf-8',
@@ -160,18 +160,18 @@ export async function waitForModel(page: Page) {
   // Wait for viewer container and canvas
   const viewerContainer = page.locator('#viewer-container')
   await expect(viewerContainer).toBeVisible()
-  
+
   const canvas = viewerContainer.locator('canvas')
   await expect(canvas).toBeVisible()
 
   // Wait for model ready attribute on dropzone (matching working homepage test)
   const dropzone = page.getByTestId('cadview-dropzone')
   await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 10000})
-  
+
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
   await page.waitForTimeout(animWaitTimeMs)
-  
+
   // TODO: Ideally we wait for camera-controls rest event
   // const cameraAtRest = page.locator('[data-is-camera-at-rest="true"]')
   // await expect(cameraAtRest).toBeVisible({timeout: 5000})
@@ -184,7 +184,6 @@ export async function waitForModel(page: Page) {
  */
 export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
   await page.getByTestId('control-button-profile').click()
-  console.log('Simulating login')
 
   await page.getByTestId('menu-open-login-dialog').click()
 
@@ -193,7 +192,7 @@ export async function auth0Login(page: Page, connection: 'github' | 'google' = '
   } else {
     await page.getByTestId('login-with-google').click()
   }
-  
+
   // Wait for successful login indication
   await expect(page.getByText('Log out')).toBeVisible()
   await page.getByTestId('control-button-profile').click()
@@ -202,6 +201,9 @@ export async function auth0Login(page: Page, connection: 'github' | 'google' = '
 
 /**
  * Sets a new value for the context-specific port variable
+ *
+ * @param context Browser context
+ * @param newPort New port number
  */
 export function setPort(context: BrowserContext, newPort: number) {
   const state = contextState.get(context) || {port: 0, nonce: ''}
@@ -210,18 +212,26 @@ export function setPort(context: BrowserContext, newPort: number) {
 }
 
 
+const DEFAULT_PORT = 8080
+
 /**
  * Retrieves the current value of the context-specific port variable
+ *
+ * @param context Browser context
+ * @return Port number
  */
 export function getPort(context: BrowserContext): number {
-  return contextState.get(context)?.port || 8080
+  return contextState.get(context)?.port || DEFAULT_PORT
 }
 
 
 /**
  * Base64 encode a payload object
+ *
+ * @param payload Object to encode
+ * @return Base64URL encoded string
  */
-export function base64EncodePayload(payload: Record<string, any>): string {
+export function base64EncodePayload(payload: Record<string, unknown>): string {
   // Convert the payload object to a JSON string
   const jsonString = JSON.stringify(payload)
   // Convert the JSON string to a Base64Url encoded string
@@ -241,7 +251,7 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
   // Unroute existing handlers first to avoid conflicts
   await page.unroute('**/authorize*')
   await page.unroute('**/oauth/token*')
-  
+
   // Intercept the /authorize request
   await page.route('**/authorize*', async (route) => {
     const url = new URL(route.request().url())
@@ -249,12 +259,10 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
 
     // Extract the 'nonce' and 'state' parameters
     const nonce = queryParams.get('nonce') || ''
-    const contextStateObj = contextState.get(context) || {port: 8080, nonce: ''}
+    const contextStateObj = contextState.get(context) || {port: DEFAULT_PORT, nonce: ''}
     contextStateObj.nonce = nonce
     contextState.set(context, contextStateObj)
     const state = queryParams.get('state') || ''
-
-    console.log('[PLAYWRIGHT] 200 **/authorize', route.request().url())
 
     // Send back modified response
     await route.fulfill({
@@ -303,10 +311,11 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
   // Intercept the /oauth/token request
   await page.route('**/oauth/token*', async (route) => {
     // Update the iat and exp values
-    const currentTimeInSeconds = Math.floor(Date.now() / 1000)
-    const DAY = 86400
+    const SECONDS_PER_DAY = 86400
+    const MILLISECONDS_PER_SECOND = 1000
+    const currentTimeInSeconds = Math.floor(Date.now() / MILLISECONDS_PER_SECOND)
     const iat = currentTimeInSeconds
-    const exp = currentTimeInSeconds + DAY // Add 24 hours
+    const exp = currentTimeInSeconds + SECONDS_PER_DAY // Add 24 hours
 
     const payload = {
       nickname: 'cypresstester',
@@ -321,13 +330,11 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
       exp: exp,
       sub: 'github|11111111',
       sid: 'cypresssession-abcdef',
-      nonce: contextState.get(context)?.nonce || nonce,
+      nonce: contextState.get(context)?.nonce || '',
     }
 
     // Encode the updated payload
     const encodedPayload = base64EncodePayload(payload)
-
-    console.log('[PLAYWRIGHT] 200 **/oauth/token*', route.request().url())
 
     // Send back modified response
     await route.fulfill({
@@ -335,9 +342,12 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
       contentType: 'application/json',
       body: JSON.stringify({
         access_token: 'testaccesstoken',
-        id_token: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.${encodedPayload}.otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1_RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDadDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9LH8d9ifiq2mOWYvglpltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A`,
+        id_token: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.${encodedPayload}.` +
+          'otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1_RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDa' +
+          'dDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9' +
+          'LH8d9ifiq2mOWYvglpltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A',
         scope: 'openid profile email offline_access',
-        expires_in: 86400,
+        expires_in: SECONDS_PER_DAY,
         token_type: 'Bearer',
       }),
     })
@@ -368,20 +378,25 @@ export async function waitForNetworkIdle(page: Page, timeout = 5000) {
 export async function waitForElementStable(page: Page, selector: string, timeout = 2000) {
   const element = page.locator(selector)
   await expect(element).toBeVisible()
-  
+
   // Wait a bit for any animations/transitions to complete
   await page.waitForTimeout(timeout)
 }
 
 
+const HTTP_OK = 200
+const MODEL_LOAD_TIMEOUT = 15000
+
 /**
  * Comprehensive model loading verification with network checks
+ *
+ * @param page Playwright page object
  */
 export async function waitForModelWithNetworkCheck(page: Page) {
   // Set up a promise to track model loading network request
   const modelLoadPromise = page.waitForResponse(
-    (response) => response.url().includes('index.ifc') && response.status() === 200,
-    {timeout: 15000}
+    (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
+    {timeout: MODEL_LOAD_TIMEOUT},
   )
 
   // Wait for both network response and DOM readiness

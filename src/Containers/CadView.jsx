@@ -3,6 +3,7 @@ import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/material/styles'
+import {captureException} from '@sentry/react'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
@@ -18,6 +19,7 @@ import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -126,9 +128,13 @@ export default function CadView({
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
-      const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.primary.sceneBackground))
+      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
+      if (!sceneBackground) {
+        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
+        console.error(error.message)
+        captureException(error)
+      }
+      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
@@ -179,15 +185,31 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
-    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
+    let isOOM = false
     try {
-      tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
+      tmpModelRef = await loadModel(modelPath)
     } catch (e) {
-      setAlert(e)
+      if (isOutOfMemoryError(e)) {
+        isOOM = true
+      }
+      if (isOOM) {
+        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
+        setAlert({
+          type: 'oom',
+          message: 'We ran out of memory attempting to load this model. ' +
+            'Try opening it on a desktop browser with more memory or ' +
+            'refresh the page.',
+        })
+      } else {
+        setAlert(e)
+      }
+
+      console.error(e)
+      captureException(e)
       return
     }
-    if (!tmpModelRef) {
+    if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
@@ -197,15 +219,17 @@ export default function CadView({
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
 
+    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+      .filter(([, value]) => value === true).map(([key]) => Number(key))
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
 
+    modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
@@ -235,11 +259,13 @@ export default function CadView({
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
-   * @param {string} filepath
+   * @param {object} routeResult
    * @param {string} gitpath to use for constructing API endpoints
    * @return {object} loaded model
    */
-  async function loadModel(filepath, gitpath) {
+  async function loadModel(routeResult) {
+    const filepath = routeResult.downloadUrl || routeResult.filepath
+    const gitpath = routeResult.gitpath
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
@@ -268,6 +294,11 @@ export default function CadView({
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
+      if (isOutOfMemoryError(error)) {
+        error.isOutOfMemory = true
+        throw error
+      }
+
       setAlert(error)
       return
     } finally {
@@ -347,7 +378,11 @@ export default function CadView({
   }
 
 
-  /** Handle double click event on canvas. */
+  /**
+   * Handle double click event on canvas.
+   *
+   * @param {Event} event - The double click event
+   */
   function canvasDoubleClickHandler(event) {
     try {
       if (!event.target || event.target.tagName !== 'CANVAS') {
@@ -415,8 +450,8 @@ export default function CadView({
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       const types = elementTypesMap
-            .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
-            .map((t) => t.name)
+        .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
+        .map((t) => t.name)
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
@@ -467,6 +502,7 @@ export default function CadView({
    * Pick the given items in the scene.
    *
    * @param {Array} resultIDs Array of expressIDs
+   * @param {boolean} updateNavigation Whether to update navigation
    */
   function selectItemsInScene(resultIDs, updateNavigation = true) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
@@ -528,10 +564,14 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
-   *
-   * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
    */
-  function updateLoadedFileInfo(modelUrlStr) {
+  function updateLoadedFileInfo() {
+    setLoadedFileInfo({
+      source: 'share', info: {
+        url: 'Foo',
+      },
+    })
+    /*
     const githubRegex = /(raw.githubusercontent|github.com)/gi
     if (modelUrlStr.indexOf('/') === 0) {
       setLoadedFileInfo({
@@ -542,6 +582,7 @@ export default function CadView({
     } else if (githubRegex.test(modelUrlStr)) {
       setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
     }
+    */
   }
 
 
@@ -636,7 +677,7 @@ export default function CadView({
         const types = elementTypesMap.filter(
           (t) => t.elements.filter(
             (e) => ids.includes(e.expressID)).length > 0)
-              .map((t) => t.name)
+          .map((t) => t.name)
         if (types.length > 0) {
           setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }

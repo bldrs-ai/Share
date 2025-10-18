@@ -3,13 +3,18 @@ import {readFile} from 'fs/promises'
 import {join} from 'path'
 
 
-const fixturesDir = join(__dirname, '..', '..', 'cypress', 'fixtures')
-
-
+/**
+ * Set up virtual path intercept for model loading
+ *
+ * @param page Playwright page object
+ * @param path Virtual path to intercept
+ * @param fixturePath Path to fixture file
+ * @return Object with intercept helpers
+ */
 export async function setupVirtualPathIntercept(
   page: Page,
-  path: string,           // e.g. '/share/v/gh/.../Momentum.ifc'
-  fixturePath: string,    // e.g. 'Momentum.ifc'
+  path: string, // e.g. '/share/v/gh/.../Momentum.ifc'
+  fixturePath: string, // e.g. 'Momentum.ifc'
 ) {
   const sharePrefix = '/share/v/gh'
   if (!path.startsWith(sharePrefix)) {
@@ -17,7 +22,7 @@ export async function setupVirtualPathIntercept(
   }
 
   const fixturesDir = 'cypress/fixtures'
-/*
+  /*
   // --- Bounce (serve HTML for SPA deep link) -------------------------------
   // Only fulfill the *document navigation* so React Router can take over.
   const bouncePattern = `**${path}*`
@@ -39,17 +44,15 @@ export async function setupVirtualPathIntercept(
     page.unroute(bouncePattern)
   })
 */
-  const proxyBase ='https://rawgit.bldrs.dev.msw/model'
+  const proxyBase = 'https://rawgit.bldrs.dev.msw/model'
   // --- Proxy intercept (serve the IFC bytes) -------------------------------
   const ghPath = path.substring(sharePrefix.length) // keep Cypress logic
   const interceptUrl = `${proxyBase}${ghPath}`
-  console.log(`[models.ts setupVirtualPathIntercept] proxy routing: ${interceptUrl}*`)
   await page.route(`${interceptUrl}*`, async (route) => {
     const body = await readFile(join(fixturesDir, fixturePath))
-    console.log(`[models.ts setupVirtualPathIntercept] fulfilling ${route.request().url()} with ${fixturePath} (${body.length}B)`)
     await route.fulfill({
       status: 200,
-      headers: { 'content-type': 'application/octet-stream' },
+      headers: {'content-type': 'application/octet-stream'},
       body,
     })
   })
@@ -60,7 +63,7 @@ export async function setupVirtualPathIntercept(
   const waitForModelResponse = () =>
     page.waitForResponse((r) => r.url().startsWith(interceptUrl))
 
-  return { interceptUrl, waitForModelRequest, waitForModelResponse }
+  return {interceptUrl, waitForModelRequest, waitForModelResponse}
 }
 
 
@@ -68,15 +71,15 @@ export async function setupVirtualPathIntercept(
  * Wait for model to be ready after loading
  * Playwright equivalent of cypress/support/models.js waitForModelReady
  *
- * @param {Page} page Playwright page object  
+ * @param page Playwright page object
  */
 export async function waitForModelReady(page: Page) {
   // Wait for model ready attribute on dropzone (matching working tests)
   await page.pause()
   const dropzone = page.getByTestId('cadview-dropzone')
-  console.log('WAITING FOR data-model-ready=true')
   // await page.pause()
-  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 15000})
+  const MODEL_READY_TIMEOUT = 15000
+  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: MODEL_READY_TIMEOUT})
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
   await page.waitForTimeout(animWaitTimeMs)

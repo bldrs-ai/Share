@@ -47,7 +47,7 @@ describe('SaveModelControl', () => {
       const hasText = (_node) => _node.textContent.includes('log in to Share with your GitHub credentials')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
-          (child) => !hasText(child),
+        (child) => !hasText(child),
       )
       return nodeHasText && childrenDontHaveText
     }

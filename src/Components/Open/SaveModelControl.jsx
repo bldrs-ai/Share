@@ -19,6 +19,7 @@ import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 
 
 /**
@@ -124,18 +125,18 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
       const branchName = requestCreateBranch ? createBranchName : branchesArr[selectedBranchName] || 'main'
       fileSave(
-          file,
-          pathWithFileName,
-          selectedFileName,
-          orgName,
-          repoName,
-          branchName,
-          accessToken,
-          isOpfsAvailable,
-          setSnackMessage,
-          (pathname) => {
-            navigate({pathname: pathname})
-          },
+        file,
+        pathWithFileName,
+        selectedFileName,
+        orgName,
+        repoName,
+        branchName,
+        accessToken,
+        isOpfsAvailable,
+        setSnackMessage,
+        (pathname) => {
+          navigateToModel({pathname}, navigate)
+        },
       )
       // Store the branch name for subsequent saves
       if (requestCreateBranch) {
@@ -417,13 +418,13 @@ async function fileSave(
       setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
 
       const commitHash = await commitFile(
-          orgName,
-          repoName,
-          pathWithFileName,
-          file,
-          `Created file ${selectedFileName}`,
-          branchName,
-          accessToken)
+        orgName,
+        repoName,
+        pathWithFileName,
+        file,
+        `Created file ${selectedFileName}`,
+        branchName,
+        accessToken)
 
       if (commitHash !== null) {
         // save to opfs

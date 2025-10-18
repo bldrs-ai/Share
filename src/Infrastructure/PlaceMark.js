@@ -25,18 +25,19 @@ export default class PlaceMark extends EventDispatcher {
    *     element, camera, and scene.
    * @param {object} options.postProcessor - Post-processing effects applied to the scene.
    */
-  constructor({context, postProcessor}) {
+  constructor({context}) {
     super()
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
-    // Assign the camera to the global window object for Cypress testing
+    // HACK(pablo): Assign the camera to the global window object for Cypress testing
     if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
-    if (!window.markerScene) {
-      window.markerScene = {}
-    }
+      if (!window.markerScene) {
+        window.markerScene = {}
+      }
       window.markerScene.domElement = _domElement
       window.markerScene.camera = _camera
     }
+
     const _scene = context.getScene()
     const _raycaster = new Raycaster()
     let _objects = []
@@ -116,7 +117,7 @@ export default class PlaceMark extends EventDispatcher {
           res = dropPlaceMark(event)
         } else {
           res = getIntersectionPlaceMarkInfo()
-         /* if (res.marker) {
+          /* if (res.marker) {
             toggleMarkerSelection(res.marker)
             event.stopPropagation()
             event.preventDefault()
@@ -127,7 +128,7 @@ export default class PlaceMark extends EventDispatcher {
       return res
     }
 
-    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/, active}) => {
+    this.putDown = ({point, normal, fillColor = 0xA9A9A9/* 0xff0000*/}) => {
       return new Promise((resolve, reject) => {
         if (!normal) {
           reject(new Error('Normal vector is not defined.'))
@@ -142,16 +143,14 @@ export default class PlaceMark extends EventDispatcher {
     this.disposePlaceMarks = () => {
       // Remove all place marks from the scene
       if (_placeMarks) {
-      _placeMarks.forEach((placemark) => {
-        _scene.remove(placemark)
-        if (placemark.material.map) {
-          placemark.material.map.dispose()
-        }
-        placemark.material.dispose()
-      })
-      _placeMarks.length = 0
-
-      // Dispose of any other resources if necessary
+        _placeMarks.forEach((placemark) => {
+          _scene.remove(placemark)
+          if (placemark.material.map) {
+            placemark.material.map.dispose()
+          }
+          placemark.material.dispose()
+        })
+        _placeMarks.length = 0
       }
     }
 
@@ -218,7 +217,7 @@ export default class PlaceMark extends EventDispatcher {
         })
     }
 
-    const createCircleTexture = (fillColor) => {
+    const createCircleTexture = () => {
       const sW = 24
       const sH = 24
       // Base color should be white. Dynamic coloring tints the base color, so

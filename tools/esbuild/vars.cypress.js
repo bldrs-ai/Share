@@ -19,6 +19,9 @@ export default {
   OPFS_IS_ENABLED: false,
   THEME_IS_ENABLED: false,
 
+  // API_KEYS
+  GOOGLE_API_KEY: 'test-key-12345',
+
   // Testing
   MSW_IS_ENABLED: true,
   ESBUILD_WATCH: false,

@@ -1,7 +1,7 @@
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
-import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
+import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../store/useStore'
 import {BlendFunction} from 'postprocessing'
 import {isDefinedAndNotNull} from '../utils/assert'
@@ -54,7 +54,7 @@ export default class IfcIsolator {
   /**
    * Sets the loaded model to the isolator context
    *
-   * @param {Mesh} (ifcModel) the laoded ifc model mesh
+   * @param {Mesh} ifcModel The loaded ifc model mesh
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
@@ -73,7 +73,7 @@ export default class IfcIsolator {
   /**
    * Collects spatial elements ids.
    *
-   * @param {object} root IFC element
+   * @param {object} element IFC element
    */
   collectSpatialElementsId(element) {
     if (element.children.length > 0) {
@@ -87,7 +87,8 @@ export default class IfcIsolator {
   /**
    * Flattens element's children if it has any.
    *
-   * @param {number} IFC element Id
+   * @param {number} elementId IFC element Id
+   * @param {Array} result Result array
    * @return {number} element id if no children or {number[]} if has children
    */
   flattenChildren(elementId, result = null) {
@@ -118,7 +119,8 @@ export default class IfcIsolator {
   /**
    * Initializes hide operations subset
    *
-   * @param {Array} (includedIds) element ids included in the subset
+   * @param {Array} includedIds element ids included in the subset
+   * @param {boolean} removeModel Whether to remove the model
    */
   initHideOperationsSubset(includedIds, removeModel = true) {
     if (removeModel) {
@@ -141,7 +143,7 @@ export default class IfcIsolator {
   /**
    * Initializes temporary isolation subset
    *
-   * @param {Array} (includedIds) element ids included in the subset
+   * @param {Array} includedIds element ids included in the subset
    */
   initTemporaryIsolationSubset(includedIds) {
     this.context.getScene().remove(this.ifcModel)
@@ -178,7 +180,7 @@ export default class IfcIsolator {
     const toBeHidden = new Set(selection.concat(this.hiddenIds))
     this.hiddenIds = [...toBeHidden]
     const hiddenIdsObject = Object.fromEntries(
-        this.hiddenIds.map((id) => [id, true]))
+      this.hiddenIds.map((id) => [id, true]))
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
@@ -189,7 +191,7 @@ export default class IfcIsolator {
   /**
    * Hides ifc elements by their ids
    *
-   * @param {Array} (toBeHiddenElementIds) element ids to be hidden
+   * @param {Array} toBeHiddenElementIds element ids to be hidden
    */
   hideElementsById(toBeHiddenElementIds) {
     if (Array.isArray(toBeHiddenElementIds)) {
@@ -200,7 +202,7 @@ export default class IfcIsolator {
       const toBeHidden = new Set(toBeHiddenElementIds.concat(this.hiddenIds))
       this.hiddenIds = [...toBeHidden]
       const hiddenIdsObject = Object.fromEntries(
-          this.hiddenIds.map((id) => [id, true]))
+        this.hiddenIds.map((id) => [id, true]))
       useStore.setState({hiddenElements: hiddenIdsObject})
     } else if (Number.isFinite(toBeHiddenElementIds)) {
       if (this.hiddenIds.includes(toBeHiddenElementIds)) {
@@ -224,7 +226,7 @@ export default class IfcIsolator {
   /**
    * Unhides ifc elements by their ids
    *
-   * @param {Array} (toBeUnhiddenElementIds) element ids to be unhidden
+   * @param {Array} toBeUnhiddenElementIds element ids to be unhidden
    */
   unHideElementsById(toBeUnhiddenElementIds) {
     if (Array.isArray(toBeUnhiddenElementIds)) {
@@ -235,7 +237,7 @@ export default class IfcIsolator {
       const toBeHidden = new Set(this.hiddenIds.filter((el) => !toBeShown.includes(el)))
       this.hiddenIds = [...toBeHidden]
       const hiddenIdsObject = Object.fromEntries(
-          this.hiddenIds.map((id) => [id, true]))
+        this.hiddenIds.map((id) => [id, true]))
       useStore.setState({hiddenElements: hiddenIdsObject})
     } else if (Number.isFinite(toBeUnhiddenElementIds)) {
       if (this.hiddenIds.includes(toBeUnhiddenElementIds)) {
@@ -317,7 +319,7 @@ export default class IfcIsolator {
   /**
    * Checks whether a certain element can be picked in scene or not
    *
-   * @param {number} (elementId) the element id
+   * @param {number} elementId the element id
    * @return {boolean} true if hidden, otherwise false
    */
   canBePickedInScene(elementId) {
@@ -330,7 +332,7 @@ export default class IfcIsolator {
   /**
    * Checks whether a certain element can be hidden in scene or not
    *
-   * @param {number} (elementId) the element id
+   * @param {number} elementId the element id
    * @return {boolean} true if can be hidden, otherwise false
    */
   canBeHidden(elementId) {
@@ -366,7 +368,7 @@ export default class IfcIsolator {
     useStore.setState({isTempIsolationModeOn: true})
     this.isolatedIds = selection
     const isolatedIdsObject = Object.fromEntries(
-        this.isolatedIds.map((id) => [id, true]))
+      this.isolatedIds.map((id) => [id, true]))
     useStore.setState({isolatedElements: isolatedIdsObject})
     this.initTemporaryIsolationSubset(selection)
   }

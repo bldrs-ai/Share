@@ -29,9 +29,11 @@ describe('NotesAndPropertiesDrawer', () => {
     const mockSetDrawerWidth = jest.fn()
     const mobileHook = renderHook(() => useIsMobile())
     const storeHook = renderHook(() => useStore((state) => state))
-    const notesAndPropsRender = render(<ShareMock>
-      <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
-                                       </ShareMock>)
+    const notesAndPropsRender = render(
+      <ShareMock>
+        <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
+      </ShareMock>,
+    )
     await act(() => {
       storeHook.result.current.toggleIsNotesVisible()
     })

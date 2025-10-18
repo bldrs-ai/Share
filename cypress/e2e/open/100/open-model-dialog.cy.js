@@ -17,12 +17,12 @@ describe('Open 100: Open model dialog', () => {
   context('First time user visits homepage not logged in', () => {
     beforeEach(() => {
       returningUserVisitsHomepageWaitForModel()
-        cy.get('[data-testid="control-button-open"]').click()
+      cy.get('[data-testid="control-button-open"]').click()
     })
 
     it('Sample tab to be selected and Momentum sample model chip to be visible', () => {
       cy.get('[data-testid="tab-samples"]').click()
-      cy.get(':nth-child(1) > [data-testid="sample-model-chip"] > .MuiChip-label').contains('Momentum')
+      cy.get('[data-testid="sample-model-chip-0"] > .MuiChip-label').contains('Momentum')
       cy.percySnapshot()
     })
     it('Open button is visible', () => {
@@ -62,5 +62,5 @@ describe('Open 100: Open model dialog', () => {
       waitForModelReady(interceptTag)
       cy.percySnapshot()
     })
-})
+  })
 })

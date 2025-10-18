@@ -37,7 +37,7 @@ function rewriteVersion(filename, versionPattern, replaceWithGroups) {
 //
 //   "version": "0.1.370",
 rewriteVersion(
-    'package.json',
-    /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.(?<minor>\d+)\.\d+"\s*(?<trailingComma>,)?$/m,
-    `$<indent>"version": "$<major>.$<minor>.${newPatch}"$<trailingComma>`,
+  'package.json',
+  /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.(?<minor>\d+)\.\d+"\s*(?<trailingComma>,)?$/m,
+  `$<indent>"version": "$<major>.$<minor>.${newPatch}"$<trailingComma>`,
 )

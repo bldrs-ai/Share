@@ -28,12 +28,12 @@ export default class ApiConnectionIframe extends AbstractApiConnection {
   on(eventName, callable) {
     debug().log('ApiConnectionIframe#on, eventName:', eventName)
     this.matrixWidgetApi.on(
-        eventName,
-        (event) => {
-          event.preventDefault()
-          const response = callable(event.detail.data)
-          this.matrixWidgetApi.transport.reply(event.detail, response)
-        },
+      eventName,
+      (event) => {
+        event.preventDefault()
+        const response = callable(event.detail.data)
+        this.matrixWidgetApi.transport.reply(event.detail, response)
+      },
     )
   }
 

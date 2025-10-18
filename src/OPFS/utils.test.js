@@ -50,7 +50,7 @@ describe('OPFS Test Suite', () => {
       expect(result).toBe(true)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(OPFSService.opfsWriteModelFileHandle)
-          .toHaveBeenCalledWith('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
+        .toHaveBeenCalledWith('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
 
@@ -102,25 +102,25 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       const result = await downloadToOPFS(
-          'objectUrl',
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
-          onProgressMock,
+        'objectUrl',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
+        onProgressMock,
       )
 
       expect(result).toEqual(mockFile)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(OPFSService.opfsDownloadToOPFS).toHaveBeenCalledWith(
-          'objectUrl',
-          'commitHash',
-          'originalFilePath',
-          'owner',
-          'repo',
-          'branch',
-          true, // Since onProgress is provided
+        'objectUrl',
+        'commitHash',
+        'originalFilePath',
+        'owner',
+        'repo',
+        'branch',
+        true, // Since onProgress is provided
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
@@ -140,13 +140,13 @@ describe('OPFS Test Suite', () => {
 
       const onProgressMock = jest.fn()
       await downloadToOPFS(
-          'objectUrl',
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
-          onProgressMock,
+        'objectUrl',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
+        onProgressMock,
       )
 
       expect(onProgressMock).toHaveBeenCalledWith({
@@ -173,28 +173,28 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       const result = await downloadModel(
-          'objectUrl',
-          'shaHash',
-          'originalFilePath',
-          'accessToken',
-          'owner',
-          'repo',
-          'branch',
-          setOPFSFile,
-          onProgressMock,
+        'objectUrl',
+        'shaHash',
+        'originalFilePath',
+        'accessToken',
+        'owner',
+        'repo',
+        'branch',
+        setOPFSFile,
+        onProgressMock,
       )
 
       expect(result).toEqual(mockFile)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(OPFSService.opfsDownloadModel).toHaveBeenCalledWith(
-          'objectUrl',
-          'shaHash',
-          'originalFilePath',
-          'owner',
-          'repo',
-          'branch',
-          'accessToken',
-          true, // Since onProgress is provided
+        'objectUrl',
+        'shaHash',
+        'originalFilePath',
+        'owner',
+        'repo',
+        'branch',
+        'accessToken',
+        true, // Since onProgress is provided
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
@@ -216,15 +216,15 @@ describe('OPFS Test Suite', () => {
       const onProgressMock = jest.fn()
       const setOPFSFile = jest.fn()
       await downloadModel(
-          'objectUrl',
-          'shaHash',
-          'originalFilePath',
-          'accessToken',
-          'owner',
-          'repo',
-          'branch',
-          setOPFSFile,
-          onProgressMock,
+        'objectUrl',
+        'shaHash',
+        'originalFilePath',
+        'accessToken',
+        'owner',
+        'repo',
+        'branch',
+        setOPFSFile,
+        onProgressMock,
       )
 
       expect(onProgressMock).toHaveBeenCalledWith({
@@ -246,21 +246,21 @@ describe('OPFS Test Suite', () => {
       OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const result = await doesFileExistInOPFS(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
 
       expect(result).toBe(true)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(OPFSService.opfsDoesFileExist).toHaveBeenCalledWith(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1) // Ensure it's called to clean up
@@ -276,11 +276,11 @@ describe('OPFS Test Suite', () => {
       OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const result = await doesFileExistInOPFS(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
 
       expect(result).toBe(false)
@@ -299,21 +299,21 @@ describe('OPFS Test Suite', () => {
       OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const result = await deleteFileFromOPFS(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
 
       expect(result).toBe(true)
       expect(OPFSService.initializeWorker).toHaveBeenCalled()
       expect(OPFSService.opfsDeleteModel).toHaveBeenCalledWith(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
@@ -330,11 +330,11 @@ describe('OPFS Test Suite', () => {
       OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const result = await deleteFileFromOPFS(
-          'originalFilePath',
-          'commitHash',
-          'owner',
-          'repo',
-          'branch',
+        'originalFilePath',
+        'commitHash',
+        'owner',
+        'repo',
+        'branch',
       )
 
       expect(result).toBe(false)

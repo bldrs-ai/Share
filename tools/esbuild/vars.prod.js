@@ -40,6 +40,9 @@ export default {
   THEME_IS_ENABLED: true,
   USE_WEBIFC_SHIM: true,
 
+  // API_KEYS
+  GOOGLE_API_KEY: null,
+
   // Testing
   MSW_IS_ENABLED: false,
   // Off for performance in prod
@@ -48,4 +51,7 @@ export default {
   THREE_PDB_IS_ENABLED: false,
   PLATFORM: 'web',
   FORCE_SINGLE_THREAD: 'false',
+
+  // Esbuild hot-reload
+  ESBUILD_WATCH: false,
 }

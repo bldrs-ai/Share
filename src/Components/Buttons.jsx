@@ -144,7 +144,6 @@ export function ControlButtonWithHashState({
   hashPrefix,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  children,
   ...props
 }) {
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
@@ -168,9 +167,7 @@ export function ControlButtonWithHashState({
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
       {...props}
-    >
-      {children}
-    </ControlButton>
+    />
   )
 }
 

@@ -8,7 +8,7 @@ export default class AbstractApiConnection {
    * @param {string} eventName
    * @param {Function} callable
    */
-  on(eventName, callable) {
+  on() {
     // do something on event.
   }
 
@@ -32,16 +32,14 @@ export default class AbstractApiConnection {
    * @param {string} eventName
    * @param {object} data
    */
-  send(eventName, data) {
+  send() {
     throw new Error('send() is not implemented')
   }
 
   /**
    * requests capabilities.
-   *
-   * @param {string[]} capabilities
    */
-  requestCapabilities(capabilities) {
+  requestCapabilities() {
     throw new Error('requestCapabilities() is not implemented')
   }
 

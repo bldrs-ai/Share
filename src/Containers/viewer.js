@@ -24,7 +24,7 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
-  window.onmousemove = (event) => viewer.highlightIfcItem()
+  window.onmousemove = () => viewer.highlightIfcItem()
 
   viewer.container = container
 

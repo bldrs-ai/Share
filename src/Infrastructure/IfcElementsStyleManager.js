@@ -3,7 +3,6 @@ import {IFCPRODUCTDEFINITIONSHAPE} from 'web-ifc'
 import {compileViewRules} from './ViewRulesCompiler'
 
 
-/* eslint-disable jsdoc/no-undefined-types */
 /**
  *  Overrides the default render functionality in the viewer
  * and adds a postprocessing effect (outlining selected elements)
@@ -12,7 +11,8 @@ export default class IfcElementsStyleManager {
   /**
    * constructs new class
    *
-   * @param {IfcParser} the parser of the viewer
+   * @param {object} parser The parser of the viewer
+   * @param {object} rules The rules object
    */
   constructor(parser, rules) {
     this.parser = parser
@@ -39,13 +39,15 @@ export default class IfcElementsStyleManager {
  * Returns a new stream mesh function that uses
  * the custom coloring provided
  *
- * @param {IfcParser} parser
+ * @param {object} parser The parser of the viewer
  * @return {Function} the new render function
  */
 function newStreamMeshFunction(parser) {
   /**
    * Overrides the default stream function in the ifc parser
    *
+   * @param {number} modelID The model ID
+   * @param {object} mesh The mesh object
    */
   function streamMesh(modelID, mesh) {
     const placedGeometries = mesh.geometries
@@ -68,13 +70,14 @@ function newStreamMeshFunction(parser) {
  * Returns a new initializeLoadingState function that uses
  * the custom coloring provided
  *
- * @param {IfcParser} parser
+ * @param {object} parser
  * @return {Function} the new render function
  */
 function newInitializeLoadingStateFunction(parser) {
   /**
    * Overrides the default initializeLoadingState function in the ifc parser
    *
+   * @param {number} modelID The model ID
    */
   async function initializeLoadingState(modelID) {
     if (this._rules?.length > 0) {

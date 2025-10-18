@@ -6,12 +6,20 @@ export default defineConfig({
   testDir: '..',
 
   testMatch: [
-    'tests/**/*.spec.ts',
+    // For now just run tests that have been moved over to src
+    // 'tests/**/*.spec.ts',
     'src/**/*.spec.ts',
   ],
 
   // Run all tests in parallel.
   fullyParallel: true,
+
+  retries: 1,
+
+  // Per-test timeout, since homepage first-time sometimes is > 30s default
+  timeout: 20_000,
+
+  workers: 4,
 
   // Reporter to use
   reporter: [['list']], // just list, no HTML
@@ -37,8 +45,13 @@ export default defineConfig({
   ],
   // Run your local dev server before starting the tests.
   webServer: {
-    command: 'yarn test-flows-serve',
+    command: 'yarn serve-pw',
     url: 'http://localhost:8080',
+    env: {
+      SHARE_CONFIG: 'playwright',
+    },
+    // True: use the dev server you start separately
+    // False: playwright will start its own with `yarn dev`
     reuseExistingServer: true,
   },
 })

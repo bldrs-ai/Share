@@ -30,7 +30,7 @@ function PopupAuth() {
           connection_scope: scope,
           ...(linkToken && {linkToken}), // ← forward it
         },
-     })
+      })
     } else {
       // Trigger the Auth0 login redirect
       loginWithRedirect({

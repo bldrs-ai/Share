@@ -15,6 +15,7 @@ export const supportedTypes = [
   'step',
   'stl',
   'stp',
+  'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
@@ -42,7 +43,7 @@ export function isExtensionSupported(ext) {
 
 
 /**
- * @param {string} strWithSuffix
+ * @param {string} pathWithSuffix
  * @return {boolean} Is supported
  */
 export function pathSuffixSupported(pathWithSuffix) {
@@ -86,8 +87,7 @@ const GLB_MAGIC_NUMBER = 0x46546C67
 
 /**
  * @param {string} path
- * @param {string} type
- * @return {string} The result of the `analyzeHeader` function.
+ * @return {Promise<string|null>} The result of the `analyzeHeader` function on the downloaded file.
  */
 export async function guessType(path) {
   debug().log('Filetype#guessType, path:', path)
@@ -123,7 +123,7 @@ export async function guessTypeFromFile(file) {
  * Attempts to guess the filetype by inspecting the given headerBuffer
  *
  * @param {ArrayBuffer} headerBuffer
- * @return {string} type
+ * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
   // Check for GLB binary format first (binary files won't decode properly as UTF-8)
@@ -145,8 +145,8 @@ export function analyzeHeader(headerBuffer) {
 /**
  * Attempts to guess the filetype by inspecting the given header string
  *
- * @param {string} headerStr
- * @return {string} type
+ * @param {string} header
+ * @return {string|null} type
  */
 export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
@@ -178,6 +178,11 @@ export function analyzeHeaderStr(header) {
  * TODO(pablo): deprecated.  The behavior wasn't defined enough to be used
  * consistently between src/Share and src/Filetype.
  *
+ * example:
+ * - 'asdf.ifc/1234' -> {parts: ['asdf', '1234'], extension: '.ifc'}
+ * - 'asdf.ifc' -> {parts: ['asdf'], extension: '.ifc'}
+ * - 'asdf' -> throws FilenameParseError
+ *
  * @deprecated
  * @param {string} filepath
  * @return {{parts: Array.<string>, extension: string}}
@@ -190,6 +195,21 @@ export function splitAroundExtension(filepath) {
   }
   const parts = filepath.split(fileSuffixRegex)
   return {parts, extension: match[0]}
+}
+
+
+/**
+ * Split around extension and remove the first slash.
+ *
+ * @param {string} filepath
+ * @return {{parts: Array.<string>, extension: string}}
+ */
+export function splitAroundExtensionRemoveFirstSlash(filepath) {
+  const {parts, extension} = splitAroundExtension(filepath)
+  if (parts[1].startsWith('/')) {
+    parts[1] = parts[1].slice(1)
+  }
+  return {parts, extension}
 }
 
 

@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import * as process from 'node:process'
 import {fileURLToPath} from 'url'
 import defines from './defines.js'
 import makePlugins from './plugins.js'
@@ -27,7 +26,7 @@ export default {
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
   external: ['*.woff', '*.woff2'],
-  minify: false, // (process.env.MINIFY || 'true') === 'true',
+  minify: true, // (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODO: have had breakage without this
   splitting: false,
   metafile: true,
@@ -37,5 +36,8 @@ export default {
   plugins: plugins,
   loader: {
     '.md': 'text',
+    '.ts': 'ts',
+    '.tsx': 'tsx',
   },
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 }

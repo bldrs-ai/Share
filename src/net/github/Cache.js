@@ -108,25 +108,25 @@
     }
   }
 
-    /**
-     * Checks the cache for a specific key and converts the response to an Octokit response format.
-     *
-     * @param {string} key The key to search for in the cache.
-     * @return {Promise<object | null>} The cached response, or null if not found or an error occurs.
-     */
-    async function checkCacheRaw(key) {
-      try {
-        if (httpCacheApiAvailable) {
-          const _httpCache = await getCache()
-          const response = await _httpCache.match(key)
-          return response
-        } else {
-          return httpCache[key]
-        }
-      } catch (error) {
-        return null
+  /**
+   * Checks the cache for a specific key and converts the response to an Octokit response format.
+   *
+   * @param {string} key The key to search for in the cache.
+   * @return {Promise<object | null>} The cached response, or null if not found or an error occurs.
+   */
+  async function checkCacheRaw(key) {
+    try {
+      if (httpCacheApiAvailable) {
+        const _httpCache = await getCache()
+        const response = await _httpCache.match(key)
+        return response
+      } else {
+        return httpCache[key]
       }
+    } catch (error) {
+      return null
     }
+  }
 
   /**
    * Updates the cache entry for a given key with the response received.
@@ -152,7 +152,7 @@
   }
 
   /**
-   *
+   * @param {string} key - Cache key
    */
   async function deleteCache(key) {
     const _httpCache = await getCache()
@@ -174,6 +174,7 @@
    *
    * @param {string} key The cache key associated with the request.
    * @param {object} response The HTTP raw response object which includes headers and data.
+   * @param {string} commitHash The commit hash
    */
   async function updateCacheRaw(key, response, commitHash) {
     const _httpCache = await getCache()

@@ -35,7 +35,7 @@ describe('matcher', () => {
     const cb = jest.fn()
     const fail = jest.fn()
     matcher('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc',
-            /https?:\/\/github.com\/(?<org>[\w-]+)\/(?<repo>[\w-]+)\/blob\/(?<ref>[\w-]+)\/(?<path>[\w/.-]+)/)
+      /https?:\/\/github.com\/(?<org>[\w-]+)\/(?<repo>[\w-]+)\/blob\/(?<ref>[\w-]+)\/(?<path>[\w/.-]+)/)
       .then((match) => {
         const {org, repo, ref, path} = match.groups
         expect(org).toBe('Swiss-Property-AG')

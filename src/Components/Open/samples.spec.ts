@@ -14,7 +14,7 @@ test.describe('Sample models', () => {
   test.describe('When model is loaded', () => {
     test.beforeEach(async ({page, context}) => {
       await homepageSetup(page, context)
-      await setIsReturningUser(context) 
+      await setIsReturningUser(context)
       await visitHomepageWaitForModel(page)
     })
 
@@ -39,21 +39,18 @@ test.describe('Sample models', () => {
         '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
         'Momentum.ifc',
       )
-      
+
       // Navigate using page hash to avoid direct file navigation
       await page.goto('/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc')
-      
+
       // Wait for model to be ready (any model, even if it's the fallback)
       await waitForModelReady(page)
 
       // Basic verification - a model loaded successfully
-      console.log('Final URL:', page.url())
-      console.log('Final title:', await page.title())
-      
       // Verify that some model is loaded (data-model-ready=true was achieved)
       const dropzone = page.getByTestId('cadview-dropzone')
       await expect(dropzone).toHaveAttribute('data-model-ready', 'true')
-      
+
       // The test passes if we can successfully set up intercepts and load any model
       // The specific content verification can be added later once routing is working
     })

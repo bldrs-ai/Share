@@ -27,11 +27,11 @@ describe('IFC slice', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
       result.current.setSelectedElement(
-          {Name: {
-            type: 1,
-            value: 'Together',
-          },
-          })
+        {Name: {
+          type: 1,
+          value: 'Together',
+        },
+        })
     })
     expect(result.current.selectedElement).toEqual({Name: {
       type: 1,

@@ -43,7 +43,7 @@ describe('view 100: Initial model load and view', () => {
       })
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
         cy.title().should('eq', 'About — bldrs.ai')
         cy.percySnapshot()
       })
@@ -58,20 +58,20 @@ describe('view 100: Initial model load and view', () => {
       beforeEach(visitHomepageWaitForModel)
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
         cy.percySnapshot()
       })
 
       context('Close about dialog', () => {
         beforeEach(() => {
-          cy.get('[data-testid="about-dialog"]').should('exist')
-          // Close About
-          cy.get('button[aria-label="action-button"]')
-            .click()
+          cy.get('[data-testid="dialog-build-every-thing-together"]').should('be.visible')
+          cy.get('[data-testid="button-dialog-main-action"]').should('be.visible').click()
         })
 
-        it('AboutDialog not visible, model visible - Screen', () => {
-          cy.get('body').find('[data-testid="about-dialog"]').should('not.exist')
+        it('AboutDialog not visible, onboarding overlay closes, model visible - Screen', () => {
+          cy.get('body').find('[data-testid="dialog-build-every-thing-together"]').should('not.exist')
+          cy.get('[data-testid="onboarding-overlay"]').should('be.visible').click()
+          cy.get('body').find('[data-testid="onboarding-overlay"]').should('not.exist')
           cy.percySnapshot()
         })
       })

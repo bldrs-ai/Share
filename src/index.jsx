@@ -11,7 +11,7 @@ import {
   matchRoutes,
 } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
+import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
@@ -72,8 +72,8 @@ if (process.env.MSW_IS_ENABLED) {
   })
 }
 
-// Enable esbuild hot-reload model
-if (process.env.ESBUILD_WATCH === 'true') {
+const isEsbuildWatchEnabled = process.env.ESBUILD_WATCH
+if (isEsbuildWatchEnabled) {
   new EventSource('/esbuild').addEventListener('change', () => location.reload())
 }
 

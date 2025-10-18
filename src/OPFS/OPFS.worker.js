@@ -30,13 +30,13 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'writeObjectModel') {
       const {objectUrl, objectKey, originalFileName} =
           assertValues(event.data,
-              ['objectUrl', 'objectKey', 'originalFileName'])
+            ['objectUrl', 'objectKey', 'originalFileName'])
 
       writeModelToOPFS(objectUrl, objectKey, originalFileName)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
       const {file, objectKey, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
-              ['file', 'objectKey', 'originalFilePath', 'owner', 'repo', 'branch'])
+            ['file', 'objectKey', 'originalFilePath', 'owner', 'repo', 'branch'])
       writeModelToOPFSFromFile(file, objectKey, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'readModelFromStorage') {
       const {modelKey} = assertValues(event.data, ['modelKey'])
@@ -44,7 +44,7 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'downloadToOPFS') {
       const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
           assertValues(event.data,
-              ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
+            ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
       await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
     } else if (event.data.command === 'downloadModel') {
       const {objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress} =
@@ -55,23 +55,25 @@ self.addEventListener('message', async (event) => {
       const {content, shaHash, originalFilePath, owner, repo, branch, accessToken} =
       assertValues(event.data, ['content', 'shaHash', 'originalFilePath', 'owner', 'repo', 'branch', 'accessToken'])
 
-    await writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
+      await writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
     } else if (event.data.command === 'doesFileExist') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
-              ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+            ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
       await doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'deleteModel') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
-              ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+            ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
       await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'clearCache') {
       await clearCache()
     } else if (event.data.command === 'snapshotCache') {
-      await snapshotCache()
+      // Optional previewWindow parameter specifies how many leading bytes to include per file
+      const previewWindow = Number.isFinite(event.data.previewWindow) ? event.data.previewWindow : parseInt(event.data.previewWindow, 10)
+      await snapshotCache(Number.isFinite(previewWindow) && previewWindow > 0 ? previewWindow : 0)
     }
   } catch (error) {
     self.postMessage({error: error.message})
@@ -82,13 +84,18 @@ self.addEventListener('message', async (event) => {
 /**
  * Return directory snapshot of OPFS cache
  */
-async function snapshotCache() {
+/**
+ * Return directory snapshot of OPFS cache including optional preview bytes per file.
+ *
+ * @param {number} [previewWindow] Number of leading bytes (per file) to include as hex via traverseDirectory.
+ */
+async function snapshotCache(previewWindow = 0) {
   const opfsRoot = await navigator.storage.getDirectory()
 
-  const directoryStructure = await traverseDirectory(opfsRoot)
+  const directoryStructure = await traverseDirectory(opfsRoot, '', previewWindow)
 
   // Send the directory structure as a message to the main thread
-  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure})
+  self.postMessage({completed: true, event: 'snapshot', directoryStructure: directoryStructure.trimEnd()})
 }
 
 
@@ -99,14 +106,68 @@ async function snapshotCache() {
  * @param {string} [path] - The path to the directory.
  * @return {Promise<string>} The directory structure as a string.
  */
-async function traverseDirectory(dirHandle, path = '') {
+/**
+ * Recursively traverse a directory and build a textual snapshot including file size, hash, and optional first bytes.
+ *
+ * Format (tab separated):
+ *   <path>/<filename>\tsize=<bytes>\thash=<sha1>\tfirst<N>="<ascii>"
+ * Directories end with a trailing slash and have no size/hash fields.
+ *
+ * @param {FileSystemDirectoryHandle} dirHandle Root / current directory handle.
+ * @param {string} [path] Current relative path (internal use).
+ * @param {number} [previewLength] If > 0 include the first N bytes of each file in hex.
+ * @return {Promise<string>} Accumulated textual listing.
+ */
+async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
   let entries = ''
+
+  // Helper: compute SHA-1 hash (raw file contents, not Git blob format) and optional preview
+  /**
+   * @param {File} file - The file to describe
+   * @return {Promise<string>}
+   */
+  async function describeFile(file) {
+    let hashHex = 'error'
+    try {
+      const buffer = await file.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest('SHA-1', buffer)
+      // eslint-disable-next-line no-magic-numbers
+      hashHex = [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    } catch (e) {
+      // swallow; hashHex already set to 'error'
+    }
+
+    let preview = ''
+    if (previewLength > 0 && file.size >= previewLength) {
+      try {
+        const slice = file.slice(0, previewLength)
+        const sliceBuf = await slice.arrayBuffer()
+        const bytes = new Uint8Array(sliceBuf)
+        // Map bytes to printable ASCII, replace others with '.'
+        // eslint-disable-next-line no-magic-numbers
+        const ascii = Array.from(bytes, (b) => (b >= 32 && b <= 126 ? String.fromCharCode(b) : '.')).join('')
+        // Escape quotes and backslashes for safer single-line output
+        const escaped = ascii.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        preview = `\tfirst${previewLength}="${escaped}"`
+      } catch (e) {
+        preview = `\tfirst${previewLength}="error"`
+      }
+    }
+    return `size=${file.size}\thash=${hashHex}${preview}`
+  }
+
   for await (const [name, handle] of dirHandle.entries()) {
     if (handle.kind === 'directory') {
       entries += `${path}/${name}/\n`
-      entries += await traverseDirectory(handle, `${path}/${name}`)
+      entries += await traverseDirectory(handle, `${path}/${name}`, previewLength)
     } else if (handle.kind === 'file') {
-      entries += `${path}/${name}\n`
+      try {
+        const file = await handle.getFile()
+        const desc = await describeFile(file)
+        entries += `${path}/${name}\t${desc}\n`
+      } catch (e) {
+        entries += `${path}/${name}\tsize=0\thash=error\n`
+      }
     }
   }
   return entries
@@ -247,7 +308,7 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
 /**
  * Computes the Git blob SHA-1 hash for a given File.
  *
- * @param {FileSystemFileHandle} file - The File object to compute the SHA-1 hash for.
+ * @param {FileSystemFileHandle} modelBlobFileHandle - The File handle to compute the SHA-1 hash for.
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
 async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
@@ -255,36 +316,36 @@ async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
   const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
   try {
-      // Get the size of the file
-      const fileSize = await blobAccessHandle.getSize()
+    // Get the size of the file
+    const fileSize = await blobAccessHandle.getSize()
 
-      // Read the entire file into an ArrayBuffer
-      const fileArrayBuffer = new ArrayBuffer(fileSize)
-      await blobAccessHandle.read(fileArrayBuffer, {at: 0})
+    // Read the entire file into an ArrayBuffer
+    const fileArrayBuffer = new ArrayBuffer(fileSize)
+    await blobAccessHandle.read(fileArrayBuffer, {at: 0})
 
-      // Create the Git blob header
-      const header = `blob ${fileSize}\u0000`
-      const headerBuffer = new TextEncoder().encode(header)
+    // Create the Git blob header
+    const header = `blob ${fileSize}\u0000`
+    const headerBuffer = new TextEncoder().encode(header)
 
-      // Create a new ArrayBuffer to hold the header and the file data
-      const combinedBuffer = new Uint8Array(headerBuffer.byteLength + fileArrayBuffer.byteLength)
+    // Create a new ArrayBuffer to hold the header and the file data
+    const combinedBuffer = new Uint8Array(headerBuffer.byteLength + fileArrayBuffer.byteLength)
 
-      // Copy the header and file data into the combined buffer
-      combinedBuffer.set(headerBuffer, 0)
-      combinedBuffer.set(new Uint8Array(fileArrayBuffer), headerBuffer.byteLength)
+    // Copy the header and file data into the combined buffer
+    combinedBuffer.set(headerBuffer, 0)
+    combinedBuffer.set(new Uint8Array(fileArrayBuffer), headerBuffer.byteLength)
 
-      // Compute the SHA-1 hash
-      const hashBuffer = await crypto.subtle.digest('SHA-1', combinedBuffer)
+    // Compute the SHA-1 hash
+    const hashBuffer = await crypto.subtle.digest('SHA-1', combinedBuffer)
 
-      // Convert the hash to a hexadecimal string
-      const hashArray = Array.from(new Uint8Array(hashBuffer))
-      const HEX_IDENTIFIER = 16
-      const hashHex = hashArray.map((b) => b.toString(HEX_IDENTIFIER).padStart(2, '0')).join('')
+    // Convert the hash to a hexadecimal string
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const HEX_IDENTIFIER = 16
+    const hashHex = hashArray.map((b) => b.toString(HEX_IDENTIFIER).padStart(2, '0')).join('')
 
-      return hashHex
+    return hashHex
   } finally {
-      // Close the handle
-      await blobAccessHandle.close()
+    // Close the handle
+    await blobAccessHandle.close()
   }
 }
 
@@ -495,7 +556,7 @@ async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag)
  * @return {Response} A mock Response object with JSON content and specified headers.
  */
 function generateMockResponse(shaHash) {
-    // Mock response body data
+  // Mock response body data
   const mockBody = JSON.stringify({
     cached: false,
     etag: '"mockEtag"',
@@ -522,6 +583,8 @@ function generateMockResponse(shaHash) {
 
 
 /**
+ * @param {string} base64 - The base64 string
+ * @param {string} mimeType - The MIME type
  * @return {Blob} The Blob object created from the base64 string.
  */
 function base64ToBlob(base64, mimeType = 'application/octet-stream') {
@@ -530,7 +593,7 @@ function base64ToBlob(base64, mimeType = 'application/octet-stream') {
   const bytes = new Uint8Array(len)
 
   for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i)
+    bytes[i] = binaryString.charCodeAt(i)
   }
 
   return new Blob([bytes], {type: mimeType})
@@ -545,6 +608,8 @@ function base64ToBlob(base64, mimeType = 'application/octet-stream') {
  * @param {string} originalFilePath - The path to the file.
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
+ * @param {string} branch - The branch name
+ * @param {string} accessToken - The access token
  */
 async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
   let _etag = null
@@ -566,7 +631,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
     const {_, etag, finalURL} = await clonedCached.json()
     _etag = etag
 
-      // Remove any enclosing quotes from the ETag value
+    // Remove any enclosing quotes from the ETag value
     cleanEtag = _etag.replace(/"/g, '')
 
     if (clonedCached.headers.get('commithash')) {
@@ -686,7 +751,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
     const {_, etag, finalURL} = await clonedCached.json()
     _etag = etag
 
-      // Remove any enclosing quotes from the ETag value
+    // Remove any enclosing quotes from the ETag value
     cleanEtag = _etag.replace(/"/g, '')
 
     if (clonedCached.headers.get('commithash')) {
@@ -876,8 +941,8 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   // not cached, download model
   const {proxyResponse, modelResponse, etag} = result
 
-   // Remove any enclosing quotes from the ETag value
-   cleanEtag = etag.replace(/"/g, '');
+  // Remove any enclosing quotes from the ETag value
+  cleanEtag = etag.replace(/"/g, '');
 
   [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(modelResponse, cacheKey, cleanEtag, onProgress)
 
@@ -887,19 +952,18 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
   console.log('SHA-1 Hash:', computedShaHash)
 
   try {
-    // eslint-disable-next-line no-unused-vars
-    const [modelDirectoryHandle_, modelBlobFileHandle_] = await
-        retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, null, false)
+    const [, modelBlobFileHandle_] = await
+    retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, null, false)
 
-      if (modelBlobFileHandle_ !== null) {
-        // eslint-disable-next-line no-console
-        console.log('SHA match found in OPFS')
-        // we already have this file, just delete the one we downloaded and update the cached response.
-        const newResponse = proxyResponse.clone()
-        await CacheModule.updateCacheRaw(cacheKey, newResponse, commitHash)
-        modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
-        return
-      }
+    if (modelBlobFileHandle_ !== null) {
+      // eslint-disable-next-line no-console
+      console.log('SHA match found in OPFS')
+      // we already have this file, just delete the one we downloaded and update the cached response.
+      const newResponse = proxyResponse.clone()
+      await CacheModule.updateCacheRaw(cacheKey, newResponse, commitHash)
+      modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
+      return
+    }
   } catch (error_) {
     return
   }
@@ -932,10 +996,13 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
 /**
  * Retrieve file with path
  *
- * @param {FileSystemDirectoryHandle} rootHandle - The root directory handle.
- * @param {string} filePath - The path to the file.
+ * @param {string} objectUrl - The object URL
  * @param {string} commitHash - The commit hash to use for the request.
- * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
+ * @param {string} originalFilePath - The path to the file.
+ * @param {string} owner - The owner
+ * @param {string} repo - The repo name
+ * @param {string} branch - The branch name
+ * @param {Function} onProgress - Progress callback
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
 async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
@@ -1084,8 +1151,8 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
         // https://developer.mozilla.org/en-US/docs/Web/API/ProgressEvent
         self.postMessage({
           progressEvent: onProgress, // REVIEW: should this really be a function
-                                     // value for an event varname, and tests
-                                     // pass it a boolean?
+          // value for an event varname, and tests
+          // pass it a boolean?
           lengthComputable: contentLength !== 0,
           total: contentLength,
           loaded: receivedLength,
@@ -1145,7 +1212,7 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
         // Create or get the file handle
         const fileHandle = await
         currentHandle.getFileHandle(`${segment }.${etag}.${ commitHash === null ? 'temporary' : commitHash}`,
-           {create: true})
+          {create: true})
         return [currentHandle, fileHandle] // Return the file handle for further processing
       } catch (error) {
         const workerMessage = `Error getting/creating file handle for file(${segment}): ${error}.`
@@ -1280,8 +1347,8 @@ async function writeFileToHandle(blobAccessHandle, modelFile) {
     return true
   } catch (error) {
     const workerMessage = `Error writing file to handle: ${error}`
-      self.postMessage({error: workerMessage})
-      return false
+    self.postMessage({error: workerMessage})
+    return false
   }
 }
 
@@ -1294,6 +1361,7 @@ async function writeFileToHandle(blobAccessHandle, modelFile) {
  * @param {string} originalFilePath - The path to the file.
  * @param {string} owner - The owner of the repository.
  * @param {string} repo - The repository name.
+ * @param {string} branch - The branch name
  */
 async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -1331,27 +1399,70 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
 
 
 /**
- * Rename file in OPFS
+ * Rename (or move) a file inside OPFS with cross-browser support.
  *
- * @param {FileSystemDirectoryHandle} parentDirectory - The parent directory handle.
- * @param {FileSystemFileHandle} fileHandle - The file handle to rename.
- * @param {string} newFileName - The new file name.
- * @return {Promise<FileSystemFileHandle>} The new file handle.
+ * @param {FileSystemDirectoryHandle} parentDirectory - current containing directory
+ * @param {FileSystemFileHandle} fileHandle - file to rename
+ * @param {string} newFileName - new name (same directory)
+ * @param {object} opts - Options
+ * @return {Promise<FileSystemFileHandle>}
  */
-async function renameFileInOPFS(parentDirectory, fileHandle, newFileName) {
-  const newFileHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
+async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts = {}) {
+  const {overwrite = true} = opts
 
-  // Copy the contents of the old file to the new file
-  const oldFile = await fileHandle.getFile()
-  const writable = await newFileHandle.createWritable()
-  await writable.write(await oldFile.arrayBuffer())
-  await writable.close()
+  // If the target exists, decide whether to overwrite or bail.
+  if (overwrite) {
+    try {
+      await parentDirectory.removeEntry(newFileName)
+    } catch (_) {
+      // Ignore errors if file doesn't exist
+    }
+  } else {
+    try {
+      const existing = await parentDirectory.getFileHandle(newFileName, {create: false})
+      if (existing) {
+        throw new DOMException('Target exists', 'InvalidModificationError')
+      }
+    } catch (_) {/* NotFound: fine */}
+  }
 
-  // Remove the old file
-  await parentDirectory.removeEntry(fileHandle.name)
+  // Prefer native move(): Safari/Firefox/Chromium support it for OPFS.
+  // Safari requires two args: (targetDirHandle, newName).
+  if (typeof fileHandle?.move === 'function') {
+    try {
+      await fileHandle.move(parentDirectory, newFileName) // works across browsers
+      return parentDirectory.getFileHandle(newFileName, {create: false})
+    } catch (err) {
+      // If some engine only accepts 1-arg rename, try that before falling back.
+      if (err instanceof TypeError || /Not enough arguments/i.test(err?.message || '')) {
+        try {
+          await fileHandle.move(newFileName) // Chromium-style single-arg rename
+          return parentDirectory.getFileHandle(newFileName, {create: false})
+        } catch {/* fall through to copy/delete */}
+      }
+      // If a SyncAccessHandle is open elsewhere, close it before retrying.
+      // (Callers: ensure any createSyncAccessHandle() has been .close()'d.)
+    }
+  }
 
-  return newFileHandle
+  // Fallback: stream copy + delete (avoids large ArrayBuffer on iOS).
+  const srcFile = await fileHandle.getFile()
+  const destHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
+  const readable = srcFile.stream()
+  const writable = await destHandle.createWritable()
+  await readable.pipeTo(writable) // closes writable on completion
+
+  try {
+    if (typeof fileHandle.remove === 'function') {
+      await fileHandle.remove()
+    } else {
+      await parentDirectory.removeEntry(fileHandle.name)
+    }
+  } catch (_) {/* If delete fails, you still have the new copy. */}
+
+  return destHandle
 }
+/* eslint-enable no-empty */
 
 
 /**
@@ -1372,12 +1483,32 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null;
 
-  // eslint-disable-next-line no-unused-vars
+
   [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(
     opfsRoot, cacheKey, null, commitHash, false,
   )
 
   if (modelBlobFileHandle !== null ) {
+    try {
+      const file = await modelBlobFileHandle.getFile()
+      if (file.size === 0) {
+        // Delete zero-byte files and treat as not existing
+        try {
+          if (typeof modelBlobFileHandle.remove === 'function') {
+            await modelBlobFileHandle.remove()
+          } else if (modelDirectoryHandle) {
+            await modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
+          }
+        } catch (_) {/* ignore deletion errors */}
+
+        self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+        return
+      }
+    } catch (_) {/* if we cannot read the file, treat as not existing */
+      self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+      return
+    }
+
     self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
   } else {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
@@ -1476,7 +1607,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {string} originalFileName - The name of the original file.
  * @return {Promise<void>}
  */
-async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
+async function writeModelToOPFS(objectUrl, objectKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1664,9 +1795,9 @@ async function readFileFromOPFS(fileName) {
 /**
  * Checks that each named param is defined and returns the object for chaining.
  *
- * @param {{[key: string]: any}} obj Variable length arguments to assert are defined.
+ * @param {Record<string, any>} obj Variable length arguments to assert are defined.
  * @param {Array<string>} keys That was passed in
- * @return {{[key: string]: any}} obj That object that was passed in, if valid
+ * @return {Record<string, any>} obj That object that was passed in, if valid
  * @throws If any argument is not defined.
  */
 function assertValues(obj, keys) {

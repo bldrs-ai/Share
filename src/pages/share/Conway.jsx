@@ -43,9 +43,9 @@ export default function Conway() {
         <ul>
           <li><strong>Fast near-exact CSG</strong>: Our cutting-edge implementation of
             Constructive Solid Geometry (CSG) partly based on
-            <Link href="https://arxiv.org/pdf/2405.12949">
+          <Link href="https://arxiv.org/pdf/2405.12949">
               “Exact predicates, exact constructions and combinatorics for mesh CSG”
-            </Link> - Lévy et al. 2024, with
+          </Link> - Lévy et al. 2024, with
             robust handling of real-world model data, tailored for the web environment.
           </li>
           <li><strong>Seamless NURBS and Advanced BREP</strong>: Conway ensures smooth

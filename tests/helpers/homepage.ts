@@ -5,6 +5,7 @@ import {waitForModel} from './utils'
 
 /**
  * Navigate to homepage and wait for model to be ready
+ *
  * @deprecated Use visitHomepageWaitForModel from utils.ts instead
  */
 export async function homepageReady(page: Page) {

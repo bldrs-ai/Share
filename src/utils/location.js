@@ -34,7 +34,7 @@ export function addHashListener(name, onHashCb) {
  *
  * @param {string} hashString The original hash string (including `#`).
  * @param {string} name A unique name for the params.
- * @param {{[key: string]: any}} [params] The parameters to encode. If null or empty, adds key with no value.
+ * @param {Record<string, any>} [params] The parameters to encode. If null or empty, adds key with no value.
  * @param {boolean} includeNames Whether or not to include the parameter names in the encoding.
  * @return {string} The updated hash string.
  */
@@ -85,7 +85,7 @@ export function setParamsToHash(hashString, name, params = {}, includeNames = fa
  * Passhtru to addHashParams, with window.location
  *
  * @param {string} name A unique name for the params
- * @param {{[key: string]: any}} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -100,7 +100,7 @@ export function addParams(name, params, includeNames = false) {
  *
  * @param {Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {{[key: string]: any}} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -155,7 +155,9 @@ const FEATURE_SEP = ';'
 
 
 /**
- * @param {{[key: string]: any}} objectParams
+ * @param {Record<string, any>} objectParams
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
  * @return {string}
  */
 export function getEncodedParam(objectParams, includeNames = false) {
@@ -183,7 +185,7 @@ export function getEncodedParam(objectParams, includeNames = false) {
 
 /**
  * @param {string} hashParams
- * @return {{[key: string]: any}}
+ * @return {Record<string, any>}
  */
 export function getObjectParams(hashParams) {
   if (!hashParams) {
@@ -341,7 +343,7 @@ export function removeParamsFromHash(hashString, name, paramKeys = []) {
     throw new Error('Invalid hash string: must start with "#"')
   }
 
-   // Remove `#` and split by FEATURE_SEP
+  // Remove `#` and split by FEATURE_SEP
   const sets = hashString.substring(1).split(FEATURE_SEP)
   const prefix = `${name}:`
   const newSets = []
@@ -475,7 +477,7 @@ export function removeHashParams(location, name, paramKeys = []) {
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(
-        '', document.title, window.location.pathname + window.location.search)
+      '', document.title, window.location.pathname + window.location.search)
   }
 }
 
@@ -484,7 +486,7 @@ export function removeHashParams(location, name, paramKeys = []) {
  * Passthru to setHashParams, with window.location
  *
  * @param {string} name A unique name for the params
- * @param {{[key: string]: any}} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -498,7 +500,7 @@ export function setParams(name, params, includeNames = false) {
  *
  * @param {Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {{[key: string]: any}} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
