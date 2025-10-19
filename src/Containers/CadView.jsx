@@ -496,7 +496,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     disablePageReloadApprovalCheck()
-    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
+    navWith(navigate, `${pathPrefix}/${repoFilePath}`, {search: '', hash: ''})
   }
 
 
