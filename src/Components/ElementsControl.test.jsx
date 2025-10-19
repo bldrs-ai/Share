@@ -7,10 +7,11 @@ import ElementsControl from './ElementsControl'
 
 
 describe('ElementsControl', () => {
-  const deselectItems = jest.fn()
+  let deselectItems
   let viewer
 
   beforeAll(async () => {
+    deselectItems = jest.fn()
     const {result} = renderHook(() => useStore((state) => state))
     viewer = __getIfcViewerAPIExtendedMockSingleton()
     viewer.isolator = {
@@ -21,6 +22,10 @@ describe('ElementsControl', () => {
     await act(() => {
       result.current.setViewer(viewer)
     })
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
   })
 
   it('should render CutPlaneMenu component when isIsolate is false', () => {
@@ -44,8 +49,9 @@ describe('ElementsControl', () => {
       </ShareMock>,
     )
     const clearButton = queryByTitle('Clear')
-    fireEvent.click(clearButton)
     expect(clearButton).toBeInTheDocument()
+    fireEvent.click(clearButton)
+    expect(deselectItems).toHaveBeenCalled()
   })
 
   it('render and trigger Hide button with selected element and not in Isolate mode', async () => {
@@ -96,16 +102,5 @@ describe('ElementsControl', () => {
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
     expect(viewer.isolator.hideSelectedElements).toHaveBeenCalled()
-  })
-
-  it('should trigger deselectItems prop function when Clear button is clicked', () => {
-    const {getByTitle} = render(
-      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-        <ElementsControl deselectItems={deselectItems}/>
-      </ShareMock>,
-    )
-    const clearButton = getByTitle('Clear')
-    fireEvent.click(clearButton)
-    expect(deselectItems).toHaveBeenCalled()
   })
 })

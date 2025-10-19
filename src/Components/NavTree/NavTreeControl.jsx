@@ -1,4 +1,5 @@
 import React, {ReactElement} from 'react'
+import SvgIcon from '@mui/material/SvgIcon'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_NAV_TREE} from './hashState'
@@ -16,7 +17,7 @@ export default function NavTreeControl() {
   return (
     <ControlButtonWithHashState
       title='Navigation'
-      icon={<TreeIcon className='icon-share'/>}
+      icon={<SvgIcon><TreeIcon className='icon-share'/></SvgIcon>}
       isDialogDisplayed={isNavTreeVisible}
       setIsDialogDisplayed={setIsNavTreeVisible}
       hashPrefix={HASH_PREFIX_NAV_TREE}

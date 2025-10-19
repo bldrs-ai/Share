@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
@@ -8,6 +7,7 @@ import {ControlButtonWithHashState} from '../Buttons'
 import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from '../Markers/component'
 import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 
 
 /**
