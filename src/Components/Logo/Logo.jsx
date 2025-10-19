@@ -10,12 +10,7 @@ import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 export function LogoB({...props}) {
   return (
     <ThemeBox>
-      <SvgIcon
-        fontSize='large'
-        {...props}
-      >
-        <LogoBIcon className='icon-share'/>
-      </SvgIcon>
+      <LogoBIcon className='icon-share'/>
     </ThemeBox>
   )
 }
