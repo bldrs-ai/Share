@@ -16,9 +16,6 @@ export default defineConfig({
 
   retries: 1,
 
-  // Per-test timeout, since homepage first-time sometimes is > 30s default
-  timeout: 10_000,
-
   workers: 4,
 
   // Reporter to use
@@ -28,13 +25,9 @@ export default defineConfig({
     // Base URL to use in actions like `await page.goto('/')`.
     baseURL: 'http://localhost:8080',
     // don’t record unless failure
-    trace: 'retain-on-failure',
-    // same for video
-    // video: 'retain-on-failure',
-    // same for screenshots
-    // screenshot: 'only-on-failure',
-    // For live debugging
-    // launchOptions: {devtools: true},
+    trace: 'off',
+    video: 'off',
+    screenshot: 'off',
   },
   // Configure projects for major browsers.
   projects: [

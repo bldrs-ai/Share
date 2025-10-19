@@ -2,9 +2,9 @@ import {test, expect, Page, BrowserContext} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
-  visitHomepageWaitForModel,
   waitForModel,
   waitForElementStable,
+  returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 
 
@@ -18,22 +18,21 @@ test.describe('Cutplanes', () => {
   /**
    *
    */
-  async function setupModelWithCutplanes(page: Page, context: BrowserContext) {
-    await homepageSetup(page, context)
-    await setIsReturningUser(context)
-    await visitHomepageWaitForModel(page)
+  async function setupModelWithCutplanes(page: Page) {
+    await homepageSetup(page)
+    await returningUserVisitsHomepageWaitForModel(page)
   }
 
-  test('Section menu visible', async ({page, context}) => {
-    await setupModelWithCutplanes(page, context)
+  test('Section menu visible', async ({page}) => {
+    await setupModelWithCutplanes(page)
 
     // Click cut-plane control and verify menu
     await page.getByTestId('control-button-cut-plane').click()
     await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
   })
 
-  test('All cut-planes added to model', async ({page, context}) => {
-    await setupModelWithCutplanes(page, context)
+  test('All cut-planes added to model', async ({page}) => {
+    await setupModelWithCutplanes(page)
 
     // Open cut-plane menu and select plan
     await page.getByTestId('control-button-cut-plane').click()
@@ -56,8 +55,8 @@ test.describe('Cutplanes', () => {
     await expect(page.getByTestId('menu-cut-plane')).not.toBeVisible()
   })
 
-  test('No cutplanes visible after clear all', async ({page, context}) => {
-    await setupModelWithCutplanes(page, context)
+  test('No cutplanes visible after clear all', async ({page}) => {
+    await setupModelWithCutplanes(page)
 
     // Add all cut-planes first
     await page.getByTestId('control-button-cut-plane').click()

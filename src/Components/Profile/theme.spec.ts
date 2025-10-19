@@ -13,9 +13,9 @@ import {
  */
 test.describe('Profile 100: Theme', () => {
   test.describe('Returning user visits homepage', () => {
-    test.beforeEach(async ({page, context}) => {
-      await homepageSetup(page, context)
-      await returningUserVisitsHomepageWaitForModel(page, context)
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('Day theme active - Screen', async ({page}) => {

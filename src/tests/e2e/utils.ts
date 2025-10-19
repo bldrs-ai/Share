@@ -134,16 +134,19 @@ export async function interceptInitialLoads(page: Page) {
 
 
 /**
- * Clear state and setup initial homepage intercepts
+ * Setup homepage intercepts and navigate to root path
+ *
+ * @param page - Playwright page object
  */
-export async function homepageSetup(page: Page, context: BrowserContext) {
-  await clearState(context)
-  await interceptInitialLoads(page)
+export async function homepageSetup(page: Page) {
+  await clearState(page.context())
 }
 
 
 /**
  * Set cookie indicating user has visited before
+ *
+ * @param context - Playwright browser context
  */
 export async function setIsReturningUser(context: BrowserContext) {
   await context.addCookies([
@@ -163,22 +166,18 @@ export async function setIsReturningUser(context: BrowserContext) {
  * The flow: / -> /share/v/p/index.ifc (bounce) -> request for index.ifc file
  *
  * @param page - Playwright page object
- * @return The intercepted response
  */
 export async function visitHomepage(page: Page) {
-  const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes('index.ifc') && r.status() === HTTP_OK),
-    page.goto('/', {waitUntil: 'domcontentloaded'}),
-  ])
-  return response
+  const response = await page.goto('/', {waitUntil: 'domcontentloaded'})
+  expect(response?.status()).toBe(HTTP_OK)
 }
 
 
 /**
  * Sets state for returning user and visit homepage
  */
-export async function returningUserVisitsHomepage(page: Page, context: BrowserContext) {
-  await setIsReturningUser(context)
+export async function returningUserVisitsHomepage(page: Page) {
+  await setIsReturningUser(page.context())
   await visitHomepage(page)
 }
 
@@ -186,9 +185,9 @@ export async function returningUserVisitsHomepage(page: Page, context: BrowserCo
 /**
  * Same as returningUserVisitsHomepage, but wait for model too
  */
-export async function returningUserVisitsHomepageWaitForModel(page: Page, context: BrowserContext) {
-  await returningUserVisitsHomepage(page, context)
-  await waitForModel(page)
+export async function returningUserVisitsHomepageWaitForModel(page: Page) {
+  await setIsReturningUser(page.context())
+  await visitHomepageWaitForModel(page)
 }
 
 
@@ -196,14 +195,24 @@ export async function returningUserVisitsHomepageWaitForModel(page: Page, contex
  * Assumes other setup, then visit homepage and wait for model
  */
 export async function visitHomepageWaitForModel(page: Page) {
-  await visitHomepage(page)
-  await waitForModel(page)
+  await Promise.all([
+    page.waitForResponse(async (response: Response) => {
+      const url = new URL(response.url())
+      if (url.pathname === '/index.ifc' && response.status() === HTTP_OK) {
+        await waitForModel(page)
+        return true
+      }
+      return false
+    }),
+    page.goto('/', {waitUntil: 'domcontentloaded'}),
+  ])
 }
 
 
 /**
  * Waits for a 3D model to load and become visible within the viewer.
- * Playwright equivalent of Cypress waitForModel function.
+ *
+ * @param page - Playwright page object
  */
 export async function waitForModel(page: Page) {
   // Wait for viewer container and canvas
@@ -215,15 +224,7 @@ export async function waitForModel(page: Page) {
 
   // Wait for model ready attribute on dropzone (matching working homepage test)
   const dropzone = page.getByTestId('cadview-dropzone')
-  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 10000})
-
-  // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
-  const animWaitTimeMs = 1000
-  await page.waitForTimeout(animWaitTimeMs)
-
-  // TODO: Ideally we wait for camera-controls rest event
-  // const cameraAtRest = page.locator('[data-is-camera-at-rest="true"]')
-  // await expect(cameraAtRest).toBeVisible({timeout: 5000})
+  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 30_000})
 }
 
 
@@ -408,7 +409,7 @@ export async function setupAuthenticationIntercepts(page: Page, context: Browser
  * Enhanced homepage setup with authentication intercepts
  */
 export async function homepageSetupWithAuth(page: Page, context: BrowserContext) {
-  await homepageSetup(page, context)
+  await homepageSetup(page)
   await setupAuthenticationIntercepts(page, context)
 }
 

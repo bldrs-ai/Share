@@ -1,8 +1,8 @@
 import {test, expect} from '@playwright/test'
 import {
-  homepageSetup,
-  visitHomepageWaitForModel,
+  clearState,
   returningUserVisitsHomepageWaitForModel,
+  visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 
 
@@ -12,15 +12,13 @@ import {
  * @see https://github.com/bldrs-ai/Share/issues/1285
  */
 test.describe('View 100: About Dialog', () => {
-  test.beforeEach(async ({page, context}) => {
-    await homepageSetup(page, context)
+  test.beforeEach(async ({page}) => {
+    await clearState(page.context())
   })
-
   test.describe('First time user visits homepage', () => {
-    test.beforeEach(async ({page}) => {
+    test.beforeEach('First time user visits homepage', async ({page}) => {
       await visitHomepageWaitForModel(page)
     })
-
     test('about dialog is displayed', async ({page}) => {
       // Check that the about dialog is visible
       const dialog = page.getByRole('dialog')
@@ -32,14 +30,12 @@ test.describe('View 100: About Dialog', () => {
   })
 
   test.describe('Returning user visits homepage', () => {
-    test.beforeEach(async ({page, context}) => {
-      await returningUserVisitsHomepageWaitForModel(page, context)
+    test.beforeEach('First time user visits homepage', async ({page}) => {
+      await returningUserVisitsHomepageWaitForModel(page)
     })
-
     test('about dialog is not displayed', async ({page}) => {
-      // Check that the about dialog is not visible
-      const dialog = page.getByRole('dialog')
-      await expect(dialog).not.toBeVisible()
+      // Check that the about dialog does not exist
+      await expect(page.getByRole('dialog')).toHaveCount(0)
     })
   })
 })
