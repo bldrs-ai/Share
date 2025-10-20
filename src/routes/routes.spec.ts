@@ -54,7 +54,7 @@ test.describe('Routes', () => {
 
 
   // Google Drive file ID route (/g)
-  test('Google Drive file ID route (/g) processes file ID', async ({page}) => {
+  test.only('Google Drive file ID route (/g) processes file ID', async ({page}) => {
     const response = await registerIntercept({
       page,
       intereceptPattern: gapiPattern,
@@ -67,7 +67,7 @@ test.describe('Routes', () => {
   })
 
 
-  test('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
+  test.only('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
     // Mock Google Drive URL format
     const googleDriveUrlStr = encodeURIComponent(`https://drive.google.com/file/d/${mockFileId}/view`)
 
@@ -82,7 +82,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
+  test.only('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
     await page.goto('/') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')

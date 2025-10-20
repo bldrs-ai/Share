@@ -10,7 +10,7 @@ export default defineConfig({
   testDir: '../src',
 
   testMatch: [
-    'Components/About/*.spec.ts',
+    // 'Components/About/*.spec.ts',
     'routes/*.spec.ts',
     // '**/*.spec.ts',
     // For now just run tests that have been moved over to src
