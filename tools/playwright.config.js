@@ -39,6 +39,7 @@ export default defineConfig({
     video: 'on-first-retry',
     screenshot: 'on-first-retry',
   },
+
   // Configure projects for major browsers.
   projects: [
     {

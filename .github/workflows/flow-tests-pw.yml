@@ -34,7 +34,7 @@ jobs:
       - run: yarn install --frozen-lockfile --prefer-offline
 
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list
+        run: yarn test-flows --reporter=github,list,html
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
