@@ -197,8 +197,7 @@ export async function returningUserVisitsHomepageWaitForModel(page: Page) {
  */
 export async function visitHomepageWaitForModel(page: Page) {
   await Promise.all([
-    await page.waitForURL('/index.ifc', {timeout: 10_000}), // ensure the bounce happened
-    /*
+    // await page.waitForURL('/index.ifc', {timeout: 10_000}), // ensure the bounce happened
     page.waitForResponse(async (response: Response) => {
       const url = new URL(response.url())
       if (url.pathname === '/index.ifc' && response.status() === HTTP_OK) {
@@ -207,7 +206,6 @@ export async function visitHomepageWaitForModel(page: Page) {
       }
       return false
     }),
-    */
     page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
   ])
 }

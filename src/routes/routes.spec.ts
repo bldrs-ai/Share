@@ -24,7 +24,7 @@ test.describe('Routes', () => {
       logs.push(`➡️  ${req.method()} ${req.url()}`)
     })
 
-    page.on('response', async (res) => {
+    page.on('response', (res) => {
       const status = res.status()
       const ok = res.ok() ? '✅' : '❌'
       logs.push(`${ok} ${status} ${res.url()}`)

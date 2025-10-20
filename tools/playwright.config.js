@@ -3,19 +3,15 @@ import {defineConfig, devices} from '@playwright/test'
 
 const isCI = !!process.env.CI
 
-console.log('isCI', isCI)
+console.warn('isCI', isCI)
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
   testDir: '../src',
 
   testMatch: [
-    'routes/*.spec.ts',
-    // 'Components/About/*.spec.ts',
-    'Components/Profile/*.spec.ts',
-    // '**/*.spec.ts',
-    // For now just run tests that have been moved over to src
-    // 'tests/**/*.spec.ts',
+    'Components/Profile/theme.spec.ts',
+    'routes/routes.spec.ts',
   ],
 
   // Run all tests in parallel.
