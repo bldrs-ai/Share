@@ -42,7 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: tools/playwright-report
+          path: |
+            tools/playwright-report/**
+            playwright-report/**
           retention-days: 7
           if-no-files-found: warn
 
@@ -61,6 +63,17 @@ jobs:
       - name: Playwright Info
         if: failure()
         run: npx playwright --version
+
+      - name: Debug: list workspace
+        if: always()
+        run: |
+          echo "PWD=$(pwd)"
+          ls -la
+          echo "---- top-level dirs ----"
+          find . -maxdepth 2 -type d -print
+          echo "---- look for playwright folders ----"
+          find . -type d -name "playwright-report" -o -name "test-results" -o -name ".playwright-artifacts" | sed 's/^/FOUND: /'
+      
 
     env:
       # Keep your app env similar to Cypress job (adjust as needed for tests/MSW)
