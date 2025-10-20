@@ -33,10 +33,7 @@ jobs:
       # since we're hashing on yarn.lock anyways
       - run: yarn install --frozen-lockfile --prefer-offline
 
-      - name: Build and serve
-        run: yarn test-flows-build-and-serve
-
-      # Run Playwright (headless). Pw will use existing server
+      # Run Playwright (headless)
       - name: Run Playwright tests
         run: yarn test-flows --reporter=github,list
 
