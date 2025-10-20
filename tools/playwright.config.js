@@ -22,7 +22,7 @@ export default defineConfig({
 
   retries: 1,
 
-  workers: 4,
+  workers: 1,
 
   // Reporter to use
   reporter: [['list']], // just list, no HTML
