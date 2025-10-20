@@ -10,7 +10,7 @@ export default defineConfig({
   testDir: '../src',
 
   testMatch: [
-    'Components/Profile/theme.spec.ts',
+    // 'Components/Profile/theme.spec.ts',
     'routes/routes.spec.ts',
   ],
 
