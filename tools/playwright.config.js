@@ -1,6 +1,8 @@
 import {defineConfig, devices} from '@playwright/test'
 
 
+const isCI = !!process.env.CI
+
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
   testDir: '../src',
@@ -45,6 +47,6 @@ export default defineConfig({
     },
     // True: use the dev server you start separately
     // False: playwright will start its own with `yarn dev`
-    reuseExistingServer: true,
+    reuseExistingServer: !isCI,
   },
 })
