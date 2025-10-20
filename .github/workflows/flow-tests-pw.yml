@@ -64,7 +64,7 @@ jobs:
         if: failure()
         run: npx playwright --version
 
-      - name: Debug: list workspace
+      - name: Debug list workspace
         if: always()
         run: |
           echo "PWD=$(pwd)"
