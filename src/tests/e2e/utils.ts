@@ -204,7 +204,7 @@ export async function visitHomepageWaitForModel(page: Page) {
       }
       return false
     }),
-    page.goto('/', {waitUntil: 'domcontentloaded'}),
+    page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
   ])
 }
 
