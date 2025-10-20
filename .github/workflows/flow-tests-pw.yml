@@ -33,9 +33,12 @@ jobs:
       # since we're hashing on yarn.lock anyways
       - run: yarn install --frozen-lockfile --prefer-offline
 
-      # Run Playwright (headless). Assumes your playwright.config.ts handles webServer/baseURL.
+      - name: Build and serve
+        run: yarn test-flows-build-and-serve
+
+      # Run Playwright (headless). Pw will use existing server
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github
+        run: yarn test-flows --reporter=github,list
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
