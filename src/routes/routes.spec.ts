@@ -82,7 +82,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({ page }) => {
+  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
     await page.goto('/') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')

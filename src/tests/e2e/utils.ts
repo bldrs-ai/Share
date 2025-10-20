@@ -450,7 +450,7 @@ export async function waitForModelWithNetworkCheck(page: Page, gotoPath?: string
     // Use Promise.all pattern to coordinate navigation and response
     const [response] = await Promise.all([
       page.waitForResponse(
-        (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
+        (rsp) => rsp.url().includes('index.ifc') && rsp.status() === HTTP_OK,
         {timeout: MODEL_LOAD_TIMEOUT},
       ),
       page.goto(gotoPath, {waitUntil: 'domcontentloaded'}),

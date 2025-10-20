@@ -3,13 +3,13 @@ import {homepageSetup, returningUserVisitsHomepageWaitForModel} from './tests/e2
 
 
 test.describe('Homepage', () => {
-  test.beforeEach(async ({page, context}) => {
-    await homepageSetup(page, context)
+  test.beforeEach(async ({page}) => {
+    await homepageSetup(page)
   })
 
   test.describe('View model', () => {
-    test.beforeEach(async ({page, context}) => {
-      await returningUserVisitsHomepageWaitForModel(page, context)
+    test.beforeEach(async ({page}) => {
+      await returningUserVisitsHomepageWaitForModel(page)
     })
 
     test('about button is visible', async ({page}) => {

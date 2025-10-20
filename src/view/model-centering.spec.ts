@@ -12,17 +12,17 @@ import {
  * @see https://github.com/bldrs-ai/Share/issues/1042
  */
 test.describe('Model Centering and View Reset', () => {
-  test.beforeEach(async ({page, context}) => {
-    await homepageSetup(page, context)
+  test.beforeEach(async ({page}) => {
+    await homepageSetup(page)
   })
 
   /**
    * This is just testing that auto-zoom works. Not really user-facing behavior.
    * Discord: https://discord.com/channels/853953158560743424/984184622621540352/1229766172199616584
    */
-  test('Model re-centered when camera hash removed', async ({page, context}) => {
+  test('Model re-centered when camera hash removed', async ({page}) => {
     // Use the working setup from other tests
-    await returningUserVisitsHomepageWaitForModel(page, context)
+    await returningUserVisitsHomepageWaitForModel(page)
 
     // Now add camera hash via JavaScript navigation to change view
     await page.evaluate(() => {

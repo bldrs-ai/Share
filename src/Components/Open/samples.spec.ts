@@ -12,9 +12,9 @@ import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/mode
  */
 test.describe('Sample models', () => {
   test.describe('When model is loaded', () => {
-    test.beforeEach(async ({page, context}) => {
-      await homepageSetup(page, context)
-      await setIsReturningUser(context)
+    test.beforeEach(async ({page}) => {
+      await homepageSetup(page)
+      await setIsReturningUser(page.context())
       await visitHomepageWaitForModel(page)
     })
 

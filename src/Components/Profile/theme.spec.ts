@@ -1,8 +1,7 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, Page} from '@playwright/test'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
-  waitForModel,
 } from '../../tests/e2e/utils'
 
 
@@ -18,39 +17,48 @@ test.describe('Profile 100: Theme', () => {
       await returningUserVisitsHomepageWaitForModel(page)
     })
 
-    test('Day theme active - Screen', async ({page}) => {
-      // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
-      await expect(page.getByTestId('cadview-dropzone')).toBeVisible()
-    })
+    test.describe('Select ProfileControl', () => {
+      const idPrefix = 'control-button-profile-menu-item-theme'
+      const checkAttr = async (page: Page, id: string, attrName: string, value: string) => {
+        await expect(page.getByTestId(id)).toHaveAttribute(attrName, value)
+      }
 
-    test.describe('Select ProfileControl > Night theme', () => {
       test.beforeEach(async ({page}) => {
         await page.getByTestId('control-button-profile').click()
-        await page.getByTestId('change-theme-to-night').click()
-        await waitForModel(page)
       })
 
-      test('Night theme active - Screen', async ({page}) => {
+      test('System theme (default) active - Screen', async ({page}) => {
+        await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'true')
+        await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'false')
+        await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'false')
         // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
-        await expect(page.getByTestId('cadview-dropzone')).toBeVisible()
-        // Verify night theme is active by checking theme button
-        await page.getByTestId('control-button-profile').click()
-        await expect(page.getByTestId('change-theme-to-day')).toBeVisible()
       })
 
       test.describe('Select ProfileControl > Day theme', () => {
         test.beforeEach(async ({page}) => {
-          await page.getByTestId('control-button-profile').click()
-          await page.getByTestId('change-theme-to-day').click()
-          await waitForModel(page)
+          await page.getByTestId(`${idPrefix}-day`).click()
+          await page.getByTestId('control-button-profile').click() // reopen
         })
 
-        test('Day theme active - Screen', async ({page}) => {
+        test('Makes day theme active - Screen', async ({page}) => {
+          await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'false')
+          await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'true')
+          await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'false')
           // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
-          await expect(page.getByTestId('cadview-dropzone')).toBeVisible()
-          // Verify day theme is active by checking theme button
-          await page.getByTestId('control-button-profile').click()
-          await expect(page.getByTestId('change-theme-to-night')).toBeVisible()
+        })
+      })
+
+      test.describe('Select ProfileControl > Night theme', () => {
+        test.beforeEach(async ({page}) => {
+          await page.getByTestId(`${idPrefix}-night`).click()
+          await page.getByTestId('control-button-profile').click() // reopen
+        })
+
+        test('Makes night theme active - Screen', async ({page}) => {
+          await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'false')
+          await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'false')
+          await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'true')
+          // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
         })
       })
     })
