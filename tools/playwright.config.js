@@ -35,9 +35,9 @@ export default defineConfig({
     // Base URL to use in actions like `await page.goto('/')`.
     baseURL: 'http://localhost:8080',
     // don’t record unless failure
-    trace: 'on',
-    video: 'on',
-    screenshot: 'on',
+    trace: 'on-first-retry',
+    video: 'on-first-retry',
+    screenshot: 'on-first-retry',
   },
   // Configure projects for major browsers.
   projects: [
