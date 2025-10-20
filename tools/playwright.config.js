@@ -32,8 +32,8 @@ export default defineConfig({
     baseURL: 'http://localhost:8080',
     // don’t record unless failure
     trace: 'on',
-    video: 'off',
-    screenshot: 'off',
+    video: 'on',
+    screenshot: 'on',
   },
   // Configure projects for major browsers.
   projects: [
