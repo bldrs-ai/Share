@@ -33,7 +33,6 @@ jobs:
       # since we're hashing on yarn.lock anyways
       - run: yarn install --frozen-lockfile --prefer-offline
 
-      # Run Playwright (headless)
       - name: Run Playwright tests
         run: yarn test-flows --reporter=github,list
 
