@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1659",
+  "version": "1.0.1666",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -43,9 +43,6 @@
     "serve": "run-script-os",
     "serve:win32": "set SHARE_CONFIG=dev && set serveHttps=false && yarn serve-share-conway",
     "serve:linux:darwin": "SHARE_CONFIG=dev serveHttps=false yarn serve-share-conway",
-    "serve-pw": "run-script-os",
-    "serve-pw:win32": "set SHARE_CONFIG=playwright && set serveHttps=false && yarn serve-share-conway",
-    "serve-pw:linux:darwin": "SHARE_CONFIG=playwright serveHttps=false yarn serve-share-conway",
     "serve-prod-https": "run-script-os",
     "serve-prod-https:win32": "set SHARE_CONFIG=prod && set serveHttps=true && yarn serve-share-conway",
     "serve-prod-https:linux:darwin": "SHARE_CONFIG=prod serveHttps=true yarn serve-share-conway",
@@ -63,6 +60,8 @@
     "test-src": "jest --config tools/jest/jest.config.js",
     "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
     "test-flows": "playwright test --config=tools/playwright.config.js",
+    "test-flows-build-and-serve": "yarn clean && SHARE_CONFIG=playwright yarn build-share-conway && yarn test-flows-serve",
+    "test-flows-serve": "npx http-server docs -p 8080",
     "typecheck": "tsc",
     "update-version": "./tools/updateVersion.mjs"
   },

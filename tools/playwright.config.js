@@ -38,7 +38,7 @@ export default defineConfig({
   ],
   // Run your local dev server before starting the tests.
   webServer: {
-    command: 'yarn serve-pw',
+    command: 'yarn test-flows-serve',
     url: 'http://localhost:8080',
     env: {
       SHARE_CONFIG: 'playwright',
