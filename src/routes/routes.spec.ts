@@ -83,7 +83,7 @@ test.describe('Routes', () => {
   })
 
   test.only('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
-    await page.goto('/') // or wherever your uploader lives
+    await page.goto('/share/v/p/index.ifc') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
     const name = 'TestFixture.ifc'
