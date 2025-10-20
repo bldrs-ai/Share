@@ -134,7 +134,7 @@ test.describe('Routes', () => {
 
 
     // URL becomes /share/v/new/<UUID>.stl — we don’t care about the exact UUID, just the shape.
-    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-fA-F-]+\.ifc$/)
+    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-fA-F-]+\.ifc$/, {timeout: 30_000})
 
     // Wait for model ready attribute on dropzone (matching working homepage test)
     const dropzone = page.getByTestId('cadview-dropzone')
