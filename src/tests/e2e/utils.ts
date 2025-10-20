@@ -1,6 +1,6 @@
 import {BrowserContext, Page, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
-import {join} from 'path'
+import path from 'path'
 
 
 // Context-specific state to avoid concurrency issues
@@ -16,7 +16,8 @@ export async function clearState(context: BrowserContext) {
 }
 
 
-const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'cypress', 'fixtures')
+// const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'cypress', 'fixtures')
+const FIXTURES_DIR = path.resolve(process.cwd(), 'cypress/fixtures')
 
 
 /**
