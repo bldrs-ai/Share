@@ -1,5 +1,7 @@
 import {test, expect} from '@playwright/test'
-import {registerIntercept} from '../tests/e2e/utils'
+import {clearState, registerIntercept, setIsReturningUser} from '../tests/e2e/utils'
+import {readFile} from 'fs/promises'
+import {join} from 'path'
 
 
 /**
@@ -11,14 +13,8 @@ test.describe('Routes', () => {
 
   test.beforeEach(async ({context}) => {
     // Set returning user cookie to skip about dialog
-    await context.addCookies([
-      {
-        name: 'isFirstTime',
-        value: '1',
-        domain: 'localhost',
-        path: '/',
-      },
-    ])
+    await clearState(context)
+    await setIsReturningUser(context)
   })
 
 
@@ -86,36 +82,38 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
+  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({ page }) => {
+    await page.goto('/') // or wherever your uploader lives
 
-  // New file route (/new)
-  test('New file route (/new) processes uploaded file', async ({page}) => {
-    // Pattern to match the local file request for a newly uploaded file
-    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+    const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
+    const name = 'TestFixture.ifc'
+    const ifc = join(FIXTURES_DIR, name)
+    const bytes = await readFile(ifc)
+    const byteArray = new Uint8Array(Array.from(bytes))
 
-    const response = await registerIntercept({
-      page,
-      intereceptPattern: newFilePattern,
-      responseUrlStr: 'http://localhost',
-      fixtureFilename: 'index.ifc',
-      gotoPath: `/share/v/new/index.ifc`,
-    })
+    // Create a DataTransfer with a File in the browser context and dispatch a drop.
+    await page.evaluate(({byteArrayArg, nameArg}) => {
+      const dropTarget = document.querySelector('[data-testid="cadview-dropzone"]') as HTMLElement
+      if (!dropTarget) {
+        throw new Error('Drop target not found')
+      }
 
-    expect(response.status()).toBe(HTTP_OK)
-  })
+      const dt = new DataTransfer()
+      const file = new File([byteArrayArg], nameArg, {type: 'ifc'})
+      dt.items.add(file)
+
+      // Fire enter/over/drop as many dropzones expect sequence
+      dropTarget.dispatchEvent(new DragEvent('dragenter', {bubbles: true, dataTransfer: dt}))
+      dropTarget.dispatchEvent(new DragEvent('dragover', {bubbles: true, dataTransfer: dt}))
+      dropTarget.dispatchEvent(new DragEvent('drop', {bubbles: true, dataTransfer: dt}))
+    }, {byteArrayArg: byteArray, nameArg: name})
 
 
-  // New file route with element path
-  test('New file route (/new) processes uploaded file with element path', async ({page}) => {
-    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+    // URL becomes /share/v/new/<UUID>.stl — we don’t care about the exact UUID, just the shape.
+    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-fA-F-]+\.ifc$/)
 
-    const response = await registerIntercept({
-      page,
-      intereceptPattern: newFilePattern,
-      responseUrlStr: 'http://localhost',
-      fixtureFilename: 'index.ifc',
-      gotoPath: `/share/v/new/index.ifc/1/2/3`,
-    })
-
-    expect(response.status()).toBe(HTTP_OK)
+    // Wait for model ready attribute on dropzone (matching working homepage test)
+    const dropzone = page.getByTestId('cadview-dropzone')
+    await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 30_000})
   })
 })
