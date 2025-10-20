@@ -25,7 +25,11 @@ export default defineConfig({
   workers: 4,
 
   // Reporter to use
-  reporter: [['list']], // just list, no HTML
+  reporter: [
+    ['list'], // nice local output
+    ['github'], // annotations in GHA
+    ['html', {outputFolder: 'playwright-report', open: 'never'}], // create HTML report dir
+  ],
 
   use: {
     // Base URL to use in actions like `await page.goto('/')`.
