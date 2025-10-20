@@ -91,7 +91,7 @@ test.describe('Routes', () => {
   })
 
 
-  test.only('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
+  test('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
     // Mock Google Drive URL format
     const googleDriveUrlStr = encodeURIComponent(`https://drive.google.com/file/d/${mockFileId}/view`)
 
@@ -106,7 +106,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  test.only('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
+  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
     await page.goto('/share/v/p/index.ifc') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
