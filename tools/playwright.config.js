@@ -45,8 +45,8 @@ export default defineConfig({
     env: {
       SHARE_CONFIG: 'playwright',
     },
-    // True: use the dev server you start separately
-    // False: playwright will start its own with `yarn dev`
+    // Don't try to use existing server on GHA.  Locally will lazy start with command
+    // above if none is running.
     reuseExistingServer: !isCI,
   },
 })
