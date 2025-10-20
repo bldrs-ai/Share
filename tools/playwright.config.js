@@ -10,9 +10,9 @@ export default defineConfig({
   testDir: '../src',
 
   testMatch: [
+    'routes/*.spec.ts',
     // 'Components/About/*.spec.ts',
-    // 'routes/*.spec.ts',
-    '**/*.spec.ts',
+    // '**/*.spec.ts',
     // For now just run tests that have been moved over to src
     // 'tests/**/*.spec.ts',
   ],
@@ -31,7 +31,7 @@ export default defineConfig({
     // Base URL to use in actions like `await page.goto('/')`.
     baseURL: 'http://localhost:8080',
     // don’t record unless failure
-    trace: 'off',
+    trace: 'on',
     video: 'off',
     screenshot: 'off',
   },

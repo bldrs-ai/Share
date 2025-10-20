@@ -17,6 +17,30 @@ test.describe('Routes', () => {
     await setIsReturningUser(context)
   })
 
+  test.beforeEach(({page}, testInfo) => {
+    const logs: string[] = []
+
+    page.on('request', (req) => {
+      logs.push(`➡️  ${req.method()} ${req.url()}`)
+    })
+
+    page.on('response', async (res) => {
+      const status = res.status()
+      const ok = res.ok() ? '✅' : '❌'
+      logs.push(`${ok} ${status} ${res.url()}`)
+    })
+
+    page.on('requestfailed', (req) => {
+      logs.push(`❌ FAILED ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`)
+    })
+
+    // On test end, attach logs to the report
+    testInfo.attach('network.log', {
+      body: logs.join('\n'),
+      contentType: 'text/plain',
+    })
+  })
+
 
   // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
   // GitHub route (/gh)
@@ -67,7 +91,7 @@ test.describe('Routes', () => {
   })
 
 
-  test('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
+  test.only('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
     // Mock Google Drive URL format
     const googleDriveUrlStr = encodeURIComponent(`https://drive.google.com/file/d/${mockFileId}/view`)
 
@@ -82,7 +106,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  test('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
+  test.only('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
     await page.goto('/share/v/p/index.ifc') // or wherever your uploader lives
 
     const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
