@@ -36,6 +36,7 @@ export function initHandlers(defines) {
   handlers.push(...subscribePageHandler())
   handlers.push(...stripePortalHandlers())
   handlers.push(...gaHandlers())
+  handlers.push(...googleApisHandlers())
   // Pass through paths that are served by static assets or playwright fixtures
   handlers.push(http.get('/share/v/p/*', () => passthrough()))
   handlers.push(http.get('/share/v/gh/*', () => passthrough()))
@@ -699,7 +700,6 @@ function gaHandlers() {
     }),
 
     http.post('https://*.google-analytics.com/*', () => {
-      console.warn('🔥 Google Analytics POST request:', request.url)
       return new Response(null, {
         status: HTTP_OK,
       })
@@ -713,6 +713,31 @@ function gaHandlers() {
           headers: {'Content-Type': 'application/json'},
         },
       )
+    }),
+  ]
+}
+
+
+/**
+ * Google APIs handlers
+ *
+ * @return {Array<object>} handlers
+ */
+function googleApisHandlers() {
+  return [
+    http.get('https://www.googleapis.com/*', , () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+    http.post('https://www.googleapis.com/*', () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
   ]
 }

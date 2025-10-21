@@ -30,7 +30,7 @@ test.describe('Routes', () => {
       if (skipGoogleAnalyticsRequests(req)) {
         return
       }
-      console.warn(`➡️  ${req.method()} ${req.url}`)
+      console.warn(`➡️  ${req.method()} ${req.url()}`)
     })
 
     page.on('response', (res) => {
