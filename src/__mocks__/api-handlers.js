@@ -725,7 +725,7 @@ function gaHandlers() {
  */
 function googleApisHandlers() {
   return [
-    http.get('https://www.googleapis.com/*', , () => {
+    http.get('https://www.googleapis.com/*', () => {
       return new Response(
         JSON.stringify({}),
         {
