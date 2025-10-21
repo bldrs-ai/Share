@@ -3,7 +3,7 @@ import cypress from './vars.cypress.js'
 
 export default {
   ...cypress,
-  OPFS_IS_ENABLED: true,
+  OPFS_IS_ENABLED: false,
   THEME_IS_ENABLED: true,
 
   // These purposely don't have bogus TLDs, as PW specs needs these to pass thru
