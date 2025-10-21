@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, Request} from '@playwright/test'
 import {clearState, registerIntercept, setIsReturningUser} from '../tests/e2e/utils'
 import {readFile} from 'fs/promises'
 import {join} from 'path'
@@ -11,36 +11,47 @@ import {join} from 'path'
 test.describe('Routes', () => {
   const HTTP_OK = 200
 
+  /**
+   * Skip Google Analytics requests
+   *
+   * @param req - Request object
+   * @return boolean - True if request should be skipped
+   */
+  function skipGoogleAnalyticsRequests(req: Request) {
+    if (new URL(req.url()).hostname.endsWith('googletagmanager.com') ||
+      new URL(req.url()).hostname.endsWith('google-analytics.com')) {
+      return true
+    }
+    return false
+  }
+
+  test.beforeEach(({page}) => {
+    page.on('request', (req: Request) => {
+      if (skipGoogleAnalyticsRequests(req)) {
+        return
+      }
+      console.warn(`➡️  ${req.method()} ${req.url}`)
+    })
+
+    page.on('response', (res) => {
+      if (skipGoogleAnalyticsRequests(res.request() as Request)) {
+        return
+      }
+      const status = res.status()
+      const ok = res.ok() ? '✅' : '❌'
+      console.warn(`${ok} ${status} ${res.url()}`)
+    })
+
+    page.on('requestfailed', (req) => {
+      console.warn(`❌ FAILED ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`)
+    })
+  })
+
   test.beforeEach(async ({context}) => {
     // Set returning user cookie to skip about dialog
     await clearState(context)
     await setIsReturningUser(context)
   })
-
-  test.beforeEach(({page}, testInfo) => {
-    const logs: string[] = []
-
-    page.on('request', (req) => {
-      logs.push(`➡️  ${req.method()} ${req.url()}`)
-    })
-
-    page.on('response', (res) => {
-      const status = res.status()
-      const ok = res.ok() ? '✅' : '❌'
-      logs.push(`${ok} ${status} ${res.url()}`)
-    })
-
-    page.on('requestfailed', (req) => {
-      logs.push(`❌ FAILED ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`)
-    })
-
-    // On test end, attach logs to the report
-    testInfo.attach('network.log', {
-      body: logs.join('\n'),
-      contentType: 'text/plain',
-    })
-  })
-
 
   // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
   // GitHub route (/gh)

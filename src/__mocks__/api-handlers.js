@@ -699,6 +699,7 @@ function gaHandlers() {
     }),
 
     http.post('https://*.google-analytics.com/*', () => {
+      console.warn('🔥 Google Analytics POST request:', request.url)
       return new Response(null, {
         status: HTTP_OK,
       })
