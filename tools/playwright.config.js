@@ -10,8 +10,7 @@ export default defineConfig({
   testDir: '../src',
 
   testMatch: [
-    'Components/Profile/theme.spec.ts',
-    // 'routes/routes.spec.ts',
+    '**/*.spec.ts',
   ],
 
   // Run all tests in parallel.
