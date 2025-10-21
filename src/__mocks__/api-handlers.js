@@ -705,7 +705,7 @@ function gaHandlers() {
       })
     }),
 
-    http.get('https://www.googletagmanager.com/*', () => {
+    http.get('https://*.googletagmanager.com/*', () => {
       return new Response(
         JSON.stringify({}),
         {
@@ -725,7 +725,7 @@ function gaHandlers() {
  */
 function googleApisHandlers() {
   return [
-    http.get('https://www.googleapis.com/*', () => {
+    http.get('https://*.googleapis.com/*', () => {
       return new Response(
         JSON.stringify({}),
         {
@@ -734,7 +734,7 @@ function googleApisHandlers() {
         },
       )
     }),
-    http.post('https://www.googleapis.com/*', () => {
+    http.post('https://*.googleapis.com/*', () => {
       return new Response(null, {
         status: HTTP_OK,
       })
