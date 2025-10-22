@@ -96,6 +96,10 @@ export default function CutPlaneMenu() {
     }
   }
 
+  const isSelected = (direction) => {
+    return cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1
+  }
+
   return (
     <>
       <TooltipIconButton
@@ -119,7 +123,8 @@ export default function CutPlaneMenu() {
       >
         <MenuItem
           onClick={() => togglePlane({direction: 'y'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+          selected={isSelected('y')}
+          aria-checked={isSelected('y') ? 'true' : 'false'}
           data-testid='menu-item-plan'
         >
           <SvgIcon><PlanIcon className='icon-share'/></SvgIcon>
@@ -127,7 +132,8 @@ export default function CutPlaneMenu() {
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'x'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+          selected={isSelected('x')}
+          aria-checked={isSelected('x') ? 'true' : 'false'}
           data-testid='menu-item-section'
         >
           <SvgIcon><SectionIcon className='icon-share'/></SvgIcon>
@@ -135,7 +141,8 @@ export default function CutPlaneMenu() {
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'z'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
+          selected={isSelected('z')}
+          aria-checked={isSelected('z') ? 'true' : 'false'}
           data-testid='menu-item-elevation'
         >
           <SvgIcon><ElevationIcon className='icon-share'/></SvgIcon>

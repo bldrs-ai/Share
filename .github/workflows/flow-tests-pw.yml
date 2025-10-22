@@ -33,6 +33,10 @@ jobs:
       # since we're hashing on yarn.lock anyways
       - run: yarn install --frozen-lockfile --prefer-offline
 
+      # Useful diagnostic
+      - name: Playwright Info
+        run: npx playwright --version
+
       - name: Run Playwright tests
         run: yarn test-flows --reporter=github,list,html
 
@@ -56,22 +60,6 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
         # Ensure you have trace: 'on-first-retry' (or similar) in playwright.config.ts
-
-      # Useful diagnostic
-      - name: Playwright Info
-        if: failure()
-        run: npx playwright --version
-
-      - name: Debug list workspace
-        if: always()
-        run: |
-          echo "PWD=$(pwd)"
-          ls -la
-          echo "---- top-level dirs ----"
-          find . -maxdepth 2 -type d -print
-          echo "---- look for playwright folders ----"
-          find . -type d -name "playwright-report" -o -name "test-results" -o -name ".playwright-artifacts" | sed 's/^/FOUND: /'
-      
 
     env:
       # Keep your app env similar to Cypress job (adjust as needed for tests/MSW)

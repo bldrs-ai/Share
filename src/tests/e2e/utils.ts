@@ -231,188 +231,11 @@ export async function waitForModel(page: Page) {
 
 
 /**
- * Performs a simulated login using Auth0 by interacting with UI elements.
- * Note: Requires authentication intercepts to be set up first.
- */
-export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
-  await page.getByTestId('control-button-profile').click()
-
-  await page.getByTestId('menu-open-login-dialog').click()
-
-  if (connection === 'github') {
-    await page.getByTestId('login-with-github').click()
-  } else {
-    await page.getByTestId('login-with-google').click()
-  }
-
-  // Wait for successful login indication
-  await expect(page.getByText('Log out')).toBeVisible()
-  await page.getByTestId('control-button-profile').click()
-}
-
-
-/**
- * Sets a new value for the context-specific port variable
- *
- * @param context Browser context
- * @param newPort New port number
- */
-export function setPort(context: BrowserContext, newPort: number) {
-  const state = contextState.get(context) || {port: 0, nonce: ''}
-  state.port = newPort
-  contextState.set(context, state)
-}
-
-
-const DEFAULT_PORT = 8080
-
-/**
- * Retrieves the current value of the context-specific port variable
- *
- * @param context Browser context
- * @return Port number
- */
-export function getPort(context: BrowserContext): number {
-  return contextState.get(context)?.port || DEFAULT_PORT
-}
-
-
-/**
- * Base64 encode a payload object
- *
- * @param payload Object to encode
- * @return Base64URL encoded string
- */
-export function base64EncodePayload(payload: Record<string, unknown>): string {
-  // Convert the payload object to a JSON string
-  const jsonString = JSON.stringify(payload)
-  // Convert the JSON string to a Base64Url encoded string
-  const base64UrlString = btoa(jsonString)
-    .replace(/\+/g, '-') // Convert '+' to '-'
-    .replace(/\//g, '_') // Convert '/' to '_'
-    .replace(/=+$/, '') // Remove trailing '='
-  return base64UrlString
-}
-
-
-/**
- * Sets up Playwright route intercepts for handling authentication.
- * Playwright equivalent of setupAuthenticationIntercepts from Cypress.
- */
-export async function setupAuthenticationIntercepts(page: Page, context: BrowserContext) {
-  // Unroute existing handlers first to avoid conflicts
-  await page.unroute('**/authorize*')
-  await page.unroute('**/oauth/token*')
-
-  // Intercept the /authorize request
-  await page.route('**/authorize*', async (route) => {
-    const url = new URL(route.request().url())
-    const queryParams = new URLSearchParams(url.search)
-
-    // Extract the 'nonce' and 'state' parameters
-    const nonce = queryParams.get('nonce') || ''
-    const contextStateObj = contextState.get(context) || {port: DEFAULT_PORT, nonce: ''}
-    contextStateObj.nonce = nonce
-    contextState.set(context, contextStateObj)
-    const state = queryParams.get('state') || ''
-
-    // Send back modified response
-    await route.fulfill({
-      status: HTTP_OK,
-      contentType: 'text/html',
-      body: `
-<!DOCTYPE html>
-<html>
-  <head><title>Authorization Response</title></head>
-  <body>
-    <script type="text/javascript">
-      (function(window, document) {
-        var targetOrigin = "http://localhost:${getPort(context)}";
-        var webMessageRequest = {};
-        var authorizationResponse = {
-          type: "authorization_response",
-          response: {
-            "code":"MMHHFcQ1bA-CrsFi6ctzt4wLc-aIljuJbdUyijNOdmtbE",
-            "state":"${state}"
-          }
-        };
-        var mainWin = (window.opener) ? window.opener : window.parent;
-        if (webMessageRequest["web_message_uri"] && webMessageRequest["web_message_target"]) {
-          window.addEventListener("message", function(evt) {
-            switch (evt.data.type) {
-              case "relay_response":
-                var messageTargetWindow = evt.source.frames[webMessageRequest["web_message_target"]];
-                if (messageTargetWindow) {
-                  messageTargetWindow.postMessage(authorizationResponse, webMessageRequest["web_message_uri"]);
-                  window.close();
-                }
-                break;
-            }
-          });
-          mainWin.postMessage({type: "relay_request"}, targetOrigin);
-        } else {
-          mainWin.postMessage(authorizationResponse, targetOrigin);
-        }
-      })(this, this.document);
-    </script>
-  </body>
-</html>`,
-    })
-  })
-
-  // Intercept the /oauth/token request
-  await page.route('**/oauth/token*', async (route) => {
-    // Update the iat and exp values
-    const SECONDS_PER_DAY = 86400
-    const MILLISECONDS_PER_SECOND = 1000
-    const currentTimeInSeconds = Math.floor(Date.now() / MILLISECONDS_PER_SECOND)
-    const iat = currentTimeInSeconds
-    const exp = currentTimeInSeconds + SECONDS_PER_DAY // Add 24 hours
-
-    const payload = {
-      nickname: 'cypresstester',
-      name: 'cypresstest@bldrs.ai',
-      picture: 'https://avatars.githubusercontent.com/u/17447690?v=4',
-      updated_at: '2024-02-20T02:57:40.324Z',
-      email: 'cypresstest@bldrs.ai',
-      email_verified: true,
-      iss: 'https://bldrs.us.auth0.com.msw/',
-      aud: 'cypresstestaudience',
-      iat: iat,
-      exp: exp,
-      sub: 'github|11111111',
-      sid: 'cypresssession-abcdef',
-      nonce: contextState.get(context)?.nonce || '',
-    }
-
-    // Encode the updated payload
-    const encodedPayload = base64EncodePayload(payload)
-
-    // Send back modified response
-    await route.fulfill({
-      status: HTTP_OK,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        access_token: 'testaccesstoken',
-        id_token: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.${encodedPayload}.` +
-          'otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1_RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDa' +
-          'dDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9' +
-          'LH8d9ifiq2mOWYvglpltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A',
-        scope: 'openid profile email offline_access',
-        expires_in: SECONDS_PER_DAY,
-        token_type: 'Bearer',
-      }),
-    })
-  })
-}
-
-
-/**
  * Enhanced homepage setup with authentication intercepts
  */
-export async function homepageSetupWithAuth(page: Page, context: BrowserContext) {
+export async function homepageSetupWithAuth(page: Page) {
   await homepageSetup(page)
-  await setupAuthenticationIntercepts(page, context)
+  await setupAuthenticationIntercepts(page)
 }
 
 
@@ -435,9 +258,6 @@ export async function waitForElementStable(page: Page, selector: string, timeout
   await page.waitForTimeout(timeout)
 }
 
-
-const HTTP_OK = 200
-const MODEL_LOAD_TIMEOUT = 15000
 
 /**
  * Comprehensive model loading verification with network checks
@@ -471,3 +291,187 @@ export async function waitForModelWithNetworkCheck(page: Page, gotoPath?: string
     ])
   }
 }
+
+
+/**
+ * Performs a simulated login using Auth0 by interacting with UI elements.
+ * Note: Requires authentication intercepts to be set up first.
+ */
+export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
+  await page.getByTestId('control-button-profile').click()
+
+  await page.getByTestId('menu-open-login-dialog').click()
+
+  if (connection === 'github') {
+    await page.getByTestId('login-with-github').click()
+  } else {
+    await page.getByTestId('login-with-google').click()
+  }
+
+  // Wait for successful login indication
+  await expect(page.getByText('Log out')).toBeVisible()
+  await page.getByTestId('control-button-profile').click()
+}
+
+
+/**
+ * Sets up Playwright route intercepts for handling authentication.
+ * Playwright equivalent of setupAuthenticationIntercepts from Cypress.
+ *
+ * @param page Playwright page object
+ */
+export async function setupAuthenticationIntercepts(page: Page) {
+  const context = page.context()
+
+  // Route patterns: catch both HTTP(s) and any host
+  const AUTHORIZE = /\/authorize(\?|$)/
+  const TOKEN = /\/oauth\/token(\?|$)/
+
+  // Unroute existing handlers first to avoid conflicts
+  await context.unroute(AUTHORIZE)
+  await context.unroute(TOKEN)
+
+  // Intercept the /authorize request
+  await context.route(AUTHORIZE, async (route: Route) => {
+    const url = new URL(route.request().url())
+    const query = url.searchParams
+
+    // Extract the 'state' and 'nonce' parameters
+    const state = query.get('state') || ''
+    const nonce = query.get('nonce') || ''
+
+    const cs = contextState.get(context) ?? {port: DEFAULT_PORT, nonce: ''}
+    cs.nonce = nonce
+    contextState.set(context, cs)
+
+    const targetOrigin = getOrigin(getPort(context))
+    const FAKE_CODE = 'MMHHFcQ1bA-CrsFi6ctzt4wLc-aIljuJbdUyijNOdmtbE'
+
+    const body = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Authorization Response</title></head>
+<body>
+<script>
+(function(window){
+  var targetOrigin = "${targetOrigin}";
+  var authorizationResponse = {
+    type: "authorization_response",
+    response: { "code": "${FAKE_CODE}", "state": ${JSON.stringify(state)} }
+  };
+  var mainWin = window.opener ? window.opener : window.parent;
+  // Auth0 SPA SDK listens for this message on the opener
+  mainWin.postMessage(authorizationResponse, targetOrigin);
+})(this);
+</script>
+</body>
+</html>`
+
+    // Send back modified response
+    await route.fulfill({
+      status: HTTP_OK,
+      contentType: 'text/html; charset=utf-8',
+      headers: {
+        'cache-control': 'no-store',
+      },
+      body,
+    })
+  })
+
+  // Intercept the /oauth/token request
+  await context.route(TOKEN, async (route: Route) => {
+    // Update the iat and exp values
+    const SECONDS_PER_DAY = 86400
+    const MILLIS_PER_SECOND = 1000
+    const now = Math.floor(Date.now() / MILLIS_PER_SECOND)
+    const exp = now + SECONDS_PER_DAY // Add 24 hours
+
+    const {nonce = ''} = contextState.get(context) ?? {}
+
+    const payload = {
+      nickname: 'cypresstester',
+      name: 'cypresstest@bldrs.ai',
+      picture: 'https://avatars.githubusercontent.com/u/17447690?v=4',
+      updated_at: new Date().toISOString(),
+      email: 'cypresstest@bldrs.ai',
+      email_verified: true,
+      iss: 'https://bldrs.us.auth0.com.msw/',
+      aud: 'cypresstestaudience',
+      iat: now,
+      exp,
+      sub: 'github|11111111',
+      sid: 'cypresssession-abcdef',
+      nonce, // must match nonce from /authorize request
+    }
+
+    // Fake JWT: header.payload.signature (header + signature can be anything)
+    const header = {alg: 'RS256', typ: 'JWT', kid: 'test-kid'}
+    const idToken = `${base64url(header)}.${base64url(payload)}.signature`
+
+    const response = {
+      access_token: 'fakeaccesstoken',
+      id_token: idToken,
+      scope: 'openid profile email offline_access',
+      expires_in: SECONDS_PER_DAY,
+      token_type: 'Bearer',
+    }
+
+    // Send back modified response
+    await route.fulfill({
+      status: HTTP_OK,
+      contentType: 'application/json; charset=utf-8',
+      headers: {
+        'access-control-allow-origin': getOrigin(getPort(context)),
+        'access-control-allow-credentials': 'true',
+        'cache-control': 'no-store',
+      },
+      body: JSON.stringify(response),
+    })
+  })
+}
+
+
+// Helpers
+/**
+ * Sets a new value for the context-specific port variable
+ *
+ * @param context Browser context
+ * @param newPort New port number
+ */
+export function setPort(context: BrowserContext, newPort: number) {
+  const state = contextState.get(context) || {port: 0, nonce: ''}
+  state.port = newPort
+  contextState.set(context, state)
+}
+
+
+/**
+ * Retrieves the current value of the context-specific port variable
+ *
+ * @param context Browser context
+ * @return Port number
+ */
+export function getPort(context: BrowserContext): number {
+  return contextState.get(context)?.port || DEFAULT_PORT
+}
+
+
+const getOrigin = (port: number) => `http://127.0.0.1:${port}`
+
+
+/**
+ * URL-safe base64 without padding
+ *
+ * @param obj Object to encode
+ * @return URL-safe base64 string
+ */
+export function base64url(obj: unknown): string {
+  const json = typeof obj === 'string' ? obj : JSON.stringify(obj)
+  const b64 = Buffer.from(json, 'utf8').toString('base64')
+  return b64.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+}
+
+
+const DEFAULT_PORT = 8080
+
+const HTTP_OK = 200
+const MODEL_LOAD_TIMEOUT = 15000

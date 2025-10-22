@@ -62,7 +62,7 @@ describe( 'SearchBar', () => {
   })
 
   it('SeachBar', () => {
-    render(<SearchBar onClickMenuCb={() => {}} isOpen={true} placeholder={'Search'}/>, {wrapper: RouteThemeCtx})
+    render(<SearchBar onClickMenuCb={() => {}} isOpen={true} placeholder='Search'/>, {wrapper: RouteThemeCtx})
     expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
   })
 })

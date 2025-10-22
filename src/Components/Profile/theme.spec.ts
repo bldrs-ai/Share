@@ -1,4 +1,4 @@
-import {test, expect, Page} from '@playwright/test'
+import {test, expect, Locator} from '@playwright/test'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
@@ -18,46 +18,58 @@ test.describe('Profile 100: Theme', () => {
     })
 
     test.describe('Select ProfileControl', () => {
-      const idPrefix = 'control-button-profile-menu-item-theme'
-      const checkAttr = async (page: Page, id: string, attrName: string, value: string) => {
-        await expect(page.getByTestId(id)).toHaveAttribute(attrName, value)
+      let controlButtonProfile: Locator
+      let menuItemThemeSystem: Locator
+      let menuItemThemeDay: Locator
+      let menuItemThemeNight: Locator
+      const isChecked = async (elt: Locator, isExpected: boolean) => {
+        await expect(elt).toHaveAttribute('aria-checked', isExpected ? 'true' : 'false')
       }
-
       test.beforeEach(async ({page}) => {
-        await page.getByTestId('control-button-profile').click()
+        const buttonId = 'control-button-profile'
+        const menuItemPrefix = `${buttonId}-menu-item-theme`
+        controlButtonProfile = page.getByTestId(buttonId)
+        menuItemThemeSystem = page.getByTestId(`${menuItemPrefix}-system`)
+        menuItemThemeDay = page.getByTestId(`${menuItemPrefix}-day`)
+        menuItemThemeNight = page.getByTestId(`${menuItemPrefix}-night`)
+        await controlButtonProfile.click()
+        await expect(menuItemThemeSystem).toBeVisible()
+        await expect(menuItemThemeDay).toBeVisible()
+        await expect(menuItemThemeNight).toBeVisible()
       })
 
-      test('System theme (default) active - Screen', async ({page}) => {
-        await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'true')
-        await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'false')
-        await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'false')
+
+      test('System theme (default) active - Screen', async () => {
+        await isChecked(menuItemThemeSystem, true)
+        await isChecked(menuItemThemeDay, false)
+        await isChecked(menuItemThemeNight, false)
         // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
       })
 
       test.describe('Select ProfileControl > Day theme', () => {
-        test.beforeEach(async ({page}) => {
-          await page.getByTestId(`${idPrefix}-day`).click()
-          await page.getByTestId('control-button-profile').click() // reopen
+        test.beforeEach(async () => {
+          await menuItemThemeDay.click()
+          await controlButtonProfile.click() // reopen
         })
 
-        test('Makes day theme active - Screen', async ({page}) => {
-          await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'false')
-          await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'true')
-          await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'false')
+        test('Makes day theme active - Screen', async () => {
+          await isChecked(menuItemThemeSystem, false)
+          await isChecked(menuItemThemeDay, true)
+          await isChecked(menuItemThemeNight, false)
           // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
         })
       })
 
       test.describe('Select ProfileControl > Night theme', () => {
-        test.beforeEach(async ({page}) => {
-          await page.getByTestId(`${idPrefix}-night`).click()
-          await page.getByTestId('control-button-profile').click() // reopen
+        test.beforeEach(async () => {
+          await menuItemThemeNight.click()
+          await controlButtonProfile.click() // reopen
         })
 
-        test('Makes night theme active - Screen', async ({page}) => {
-          await checkAttr(page, `${idPrefix}-system`, 'aria-checked', 'false')
-          await checkAttr(page, `${idPrefix}-day`, 'aria-checked', 'false')
-          await checkAttr(page, `${idPrefix}-night`, 'aria-checked', 'true')
+        test('Makes night theme active - Screen', async () => {
+          await isChecked(menuItemThemeSystem, false)
+          await isChecked(menuItemThemeDay, false)
+          await isChecked(menuItemThemeNight, true)
           // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
         })
       })
