@@ -3,8 +3,8 @@ import {
   homepageSetup,
   setIsReturningUser,
   waitForModel,
-  waitForElementStable,
   returningUserVisitsHomepageWaitForModel,
+  LONG_TEST_TIMEOUT_SECONDS,
 } from '../../tests/e2e/utils'
 
 
@@ -40,6 +40,8 @@ test.describe('Cutplanes', () => {
 
 
       test('All cut-planes added to model', async () => {
+        test.setTimeout(LONG_TEST_TIMEOUT_SECONDS)
+
         // Activate plan plane
         await menuItemPlan.click()
         await expect(menuCutPlane).toBeHidden()
@@ -92,10 +94,6 @@ test.describe('Cutplanes', () => {
         // Verify the model is loaded with cut-plane applied
         await expect(page.locator('[data-testid="cadview-dropzone"]')).toBeVisible()
         await expect(page.locator('[data-model-ready="true"]')).toBeVisible()
-
-        // Wait for cut-plane to be applied
-        await waitForElementStable(page, '[data-testid="cadview-dropzone"]')
-
         // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
       })
     })

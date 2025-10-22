@@ -1,136 +1,48 @@
-import {BrowserContext, Page, Response, Route, expect} from '@playwright/test'
+import {BrowserContext, Page, Request, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import path from 'path'
 
 
-// Context-specific state to avoid concurrency issues
-const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
-
-
 /**
- * Clear browser storage and cookies
+ * Log network calls to the console
+ *
+ * @param page - Playwright page object
  */
+export function logNetworkCalls({page}: {page: Page}) {
+  const skipGoogleAnalyticsRequests = (req: Request) => {
+    if (new URL(req.url()).hostname.endsWith('googletagmanager.com') ||
+      new URL(req.url()).hostname.endsWith('google-analytics.com')) {
+      return true
+    }
+    return false
+  }
+
+  page.on('request', (req: Request) => {
+    if (skipGoogleAnalyticsRequests(req)) {
+      return
+    }
+    console.warn(`➡️  ${req.method()} ${req.url()}`)
+  })
+
+  page.on('response', (res) => {
+    if (skipGoogleAnalyticsRequests(res.request() as Request)) {
+      return
+    }
+    const status = res.status()
+    const ok = res.ok() ? '✅' : '❌'
+    console.warn(`${ok} ${status} ${res.url()}`)
+  })
+
+  page.on('requestfailed', (req) => {
+    console.warn(`❌ FAILED ${req.method()} ${req.url()} :: ${req.failure()?.errorText}`)
+  })
+}
+
+
+/** Clear browser storage and cookies. */
 export async function clearState(context: BrowserContext) {
   await context.clearCookies()
   await context.clearPermissions()
-}
-
-
-// const FIXTURES_DIR = join(__dirname, '..', '..', '..', 'cypress', 'fixtures')
-const FIXTURES_DIR = path.resolve(process.cwd(), 'cypress/fixtures')
-
-
-/**
- * Helper to register an intercept and navigate to a route
- *
- * @param page - Playwright page object
- * @param intereceptPattern - Pattern to match for page.route()
- * @param responseUrlStr - URL string to match in waitForResponse()
- * @param fixtureFilename - Fixture file name (relative to cypress/fixtures/)
- * @param gotoPath - Path to navigate to
- * @return The intercepted response
- */
-export async function registerIntercept({
-  page,
-  intereceptPattern,
-  responseUrlStr,
-  fixtureFilename,
-  gotoPath,
-}: {
-  page: Page,
-  intereceptPattern: RegExp,
-  responseUrlStr: string,
-  fixtureFilename: string,
-  gotoPath: string,
-}): Promise<Response> {
-  const fixtureBuffer = await readFile(`${FIXTURES_DIR}/${fixtureFilename}`)
-  await page.route(intereceptPattern, (route: Route) => {
-    route.fulfill({
-      status: HTTP_OK,
-      body: fixtureBuffer,
-      contentType: 'application/octet-stream',
-    })
-  })
-
-  const [response] = await Promise.all([
-    page.waitForResponse((r: Response) => r.url().startsWith(responseUrlStr)),
-    page.goto(gotoPath),
-  ])
-
-  return response
-}
-
-
-/**
- * Intercept load of index.ifc to serve fixture data.
- * Playwright equivalent of cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'})
- */
-export async function interceptIndex(page: Page) {
-  // Unroute any existing handlers first to avoid conflicts
-  await page.unroute('**/index.ifc')
-
-  await page.route('**/index.ifc', async (route) => {
-    try {
-      const fixtureBuffer = await readFile(`${FIXTURES_DIR}/index.ifc`)
-      await route.fulfill({
-        status: HTTP_OK,
-        contentType: 'application/octet-stream',
-        body: fixtureBuffer,
-      })
-    } catch (error) {
-      console.warn('Failed to load index.ifc fixture:', error)
-      // Fallback to continue with original request
-      await route.continue()
-    }
-  })
-}
-
-
-/**
- * Intercept load of virtual project path to serve 404 bounce page.
- * Playwright equivalent of cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'})
- */
-export async function interceptBounce(page: Page) {
-  const patterns = [
-    '**/share/v/p/index.ifc',
-    '**/share/v/p/index.ifc/*',
-    '**/share/v/p/index.ifc?*',
-  ]
-
-  // Unroute existing handlers first to avoid conflicts
-  for (const pattern of patterns) {
-    await page.unroute(pattern)
-  }
-
-  for (const pattern of patterns) {
-    await page.route(pattern, async (route) => {
-      try {
-        const fixtureBuffer = await readFile(`${FIXTURES_DIR}/404.html`)
-        await route.fulfill({
-          status: 404,
-          contentType: 'text/html; charset=utf-8',
-          body: fixtureBuffer,
-        })
-      } catch (error) {
-        console.warn('Failed to load 404.html fixture:', error)
-        // Fallback to actual 404
-        await route.fulfill({
-          status: 404,
-          contentType: 'text/html; charset=utf-8',
-          body: '<html><body><h1>404 Not Found</h1></body></html>',
-        })
-      }
-    })
-  }
-}
-
-
-/**
- * Setup initial homepage intercepts
- */
-export async function interceptInitialLoads(page: Page) {
-  await interceptIndex(page)
-  await interceptBounce(page)
 }
 
 
@@ -231,86 +143,56 @@ export async function waitForModel(page: Page) {
 
 
 /**
+ * Helper to register an intercept and navigate to a route
+ *
+ * @param page - Playwright page object
+ * @param intereceptPattern - Pattern to match for page.route()
+ * @param responseUrlStr - URL string to match in waitForResponse()
+ * @param fixtureFilename - Fixture file name (relative to cypress/fixtures/)
+ * @param gotoPath - Path to navigate to
+ * @return The intercepted response
+ */
+export async function registerIntercept({
+  page,
+  intereceptPattern,
+  responseUrlStr,
+  fixtureFilename,
+  gotoPath,
+}: {
+  page: Page,
+  intereceptPattern: RegExp,
+  responseUrlStr: string,
+  fixtureFilename: string,
+  gotoPath: string,
+}): Promise<Response> {
+  const fixtureBuffer = await readFile(`${FIXTURES_DIR}/${fixtureFilename}`)
+  await page.route(intereceptPattern, (route: Route) => {
+    route.fulfill({
+      status: HTTP_OK,
+      body: fixtureBuffer,
+      contentType: 'application/octet-stream',
+    })
+  })
+
+  const [response] = await Promise.all([
+    page.waitForResponse((r: Response) => r.url().startsWith(responseUrlStr)),
+    page.goto(gotoPath),
+  ])
+
+  return response
+}
+
+const FIXTURES_DIR = path.resolve(process.cwd(), 'cypress/fixtures')
+
+
+// Auth0 helpers
+
+/**
  * Enhanced homepage setup with authentication intercepts
  */
 export async function homepageSetupWithAuth(page: Page) {
   await homepageSetup(page)
   await setupAuthenticationIntercepts(page)
-}
-
-
-/**
- * Wait for network requests to complete (useful for complex async operations)
- */
-export async function waitForNetworkIdle(page: Page, timeout = 5000) {
-  await page.waitForLoadState('networkidle', {timeout})
-}
-
-
-/**
- * Helper to wait for any element to be stable (not moving/changing)
- */
-export async function waitForElementStable(page: Page, selector: string, timeout = 2000) {
-  const element = page.locator(selector)
-  await expect(element).toBeVisible()
-
-  // Wait a bit for any animations/transitions to complete
-  await page.waitForTimeout(timeout)
-}
-
-
-/**
- * Comprehensive model loading verification with network checks
- * Uses Promise.all pattern like routes.spec.ts for proper synchronization
- *
- * @param page Playwright page object
- * @param gotoPath Path to navigate to (optional, if not provided just waits for model)
- * @return The intercepted response if gotoPath provided
- */
-export async function waitForModelWithNetworkCheck(page: Page, gotoPath?: string) {
-  if (gotoPath) {
-    // Use Promise.all pattern to coordinate navigation and response
-    const [response] = await Promise.all([
-      page.waitForResponse(
-        (rsp) => rsp.url().includes('index.ifc') && rsp.status() === HTTP_OK,
-        {timeout: MODEL_LOAD_TIMEOUT},
-      ),
-      page.goto(gotoPath, {waitUntil: 'domcontentloaded'}),
-    ])
-    await waitForModel(page)
-    return response
-  } else {
-    // Just wait for response and DOM readiness
-    const modelLoadPromise = page.waitForResponse(
-      (response) => response.url().includes('index.ifc') && response.status() === HTTP_OK,
-      {timeout: MODEL_LOAD_TIMEOUT},
-    )
-    await Promise.all([
-      modelLoadPromise,
-      waitForModel(page),
-    ])
-  }
-}
-
-
-/**
- * Performs a simulated login using Auth0 by interacting with UI elements.
- * Note: Requires authentication intercepts to be set up first.
- */
-export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
-  await page.getByTestId('control-button-profile').click()
-
-  await page.getByTestId('menu-open-login-dialog').click()
-
-  if (connection === 'github') {
-    await page.getByTestId('login-with-github').click()
-  } else {
-    await page.getByTestId('login-with-google').click()
-  }
-
-  // Wait for successful login indication
-  await expect(page.getByText('Log out')).toBeVisible()
-  await page.getByTestId('control-button-profile').click()
 }
 
 
@@ -429,28 +311,39 @@ export async function setupAuthenticationIntercepts(page: Page) {
   })
 }
 
+// Context-specific state to avoid concurrency issues
+const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
 
-// Helpers
+
 /**
- * Sets a new value for the context-specific port variable
- *
- * @param context Browser context
- * @param newPort New port number
+ * Performs a simulated login using Auth0 by interacting with UI elements.
+ * Note: Requires authentication intercepts to be set up first.
  */
-export function setPort(context: BrowserContext, newPort: number) {
-  const state = contextState.get(context) || {port: 0, nonce: ''}
-  state.port = newPort
-  contextState.set(context, state)
+export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
+  await page.getByTestId('control-button-profile').click()
+
+  await page.getByTestId('menu-open-login-dialog').click()
+
+  if (connection === 'github') {
+    await page.getByTestId('login-with-github').click()
+  } else {
+    await page.getByTestId('login-with-google').click()
+  }
+
+  // Wait for successful login indication
+  await expect(page.getByText('Log out')).toBeVisible()
+  await page.getByTestId('control-button-profile').click()
 }
 
 
+// Helpers.  No exports below here.
 /**
  * Retrieves the current value of the context-specific port variable
  *
  * @param context Browser context
  * @return Port number
  */
-export function getPort(context: BrowserContext): number {
+function getPort(context: BrowserContext): number {
   return contextState.get(context)?.port || DEFAULT_PORT
 }
 
@@ -464,7 +357,7 @@ const getOrigin = (port: number) => `http://127.0.0.1:${port}`
  * @param obj Object to encode
  * @return URL-safe base64 string
  */
-export function base64url(obj: unknown): string {
+function base64url(obj: unknown): string {
   const json = typeof obj === 'string' ? obj : JSON.stringify(obj)
   const b64 = Buffer.from(json, 'utf8').toString('base64')
   return b64.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
@@ -472,6 +365,5 @@ export function base64url(obj: unknown): string {
 
 
 const DEFAULT_PORT = 8080
-
 const HTTP_OK = 200
-const MODEL_LOAD_TIMEOUT = 15000
+export const LONG_TEST_TIMEOUT_SECONDS = 60_000

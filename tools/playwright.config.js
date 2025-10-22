@@ -3,8 +3,6 @@ import {defineConfig, devices} from '@playwright/test'
 
 const isCI = !!process.env.CI
 
-console.warn('isCI', isCI)
-
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
   testDir: '../src',
