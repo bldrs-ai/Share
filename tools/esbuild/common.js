@@ -26,7 +26,7 @@ export default {
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
   external: ['*.woff', '*.woff2'],
-  minify: true, // (process.env.MINIFY || 'true') === 'true',
+  minify: (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODO: have had breakage without this
   splitting: false,
   metafile: true,
