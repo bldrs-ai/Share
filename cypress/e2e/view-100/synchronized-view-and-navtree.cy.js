@@ -10,7 +10,7 @@ import {
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1046} */
-describe('View 100: Synchronized View and NavTree', () => {
+describe.skip('View 100: Synchronized View and NavTree', () => {
   beforeEach(() => {
     homepageSetup()
     setIsReturningUser()

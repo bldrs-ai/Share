@@ -10,6 +10,7 @@ import {
 } from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useMock} from './ProfileControl'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
 
 
 /**
@@ -22,6 +23,7 @@ import {useMock} from './ProfileControl'
  * @return {ReactElement}
  */
 export default function LoginDialog({isDialogDisplayed, setIsDialogDisplayed, onLogin, isGoogleEnabled}) {
+  const isGoogleFeatureFlagEnabled = useExistInFeature('googleOAuth2')
   return (
     <Dialog
       headerText='Sign in with'
@@ -44,7 +46,7 @@ export default function LoginDialog({isDialogDisplayed, setIsDialogDisplayed, on
         >
           GitHub
         </Button>
-        {(isGoogleEnabled || useMock) && (
+        {(isGoogleFeatureFlagEnabled && (isGoogleEnabled || useMock)) && (
           <Button
             fullWidth
             variant='outlined'
