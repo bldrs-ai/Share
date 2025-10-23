@@ -1,1 +1,1 @@
-export const SEARCH_BAR_PLACEHOLDER_TEXT = 'Model query or GitHub model link'
+export const SEARCH_BAR_PLACEHOLDER_TEXT = 'Seardch or link (Google, GitHub models)'

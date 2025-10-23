@@ -3,6 +3,7 @@ import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {processExternalUrl} from '../../routes/routes'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
@@ -78,6 +79,21 @@ export default function SearchBar({
       }
       return
     }
+
+    const result = processExternalUrl(window.location.href, inputText)
+    if (result) {
+      try {
+        disablePageReloadApprovalCheck()
+        navigate(`/share/v/u/${inputText}`)
+        if (onSuccess) {
+          onSuccess()
+        }
+      } catch (e) {
+        setError(`Please enter a valid url.`)
+      }
+      return
+    }
+
 
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
