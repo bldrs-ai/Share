@@ -31,7 +31,9 @@ export default function TitledLayout({title, children}) {
             margin: {xs: '0 0 1rem 0', md: '0 1rem 1rem 0'}, // Margin for wrapping
           }}
         >
-          <Link href="/"><LogoBWithDomain sx={{width: '8rem', height: '8rem'}}/></Link>
+          <Link href="/">
+            <LogoBWithDomain sx={{width: '125px', height: '125px'}}/>
+          </Link>
         </Paper>
         <Paper
           variant='page'

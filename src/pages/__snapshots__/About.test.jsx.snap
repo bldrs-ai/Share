@@ -1,0 +1,55 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`About renders 1`] = `
+<div>
+  <div
+    class="MuiPaper-root MuiPaper-page-background MuiPaper-rounded css-1qmtcj9-MuiPaper-root"
+  >
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1deatua-MuiPaper-root"
+    >
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+        href="/"
+      >
+        <div
+          class="MuiBox-root css-1dukxs6"
+        >
+          <svg
+            data-filename="src/assets/LogoBWithDomain.svg"
+          />
+        </div>
+      </a>
+    </div>
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1xgkhtk-MuiPaper-root"
+    >
+      <h1
+        class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+      >
+        About Bldrs
+      </h1>
+      <span
+        class="MuiTypography-root MuiTypography-p css-gc4ztf-MuiTypography-root"
+      >
+        The Architecture, Engineering and Construction industries are trying to face challenging problems of the future with tools anchored in the past. Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative, open development.
+      </span>
+      <span
+        class="MuiTypography-root MuiTypography-p css-gc4ztf-MuiTypography-root"
+      >
+        We can't imagine a future where building the rest of the world hasn't been transformed by these new ways of working. We are part of that transformation.
+      </span>
+      <span
+        class="MuiTypography-root MuiTypography-p css-gc4ztf-MuiTypography-root"
+      >
+        The key insights from Tech. Cross-functional online collaboration unlocks team flow, productivity and creativity. Your team extends outside of your organization and software developers are essential team members. An ecosystem of app Creators developing on a powerful operating system. Platform is the most scalable architecture. Open workspaces, open standards and open source code the most powerful way to work. Cooperation is the unfair advantage.
+      </span>
+      <span
+        class="MuiTypography-root MuiTypography-p css-gc4ztf-MuiTypography-root"
+      >
+        Smarter Building Together
+      </span>
+    </div>
+  </div>
+</div>
+`;
