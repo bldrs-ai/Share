@@ -66,10 +66,13 @@ function Thc({children}) {
  * @param {React.ReactNode} props.children
  * @return {ReactElement}
  */
+/*
 function Thc2({children}) {
   // I'd like to high-light the excellent name of this component
   return <th style={{textAlign: 'center', fontWeight: 'normal'}} colSpan={2}>{children}</th>
 }
+*/
+// TODO(pablo): re-enable after prod bug fixed
 
 
 /**
@@ -141,14 +144,13 @@ function AboutContent() {
           </Box>
           <table style={{width: '100%', border: '1px solid rgba(128, 128, 128, .5)', padding: '0.5em'}}>
             <thead>
-              <tr><th/><th/><Thc2><em>Login with</em></Thc2><th/></tr>
-              <tr><th/><Thc>Always</Thc><Thc>Google</Thc><Thc>GitHub</Thc><Pro/></tr>
+              <tr><th/><Thc>Always</Thc><Thc>Login with<br/>GitHub</Thc><Pro/></tr>
             </thead>
             <tbody>
-              <tr><td>Fastest viewer</td><Tdc>✓</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
-              <tr><td>Share views</td><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
-              <tr><td>Placemarks & Notes</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
-              <tr><td>Private models</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Fastest viewer</td><Tdc>✓</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Share views</td><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Placemarks & Notes</td><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Private models</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
             </tbody>
           </table>
           <Stack direction='row' justifyContent='center' alignItems='center' spacing={1}>
