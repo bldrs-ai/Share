@@ -1,0 +1,220 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Privacy renders 1`] = `
+<div>
+  <div
+    class="MuiPaper-root MuiPaper-page-background MuiPaper-rounded css-1qmtcj9-MuiPaper-root"
+  >
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1deatua-MuiPaper-root"
+    >
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+        href="/"
+      >
+        <div
+          class="MuiBox-root css-1dukxs6"
+        >
+          <svg
+            data-filename="src/assets/LogoBWithDomain.svg"
+          />
+        </div>
+      </a>
+    </div>
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1xgkhtk-MuiPaper-root"
+    >
+      <h1
+        class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+      >
+        Privacy Policy
+      </h1>
+      <div
+        class="MuiBox-root css-lgj0h8"
+      >
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            Effective Date:
+          </strong>
+           January 1, 2022
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            Last Updated:
+          </strong>
+           October 23, 2025
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Bldrs Share (“we,” “us,” “our”) provides open-source, browser-first tools for viewing and collaborating on 3D model files (e.g., IFC, STEP) using our Conway Engine. We design our software to minimize data collection and maximize user control.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          1. Information We Collect
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Bldrs Share is built to operate 
+          <strong>
+            without centralized data storage
+          </strong>
+          . We do not host user content or model data by default. Depending on your configuration:
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            Authentication data.
+          </strong>
+           When you sign in via Auth0/Google or another provider, we receive basic profile information (name, email, avatar) to create or identify your account.
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            Model data.
+          </strong>
+           Models you open are processed locally in your browser using WebAssembly. If you connect third-party storage (e.g., Google Drive), we only request access to the specific files you select. We do not scan or store other files from your account.
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            Telemetry (optional).
+          </strong>
+           If enabled in a hosted deployment, we may collect anonymized usage metrics (e.g., performance, feature use) to improve reliability and UX.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          2. Open-Source and Self-Hosted Use
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Most of our codebase (including Bldrs Share and Conway) is available under the
+          <strong>
+             GNU Affero General Public License (AGPL)
+          </strong>
+           on GitHub. If you deploy or modify our software, you are responsible for complying with applicable privacy laws and for communicating your own deployment’s data-handling practices to your users.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          3. How We Use Information
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          We use limited account and usage data to authenticate users; enable integrations (e.g., importing from Google Drive); improve performance, security, and usability; and communicate important service updates.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          4. Data Storage and Security
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          <strong>
+            No persistent model storage by default.
+          </strong>
+           Model data is processed client-side and is not uploaded to our servers. Communication between your browser and our services uses HTTPS. Future, optional hosted collaboration features (e.g., Firestore for comments/sharing) may store limited user-generated data; if launched, this policy will be updated accordingly.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          5. Google User Data
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Our use of Google user data complies with the
+           
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            href="https://developers.google.com/terms/api-services-user-data-policy"
+            rel="noopener"
+            target="_blank"
+          >
+            Google API Services User Data Policy
+          </a>
+          , including Limited Use requirements. Access to Google Drive is used solely to open or save the files that you explicitly select.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          6. Your Choices
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          You can disconnect Google access in your Google Account settings. You may request deletion of any stored account metadata (if applicable) by emailing 
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            href="mailto:support@bldrs.ai"
+          >
+            support@bldrs.ai
+          </a>
+          . You can also use open-source/self-hosted deployments without accounts, subject to your configuration.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          7. Children’s Privacy
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Our services are not directed to children under 13, and we do not knowingly collect personal information from them.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          8. Updates
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          We may update this Privacy Policy as our services evolve. The “Last Updated” date will reflect the most recent changes.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        >
+          9. Contact
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-17ggkq7-MuiTypography-root"
+        >
+          Questions or privacy requests? Email
+           
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            href="mailto:support@bldrs.ai"
+          >
+            support@bldrs.ai
+          </a>
+           or visit
+           
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            href="https://bldrs.ai"
+            rel="noopener"
+            target="_blank"
+          >
+            https://bldrs.ai
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+`;

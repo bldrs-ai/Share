@@ -1,43 +1,42 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
-import SvgIcon from '@mui/material/SvgIcon'
 import {useTheme} from '@mui/material/styles'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
+import SvgIcon from '@mui/material/SvgIcon'
 
 
 /** @return {ReactElement} */
 export function LogoB({...props}) {
   return (
     <ThemeBox>
-      <LogoBIcon className='icon-share'/>
+      <SvgIcon
+        component={LogoBIcon}
+        inheritViewBox={true}
+        className='icon-share'
+        {...props}
+      />
     </ThemeBox>
   )
 }
 
 
-/** @return {ReactElement} */
+/**
+ * @param {object} props
+ * @return {ReactElement}
+ */
 export function LogoBWithDomain({...props}) {
-  const {theme} = useThemeWithLogo()
-  // We're currently only showing Logo in dialogs, etc. so
-  // use secondary contrastText
   return (
     <ThemeBox>
       <SvgIcon
-        fontSize='large'
+        component={LogoBWithDomainIcon}
+        inheritViewBox={true}
+        className='icon-share'
         {...props}
-      >
-        <LogoBWithDomainIcon
-          className='icon-share'
-          style={{
-            fill: theme?.palette?.secondary?.contrastText || '#000000',
-          }}
-        />
-      </SvgIcon>
+      />
     </ThemeBox>
   )
 }
-
 
 /**
  * @property {Array.<ReactElement>} children The logo
@@ -45,7 +44,6 @@ export function LogoBWithDomain({...props}) {
  */
 function ThemeBox({children}) {
   const {logoColors} = useThemeWithLogo()
-
   return (
     <Box
       sx={{
