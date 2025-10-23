@@ -1,5 +1,5 @@
 import '@percy/cypress'
-import { ABOUT_MISSION } from '../../../src/Components/About/component'
+import {ABOUT_MISSION} from '../../../src/Components/About/component'
 import {
   homepageSetup,
   setIsReturningUser,
