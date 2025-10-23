@@ -33,7 +33,7 @@ export default function Styles({theme}) {
           },
         },
         'a': {
-          color: theme.palette.primary.main,
+          color: 'green', // color: theme.palette.primary.main,
         },
         // TODO(pablo): move these Mui styles to
         // src/theme/Components.js

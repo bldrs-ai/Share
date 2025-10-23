@@ -18,18 +18,13 @@ describe('AboutControl', () => {
     expect(aboutControl).toBeInTheDocument()
   })
 
-  it('renders AboutDialog when control is pressed', () => {
-    const {getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+  it('renders AboutDialog when control is pressed and updates the document title', async () => {
+    const {container, getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
     const aboutControl = getByTestId(testId)
     fireEvent.click(aboutControl)
     const dialogTitle = getByText(ABOUT_MISSION)
     expect(dialogTitle).toBeInTheDocument()
-  })
-
-  it('updates the document title when the dialog is open', async () => {
-    const {getByTestId} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTestId(testId)
-    fireEvent.click(aboutControl)
     await(waitFor(() => expect(document.title).toBe(ABOUT_PAGE_TITLE)))
+    expect(container).toMatchSnapshot()
   })
 })

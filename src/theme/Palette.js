@@ -21,6 +21,7 @@ export const day = {
     contrastText: colors.grey.darkest,
     sceneBackground: '#ffffff',
     sceneHighlight: '#00F0FF',
+    link: colors.blue.dark,
   },
 
   // Side drawer, dialogs
@@ -35,6 +36,7 @@ export const day = {
     // partly transparent
     backgroundColor: `${colors.grey.light}A0`,
     backdropFilter: 'blur(1px)',
+    link: colors.blue.darkest,
   },
 
   success: {
@@ -73,6 +75,7 @@ export const night = {
     contrastText: colors.grey.lightest,
     sceneBackground: '#000000',
     sceneHighlight: '#00F0FF',
+    link: colors.blue.light,
   },
 
   // Side drawer, dialogs
@@ -87,6 +90,7 @@ export const night = {
     // partly transparent. 0x80: 0.5
     backgroundColor: `${colors.grey.dark}80`,
     backdropFilter: 'blur(1px)',
+    link: colors.blue.lightest,
   },
 
   success: {

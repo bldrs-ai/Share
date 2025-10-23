@@ -9,7 +9,7 @@ exports[`Terms renders 1`] = `
       class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1deatua-MuiPaper-root"
     >
       <a
-        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-19x0ale-MuiTypography-root-MuiLink-root"
         href="/"
       >
         <div
@@ -63,7 +63,7 @@ exports[`Terms renders 1`] = `
         >
           Bldrs Share provides browser-based tools for viewing and collaborating on 3D model files. You may use our hosted instance at 
           <a
-            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-19x0ale-MuiTypography-root-MuiLink-root"
             href="https://bldrs.ai"
             rel="noopener"
             target="_blank"
@@ -177,7 +177,7 @@ exports[`Terms renders 1`] = `
         >
           Questions? Email 
           <a
-            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-19x0ale-MuiTypography-root-MuiLink-root"
             href="mailto:support@bldrs.ai"
           >
             support@bldrs.ai
@@ -185,7 +185,7 @@ exports[`Terms renders 1`] = `
            or visit
            
           <a
-            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1jey5kd-MuiTypography-root-MuiLink-root"
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-19x0ale-MuiTypography-root-MuiLink-root"
             href="https://bldrs.ai"
             rel="noopener"
             target="_blank"

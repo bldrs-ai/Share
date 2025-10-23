@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AboutControl renders AboutDialog when control is pressed and updates the document title 1`] = `
+<div>
+  <button
+    aria-pressed="false"
+    class="MuiButtonBase-root MuiToggleButton-root MuiToggleButton-sizeSmall MuiToggleButton-success css-1aw5b4q-MuiButtonBase-root-MuiToggleButton-root"
+    data-mui-internal-clone-element="true"
+    data-testid="control-button-about"
+    tabindex="0"
+    title="About Bldrs
+1.0.1661"
+    type="button"
+    value=""
+    variant="control"
+  >
+    <div
+      class="MuiBox-root css-1dukxs6"
+    >
+      <svg
+        data-filename="src/assets/LogoB.svg"
+      />
+    </div>
+    <span
+      class="MuiTouchRipple-root css-8je8zh-MuiTouchRipple-root"
+    />
+  </button>
+</div>
+`;

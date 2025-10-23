@@ -217,7 +217,7 @@ export function getComponentOverrides(palette, typography) {
     MuiLink: {
       styleOverrides: {
         root: {
-          color: palette.secondary.contrastText,
+          color: palette.primary.link,
           textDecoration: 'underline',
         },
       },
