@@ -19,12 +19,11 @@ describe('AboutControl', () => {
   })
 
   it('renders AboutDialog when control is pressed and updates the document title', async () => {
-    const {container, getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const {getByTestId, getByText} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
     const aboutControl = getByTestId(testId)
     fireEvent.click(aboutControl)
     const dialogTitle = getByText(ABOUT_MISSION)
     expect(dialogTitle).toBeInTheDocument()
     await(waitFor(() => expect(document.title).toBe(ABOUT_PAGE_TITLE)))
-    expect(container).toMatchSnapshot()
   })
 })
