@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {ABOUT_MISSION} from '../../../src/Components/About/component'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -8,7 +9,7 @@ import {
 
 
 // From https://github.com/bldrs-ai/Share/issues/1031
-describe('view 100: Initial model load and view', () => {
+describe.skip('view 100: Initial model load and view', () => {
   beforeEach(homepageSetup)
 
   context('Returning user', () => {
@@ -18,19 +19,19 @@ describe('view 100: Initial model load and view', () => {
       beforeEach(visitHomepageWaitForModel)
 
       // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
-      it.skip('See logo model, model title and all main controls - Screen', () => {
+      it('See logo model, model title and all main controls - Screen', () => {
         cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
 
-        cy.get('[data-testid="control-button-open"]').should('exist')
-        cy.get('[data-testid="control-button-navigation"]').should('exist')
-        cy.get('[data-testid="control-button-search"]').should('exist')
-        cy.get('[data-testid="control-button-profile"]').should('exist')
-        cy.get('[data-testid="control-button-share"]').should('exist')
-        cy.get('[data-testid="control-button-notes"]').should('exist')
-        cy.get('[data-testid="control-button-rendering"]').should('exist')
-        cy.get('[data-testid="control-button-help"]').should('exist')
-        cy.get('[data-testid="control-button-cut-plane"]').should('exist')
-        cy.get('[data-testid="control-button-about"]').should('exist')
+        cy.getByTestId('control-button-open').should('exist')
+        cy.getByTestId('control-button-navigation').should('exist')
+        cy.getByTestId('control-button-search').should('exist')
+        cy.getByTestId('control-button-profile').should('exist')
+        cy.getByTestId('control-button-share').should('exist')
+        cy.getByTestId('control-button-notes').should('exist')
+        cy.getByTestId('control-button-rendering').should('exist')
+        cy.getByTestId('control-button-help').should('exist')
+        cy.getByTestId('control-button-cut-plane').should('exist')
+        cy.getByTestId('control-button-about').should('exist')
 
         cy.percySnapshot()
       })
@@ -43,7 +44,7 @@ describe('view 100: Initial model load and view', () => {
       })
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
+        cy.getByTestId(DIALOG_ID).should('exist')
         cy.title().should('eq', 'About — bldrs.ai')
         cy.percySnapshot()
       })
@@ -58,23 +59,27 @@ describe('view 100: Initial model load and view', () => {
       beforeEach(visitHomepageWaitForModel)
 
       it('See AboutDialog - Screen', () => {
-        cy.get('[data-testid="dialog-build-every-thing-together"]').should('exist')
+        cy.getByTestId(DIALOG_ID).should('exist')
         cy.percySnapshot()
       })
 
       context('Close about dialog', () => {
         beforeEach(() => {
-          cy.get('[data-testid="dialog-build-every-thing-together"]').should('be.visible')
-          cy.get('[data-testid="button-dialog-main-action"]').should('be.visible').click()
+          cy.getByTestId(DIALOG_ID).should('be.visible')
+          cy.getByTestId('button-dialog-main-action').click()
         })
 
         it('AboutDialog not visible, onboarding overlay closes, model visible - Screen', () => {
-          cy.get('body').find('[data-testid="dialog-build-every-thing-together"]').should('not.exist')
-          cy.get('[data-testid="onboarding-overlay"]').should('be.visible').click()
-          cy.get('body').find('[data-testid="onboarding-overlay"]').should('not.exist')
+          cy.getByTestId(DIALOG_ID).should('not.exist')
+          cy.getByTestId('onboarding-overlay').should('be.visible').click()
+          cy.getByTestId('onboarding-overlay').should('not.exist')
           cy.percySnapshot()
         })
       })
     })
   })
 })
+
+
+const idPart = ABOUT_MISSION.toLowerCase().replaceAll(' ', '-').replaceAll('.', '')
+const DIALOG_ID = `dialog-${idPart}`

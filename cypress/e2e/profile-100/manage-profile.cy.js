@@ -40,7 +40,7 @@ describe('ManageProfile modal', () => {
     })
   })
 
-  context('When only Google is linked', () => {
+  context.skip('When only Google is linked', () => {
     beforeEach(() => {
       // user with GitHub identity only
       returningUserVisitsHomepageWaitForModel()

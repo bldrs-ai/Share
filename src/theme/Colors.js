@@ -18,5 +18,12 @@ export function getColors() {
       darkest: '#101010',
       black: '#000000',
     },
+    blue: {
+      lightest: '#ccccff',
+      light: '#ccccff',
+      medium: '#aaaaff',
+      dark: '#8888ff',
+      darkest: '#4444ff',
+    },
   }
 }

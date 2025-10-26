@@ -70,12 +70,19 @@ export function assertDefined(...args) {
 /**
  * @param {boolean} arg Value to test
  * @return {boolean} The argument
+ * @throws If the argument is not a boolean
  */
 export function assertDefinedBoolean(arg) {
-  if (arg) {
-    return true
+  if (arg === undefined) {
+    throw new Error('Argument must be defined')
   }
-  return false
+  if (arg === null) {
+    throw new Error('Argument must be not null')
+  }
+  if (typeof arg !== 'boolean') {
+    throw new Error('Argument must be a boolean')
+  }
+  return arg
 }
 
 

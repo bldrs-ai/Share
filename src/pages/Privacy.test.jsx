@@ -1,13 +1,13 @@
 import React from 'react'
 import {render} from '@testing-library/react'
 import {HelmetThemeCtx} from '../Share.fixture'
-import About from './About'
+import Privacy from './Privacy'
 
 
-describe('About', () => {
+describe('Privacy', () => {
   it('renders', () => {
-    const {container, getByText} = render(<About/>, {wrapper: HelmetThemeCtx})
-    const title = getByText('About Bldrs')
+    const {container, getByText} = render(<Privacy/>, {wrapper: HelmetThemeCtx})
+    const title = getByText('Privacy Policy')
     expect(title).toBeInTheDocument()
     expect(container).toMatchSnapshot()
   })

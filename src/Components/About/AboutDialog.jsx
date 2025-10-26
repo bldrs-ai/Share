@@ -1,5 +1,6 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
+import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import SvgIcon from '@mui/material/SvgIcon'
@@ -45,6 +46,71 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
 }
 
 
+/**
+ * Centered table header cell
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ * @return {ReactElement}
+ */
+function Thc({children}) {
+  // I'd like to high-light the excellent name of this component
+  return <th style={{textAlign: 'center', fontWeight: 'normal'}}>{children}</th>
+}
+
+
+/**
+ * Centered table header cell with 2 columns
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ * @return {ReactElement}
+ */
+/*
+function Thc2({children}) {
+  // I'd like to high-light the excellent name of this component
+  return <th style={{textAlign: 'center', fontWeight: 'normal'}} colSpan={2}>{children}</th>
+}
+*/
+// TODO(pablo): re-enable after prod bug fixed
+
+
+/**
+ * Centered table header cell with 2 columns
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ * @return {ReactElement}
+ */
+function Pro({children}) {
+  // I'd like to high-light the excellent name of this component
+  return (
+    <th
+      style={{
+        textAlign: 'center',
+        fontWeight: 'bold',
+        width: '4em',
+        color: 'lime',
+      }}
+    >
+      Pro
+    </th>
+  )
+}
+
+
+/**
+ * Centered table data cell
+ *
+ * @param {object} props
+ * @param {React.ReactNode} props.children
+ * @return {ReactElement}
+ */
+function Tdc({children}) {
+  return <td style={{textAlign: 'center'}}>{children}</td>
+}
+
+
 /** @return {ReactElement} */
 function AboutContent() {
   return (
@@ -58,26 +124,35 @@ function AboutContent() {
         justifyContent='center'
         alignItems='center'
       >
-        <Stack align='left' spacing={2} sx={{width: '100%'}}>
+        <Stack align='center' justifyContent='center' spacing={2} sx={{width: '100%'}}>
           <Typography variant='body1'>
-            Welcome to Bldrs - Share!
+            <Link href='/share/about'>The fastest browser-based CAD engine</Link>.
           </Typography>
-          <div>
-            Use the Open dialog to open IFC or STEP models from:
-            <ul>
-              <li>Local files - <em>Drag &amp; Drop to open; no data is uploaded</em></li>
-              <li>Files hosted on GitHub, public or private</li>
-              <li>Click the Open folder and check out Sample models</li>
-            </ul>
-          </div>
-          <Typography variant='body1'>
-            Position the camera, Select elements, Crop using section planes and
-            Collaborate with your team via Notes.  For files on GitHub share the
-            exact view using the page URL or Share dialog.
-          </Typography>
-          <Typography variant='body1'>
-            Comments and suggestions welcome!
-          </Typography>
+          <Box
+            component="ul"
+            sx={{
+              width: '90%',
+              margin: '0 auto',
+              listStyleType: 'disc',
+              textAlign: 'left',
+              display: 'inline-block',
+            }}
+          >
+            <li><strong>Drag &amp; Drop to open; no data upload</strong></li>
+            <li>Open standards: IFC 2x3&4, STL, OBJ</li>
+            <li>STEP AP214 (<Link href='https://github.com/bldrs-ai/conway-viewer-demo'>early access</Link>)</li>
+          </Box>
+          <table style={{width: '100%', border: '1px solid rgba(128, 128, 128, .5)', padding: '0.5em'}}>
+            <thead>
+              <tr><th/><Thc>Always</Thc><Thc>Login with<br/>GitHub</Thc><Pro/></tr>
+            </thead>
+            <tbody>
+              <tr><td>Fastest viewer</td><Tdc>✓</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Share views</td><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Placemarks & Notes</td><Tdc>X</Tdc><Tdc>✓</Tdc><Tdc>✓</Tdc></tr>
+              <tr><td>Private models</td><Tdc>X</Tdc><Tdc>X</Tdc><Tdc>✓</Tdc></tr>
+            </tbody>
+          </table>
           <Stack direction='row' justifyContent='center' alignItems='center' spacing={1}>
             <Link href='https://discord.gg/9SxguBkFfQ' rel='noopener' sx={{display: 'flex', alignItems: 'center'}}>
               <SvgIcon sx={{marginRight: '0.25em'}}><DiscordIcon className='icon-share'/></SvgIcon>Discord
@@ -89,6 +164,9 @@ function AboutContent() {
               <EmailIcon className='icon-share' sx={{marginRight: '0.25em'}}/>info@bldrs.ai
             </Link>
           </Stack>
+          <Typography variant='body2' sx={{fontSize: '0.9em', opacity: 0.75, textAlign: 'center'}}>
+            See our <Link href='/tos'>Terms of Service</Link> and <Link href='/privacy'>Privacy Policy</Link>.
+          </Typography>
         </Stack>
       </Stack>
     </>)

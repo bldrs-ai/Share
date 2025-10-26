@@ -11,6 +11,7 @@ import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
+import {assertDefinedBoolean} from '../../utils/assert'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
@@ -50,7 +51,8 @@ export default function ProfileControl() {
   } = useAuth0()
   const theme = useTheme()
 
-  const [isLoginDialogDisplayed, setIsLoginDialogDisplayed] = useState(false)
+  const isLoginVisible = useStore((state) => state.isLoginVisible)
+  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
   const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -102,7 +104,7 @@ export default function ProfileControl() {
 
   const onLoginClick = (connection) => {
     handleLogin(connection)
-    setIsLoginDialogDisplayed(false)
+    setIsLoginVisible(false)
     onCloseMenu()
   }
 
@@ -165,6 +167,8 @@ export default function ProfileControl() {
     setIsDay(theme.palette.mode === 'light')
   }, [theme.palette.mode])
 
+  assertDefinedBoolean(isLoginVisible)
+
   return (
     <>
       <TooltipIconButton
@@ -190,7 +194,7 @@ export default function ProfileControl() {
         {!isAuthenticated && (
           <MenuItem
             onClick={() => {
-              setIsLoginDialogDisplayed(true)
+              setIsLoginVisible(true)
               onCloseMenu()
             }}
             data-testid='menu-open-login-dialog'
@@ -321,8 +325,8 @@ export default function ProfileControl() {
       </Menu>
 
       <LoginDialog
-        isDialogDisplayed={isLoginDialogDisplayed}
-        setIsDialogDisplayed={(isDisplayed) => setIsLoginDialogDisplayed(isDisplayed)}
+        isDialogDisplayed={isLoginVisible}
+        setIsDialogDisplayed={(isDisplayed) => setIsLoginVisible(isDisplayed)}
         onLogin={onLoginClick}
         isGoogleEnabled={isGoogleEnabled}
       />

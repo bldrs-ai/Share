@@ -1,47 +1,15 @@
 import React from 'react'
-import {fireEvent, render} from '@testing-library/react'
+import {act, fireEvent, render, within} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
-import {ThemeCtx} from '../../theme/Theme.fixture'
+import {RouteThemeCtx} from '../../Share.fixture'
+import useStore from '../../store/useStore'
 import LoginMenu from './ProfileControl'
-import {MemoryRouter} from 'react-router-dom'
-
-
-export const withRouter = (ui, {route = '/'} = {}) => (
-  <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-)
-
-
-jest.mock('../../store/useStore', () => {
-  // Everything is inside the factory’s own scope 👇
-  const storeState = {
-    appMetadata: null,
-    setAppMetadata: (data) => {
-      storeState.appMetadata = data
-    },
-    setAccessToken: jest.fn(),
-  }
-  // This is the mock implementation of the useStore hook
-  const useStoreMock = (selector) => selector(storeState)
-
-  /* ---- helpers the tests can call ---- */
-  useStoreMock.__setAppMetadata = (meta) => storeState.setAppMetadata(meta)
-  useStoreMock.__reset = () => {
-    storeState.appMetadata = null
-  }
-
-  return {
-    __esModule: true,
-    default: useStoreMock,
-  }
-})
-
-const useStoreMock = require('../../store/useStore').default
 
 
 describe('ProfileControl', () => {
   it('renders the login button when not logged in, and other links', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -53,9 +21,10 @@ describe('ProfileControl', () => {
     expect(BldrsWiki).toBeInTheDocument()
   })
 
+
   it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -63,9 +32,10 @@ describe('ProfileControl', () => {
     expect(LoginWithGithub).toBeInTheDocument()
   })
 
+
   it('renders all theme selection options', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, findByText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -78,21 +48,23 @@ describe('ProfileControl', () => {
     expect(systemTheme).toBeInTheDocument()
   })
 
+
   it('shows checkmark next to System theme by default', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId, getByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, getByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
     const systemThemeItem = getByTestId('control-button-profile-menu-item-theme-system')
-    const checkIcon = systemThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]')
+    const checkIcon = within(systemThemeItem).getByTestId('CheckOutlinedIcon')
 
     expect(checkIcon).toBeInTheDocument()
   })
 
+
   it('allows selecting Day theme', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -106,9 +78,10 @@ describe('ProfileControl', () => {
     expect(dayThemeButton).toBeInTheDocument()
   })
 
+
   it('allows selecting Night theme', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -121,9 +94,10 @@ describe('ProfileControl', () => {
     expect(nightThemeButton).toBeInTheDocument()
   })
 
+
   it('allows selecting System theme', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -136,9 +110,10 @@ describe('ProfileControl', () => {
     expect(systemThemeButton).toBeInTheDocument()
   })
 
+
   it('shows correct icons for each theme option', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -147,14 +122,15 @@ describe('ProfileControl', () => {
     const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
     // Check for correct icons
-    expect(dayThemeItem.querySelector('[data-testid="WbSunnyOutlinedIcon"]')).toBeInTheDocument()
-    expect(nightThemeItem.querySelector('[data-testid="NightlightOutlinedIcon"]')).toBeInTheDocument()
-    expect(systemThemeItem.querySelector('[data-testid="SettingsBrightnessOutlinedIcon"]')).toBeInTheDocument()
+    expect(within(dayThemeItem).getByTestId('WbSunnyOutlinedIcon')).toBeInTheDocument()
+    expect(within(nightThemeItem).getByTestId('NightlightOutlinedIcon')).toBeInTheDocument()
+    expect(within(systemThemeItem).getByTestId('SettingsBrightnessOutlinedIcon')).toBeInTheDocument()
   })
 
-  it('shows checkmark indicating current theme selection', async () => {
+
+  it('theme defaults to system', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -162,19 +138,16 @@ describe('ProfileControl', () => {
     const nightThemeItem = await findByTestId('control-button-profile-menu-item-theme-night')
     const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
-    // At least one theme should have a checkmark (since we can't easily control theme state in test)
-    const dayHasCheck = dayThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]') !== null
-    const nightHasCheck = nightThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]') !== null
-    const systemHasCheck = systemThemeItem.querySelector('[data-testid="CheckOutlinedIcon"]') !== null
-
-    // Exactly one theme should have a checkmark
-    const checkCount = [dayHasCheck, nightHasCheck, systemHasCheck].filter(Boolean).length
-    expect(checkCount).toBe(1)
+    // Check if the checkmark is present for system and not for day or night
+    expect(within(dayThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(nightThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(systemThemeItem).getByTestId('CheckOutlinedIcon')).toBeInTheDocument()
   })
 
-  it('theme selection is mutually exclusive', async () => {
+
+  it('theme changes work', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -183,28 +156,43 @@ describe('ProfileControl', () => {
     const nightThemeItem = await findByTestId('control-button-profile-menu-item-theme-night')
     const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
-    // All theme options should be present
-    expect(dayThemeItem).toBeInTheDocument()
-    expect(nightThemeItem).toBeInTheDocument()
-    expect(systemThemeItem).toBeInTheDocument()
+    act(() => dayThemeItem.click())
+    expect(within(dayThemeItem).getByTestId('CheckOutlinedIcon')).toBeInTheDocument()
+    expect(within(nightThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(systemThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+
+    act(() => nightThemeItem.click())
+    expect(within(dayThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(nightThemeItem).getByTestId('CheckOutlinedIcon')).toBeInTheDocument()
+    expect(within(systemThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+
+    act(() => systemThemeItem.click())
+    expect(within(dayThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(nightThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
+    expect(within(systemThemeItem).getByTestId('CheckOutlinedIcon')).toBeInTheDocument()
   })
+
 
   it('renders users avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByAltText} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByAltText} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const avatarImage = await findByAltText('Unit Testing')
     expect(avatarImage).toBeInTheDocument()
   })
 
-  it('shows “Manage Subscription” for a paying (Pro) user', async () => {
+
+  it('shows "Manage Subscription" for a paying (Pro) user', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    useStoreMock.__setAppMetadata({
-      userEmail: 'pro@test.com',
-      stripeCustomerId: 'cus_test_123',
-      subscriptionStatus: 'sharePro',
+
+    act(() => {
+      useStore.getState().setAppMetadata({
+        userEmail: 'pro@test.com',
+        stripeCustomerId: 'cus_test_123',
+        subscriptionStatus: 'sharePro',
+      })
     })
 
-    const {findByTestId, queryByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, queryByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
@@ -212,15 +200,19 @@ describe('ProfileControl', () => {
     expect(queryByTestId('upgrade-to-pro')).toBeNull()
   })
 
-  it('shows “Upgrade to Pro” for an authenticated Free user', async () => {
+
+  it('shows "Upgrade to Pro" for an authenticated Free user', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    useStoreMock.__setAppMetadata({
-      userEmail: 'free@test.com',
-      stripeCustomerId: null,
-      subscriptionStatus: 'free',
+
+    act(() => {
+      useStore.getState().setAppMetadata({
+        userEmail: 'free@test.com',
+        stripeCustomerId: null,
+        subscriptionStatus: 'free',
+      })
     })
 
-    const {findByTestId, queryByTestId} = render(withRouter(<LoginMenu/>), {wrapper: ThemeCtx})
+    const {findByTestId, queryByTestId} = render(<LoginMenu/>, {wrapper: RouteThemeCtx})
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 

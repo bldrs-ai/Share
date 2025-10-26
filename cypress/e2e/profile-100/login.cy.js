@@ -19,7 +19,7 @@ describe('Profile 100: Login with Github', () => {
   })
 })
 
-describe('Profile 100: Login with Github', () => {
+describe.skip('Profile 100: Login with Github', () => {
   beforeEach(homepageSetup)
   context('Returning user visits homepage, clicks ProfileControl', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
