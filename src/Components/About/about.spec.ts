@@ -4,6 +4,7 @@ import {
   returningUserVisitsHomepageWaitForModel,
   visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
+import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 
 
 /**
@@ -15,6 +16,7 @@ test.describe('View 100: About Dialog', () => {
   test.beforeEach(async ({page}) => {
     await clearState(page.context())
   })
+
   test.describe('First time user visits homepage', () => {
     test.beforeEach('First time user visits homepage', async ({page}) => {
       await visitHomepageWaitForModel(page)
@@ -39,8 +41,3 @@ test.describe('View 100: About Dialog', () => {
     })
   })
 })
-
-
-// Constants from the About component
-const ABOUT_MISSION = 'Build Every Thing Together'
-const ABOUT_PAGE_TITLE = 'About — bldrs.ai'

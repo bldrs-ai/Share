@@ -5,19 +5,20 @@ import {
 } from '../../tests/e2e/utils'
 
 
+const {describe, beforeEach} = test
 /**
- * Profile 100: Theme - migrated from Cypress
+ * Profile 100: Theme
  *
  * {@link https://github.com/bldrs-ai/Share/issues/1070}
  */
-test.describe('Profile 100: Theme', () => {
-  test.describe('Returning user visits homepage', () => {
-    test.beforeEach(async ({page}) => {
+describe('Profile 100: Theme', () => {
+  describe('Returning user visits homepage', () => {
+    beforeEach(async ({page}) => {
       await homepageSetup(page)
       await returningUserVisitsHomepageWaitForModel(page)
     })
 
-    test.describe('Select ProfileControl', () => {
+    describe('Select ProfileControl', () => {
       let controlButtonProfile: Locator
       let menuItemThemeSystem: Locator
       let menuItemThemeDay: Locator
@@ -25,7 +26,7 @@ test.describe('Profile 100: Theme', () => {
       const isChecked = async (elt: Locator, isExpected: boolean) => {
         await expect(elt).toHaveAttribute('aria-checked', isExpected ? 'true' : 'false')
       }
-      test.beforeEach(async ({page}) => {
+      beforeEach(async ({page}) => {
         const buttonId = 'control-button-profile'
         const menuItemPrefix = `${buttonId}-menu-item-theme`
         controlButtonProfile = page.getByTestId(buttonId)
@@ -46,8 +47,8 @@ test.describe('Profile 100: Theme', () => {
         // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
       })
 
-      test.describe('Select ProfileControl > Day theme', () => {
-        test.beforeEach(async () => {
+      describe('Select ProfileControl > Day theme', () => {
+        beforeEach(async () => {
           await menuItemThemeDay.click()
           await controlButtonProfile.click() // reopen
         })
@@ -60,8 +61,8 @@ test.describe('Profile 100: Theme', () => {
         })
       })
 
-      test.describe('Select ProfileControl > Night theme', () => {
-        test.beforeEach(async () => {
+      describe('Select ProfileControl > Night theme', () => {
+        beforeEach(async () => {
           await menuItemThemeNight.click()
           await controlButtonProfile.click() // reopen
         })
@@ -72,6 +73,16 @@ test.describe('Profile 100: Theme', () => {
           await isChecked(menuItemThemeNight, true)
           // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
         })
+      })
+
+      test('Theme persists after page reload - Screen', async ({page}) => {
+        await menuItemThemeDay.click()
+        await page.reload()
+        await controlButtonProfile.click() // reopen
+        await isChecked(menuItemThemeDay, true)
+        await isChecked(menuItemThemeNight, false)
+        await isChecked(menuItemThemeSystem, false)
+        // TODO: Add screenshot/visual testing equivalent to cy.percySnapshot()
       })
     })
   })
