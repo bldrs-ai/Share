@@ -16,6 +16,8 @@ import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
+import Privacy from './pages/Privacy'
+import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
 import useStore from './store/useStore'
@@ -189,6 +191,8 @@ export default function BaseRoutes({testElt = null}) {
                 }
               />
               <Route path='about' element={<About/>}/>
+              <Route path='privacy' element={<Privacy/>}/>
+              <Route path='tos' element={<TOS/>}/>
               <Route path='blog/*' element={<BlogRoutes/>}/>
             </Route>
             <Route path='popup-auth' element={<PopupAuth/>}/>

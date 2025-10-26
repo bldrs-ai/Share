@@ -26,7 +26,7 @@ export default function About() {
         unfair advantage.
       </Typography>
       <Typography variant='p'>
-        Build Every Thing Together
+        Smarter Building Together
       </Typography>
     </TitledLayout>
   )

@@ -9,7 +9,7 @@ import debug from '../utils/debug'
  * @param {string} name Feature flag name
  * @return {Function}
  */
-export function useExistInFeature(name) {
+export default function useExistInFeature(name) {
   const [existInFeature, setExistInFeature] = useState(false)
   const [searchParams] = useSearchParams()
 

@@ -2,14 +2,18 @@ import React, {ReactElement} from 'react'
 import {
   Stack,
   Button,
+  SvgIcon,
 } from '@mui/material'
 import {
   Login as LoginIcon,
   GitHub as GitHubIcon,
-  Google as GoogleIcon,
 } from '@mui/icons-material'
 import Dialog from '../Dialog'
+import useHashState from '../../hooks/useHashState'
 import {useMock} from './ProfileControl'
+import useExistInFeature from '../../hooks/useExistInFeature'
+import GoogleIcon from '../../assets/icons/google-icon.svg'
+import {HASH_PREFIX_LOGIN} from './hashState'
 
 
 /**
@@ -22,6 +26,8 @@ import {useMock} from './ProfileControl'
  * @return {ReactElement}
  */
 export default function LoginDialog({isDialogDisplayed, setIsDialogDisplayed, onLogin, isGoogleEnabled}) {
+  const isGoogleFeatureFlagEnabled = useExistInFeature('googleOAuth2')
+  useHashState(HASH_PREFIX_LOGIN, isDialogDisplayed)
   return (
     <Dialog
       headerText='Sign in with'
@@ -30,6 +36,23 @@ export default function LoginDialog({isDialogDisplayed, setIsDialogDisplayed, on
       headerIcon={<LoginIcon className='icon-share'/>}
     >
       <Stack spacing={2} mt={2}>
+        {(isGoogleFeatureFlagEnabled && (isGoogleEnabled || useMock)) && (
+          <Button
+            fullWidth
+            variant='outlined'
+            startIcon={<SvgIcon component={GoogleIcon} inheritViewBox sx={{width: '24px', height: '24px'}}/>}
+            onClick={() => onLogin('google-oauth2')}
+            data-testid='login-with-google'
+            sx={{
+              'borderColor': 'divider',
+              'color': 'text.primary',
+              '&:hover': {borderColor: 'text.primary'},
+              'textTransform': 'none',
+            }}
+          >
+            Google
+          </Button>
+        )}
         <Button
           fullWidth
           variant='outlined'
@@ -40,26 +63,11 @@ export default function LoginDialog({isDialogDisplayed, setIsDialogDisplayed, on
             'borderColor': 'divider',
             'color': 'text.primary',
             '&:hover': {borderColor: 'text.primary'},
+            'textTransform': 'none',
           }}
         >
           GitHub
         </Button>
-        {(isGoogleEnabled || useMock) && (
-          <Button
-            fullWidth
-            variant='outlined'
-            startIcon={<GoogleIcon/>}
-            onClick={() => onLogin('google-oauth2')}
-            data-testid='login-with-google'
-            sx={{
-              'borderColor': 'divider',
-              'color': 'text.primary',
-              '&:hover': {borderColor: 'text.primary'},
-            }}
-          >
-            Google
-          </Button>
-        )}
       </Stack>
     </Dialog>
   )
