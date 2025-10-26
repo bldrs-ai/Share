@@ -1,5 +1,5 @@
 import {renderHook} from '@testing-library/react'
-import {useExistInFeature} from './useExistInFeature'
+import useExistInFeature from './useExistInFeature'
 
 
 jest.mock('react-router-dom', () => {
