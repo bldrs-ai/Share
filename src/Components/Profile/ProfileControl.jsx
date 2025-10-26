@@ -250,13 +250,33 @@ export default function ProfileControl() {
             Bldrs Wiki
           </Typography>
         </MenuItem>
+
         <Divider/>
+
+        {/* Theme menu items */}
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.System)
+            onCloseMenu()
+          }}
+          role='menuitemradio'
+          aria-checked={theme.isSystemMode}
+          data-testid='control-button-profile-menu-item-theme-system'
+        >
+          <SettingsBrightnessOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            Use system theme
+          </Typography>
+          {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
         <MenuItem
           onClick={() => {
             theme.setTheme(Themes.Day)
             onCloseMenu()
           }}
-          data-testid='set-theme-day'
+          role='menuitemradio'
+          aria-checked={!theme.isSystemMode && isDay}
+          data-testid='control-button-profile-menu-item-theme-day'
         >
           <WbSunnyOutlinedIcon/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>
@@ -269,7 +289,9 @@ export default function ProfileControl() {
             theme.setTheme(Themes.Night)
             onCloseMenu()
           }}
-          data-testid='set-theme-night'
+          role='menuitemradio'
+          aria-checked={!theme.isSystemMode && !isDay}
+          data-testid='control-button-profile-menu-item-theme-night'
         >
           <NightlightOutlinedIcon/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>
@@ -277,21 +299,10 @@ export default function ProfileControl() {
           </Typography>
           {!theme.isSystemMode && !isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            theme.setTheme(Themes.System)
-            onCloseMenu()
-          }}
-          data-testid='set-theme-system'
-        >
-          <SettingsBrightnessOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Use system theme
-          </Typography>
-          {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
-        </MenuItem>
+        {/* End of theme menu items */}
 
         <Divider/>
+
         <MenuItem
           onClick={async () => {
             onCloseMenu()

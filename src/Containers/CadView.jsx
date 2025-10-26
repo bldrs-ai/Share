@@ -105,7 +105,6 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
-  const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
 
   // Drag and Drop
   // Add a new state for drag over effect
@@ -252,7 +251,6 @@ export default function CadView({
     // Would like to use zero but doesn't work
     // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
     cameraControls.addEventListener('rest', () => {
-      setIsCameraAtRest(true)
       trackModelInteraction()
     })
   }
@@ -721,13 +719,7 @@ export default function CadView({
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
-      {
-        <ViewerContainer
-          data-testid='cadview-dropzone'
-          data-model-ready={isModelReady}
-          data-is-camera-at-rest={isCameraAtRest}
-        />
-      }
+      {<ViewerContainer/>}
       {viewer && (
         <RootLandscape
           pathPrefix={pathPrefix}

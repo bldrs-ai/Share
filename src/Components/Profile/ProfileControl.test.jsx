@@ -55,7 +55,7 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const systemThemeItem = getByTestId('set-theme-system')
+    const systemThemeItem = getByTestId('control-button-profile-menu-item-theme-system')
     const checkIcon = within(systemThemeItem).getByTestId('CheckOutlinedIcon')
 
     expect(checkIcon).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const dayThemeButton = await findByTestId('set-theme-day')
+    const dayThemeButton = await findByTestId('control-button-profile-menu-item-theme-day')
 
     // Should be clickable
     expect(dayThemeButton).toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const nightThemeButton = await findByTestId('set-theme-night')
+    const nightThemeButton = await findByTestId('control-button-profile-menu-item-theme-night')
 
     // Should be clickable
     expect(nightThemeButton).toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const systemThemeButton = await findByTestId('set-theme-system')
+    const systemThemeButton = await findByTestId('control-button-profile-menu-item-theme-system')
 
     // Should be clickable
     expect(systemThemeButton).toBeInTheDocument()
@@ -117,9 +117,9 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const dayThemeItem = await findByTestId('set-theme-day')
-    const nightThemeItem = await findByTestId('set-theme-night')
-    const systemThemeItem = await findByTestId('set-theme-system')
+    const dayThemeItem = await findByTestId('control-button-profile-menu-item-theme-day')
+    const nightThemeItem = await findByTestId('control-button-profile-menu-item-theme-night')
+    const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
     // Check for correct icons
     expect(within(dayThemeItem).getByTestId('WbSunnyOutlinedIcon')).toBeInTheDocument()
@@ -134,9 +134,9 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const dayThemeItem = await findByTestId('set-theme-day')
-    const nightThemeItem = await findByTestId('set-theme-night')
-    const systemThemeItem = await findByTestId('set-theme-system')
+    const dayThemeItem = await findByTestId('control-button-profile-menu-item-theme-day')
+    const nightThemeItem = await findByTestId('control-button-profile-menu-item-theme-night')
+    const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
     // Check if the checkmark is present for system and not for day or night
     expect(within(dayThemeItem).queryByTestId('CheckOutlinedIcon')).toBeNull()
@@ -151,9 +151,10 @@ describe('ProfileControl', () => {
     const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
-    const dayThemeItem = await findByTestId('set-theme-day')
-    const nightThemeItem = await findByTestId('set-theme-night')
-    const systemThemeItem = await findByTestId('set-theme-system')
+    // Verify that the checkmark behavior suggests mutual exclusivity
+    const dayThemeItem = await findByTestId('control-button-profile-menu-item-theme-day')
+    const nightThemeItem = await findByTestId('control-button-profile-menu-item-theme-night')
+    const systemThemeItem = await findByTestId('control-button-profile-menu-item-theme-system')
 
     act(() => dayThemeItem.click())
     expect(within(dayThemeItem).getByTestId('CheckOutlinedIcon')).toBeInTheDocument()

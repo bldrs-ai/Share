@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import * as process from 'node:process'
 import {fileURLToPath} from 'url'
 import defines from './defines.js'
 import makePlugins from './plugins.js'

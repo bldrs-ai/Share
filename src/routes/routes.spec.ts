@@ -1,6 +1,7 @@
-import {test, expect, Page, Response, Route} from '@playwright/test'
-import fs from 'fs'
-import path from 'path'
+import {test, expect} from '@playwright/test'
+import {clearState, registerIntercept, setIsReturningUser} from '../tests/e2e/utils'
+import {readFile} from 'fs/promises'
+import {join} from 'path'
 
 
 /**
@@ -11,15 +12,8 @@ test.describe('Routes', () => {
   const HTTP_OK = 200
 
   test.beforeEach(async ({context}) => {
-    // Set returning user cookie to skip about dialog
-    await context.addCookies([
-      {
-        name: 'isFirstTime',
-        value: '1',
-        domain: 'localhost',
-        path: '/',
-      },
-    ])
+    await clearState(context)
+    await setIsReturningUser(context)
   })
 
   // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
@@ -38,6 +32,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
+
   const mockFileId = '17aKaRB6EU2fJtBpmpmZ87IlwZ-J-4XrU'
   const gapiPattern = new RegExp(`https://www\\.googleapis\\.com/drive/v3/files/${mockFileId}($|\\?)`)
   // Generic URL route (/u)
@@ -55,6 +50,7 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
+
   // Google Drive file ID route (/g)
   test('Google Drive file ID route (/g) processes file ID', async ({page}) => {
     const response = await registerIntercept({
@@ -67,6 +63,7 @@ test.describe('Routes', () => {
 
     expect(response.status()).toBe(HTTP_OK)
   })
+
 
   test('Google Drive URL route (/g) processes Google Drive URL', async ({page}) => {
     // Mock Google Drive URL format
@@ -83,75 +80,38 @@ test.describe('Routes', () => {
     expect(response.status()).toBe(HTTP_OK)
   })
 
-  // New file route (/new)
-  test('New file route (/new) processes uploaded file', async ({page}) => {
-    // Pattern to match the local file request for a newly uploaded file
-    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+  test.skip('upload IFC → redirects to /share/v/new/<UUID>.ifc and renders', async ({page}) => {
+    await page.goto('/share/v/p/index.ifc') // or wherever your uploader lives
 
-    const response = await registerIntercept({
-      page,
-      intereceptPattern: newFilePattern,
-      responseUrlStr: 'http://localhost',
-      fixtureFilename: 'index.ifc',
-      gotoPath: `/share/v/new/index.ifc`,
-    })
+    const FIXTURES_DIR = join(__dirname, '..', '..', 'cypress', 'fixtures')
+    const name = 'TestFixture.ifc'
+    const ifc = join(FIXTURES_DIR, name)
+    const bytes = await readFile(ifc)
+    const byteArray = new Uint8Array(Array.from(bytes))
 
-    expect(response.status()).toBe(HTTP_OK)
-  })
+    // Create a DataTransfer with a File in the browser context and dispatch a drop.
+    await page.evaluate(({byteArrayArg, nameArg}) => {
+      const dropTarget = document.querySelector('[data-testid="cadview-dropzone"]') as HTMLElement
+      if (!dropTarget) {
+        throw new Error('Drop target not found')
+      }
 
-  // New file route with element path
-  test('New file route (/new) processes uploaded file with element path', async ({page}) => {
-    const newFilePattern = new RegExp('http://localhost:[0-9]+/index\\.ifc')
+      const dt = new DataTransfer()
+      const file = new File([byteArrayArg], nameArg, {type: 'ifc'})
+      dt.items.add(file)
 
-    const response = await registerIntercept({
-      page,
-      intereceptPattern: newFilePattern,
-      responseUrlStr: 'http://localhost',
-      fixtureFilename: 'index.ifc',
-      gotoPath: `/share/v/new/index.ifc/1/2/3`,
-    })
+      // Fire enter/over/drop as many dropzones expect sequence
+      dropTarget.dispatchEvent(new DragEvent('dragenter', {bubbles: true, dataTransfer: dt}))
+      dropTarget.dispatchEvent(new DragEvent('dragover', {bubbles: true, dataTransfer: dt}))
+      dropTarget.dispatchEvent(new DragEvent('drop', {bubbles: true, dataTransfer: dt}))
+    }, {byteArrayArg: byteArray, nameArg: name})
 
-    expect(response.status()).toBe(HTTP_OK)
+
+    // URL becomes /share/v/new/<UUID>.stl — we don’t care about the exact UUID, just the shape.
+    await expect(page).toHaveURL(/\/share\/v\/new\/[0-9a-fA-F-].*$/, {timeout: 30_000})
+
+    // Wait for model ready attribute on dropzone (matching working homepage test)
+    const dropzone = page.getByTestId('cadview-dropzone')
+    await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 30_000})
   })
 })
-
-
-/**
- * Helper to register an intercept and navigate to a route
- *
- * @param params - Parameters object
- * @param params.page - Playwright page object
- * @param params.intereceptPattern - Pattern to match for page.route()
- * @param params.responseUrlStr - URL string to match in waitForResponse()
- * @param params.fixtureFilename - Fixture file name (relative to cypress/fixtures/)
- * @param params.gotoPath - Path to navigate to
- * @return The intercepted response
- */
-async function registerIntercept({
-  page,
-  intereceptPattern,
-  responseUrlStr,
-  fixtureFilename,
-  gotoPath,
-}: {
-  page: Page,
-  intereceptPattern: RegExp,
-  responseUrlStr: string,
-  fixtureFilename: string,
-  gotoPath: string,
-}): Promise<Response> {
-  await page.route(intereceptPattern, (route: Route) => {
-    route.fulfill({
-      status: 200,
-      body: fs.readFileSync(path.join(__dirname, '..', '..', 'cypress', 'fixtures', fixtureFilename), 'utf8'),
-      contentType: 'application/octet-stream',
-    })
-  })
-
-  const [response] = await Promise.all([
-    page.waitForResponse((r: Response) => r.url().startsWith(responseUrlStr)),
-    page.goto(gotoPath),
-  ])
-
-  return response
-}

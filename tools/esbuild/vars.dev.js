@@ -3,6 +3,7 @@ import cypress from './vars.cypress.js'
 
 export default {
   ...cypress,
+  ESBUILD_WATCH: true,
   // Share
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
@@ -13,7 +14,4 @@ export default {
 
   // served from bldrs.ai in prod, separate server in local dev
   CORS_PROXY_HOST: 'http://localhost:8090',
-
-  // Esbuild hot-reload
-  ESBUILD_WATCH: true,
 }

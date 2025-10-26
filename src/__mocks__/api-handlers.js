@@ -27,15 +27,21 @@ let commentDeleted = false
  */
 export function initHandlers(defines) {
   const handlers = []
-  handlers.push(...prodDetectHandlers())
+  handlers.push(...prohibitProdAccess())
   handlers.push(...workersAndWasmPassthrough())
   handlers.push(...iconHandlers())
-  handlers.push(...gaHandlers())
-  handlers.push(...githubHandlers(defines, true))
-  handlers.push(...githubHandlers(defines, false))
+  handlers.push(...githubApiHandlers(defines, true))
+  handlers.push(...githubApiHandlers(defines, false))
   handlers.push(...netlifyHandlers())
-  handlers.push(...stripePortalHandlers())
   handlers.push(...subscribePageHandler())
+  handlers.push(...stripePortalHandlers())
+  handlers.push(...gaHandlers())
+  handlers.push(...googleApisHandlers())
+  // Pass through paths that are served by static assets or playwright fixtures
+  handlers.push(http.get('/share/v/p/*', () => passthrough()))
+  handlers.push(http.get('/share/v/gh/*', () => passthrough()))
+  handlers.push(http.get('https://rawgit.bldrs.dev/model/*', () => passthrough()))
+  handlers.push(http.get('https://rawgit.bldrs.dev/r/*', () => passthrough()))
   handlers.push(...installEsbuildHotReloadHandler())
   return handlers
 }
@@ -46,7 +52,7 @@ export function initHandlers(defines) {
  *
  * @return {Array<object>} handlers
  */
-function prodDetectHandlers() {
+function prohibitProdAccess() {
   return [
     http.get('http://bldrs.ai/*', ({request}) => {
       console.error('Found absolute ref to prod:', request.url)
@@ -55,23 +61,6 @@ function prodDetectHandlers() {
         headers: {'Content-Type': 'text/plain'},
       })
     }),
-  ]
-}
-
-
-/**
- * Let requests for web workers, wasm and related files to passthrough.
- *
- * @return {Array<object>} handlers
- */
-function workersAndWasmPassthrough() {
-  return [
-    // Caching + OPFS
-    http.get(/\/Cache\.js$/, () => passthrough()),
-    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
-    // Conway
-    http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
-    http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
   ]
 }
 
@@ -92,6 +81,29 @@ function iconHandlers() {
         headers: {'Content-Type': 'text/plain'},
       })
     }),
+    http.get(/\/favicon\.ico$/, () => {
+      return new Response('', {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'image/x-icon'},
+      })
+    }),
+  ]
+}
+
+
+/**
+ * Let requests for web workers, wasm and related files to passthrough.
+ *
+ * @return {Array<object>} handlers
+ */
+function workersAndWasmPassthrough() {
+  return [
+    // Caching + OPFS
+    http.get(/\/Cache\.js$/, () => passthrough()),
+    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
+    // Conway
+    http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
+    http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
   ]
 }
 
@@ -178,49 +190,13 @@ function stripePortalHandlers() {
 
 
 /**
- * Mock to disable Google Analytics.
- *
- * @return {Array<object>} handlers
- */
-function gaHandlers() {
-  return [
-    http.get('https://www.google-analytics.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
-
-    http.post('https://www.google-analytics.com/*', () => {
-      return new Response(null, {
-        status: HTTP_OK,
-      })
-    }),
-
-    http.get('https://www.googletagmanager.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
-  ]
-}
-
-
-/**
  * Static stubs GitHub orgs, repos, issues.
  *
  * @param {object} defines todo implementation
  * @param {boolean} authed Whether authenticated
  * @return {Array<object>} handlers
  */
-function githubHandlers(defines, authed) {
+function githubApiHandlers(defines, authed) {
   const GH_BASE_AUTHED = defines.GITHUB_BASE_URL
   const GH_BASE_UNAUTHED = defines.GITHUB_BASE_URL_UNAUTHENTICATED
   return [
@@ -701,6 +677,67 @@ function githubHandlers(defines, authed) {
           headers: {'Content-Type': 'application/json'},
         },
       )
+    }),
+  ]
+}
+
+
+/**
+ * Mock to disable Google Analytics.
+ *
+ * @return {Array<object>} handlers
+ */
+function gaHandlers() {
+  return [
+    http.get('https://*.google-analytics.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+
+    http.post('https://*.google-analytics.com/*', () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
+    }),
+
+    http.get('https://*.googletagmanager.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+  ]
+}
+
+
+/**
+ * Google APIs handlers
+ *
+ * @return {Array<object>} handlers
+ */
+function googleApisHandlers() {
+  return [
+    http.get('https://*.googleapis.com/*', () => {
+      return new Response(
+        JSON.stringify({}),
+        {
+          status: HTTP_OK,
+          headers: {'Content-Type': 'application/json'},
+        },
+      )
+    }),
+    http.post('https://*.googleapis.com/*', () => {
+      return new Response(null, {
+        status: HTTP_OK,
+      })
     }),
   ]
 }

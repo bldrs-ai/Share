@@ -43,6 +43,8 @@ export function isExtensionSupported(ext) {
 
 
 /**
+ * Check if the path suffix is supported, e.g. "model.glb" or "path/to/model.GLB".
+ *
  * @param {string} pathWithSuffix
  * @return {boolean} Is supported
  */
