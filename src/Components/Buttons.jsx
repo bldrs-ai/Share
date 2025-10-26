@@ -1,13 +1,12 @@
-import React, {ReactElement, useEffect, useState} from 'react'
-import {useLocation} from 'react-router'
+import React, {ReactElement, useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import SvgIcon from '@mui/material/SvgIcon'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams, hasHashParams, removeHashParams} from '../utils/location'
 import {useIsMobile} from './Hooks'
+import useHashState from '../hooks/useHashState'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
@@ -148,19 +147,7 @@ export function ControlButtonWithHashState({
 }) {
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
 
-  const location = useLocation()
-  useEffect(() => {
-    // If dialog displayed by initial state value (e.g. About for isFirstTime)
-    // or if hashPrefix is present
-    const isActiveHash = hasHashParams(window.location, hashPrefix)
-    if (isDialogDisplayed) {
-      if (!isActiveHash) {
-        addHashParams(window.location, hashPrefix)
-      }
-    } else if (isActiveHash) {
-      removeHashParams(window.location, hashPrefix)
-    }
-  }, [hashPrefix, isDialogDisplayed, location])
+  useHashState(hashPrefix, isDialogDisplayed)
 
   return (
     <ControlButton
