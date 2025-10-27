@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 import {
   clearState,
   returningUserVisitsHomepageWaitForModel,
@@ -7,18 +7,19 @@ import {
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 
 
+const {beforeEach, describe} = test
 /**
  * Migrated from cypress/e2e/home/about.cy.js
  *
  * @see https://github.com/bldrs-ai/Share/issues/1285
  */
-test.describe('View 100: About Dialog', () => {
-  test.beforeEach(async ({page}) => {
+describe('View 100: About Dialog', () => {
+  beforeEach(async ({page}) => {
     await clearState(page.context())
   })
 
-  test.describe('First time user visits homepage', () => {
-    test.beforeEach('First time user visits homepage', async ({page}) => {
+  describe('First time user visits homepage', () => {
+    beforeEach('First time user visits homepage', async ({page}) => {
       await visitHomepageWaitForModel(page)
     })
     test('about dialog is displayed', async ({page}) => {
@@ -31,8 +32,8 @@ test.describe('View 100: About Dialog', () => {
     })
   })
 
-  test.describe('Returning user visits homepage', () => {
-    test.beforeEach('First time user visits homepage', async ({page}) => {
+  describe('Returning user visits homepage', () => {
+    beforeEach('First time user visits homepage', async ({page}) => {
       await returningUserVisitsHomepageWaitForModel(page)
     })
     test('about dialog is not displayed', async ({page}) => {

@@ -1,10 +1,11 @@
-import {expect, Locator, test} from '@playwright/test'
+import {Locator, expect, test} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {TITLE} from './component'
+import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
@@ -47,7 +48,7 @@ describe('View 100: Access elements property', () => {
       await assertPropertyValue(propertiesPanel, 'Express Id', '621')
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')
 
-      await expect(page).toHaveScreenshot('properties-panel-visible.png')
+      await expectScreen(page, 'properties-panel-visible.png')
     })
   })
 })

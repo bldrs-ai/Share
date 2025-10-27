@@ -38,7 +38,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {...devices['Desktop Chrome']},
+      use: {
+        launchOptions: {
+          // Helps reduce platform-specific text AA differences:
+          args: [
+            '--disable-lcd-text',
+            '--disable-font-subpixel-positioning',
+          ],
+        },
+        ...devices['Desktop Chrome'],
+      },
     },
   ],
   // Run your local dev server before starting the tests.
@@ -51,5 +60,16 @@ export default defineConfig({
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
     reuseExistingServer: !isCI,
+  },
+
+  expect: {
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+      // small safety net for residual AA drift:
+      // maxDiffPixels: 30,           // or
+      // maxDiffPixelRatio: 0.0005,
+    },
   },
 })

@@ -1,11 +1,11 @@
-import {test, expect, Locator} from '@playwright/test'
+import {Locator, expect, test} from '@playwright/test'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 
 
-const {describe, beforeEach} = test
+const {beforeEach, describe} = test
 /**
  * Profile 100: Theme
  *

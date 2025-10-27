@@ -5,6 +5,7 @@ import {
   returningUserVisitsHomepageWaitForModel,
   setupAuthenticationIntercepts,
 } from '../../tests/e2e/utils'
+import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
@@ -28,7 +29,7 @@ describe('Profile 100: Login with Github', () => {
     // Login with Github
     await auth0Login(page, 'github')
     // Verify logged in
-    await expect(page).toHaveScreenshot('logged-in-github.png')
+    await expectScreen(page, 'logged-in-github.png')
   })
 
   describe('Returning user visits homepage with Google OAuth feature flag, clicks ProfileControl', () => {
@@ -41,12 +42,12 @@ describe('Profile 100: Login with Github', () => {
       await page.getByTestId('menu-open-login-dialog').click()
       await expect(page.getByTestId('login-with-github')).toBeVisible()
       await expect(page.getByTestId('login-with-google')).toBeVisible()
-      await expect(page).toHaveScreenshot('login-github-and-google.png')
+      await expectScreen(page, 'login-github-and-google.png')
     })
 
     test('Login with Google - Screen', async ({page}) => {
       await auth0Login(page, 'google')
-      await expect(page).toHaveScreenshot('logged-in-google.png')
+      await expectScreen(page, 'logged-in-google.png')
     })
   })
 })

@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
@@ -6,9 +6,10 @@ import {
 } from '../../tests/e2e/utils'
 import {waitForModelReady, setupVirtualPathIntercept} from '../../tests/e2e/models'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
+import {expectScreen} from '../../tests/screens'
 
 
-const {describe, beforeEach} = test
+const {beforeEach, describe} = test
 /**
  * Migrated from cypress/e2e/search/100/permalink.cy.js
  *
@@ -27,7 +28,7 @@ describe('Search 100', () => {
       const searchInput = page.getByPlaceholder(SEARCH_BAR_PLACEHOLDER_TEXT)
       await expect(searchInput).toBeVisible()
       await expect(searchInput).toHaveValue('together')
-      await expect(page).toHaveScreenshot('search-together-permalink.png')
+      await expectScreen(page, 'search-together-permalink.png')
     })
   })
 
@@ -46,7 +47,7 @@ describe('Search 100', () => {
 
       await expect(searchInput).toBeHidden()
       await expect(page).toHaveURL(/q=together/)
-      await expect(page).toHaveScreenshot('search-together-highlighted.png')
+      await expectScreen(page, 'search-together-highlighted.png')
     })
 
     describe('with GitHub link to box.ifc', () => {
@@ -64,7 +65,7 @@ describe('Search 100', () => {
 
       test('box.ifc loads - Screen', async ({page}) => {
         await waitForModelReady(page)
-        await expect(page).toHaveScreenshot('box-github-link-loaded.png')
+        await expectScreen(page, 'box-github-link-loaded.png')
       })
     })
   })

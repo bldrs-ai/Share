@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -7,7 +7,7 @@ import {
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 
 
-const {describe, beforeEach} = test
+const {beforeEach, describe} = test
 /**
  * Sample models tests - migrated from cypress/e2e/ifc-model/load-sample-model.cy.js
  */

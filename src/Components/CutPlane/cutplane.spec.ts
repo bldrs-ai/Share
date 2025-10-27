@@ -1,4 +1,4 @@
-import {Page, expect, test, Locator} from '@playwright/test'
+import {Locator, Page, expect, test} from '@playwright/test'
 import {waitForModelReady} from 'src/tests/e2e/models'
 import {
   homepageSetup,
@@ -6,6 +6,7 @@ import {
   LONG_TEST_TIMEOUT_SECONDS,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
+import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
@@ -68,7 +69,7 @@ describe('Cutplanes', () => {
         await isChecked(menuItemPlan, true)
         await isChecked(menuItemSection, true)
         await isChecked(menuItemElevation, true)
-        await expect(page).toHaveScreenshot('cut-planes-added.png')
+        await expectScreen(page, 'cut-planes-added.png')
 
         // Clear all cut-planes
         await menuItemClearAll.click()
@@ -84,7 +85,7 @@ describe('Cutplanes', () => {
         // Close menu
         await controlButtonCutPlane.click({force: true})
         await expect(menuCutPlane).toBeHidden()
-        await expect(page).toHaveScreenshot('cut-planes-removed.png')
+        await expectScreen(page, 'cut-planes-removed.png')
       })
     })
   })
@@ -100,7 +101,7 @@ describe('Cutplanes', () => {
 
     test('Shows just vertical bar of b - Screen', async ({page}) => {
       await checkHashState(page, cpHashState)
-      await expect(page).toHaveScreenshot('cut-plane-permalink.png')
+      await expectScreen(page, 'cut-plane-permalink.png')
     })
   })
 })
