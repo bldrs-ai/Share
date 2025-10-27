@@ -50,6 +50,7 @@ export default defineConfig({
       },
     },
   ],
+
   // Run your local dev server before starting the tests.
   webServer: {
     command: isCI ? `yarn test-flows-build-and-serve` : `yarn test-flows-serve`,
@@ -72,4 +73,7 @@ export default defineConfig({
       // maxDiffPixelRatio: 0.0005,
     },
   },
+
+  snapshotPathTemplate:
+    '{testDir}/{testFileName}-snapshots/{arg}{ext}',
 })
