@@ -61,19 +61,82 @@ describe('View 100: Access elements property', () => {
  * @param page - Playwright page object
  * @param name - Screenshot name
  */
-async function expectScreenshotWithDiagnostics(page: Page, name: string) {
-  // Check which font is actually used
-  const fontFamily = await page
-    .locator('text=621')
-    .first()
-    .evaluate((el) => getComputedStyle(el).fontFamily)
+export async function expectScreenshotWithFontDiag(page: Page, name: string) {
+  // 1) Wait for webfonts to finish loading (prevents first-paint fallback)
+  await page.evaluate(async () => {
+    if (document.fonts?.status !== 'loaded') {
+      await document.fonts?.ready
+    }
+  })
+
+  // 2) Pull a representative node (your “621” cell)
+  const target = page.locator('text=621').first()
+
+  // 3) Gather diagnostics in the page context
+  const diag = await target.evaluate((el) => {
+    const getFont = (e: Element) => getComputedStyle(e).fontFamily
+    const fam = getFont(el)
+
+    // Is Roboto (400/16px) actually available?
+    const hasRoboto = document.fonts?.check?.('400 16px "Roboto"') ?? false
+
+    // Infer which family is used by width comparison
+    // (Render to an offscreen canvas with different families)
+    const text = (el.textContent || '621').trim() || '621'
+    const style = getComputedStyle(el)
+    const size = style.fontSize || '16px'
+    const weight = style.fontWeight || '400'
+
+    const measure = (family: string) => {
+      const c = document.createElement('canvas')
+      const ctx = c.getContext('2d')
+      ctx.font = `${weight} ${size} ${family}`
+      return ctx.measureText(text).width
+    }
+
+    const wActual = (el as HTMLElement).getBoundingClientRect().width
+    const wRoboto = measure('"Roboto"')
+    const wHelvetica = measure('"Helvetica"')
+    const wArial = measure('"Arial"')
+    const wSerif = measure('serif')
+
+    // Guess the closest
+    const diffs = [
+      ['Roboto', Math.abs(wActual - wRoboto)],
+      ['Helvetica', Math.abs(wActual - wHelvetica)],
+      ['Arial', Math.abs(wActual - wArial)],
+      ['serif', Math.abs(wActual - wSerif)],
+    ].sort((a, b) => {
+      const aa = a[1] as number
+      const bb = b[1] as number
+      return aa - bb
+    })
+
+    return {
+      computedFontFamily: fam,
+      documentFontsStatus: document.fonts?.status,
+      hasRoboto,
+      widths: {
+        actual: wActual, Roboto: wRoboto, Helvetica: wHelvetica, Arial: wArial, serif: wSerif,
+      },
+      likelyUsed: diffs[0][0],
+      textSample: text,
+      cssSnapshot: {
+        fontSize: size,
+        fontWeight: weight,
+        fontSynthesis: style.fontSynthesis || style['font-synthesis'],
+      },
+    }
+  })
+
+  console.warn(`[font-diag]`, JSON.stringify(diag, null, 2))
 
   try {
     await expect(page).toHaveScreenshot(name)
   } catch (err) {
-    console.error(`❌ Screenshot mismatch for ${name}`)
-    console.error(`Font family at "Express Id 621" is: ${fontFamily}`)
-    throw err // rethrow so Playwright still marks the test failed
+    console.error(`❌ Screenshot mismatch: ${name}`)
+    console.error(`[font-diag summary] likelyUsed=${diag.likelyUsed}, hasRoboto=${diag.hasRoboto}, status=${diag.documentFontsStatus}`)
+    throw err
   }
 }
 
