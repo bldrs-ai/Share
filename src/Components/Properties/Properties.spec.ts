@@ -1,11 +1,11 @@
-import {Locator, expect, test} from '@playwright/test'
+import {Locator, Page, expect, test} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {TITLE} from './component'
-import {expectScreen} from '../../tests/screens'
+// import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
@@ -48,10 +48,34 @@ describe('View 100: Access elements property', () => {
       await assertPropertyValue(propertiesPanel, 'Express Id', '621')
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')
 
-      await expectScreen(page, 'properties-panel-visible.png')
+
+      await expectScreenshotWithDiagnostics(page, 'properties-panel-visible.png')
     })
   })
 })
+
+
+/**
+ * Takes a screenshot if not running in GitHub Actions
+ *
+ * @param page - Playwright page object
+ * @param name - Screenshot name
+ */
+async function expectScreenshotWithDiagnostics(page: Page, name: string) {
+  // Check which font is actually used
+  const fontFamily = await page
+    .locator('text=621')
+    .first()
+    .evaluate((el) => getComputedStyle(el).fontFamily)
+
+  try {
+    await expect(page).toHaveScreenshot(name)
+  } catch (err) {
+    console.error(`❌ Screenshot mismatch for ${name}`)
+    console.error(`Font family at "Express Id 621" is: ${fontFamily}`)
+    throw err // rethrow so Playwright still marks the test failed
+  }
+}
 
 
 /**
