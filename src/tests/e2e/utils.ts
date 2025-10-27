@@ -331,7 +331,7 @@ export async function auth0Login(page: Page, connection: 'github' | 'google' = '
   }
 
   // Wait for logout menu item to exist
-  await page.getByTestId('menu-open-logout-dialog').count(1)
+  await expect(page.getByTestId('menu-open-logout-dialog')).toHaveCount(1)
 }
 
 

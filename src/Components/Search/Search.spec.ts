@@ -3,7 +3,6 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
   setIsReturningUser,
-  visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 import {waitForModelReady, setupVirtualPathIntercept} from '../../tests/e2e/models'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
