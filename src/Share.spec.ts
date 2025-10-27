@@ -1,10 +1,11 @@
-import {test, expect, Locator} from '@playwright/test'
+import {Locator, expect, test} from '@playwright/test'
 import {auth0Login, homepageSetup, returningUserVisitsHomepageWaitForModel, setupAuthenticationIntercepts} from './tests/e2e/utils'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './Components/Search/component'
 
 
+const {beforeEach, describe} = test
 /** Main Share page tests */
-test.describe('Share', () => {
+describe('Share', () => {
   let controlButtonAbout: Locator
   let controlButtonCutPlane: Locator
   let controlButtonHelp: Locator
@@ -15,7 +16,7 @@ test.describe('Share', () => {
   let controlButtonSearch: Locator
   let controlButtonShare: Locator
   let controlButtonVersions: Locator
-  test.beforeEach('Homepage loads successfully', async ({page}) => {
+  beforeEach('Homepage loads successfully', async ({page}) => {
     await homepageSetup(page)
     await returningUserVisitsHomepageWaitForModel(page)
     controlButtonAbout = page.getByTestId('control-button-about')
@@ -62,9 +63,9 @@ test.describe('Share', () => {
   })
 
   // TODO(pablo): fix auth0 login in Playwright and re-enable
-  test.describe.skip('Logged in user', () => {
+  describe.skip('Logged in user', () => {
     let controlButtonSave: Locator
-    test.beforeEach('Login', async ({page}) => {
+    beforeEach('Login', async ({page}) => {
       await setupAuthenticationIntercepts(page)
       await auth0Login(page)
       controlButtonSave = page.getByTestId('control-button-save')
