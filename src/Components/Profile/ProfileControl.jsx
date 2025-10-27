@@ -207,7 +207,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={onLogoutClick}>
+          <MenuItem onClick={onLogoutClick} data-testid='menu-open-logout-dialog'>
             <LogoutOutlinedIcon/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Log out

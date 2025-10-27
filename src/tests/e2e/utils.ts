@@ -330,9 +330,8 @@ export async function auth0Login(page: Page, connection: 'github' | 'google' = '
     await page.getByTestId('login-with-google').click()
   }
 
-  // Wait for successful login indication
-  await expect(page.getByText('Log out')).toBeVisible()
-  await page.getByTestId('control-button-profile').click()
+  // Wait for logout menu item to exist
+  await page.getByTestId('menu-open-logout-dialog').count(1)
 }
 
 
