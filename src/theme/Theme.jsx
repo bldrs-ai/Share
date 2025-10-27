@@ -74,9 +74,10 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
   // Ensure we have a valid mode, default to Day if undefined
   const validMode = mode || Themes.Day
   const activePalette = validMode === Themes.Day ? day : night
+  const activeTypography = getTypography()
   const theme = {
-    components: getComponentOverrides(activePalette),
-    typography: getTypography(),
+    components: getComponentOverrides(activePalette, activeTypography),
+    typography: activeTypography,
     shape: {borderRadius: 10},
     palette: activePalette,
     zIndex: {
