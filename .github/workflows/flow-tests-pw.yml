@@ -38,7 +38,7 @@ jobs:
         run: npx playwright --version
 
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=6
+        run: yarn test-flows --reporter=github,list,html --workers=7
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report

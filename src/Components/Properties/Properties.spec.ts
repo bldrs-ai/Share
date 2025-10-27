@@ -16,8 +16,18 @@ const {beforeEach, describe} = test
  */
 describe('View 100: Access elements property', () => {
   beforeEach(async ({page}) => {
+    page.on('requestfailed', (r) => {
+      if (/\.(woff2?|ttf|otf)($|\?)/i.test(r.url())) {
+        console.warn('[font] requestfailed', r.url(), r.failure()?.errorText)
+      }
+    })
     await homepageSetup(page)
     await setIsReturningUser(page.context())
+    await page.evaluate(async () => {
+      if (document.fonts?.status !== 'loaded') {
+        await document.fonts?.ready
+      }
+    })
   })
 
   describe('User visits permalink to selected element and clicks properties control', () => {
@@ -71,6 +81,9 @@ export async function expectScreenshotWithFontDiag(page: Page, name: string) {
 
   // 2) Pull a representative node (your “621” cell)
   const target = page.locator('text=621').first()
+  if (!target) {
+    throw new Error('Target text=621 for diagnosis not found')
+  }
 
   // 3) Gather diagnostics in the page context
   const diag = await target.evaluate((el) => {
@@ -84,8 +97,8 @@ export async function expectScreenshotWithFontDiag(page: Page, name: string) {
     // (Render to an offscreen canvas with different families)
     const text = (el.textContent || '621').trim() || '621'
     const style = getComputedStyle(el)
-    const size = style.fontSize || '16px'
-    const weight = style.fontWeight || '400'
+    const size = style.fontSize
+    const weight = style.fontWeight
 
     const measure = (family: string) => {
       const c = document.createElement('canvas')
@@ -133,12 +146,14 @@ export async function expectScreenshotWithFontDiag(page: Page, name: string) {
   })
 
   console.warn(`[font-diag]`, JSON.stringify(diag, null, 2))
+  console.error(`[font-diag summary] likelyUsed=${diag.likelyUsed}, hasRoboto=${diag.hasRoboto}, status=${diag.documentFontsStatus}`)
+  const links = await page.$$eval('link[rel=stylesheet]', (els) => els.map((e) => (e as HTMLLinkElement).href))
+  console.error('stylesheets:', links)
 
   try {
     await expect(page).toHaveScreenshot(name)
   } catch (err) {
     console.error(`❌ Screenshot mismatch: ${name}`)
-    console.error(`[font-diag summary] likelyUsed=${diag.likelyUsed}, hasRoboto=${diag.hasRoboto}, status=${diag.documentFontsStatus}`)
     throw err
   }
 }

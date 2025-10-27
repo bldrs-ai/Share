@@ -25,7 +25,6 @@ export default {
   platform: 'browser',
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
-  // external: ['*.woff', '*.woff2'],
   loader: {
     '.css': 'css',
     '.woff': 'file',
