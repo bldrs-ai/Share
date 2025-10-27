@@ -11,10 +11,10 @@ export default function Styles({theme}) {
     <GlobalStyles
       styles={{
         'html, body': {
-          'font-synthesis': 'none',
-          '-webkit-font-smoothing': 'antialiased',
-          'text-rendering': 'optimizeLegibility',
-          'letter-spacing': 'normal',
+          fontSynthesis: 'none',
+          WebkitFontSmoothing: 'antialiased',
+          textRendering: 'optimizeLegibility',
+          letterSpacing: 'normal',
         },
         'body': {
           overscrollBehavior: 'none',

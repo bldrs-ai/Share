@@ -59,12 +59,13 @@ export async function homepageSetup(page: Page) {
   const ok = await page.evaluate(() => document.fonts?.check('16px Roboto'))
   expect(ok).toBeTruthy()
   // Disable font synthesis
+  */
   await page.addStyleTag({content: `
     html, body {
       font-synthesis-weight: none;
       font-synthesis-style: none;
     }
-  `})*/
+  `})
   await clearState(page.context())
 }
 
