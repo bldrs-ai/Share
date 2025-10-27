@@ -320,18 +320,15 @@ const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>(
  * Note: Requires authentication intercepts to be set up first.
  */
 export async function auth0Login(page: Page, connection: 'github' | 'google' = 'github') {
+  await expect(page.getByTestId('AccountBoxOutlinedIcon')).toBeVisible()
   await page.getByTestId('control-button-profile').click()
-
   await page.getByTestId('menu-open-login-dialog').click()
-
   if (connection === 'github') {
     await page.getByTestId('login-with-github').click()
   } else {
     await page.getByTestId('login-with-google').click()
   }
-
-  // Wait for logout menu item to exist
-  await expect(page.getByTestId('menu-open-logout-dialog')).toHaveCount(1)
+  await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
 }
 
 

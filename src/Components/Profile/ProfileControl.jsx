@@ -175,7 +175,9 @@ export default function ProfileControl() {
         title='Profile'
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
-          isAuthenticated ? <Avatar alt={user?.name} src={user?.picture}/> : <AccountBoxOutlinedIcon/>
+          isAuthenticated ?
+            <Avatar alt={user?.name} src={user?.picture} data-testid='control-button-profile-icon-authenticated'/> :
+            <AccountBoxOutlinedIcon/>
         }
         variant='control'
         placement='bottom'
