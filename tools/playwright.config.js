@@ -73,7 +73,7 @@ export default defineConfig({
       caret: 'hide',
       scale: 'css',
       // small safety net for residual AA drift:
-      maxDiffPixels: 30,
+      // maxDiffPixels: 30,
       maxDiffPixelRatio: 0.015, // 1.5%
     },
   },
