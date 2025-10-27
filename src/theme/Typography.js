@@ -1,4 +1,5 @@
-const fontFamily = `"Roboto", "Helvetica", "Arial", sans-serif`
+// const fontFamily = `"Roboto", "Helvetica", "Arial", sans-serif`
+const fontFamily = `"Roboto", sans-serif`
 const fontSize = 16
 const fontWeight = 400
 const letterSpacing = 'normal'
