@@ -90,6 +90,9 @@ export async function expectScreenshotWithFontDiag(page: Page, name: string) {
     const measure = (family: string) => {
       const c = document.createElement('canvas')
       const ctx = c.getContext('2d')
+      if (!ctx) {
+        throw new Error('Failed to get context')
+      }
       ctx.font = `${weight} ${size} ${family}`
       return ctx.measureText(text).width
     }
@@ -124,7 +127,7 @@ export async function expectScreenshotWithFontDiag(page: Page, name: string) {
       cssSnapshot: {
         fontSize: size,
         fontWeight: weight,
-        fontSynthesis: style.fontSynthesis || style['font-synthesis'],
+        fontSynthesis: style.fontSynthesis,
       },
     }
   })

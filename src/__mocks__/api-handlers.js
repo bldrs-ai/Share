@@ -29,7 +29,7 @@ export function initHandlers(defines) {
   const handlers = []
   handlers.push(...prohibitProdAccess())
   handlers.push(...workersAndWasmPassthrough())
-  handlers.push(...iconHandlers())
+  handlers.push(...iconAndFontHandlers())
   handlers.push(...githubApiHandlers(defines, true))
   handlers.push(...githubApiHandlers(defines, false))
   handlers.push(...netlifyHandlers())
@@ -66,15 +66,16 @@ function prohibitProdAccess() {
 
 
 /**
- * Null route prod static icon requests.
+ * Passthru for expected icons and fonts, null route prod static icon requests.
  *
  * @return {Array<object>} handlers
  */
-function iconHandlers() {
+function iconAndFontHandlers() {
   return [
     // Icons
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
+    http.get(/\/roboto-*/, () => passthrough()),
     http.get('http://bldrs.ai/icons/*', () => {
       return new Response('', {
         status: HTTP_BAD_REQUEST,

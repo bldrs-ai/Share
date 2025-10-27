@@ -55,6 +55,8 @@ export async function homepageSetup(page: Page) {
   // The next two steps are necessary to avoid font synthesis issues in GitHub Actions.
   // Wait for fonts to load
   await page.evaluate(async () => await (document).fonts?.ready)
+  const ok = await page.evaluate(() => document.fonts?.check('16px Roboto'))
+  expect(ok).toBeTruthy()
   // Disable font synthesis
   await page.addStyleTag({content: `
     html, body {
