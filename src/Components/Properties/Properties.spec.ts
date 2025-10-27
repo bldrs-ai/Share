@@ -49,7 +49,7 @@ describe('View 100: Access elements property', () => {
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')
 
 
-      await expectScreenshotWithDiagnostics(page, 'properties-panel-visible.png')
+      await expectScreenshotWithFontDiag(page, 'properties-panel-visible.png')
     })
   })
 })
