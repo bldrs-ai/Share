@@ -47,13 +47,6 @@ describe('View 100: Access elements property', () => {
       await assertPropertyValue(propertiesPanel, 'Express Id', '621')
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')
 
-      // APPROACH 3: Enhanced ARIA-based assertions (when ARIA attributes are added)
-      // Uncomment these when the component has proper ARIA attributes:
-      // const propertiesTableAria = propertiesPanel.getByRole('table', {name: 'Element properties'})
-      // await expect(propertiesTableAria).toBeVisible()
-      // await expect(propertiesPanel.getByRole('cell', {name: 'Property: Express Id'})).toBeVisible()
-      // await expect(propertiesPanel.getByRole('cell', {name: 'Value: 621'})).toBeVisible()
-
       await expect(page).toHaveScreenshot('properties-panel-visible.png')
     })
   })
