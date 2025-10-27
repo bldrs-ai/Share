@@ -58,13 +58,14 @@ describe('View 100: Access elements property', () => {
       await assertPropertyValue(propertiesPanel, 'Express Id', '621')
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')
 
-
-      await expectScreenshotWithFontDiag(page, 'properties-panel-visible.png')
+      await expect(page).toHaveScreenshot('properties-panel-visible.png')
+      // await expectScreenshotWithFontDiag(page, 'properties-panel-visible.png')
     })
   })
 })
 
 
+// TODO(pablo): Keep this for debugging font issues
 /**
  * Takes a screenshot if not running in GitHub Actions
  *
