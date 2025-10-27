@@ -70,7 +70,7 @@ export default defineConfig({
       scale: 'css',
       // small safety net for residual AA drift:
       // maxDiffPixels: 30,
-      maxDiffPixelRatio: 0.0005, // 0.05%
+      // maxDiffPixelRatio: 0.0005, // 0.05%
     },
   },
 
