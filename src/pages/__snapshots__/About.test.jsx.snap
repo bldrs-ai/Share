@@ -25,7 +25,7 @@ exports[`About renders 1`] = `
       class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1xgkhtk-MuiPaper-root"
     >
       <h1
-        class="MuiTypography-root MuiTypography-h1 css-wih9vs-MuiTypography-root"
+        class="MuiTypography-root MuiTypography-h1 css-qbrzir-MuiTypography-root"
       >
         About Bldrs
       </h1>
