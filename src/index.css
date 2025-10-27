@@ -1,0 +1,22 @@
+/* These are here by suggestions of CG to normalize font rendering between
+   prod and GitHub Actions. */
+/* Metric-override fallback for Roboto to prevent vertical reflow */
+@font-face {
+  font-family: "Roboto Fallback";
+  src: local("Arial");
+  ascent-override: 92%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+  size-adjust: 97%;
+}
+
+/* Apply it as part of the default font stack */
+:root {
+  --app-font: "Roboto", "Roboto Fallback", system-ui, -apple-system, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  font-family: var(--app-font);
+  font-synthesis: none;
+}

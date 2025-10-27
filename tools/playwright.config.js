@@ -69,11 +69,11 @@ export default defineConfig({
       caret: 'hide',
       scale: 'css',
       // small safety net for residual AA drift:
-      // maxDiffPixels: 30,           // or
-      // maxDiffPixelRatio: 0.0005,
+      // maxDiffPixels: 30,
+      maxDiffPixelRatio: 0.0005, // 0.05%
     },
   },
 
   snapshotPathTemplate:
-    '{testDir}/{testFileName}-snapshots/{arg}{ext}',
+    '{testDir}/{testFilePath}-snapshots/{arg}{ext}',
 })
