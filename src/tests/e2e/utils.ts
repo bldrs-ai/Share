@@ -162,7 +162,7 @@ export async function waitForModel(page: Page) {
  * @param page - Playwright page object
  * @param intereceptPattern - Pattern to match for page.route()
  * @param responseUrlStr - URL string to match in waitForResponse()
- * @param fixtureFilename - Fixture file name (relative to cypress/fixtures/)
+ * @param fixtureFilename - Fixture file name (relative to src/tests/fixtures/)
  * @param gotoPath - Path to navigate to
  * @return The intercepted response
  */
@@ -196,7 +196,7 @@ export async function registerIntercept({
   return response
 }
 
-const FIXTURES_DIR = path.resolve(process.cwd(), 'cypress/fixtures')
+const FIXTURES_DIR = path.resolve(process.cwd(), 'src/tests/fixtures')
 
 
 // Auth0 helpers

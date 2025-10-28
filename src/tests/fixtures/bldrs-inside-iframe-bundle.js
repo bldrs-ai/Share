@@ -7671,7 +7671,7 @@ return
   },
 })
 
-// cypress/fixtures/bldrs-inside-iframe.js
+// src/tests/fixtures/bldrs-inside-iframe.js
 const mxwidgets = __toESM(require_lib())
 console.log('mxwidgets:', mxwidgets)
 const _BldrsWidget = class _BldrsWidget {

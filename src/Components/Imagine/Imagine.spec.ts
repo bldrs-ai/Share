@@ -42,7 +42,7 @@ describe.skip('create-100: Imagine', () => {
 
       beforeEach(async ({page}) => {
         // Set up API interception for image generation
-        const imageData = await readFile('cypress/fixtures/candy-cane-bldrs.png', 'base64')
+        const imageData = await readFile('src/tests/fixtures/candy-cane-bldrs.png', 'base64')
 
         await page.route('**/generate', async (route) => {
           await route.fulfill({

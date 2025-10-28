@@ -90,7 +90,7 @@ describe('Sample models', () => {
     test('should load the Momentum model when selected', async ({page}) => {
       // Set up intercept for Momentum.ifc using TestFixture.ifc
       await page.route('**/Momentum.ifc', async (route) => {
-        const fixturePath = path.resolve(process.cwd(), 'cypress/fixtures/TestFixture.ifc')
+        const fixturePath = path.resolve(process.cwd(), 'src/tests/fixtures/TestFixture.ifc')
         const fixtureBuffer = await readFile(fixturePath)
 
         await route.fulfill({
@@ -162,7 +162,7 @@ describe('Sample models', () => {
           // Select element, opens nav
           const interceptEltSelectTag = 'twoLevelSelect'
           await page.route('**/share/v/p/index.ifc/81/621', async (route: any) => {
-            const fixturePath = path.resolve(process.cwd(), 'cypress/fixtures/404.html')
+            const fixturePath = path.resolve(process.cwd(), 'src/tests/fixtures/404.html')
             const fixtureBuffer = await readFile(fixturePath)
             await route.fulfill({
               status: 200,

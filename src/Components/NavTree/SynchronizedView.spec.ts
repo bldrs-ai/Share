@@ -50,7 +50,7 @@ describe.skip('View 100: Synchronized View and NavTree', () => {
     beforeEach(async ({page}) => {
       // TODO(pablo): root id selection doesn't work after search state working.  Also move this to a helper
       await page.route('**/share/v/p/index.ifc/81/621', async (route: Route) => {
-        const fixturePath = path.resolve(process.cwd(), 'cypress/fixtures/404.html')
+        const fixturePath = path.resolve(process.cwd(), 'src/tests/fixtures/404.html')
         const fixtureBuffer = await readFile(fixturePath)
 
         await route.fulfill({

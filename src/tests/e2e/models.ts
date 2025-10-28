@@ -22,7 +22,7 @@ export async function setupVirtualPathIntercept(
     throw new Error(`Path must start with ${sharePrefix}`)
   }
 
-  const fixturesDir = 'cypress/fixtures'
+  const fixturesDir = 'src/tests/fixtures'
   const proxyBase = 'https://rawgit.bldrs.dev.msw/model'
   // --- Proxy intercept (serve the IFC bytes) -------------------------------
   const ghPath = path.substring(sharePrefix.length) // keep Cypress logic

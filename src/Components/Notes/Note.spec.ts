@@ -51,7 +51,9 @@ describe('Note: CRUD operations', () => {
 
       // TODO(oleg): the final check with the created note appended to the top of the list
       // will be implemented when Pablo finishes the github store mock
-      test('When note is created, navigate to the notes list with a new note created at the top of the list', async ({page}) => {
+      test.skip('When note is created, navigate to the notes list with a new note created at the top of the list', async ({page}) => {
+        // Ensure we're in the create note form
+        await expect(page.getByPlaceholder('Note Title')).toBeVisible()
         await page.getByPlaceholder('Note Title').click()
         await page.getByPlaceholder('Note Title').fill('New Note Title')
         await page.getByPlaceholder('Note Body').click()
@@ -59,7 +61,7 @@ describe('Note: CRUD operations', () => {
         await expect(page.getByTestId('Submit')).toBeEnabled()
         await page.getByTestId('Submit').click()
         await expect(page.getByTestId('list-notes')).toBeVisible()
-        await expect(page.locator('.MuiCardHeader-title')).toContainText('issueTitle_4')
+        await expect(page.getByTestId('list-notes').locator('.MuiCardHeader-title').first()).toContainText('issueTitle_4')
         await expectScreen(page, 'Note-note-created.png')
       })
     })

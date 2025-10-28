@@ -36,7 +36,7 @@ describe.skip('bldrs inside iframe', () => {
 
     for (const fixture of fixtures) {
       try {
-        const content = await readFile(`cypress/fixtures/${fixture}`)
+        const content = await readFile(`src/tests/fixtures/${fixture}`)
         const outPath = path.join(targetDirectory, fixture)
         await writeFile(outPath, content)
       } catch (error) {
@@ -71,7 +71,7 @@ describe.skip('bldrs inside iframe', () => {
 
     // Set up message interception
     await page.route(REMOTE_IFC_URL, async (route) => {
-      const fixturePath = `cypress/fixtures/${REMOTE_IFC_FIXTURE}`
+      const fixturePath = `src/tests/fixtures/${REMOTE_IFC_FIXTURE}`
       const fixtureContent = await readFile(fixturePath)
       await route.fulfill({
         status: REQUEST_SUCCESS_CODE,
