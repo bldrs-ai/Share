@@ -1,4 +1,3 @@
-import {CypressHistorySupport} from 'cypress-react-router'
 import React, {ReactElement, StrictMode, useEffect} from 'react'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
@@ -90,7 +89,6 @@ function AppWithContext() {
           <title>Bldrs.ai</title>
         </Helmet>
         <BrowserRouter>
-          <CypressHistorySupport/>
           <Auth0ProviderWithHistory>
             <BaseRoutes/>
           </Auth0ProviderWithHistory>
