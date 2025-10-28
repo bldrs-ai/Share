@@ -25,7 +25,14 @@ export default {
   platform: 'browser',
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
-  external: ['*.woff', '*.woff2'],
+  loader: {
+    '.css': 'css',
+    '.woff': 'file',
+    '.woff2': 'file',
+    '.md': 'text',
+    '.ts': 'ts',
+    '.tsx': 'tsx',
+  },
   minify: (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODO: have had breakage without this
   splitting: false,
@@ -34,10 +41,5 @@ export default {
   logLevel: 'info',
   define: defines,
   plugins: plugins,
-  loader: {
-    '.md': 'text',
-    '.ts': 'ts',
-    '.tsx': 'tsx',
-  },
   resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 }

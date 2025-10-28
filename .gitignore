@@ -11,6 +11,7 @@ cypress/e2e/logs
 tools/playwright-report
 tools/test-results
 test-results
+.cache
 
 /coverage
 

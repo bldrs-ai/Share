@@ -1,14 +1,21 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import GlobalStyles from '@mui/material/GlobalStyles'
+
 
 /**
  * @property {object} theme To set link, icon and scrollbar colors.
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function Styles({theme}) {
   return (
     <GlobalStyles
       styles={{
+        'html, body': {
+          fontSynthesis: 'none',
+          WebkitFontSmoothing: 'antialiased',
+          textRendering: 'optimizeLegibility',
+          letterSpacing: 'normal',
+        },
         'body': {
           overscrollBehavior: 'none',
           overflow: 'hidden',

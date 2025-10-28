@@ -175,7 +175,9 @@ export default function ProfileControl() {
         title='Profile'
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
-          isAuthenticated ? <Avatar alt={user?.name} src={user?.picture}/> : <AccountBoxOutlinedIcon/>
+          isAuthenticated ?
+            <Avatar alt={user?.name} src={user?.picture} data-testid='control-button-profile-icon-authenticated'/> :
+            <AccountBoxOutlinedIcon/>
         }
         variant='control'
         placement='bottom'
@@ -207,7 +209,7 @@ export default function ProfileControl() {
         )}
 
         {isAuthenticated && (
-          <MenuItem onClick={onLogoutClick}>
+          <MenuItem onClick={onLogoutClick} data-testid='menu-open-logout-dialog'>
             <LogoutOutlinedIcon/>
             <Typography sx={{marginLeft: '10px'}} variant='overline'>
               Log out

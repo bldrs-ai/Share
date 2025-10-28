@@ -39,7 +39,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
     }
   }
   return (
-    <table key={`table-${serial++}`}>
+    <table key={`table-${serial++}`} role="table" aria-label="Element properties">
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -208,6 +208,9 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
 }
 
 
+// TODO(pablo): make aria-compliant:
+// - table role='table'
+// - with td[id={`key-${d1}`}] ref'd by td[headers={`key-${d1}`}]
 /**
  * HTML table row
  *
@@ -234,16 +237,20 @@ function Row({d1, d2}) {
   }
   return (
     isActive ? (
-      <tr onDoubleClick={toggleActive}>
-        <td colSpan={2}>
+      <tr onDoubleClick={toggleActive} role='row' aria-expanded='true'>
+        <td colSpan={2} role='cell'>
           <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
           <Typography variant='propValue'>{d2}</Typography>
         </td>
       </tr>
     ) : (
-      <tr onDoubleClick={toggleActive}>
-        <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
-        <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
+      <tr onDoubleClick={toggleActive} role='row' aria-expanded='false'>
+        <td style={rowStyleInactive} role='cell' aria-label={`Property: ${d1}`}>
+          <Typography variant='propTitle'>{d1}</Typography>
+        </td>
+        <td style={rowStyleInactive} role='cell' aria-label={`Value: ${d2}`}>
+          <Typography variant='propValue'>{d2}</Typography>
+        </td>
       </tr>
     )
   )

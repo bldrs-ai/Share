@@ -15,6 +15,7 @@ module.exports = {
     'plugin:jsdoc/recommended',
     'plugin:cypress/recommended',
   ],
+  ignorePatterns: ['tools/playwright-report/**'],
   overrides: [
     {
       files: ['*.js', '*.mjs', '*.jsx'],

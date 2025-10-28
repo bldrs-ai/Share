@@ -138,7 +138,7 @@ export function getComponentOverrides(palette, typography) {
     MuiDialogTitle: {
       styleOverrides: {
         root: {
-          fontWeight: 400,
+          ...typography.h1,
           textAlign: 'center',
         },
       },
@@ -278,10 +278,17 @@ export function getComponentOverrides(palette, typography) {
         },
       }],
     },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          ...typography.caption,
+        },
+      },
+    },
     MuiTypography: {
       styleOverrides: {
         root: {
-          color: palette.secondary.contrastText,
+          // color: palette.secondary.contrastText,
         },
       },
     },

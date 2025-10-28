@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {expect, test} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -7,12 +7,13 @@ import {
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 
 
+const {beforeEach, describe} = test
 /**
  * Sample models tests - migrated from cypress/e2e/ifc-model/load-sample-model.cy.js
  */
-test.describe('Sample models', () => {
-  test.describe('When model is loaded', () => {
-    test.beforeEach(async ({page}) => {
+describe('Sample models', () => {
+  describe('When model is loaded', () => {
+    beforeEach(async ({page}) => {
       await homepageSetup(page)
       await setIsReturningUser(page.context())
       await visitHomepageWaitForModel(page)
@@ -36,12 +37,13 @@ test.describe('Sample models', () => {
       // Set up the intercept before navigating
       await setupVirtualPathIntercept(
         page,
-        '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
-        'Momentum.ifc',
+        '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc',
+        'box.ifc',
       )
 
       // Navigate using page hash to avoid direct file navigation
-      await page.goto('/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc')
+      // await page.goto('/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc')
+      await page.goto('/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc')
 
       // Wait for model to be ready (any model, even if it's the fallback)
       await waitForModelReady(page)
@@ -50,9 +52,6 @@ test.describe('Sample models', () => {
       // Verify that some model is loaded (data-model-ready=true was achieved)
       const dropzone = page.getByTestId('cadview-dropzone')
       await expect(dropzone).toHaveAttribute('data-model-ready', 'true')
-
-      // The test passes if we can successfully set up intercepts and load any model
-      // The specific content verification can be added later once routing is working
     })
   })
 })
