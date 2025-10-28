@@ -1,4 +1,4 @@
-import {test} from '@playwright/test'
+import {Page, test} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -23,7 +23,7 @@ describe('Open 200: Open Models in multiple formats', () => {
    * @property {string} filePath Actual fixture to use
    * @property {string} debugTag debugging name for intercept
    */
-  async function doTest({page, urlPath, filePath, debugTag}: {page: any, urlPath: string, filePath: string, debugTag: string}) {
+  async function doTest({page, urlPath, filePath, debugTag}: {page: Page, urlPath: string, filePath: string, debugTag: string}) {
     await setupVirtualPathIntercept(page, urlPath, filePath)
     await page.goto(urlPath)
     await waitForModelReady(page)

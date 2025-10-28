@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test'
+import {expect, Route, test} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import path from 'path'
 import {
@@ -141,7 +141,6 @@ describe('Sample models', () => {
 
         describe('Choose one of the projects from the list', () => {
           beforeEach(async ({page}) => {
-            const interceptTag = 'ghModelLoad'
             await setupVirtualPathIntercept(
               page,
               '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
@@ -160,8 +159,7 @@ describe('Sample models', () => {
       describe('Open up all persistent controls', () => {
         beforeEach(async ({page}) => {
           // Select element, opens nav
-          const interceptEltSelectTag = 'twoLevelSelect'
-          await page.route('**/share/v/p/index.ifc/81/621', async (route: any) => {
+          await page.route('**/share/v/p/index.ifc/81/621', async (route: Route) => {
             const fixturePath = path.resolve(process.cwd(), 'src/tests/fixtures/404.html')
             const fixtureBuffer = await readFile(fixturePath)
             await route.fulfill({
@@ -188,7 +186,6 @@ describe('Sample models', () => {
           await page.getByTestId('menu-item-plan').click()
 
           // Select a sample project
-          const interceptModelLoadTag = 'ghModelLoad'
           await setupVirtualPathIntercept(
             page,
             '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',

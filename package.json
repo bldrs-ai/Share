@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1791",
+  "version": "1.0.1792",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -159,7 +159,8 @@
     "jsdom": "20.0.3",
     "node-fetch": "2",
     "playwright": "1.54.2",
-    "ts-jest": "29.4.4"
+    "ts-jest": "29.4.4",
+    "uuid": "^13.0.0"
   },
   "engines": {
     "node": ">=20"

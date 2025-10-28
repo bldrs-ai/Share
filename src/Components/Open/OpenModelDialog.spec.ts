@@ -46,8 +46,6 @@ describe('Open 100: Open model dialog', () => {
   })
 
   describe('Returning user visits homepage logged in', () => {
-    const interceptTag = 'ghOpenModelLoad'
-
     beforeEach(async ({page}) => {
       await returningUserVisitsHomepageWaitForModel(page)
       await setupVirtualPathIntercept(

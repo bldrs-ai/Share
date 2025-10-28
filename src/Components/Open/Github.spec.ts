@@ -30,8 +30,6 @@ describe('Open 100: GitHub Integration', () => {
     })
 
     describe('Returning user visits homepage, enters Model URL into search', () => {
-      const interceptTag = 'ghModelLoad'
-
       beforeEach(async ({page}) => {
         await setIsReturningUser(page.context())
         await visitHomepageWaitForModel(page)
@@ -61,8 +59,6 @@ describe('Open 100: GitHub Integration', () => {
     })
 
     describe('Returning user visits homepage, logs in', () => {
-      const interceptTag = 'ghOpenModelLoad'
-
       beforeEach(async ({page}) => {
         await returningUserVisitsHomepageWaitForModel(page)
         await auth0Login(page)

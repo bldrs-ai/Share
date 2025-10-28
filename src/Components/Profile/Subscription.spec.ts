@@ -26,7 +26,7 @@ async function openProfileMenu(page: Page) {
  */
 async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free' = 'free') {
   await page.evaluate((subscriptionTier) => {
-    if (!(window as any).store) {
+    if (!(window as unknown as WindowWithStore).store) {
       throw new Error(
         'Zustand store not found on window – make sure win.store is set in test builds.',
       )
@@ -35,11 +35,23 @@ async function setSubscriptionTier(page: Page, tier: 'sharePro' | 'free' = 'free
     const meta = {
       userEmail: 'cypress@bldrs.ai',
       stripeCustomerId: subscriptionTier === 'sharePro' ? 'cus_test_123' : null,
-      subscriptionStatus: subscriptionTier === 'sharePro' ? 'sharePro' : 'free',
+      subscriptionStatus: subscriptionTier === 'sharePro' ? 'sharePro' as const : 'free' as const,
     }
 
-    ;(window as any).store.getState().setAppMetadata(meta)
+    ;(window as unknown as WindowWithStore).store?.getState().setAppMetadata(meta)
   }, tier)
+}
+
+type WindowWithStore = Window & {
+  store?: {
+    getState: () => {
+      setAppMetadata: (meta: {
+        userEmail?: string
+        stripeCustomerId?: string | null
+        subscriptionStatus?: 'sharePro' | 'free' | 'shareProPendingReauth' | 'freePendingReauth'
+      }) => void
+    }
+  }
 }
 
 /**

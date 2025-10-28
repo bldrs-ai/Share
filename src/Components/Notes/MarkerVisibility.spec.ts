@@ -46,7 +46,7 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
 
         // Check if marker scene exists (optional)
         const markerScene = await page.evaluate(() => {
-          return (window as any).markerScene
+          return (window as unknown as WindowWithMarkerScene).markerScene
         })
 
         if (markerScene && markerScene.markerObjects && markerScene.markerObjects.size !== undefined) {
@@ -58,7 +58,7 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
           // Check visibility of markers
           const markers = Array.from(markerScene.markerObjects)
           for (const marker of markers) {
-            expect((marker as any).userData.id).toBeDefined()
+            expect((marker as unknown as {userData: {id: string}}).userData.id).toBeDefined()
           }
         }
 
@@ -67,3 +67,10 @@ describe('Placemarks 100: Not visible when notes is not open', () => {
     })
   })
 })
+
+
+type WindowWithMarkerScene = Window & {
+  markerScene?: {
+    markerObjects?: Set<object>
+  }
+}
