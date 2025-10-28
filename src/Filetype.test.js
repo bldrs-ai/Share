@@ -62,7 +62,7 @@ describe('Filetype', () => {
     }).toThrow(FilenameParseError)
   })
 
-  context('analyzeHeaderStr', () => {
+  describe('analyzeHeaderStr', () => {
     it('matches bld header', () => {
       const header = `{\n` +
             `  "metadata": {`
@@ -101,7 +101,7 @@ describe('Filetype', () => {
     })
   })
 
-  context('analyzeHeader (binary)', () => {
+  describe('analyzeHeader (binary)', () => {
     // Test constants
     const GLB_MAGIC_NUMBER = 0x46546C67 // "glTF" in little-endian
     const WRONG_MAGIC_NUMBER = 0x12345678
@@ -179,7 +179,7 @@ describe('Filetype', () => {
     })
   })
 
-  context('new supported types', () => {
+  describe('new supported types', () => {
     it('includes GLB and GLTF in supported types', () => {
       expect(supportedTypes).toContain('glb')
       expect(supportedTypes).toContain('gltf')

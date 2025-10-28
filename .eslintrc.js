@@ -13,7 +13,6 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
     'plugin:jsdoc/recommended',
-    'plugin:cypress/recommended',
   ],
   ignorePatterns: ['tools/playwright-report/**'],
   overrides: [
@@ -68,7 +67,6 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: [
-    'cypress',
     'import',
     'react',
     'jsx-a11y',
