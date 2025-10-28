@@ -7,11 +7,16 @@ import {
   visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
 /**
- * Sample models tests - migrated from cypress/e2e/ifc-model/load-sample-model.cy.js
+ * Sample models tests - migrated from:
+ * - cypress/e2e/ifc-model/load-sample-model.cy.js
+ * - cypress/e2e/open/100/open-sample-model.cy.js
+ *
+ * @see https://github.com/bldrs-ai/Share/issues/757
  */
 describe('Sample models', () => {
   describe('When model is loaded', () => {
@@ -112,6 +117,93 @@ describe('Sample models', () => {
 
       // Verify specific text appears (from the loaded model)
       await expect(page.getByText('Proxy with extruded box')).toBeVisible()
+    })
+  })
+
+  // Additional tests from open-sample-model.cy.js
+  describe.skip('Open 100: Open Sample Model', () => {
+    describe('Returning user visits homepage', () => {
+      beforeEach(async ({page}) => {
+        await homepageSetup(page)
+        await setIsReturningUser(page.context())
+        await visitHomepageWaitForModel(page)
+      })
+
+      describe('Select OpenModelControl > Sample Models', () => {
+        beforeEach(async ({page}) => {
+          await page.getByTestId('control-button-open').click()
+          await page.getByTestId('tab-samples').click()
+        })
+
+        test('Sample project list appears, including Momentum etc. - Screen', async ({page}) => {
+          await expectScreen(page, 'Samples-project-list.png')
+        })
+
+        describe('Choose one of the projects from the list', () => {
+          beforeEach(async ({page}) => {
+            const interceptTag = 'ghModelLoad'
+            await setupVirtualPathIntercept(
+              page,
+              '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
+              '/Momentum.ifc',
+            )
+            await page.getByText('Momentum').click()
+            await waitForModelReady(page)
+          })
+
+          test('Project loads - Screen', async ({page}) => {
+            await expectScreen(page, 'Samples-momentum-loaded.png')
+          })
+        })
+      })
+
+      describe('Open up all persistent controls', () => {
+        beforeEach(async ({page}) => {
+          // Select element, opens nav
+          const interceptEltSelectTag = 'twoLevelSelect'
+          await page.route('**/share/v/p/index.ifc/81/621', async (route: any) => {
+            const fixturePath = path.resolve(process.cwd(), 'cypress/fixtures/404.html')
+            const fixtureBuffer = await readFile(fixturePath)
+            await route.fulfill({
+              status: 200,
+              body: fixtureBuffer,
+              headers: {'content-type': 'text/html'},
+            })
+          })
+          await page.goto('/share/v/p/index.ifc/81/621')
+          await waitForModelReady(page)
+
+          // Open properties
+          await page.getByTestId('control-button-properties').click()
+
+          // Open notes
+          await page.getByTestId('control-button-notes').click()
+
+          // Open search
+          await page.getByTestId('control-button-search').click()
+
+          // Add a cutplane
+          await page.getByTestId('control-button-cut-plane').click()
+          await expect(page.getByTestId('menu-cut-plane')).toBeVisible()
+          await page.getByTestId('menu-item-plan').click()
+
+          // Select a sample project
+          const interceptModelLoadTag = 'ghModelLoad'
+          await setupVirtualPathIntercept(
+            page,
+            '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
+            '/Momentum.ifc',
+          )
+          await page.getByTestId('control-button-open').click()
+          await page.getByTestId('tab-samples').click()
+          await page.getByText('Momentum').click()
+          await waitForModelReady(page)
+        })
+
+        test('Project loads, all controls reset - Screen', async ({page}) => {
+          await expectScreen(page, 'Samples-all-controls-reset.png')
+        })
+      })
     })
   })
 })
