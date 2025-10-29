@@ -61,7 +61,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
       justifyContent='center'
       alignItems='center'
       sx={stackSx}
-      data-testid={`dialog-open-model-samples`}
+      data-testid='dialog-open-model-samples'
     >
       {Object.keys(modelPath).map((model, i) => (
         <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>

@@ -1,6 +1,6 @@
 import {splitAroundExtensionRemoveFirstSlash} from '../Filetype'
 import debug from '../utils/debug'
-import processGithubParams, {isGithubParams, GithubParams, GithubResult} from './github'
+import processGithubParams, {isGithubParams, GithubParams, GithubResult, processGithubUrl} from './github'
 import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
 
 
@@ -95,23 +95,33 @@ export function processFile(originalUrl: URL, filepath: string): FileResult {
 
 
 /**
- * Processes a URL filepath for external content, currently supporting Google Drive.
+ * Processes a URL filepath for external content, supporting GitHub and Google Drive.
  *
  * @param originalUrl - The original URL
  * @param maybeUrlParamStr - The embedded file path to process, should be a URL
- * @return The original URL, a Google File ID or null.
+ * @return The original URL, a GitHub/Google File ID or null.
  */
-export function processExternalUrl(originalUrl: URL, maybeUrlParamStr: string): GoogleResult | UrlResult | null {
+export function processExternalUrl(originalUrl: URL, maybeUrlParamStr: string): GithubResult | GoogleResult | UrlResult | null {
   let urlParam: URL
   try {
     urlParam = new URL(maybeUrlParamStr)
   } catch {
     return null
   }
-  const result: GoogleResult = processGoogleUrl(originalUrl, urlParam) as GoogleResult
-  if (result) {
-    return result
+
+  // Try GitHub URL first
+  const githubResult: GithubResult | null = processGithubUrl(originalUrl, urlParam)
+  if (githubResult) {
+    return githubResult
   }
+
+  // Try Google Drive URL
+  const googleResult: GoogleResult | null = processGoogleUrl(originalUrl, urlParam) as GoogleResult
+  if (googleResult) {
+    return googleResult
+  }
+
+  // Fallback to generic URL
   return {
     originalUrl,
     downloadUrl: urlParam,

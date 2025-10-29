@@ -77,7 +77,7 @@ export default function OpenModelDialog({
           justifyContent: 'center',
           alignItems: 'center',
         }}
-        data-testid={`dialog-open-model-tabs-stack`}
+        data-testid='dialog-open-model-tabs-stack'
       >
         { currentTab === 0 &&
           <Stack data-testid='dialog-open-model-local' spacing={1}>
@@ -102,7 +102,7 @@ export default function OpenModelDialog({
           </Stack>
         }
         { currentTab === 1 &&
-          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
+          <Stack data-testid='dialog-open-model-github' spacing={1}>
             <TextField
               label='GitHub Model URL'
               value={name}

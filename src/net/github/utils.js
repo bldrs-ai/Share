@@ -28,10 +28,10 @@ export const parseGitHubRepositoryUrl = (githubUrl) => {
     throw new Error('Not a valid GitHub repository URL')
   }
   const match = url.pathname.match(`^/${pathParts.join('/')}$`)
-  if (match === null) {
+  if (match === null || !match.groups) {
     throw new Error('Could not match GitHub repository URL')
   }
-  const {groups: {org, repo, branch, file}} = match
+  const {org, repo, branch, file} = match.groups
   return {
     url: url,
     owner: org,
@@ -62,8 +62,8 @@ const re = new RegExp(`^/${pathParts.join('/')}$`)
  */
 export function extractOrgPrefixedPath(urlWithPath) {
   const match = re.exec(urlWithPath) // TODO actually handle
-  if (match) {
-    const {groups: {org, repo, branch, file}} = match
+  if (match && match.groups) {
+    const {org, repo, branch, file} = match.groups
     return `/${org}/${repo}/${branch}/${file}`
   }
   throw new Error(`Expected a multi-part file path: ${urlWithPath}`)
@@ -84,12 +84,12 @@ export function githubUrlOrPathToSharePath(urlWithPath) {
 /**
  * Check if input is a url
  *
- * @param {input} input
+ * @param {string} input
  * @return {boolean} return true if url is found
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return pathSuffixSupported(input) && (
+  return typeof input === 'string' && pathSuffixSupported(input) && (
     input.startsWith('http') ||
       input.startsWith('/') ||
       input.startsWith('bldrs') ||
@@ -102,14 +102,17 @@ export function looksLikeLink(input) {
 /**
  * Look for any obvious problems with the given url.
  *
- * @param {object} urlStr
- * @return {boolean} return true if url is found
+ * @param {string} urlStr
+ * @return {string} The trimmed path
  * @throws Error if the argument have path slash '/' characters after
  * trimming host and appinstal prefix.
  * @private
  */
 export function trimToPath(urlStr) {
   assertDefined(urlStr)
+  if (typeof urlStr !== 'string') {
+    throw new Error('urlStr must be a string')
+  }
   let s = urlStr.trim()
   if (s.startsWith('http://')) {
     s = s.substring('http://'.length)

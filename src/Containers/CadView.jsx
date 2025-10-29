@@ -31,6 +31,7 @@ import {initViewer} from './viewer'
 
 let count = 0
 
+
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
  *
@@ -270,6 +271,8 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
+    clearIfcModels(viewer)
+
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
 
@@ -483,6 +486,8 @@ export default function CadView({
     setIsNavTreeVisible(false)
     setIsPropertiesVisible(false)
     setIsNotesVisible(false)
+
+    clearIfcModels(viewer)
   }
 
 
@@ -732,4 +737,17 @@ export default function CadView({
       )}
     </Box>
   )
+}
+
+
+/**
+ * Clear existing IFC models from the viewer context.
+ * Prevents "Model cannot be loaded. A model is already present" error.
+ *
+ * @param {object|null} viewer The viewer instance
+ */
+function clearIfcModels(viewer) {
+  if (viewer && viewer.context && viewer.context.items && viewer.context.items.ifcModels) {
+    viewer.context.items.ifcModels.length = 0
+  }
 }
