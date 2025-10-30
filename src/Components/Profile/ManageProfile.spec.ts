@@ -20,7 +20,7 @@ async function openManageProfile(page: Page, connection: 'github' | 'google' = '
   await auth0Login(page, connection) // mocked login
   await page.getByTestId('control-button-profile').click()
   await page.getByTestId('manage-profile').click()
-  await expect(page.getByTestId('dialog-manage-profile')).toBeVisible()
+  await expect(page.getByRole('dialog')).toBeVisible()
 }
 
 /**
@@ -93,7 +93,7 @@ describe('ManageProfile modal', () => {
     test('hides the dialog when Close clicked', async ({page}) => {
       await openManageProfile(page)
       await page.getByTestId('button-close-dialog-manage-profile').click()
-      await expect(page.getByTestId('dialog-manage-profile')).toHaveCount(0)
+      await expect(page.getByRole('dialog')).toHaveCount(0)
     })
   })
 })
