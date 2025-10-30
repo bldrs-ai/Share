@@ -20,8 +20,7 @@ export default defineConfig({
 
   // Reporter to use
   reporter: [
-    ['list'], // nice local output
-    ['github'], // annotations in GHA
+    [isCI ? 'github' : 'dot'],
     ['html', {outputFolder: 'playwright-report', open: 'never'}], // create HTML report dir
   ],
 

@@ -172,3 +172,12 @@ export function safePathSplit(pathStr) {
   }
   return parts
 }
+
+
+/**
+ * @param {string} s
+ * @return {string}
+ */
+export function slugify(s) {
+  return String(s).toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
