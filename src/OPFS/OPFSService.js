@@ -16,7 +16,8 @@ let workerRef = null
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker('/OPFS.Worker.js')
+    // Use module worker pointing to bundled ESM worker
+    workerRef = new Worker(new URL('./OPFS.worker.js', import.meta.url), {type: 'module'})
 
     workerRef.postMessage({
       command: 'initializeWorker',

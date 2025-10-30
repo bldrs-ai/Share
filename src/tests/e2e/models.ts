@@ -4,32 +4,78 @@ import {join} from 'path'
 
 
 /**
- * Set up virtual path intercept for model loading
- * Uses Promise.all pattern like routes.spec.ts for proper synchronization
+ * Setup route intercept for github model loading.  The return value is a callback
+ * to invoke when ready to wait for model ready.
  *
  * @param page Playwright page object
- * @param path Virtual path to intercept
- * @param fixturePath Path to fixture file
- * @return Object with intercept helpers and navigation function
+ * @param proxyPathname GitHub proxy pathname, e.g. '/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+ * @param gotoPathname Pathname to navigate to,
+ *   e.g. '/share/v/gh/.../box.ifc'
+ *   or null if caller should handle navigation.
+ * @param fixtureFilename Fixture file, e.g. 'box.ifc'
+ * @return A wait for model ready callback.
  */
-export async function setupVirtualPathIntercept(
+export async function setupGithubPathIntercept(
   page: Page,
-  path: string, // e.g. '/share/v/gh/.../Momentum.ifc'
-  fixturePath: string, // e.g. 'Momentum.ifc'
-) {
-  const sharePrefix = '/share/v/gh'
-  if (!path.startsWith(sharePrefix)) {
-    throw new Error(`Path must start with ${sharePrefix}`)
+  proxyPathname: string,
+  gotoPathname: string | undefined,
+  fixtureFilename: string,
+): Promise<() => Promise<void>> {
+  if (!proxyPathname.startsWith('/')) {
+    throw new Error(`GitHub proxy pathname must start with '/': ${proxyPathname}`)
   }
+  const proxyBase = 'https://rawgit.bldrs.dev/r' // since it will be appended to this
+  const interceptPrefix = `${proxyBase}${proxyPathname}`
+  return await setupRouteIntercept(page, interceptPrefix, gotoPathname, fixtureFilename)
+}
 
-  const fixturesDir = 'src/tests/fixtures'
-  const proxyBase = 'https://rawgit.bldrs.dev.msw/model'
-  // --- Proxy intercept (serve the IFC bytes) -------------------------------
-  const ghPath = path.substring(sharePrefix.length) // keep Cypress logic
-  const interceptUrl = `${proxyBase}${ghPath}`
 
-  await page.route(`${interceptUrl}*`, async (route) => {
-    const body = await readFile(join(fixturesDir, fixturePath))
+/**
+ * Setup route intercept for google drive model loading.  The return value is a callback
+ * to invoke when ready to wait for model ready.
+ *
+ * @param page Playwright page object
+ * @param googleDriveFildId Google Drive file ID, e.g. '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO'
+ * @param gotoPathname Pathname to navigate to,
+ *   e.g. '/share/v/g/https://drive.google.com/file/d/1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO/view'
+ *   or null if caller should handle navigation.
+ * @param fixtureFilename Fixture file, e.g. 'box.ifc'
+ * @return A wait for model ready callback.
+ */
+export async function setupGoogleDrivePathIntercept(
+  page: Page,
+  googleDriveFildId: string,
+  gotoPathname: string | undefined,
+  fixtureFilename: string, // e.g. 'Momentum.ifc'
+): Promise<() => Promise<void>> {
+  const interceptPrefix = `https://www.googleapis.com/drive/v3/files/${googleDriveFildId}`
+  return await setupRouteIntercept(page, interceptPrefix, gotoPathname, fixtureFilename)
+}
+
+
+// Don't export this function, it's internal helper for
+// setupGithubPathIntercept and setupGoogleDrivePathIntercept.
+/**
+ * Setup route intercept for model loading.  The return value is a callback
+ * to invoke when ready to wait for model ready.
+ *
+ * @param page Playwright page object
+ * @param interceptPrefix Virtual path to intercept
+ * @param gotoPathname Pathname to navigate to, e.g.
+ *   '/share/v/g/.../box.ifc'
+ *   '/share/v/gh/.../box.ifc'
+ *   or null if caller should handle navigation.
+ * @param fixtureFilename Fixture file, e.g. 'box.ifc'
+ * @return A wait for model ready callback.
+ */
+async function setupRouteIntercept(
+  page: Page, interceptPrefix: string, gotoPathname: string | undefined, fixtureFilename: string):
+  Promise<() => Promise<void>> {
+  const interceptRoute = `${interceptPrefix}*`
+  console.log('setupRouteIntercept: seting up intercept:', interceptRoute)
+  await page.route(interceptRoute, async (route) => {
+    const fixturesDir = 'src/tests/fixtures'
+    const body = await readFile(join(fixturesDir, fixtureFilename))
     await route.fulfill({
       status: 200,
       headers: {'content-type': 'application/octet-stream'},
@@ -37,21 +83,13 @@ export async function setupVirtualPathIntercept(
     })
   })
 
-  // Return helpers that use Promise.all pattern like routes.spec.ts
-  const navigateAndWaitForModel = async () => {
-    const [response] = await Promise.all([
-      page.waitForResponse((r) => r.url().startsWith(interceptUrl)),
-      page.goto(path, {waitUntil: 'domcontentloaded'}),
+  return async () => {
+    console.log('waitForModelReadyCallback: waiting for intercept:', interceptRoute)
+    console.log('waitForModelReadyCallback: navigating to:', gotoPathname)
+    await Promise.all([
+      page.waitForResponse((r) => r.url().startsWith(interceptPrefix)),
+      gotoPathname ? page.goto(gotoPathname, {waitUntil: 'domcontentloaded'}) : Promise.resolve(),
     ])
-    return response
-  }
-
-  return {
-    interceptUrl,
-    navigateAndWaitForModel,
-    // Legacy helpers for backwards compatibility
-    waitForModelRequest: () => page.waitForRequest((r) => r.url().startsWith(interceptUrl)),
-    waitForModelResponse: () => page.waitForResponse((r) => r.url().startsWith(interceptUrl)),
   }
 }
 

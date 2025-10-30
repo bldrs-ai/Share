@@ -14,15 +14,16 @@ import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
+import {isOutOfMemoryError} from '../utils/oom'
 import {testUuid} from '../utils/strings'
-import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {CacheException, NotFoundAlert} from './Alerts'
+import {dereferenceAndProxyDownloadContents} from './urls'
 import glbToThree from './glb'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
-import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
@@ -95,24 +96,17 @@ export async function load(
     throw new Error(`Unknown filetype for: ${path}`)
   }
 
+  onProgress('Downloading model...')
   let modelData
   if (isOpfsAvailable) {
-    onProgress('Preparing file download...')
     // download to file using caching system or else...
-    let file
+    let modelFile
     if (isUploadedFile) {
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      modelFile = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
     } else if (isLocallyHostedFile) {
       debug().log('Loader#load: local file:', path)
-      file = await downloadToOPFS(
-        path,
-        path,
-        'bldrs-ai',
-        'BldrsLocalStorage',
-        'V1',
-        'Projects',
-        onProgress)
+      modelFile = await downloadToOPFS(path, path, 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects', onProgress)
     } else {
       let pathUrl
       try {
@@ -130,10 +124,10 @@ export async function load(
         }
 
         if (isBase64) {
-          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          modelFile = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
         } else {
           debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-          file = await downloadModel(
+          modelFile = await downloadModel(
             derefPath,
             shaHash,
             filePath,
@@ -147,7 +141,7 @@ export async function load(
       } else {
         const opfsFilename = pathUrl.pathname
         debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
-        file = await downloadToOPFS(
+        modelFile = await downloadToOPFS(
           path,
           opfsFilename,
           pathUrl.host,
@@ -157,10 +151,13 @@ export async function load(
           onProgress)
       }
     }
-    debug().log('Loader#load: File from OPFS:', file)
-    setOpfsFile(file)
     onProgress('Reading model data...')
-    modelData = await file.arrayBuffer()
+    debug(true).log('Loader#load: Model from OPFS:', modelFile)
+    setOpfsFile(modelFile)
+    if (modelFile.size === 0) {
+      throw new CacheException('Empty model')
+    }
+    modelData = await modelFile.arrayBuffer()
     if (isFormatText) {
       onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
@@ -168,7 +165,6 @@ export async function load(
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
-    onProgress('Downloading model data...')
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }
@@ -202,7 +198,7 @@ export async function load(
 
   if (!isIfc) {
     onProgress('Converting model format...')
-    debug().log('Loader#load: converting non-IFC model to IFC:', model)
+    debug(true).log('Loader#load: converting non-IFC model to IFC:', model)
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
@@ -254,7 +250,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
     if (error.response) {
       console.warn('error.response.status:', error.response.status)
       if (error.response.status === HTTP_NOT_FOUND) {
-        throw new NotFoundError('File not found')
+        throw new NotFoundAlert('File not found on server')
       } else {
         throw new Error(`Error response from server: status(${error.response.status}), message(${error.response.data})`)
       }
@@ -575,7 +571,7 @@ function newIfcLoader(viewer) {
     onError,
   ) {
     if (this.context.items.ifcModels.length !== 0) {
-      throw new Error('Model cannot be loaded.  A model is already present')
+      throw new Error('Attempt to load a model into an already-used viewer instance')
     }
     try {
       if (onProgress) {
@@ -628,6 +624,7 @@ function newIfcLoader(viewer) {
       }
       return ifcModel
     } catch (err) {
+      console.error('newIfcLoader.parse: error:', err)
       loader.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.
       if (isOutOfMemoryError(err)) {
@@ -658,18 +655,5 @@ function onDownloadProgressHandler(progressEvent, onProgress) {
     const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
     debug().log(`Loader#loadModel$onProgress, ${loadedBytes} bytes`)
     onProgress(`${loadedMegs} MB`)
-  }
-}
-
-
-/** For network or file resources that are not found. */
-export class NotFoundError extends Error {
-  /** @param {string} message */
-  constructor(message) {
-    super(message)
-    this.name = 'NotFoundError'
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
-    }
   }
 }

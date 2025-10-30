@@ -165,6 +165,11 @@ export default function CadView({
       return
     }
 
+    if (viewer.IFC.context.items.ifcModels.length > 0) {
+      debug(true).warn('CadView#onViewer: viewer already has a model loaded')
+      return
+    }
+
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -203,6 +208,7 @@ export default function CadView({
             'refresh the page.',
         })
       } else {
+        debug(true).error('CadView#onViewer: error:', e)
         setAlert(e)
       }
 
@@ -263,6 +269,7 @@ export default function CadView({
    * @param {object} routeResult
    * @param {string} gitpath to use for constructing API endpoints
    * @return {object} loaded model
+   * @throws {Error} If model cannot be loaded
    */
   async function loadModel(routeResult) {
     const filepath = routeResult.downloadUrl || routeResult.filepath
@@ -270,8 +277,6 @@ export default function CadView({
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
-
-    clearIfcModels(viewer)
 
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
@@ -296,13 +301,10 @@ export default function CadView({
     try {
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
-    } catch (error) {
-      if (isOutOfMemoryError(error)) {
-        error.isOutOfMemory = true
-        throw error
-      }
-
-      setAlert(error)
+    } catch (e) {
+      console.error(e)
+      captureException(e)
+      setAlert(e)
       return
     } finally {
       setIsModelLoading(false)
@@ -486,8 +488,6 @@ export default function CadView({
     setIsNavTreeVisible(false)
     setIsPropertiesVisible(false)
     setIsNotesVisible(false)
-
-    clearIfcModels(viewer)
   }
 
 
@@ -618,7 +618,7 @@ export default function CadView({
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
-    debug().log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
+    debug(true).log('CadView#useEffect1[modelPath], calling onModelPath, modelPath:', modelPath)
     onModelPath()
   }, [modelPath, customViewSettings])
 
@@ -737,17 +737,4 @@ export default function CadView({
       )}
     </Box>
   )
-}
-
-
-/**
- * Clear existing IFC models from the viewer context.
- * Prevents "Model cannot be loaded. A model is already present" error.
- *
- * @param {object|null} viewer The viewer instance
- */
-function clearIfcModels(viewer) {
-  if (viewer && viewer.context && viewer.context.items && viewer.context.items.ifcModels) {
-    viewer.context.items.ifcModels.length = 0
-  }
 }

@@ -18,6 +18,7 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     backgroundColor: new Color(backgroundColorStr),
   })
 
+  console.log('initViewer: viewer copy:', {...viewer})
   // Path to web-ifc.wasm in serving directory.
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true

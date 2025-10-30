@@ -12,17 +12,12 @@ import CloseIcon from '@mui/icons-material/Close'
 
 /** @return {ReactElement} */
 export default function AlertAndSnackbar() {
-  const appPrefix = useStore((state) => state.appPrefix)
-
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const [isSnackOpen, setIsSnackOpen] = useState(false)
   const [text, setText] = useState(null)
   const [duration, setDuration] = useState(null)
-
-  const navigate = useNavigate()
-
 
   useEffect(() => {
     if (snackMessage === null) {
@@ -50,7 +45,10 @@ export default function AlertAndSnackbar() {
       <AlertDialog
         onClose={() => {
           setSnackMessage(null)
-          navToDefault(navigate, appPrefix)
+          // This is a hard-reset of the app.  navigate() will keep us
+          // within react-router, and window.location.reload() leaves us
+          // with a potentially broken path or infinite reload loop.
+          window.location.replace('/')
         }}
       />
       <Snackbar

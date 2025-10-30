@@ -60,6 +60,7 @@ export default function Dialog({
       closeAfterTransition={false}
       // Use safe headerText for data-testid
       data-testid={`dialog-${dataTestIdSuffix}`}
+      {...(props.sx ? {sx: props.sx} : {})}
     >
       <DialogTitle
         variant='h1'

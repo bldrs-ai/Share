@@ -29,20 +29,23 @@ export function initHandlers(defines) {
   const handlers = []
   handlers.push(...prohibitProdAccess())
   handlers.push(...workersAndWasmPassthrough())
-  handlers.push(...iconAndFontHandlers())
+  handlers.push(...iconsFontsCssHandlers())
   handlers.push(...githubApiHandlers(defines, true))
   handlers.push(...githubApiHandlers(defines, false))
   handlers.push(...netlifyHandlers())
   handlers.push(...subscribePageHandler())
   handlers.push(...stripePortalHandlers())
   handlers.push(...gaHandlers())
-  handlers.push(...googleApisHandlers())
   // Pass through paths that are served by static assets or playwright fixtures
   handlers.push(http.get('/share/v/p/*', () => passthrough()))
   handlers.push(http.get('/share/v/gh/*', () => passthrough()))
+  handlers.push(http.get('/share/v/g/*', () => passthrough()))
+  handlers.push(http.get('/share/v/u/*', () => passthrough()))
   handlers.push(http.get('https://rawgit.bldrs.dev/model/*', () => passthrough()))
   handlers.push(http.get('https://rawgit.bldrs.dev/r/*', () => passthrough()))
+  handlers.push(http.get('https://www.googleapis.com/drive/v3/files/*', () => passthrough()))
   handlers.push(...installEsbuildHotReloadHandler())
+  // handlers.push(http.get('https://192.168.0.10/*', () => passthrough())) // local static server
   return handlers
 }
 
@@ -70,22 +73,19 @@ function prohibitProdAccess() {
  *
  * @return {Array<object>} handlers
  */
-function iconAndFontHandlers() {
+function iconsFontsCssHandlers() {
   return [
+    // CSS
+    http.get(/\/index\.css$/, () => passthrough()),
     // Icons
     http.get(/\/favicon\.ico$/, () => passthrough()),
     http.get(/\/icons/, () => passthrough()),
+    // Fonts
     http.get(/\/roboto-*/, () => passthrough()),
     http.get('http://bldrs.ai/icons/*', () => {
       return new Response('', {
         status: HTTP_BAD_REQUEST,
         headers: {'Content-Type': 'text/plain'},
-      })
-    }),
-    http.get(/\/favicon\.ico$/, () => {
-      return new Response('', {
-        status: HTTP_OK,
-        headers: {'Content-Type': 'image/x-icon'},
       })
     }),
   ]
