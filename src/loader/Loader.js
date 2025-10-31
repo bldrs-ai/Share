@@ -90,7 +90,7 @@ export async function load(
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   onProgress('Determining file type...')
-  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -99,6 +99,7 @@ export async function load(
   }
 
   let modelData
+  let fromOPFS = false 
   if (isOpfsAvailable) {
     onProgress('Preparing file download...')
     // download to file using caching system or else...
@@ -172,6 +173,16 @@ export async function load(
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
     onProgress('Reading file data...')
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext === 'glb' && isIfc) {
+      // GLB IFC needs special loader to extract properties payload
+      const loaderResult = getLoader("glb", viewer);
+      loader = loaderResult.loader;
+      isLoaderAsync = loaderResult.isLoaderAsync;
+      isFormatText = loaderResult.isFormatText;
+      isIfc = loaderResult.isIfc;
+      fixupCb = loaderResult.fixupCb;
+    }
     modelData = await file.arrayBuffer()
     if (isFormatText) {
       onProgress('Decoding text data...')
@@ -297,15 +308,54 @@ function convertToShareModel(model, viewer) {
    * @param {Object3D} model
    */
   function recursiveDecorate(obj3d) {
+    // Check if we have bldrsPayload to extract real expressIDs
+    const payload = model.userData?.bldrsPayload
+    
+    // Try to get expressID from userData or name
+    let expressID = obj3d.userData?.expressID
+    
+    // If we have a payload and the object has a name, try to find matching expressID
+    if (!expressID && payload && obj3d.name) {
+      // The payload keys are the expressIDs
+      // We need to match based on the GLTF node structure
+      // For now, try to extract from name if it contains the ID
+      const nameMatch = obj3d.name.match(/(\d+)/)
+      if (nameMatch) {
+        const possibleID = parseInt(nameMatch[1])
+        if (payload[possibleID]) {
+          expressID = possibleID
+        }
+      }
+    }
+    
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || {value: 'Object'}
-    obj3d.LongName = obj3d.LongName || {value: 'Object'}
-    const id = objIdSerial++
+    obj3d.Name = obj3d.Name || {value: obj3d.name || 'Object'}
+    obj3d.LongName = obj3d.LongName || {value: obj3d.name || 'Object'}
+    
+    const id = expressID ?? objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
+    
+    // If we found properties in the payload, use them
+    if (payload && payload[obj3d.expressID]) {
+      const props = payload[obj3d.expressID]
+      if (props.itemProperties) {
+        if (props.itemProperties.Name) {
+          obj3d.Name = {value: props.itemProperties.Name.value || props.itemProperties.Name}
+        }
+        if (props.itemProperties.LongName) {
+          obj3d.LongName = {value: props.itemProperties.LongName.value || props.itemProperties.LongName}
+        }
+        if (props.itemProperties.type) {
+          // Convert numeric IFC type to string
+          obj3d.type = String(props.itemProperties.type)
+        }
+      }
+    }
+    
     if (obj3d.geometry) {
       const ids = new Int8Array(1)
-      ids[0] = id
+      ids[0] = obj3d.expressID
       // TODO(pablo)
       // obj3d.geometry = obj3d.geometry || {attributes: {}}
 
@@ -342,15 +392,106 @@ function convertToShareModel(model, viewer) {
   model.LongName = model.LongName || {value: 'Model'}
   // model.ifcManager = viewer.IFC
   model.ifcManager = viewer.IFC.loader.ifcManager
+  
+  // Store reference to the model for closure
+  const modelRef = model
+  
   model.ifcManager.getSpatialStructure = (modelId, flatten) => {
-    return model
+    console.log('getSpatialStructure called, checking for bldrsPayload...')
+    
+    // Check if we have a bldrsPayload - if so, build tree from GLTF scene
+    if (modelRef.userData && modelRef.userData.bldrsPayload) {
+      console.log('Found bldrsPayload, building spatial tree from GLTF scene hierarchy')
+      const payload = modelRef.userData.bldrsPayload
+      
+      // Build spatial tree from GLTF scene hierarchy
+      const buildTreeFromScene = (obj3d) => {
+        const expressID = obj3d.expressID
+        
+        // Get properties from payload if available
+        let name = obj3d.name || 'Element'
+        let longName = obj3d.name || 'Element'
+        let type = obj3d.type || 'IFCOBJECT'
+        
+        if (expressID !== undefined && payload[expressID]) {
+          const props = payload[expressID]
+          console.log('Found payload for expressID', expressID, ':', props)
+          
+          // Extract name from itemProperties
+          if (props.itemProperties) {
+            if (props.itemProperties.Name) {
+              name = props.itemProperties.Name.value || props.itemProperties.Name
+            }
+            if (props.itemProperties.LongName) {
+              longName = props.itemProperties.LongName.value || props.itemProperties.LongName
+            }
+            if (props.itemProperties.type) {
+              // Convert numeric IFC type to string
+              type = String(props.itemProperties.type)
+            }
+          }
+          
+          console.log('Extracted - name:', name, 'longName:', longName, 'type:', type)
+        } else {
+          // For nodes without payload, ensure type is a string
+          if (typeof type === 'number') {
+            type = String(type)
+          }
+        }
+        
+        const node = {
+          expressID: expressID,
+          type: type,
+          Name: {value: name},
+          LongName: {value: longName},
+          children: []
+        }
+        
+        // Recursively process children
+        if (obj3d.children && obj3d.children.length > 0) {
+          for (const child of obj3d.children) {
+            const childNode = buildTreeFromScene(child)
+            node.children.push(childNode)
+          }
+        }
+        
+        return node
+      }
+      
+      const spatialTree = buildTreeFromScene(modelRef)
+      console.log('Built spatial tree:', spatialTree)
+      return spatialTree
+    }
+    
+    console.log('No bldrsPayload found, returning model itself')
+    // Fallback to returning the model itself
+    return modelRef
   }
+  
   model.ifcManager.getExpressId = (geom, faceNdx) => {
     debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
     return geom.id
   }
 
   model.getIfcType = (eltType) => eltType
+  
+  // Override getPropertySets for models with bldrsPayload
+  model.getPropertySets = async (expressID) => {
+    console.log('getPropertySets called for expressID:', expressID)
+    
+    if (modelRef.userData && modelRef.userData.bldrsPayload) {
+      const payload = modelRef.userData.bldrsPayload
+      const props = payload[expressID]
+      
+      if (props && props.propertySets) {
+        console.log('Found propertySets in bldrsPayload:', props.propertySets)
+        return props.propertySets
+      }
+    }
+    
+    console.log('No propertySets found, returning empty array')
+    return []
+  }
 
   return model
 }
@@ -511,6 +652,7 @@ async function findLoader(pathname, viewer) {
     }
     case 'glb':
     case 'gltf': {
+      viewer.IFC.type = "glb"
       loader = newGltfLoader()
       fixupCb = glbToThree
       break
@@ -548,12 +690,96 @@ async function findLoader(pathname, viewer) {
 
 
 /**
+ * Get a loader instance for a specific file type
+ * 
+ * @param {string} loaderType - The file extension/type (e.g., 'ifc', 'gltf', 'glb', 'obj', etc.)
+ * @param {object} viewer - The viewer instance (required for IFC loader)
+ * @return {object} Object containing loader and metadata: {loader, isLoaderAsync, isFormatText, isIfc, fixupCb}
+ */
+export function getLoader(loaderType, viewer) {
+  const extension = loaderType.toLowerCase().replace(/^\./, '') // Remove leading dot if present
+  let isLoaderAsync = false
+  let isFormatText = false
+  let isIfc = false
+  let loader
+  let fixupCb
+
+  switch (extension) {
+    case 'bld': {
+      loader = new BLDLoader(viewer)
+      isFormatText = true
+      break
+    }
+    case 'fbx': {
+      loader = new FBXLoader()
+      break
+    }
+    case 'step':
+    case 'stp':
+    case 'ifc': {
+      if (!viewer) {
+        throw new Error('Viewer instance required for IFC loader')
+      }
+      loader = newIfcLoader(viewer)
+      isLoaderAsync = true
+      isFormatText = false
+      isIfc = true
+      break
+    }
+    case 'obj': {
+      loader = new OBJLoader()
+      fixupCb = objToThree
+      isFormatText = true
+      break
+    }
+    case 'pdb': {
+      loader = new PDBLoader()
+      fixupCb = pdbToThree
+      isFormatText = true
+      break
+    }
+    case 'stl': {
+      loader = new STLLoader()
+      fixupCb = stlToThree
+      isFormatText = false
+      break
+    }
+    case 'xyz': {
+      loader = new XYZLoader()
+      fixupCb = xyzToThree
+      isFormatText = true
+      break
+    }
+    case 'glb':
+    case 'gltf': {
+      viewer.IFC.type = "glb"
+      loader = newGltfLoader()
+      fixupCb = glbToThree
+      break
+    }
+    default:
+      throw new Error(`Unsupported loader type: ${extension}`)
+  }
+
+  loader.type = extension
+  return {
+    loader,
+    isLoaderAsync,
+    isFormatText,
+    isIfc,
+    fixupCb,
+  }
+}
+
+
+/**
  * @return {GLTFLoader} With DRACO codec enabled
  */
 function newGltfLoader() {
   const loader = new GLTFLoader
   const dracoLoader = new DRACOLoader
-  dracoLoader.setDecoderPath('./node_modules/three/examples/jsm/libs/draco/')
+  dracoLoader.setDecoderPath('/static/js/draco/')        // your static path
+  dracoLoader.setDecoderConfig({ type: 'wasm' })
   loader.setDRACOLoader(dracoLoader)
   return loader
 }

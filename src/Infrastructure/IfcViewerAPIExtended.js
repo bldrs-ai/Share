@@ -1,4 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import {MeshLambertMaterial} from 'three'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
@@ -23,6 +24,9 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
+  _glbSelectionMeshes = [] // Store selection meshes for GLB models
+  _glbPreselectionMesh = null // Store preselection mesh for GLB models
+  
   /**  */
   constructor(options) {
     super(options)
@@ -33,6 +37,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
+    
+    // Initialize selection materials for GLB models (will be set from CadView theme)
+    this._glbSelectMat = null
+    this._glbPreselectMat = null
   }
 
   /**
@@ -42,6 +50,105 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   setCustomViewSettings(customViewSettings) {
     this.viewsManager.setViewSettings(customViewSettings)
+  }
+
+  /**
+   * Sets the selection materials for GLB models
+   *
+   * @param {MeshLambertMaterial} selectMat - Material for selected elements
+   * @param {MeshLambertMaterial} preselectMat - Material for preselected elements
+   */
+  setGlbSelectionMaterials(selectMat, preselectMat) {
+    this._glbSelectMat = selectMat
+    this._glbPreselectMat = preselectMat
+  }
+
+  /**
+   * Emulates pickIfcItemsByID for GLB models by creating selection meshes
+   *
+   * @param {number} modelID - ID of the model
+   * @param {number[]} ids - Express IDs to select
+   * @param {boolean} focusSelection - If true, focus camera on selection
+   * @param {boolean} removePrevious - If true, remove previous selection
+   */
+  async pickGlbItemsByID(modelID, ids, focusSelection = false, removePrevious = true) {
+    const model = this.context.items.ifcModels[modelID]
+    if (!model) {
+      debug().warn('Model not found for GLB selection')
+      return
+    }
+
+    // Remove previous selection meshes if requested
+    if (removePrevious && this._glbSelectionMeshes.length > 0) {
+      for (const mesh of this._glbSelectionMeshes) {
+        this.context.getScene().remove(mesh)
+        if (mesh.geometry) {
+          mesh.geometry.dispose()
+        }
+      }
+      this._glbSelectionMeshes = []
+    }
+
+    // Find and clone meshes for the selected expressIDs
+    const selectedMeshes = []
+    
+    // Recursive function to check node and its children
+    const checkNode = (node) => {
+      const nodeExpressID = node.expressID
+      
+      if (nodeExpressID !== undefined && ids.includes(parseInt(nodeExpressID))) {
+        // Found a node with matching expressID, collect all meshes under it
+        node.traverse((descendant) => {
+          if (descendant.geometry) {
+            selectedMeshes.push(descendant)
+          }
+        })
+      }
+      
+      // Recursively check children
+      if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+          checkNode(child)
+        }
+      }
+    }
+    
+    // Start checking from model's direct children
+    for (const child of model.children) {
+      checkNode(child)
+    }
+
+    // Create selection overlay meshes
+    const selectMat = this._glbSelectMat || new MeshLambertMaterial({
+      transparent: true,
+      color: 0x0066ff,
+      depthTest: true,
+    })
+
+    for (const mesh of selectedMeshes) {
+      const selectionMesh = mesh.clone()
+      selectionMesh.material = selectMat
+      selectionMesh.renderOrder = 1
+      this.context.getScene().add(selectionMesh)
+      this._glbSelectionMeshes.push(selectionMesh)
+    }
+
+    debug().log('IfcViewerAPIExtended#pickGlbItemsByID, created selection meshes: ', this._glbSelectionMeshes.length)
+  }
+
+  /**
+   * Removes all GLB selection meshes (emulates unpickIfcItems for GLB)
+   */
+  unpickGlbItems() {
+    if (this._glbSelectionMeshes.length > 0) {
+      for (const mesh of this._glbSelectionMeshes) {
+        this.context.getScene().remove(mesh)
+        if (mesh.geometry) {
+          mesh.geometry.dispose()
+        }
+      }
+      this._glbSelectionMeshes = []
+    }
   }
 
   /**
@@ -102,7 +209,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {number[]} expressIds express Ids of the elements
    */
   async setSelection(modelID, expressIds, focusSelection) {
-    if (this.IFC.type !== 'ifc') {
+    if (this.IFC.type !== 'ifc' && this.IFC.type !== 'glb') {
       debug().warn('setSelection is not supported for this type of model')
       return
     }
@@ -112,6 +219,54 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
       // if not specified, only focus on item if it was the first one to be selected
       focusSelection = toBeSelected.length === 1
     }
+    
+    // Handle GLB models separately
+    if (this.IFC.type === 'glb' || this.IFC.type === 'gltf') {
+      if (toBeSelected.length !== 0) {
+        await this.pickGlbItemsByID(modelID, toBeSelected, focusSelection, true)
+        
+        // Also use highlighter for outline effect
+        const model = this.context.items.ifcModels[modelID]
+        if (model) {
+          const selectedMeshes = []
+          
+          // Recursive function to check node and its children
+          const checkNode = (node) => {
+            const nodeExpressID = node.expressID
+            
+            if (nodeExpressID !== undefined && toBeSelected.includes(parseInt(nodeExpressID))) {
+              // Found a node with matching expressID, collect all meshes under it
+              node.traverse((descendant) => {
+                if (descendant.geometry) {
+                  selectedMeshes.push(descendant)
+                }
+              })
+            }
+            
+            // Recursively check children
+            if (node.children && node.children.length > 0) {
+              for (const child of node.children) {
+                checkNode(child)
+              }
+            }
+          }
+          
+          // Start checking from model's direct children
+          for (const child of model.children) {
+            checkNode(child)
+          }
+          
+          debug().log('IfcViewerAPIExtended#setSelection (GLB), selected meshes: ', selectedMeshes)
+          this.highlighter.setHighlighted(selectedMeshes)
+        }
+      } else {
+        this.unpickGlbItems()
+        this.highlighter.setHighlighted(null)
+      }
+      return
+    }
+    
+    // Handle IFC models
     if (toBeSelected.length !== 0) {
       try {
         debug().log('IfcViewerAPIExtended#setSelection, with Array<toBeSelected>: ', toBeSelected)
@@ -138,9 +293,57 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   async highlightIfcItem() {
     const found = this.context.castRayIfc()
     if (!found) {
-      this.IFC.selector.preselection.toggleVisibility(false)
+      // Clear highlights when nothing is hovered
+      this.highlighter.setHighlighted(null)
+      
+      // Clear GLB preselection mesh if exists
+      if (this._glbPreselectionMesh) {
+        this.context.getScene().remove(this._glbPreselectionMesh)
+        if (this._glbPreselectionMesh.geometry) {
+          this._glbPreselectionMesh.geometry.dispose()
+        }
+        this._glbPreselectionMesh = null
+      }
+      
+      // Only toggle preselection visibility for IFC models
+      if (this.IFC.type === 'ifc') {
+        this.IFC.selector.preselection.toggleVisibility(false)
+      }
       return
     }
+    
+    // For GLB models, create a preselection overlay mesh
+    if (this.IFC.type === 'glb' || this.IFC.type === 'gltf') {
+      // Remove previous preselection mesh
+      if (this._glbPreselectionMesh) {
+        this.context.getScene().remove(this._glbPreselectionMesh)
+        if (this._glbPreselectionMesh.geometry) {
+          this._glbPreselectionMesh.geometry.dispose()
+        }
+        this._glbPreselectionMesh = null
+      }
+      
+      // Create preselection mesh with preselectMat
+      const preselectMat = this._glbPreselectMat || new MeshLambertMaterial({
+        transparent: true,
+        opacity: 0.5,
+        color: 0x0066ff,
+        depthTest: true,
+      })
+      
+      const mesh = found.object
+      const preselectionMesh = mesh.clone()
+      preselectionMesh.material = preselectMat
+      preselectionMesh.renderOrder = 0 // Lower than selection
+      this.context.getScene().add(preselectionMesh)
+      this._glbPreselectionMesh = preselectionMesh
+      
+      // Also use highlighter for outline effect
+      this.highlighter.setHighlighted([mesh])
+      return
+    }
+    
+    // For IFC models, use the standard IFC selection logic
     const id = this.getPickedItemId(found)
     if (this.IFC.type === 'ifc' && this.isolator.canBePickedInScene(id)) {
       await this.IFC.selector.preselection.pick(found)
@@ -156,6 +359,12 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {number[]} expressIds express Ids of the elements
    */
   async preselectElementsByIds(modelId, expressIds) {
+    // Only works for IFC models
+    if (this.IFC.type !== 'ifc' && this.IFC.type !== 'glb') {
+      debug().warn('preselectElementsByIds is not supported for this type of model')
+      return
+    }
+    
     const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
     debug().log('IfcViewerAPIExtended#preselectElementsByIds, filteredIds:', filteredIds)
     if (filteredIds.length) {
@@ -188,7 +397,72 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
 
   /**
-   * Highlights the item pointed by the cursor.
+   * Gets properties for an element by expressID.
+   * For GLTF models with bldrsPayload, returns properties from the payload.
+   * For IFC models, delegates to the IFC manager.
+   *
+   * @param {number} modelID
+   * @param {number} expressID
+   * @return {Promise<object>} The properties object
+   */
+  async getProperties(modelID, expressID) {
+    console.log('getProperties called for modelID:', modelID, 'expressID:', expressID)
+    
+    const model = this.context.items.ifcModels[modelID]
+    console.log('Model found:', !!model)
+    
+    // Check if model has bldrsPayload (flat map of expressID -> properties)
+    if (model && model.userData && model.userData.bldrsPayload) {
+      const payload = model.userData.bldrsPayload
+      console.log('Found bldrsPayload')
+      
+      // Try both string and numeric keys
+      const props = payload[String(expressID)] || payload[expressID]
+      
+      if (props) {
+        console.log('Found properties in bldrsPayload:', props)
+        
+        // Convert to the format expected by Share
+        const result = {
+          expressID: props.expressID,
+          type: props.itemProperties?.type || 'IFCOBJECT',
+          Name: props.itemProperties?.Name || {value: 'Element'},
+          LongName: props.itemProperties?.LongName || props.itemProperties?.Name || {value: 'Element'},
+          // Include all other properties
+          ...props.itemProperties,
+        }
+        
+        // Add property sets if available
+        if (props.propertySets) {
+          result.propertySets = props.propertySets
+        }
+        
+        return result
+      } else {
+        console.log('expressID not found in bldrsPayload, available keys:', Object.keys(payload).slice(0, 10))
+      }
+    }
+    
+    // Fallback to IFC manager
+    if (this.IFC && this.IFC.loader && this.IFC.loader.ifcManager) {
+      console.log('Falling back to IFC manager')
+      return await this.IFC.loader.ifcManager.getItemProperties(modelID, expressID)
+    }
+    
+    // Last resort
+    console.log('No properties found, returning default')
+    return {
+      Name: {value: 'Element'},
+      LongName: {value: 'Element'},
+      expressID: expressID,
+    }
+  }
+
+
+  /**
+   * Gets the expressID of the picked item.
+   * For GLB models, extracts the expressID from mesh userData.
+   * For IFC models, uses the IFC manager to get the expressID.
    *
    * @param {object} picked item
    * @return {number} element id
@@ -198,6 +472,36 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }
+    
+    // For GLB models, try to get expressID from the node hierarchy
+    if (this.IFC.type === 'glb' || this.IFC.type === 'gltf') {
+      // Walk up the parent chain to find an expressID
+      let currentNode = mesh
+      while (currentNode) {
+        if (currentNode.expressID !== undefined) {
+          return parseInt(currentNode.expressID)
+        }
+        currentNode = currentNode.parent
+      }
+      
+      // Fallback: check userData
+      if (mesh.userData && mesh.userData.expressID !== undefined) {
+        return mesh.userData.expressID
+      }
+      
+      // Fallback: check if the name contains an expressID (common in GLB exports)
+      if (mesh.name) {
+        const match = mesh.name.match(/expressID[_-]?(\d+)/i)
+        if (match) {
+          return parseInt(match[1])
+        }
+      }
+      
+      // Return null if no expressID found
+      return null
+    }
+    
+    // For IFC models, use the IFC manager
     const ifcManager = this.IFC
     return ifcManager.loader.ifcManager.getExpressId(mesh.geometry, picked.faceIndex)
   }

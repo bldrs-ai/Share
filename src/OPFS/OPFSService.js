@@ -5,6 +5,8 @@ import {workerRef_} from './OPFSWorkerRef.js'
 // TODO(pablo): probably don't need global state, can
 // pass worker refs as needed.
 let workerRef = null
+let wasmInitializationInProgress = false
+let wasmInitializationPromise = null
 
 /**
  * Initializes and returns a reference to a web worker.
@@ -73,16 +75,36 @@ export async function initializeWasm(wasmModulePath = '/static/js/ConwayGeomWasm
     return Promise.resolve(false)
   }
 
-  return new Promise((resolve, reject) => {
+  // If initialization is already in progress, return the existing promise
+  if (wasmInitializationInProgress && wasmInitializationPromise) {
+    debug().warn('WASM initialization already in progress, waiting for existing initialization...')
+    return wasmInitializationPromise
+  }
+
+  debug().log('Starting new WASM initialization...')
+
+  // Create new initialization promise
+  wasmInitializationInProgress = true
+  wasmInitializationPromise = new Promise((resolve, reject) => {
+    let timeoutId = null
+    
     // Set up a one-time message listener for the initialization response
     const handleMessage = (event) => {
       if (event.data.event === 'wasmInitialized') {
         workerRef.removeEventListener('message', handleMessage)
+        if (timeoutId) clearTimeout(timeoutId)
+        wasmInitializationInProgress = false
         resolve(true)
       } else if (event.data.event === 'wasmInitError') {
         workerRef.removeEventListener('message', handleMessage)
+        if (timeoutId) clearTimeout(timeoutId)
+        wasmInitializationInProgress = false
+        wasmInitializationPromise = null
         console.error('WASM initialization error:', event.data.error)
         reject(new Error(event.data.error))
+      } else if (event.data.event === 'wasmInitProgress') {
+        // Log progress to help debug slow initialization
+        debug().log(`WASM initialization progress: ${event.data.stage}`)
       }
     }
 
@@ -95,13 +117,17 @@ export async function initializeWasm(wasmModulePath = '/static/js/ConwayGeomWasm
       memory: (globalThis).ConwaySharedMemory, // Use the buffer directly for shared memory
     })
 
-    // Optional: Add a timeout to prevent hanging indefinitely
-    const TIMEOUT = 30000
-    setTimeout(() => {
+    // Increased timeout for WASM initialization (especially for multi-threaded WASM on slower devices)
+    const TIMEOUT = 60000 // 60 seconds
+    timeoutId = setTimeout(() => {
       workerRef.removeEventListener('message', handleMessage)
-      reject(new Error('WASM initialization timeout'))
+      wasmInitializationInProgress = false
+      wasmInitializationPromise = null
+      reject(new Error('WASM initialization timeout after 60s'))
     }, TIMEOUT)
   })
+
+  return wasmInitializationPromise
 }
 /* eslint-enable require-await, default-param-last */
 

@@ -1,6 +1,6 @@
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
-import {load, readModel} from './Loader'
+import {load, readModel, getLoader} from './Loader'
 
 
 let mathRandomSpy
@@ -632,3 +632,146 @@ function setupMockBlobWithContent(fileContent) {
     MockBlob.prototype.arrayBuffer = originalArrayBuffer
   }
 }
+
+
+describe('getLoader', () => {
+  it('returns IFC loader with correct metadata', () => {
+    const result = getLoader('ifc', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('ifc')
+    expect(result.isLoaderAsync).toBe(true)
+    expect(result.isFormatText).toBe(false)
+    expect(result.isIfc).toBe(true)
+    expect(result.fixupCb).toBeUndefined()
+  })
+
+  it('returns STEP loader with correct metadata', () => {
+    const result = getLoader('step', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('step')
+    expect(result.isLoaderAsync).toBe(true)
+    expect(result.isFormatText).toBe(false)
+    expect(result.isIfc).toBe(true)
+  })
+
+  it('returns STP loader with correct metadata', () => {
+    const result = getLoader('stp', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('stp')
+    expect(result.isLoaderAsync).toBe(true)
+    expect(result.isIfc).toBe(true)
+  })
+
+  it('returns GLB loader with correct metadata', () => {
+    const result = getLoader('glb', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('glb')
+    expect(result.isLoaderAsync).toBe(false)
+    expect(result.isFormatText).toBe(false)
+    expect(result.isIfc).toBe(false)
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns GLTF loader with correct metadata', () => {
+    const result = getLoader('gltf', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('gltf')
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns OBJ loader with correct metadata', () => {
+    const result = getLoader('obj', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('obj')
+    expect(result.isLoaderAsync).toBe(false)
+    expect(result.isFormatText).toBe(true)
+    expect(result.isIfc).toBe(false)
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns FBX loader with correct metadata', () => {
+    const result = getLoader('fbx', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('fbx')
+    expect(result.isLoaderAsync).toBe(false)
+    expect(result.isFormatText).toBe(false)
+    expect(result.isIfc).toBe(false)
+    expect(result.fixupCb).toBeUndefined()
+  })
+
+  it('returns PDB loader with correct metadata', () => {
+    const result = getLoader('pdb', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('pdb')
+    expect(result.isFormatText).toBe(true)
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns STL loader with correct metadata', () => {
+    const result = getLoader('stl', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('stl')
+    expect(result.isFormatText).toBe(false)
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns XYZ loader with correct metadata', () => {
+    const result = getLoader('xyz', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('xyz')
+    expect(result.isFormatText).toBe(true)
+    expect(result.fixupCb).toBeDefined()
+  })
+
+  it('returns BLD loader with correct metadata', () => {
+    const result = getLoader('bld', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('bld')
+    expect(result.isFormatText).toBe(true)
+    expect(result.isIfc).toBe(false)
+  })
+
+  it('handles extension with leading dot', () => {
+    const result = getLoader('.ifc', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('ifc')
+  })
+
+  it('handles uppercase extension', () => {
+    const result = getLoader('IFC', mockViewer)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('ifc')
+  })
+
+  it('throws error for unsupported loader type', () => {
+    expect(() => getLoader('unsupported', mockViewer)).toThrow('Unsupported loader type: unsupported')
+  })
+
+  it('throws error when viewer is not provided for IFC loader', () => {
+    expect(() => getLoader('ifc', null)).toThrow('Viewer instance required for IFC loader')
+  })
+
+  it('throws error when viewer is not provided for STEP loader', () => {
+    expect(() => getLoader('step', null)).toThrow('Viewer instance required for IFC loader')
+  })
+
+  it('works without viewer for non-IFC loaders', () => {
+    const result = getLoader('obj', null)
+    
+    expect(result.loader).toBeDefined()
+    expect(result.loader.type).toBe('obj')
+  })
+})

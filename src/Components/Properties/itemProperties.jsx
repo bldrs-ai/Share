@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import Typography from '@mui/material/Typography'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
+import {getName as getIfcTypeName} from '../../utils/IfcTypesMap'
 import debug from '../../utils/debug'
 import {stoi} from '../../utils/strings'
 
@@ -20,13 +21,33 @@ import {stoi} from '../../utils/strings'
 export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
   const ROWS = []
   let rowKey = 0
-  if (ifcProps.constructor &&
+  
+  // Determine IFC type name
+  let ifcTypeName = null
+  if (model.userData && model.userData.bldrsPayload && ifcProps.type !== undefined) {
+    // For GLB models, convert numeric type to string name using IfcTypesMap
+    try {
+      ifcTypeName = getIfcTypeName(ifcProps.type)
+    } catch (e) {
+      console.warn('Failed to get IFC type name for type:', ifcProps.type, e)
+      ifcTypeName = String(ifcProps.type)
+    }
+  } else if (ifcProps.constructor &&
       ifcProps.constructor.name &&
       ifcProps.constructor.name !== 'IfcPropertySet') {
-    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`}/>)
+    ifcTypeName = ifcProps.constructor.name
   }
+  
+  if (ifcTypeName && ifcTypeName !== 'Object') {
+    ROWS.push(<Row d1={'IFC Type'} d2={ifcTypeName} key={`type-${serial}`}/>)
+  }
+  
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
+      continue
+    }
+    // Skip LongName and propertySets for GLB models
+    if (model.userData && model.userData.bldrsPayload && (key === 'LongName' || key === 'propertySets')) {
       continue
     }
     const val = ifcProps[key]
@@ -104,6 +125,19 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       if (propValue.type === 0) {
         return null
       }
+      
+      // For GLB models with dereferenced data, handle nested objects
+      if (model.userData && model.userData.bldrsPayload && typeof propValue === 'object' && propValue !== null) {
+        // If it's a dereferenced IFC object (has expressID), create a property table for it
+        if (propValue.expressID !== undefined) {
+          return await createPropertyTable(model, propValue, true, serial)
+        }
+        // If it's a simple object with a value property, extract the value
+        if (propValue.value !== undefined) {
+          return <Row d1={label} d2={decodeIFCString(propValue.value)} key={serial}/>
+        }
+      }
+      
       return (
         <Row
           d1={label}
@@ -128,6 +162,39 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
  * @return {object} Table of quantities
  */
 export async function quantities(model, quantitiesObj, serial) {
+  // Check if this is a bldrs GLB model with already dereferenced quantities
+  if (model.userData && model.userData.bldrsPayload) {
+    console.log('Bldrs GLB model detected, quantities already dereferenced')
+    const rows = []
+    
+    // Quantities array contains the actual quantity objects, not references
+    if (Array.isArray(quantitiesObj)) {
+      quantitiesObj.forEach((quant) => {
+        const name = decodeIFCString(quant.Name?.value || quant.Name || '')
+        let val = 'value'
+        for (const key in quant) {
+          if (key.endsWith('Value')) {
+            val = quant[key]?.value || quant[key] || 'value'
+            break
+          }
+        }
+        val = decodeIFCString(val)
+        rows.push(<Row d1={name} d2={val} key={serial++}/>)
+      })
+    }
+    
+    return (
+      <tr key={`quantities-${serial++}`}>
+        <td colSpan={2} style={{borderBottom: 'none'}}>
+          <table>
+            <tbody>{rows}</tbody>
+          </table>
+        </td>
+      </tr>
+    )
+  }
+  
+  // Regular IFC model - use unpackHelper to dereference
   return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
     const name = decodeIFCString(ifcElt.Name.value)
     let val = 'value'
@@ -198,6 +265,33 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
   if (!Array.isArray(hasPropertiesArr)) {
     throw new Error('hasPropertiesArr should be array')
   }
+  
+  // Check if this is a bldrs GLB model with already dereferenced properties
+  if (model.userData && model.userData.bldrsPayload) {
+    console.log('Bldrs GLB model detected, properties already dereferenced')
+    const rows = []
+    
+    // HasProperties array contains the actual property objects, not references
+    hasPropertiesArr.forEach((prop) => {
+      const name = decodeIFCString(prop.Name?.value || prop.Name || '')
+      const value = (prop.NominalValue === undefined || prop.NominalValue === null) ?
+        '<error>' :
+        decodeIFCString(prop.NominalValue?.value || prop.NominalValue || '')
+      rows.push(<Row d1={name} d2={value} key={serial++}/>)
+    })
+    
+    return (
+      <tr key={`hasProps-${serial++}`}>
+        <td colSpan={2} style={{borderBottom: 'none'}}>
+          <table>
+            <tbody>{rows}</tbody>
+          </table>
+        </td>
+      </tr>
+    )
+  }
+  
+  // Regular IFC model - use unpackHelper to dereference
   return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
     const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
@@ -217,6 +311,7 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
  * @return {object} The react component
  */
 function Row({d1, d2}) {
+  console.log('Rendering Row with d1:', d1, 'd2:', d2, 'type:', typeof d2)
   const [isActive, setIsActive] = useState(false)
   const toggleActive = () => {
     setIsActive(!isActive)
@@ -229,6 +324,13 @@ function Row({d1, d2}) {
   if (d1 === null || d1 === undefined || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
+  
+  // Convert objects to string representation to prevent React errors
+  if (typeof d2 === 'object' && d2 !== null && !React.isValidElement(d2)) {
+    console.warn('Row received object for d2, converting to string:', d2)
+    d2 = JSON.stringify(d2)
+  }
+  
   if (d2 === null) {
     return <tr onDoubleClick={toggleActive}><td colSpan='2'>{d1}</td></tr>
   }

@@ -12,6 +12,37 @@ let conwayModule = null
 
 /* global FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemSyncAccessHandle */
 
+async function gzipBytes(u8) {
+  if (typeof CompressionStream === 'function') {
+    // Stream the data through the gzip transform
+    const input = new Blob([u8]).stream();
+    const compressedStream = input.pipeThrough(new CompressionStream('gzip'));
+    const ab = await new Response(compressedStream).arrayBuffer();
+    return new Uint8Array(ab);
+  } else {
+    // Fallback (e.g., pako)
+    // importScripts('pako.min.js');
+    // return self.pako.gzip(u8);
+    return null;
+  }
+}
+
+// Emscripten-style: expects wasmModule with _malloc / HEAPU8
+function arrayToWasmHeap(array /* Float32Array | Float64Array | Uint32Array | Uint8Array */, wasmModule) {
+  // Number of bytes to copy from the *view*, not the whole backing buffer
+  const numBytes = array.byteLength;
+
+  // Allocate in wasm heap
+  const ptr = wasmModule._malloc(numBytes);
+
+  // Create a view over wasm memory and copy the bytes from the source view
+  // Note: include array.byteOffset so we only copy the relevant slice
+  const heapView = new Uint8Array(wasmModule.HEAPU8.buffer, ptr, numBytes);
+  heapView.set(new Uint8Array(array.buffer, array.byteOffset, numBytes));
+
+  return ptr;
+}
+
 let CacheModule
 
 /**
@@ -37,6 +68,9 @@ return
 const dynamicImport = new Function( 'module', 'return import(module)' )
 // eslint-disable-next-line no-unused-vars
 let geometryConvertor = null
+let wasmInitializationState = 'not-started' // 'not-started', 'initializing', 'initialized', 'failed'
+let wasmInitializationPromise = null
+let pendingInitRequests = [] // Queue for pending initialization requests
 
 self.addEventListener('message', async (event) => {
   try {
@@ -51,60 +85,140 @@ self.addEventListener('message', async (event) => {
       self.postMessage({completed: true, event: 'workerInitialized'})
     } else if (event.data.command === 'initializeWasm') {
       const {wasmModulePath, memory} = assertValues(event.data, ['wasmModulePath', 'memory'])
+      const forceRetry = event.data.forceRetry || false
 
-      try {
-        // eslint-disable-next-line no-console
-        console.log('Importing Conway WASM module in worker:', wasmModulePath)
+      // If already initialized, return immediately
+      if (wasmInitializationState === 'initialized' && !forceRetry) {
+        self.postMessage({completed: true, event: 'wasmInitialized'})
+        return
+      }
+      
+      // Allow retry if failed or forced
+      if (wasmInitializationState === 'failed' || forceRetry) {
+        wasmInitializationState = 'not-started'
+        wasmInitializationPromise = null
+        conwayModule = null
+        geometryConvertor = null
+      }
+      
+      // If currently initializing, wait for it and notify when done
+      if (wasmInitializationState === 'initializing') {
+        if (wasmInitializationPromise) {
+          try {
+            await wasmInitializationPromise
+            // Send success message after waiting
+            if (wasmInitializationState === 'initialized') {
+              self.postMessage({completed: true, event: 'wasmInitialized'})
+            }
+          } catch (error) {
+            // Error already sent in the original initialization, just return
+          }
+          return
+        }
+      }
 
-        // Use dynamic import instead of importScripts for ES6 modules
-        const module = await dynamicImport(wasmModulePath)
+      wasmInitializationState = 'initializing'
+      
+      // Create a promise to track initialization
+      wasmInitializationPromise = (async () => {
+        try {
+          // eslint-disable-next-line no-console
+          console.log('Importing Conway WASM module in worker:', wasmModulePath)
 
+          // Send progress update
+          self.postMessage({event: 'wasmInitProgress', stage: 'importing'})
 
-        // Initialize Conway module - check for default export or named exports
-        const ConwayGeomWasm = module.default || module.ConwayGeomWasm
+          // Use dynamic import instead of importScripts for ES6 modules
+          const module = await dynamicImport(wasmModulePath)
 
-        if (typeof ConwayGeomWasm === 'function') {
+          // Send progress update
+          self.postMessage({event: 'wasmInitProgress', stage: 'module-loaded'})
+
+          // Initialize Conway module - check for default export or named exports
+          const ConwayGeomWasm = module.default || module.ConwayGeomWasm
+
+          if (typeof ConwayGeomWasm !== 'function') {
+            throw new Error('ConwayGeomWasm function not found in module exports')
+          }
+
           // Configure Conway WASM with proper locateFile and pthread support
           const config = {
             noInitialRun: true,
             wasmMemory: memory,
             locateFile: (filename, prefix) => {
+              // Only handle .wasm files, let others use default
               if (filename.endsWith('.wasm')) {
-                // Use multi-threaded version for pthread support
-                return '/static/js/ConwayGeomWasmWebMT.wasm'
-              } else if (filename.endsWith('ConwayGeomWasmWebMT.js')) {
-                return '/static/js/ConwayGeomWasmWebMT.js'
+                const wasmPath = '/static/js/ConwayGeomWasmWebMT.wasm'
+                // eslint-disable-next-line no-console
+                console.log(`locateFile: ${filename} -> ${wasmPath}`)
+                return wasmPath
               }
-              // fallback
-              return prefix + filename
+              // For .js worker files, use the prefix
+              const defaultPath = prefix + filename
+              // eslint-disable-next-line no-console
+              console.log(`locateFile: ${filename} -> ${defaultPath}`)
+              return defaultPath
             },
           }
 
           // Set mainScriptUrlOrBlob for pthread support
-          config.mainScriptUrlOrBlob = '/static/js/ConwayGeomWasmWebMT.js'
+          config.mainScriptUrlOrBlob = wasmModulePath
+
+          // Send progress update
+          self.postMessage({event: 'wasmInitProgress', stage: 'initializing-wasm'})
 
           // Initialize Conway with proper config
           // eslint-disable-next-line new-cap
-          ConwayGeomWasm(config).then((wasmModule) => {
-            // Initialize the geometry processor
-           // const initialized = wasmModule.initializeGeometryProcessor()
-            conwayModule = wasmModule
-            // eslint-disable-next-line no-console
-            console.log('Conway WASM module initialized in worker with pthread support:', conwayModule)
-            geometryConvertor = new GeometryConvertor(conwayModule)
-            self.postMessage({completed: true, event: 'wasmInitialized'})
-          }).catch((error) => {
-            console.error('Failed to initialize Conway module:', error)
-            self.postMessage({error: `Failed to initialize Conway: ${error.message}`, event: 'wasmInitError'})
+          const wasmModule = await ConwayGeomWasm(config)
+          
+          // Verify the module is properly initialized before proceeding
+          if (!wasmModule) {
+            throw new Error('WASM module initialization returned null or undefined')
+          }
+
+          conwayModule = wasmModule
+          
+          // Send progress update
+          self.postMessage({event: 'wasmInitProgress', stage: 'creating-convertor'})
+          
+          // Initialize the geometry processor (do this synchronously without delay)
+          geometryConvertor = new GeometryConvertor(conwayModule)
+          
+          // Verify geometryConvertor is properly created
+          if (!geometryConvertor) {
+            throw new Error('GeometryConvertor initialization failed')
+          }
+
+          wasmInitializationState = 'initialized'
+          
+          // eslint-disable-next-line no-console
+          console.log('Conway WASM module initialized in worker with pthread support')
+          self.postMessage({completed: true, event: 'wasmInitialized'})
+        } catch (error) {
+          wasmInitializationState = 'failed'
+          conwayModule = null
+          geometryConvertor = null
+          console.error('Failed to initialize WASM module:', error)
+          self.postMessage({
+            error: `Failed to initialize Conway: ${error.message}`,
+            event: 'wasmInitError',
+            stack: error.stack
           })
-        } else {
-          throw new Error('ConwayGeomWasm function not found in module exports')
+          throw error // Re-throw to allow retry
         }
-      } catch (error) {
-        console.error('Failed to import Conway WASM module:', error)
-        self.postMessage({error: `Failed to import Conway: ${error.message}`, event: 'wasmInitError'})
-      }
+      })()
+
+      await wasmInitializationPromise
     } else if (event.data.command === 'exportToGlb') {
+      // Ensure WASM is initialized before proceeding
+      if (wasmInitializationState !== 'initialized' || !conwayModule) {
+        const errorMsg = wasmInitializationState === 'failed' 
+          ? 'WASM initialization previously failed. Please reinitialize.'
+          : 'WASM module not initialized. Please initialize before exporting to GLB.'
+        self.postMessage({error: errorMsg, event: 'glbExportError'})
+        return
+      }
+
       const {geometryPtr,
          materialsPtr,
          chunks,
@@ -351,21 +465,16 @@ throw new Error('Conway WASM module not initialized.')
   if (serializedGeometryProperties && typeof serializedGeometryProperties === 'object') {
     serializedPropertiesJson = JSON.stringify(serializedGeometryProperties)
   }
-  const propertiesCacheKey = serializedPropertiesJson ?
-    [...basePathParts, `${glbBase}.properties.json`].filter(Boolean).join('/') :
-    null
 
-  let elementTypesJson = null
-  if (Array.isArray(elementTypesMap) && elementTypesMap.length > 0) {
-    try {
-      elementTypesJson = JSON.stringify(elementTypesMap)
-    } catch (error) {
-      console.error('Failed to serialize element types map for GLB export:', error)
-    }
+  let propertiesPtr = null 
+  let propertiesLen = 0
+  if (serializedPropertiesJson) {
+    // 2) encode + gzip
+    const bytes = new TextEncoder().encode(serializedPropertiesJson);
+    const gz = await gzipBytes(bytes);
+    propertiesPtr = arrayToWasmHeap(gz, conwayModule);   // wasm = your Emscripten module
+    propertiesLen = gz.byteLength;
   }
-  const elementTypesCacheKey = elementTypesJson ?
-    [...basePathParts, `${glbBase}.elementTypes.json`].filter(Boolean).join('/') :
-    null
 
   try {
     // eslint-disable-next-line no-console
@@ -381,8 +490,9 @@ throw new Error('Conway WASM module not initialized.')
       true, // isGlb
       false, // outputDraco (you called it "merge" in a comment but passing true)
       filePath,
-      serializedPropertiesJson,
-      elementTypesJson,
+      propertiesPtr,
+      propertiesLen,
+      elementTypesMap,
     )) {
       if (!glbResult?.success) {
         console.log('GLB result indicates failure:', glbResult)
@@ -424,38 +534,6 @@ throw new Error('Conway WASM module not initialized.')
       // free native containers if these are emscripten objects
       glbResult.bufferUris?.delete?.()
       glbResult.buffers?.delete?.()
-    }
-
-    if (propertiesCacheKey && serializedPropertiesJson) {
-      try {
-        const [, propertiesFileHandle] = await writeFileToExactPath(opfsRoot, propertiesCacheKey)
-        if (!propertiesFileHandle) {
-          throw new Error('Unable to obtain properties file handle')
-        }
-        const writableProps = await propertiesFileHandle.createWritable()
-        await writableProps.write(new Blob([serializedPropertiesJson], {type: 'application/json'}))
-        await writableProps.close()
-        // eslint-disable-next-line no-console
-        console.log(`GLB properties written to OPFS: ${propertiesCacheKey}`)
-      } catch (err) {
-        console.error('Error writing GLB properties:', err)
-      }
-    }
-
-    if (elementTypesCacheKey && elementTypesJson) {
-      try {
-        const [, elementTypesFileHandle] = await writeFileToExactPath(opfsRoot, elementTypesCacheKey)
-        if (!elementTypesFileHandle) {
-          throw new Error('Unable to obtain element types file handle')
-        }
-        const writableElementTypes = await elementTypesFileHandle.createWritable()
-        await writableElementTypes.write(new Blob([elementTypesJson], {type: 'application/json'}))
-        await writableElementTypes.close()
-        // eslint-disable-next-line no-console
-        console.log(`Element types map written to OPFS: ${elementTypesCacheKey}`)
-      } catch (err) {
-        console.error('Error writing element types map:', err)
-      }
     }
 
     self.postMessage({
@@ -2020,13 +2098,35 @@ async function readModelFromOPFS(owner, repo, branch, modelKey) {
 
     // Get the file handle for the last segment
     const fileName = parts[parts.length - 1]
+    
+    // First, try to get the .glb version if it exists
+    const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, '')
+    const glbFileName = `${fileNameWithoutExt}.glb`
+    
     let fileHandle
+    let foundGlb = false
+    
+    // Try GLB first
     try {
-      fileHandle = await currentDir.getFileHandle(fileName)
+      fileHandle = await currentDir.getFileHandle(glbFileName, {create: false})
+      foundGlb = true
+      // eslint-disable-next-line no-console
+      console.log(`Found GLB file: ${glbFileName}`)
     } catch (error) {
-      const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
-      self.postMessage({error: errorMessage})
-      return
+      // GLB not found, will try original file
+    }
+    
+    // If GLB not found, try the original filename
+    if (!foundGlb) {
+      try {
+        fileHandle = await currentDir.getFileHandle(fileName, {create: false})
+        // eslint-disable-next-line no-console
+        console.log(`Found original file: ${fileName}`)
+      } catch (error) {
+        const errorMessage = `Error retrieving File from ${fileName} (also tried ${glbFileName}): ${error}.`
+        self.postMessage({error: errorMessage})
+        return
+      }
     }
 
     const file = await fileHandle.getFile()
@@ -2231,7 +2331,8 @@ class GeometryConvertor {
       isGlb,
       outputDraco,
       fileUri,
-      propertiesJson = null,
+      propertiesPtr = null,
+      propertiesLength = 0,
       elementTypesJson = null,
   ) {
     if (!this.wasmModule) {
@@ -2257,7 +2358,8 @@ return
           chunkUri,
           chunk.offset,
           chunk.count,
-          propertiesJson,
+          propertiesPtr,
+          propertiesLength,
           elementTypesJson,
         ),
       )
@@ -2287,7 +2389,8 @@ return
     fileUri,
     geometryOffset = 0,
     geometryCount /* don’t default: ptrs don’t have size() */,
-    propertiesJson = null,
+    propertiesPtr = null,
+    propertiesLength = 0,
     elementTypesJson = null,
   ) {
     const noResults = {success: false, bufferUris: undefined, buffers: undefined}
@@ -2304,8 +2407,9 @@ return noResults
       geometryOffset,
       geometryCount,
     ]
-    if (propertiesJson !== null && propertiesJson !== undefined) {
-      args.push(propertiesJson)
+    if (propertiesPtr !== null && propertiesLength !== 0) {
+      args.push(propertiesPtr)
+      args.push(propertiesLength)
     }
     if (elementTypesJson !== null && elementTypesJson !== undefined) {
       args.push(elementTypesJson)

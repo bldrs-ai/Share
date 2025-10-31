@@ -346,6 +346,27 @@ export default function CadView({
     return loadedModel
   }
 
+  // Returns a plain JS object you can JSON.stringify safely.
+function serializeIfcSpatialTree(root) {
+  function toNode(n) {
+    const name =
+      n?.Name?.value ?? n?.LongName?.value ?? n?.name ?? String(n?.expressID ?? '');
+
+    // build children recursively, ignoring parent/back-refs
+    const kids = Array.isArray(n.children)
+      ? n.children.map(toNode).filter(Boolean)
+      : [];
+
+    return {
+      expressID: String(n.expressID),
+      type: n.type,            // e.g., IFCPROJECT / IFCSITE / IFCBUILDING / IFCBUILDINGSTOREY / ...
+      name,
+      children: kids
+    };
+  }
+  return toNode(root);
+}
+
 
   /**
    * Analyze loaded IFC model to configure UI elements.
@@ -375,7 +396,9 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     const tmpElementTypeMap = groupElementsByTypes(rootElt)
+    const spatialTree = JSON.stringify(serializeIfcSpatialTree(rootElt));
     console.log(`elementTypesMap: ${JSON.stringify(tmpElementTypeMap)}`)
+    console.log(`rootElement: ${spatialTree}`)
         if (m.type === 'ifc' && isOpfsAvailable && viewer?.IFC?.loader?.ifcManager?.ifcAPI) {
       const defaultOwner = 'BldrsLocalStorage'
       const defaultRepo = 'V1'
@@ -416,7 +439,7 @@ export default function CadView({
           branch,
           filePath,
           opfsFilename,
-          elementTypesMap: tmpElementTypeMap,
+          elementTypesMap: spatialTree,
         })
       } catch (error) {
         console.error('CadView#onModel: Failed to export GLB via Conway', error)
