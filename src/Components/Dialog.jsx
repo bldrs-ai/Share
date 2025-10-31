@@ -4,8 +4,9 @@ import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import {assertDefined, assertString} from '../utils/assert'
 import useStore from '../store/useStore'
+import {assertDefined, assertString} from '../utils/assert'
+import {slugify} from '../utils/strings'
 import {CloseButton} from './Buttons'
 
 
@@ -48,7 +49,7 @@ export default function Dialog({
     }
   }
   const onCloseClick = () => setIsDialogDisplayed(false)
-  const dataTestIdSuffix = headerText.toLowerCase().replaceAll(' ', '-')
+  const dataTestIdSuffix = slugify(headerText)
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -58,8 +59,7 @@ export default function Dialog({
       // There's a warning without this due to a bug in MUI Dialog. When the dialog
       // is closed, the transition animation is not played.
       closeAfterTransition={false}
-      // Use safe headerText for data-testid
-      data-testid={`dialog-${dataTestIdSuffix}`}
+      // don't use data-testid, use getByRole('dialog') instead
     >
       <DialogTitle
         variant='h1'

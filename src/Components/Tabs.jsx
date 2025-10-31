@@ -2,6 +2,7 @@ import React, {useState, ReactElement} from 'react'
 import MuiTabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import {assertDefined} from '../utils/assert'
+import {slugify} from '../utils/strings'
 
 
 /**
@@ -23,7 +24,7 @@ export default function Tabs({tabLabels, currentTab, actionCb, isScrollable = fa
       onChange={handleChange}
       centered
       variant={isScrollable ? 'scrollable' : 'standard'}
-      data-testid={`tabs-${tabLabels.join('-').toLowerCase().replaceAll(' ', '-')}`}
+      data-testid={`tabs-${slugify(tabLabels.join('-'))}`}
     >
       {tabLabels.map((tab) => <Tab key={tab} label={tab} data-testid={`tab-${tab.toLowerCase()}`}/>)}
     </MuiTabs>

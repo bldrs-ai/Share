@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1792",
+  "version": "1.0.1795",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -84,6 +84,7 @@
     "@svgr/core": "8.1.0",
     "@svgr/plugin-jsx": "8.1.0",
     "@svgr/webpack": "8.1.0",
+    "airbnb-js-shims": "^2.2.1",
     "axios": "1.6.7",
     "babel-loader": "8.3.0",
     "clsx": "1.2.1",
