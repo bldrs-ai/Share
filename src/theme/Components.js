@@ -167,18 +167,14 @@ export function getComponentOverrides(palette, typography) {
         },
       }],
     },
-    MuiMenuItem: {
+    MuiMenu: {
       styleOverrides: {
         root: {
-          '&.Mui-selected': {
-            backgroundColor: palette.secondary.dark,
-            fontWeight: 'bold',
+          '& .MuiSvgIcon-root': {
+            marginRight: '10px',
           },
-          '&.Mui-selected:hover': {
-            // TODO(pablo): merge with above. Can't figure out combined selector
-            backgroundColor: palette.secondary.dark,
+          '& .Mui-selected .MuiTypography-root': {
             fontWeight: 'bold',
-            fontStyle: 'italic',
           },
         },
       },
@@ -225,26 +221,9 @@ export function getComponentOverrides(palette, typography) {
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          backgroundColor: palette.secondary.main,
           borderRadius: '10px',
         },
       },
-    },
-    MuiSvgIcon: {
-      styleOverrides: {
-        root: {
-          width: '1.5rem',
-          height: '1.5rem',
-          color: palette.secondary.contrastText,
-        },
-      },
-      variants: [{
-        // Used in HelpControl to indicate activity state
-        props: {variant: 'success'},
-        style: {
-          color: palette.success.main,
-        },
-      }],
     },
     MuiSwitch: {
       styleOverrides: {
@@ -257,6 +236,7 @@ export function getComponentOverrides(palette, typography) {
         root: {
           '&.Mui-selected, &.Mui-selected:hover': {
             color: palette.secondary.contrastText,
+            fontWeight: 'bold',
           },
         },
       },
@@ -288,7 +268,6 @@ export function getComponentOverrides(palette, typography) {
     MuiTypography: {
       styleOverrides: {
         root: {
-          // color: palette.secondary.contrastText,
         },
       },
     },
