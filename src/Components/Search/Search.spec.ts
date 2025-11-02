@@ -98,7 +98,7 @@ describe('Search 100', () => {
       test.afterEach(async ({page}, testInfo) => {
         const failed = testInfo.status !== testInfo.expectedStatus // catches fail + unexpected pass
         if (failed) {
-          console.log(`⏸  Pausing on failure: ${testInfo.title}`)
+          console.warn(`⏸  Pausing on failure: ${testInfo.title}`)
           await page.pause() // keeps browser open; resume/step in Inspector
         }
       })

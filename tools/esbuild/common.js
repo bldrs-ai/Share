@@ -23,6 +23,7 @@ export default {
   outbase: path.resolve(repoRoot, 'src'),
   format: 'esm',
   platform: 'browser',
+  // Roughly 2018-era browsers
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
   loader: {

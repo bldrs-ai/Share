@@ -1,12 +1,10 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
 import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
 import Typography from '@mui/material/Typography'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import {navToDefault} from '../utils/navigate'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -45,10 +43,6 @@ export default function AlertAndSnackbar() {
       <AlertDialog
         onClose={() => {
           setSnackMessage(null)
-          // This is a hard-reset of the app.  navigate() will keep us
-          // within react-router, and window.location.reload() leaves us
-          // with a potentially broken path or infinite reload loop.
-          window.location.replace('/')
         }}
       />
       <Snackbar

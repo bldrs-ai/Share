@@ -20,7 +20,7 @@ let commentDeleted = false
 
 
 /**
- * Initialize API handlers, including Google Analytics and GitHub.
+ * Sandbox dev environement during dev, with some passthru for CI.
  *
  * @param {object} defines - Configuration defines
  * @return {Array<object>} handlers
@@ -30,22 +30,38 @@ export function initHandlers(defines) {
   handlers.push(...prohibitProdAccess())
   handlers.push(...workersAndWasmPassthrough())
   handlers.push(...iconsFontsCssHandlers())
-  handlers.push(...githubApiHandlers(defines, true))
-  handlers.push(...githubApiHandlers(defines, false))
+
+  // Esbuild hot-reload
+  handlers.push(...installEsbuildHotReloadHandler())
+
+  // Analytics
+  handlers.push(...gaHandlers())
+
+  // Stripe
   handlers.push(...netlifyHandlers())
   handlers.push(...subscribePageHandler())
   handlers.push(...stripePortalHandlers())
-  handlers.push(...gaHandlers())
+
+  /* Model loading */
   // Pass through paths that are served by static assets or playwright fixtures
   handlers.push(http.get('/share/v/p/*', () => passthrough()))
+
+  // GitHub
   handlers.push(http.get('/share/v/gh/*', () => passthrough()))
-  handlers.push(http.get('/share/v/g/*', () => passthrough()))
-  handlers.push(http.get('/share/v/u/*', () => passthrough()))
+  handlers.push(...githubApiHandlers(defines, true))
+  handlers.push(...githubApiHandlers(defines, false))
   handlers.push(http.get('https://rawgit.bldrs.dev/model/*', () => passthrough()))
   handlers.push(http.get('https://rawgit.bldrs.dev/r/*', () => passthrough()))
+
+  // Google Drive
+  handlers.push(http.get('/share/v/g/*', () => passthrough()))
+  handlers.push(...googleApisHandlers())
   handlers.push(http.get('https://www.googleapis.com/drive/v3/files/*', () => passthrough()))
-  handlers.push(...installEsbuildHotReloadHandler())
-  // handlers.push(http.get('https://192.168.0.10/*', () => passthrough())) // local static server
+
+  // Generic URL, especially for local static server
+  handlers.push(http.get('/share/v/u/*', () => passthrough()))
+  handlers.push(http.get(/^https:\/\/localhost:\d+\//, () => passthrough())) // local static server
+
   return handlers
 }
 
@@ -59,10 +75,7 @@ function prohibitProdAccess() {
   return [
     http.get('http://bldrs.ai/*', ({request}) => {
       console.error('Found absolute ref to prod:', request.url)
-      return new Response('', {
-        status: HTTP_BAD_REQUEST,
-        headers: {'Content-Type': 'text/plain'},
-      })
+      return new Response('', HTTP_BAD_JSON)
     }),
   ]
 }
@@ -83,10 +96,7 @@ function iconsFontsCssHandlers() {
     // Fonts
     http.get(/\/roboto-*/, () => passthrough()),
     http.get('http://bldrs.ai/icons/*', () => {
-      return new Response('', {
-        status: HTTP_BAD_REQUEST,
-        headers: {'Content-Type': 'text/plain'},
-      })
+      return new Response('', HTTP_BAD_JSON)
     }),
   ]
 }
@@ -120,24 +130,12 @@ function netlifyHandlers() {
       const {stripeCustomerId} = await request.json()
 
       if (!stripeCustomerId) {
-        return new Response(
-          JSON.stringify({error: 'Missing stripeCustomerId'}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify({error: 'Missing stripeCustomerId'}), HTTP_BAD_JSON)
       }
 
       // return a mocked Stripe billing-portal URL
       const fakeUrl = `https://stripe.portal.msw/mockportal/session/${stripeCustomerId}`
-      return new Response(
-        JSON.stringify({url: fakeUrl}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify({url: fakeUrl}), HTTP_OK_JSON)
     }),
   ]
 }
@@ -151,8 +149,8 @@ function subscribePageHandler() {
   return [
     // this will catch GET /subscribe, /subscribe/, or /subscribe?foo=bar
     http.get('/subscribe*', () => {
-      return new Response(`
-          <!DOCTYPE html>
+      return new Response(
+        `<!DOCTYPE html>
           <html lang="en">
             <head>
               <meta charset="UTF-8">
@@ -164,10 +162,8 @@ function subscribePageHandler() {
               <button id="start-payment">Start Payment</button>
             </body>
           </html>
-        `.trim(), {
-        status: HTTP_OK,
-        headers: {'Content-Type': 'text/html'},
-      })
+        `.trim(),
+        HTTP_OK_JSON)
     }),
   ]
 }
@@ -181,10 +177,7 @@ function subscribePageHandler() {
 function stripePortalHandlers() {
   return [
     http.get('https://stripe.portal.msw/mockportal/session/:stripeCustomerId', () => {
-      return new Response('<html><body><h1>Mock Stripe Portal</h1></body></html>', {
-        status: HTTP_OK,
-        headers: {'Content-Type': 'text/html'},
-      })
+      return new Response('<html><body><h1>Mock Stripe Portal</h1></body></html>', HTTP_OK_JSON)
     }),
   ]
 }
@@ -204,13 +197,7 @@ function githubApiHandlers(defines, authed) {
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
       const {org, repo} = params
       const createdIssues = createMockIssues(org, repo, sampleIssues)
-      return new Response(
-        JSON.stringify(createdIssues),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(createdIssues), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues/:issueNumber/comments`, ({params}) => {
@@ -222,21 +209,9 @@ function githubApiHandlers(defines, authed) {
 
       if (commentDeleted) {
         commentDeleted = false
-        return new Response(
-          JSON.stringify(MOCK_COMMENTS_POST_DELETION.data),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify(MOCK_COMMENTS_POST_DELETION.data), HTTP_OK_JSON)
       }
-      return new Response(
-        JSON.stringify(MOCK_COMMENTS.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(MOCK_COMMENTS.data), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/contents/:path`, ({params, request}) => {
@@ -273,10 +248,7 @@ function githubApiHandlers(defines, authed) {
               html: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
             },
           }),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_OK_JSON,
         )
       }
 
@@ -286,10 +258,7 @@ function githubApiHandlers(defines, authed) {
             message: 'Not Found',
             documentation_url: 'https://docs.github.com/http/reference/repos#get-repository-content',
           }),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_NOT_FOUND_JSON,
         )
       }
 
@@ -350,26 +319,14 @@ function githubApiHandlers(defines, authed) {
             html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
           },
         }),
-        {
-          status: HTTP_OK,
-          headers: {'content-type': 'application/json; charset=utf-8'},
-        },
-      )
+        HTTP_OK_JSON)
     }),
 
     http.post(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:org/:repo/issues`, ({params}) => {
       const {org, repo} = params
 
       if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
-        return new Response(
-          JSON.stringify({
-            message: 'Not Found',
-          }),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify({message: 'Not Found'}), HTTP_NOT_FOUND_JSON)
       }
 
       return new Response(null, {
@@ -392,15 +349,7 @@ function githubApiHandlers(defines, authed) {
       const {org, repo} = params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
-        return new Response(
-          JSON.stringify({
-            message: 'Not Found',
-          }),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify({message: 'Not Found'}), HTTP_NOT_FOUND_JSON)
       }
 
       return new Response(null, {
@@ -444,127 +393,54 @@ function githubApiHandlers(defines, authed) {
         )
       }
 
-      return new Response(
-        JSON.stringify(MOCK_ORGANIZATIONS.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(MOCK_ORGANIZATIONS.data), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, () => {
-      return new Response(
-        JSON.stringify(MOCK_USER_REPOSITORIES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(MOCK_USER_REPOSITORIES.data), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
-      return new Response(
-        JSON.stringify({
-          data: [MOCK_REPOSITORY],
-        }),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify({data: [MOCK_REPOSITORY]}), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, () => {
-      return new Response(
-        JSON.stringify(MOCK_FILES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(MOCK_FILES.data), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, () => {
-      return new Response(
-        JSON.stringify(MOCK_BRANCHES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify(MOCK_BRANCHES.data), HTTP_OK_JSON)
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/commits`, ({params, request}) => {
       // Directly check params for 'failurecaseowner' and 'failurecaserepo'
       if (params.owner === 'failurecaseowner' && params.repo === 'failurecaserepo') {
-        return new Response(
-          JSON.stringify({sha: 'error'}),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify({sha: 'error'}), HTTP_NOT_FOUND_JSON)
         // Handle non existent file request
       } else if (params.owner === 'nonexistentowner' && params.repo === 'nonexistentrepo') {
-        return new Response(
-          JSON.stringify([]),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+        return new Response(JSON.stringify([]), HTTP_OK_JSON)
         // Handle unauthenticated case
       } else if (params.owner === 'unauthedcaseowner' && params.repo === 'unauthedcaserepo' ) {
         const requestUrl = request.url.toString()
 
         if ( requestUrl.includes(GH_BASE_AUTHED)) {
-          return new Response(
-            JSON.stringify({sha: 'error'}),
-            {
-              status: HTTP_NOT_FOUND,
-              headers: {'Content-Type': 'application/json'},
-            },
-          )
+          return new Response(JSON.stringify({sha: 'error'}), HTTP_NOT_FOUND_JSON)
         } else {
-          return new Response(
-            JSON.stringify(MOCK_COMMITS.data),
-            {
-              status: HTTP_OK,
-              headers: {'Content-Type': 'application/json'},
-            },
-          )
+          return new Response(JSON.stringify(MOCK_COMMITS.data), HTTP_OK_JSON)
         }
         // Handle authenticated case
       } else if (params.owner === 'authedcaseowner' && params.repo === 'authedcaserepo' ) {
         const requestUrl = request.url.toString()
 
         if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
-          return new Response(
-            JSON.stringify({sha: 'error'}),
-            {
-              status: HTTP_NOT_FOUND,
-              headers: {'Content-Type': 'application/json'},
-            },
-          )
+          return new Response(JSON.stringify({sha: 'error'}), HTTP_NOT_FOUND_JSON)
         } else {
-          return new Response(
-            JSON.stringify(MOCK_COMMITS.data),
-            {
-              status: HTTP_OK,
-              headers: {'Content-Type': 'application/json'},
-            },
-          )
+          return new Response(JSON.stringify(MOCK_COMMITS.data), HTTP_OK_JSON)
         }
       }
       // For all other cases, return a success response
       return new Response(
-        JSON.stringify(MOCK_COMMITS.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify(MOCK_COMMITS.data), HTTP_OK_JSON)
     }),
 
 
@@ -575,23 +451,13 @@ function githubApiHandlers(defines, authed) {
     // octokit.http.git.getRef
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, () => {
       return new Response(
-        JSON.stringify({object: {sha: 'parentSha'}}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify({object: {sha: 'parentSha'}}), HTTP_OK_JSON)
     }),
 
     // octokit.http.git.getCommit
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, () => {
       return new Response(
-        JSON.stringify({tree: {sha: 'treeSha'}}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify({tree: {sha: 'treeSha'}}), HTTP_OK_JSON)
     }),
 
     // octokit.http.git.createBlob
@@ -599,20 +465,10 @@ function githubApiHandlers(defines, authed) {
       const {content, encoding} = await request.json()
       if (content === undefined || encoding === undefined) {
         return new Response(
-          JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+          JSON.stringify({success: false}), HTTP_BAD_JSON)
       }
       return new Response(
-        JSON.stringify({sha: 'blobSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify({sha: 'blobSha'}), HTTP_OK_JSON)
     }),
 
     // octokit.http.git.createTree
@@ -622,20 +478,9 @@ function githubApiHandlers(defines, authed) {
       // eslint-disable-next-line camelcase
       if (base_tree === undefined || tree === undefined) {
         return new Response(
-          JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+          JSON.stringify({success: false}), HTTP_BAD_JSON)
       }
-      return new Response(
-        JSON.stringify({sha: 'newTreeSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+      return new Response(JSON.stringify({sha: 'newTreeSha'}), HTTP_OK_JSON)
     }),
 
     // octokit.http.git.createCommit
@@ -643,20 +488,10 @@ function githubApiHandlers(defines, authed) {
       const {message, tree, parents} = await request.json()
       if (message === undefined || tree === undefined || parents === undefined) {
         return new Response(
-          JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+          JSON.stringify({success: false}), HTTP_BAD_JSON)
       }
       return new Response(
-        JSON.stringify({sha: 'newCommitSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify({sha: 'newCommitSha'}), HTTP_OK_JSON)
     }),
 
     // octokit.http.git.updateRef
@@ -664,20 +499,10 @@ function githubApiHandlers(defines, authed) {
       const {sha} = await request.json()
       if (sha === undefined) {
         return new Response(
-          JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
-        )
+          JSON.stringify({success: false}), HTTP_BAD_JSON)
       }
       return new Response(
-        JSON.stringify({sha: 'smth'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
+        JSON.stringify({sha: 'smth'}), HTTP_OK_JSON)
     }),
   ]
 }
@@ -689,32 +514,12 @@ function githubApiHandlers(defines, authed) {
  * @return {Array<object>} handlers
  */
 function gaHandlers() {
+  const gaUrl = 'https://*.google-analytics.com/*'
+  const gtmUrl = 'https://*.googletagmanager.com/*'
   return [
-    http.get('https://*.google-analytics.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
-
-    http.post('https://*.google-analytics.com/*', () => {
-      return new Response(null, {
-        status: HTTP_OK,
-      })
-    }),
-
-    http.get('https://*.googletagmanager.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
+    http.get(gaUrl, () => GET_RSP_OK_JSON),
+    http.post(gaUrl, () => POST_RSP_OK_NULL),
+    http.get(gtmUrl, () => GET_RSP_OK_JSON),
   ]
 }
 
@@ -725,21 +530,10 @@ function gaHandlers() {
  * @return {Array<object>} handlers
  */
 function googleApisHandlers() {
+  const gaUrl = 'https://*.googleapis.com/*'
   return [
-    http.get('https://*.googleapis.com/*', () => {
-      return new Response(
-        JSON.stringify({}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
-      )
-    }),
-    http.post('https://*.googleapis.com/*', () => {
-      return new Response(null, {
-        status: HTTP_OK,
-      })
-    }),
+    http.get(gaUrl, () => GET_RSP_OK_JSON),
+    http.post(gaUrl, () => POST_RSP_OK_NULL),
   ]
 }
 
@@ -760,3 +554,31 @@ function installEsbuildHotReloadHandler() {
     return []
   }
 }
+
+
+// Helpers
+const HTTP_OK_JSON = {
+  status: HTTP_OK,
+  headers: {'Content-Type': 'application/json'},
+}
+
+const HTTP_NOT_FOUND_JSON = {
+  status: HTTP_NOT_FOUND,
+  headers: {'Content-Type': 'application/json'},
+}
+
+const HTTP_BAD_JSON = {
+  status: HTTP_BAD_REQUEST,
+  headers: {'Content-Type': 'application/json'},
+}
+
+// Singleton empty JSON response for mocking analytics and API calls
+const GET_RSP_OK_JSON = new Response(
+  JSON.stringify({}),
+  HTTP_OK_JSON,
+)
+
+// Singleton empty response for mocking API calls
+const POST_RSP_OK_NULL = new Response(null, {
+  status: HTTP_OK,
+})

@@ -72,7 +72,6 @@ async function setupRouteIntercept(
   page: Page, interceptPrefix: string, gotoPathname: string | undefined, fixtureFilename: string):
   Promise<() => Promise<void>> {
   const interceptRoute = `${interceptPrefix}*`
-  console.log('setupRouteIntercept: seting up intercept:', interceptRoute)
   await page.route(interceptRoute, async (route) => {
     const fixturesDir = 'src/tests/fixtures'
     const body = await readFile(join(fixturesDir, fixtureFilename))
@@ -84,8 +83,6 @@ async function setupRouteIntercept(
   })
 
   return async () => {
-    console.log('waitForModelReadyCallback: waiting for intercept:', interceptRoute)
-    console.log('waitForModelReadyCallback: navigating to:', gotoPathname)
     await Promise.all([
       page.waitForResponse((r) => r.url().startsWith(interceptPrefix)),
       gotoPathname ? page.goto(gotoPathname, {waitUntil: 'domcontentloaded'}) : Promise.resolve(),

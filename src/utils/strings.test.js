@@ -5,6 +5,7 @@ import {
   isNumber,
   isNumeric,
   safePathSplit,
+  slugify,
   testUuid,
   toTitleCase,
   toKey,
@@ -114,5 +115,26 @@ describe('strings', () => {
     expect(toKey('abc')).toBe('abc')
     expect(toKey('a-b-c')).toBe('abc')
     expect(toKey('a_b-c.d')).toBe('abcd')
+  })
+
+
+  it('slugify converts strings to URL-friendly slugs', () => {
+    expect(slugify('Hello World')).toBe('hello-world')
+    expect(slugify('Hello  World')).toBe('hello-world')
+    expect(slugify('  Hello World  ')).toBe('hello-world')
+    expect(slugify('Hello-World')).toBe('hello-world')
+    expect(slugify('Hello@World#123')).toBe('helloworld123')
+    expect(slugify('UPPERCASE STRING')).toBe('uppercase-string')
+    expect(slugify('Mixed Case String')).toBe('mixed-case-string')
+    expect(slugify('123abc')).toBe('123abc')
+    expect(slugify('special!@#$%chars')).toBe('specialchars')
+    expect(slugify('')).toBe('')
+    expect(slugify('   ')).toBe('')
+    expect(slugify('multiple   spaces')).toBe('multiple-spaces')
+    expect(slugify('a-b-c')).toBe('a-b-c')
+    expect(slugify('a--b')).toBe('a--b')
+    expect(slugify('test_string')).toBe('teststring')
+    expect(slugify(String(123))).toBe('123')
+    expect(slugify('Test & Test')).toBe('test--test')
   })
 })
