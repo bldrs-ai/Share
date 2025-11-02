@@ -201,35 +201,29 @@ export default function ProfileControl() {
             }}
             data-testid='menu-open-login-dialog'
           >
-            <LoginOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>
-              Log in
-            </Typography>
+            <LoginOutlinedIcon className='icon-share'/>
+            <Typography>Log in</Typography>
           </MenuItem>
         )}
 
         {isAuthenticated && (
           <MenuItem onClick={onLogoutClick} data-testid='menu-open-logout-dialog'>
-            <LogoutOutlinedIcon/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>
-              Log out
-            </Typography>
+            <LogoutOutlinedIcon className='icon-share'/>
+            <Typography>Log out</Typography>
           </MenuItem>
         )}
 
         {isAuthenticated && (
           <MenuItem onClick={onManageProfileClick} data-testid='manage-profile'>
             <AccountCircleOutlined/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>
-              Manage Profile
-            </Typography>
+            <Typography>Manage Profile</Typography>
           </MenuItem>
         )}
 
         {isAuthenticated && (
           <MenuItem onClick={onSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            <Typography>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
             </Typography>
           </MenuItem>
@@ -242,15 +236,11 @@ export default function ProfileControl() {
 
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Join GitHub
-          </Typography>
+          <Typography>Join GitHub</Typography>
         </MenuItem>
         <MenuItem onClick={() => window.open('https://github.com/bldrs-ai/Share/wiki', '_blank')}>
           <InfoOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Bldrs Wiki
-          </Typography>
+          <Typography>Bldrs Wiki</Typography>
         </MenuItem>
 
         <Divider/>
@@ -266,9 +256,7 @@ export default function ProfileControl() {
           data-testid='control-button-profile-menu-item-theme-system'
         >
           <SettingsBrightnessOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Use system theme
-          </Typography>
+          <Typography>Use system theme</Typography>
           {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
         <MenuItem
@@ -281,9 +269,7 @@ export default function ProfileControl() {
           data-testid='control-button-profile-menu-item-theme-day'
         >
           <WbSunnyOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Day theme
-          </Typography>
+          <Typography>Day theme</Typography>
           {!theme.isSystemMode && isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
         <MenuItem
@@ -296,9 +282,7 @@ export default function ProfileControl() {
           data-testid='control-button-profile-menu-item-theme-night'
         >
           <NightlightOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Night theme
-          </Typography>
+          <Typography>Night theme</Typography>
           {!theme.isSystemMode && !isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
         {/* End of theme menu items */}
@@ -320,9 +304,7 @@ export default function ProfileControl() {
           data-testid='clear-local-cache'
         >
           <CleaningServicesOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Clear Local Cache
-          </Typography>
+          <Typography>Clear Local Cache</Typography>
         </MenuItem>
       </Menu>
 
