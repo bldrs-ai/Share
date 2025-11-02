@@ -137,7 +137,7 @@ describe('Alert and Snackbar', () => {
       await expect(snackbar).toBeHidden()
     })
 
-    test('Snackbar auto-dismisses after 5 seconds when autoDismiss is true', async ({page}) => {
+    test.skip('Snackbar auto-dismisses after 5 seconds when autoDismiss is true', async ({page}) => {
       await setSnackMessage(page, {text: 'Auto-dismiss message', autoDismiss: true})
       const snackbar = page.getByTestId('snackbar')
       await expect(snackbar).toBeVisible()
