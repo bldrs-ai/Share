@@ -33,8 +33,8 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
         <Link href='/'>
           <LogoB
             sx={isMobile ? {
-              width: '70px',
-              height: '70px',
+              width: '50px',
+              height: '50px',
             } : {
               width: '80px',
               height: '80px',
@@ -44,20 +44,6 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
       }
       actionTitle='OK'
       actionCb={onClose}
-      sx={isMobile ? {
-        '& .MuiDialogTitle-root': {
-          gap: '0',
-        },
-        '& .dialog-header-text': {
-          width: '100%',
-          height: '100%',
-          fontSize: '19px',
-        },
-      } : {
-        '& .MuiDialogTitle-root': {
-          gap: '0',
-        },
-      }}
     >
       <AboutContent/>
     </Dialog>
