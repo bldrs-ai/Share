@@ -19,9 +19,12 @@ export default function BottomBar({deselectItems}) {
       justifyContent='space-between'
       alignItems='center'
       data-testid='BottomBar'
+      sx={{position: 'relative'}}
     >
       <AboutControl/>
-      <ElementsControl deselectItems={deselectItems}/>
+      <Stack direction='row' alignItems='center'>
+        <ElementsControl deselectItems={deselectItems}/>
+      </Stack>
       <HelpControl/>
     </Stack>
   )

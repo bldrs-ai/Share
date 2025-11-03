@@ -2,11 +2,13 @@ import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
+import {useIsMobile} from '../../Components/Hooks'
 import TitledLayout from '../../layouts/TitledLayout'
 
 
 /** @return {ReactElement} */
 export default function About() {
+  const isMobile = useIsMobile()
   const prodPrefix = 'https://bldrs.ai/share/v/gh/bldrs-ai'
   return (
     <TitledLayout title='Bldrs Share: High-performance Web-based CAD sharing'>
@@ -17,7 +19,7 @@ export default function About() {
           alignItems: 'center',
           height: '100%',
           float: 'right',
-          margin: '0 0 1em 2em',
+          margin: isMobile ? '0' : '0 0 1em 2em',
         }}
       >
         <Link href='/share/about/conway'>
@@ -27,6 +29,7 @@ export default function About() {
             width='600'
             style={{
               marginBottom: '0.5em',
+              maxWidth: '100%',
             }}
           />
           <Box sx={{textAlign: 'center'}}>
@@ -35,10 +38,17 @@ export default function About() {
         </Link>
       </Box>
       <Typography variant='p'>
-        Bldrs Share is a high-performance web application for CAD model sharing and
-        collaboration, built on open-source standards for speed, accuracy, and flexibility.
+        Bldrs Share is a high-performance browser-based application for CAD model viewingsharing and
+        collaboration.  Share is built on open-source standards for speed, accuracy, and flexibility.
         Designed for real-time, browser-based teamwork, Bldrs Share empowers teams to
         effortlessly share detailed models and collaborate seamlessly from any device.
+      </Typography>
+      <Typography variant='p'>
+        Read our:
+        <ul>
+          <li><Link href='/tos'>Terms of Service</Link></li>
+          <li><Link href='/privacy'>Privacy Policy</Link></li>
+        </ul>
       </Typography>
       <Typography variant='h2'>
         <strong>Key Features of Bldrs Share</strong>
