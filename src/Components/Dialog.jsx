@@ -49,7 +49,6 @@ export default function Dialog({
       setAlert(e)
     }
   }
-  const sxProps = {...props.sx}
   const onCloseClick = () => setIsDialogDisplayed(false)
   const dataTestIdSuffix = slugify(headerText)
   return (
@@ -62,7 +61,6 @@ export default function Dialog({
       // is closed, the transition animation is not played.
       closeAfterTransition={false}
       // don't use data-testid, use getByRole('dialog') instead
-      {...sxProps}
     >
       <DialogTitle
         variant='h1'
