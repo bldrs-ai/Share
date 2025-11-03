@@ -320,7 +320,7 @@ describe('Loader', () => {
         // Verify progress messages are called in correct order
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
         expect(progressCalls).toContain('Determining file type...')
-        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Downloading model...')
         expect(progressCalls).toContain('Reading model data...')
         expect(progressCalls).toContain('Configuring loader...')
         expect(progressCalls).toContain('Parsing model geometry...')
@@ -349,7 +349,7 @@ describe('Loader', () => {
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
         expect(progressCalls).toContain('Determining file type...')
-        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Downloading model...')
         expect(progressCalls).toContain('Reading model data...')
         expect(progressCalls).toContain('Configuring loader...')
         expect(progressCalls).toContain('Parsing model geometry...')
@@ -376,7 +376,7 @@ describe('Loader', () => {
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
         expect(progressCalls).toContain('Determining file type...')
-        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Downloading model...')
         expect(progressCalls).toContain('Reading model data...')
         expect(progressCalls).toContain('Decoding model data...')
         expect(progressCalls).toContain('Processing model data...')
@@ -400,7 +400,7 @@ describe('Loader', () => {
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
         expect(progressCalls).toContain('Determining file type...')
-        expect(progressCalls).toContain('Preparing file download...')
+        expect(progressCalls).toContain('Downloading model...')
         expect(progressCalls).toContain('Reading model data...')
         // Should NOT contain 'Decoding model data...' for binary files
         expect(progressCalls).not.toContain('Decoding model data...')

@@ -152,7 +152,7 @@ export async function load(
       }
     }
     onProgress('Reading model data...')
-    debug(true).log('Loader#load: Model from OPFS:', modelFile)
+    debug().log('Loader#load: Model from OPFS:', modelFile)
     setOpfsFile(modelFile)
     if (modelFile.size === 0) {
       throw new CacheException('Empty model')
@@ -198,7 +198,7 @@ export async function load(
 
   if (!isIfc) {
     onProgress('Converting model format...')
-    debug(true).log('Loader#load: converting non-IFC model to IFC:', model)
+    debug().log('Loader#load: converting non-IFC model to IFC:', model)
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
