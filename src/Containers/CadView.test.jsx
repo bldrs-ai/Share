@@ -148,7 +148,7 @@ describe('CadView', () => {
   it('renders with mock IfcViewerAPIExtended', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
@@ -162,7 +162,7 @@ describe('CadView', () => {
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTestId(aboutControlTestId))
     const getPropsCalls = viewer.getProperties.mock.calls
@@ -189,7 +189,7 @@ describe('CadView', () => {
     global.Worker = jest.fn(() => mockWorker)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     // Wait for component to be fully loaded
     // Necessary to wait for some of the component to render to avoid
@@ -237,7 +237,7 @@ describe('CadView', () => {
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(
       <ShareMock>
-        <CadView installPrefix={'/'} appPrefix={''} pathPrefix={''} modelPath={{filepath: '/index.ifc'}}/>
+        <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
       </ShareMock>,
     )
     await actAsyncFlush()
@@ -263,7 +263,7 @@ describe('CadView', () => {
     })
 
     const {getByTestId} =
-          render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+          render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
@@ -316,7 +316,7 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toBe(selectedIdsAsString)
 
     const {getByTestId} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
@@ -341,7 +341,7 @@ describe('CadView', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     expect(getByTitle('Section')).toBeInTheDocument()
     await act(() => {
@@ -367,7 +367,7 @@ describe('CadView', () => {
     const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => {
       const alert = result.current.alert
