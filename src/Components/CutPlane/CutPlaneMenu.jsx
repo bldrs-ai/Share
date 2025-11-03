@@ -29,7 +29,6 @@ export default function CutPlaneMenu() {
   const cutPlanes = useStore((state) => state.cutPlanes)
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
 
   const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
@@ -65,7 +64,6 @@ export default function CutPlaneMenu() {
   }, [model])
 
   const togglePlane = ({direction, offset = 0}) => {
-    setLevelInstance(null)
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
@@ -128,7 +126,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-plan'
         >
           <SvgIcon><PlanIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
+          <Typography>Plan</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'x'})}
@@ -137,7 +135,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-section'
         >
           <SvgIcon><SectionIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
+          <Typography>Section</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'z'})}
@@ -146,7 +144,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-elevation'
         >
           <SvgIcon><ElevationIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
+          <Typography>Elevation</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -156,7 +154,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
+          <Typography>Clear all</Typography>
         </MenuItem>
       </Menu>
     </>

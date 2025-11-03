@@ -172,7 +172,7 @@ export default function OnboardingOverlay({isVisible, onClose}) {
           <Stack spacing={3} alignItems='center'>
             <FileUploadIcon
               sx={{
-                fontSize: '42rem',
+                fontSize: '4rem',
                 color: '#ffffff',
                 filter: 'drop-shadow(0px 0px 10px rgba(255,255,255,0.3))',
               }}

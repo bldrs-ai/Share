@@ -46,9 +46,6 @@ export default function createUISlice(set, get) {
     isThemeEnabled: isThemeEnabled,
     setIsThemeEnabled: (is) => set(() => ({isThemeEnabled: is})),
 
-    levelInstance: null,
-    setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
-
     snackMessage: null,
     setSnackMessage: (msg) => set(() => ({snackMessage: msg})),
 
