@@ -29,7 +29,6 @@ export default function CutPlaneMenu() {
   const cutPlanes = useStore((state) => state.cutPlanes)
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
 
   const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
@@ -65,7 +64,6 @@ export default function CutPlaneMenu() {
   }, [model])
 
   const togglePlane = ({direction, offset = 0}) => {
-    setLevelInstance(null)
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
