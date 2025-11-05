@@ -3,37 +3,27 @@ import fs from 'node:fs'
 import * as path from 'node:path'
 import {fileURLToPath} from 'url'
 import config from './common.js'
-import defines from './defines.js'
 
 
+const mainBuild = esbuild.build(config)
+
+// Worker
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 const workerFile = path.resolve(repoRoot, 'src', 'OPFS', 'OPFS.worker.js')
 const buildDir = path.resolve(repoRoot, 'docs')
-
-// Build worker as IIFE bundle (no exports, just executes code)
-// This allows ESM imports inside but bundles to a format that works in workers
 const workerBuild = esbuild.build({
+  ...config,
   entryPoints: [workerFile],
   outfile: path.join(buildDir, 'OPFS.Worker.js'),
+  outdir: undefined,
+  // Build worker as IIFE bundle (no exports, just executes code)
+  // This allows ESM imports inside but bundles to a format that works in workers
   format: 'iife',
-  platform: 'browser',
-  target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
-  bundle: true,
-  minify: (process.env.MINIFY || 'true') === 'true',
-  keepNames: true,
-  splitting: false,
-  metafile: true,
-  sourcemap: true,
-  logLevel: 'info',
-  define: defines,
-  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
   banner: {
     js: '// Worker file - no exports',
   },
 })
 
-// Build main application
-const mainBuild = esbuild.build(config)
 
 // Wait for both builds to complete
 Promise.all([mainBuild, workerBuild])
