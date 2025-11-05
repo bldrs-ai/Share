@@ -16,12 +16,8 @@ const workerBuild = esbuild.build({
   entryPoints: [workerFile],
   outfile: path.join(buildDir, 'OPFS.Worker.js'),
   outdir: undefined,
-  // Build worker as IIFE bundle (no exports, just executes code)
-  // This allows ESM imports inside but bundles to a format that works in workers
-  format: 'iife',
-  banner: {
-    js: '// Worker file - no exports',
-  },
+  // Build worker as ESM bundle - requires {type: 'module'} when loading
+  format: 'esm',
 })
 
 
