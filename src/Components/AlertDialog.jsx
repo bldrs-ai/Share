@@ -42,11 +42,9 @@ export default function AlertDialog({onClose}) {
     }
   }
 
-  const title = `${severityTitle}: ${alertTitle}`
-
   return (
     <Dialog
-      headerText={severityTitle}
+      headerText={alertTitle}
       isDialogDisplayed={alert !== null}
       setIsDialogDisplayed={onCloseInner}
       actionCb={onCloseInner}
@@ -54,7 +52,7 @@ export default function AlertDialog({onClose}) {
       actionTitle={actionTitle}
     >
       <Helmet>
-        <title>{title}</title>
+        <title>{severityTitle}</title>
         <meta name="description" content={description}/>
       </Helmet>
       <Alert severity={severity}>
