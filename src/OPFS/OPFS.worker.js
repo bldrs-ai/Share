@@ -1,5 +1,5 @@
-let GITHUB_BASE_URL_AUTHENTICATED = null
-let GITHUB_BASE_URL_UNAUTHENTICATED = null
+import * as CacheModule from '../net/github/Cache.js'
+
 
 /**
  * @global
@@ -9,8 +9,9 @@ let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
 /* global FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemSyncAccessHandle */
 
-/* global importScripts, CacheModule */
-importScripts('./Cache.js')
+let GITHUB_BASE_URL_AUTHENTICATED = null
+let GITHUB_BASE_URL_UNAUTHENTICATED = null
+
 
 self.addEventListener('message', async (event) => {
   try {
