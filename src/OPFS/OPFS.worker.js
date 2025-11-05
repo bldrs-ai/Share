@@ -240,6 +240,7 @@ self.addEventListener('message', async (event) => {
           'opfsFilename'])
       const serializedGeometryProperties = event.data.serializedGeometryProperties || null
       const elementTypesMap = event.data.elementTypesMap || null
+      const scaleFactor = event.data.scaleFactor
 
       await exportToGlb(
         geometryPtr,
@@ -253,6 +254,7 @@ self.addEventListener('message', async (event) => {
         opfsFilename,
         serializedGeometryProperties,
         elementTypesMap,
+        scaleFactor,
       )
     } else if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
@@ -430,6 +432,7 @@ async function clearCache() {
  * @param {string} filePath - The original file path
  * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
  * @param {Array} [elementTypesMap] Array of element type groupings with expressID/name metadata
+ * @param {number} [scaleFactor] - The linear scaling factor from the IFC model
  */
 async function exportToGlb(
   geometryPtr,
@@ -443,6 +446,7 @@ async function exportToGlb(
   opfsFilename,
   serializedGeometryProperties,
   elementTypesMap,
+  scaleFactor,
 ) {
   if (!conwayModule) {
 throw new Error('Conway WASM module not initialized.')
@@ -493,6 +497,7 @@ throw new Error('Conway WASM module not initialized.')
       propertiesPtr,
       propertiesLen,
       elementTypesMap,
+      scaleFactor,
     )) {
       if (!glbResult?.success) {
         console.log('GLB result indicates failure:', glbResult)
@@ -2322,6 +2327,10 @@ class GeometryConvertor {
    * @param {*} isGlb
    * @param {*} outputDraco
    * @param {*} fileUri
+   * @param {*} propertiesPtr
+   * @param {*} propertiesLength
+   * @param {*} elementTypesJson
+   * @param {number} [scaleFactor] - The linear scaling factor from the IFC model
    * @return
    */
   async* toGltfs(
@@ -2334,6 +2343,7 @@ class GeometryConvertor {
       propertiesPtr = null,
       propertiesLength = 0,
       elementTypesJson = null,
+      scaleFactor,
   ) {
     if (!this.wasmModule) {
 return
@@ -2358,6 +2368,7 @@ return
           chunkUri,
           chunk.offset,
           chunk.count,
+          scaleFactor,
           propertiesPtr,
           propertiesLength,
           elementTypesJson,
@@ -2389,6 +2400,7 @@ return
     fileUri,
     geometryOffset = 0,
     geometryCount /* don’t default: ptrs don’t have size() */,
+    scaleFactor,
     propertiesPtr = null,
     propertiesLength = 0,
     elementTypesJson = null,
@@ -2406,6 +2418,7 @@ return noResults
       fileUri,
       geometryOffset,
       geometryCount,
+      scaleFactor,
     ]
     if (propertiesPtr !== null && propertiesLength !== 0) {
       args.push(propertiesPtr)

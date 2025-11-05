@@ -480,6 +480,7 @@ export function opfsSnapshotCache(previewWindow = 0) {
  * @param {string} filePath - The original IFC file path
  * @param {Record<number, *>} [serializedGeometryProperties] Serialized IFC element properties keyed by expressID
  * @param {Array} [elementTypesMap] Array of element type groupings with expressID/name metadata
+ * @param {number} [scaleFactor] - The linear scaling factor from the IFC model
  */
 export function opfsExportToGlb(
   geometryPtr,
@@ -493,6 +494,7 @@ export function opfsExportToGlb(
   opfsFilename,
   serializedGeometryProperties,
   elementTypesMap,
+  scaleFactor,
 ) {
   if (!workerRef) {
     debug().error('Worker not initialized')
@@ -512,6 +514,7 @@ export function opfsExportToGlb(
     opfsFilename: opfsFilename,
     serializedGeometryProperties: serializedGeometryProperties,
     elementTypesMap: elementTypesMap,
+    scaleFactor: scaleFactor,
   })
 }
 

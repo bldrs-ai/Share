@@ -1000,6 +1000,8 @@ export async function initializeConwayAndExportGlb({
         }
         // eslint-disable-next-line no-console
         console.log('Exporting aggregated geometry to GLB via OPFS worker...')
+        const scaleFactor = viewer.IFC.loader?.ifcManager?.ifcAPI?.getLinearScalingFactor(0)
+        console.log('Using scale factor for export:', scaleFactor)
         // Export to GLB using Conway in the worker
         opfsExportToGlb(
           geometryPtr,
@@ -1013,6 +1015,7 @@ export async function initializeConwayAndExportGlb({
           opfsFilename,
           serializedGeometryProperties,
           elementTypesMap,
+          scaleFactor,
         )
       } else {
         console.error('Conway WASM initialization failed')
