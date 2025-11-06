@@ -121,6 +121,7 @@
     "three": "0.135.0",
     "typescript": "4.9.4",
     "use-double-tap": "1.3.4",
+    "uuid": "13.0.0",
     "web-ifc-viewer": "./web-ifc-viewer-1.0.209-bldrs-7.tgz",
     "web-vitals": "2.1.4",
     "webpack": "5.89.0",
@@ -162,8 +163,7 @@
     "jsdom": "20.0.3",
     "node-fetch": "2",
     "playwright": "1.54.2",
-    "ts-jest": "29.4.4",
-    "uuid": "13.0.0"
+    "ts-jest": "29.4.4"
   },
   "engines": {
     "node": ">=20"
