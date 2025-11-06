@@ -79,7 +79,7 @@ describe('Search 100', () => {
           page,
           fileId,
           undefined, // we're initiating the navigation below, so no auto-navigate needed
-          'box.ifc',
+          'test-models/ifc/misc/box.ifc',
         )
       })
 
@@ -92,7 +92,6 @@ describe('Search 100', () => {
         await waitForModelReadyCallback()
         await expect(page).toHaveURL(/\/share\/v\/g\//)
         await expectScreen(page, 'box-google-drive-link-loaded.png')
-        await page.pause()
       })
 
       test.afterEach(async ({page}, testInfo) => {
