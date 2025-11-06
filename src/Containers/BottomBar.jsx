@@ -14,7 +14,7 @@ import useExistInFeature from '../hooks/useExistInFeature'
  * @return {ReactElement}
  */
 export default function BottomBar({deselectItems}) {
-  const isFloatingChatEnabled = useExistInFeature('assistant')
+  const isAssistantEnabled = useExistInFeature('assistant')
   return (
     <Stack
       spacing={2}
@@ -26,7 +26,7 @@ export default function BottomBar({deselectItems}) {
     >
       <AboutControl/>
       <ElementsControl deselectItems={deselectItems}/>
-      {isFloatingChatEnabled ? <AssistantChat/> : <HelpControl/>}
+      {isAssistantEnabled ? <AssistantChat/> : <HelpControl/>}
     </Stack>
   )
 }
