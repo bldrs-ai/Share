@@ -24,8 +24,11 @@ export default function AlertDialog({onClose}) {
   const severity = alert?.severity || 'error'
   const severityTitle = severity.charAt(0).toUpperCase() + severity.slice(1)
   const name = alert?.name || 'Error'
-  const alertTitle = alert?.title || 'General error'
-  const description = alert?.description || 'An error occurred.  Please reset the application and try again.'
+  const alertTitle = alert?.title || 'Error'
+  const description = (
+    typeof alert === 'string' ?
+      alert : (alert?.description || alert?.message || 'An error occurred.  Please reset the application and try again.')
+  )
   const actionTitle = alert?.actionTitle || 'Reset'
   const actionUrl = alert?.actionUrl || '/'
 

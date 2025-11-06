@@ -9,7 +9,6 @@ export class NetworkException extends Exception {
   /** @param message Error message */
   constructor(message: string) {
     super(message)
-    this.name = 'NetworkException'
     this.title = 'Network exception'
     this.description = 'A problem with the network resource occurred.'
   }
@@ -24,7 +23,6 @@ export class HttpAlert extends Alert {
   /** @param message Error message */
   constructor(message: string) {
     super(message)
-    this.name = 'HttpAlert'
     this.title = 'HTTP alert'
     this.description = 'A problem with the web occurred.'
   }

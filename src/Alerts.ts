@@ -30,18 +30,27 @@ export class BaseError extends Error {
    * @param message Error message
    * @param opts Optional fields to override and/or include a cause
    */
-  constructor(message: string, opts?: {
-    title?: string,
-    description?: string,
-    action?: string,
-    actionUrl?: string,
-    cause?: unknown,
+  constructor(
+    message: string,
+    opts?: {
+      title?: string,
+      description?: string,
+      action?: string,
+      actionUrl?: string,
+      cause?: unknown,
+      severity?: Severity,
   }) {
-    // Prefer native Error cause propagation when available
-    super(message)
+    // Pass cause to super so native chaining works
+    // (OK in Node 16.9+/Chromium 93+; harmless elsewhere)
+    if (opts?.cause !== undefined) {
+      // @ts-expect-error - Error constructor with options.cause is supported in Node 16.9+/Chromium 93+
+      super(message, {cause: opts.cause})
+    } else {
+      super(message)
+    }
     this.severity = 'error'
-    this.name = 'BaseError'
-    this.title = opts?.title || 'Error'
+    this.name = new.target.name
+    this.title = opts?.title || 'FooError'
     this.description = opts?.description || message
     this.action = opts?.action || 'Reset'
     this.actionUrl = opts?.actionUrl || '/'
@@ -49,111 +58,46 @@ export class BaseError extends Error {
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, BaseError)
     }
-    // If a cause Error exists, append its stack for debugging context
-    const causeAny = (this as unknown as {cause?: unknown}).cause
-    if (causeAny && typeof causeAny === 'object' && 'stack' in (causeAny as Record<string, unknown>)) {
-      const cstack = (causeAny as {stack?: unknown}).stack
-      if (typeof cstack === 'string' && typeof this.stack === 'string') {
-        this.stack = `${this.stack}\nCaused by: ${cstack}`
-      }
-    }
   }
 
   /**
-   * Serialize to a plain JSON object suitable for postMessage.
+   * Serialize the error to a JSON object.
    *
-   * @return JSON object
+   * @return The JSON object.
    */
-  toJson() {
-    const causeAny = (this as unknown as {cause?: unknown}).cause
-    const causeErr = causeAny instanceof Error ? causeAny : null
+  toJSON(): Record<string, unknown> {
     return {
-      type: this.constructor.name,
-      message: this.message,
-      severity: this.severity,
       name: this.name,
+      message: this.message,
       title: this.title,
       description: this.description,
       action: this.action,
       actionUrl: this.actionUrl,
-      stack: this.stack ?? null,
-      causeMessage: causeErr ? causeErr.message : (causeAny ? String(causeAny) : null),
-      causeStack: causeErr ? (causeErr.stack || null) : null,
+      severity: this.severity,
+      cause: this.cause instanceof Error ? {name: this.cause.name, message: String(this.cause.message)} : this.cause,
+      stack: this.stack,
     }
   }
 
+
   /**
-   * Reconstruct an instance from JSON created by toJson().
-   * Falls back to BaseError if type is unknown.
+   * Reconstruct an error from a JSON object.
    *
-   * @param json JSON object
-   * @return BaseError instance
+   * @param obj - The JSON object to reconstruct the error from.
+   * @return The reconstructed error.
    */
-  static fromJson(json: {
-    type?: string,
-    message?: string,
-    severity?: Severity,
-    name?: string,
-    title?: string,
-    description?: string,
-    action?: string,
-    actionUrl?: string,
-    stack?: string | null,
-    causeMessage?: string | null,
-    causeStack?: string | null,
-  }): BaseError {
-    const {type, message, severity, name, title, description, action, actionUrl, stack, causeMessage, causeStack} = json || {}
-    let instance: BaseError
-    switch (type) {
-      case 'Exception':
-        instance = new Exception(message || title || 'Exception')
-        break
-      case 'Alert':
-        instance = new Alert(message || title || 'Alert')
-        break
-      case 'Info':
-        instance = new Info(name, title, description) as unknown as BaseError
-        break
-      case 'Success':
-        instance = new Success(name, title, description) as unknown as BaseError
-        break
-      default:
-        instance = new BaseError(message || title || 'Error')
-        break
-    }
-    if (severity) {
-      instance.severity = severity
-    }
-    if (name) {
-      instance.name = name
-    }
-    if (title) {
-      instance.title = title
-    }
-    if (description) {
-      instance.description = description
-    }
-    if (action) {
-      instance.action = action
-    }
-    if (actionUrl) {
-      instance.actionUrl = actionUrl
-    }
-    if (stack) {
-      instance.stack = stack
-    }
-    // Attach cause data (as message/stack) for debugging context
-    if (causeMessage || causeStack) {
-      const cause = new Error(causeMessage || 'cause')
-      if (causeStack) {
-        cause.stack = causeStack
-      }
-      instance.cause = cause
-      if (typeof instance.stack === 'string' && cause.stack) {
-        instance.stack = `${instance.stack}\nCaused by: ${cause.stack}`
-      }
-    }
-    return instance
+  static fromJSON(obj: Record<string, unknown>): BaseError {
+    const err = new BaseError(String(obj?.message ?? 'Error'), {
+      title: typeof obj?.title === 'string' ? obj.title : undefined,
+      description: typeof obj?.description === 'string' ? obj.description : undefined,
+      action: typeof obj?.action === 'string' ? obj.action : undefined,
+      actionUrl: typeof obj?.actionUrl === 'string' ? obj.actionUrl : undefined,
+      cause: obj?.cause,
+      severity: obj?.severity as Severity | undefined,
+    })
+    err.name = String(obj?.name ?? 'BaseError')
+    err.stack = typeof obj?.stack === 'string' ? obj.stack : err.stack
+    return err
   }
 }
 
@@ -167,36 +111,63 @@ export class Exception extends BaseError {
   /**
    * @param message Error message
    */
-  constructor(message: string) {
-    super(message)
-    this.severity = 'error'
-    this.name = 'Exception'
-    this.title = 'Exception'
-    this.description = 'An exception occurred.  Please reset the application and try again.'
-    this.action = 'Reset'
-    this.actionUrl = '/'
+  constructor(
+    message = 'Exception occurred. Please reset the application and try again.',
+    opts: { cause?: unknown } = {},
+  ) {
+    super(message, {
+      severity: 'error',
+      title: 'Exception',
+      description: 'An exception occurred.  Please reset the application and try again.',
+      action: 'Reset',
+      actionUrl: '/',
+      cause: opts?.cause,
+    })
   }
 }
 
 
 // Alerts
 /**
- * Alert with a reset action for user.
+ * Alert message for user.
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Alert extends BaseError {
+export class Alert {
+  name: string
+  message: string
+  severity: 'alert'
+  title: string
+  description: string
+  action: string
+  actionUrl: string
+
   /**
    * @param message Error message
+   * @param opts Optional fields to override and/or include a cause
    */
-  constructor(message: string) {
-    super(message)
-    this.severity = 'warning'
-    this.name = 'Alert'
-    this.title = 'Alert'
-    this.description = 'An alert occurred.  Please check the application and try again.'
-    this.action = 'Reset'
-    this.actionUrl = '/share/v/p/index.ifc' // Soft reset by redirect to default model
+  constructor(
+    message = 'Alert message occurred. Please check the application and try again.',
+    opts: {
+      title?: string,
+      description?: string,
+      action?: string,
+      actionUrl?: string,
+      cause?: unknown,
+    } = {
+      title: 'Alert',
+      description: message,
+      action: 'Reset',
+      actionUrl: '/share/v/p/index.ifc',
+    },
+  ) {
+    this.name = new.target.name
+    this.message = message
+    this.severity = 'alert'
+    this.title = opts.title ?? 'Alert'
+    this.description = opts.description ?? message
+    this.action = opts.action ?? 'Reset'
+    this.actionUrl = opts.actionUrl ?? '/share/v/p/index.ifc'
   }
 }
 
@@ -207,48 +178,65 @@ export class Alert extends BaseError {
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Info extends BaseError {
+export class Info {
+  name: string
+  message: string
+  severity: 'info'
+  title: string
+  description: string
+  action: string
+  actionUrl: string
+  cause?: unknown
+
   /**
-   * @param name
-   * @param title
-   * @param description
+   * @param message Error message
+   * @param opts Optional fields to override and/or include a cause
    */
   constructor(
-    name = 'Info',
-    title = 'Info',
-    description = 'An info message occurred.  Please check the application and try again.',
+    message = 'Info message occurred. Please check the application and try again.',
+    opts: {
+      title?: string,
+      description?: string,
+      action?: string,
+      actionUrl?: string,
+      cause?: unknown,
+    } = {
+      title: 'Info',
+      description: message,
+      action: 'Reset',
+      actionUrl: '/',
+    },
   ) {
-    super(description)
+    this.name = new.target.name
+    this.message = message
     this.severity = 'info'
-    this.name = name
-    this.title = title
-    this.description = description
+    this.title = opts.title ?? 'Info'
+    this.description = opts.description ?? message
+    this.action = opts.action ?? 'Reset'
+    this.actionUrl = opts.actionUrl ?? '/'
   }
 }
 
 
-// Success
+/** SpecificErrors */
+
 /**
- * Success message.
+ * Error when the application runs out of memory.
  *
- * NB: Subclass this class to provide a custom title, description, and action.
+ * @augments BaseError
  */
-export class Success extends BaseError {
-  /**
-   * @param name
-   * @param title
-   * @param description
-   */
+export class OutOfMemoryError extends BaseError {
+  /** @param message Error message */
   constructor(
-    name = 'Success',
-    title = 'Success',
-    description = 'A success message occurred.  Please check the application and try again.',
+    message = 'The application ran out of memory.  Please reset the application and try again.',
+    opts: { cause?: unknown } = {},
   ) {
-    super(description)
-    this.severity = 'success'
-    this.name = name
-    this.title = title
-    this.description = description
+    super(message, {
+      severity: 'error',
+      title: 'Out of Memory',
+      description: message,
+      cause: opts?.cause,
+    })
   }
 }
 
@@ -261,31 +249,17 @@ export class Success extends BaseError {
  */
 export class FileStreamingUnsupported extends BaseError {
   /**
-   * @param message
+   * @param message Error message
    */
-  constructor(message: string) {
-    super(message)
-    this.severity = 'error'
-    this.name = 'FileStreamingUnsupported'
-    this.title = 'Streaming not supported'
-    this.description = message
-  }
-}
-
-
-// Errors
-// Out of memory error
-/**
- * Error when the application runs out of memory.
- *
- * @augments BaseError
- */
-export class OutOfMemoryError extends BaseError {
-  /** @param message Error message */
-  constructor(message = 'Out of memory: wasm memory allocate failed') {
-    super(message)
-    this.name = 'OutOfMemoryError'
-    this.title = 'Out of Memory'
-    this.description = 'The application ran out of memory.  Please reset the application and try again.'
+  constructor(
+    message = 'Streaming not supported. Please reset the application and try again.',
+    opts: { cause?: unknown } = {},
+  ) {
+    super(message, {
+      severity: 'error',
+      title: 'Streaming not supported',
+      description: message,
+      cause: opts?.cause,
+    })
   }
 }
