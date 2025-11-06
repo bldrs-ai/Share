@@ -38,7 +38,7 @@ export default function AlertDialog({onClose}) {
     } else if (actionUrl) {
       navigate(actionUrl)
     } else {
-      onClose()
+      onClose(alert)
     }
   }
 

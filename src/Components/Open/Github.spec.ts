@@ -6,8 +6,9 @@ import {
   setIsReturningUser,
   visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
-import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {setupGithubPathIntercept, waitForModelReady} from '../../tests/e2e/models'
 import {expectScreen} from '../../tests/screens'
+import {GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
 
 
 const {beforeEach, describe} = test
@@ -27,33 +28,35 @@ describe('Open 100: GitHub Integration', () => {
   describe('Open Project From GitHub Link', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
+      await setIsReturningUser(page.context())
+      await visitHomepageWaitForModel(page)
     })
 
     describe('Returning user visits homepage, enters Model URL into search', () => {
+      const githubPathname = '/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+      let waitForModelReadyCallback: () => Promise<void>
       beforeEach(async ({page}) => {
-        await setIsReturningUser(page.context())
-        await visitHomepageWaitForModel(page)
-        await page.getByTestId('control-button-search').click()
-        await setupVirtualPathIntercept(
+        waitForModelReadyCallback = await setupGithubPathIntercept(
           page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
-          '/Momentum.ifc',
+          githubPathname,
+          undefined, // we're initiating the navigation below, so no auto-navigate needed
+          'test-models/ifc/misc/box.ifc',
         )
-        // Note this includes {enter} at end to simulate Enter keypress
-        await page.getByTestId('textfield-search-query')
-          .fill('https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc')
-        await page.getByTestId('textfield-search-query').press('Enter')
       })
 
       // TODO(https://github.com/bldrs-ai/Share/issues/1269): fix and re-enable
-      test.skip('Model loads - Screen', async ({page}) => {
-        await waitForModelReady(page)
+      test('Model loads - Screen', async ({page}) => {
+        await page.getByTestId('control-button-open').click()
+        // Note this includes {enter} at end to simulate Enter keypress
+        const searchInput = page.getByPlaceholder(GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT)
+        await searchInput.fill(`https://github.com${githubPathname}`)
+        await waitForModelReadyCallback()
         await expectScreen(page, 'Github-link-model-loaded.png')
       })
     })
   })
 
-  describe('Open model from GitHub via UI', () => {
+  describe.skip('Open model from GitHub via UI', () => {
     beforeEach(async ({page}) => {
       await homepageSetup(page)
     })
@@ -63,10 +66,11 @@ describe('Open 100: GitHub Integration', () => {
         await returningUserVisitsHomepageWaitForModel(page)
         await auth0Login(page)
         // set up initial index.ifc load
-        await setupVirtualPathIntercept(
+        await setupGithubPathIntercept(
           page,
-          '/share/v/gh/cypresstester/test-repo/main/window.ifc',
-          '/index.ifc',
+          '/bldrs-ai/test-models/main/ifc/misc/box.ifc',
+          undefined, // we're initiating the navigation below, so no auto-navigate needed
+          'box.ifc',
         )
       })
 

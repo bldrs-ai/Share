@@ -14,7 +14,6 @@ import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
-import {isOutOfMemoryError} from '../utils/oom'
 import {testUuid} from '../utils/strings'
 import BLDLoader from './BLDLoader'
 import {CacheException, NotFoundAlert} from './Alerts'
@@ -173,22 +172,12 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  let model
-  try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
-  } catch (e) {
-    if (isOutOfMemoryError(e)) {
-      e.isOutOfMemory = true
-    }
-    throw e
-  }
+  // Throws
+  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
 
   if (model === null || model === undefined) {
     // If loader captured a last error, surface that
     const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
-    if (isOutOfMemoryError(lastErr)) {
-      lastErr.isOutOfMemory = true
-    }
     throw lastErr
   }
 
@@ -573,70 +562,56 @@ function newIfcLoader(viewer) {
     if (this.context.items.ifcModels.length !== 0) {
       throw new Error('Attempt to load a model into an already-used viewer instance')
     }
-    try {
-      if (onProgress) {
-        onProgress('Configuring loader...')
-      }
-      await this.loader.ifcManager.applyWebIfcConfig({
-        COORDINATE_TO_ORIGIN: true,
-        USE_FAST_BOOLS: true,
-      })
 
-      if (onProgress) {
-        onProgress('Parsing model geometry...')
-      }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
-      this.addIfcModel(ifcModel)
-
-      if (onProgress) {
-        onProgress('Setting up coordinate system...')
-      }
-      // eslint-disable-next-line new-cap
-      const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
-      const matrix = new Matrix4().fromArray(matrixArr)
-      this.loader.ifcManager.setupCoordinationMatrix(matrix)
-
-      if (onProgress) {
-        onProgress('Fitting model to frame...')
-      }
-      this.context.fitToFrame()
-
-      if (onProgress) {
-        onProgress('Gathering model statistics...')
-      }
-      const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
-      ifcModel.name = statsApi.projectName ?? undefined
-      const loadStats = {
-        loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
-        geometryMemory: statsApi.getGeometryMemory(),
-        geometryTime: statsApi.getGeometryTime(),
-        ifcVersion: statsApi.getVersion(),
-        loadStatus: statsApi.getLoadStatus(),
-        originatingSystem: statsApi.getOriginatingSystem(),
-        preprocessorVersion: statsApi.getPreprocessorVersion(),
-        parseTime: statsApi.getParseTime(),
-        totalTime: statsApi.getTotalTime(),
-      }
-      ifcModel.loadStats = loadStats
-
-      if (onProgress) {
-        onProgress('Model loaded successfully!')
-      }
-      return ifcModel
-    } catch (err) {
-      console.error('newIfcLoader.parse: error:', err)
-      loader.ifcLastError = err
-      // Rethrow OOM so callers can present a tailored UX message.
-      if (isOutOfMemoryError(err)) {
-        err.isOutOfMemory = true // tag for convenience
-        throw err
-      }
-      console.error(err)
-      if (onError) {
-        onError(err)
-      }
-      return null
+    if (onProgress) {
+      onProgress('Configuring loader...')
     }
+    await this.loader.ifcManager.applyWebIfcConfig({
+      COORDINATE_TO_ORIGIN: true,
+      USE_FAST_BOOLS: true,
+    })
+
+    if (onProgress) {
+      onProgress('Parsing model geometry...')
+    }
+    const ifcModel = await this.loader.parse(buffer, onProgress)
+    this.addIfcModel(ifcModel)
+
+    if (onProgress) {
+      onProgress('Setting up coordinate system...')
+    }
+    // eslint-disable-next-line new-cap
+    const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
+    const matrix = new Matrix4().fromArray(matrixArr)
+    this.loader.ifcManager.setupCoordinationMatrix(matrix)
+
+    if (onProgress) {
+      onProgress('Fitting model to frame...')
+    }
+    this.context.fitToFrame()
+
+    if (onProgress) {
+      onProgress('Gathering model statistics...')
+    }
+    const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
+    ifcModel.name = statsApi.projectName ?? undefined
+    const loadStats = {
+      loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
+      geometryMemory: statsApi.getGeometryMemory(),
+      geometryTime: statsApi.getGeometryTime(),
+      ifcVersion: statsApi.getVersion(),
+      loadStatus: statsApi.getLoadStatus(),
+      originatingSystem: statsApi.getOriginatingSystem(),
+      preprocessorVersion: statsApi.getPreprocessorVersion(),
+      parseTime: statsApi.getParseTime(),
+      totalTime: statsApi.getTotalTime(),
+    }
+    ifcModel.loadStats = loadStats
+
+    if (onProgress) {
+      onProgress('Model loaded successfully!')
+    }
+    return ifcModel
   }
   return loader
 }

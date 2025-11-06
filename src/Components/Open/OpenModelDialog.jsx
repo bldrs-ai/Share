@@ -16,7 +16,12 @@ import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+import {
+  GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT,
+  LABEL_LOCAL,
+  LABEL_GITHUB,
+  LABEL_SAMPLES,
+} from './component'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 
 
@@ -104,7 +109,7 @@ export default function OpenModelDialog({
         { currentTab === 1 &&
           <Stack data-testid='dialog-open-model-github' spacing={1}>
             <TextField
-              label='GitHub Model URL'
+              label={GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT}
               value={name}
               onChange={(event) => {
                 const ghPath = event.target.value

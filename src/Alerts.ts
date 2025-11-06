@@ -14,9 +14,9 @@
 export type Severity = 'error' | 'warning' | 'info' | 'success'
 
 /**
- * Base serializable exception/alert with helpers for structured clone and reconstruction.
+ * Base serializable error with helpers for structured clone and reconstruction.
  */
-export class BaseException extends Error {
+export class BaseError extends Error {
   severity: Severity
   name: string
   title: string
@@ -40,14 +40,14 @@ export class BaseException extends Error {
     // Prefer native Error cause propagation when available
     super(message)
     this.severity = 'error'
-    this.name = 'BaseException'
+    this.name = 'BaseError'
     this.title = opts?.title || 'Error'
     this.description = opts?.description || message
     this.action = opts?.action || 'Reset'
     this.actionUrl = opts?.actionUrl || '/'
     this.cause = opts?.cause
     if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, BaseException)
+      Error.captureStackTrace(this, BaseError)
     }
     // If a cause Error exists, append its stack for debugging context
     const causeAny = (this as unknown as {cause?: unknown}).cause
@@ -84,10 +84,10 @@ export class BaseException extends Error {
 
   /**
    * Reconstruct an instance from JSON created by toJson().
-   * Falls back to BaseException if type is unknown.
+   * Falls back to BaseError if type is unknown.
    *
    * @param json JSON object
-   * @return BaseException instance
+   * @return BaseError instance
    */
   static fromJson(json: {
     type?: string,
@@ -101,9 +101,9 @@ export class BaseException extends Error {
     stack?: string | null,
     causeMessage?: string | null,
     causeStack?: string | null,
-  }): BaseException {
+  }): BaseError {
     const {type, message, severity, name, title, description, action, actionUrl, stack, causeMessage, causeStack} = json || {}
-    let instance: BaseException
+    let instance: BaseError
     switch (type) {
       case 'Exception':
         instance = new Exception(message || title || 'Exception')
@@ -112,13 +112,13 @@ export class BaseException extends Error {
         instance = new Alert(message || title || 'Alert')
         break
       case 'Info':
-        instance = new Info(name, title, description) as unknown as BaseException
+        instance = new Info(name, title, description) as unknown as BaseError
         break
       case 'Success':
-        instance = new Success(name, title, description) as unknown as BaseException
+        instance = new Success(name, title, description) as unknown as BaseError
         break
       default:
-        instance = new BaseException(message || title || 'Error')
+        instance = new BaseError(message || title || 'Error')
         break
     }
     if (severity) {
@@ -163,7 +163,7 @@ export class BaseException extends Error {
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Exception extends BaseException {
+export class Exception extends BaseError {
   /**
    * @param message Error message
    */
@@ -185,7 +185,7 @@ export class Exception extends BaseException {
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Alert extends BaseException {
+export class Alert extends BaseError {
   /**
    * @param message Error message
    */
@@ -207,7 +207,7 @@ export class Alert extends BaseException {
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Info extends BaseException {
+export class Info extends BaseError {
   /**
    * @param name
    * @param title
@@ -233,7 +233,7 @@ export class Info extends BaseException {
  *
  * NB: Subclass this class to provide a custom title, description, and action.
  */
-export class Success extends BaseException {
+export class Success extends BaseError {
   /**
    * @param name
    * @param title
@@ -257,9 +257,9 @@ export class Success extends BaseException {
  * Indicates streaming reads/writes are not supported in the current environment.
  * Used when Response.body is unavailable and streaming OPFS writes cannot be performed.
  *
- * @augments BaseException
+ * @augments BaseError
  */
-export class FileStreamingUnsupported extends BaseException {
+export class FileStreamingUnsupported extends BaseError {
   /**
    * @param message
    */
@@ -269,5 +269,23 @@ export class FileStreamingUnsupported extends BaseException {
     this.name = 'FileStreamingUnsupported'
     this.title = 'Streaming not supported'
     this.description = message
+  }
+}
+
+
+// Errors
+// Out of memory error
+/**
+ * Error when the application runs out of memory.
+ *
+ * @augments BaseError
+ */
+export class OutOfMemoryError extends BaseError {
+  /** @param message Error message */
+  constructor(message = 'Out of memory: wasm memory allocate failed') {
+    super(message)
+    this.name = 'OutOfMemoryError'
+    this.title = 'Out of Memory'
+    this.description = 'The application ran out of memory.  Please reset the application and try again.'
   }
 }

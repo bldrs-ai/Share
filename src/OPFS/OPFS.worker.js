@@ -1,11 +1,5 @@
-/* ESM imports when bundled for module worker */
-import CacheModule from '../net/github/Cache.js'
-import {FileStreamingUnsupported} from '../Alerts'
-import {NetworkException, HttpAlert} from '../net/Alerts.js'
+import * as CacheModule from '../net/github/Cache.js'
 
-
-let GITHUB_BASE_URL_AUTHENTICATED = null
-let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
 /**
  * @global
@@ -14,6 +8,9 @@ let GITHUB_BASE_URL_UNAUTHENTICATED = null
  */
 
 /* global FileSystemDirectoryHandle, FileSystemFileHandle, FileSystemSyncAccessHandle */
+
+let GITHUB_BASE_URL_AUTHENTICATED = null
+let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
 
 self.addEventListener('message', async (event) => {
@@ -432,32 +429,7 @@ async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onPro
   }
 
   if (!response.body) {
-    // Fallback: no ReadableStream available, write full buffer in one shot
-    try {
-      const fileArrayBuffer = await response.arrayBuffer()
-      await blobAccessHandle.write(fileArrayBuffer, {at: 0})
-      await blobAccessHandle.close()
-
-      try {
-        const blobFile = await modelBlobFileHandle.getFile()
-        self.postMessage({completed: true, event: 'download', file: blobFile})
-      } catch (error) {
-        const workerMessage = `Error Getting file handle: ${error}.`
-        self.postMessage({error: workerMessage})
-        return
-      }
-
-      return
-    } catch (error) {
-      try {
-        await blobAccessHandle.close()
-      } catch (_) {
-        /* ignore */
-      }
-      const ex = new FileStreamingUnsupported('OPFS: fallback full-buffer write failed', {cause: error})
-      self.postMessage({error: ex.toJson()})
-      return
-    }
+    throw new Error('ReadableStream not supported in this browser.')
   }
 
   const reader = response.body.getReader()
@@ -1137,17 +1109,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
     return
   }
   // Fetch the file from the object URL
-  let response = null
-  try {
-    response = await fetch(objectUrl)
-  } catch (error) {
-    throw new NetworkException(`Error fetching ${objectUrl}: ${error}`)
-  }
-
-  // Check if response is ok
-  if (!response.ok) {
-    throw new HttpAlert(`Error fetching ${objectUrl}: ${response.status} ${response.statusText}`)
-  }
+  const response = await fetch(objectUrl)
 
   if (!response.body) {
     throw new Error('ReadableStream not supported in this browser.')

@@ -8,7 +8,7 @@ import {join} from 'path'
  * to invoke when ready to wait for model ready.
  *
  * @param page Playwright page object
- * @param proxyPathname GitHub proxy pathname, e.g. '/bldrs-ai/test-models/main/ifc/misc/box.ifc'
+ * @param githubPathname GitHub proxy pathname, e.g. '/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * @param gotoPathname Pathname to navigate to,
  *   e.g. '/share/v/gh/.../box.ifc'
  *   or null if caller should handle navigation.
@@ -17,15 +17,15 @@ import {join} from 'path'
  */
 export async function setupGithubPathIntercept(
   page: Page,
-  proxyPathname: string,
+  githubPathname: string,
   gotoPathname: string | undefined,
   fixtureFilename: string,
 ): Promise<() => Promise<void>> {
-  if (!proxyPathname.startsWith('/')) {
-    throw new Error(`GitHub proxy pathname must start with '/': ${proxyPathname}`)
+  if (!githubPathname.startsWith('/')) {
+    throw new Error(`GitHub proxy pathname must start with '/': ${githubPathname}`)
   }
   const proxyBase = 'https://rawgit.bldrs.dev/r' // since it will be appended to this
-  const interceptPrefix = `${proxyBase}${proxyPathname}`
+  const interceptPrefix = `${proxyBase}${githubPathname}`
   return await setupRouteIntercept(page, interceptPrefix, gotoPathname, fixtureFilename)
 }
 

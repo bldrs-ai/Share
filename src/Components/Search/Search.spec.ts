@@ -57,7 +57,7 @@ describe('Search 100', () => {
           page,
           '/bldrs-ai/test-models/main/ifc/misc/box.ifc',
           undefined, // we're initiating the navigation below, so no auto-navigate needed
-          'box.ifc',
+          'test-models/ifc/misc/box.ifc',
         )
       })
 
