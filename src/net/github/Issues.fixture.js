@@ -200,14 +200,22 @@ export const MOCK_ISSUES = {
   ],
 }
 
+
+/**
+ * @typedef {object} IssueInfo
+ * @property {number} id - The issue ID.
+ * @property {string} title - The issue title.
+ * @property {string} body - The issue body.
+ */
+
 /**
  * Generates an array of mock GitHub issue objects.
  * Each issue object is constructed using the provided organization, repository, and issue information.
  *
  * @param {string} org - The GitHub organization name.
  * @param {string} repo - The GitHub repository name.
- * @param {Array} issuesInfo - An array of objects containing information for each issue.
- * @return {Array} An array of mock issue objects.
+ * @param {Array<IssueInfo>} issuesInfo - An array of objects containing information for each issue.
+ * @return {Array<object>} An array of mock issue objects.
  */
 export const createMockIssues = (org, repo, issuesInfo) => {
   return issuesInfo.map((issueInfo, index) => ({

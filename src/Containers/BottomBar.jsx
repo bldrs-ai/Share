@@ -1,14 +1,14 @@
 import React, {ReactElement} from 'react'
 import Stack from '@mui/material/Stack'
 import AboutControl from '../Components/About/AboutControl'
-import FloatingChat from '../Components/Chat/FloatingChat' // Adjust path if needed
+import AssistantChat from '../Components/Assistant/AssistantChat'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'
 import useExistInFeature from '../hooks/useExistInFeature'
 
 
 /**
- * BottomBar contains AboutControl, ElementsControl and HelpControl
+ * BottomBar contains AboutControl, ElementsControl, AssistantChat and HelpControl
  *
  * @property {Function} deselectItems deselects currently selected element
  * @return {ReactElement}
@@ -26,7 +26,7 @@ export default function BottomBar({deselectItems}) {
     >
       <AboutControl/>
       <ElementsControl deselectItems={deselectItems}/>
-      {isFloatingChatEnabled ? <FloatingChat/> : <HelpControl/>}
+      {isFloatingChatEnabled ? <AssistantChat/> : <HelpControl/>}
     </Stack>
   )
 }

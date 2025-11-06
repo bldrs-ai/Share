@@ -14,10 +14,8 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
   const openrouterBaseUrl = defines.OPENROUTER_BASE_URL
   assertDefined(openrouterBaseUrl, 'OPENROUTER_BASE_URL is required')
   const chatCompletionsEndpoint = `${openrouterBaseUrl}/api/v1/chat/completions*`
-  console.log('chatCompletionsEndpoint', chatCompletionsEndpoint)
 
   handlers.push(http.options(chatCompletionsEndpoint, () => {
-    console.log('openrouterOPTIONS response', chatCompletionsEndpoint)
     return new Response(null, {
       status: HTTP_OK,
       headers: OPENROUTER_CORS_HEADERS,
@@ -25,7 +23,6 @@ export default function apiHandlersOpenrouter(defines: Defines): HttpHandler[] {
   }))
 
   handlers.push(http.post(chatCompletionsEndpoint, () => {
-    console.log('openrouterPOST response', chatCompletionsEndpoint)
     return new Response(JSON.stringify(MOCK_OPENROUTER_RESPONSE), {
       status: HTTP_OK,
       headers: {
@@ -63,7 +60,7 @@ const MOCK_OPENROUTER_RESPONSE = {
       index: 0,
       message: {
         role: 'assistant',
-        content: '```json\n{\n  \'assistant_response\': \'Test received.\',\n  \'client_code\': \'return [];\'\n}\n```',
+        content: '```json\n{\n  "assistant_response": "Test received.",\n  "client_code": "return [];"\n}\n```',
         refusal: null,
         reasoning: '**Lots of reasoning here...**',
         reasoning_details: [

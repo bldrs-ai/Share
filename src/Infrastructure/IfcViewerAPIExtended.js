@@ -76,24 +76,26 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const manager = this.IFC.loader.ifcManager
     const structure = await manager.getSpatialStructure(0, true)
     const projectNode = Array.isArray(structure) ?
-    structure[0] :
-    structure
-  if (!projectNode) {
-    console.warn('No project node found in spatial structure')
-    return []
-  }
+      structure[0] :
+      structure
+    if (!projectNode) {
+      console.warn('No project node found in spatial structure')
+      return []
+    }
 
     // helper: pull out every IfcBuildingStorey node
     /**
+     * @param {object} node
+     * @param {Array} out
      * @return {Array} storeys
      */
     function collectStoreys(node, out = []) {
       if (node.type === 'IFCBUILDINGSTOREY') {
-out.push(node)
-}
+        out.push(node)
+      }
       for (const c of node.children || []) {
-collectStoreys(c, out)
-}
+        collectStoreys(c, out)
+      }
       return out
     }
 
@@ -114,8 +116,10 @@ collectStoreys(c, out)
     }
     const floorNode = storeys[idx].node
 
-     // 4. collect all expressIDs under this storey via node.children
+    // 4. collect all expressIDs under this storey via node.children
     /**
+     * @param {object} node
+     * @param {Array} out
      * @return {Array} elements
      */
     function collectElements(node) {
