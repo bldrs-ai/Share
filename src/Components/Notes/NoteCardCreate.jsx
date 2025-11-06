@@ -96,7 +96,11 @@ export default function NoteCardCreate({
     setComments(newComments)
   }
 
-  /** create new comment based on the selected note Id*/
+  /**
+   * Create new comment based on the selected note Id.
+   *
+   * @return {Promise<any>}
+   */
   async function createNewComment() {
     assertStringNotEmpty(body)
     const commentPayload = {
@@ -149,12 +153,12 @@ export default function NoteCardCreate({
               inputProps={{maxLength: 256}}
             />}
           avatar={
-          isAuthenticated ?
-            <Avatar
-              alt={user.name}
-              src={user.picture}
-            /> :
-            <Avatar alt={username} src={avatarUrl}/>
+            isAuthenticated ?
+              <Avatar
+                alt={user.name}
+                src={user.picture}
+              /> :
+              <Avatar alt={username} src={avatarUrl}/>
           }
         />
       }

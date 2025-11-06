@@ -1,4 +1,3 @@
-import {CypressHistorySupport} from 'cypress-react-router'
 import React, {ReactElement, StrictMode, useEffect} from 'react'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
@@ -11,15 +10,17 @@ import {
   matchRoutes,
 } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
+import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
-import '@fontsource/roboto/300.css'
-import '@fontsource/roboto/400.css'
-import '@fontsource/roboto/500.css'
-import '@fontsource/roboto/700.css'
+import './compat'
+import './index.css'
 import 'react-chat-elements/dist/main.css'
+import '@fontsource/roboto/latin-300.css'
+import '@fontsource/roboto/latin-400.css'
+import '@fontsource/roboto/latin-500.css'
+import '@fontsource/roboto/latin-700.css'
 
 
 Sentry.init({
@@ -61,6 +62,7 @@ if (process.env.MSW_IS_ENABLED) {
     OAUTH2_CLIENT_ID: process.env.OAUTH2_CLIENT_ID,
     RAW_GIT_PROXY_URL: process.env.RAW_GIT_PROXY_URL,
     RAW_GIT_PROXY_URL_NEW: process.env.RAW_GIT_PROXY_URL_NEW,
+    OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL,
   })
   worker.start({
     onUnhandledRequest(req) {
@@ -73,8 +75,8 @@ if (process.env.MSW_IS_ENABLED) {
   })
 }
 
-// Enable esbuild hot-reload model
-if (process.env.NODE_ENV === 'development') {
+const isEsbuildWatchEnabled = process.env.ESBUILD_WATCH
+if (isEsbuildWatchEnabled) {
   new EventSource('/esbuild').addEventListener('change', () => location.reload())
 }
 
@@ -90,7 +92,6 @@ function AppWithContext() {
           <title>Bldrs.ai</title>
         </Helmet>
         <BrowserRouter>
-          <CypressHistorySupport/>
           <Auth0ProviderWithHistory>
             <BaseRoutes/>
           </Auth0ProviderWithHistory>

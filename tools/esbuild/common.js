@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import * as process from 'node:process'
 import {fileURLToPath} from 'url'
 import defines from './defines.js'
 import makePlugins from './plugins.js'
@@ -24,9 +23,17 @@ export default {
   outbase: path.resolve(repoRoot, 'src'),
   format: 'esm',
   platform: 'browser',
+  // Roughly 2018-era browsers
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
-  external: ['*.woff', '*.woff2'],
+  loader: {
+    '.css': 'css',
+    '.woff': 'file',
+    '.woff2': 'file',
+    '.md': 'text',
+    '.ts': 'ts',
+    '.tsx': 'tsx',
+  },
   minify: (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODO: have had breakage without this
   splitting: false,
@@ -35,7 +42,5 @@ export default {
   logLevel: 'info',
   define: defines,
   plugins: plugins,
-  loader: {
-    '.md': 'text',
-  },
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 }

@@ -1,32 +1,54 @@
 import React, {ReactElement} from 'react'
+import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
+import {useIsMobile} from '../../Components/Hooks'
 import TitledLayout from '../../layouts/TitledLayout'
 
 
 /** @return {ReactElement} */
 export default function About() {
+  const isMobile = useIsMobile()
   const prodPrefix = 'https://bldrs.ai/share/v/gh/bldrs-ai'
   return (
     <TitledLayout title='Bldrs Share: High-performance Web-based CAD sharing'>
-      <iframe
-        title='Bldrs Share: High-performance Web-based CAD sharing'
-        width='420'
-        height='315'
-        style={{
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
           float: 'right',
-          border: 'none',
-          margin: '2em',
+          margin: isMobile ? '0' : '0 0 1em 2em',
         }}
-        src='https://www.youtube.com/embed/5_MDaM25IeE'
-        frameBorder='0'
-        allowFullScreen={true}
-      />
+      >
+        <Link href='/share/about/conway'>
+          <img
+            src='/speedtest.png'
+            alt='Conway vs Industry Leaders - Speed test graph'
+            width='600'
+            style={{
+              marginBottom: '0.5em',
+              maxWidth: '100%',
+            }}
+          />
+          <Box sx={{textAlign: 'center'}}>
+            Explore the Conway Engine →
+          </Box>
+        </Link>
+      </Box>
       <Typography variant='p'>
-        Bldrs Share is a high-performance web application for CAD model sharing and
-        collaboration, built on open-source standards for speed, accuracy, and flexibility.
+        Bldrs Share is a high-performance browser-based application for CAD model viewingsharing and
+        collaboration.  Share is built on open-source standards for speed, accuracy, and flexibility.
         Designed for real-time, browser-based teamwork, Bldrs Share empowers teams to
         effortlessly share detailed models and collaborate seamlessly from any device.
+      </Typography>
+      <Typography variant='p'>
+        Read our:
+        <ul>
+          <li><Link href='/tos'>Terms of Service</Link></li>
+          <li><Link href='/privacy'>Privacy Policy</Link></li>
+        </ul>
       </Typography>
       <Typography variant='h2'>
         <strong>Key Features of Bldrs Share</strong>
@@ -35,18 +57,13 @@ export default function About() {
         <strong>Correct & Fast</strong>
       </Typography>
       <Typography variant='p'>
-        We bring your complex CAD models to life (supporting
-        &nbsp;<Link href={`${prodPrefix}/test-models/main/ifc/Schependomlaan.ifc#c:36.563,6.143,-16.59,5.457,5.29,0.326`}>IFC</Link>/
-        &nbsp;<Link href={`${prodPrefix}/test-models/main/step/zoo.dev/a-gear.step`}>STEP</Link>,
+        We bring your complex CAD models to life, supporting
+        &nbsp;<Link href={`${prodPrefix}/test-models/main/ifc/Schependomlaan.ifc#c:36.563,6.143,-16.59,5.457,5.29,0.326`}>IFC</Link>,
         &nbsp;<Link href={`${prodPrefix}/test-models/main/stl/slotted_disk.stl#c:1.273,0.548,1.167,0.089,-0.072,-0.087`}>STL</Link>,
-        &nbsp;<Link href={`${prodPrefix}/headless-three/main/models/obj/tree.obj`}>OBJ</Link> and
-        more) with the highest quality and best-in-class performance.
-      </Typography>
-      <Typography variant='p'>
-        <strong>Fast is our favorite feature!</strong>
-      </Typography>
-      <Typography variant='p'>
-        <Link href='/share/about/conway'>Explore the Conway Engine →</Link>
+        &nbsp;<Link href={`${prodPrefix}/headless-three/main/models/obj/tree.obj`}>OBJ</Link>,
+        &nbsp;and initial support for <Link href={`${prodPrefix}/test-models/main/step/zoo.dev/a-gear.step`}>STEP</Link>
+        &nbsp;with the highest quality and best-in-class performance.
+        <br/>
       </Typography>
       <Typography variant='h2'>
         <strong>Browser-First, Desktop-Free</strong>

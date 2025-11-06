@@ -2,6 +2,7 @@ import React, {ReactElement, createRef, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
 import {useLocation} from 'react-router'
+import {gtagEvent} from '../../privacy/analytics'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -84,8 +85,19 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, location, model, viewer, viewer?.clipper])
 
+  // Track when share dialog is opened
+  useEffect(() => {
+    if (model && isDialogDisplayed) {
+      gtagEvent('share', {
+        method: 'url',
+        content_type: model.type || 'unknown',
+        item_id: window.location.path,
+      })
+    }
+  }, [isDialogDisplayed, model])
 
-  const onCopy = (event) => {
+
+  const onCopy = () => {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(window.location)
     urlTextFieldRef.current.select()

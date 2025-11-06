@@ -28,7 +28,7 @@ describe('OpenModelControl', () => {
       const hasText = (_node) => _node.textContent.includes('Host your model on GitHub and log in to Share')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
-          (child) => !hasText(child),
+        (child) => !hasText(child),
       )
       return nodeHasText && childrenDontHaveText
     }

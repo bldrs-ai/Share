@@ -1,115 +1,129 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {
+  Avatar,
+  Menu,
+  MenuItem,
+  Typography,
+  Divider,
+} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
-import Avatar from '@mui/material/Avatar'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
-import Typography from '@mui/material/Typography'
-import Divider from '@mui/material/Divider'
-import {TooltipIconButton} from '../Buttons'
+import {captureException} from '@sentry/react'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
+import {Themes} from '../../theme/Theme'
+import {assertDefinedBoolean} from '../../utils/assert'
+import {TooltipIconButton} from '../Buttons'
+import LoginDialog from './LoginDialog'
+import ManageProfile from './ManageProfile'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
+  AccountCircleOutlined,
   GitHub as GitHubIcon,
   InfoOutlined as InfoOutlinedIcon,
   LoginOutlined as LoginOutlinedIcon,
   LogoutOutlined as LogoutOutlinedIcon,
   NightlightOutlined as NightlightOutlinedIcon,
   WbSunnyOutlined as WbSunnyOutlinedIcon,
+  SettingsBrightnessOutlined as SettingsBrightnessOutlinedIcon,
+  CheckOutlined as CheckOutlinedIcon,
   PaymentOutlined,
+  CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
-
-
-const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
-
-const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+import {clearOPFSCache} from '../../OPFS/utils'
 
 
 /**
- * ProfileControl contains the option to log in/log out and to theme control
+ * ProfileControl contains the option to log in/log out and theme control
  *
  * @return {ReactElement}
  */
 export default function ProfileControl() {
+  const isGoogleEnabled = useStore((state) => state.isGoogleEnabled)
+  const appMetadata = useStore((state) => state.appMetadata)
+  const setAccessToken = useStore((state) => state.setAccessToken)
+
+  const {
+    getAccessTokenSilently,
+    isAuthenticated,
+    loginWithRedirect,
+    logout,
+    user,
+  } = useAuth0()
+  const theme = useTheme()
+
+  const isLoginVisible = useStore((state) => state.isLoginVisible)
+  const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
+  const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
-
-  const theme = useTheme()
-  const {isAuthenticated, logout, user} = useAuth0()
-  const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
-  const {getAccessTokenSilently, loginWithRedirect} = useAuth0()
-  const appMetadata = useStore((state) => state.appMetadata)
   const userEmail = appMetadata?.userEmail || ''
   const stripeCustomerId = appMetadata?.stripeCustomerId || null
-  const setAccessToken = useStore((state) => state.setAccessToken)
+
+  const onManageProfileClick = () => setIsManageProfileOpen(true)
+
 
   useEffect(() => {
     /**
-     * Listen for changes in localStorage
+     * @param {Event} event - The storage event
      */
     function handleStorageEvent(event) {
       if (event.key === 'refreshAuth' && event.newValue === 'true') {
-        // When login is detected, refresh the auth state
-        getAccessTokenSilently(
-          {
+        getAccessTokenSilently({
           authorizationParams: {
-          audience: 'https://api.github.com/',
-          scope: 'openid profile email offline_access',
-        },
-        cacheMode: 'on',
-        useRefreshTokens: true,
-      })
+            audience: 'https://api.github.com/',
+            scope: 'openid profile email offline_access',
+          },
+          cacheMode: 'on',
+          useRefreshTokens: true,
+        })
           .then((token) => {
-            // clear the flag so the event doesn't fire again unnecessarily
             localStorage.removeItem('refreshAuth')
             setAccessToken(token)
           })
           .catch((error) => {
             console.error('Error refreshing token:', error)
+            // report in sentry
+            captureException(error)
           })
       }
     }
     window.addEventListener('storage', handleStorageEvent)
     return () => window.removeEventListener('storage', handleStorageEvent)
-  })
+  }, [getAccessTokenSilently, setAccessToken])
 
-  const onCloseClick = () => setAnchorEl(null)
+  const onCloseMenu = () => setAnchorEl(null)
 
-  const handleLogin = () => {
+  const handleLogin = (connection) => {
     if (useMock) {
-      loginWithRedirect()
+      loginWithRedirect(connection)
     } else {
-      window.open('/popup-auth', 'authPopup', 'width=600,height=600')
+      window.open(`/popup-auth?connection=${connection}`, 'authPopup', 'width=600,height=600')
     }
   }
 
-  // Login
-  const onLoginClick = () => {
-    onCloseClick()
-    handleLogin()
+  const onLoginClick = (connection) => {
+    handleLogin(connection)
+    setIsLoginVisible(false)
+    onCloseMenu()
   }
 
-  // Logout
   const onLogoutClick = () => {
-    logout({returnTo: window.location.origin})
-    onCloseClick()
+    logout({
+      returnTo: window.location.origin,
+      openUrl: () => {
+        window.location.href = window.location.origin
+      },
+    })
+    onCloseMenu()
   }
 
-  // Toggle theme
-  const handleThemeToggle = () => {
-    theme.toggleColorMode()
-    onCloseClick()
-  }
 
-  // Open Pricing
-  // Navigate to /subscribe for the pricing table and pass the current theme as a query parameter.
-  const handleSubscriptionClick = async () => {
-    onCloseClick()
-
+  const onSubscriptionClick = async () => {
+    onCloseMenu()
     const themeParam = isDay ? 'light' : 'dark'
 
     if (stripeCustomerId) {
-      // 1) If the user has a stripeCustomerId, go to the Stripe Billing Portal
       try {
         const response = await fetch('/.netlify/functions/create-portal-session', {
           method: 'POST',
@@ -121,37 +135,39 @@ export default function ProfileControl() {
           window.location.href = data.url
         } else {
           console.error('No portal URL returned:', data)
+          // report in sentry
+          captureException(new Error('No portal URL returned:', data))
         }
       } catch (err) {
         console.error('Error creating portal session:', err)
+        // report in sentry
+        captureException(err)
       }
     } else {
-      // 2) If there's no stripeCustomerId yet, redirect to the pricing table
       const subscribeUrl = `/subscribe/?theme=${themeParam}&userEmail=${userEmail}`
       if (useMock) {
-          // in cypress/mock mode, fetch & doc.write so MSW can intercept
-          try {
-            const res = await fetch(subscribeUrl)
-            const html = await res.text()
-            // replace the current document with our stubbed HTML
-            document.open()
-            document.write(html)
-            document.close()
-          } catch (err) {
-            console.error('Error loading mock subscribe page:', err)
-          }
-        } else {
-            // real app: do a normal navigation
-            window.location.href = subscribeUrl
+        try {
+          const res = await fetch(subscribeUrl)
+          const html = await res.text()
+          document.open()
+          document.write(html)
+          document.close()
+        } catch (err) {
+          console.error('Error loading mock subscribe page:', err)
+          // report in sentry
+          captureException(err)
         }
+      } else {
+        window.location.href = subscribeUrl
       }
     }
+  }
 
-
-  // Sync local isDay with MUI theme
   useEffect(() => {
     setIsDay(theme.palette.mode === 'light')
   }, [theme.palette.mode])
+
+  assertDefinedBoolean(isLoginVisible)
 
   return (
     <>
@@ -160,72 +176,147 @@ export default function ProfileControl() {
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
           isAuthenticated ?
-            <Avatar alt={user?.name} src={user?.picture}/> :
-            <AccountBoxOutlinedIcon className='icon-share'/>
+            <Avatar alt={user?.name} src={user?.picture} data-testid='control-button-profile-icon-authenticated'/> :
+            <AccountBoxOutlinedIcon/>
         }
         variant='control'
         placement='bottom'
         dataTestId='control-button-profile'
       />
+
       <Menu
         elevation={1}
         anchorEl={anchorEl}
         open={isMenuVisible}
-        onClose={onCloseClick}
+        onClose={onCloseMenu}
         anchorOrigin={{vertical: 'top', horizontal: 'left'}}
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
         sx={{transform: 'translateX(-1em)'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
-          {isAuthenticated ? (
-            <>
-              <LogoutOutlinedIcon/>
-              <Typography sx={{marginLeft: '10px'}} variant='overline'>
-                Log out
-              </Typography>
-            </>
-          ) : (
-            <>
-              <LoginOutlinedIcon/>
-              <Typography sx={{marginLeft: '10px'}} variant='overline'>
-                Log in with GitHub
-              </Typography>
-            </>
-          )}
-        </MenuItem>
+        {!isAuthenticated && (
+          <MenuItem
+            onClick={() => {
+              setIsLoginVisible(true)
+              onCloseMenu()
+            }}
+            data-testid='menu-open-login-dialog'
+          >
+            <LoginOutlinedIcon className='icon-share'/>
+            <Typography>Log in</Typography>
+          </MenuItem>
+        )}
 
         {isAuthenticated && (
-          <MenuItem onClick={handleSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
+          <MenuItem onClick={onLogoutClick} data-testid='menu-open-logout-dialog'>
+            <LogoutOutlinedIcon className='icon-share'/>
+            <Typography>Log out</Typography>
+          </MenuItem>
+        )}
+
+        {isAuthenticated && (
+          <MenuItem onClick={onManageProfileClick} data-testid='manage-profile'>
+            <AccountCircleOutlined/>
+            <Typography>Manage Profile</Typography>
+          </MenuItem>
+        )}
+
+        {isAuthenticated && (
+          <MenuItem onClick={onSubscriptionClick} data-testid={stripeCustomerId ? 'manage-subscription' : 'upgrade-to-pro'}>
             <PaymentOutlined/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>
+            <Typography>
               {stripeCustomerId ? 'Manage Subscription' : 'Upgrade to Pro'}
             </Typography>
           </MenuItem>
         )}
 
+        <ManageProfile
+          isDialogDisplayed={isManageProfileOpen}
+          setIsDialogDisplayed={(isDisplayed) => setIsManageProfileOpen(isDisplayed)}
+        />
+
         <MenuItem onClick={() => window.open('https://github.com/signup', '_blank')}>
           <GitHubIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Join GitHub
-          </Typography>
+          <Typography>Join GitHub</Typography>
         </MenuItem>
         <MenuItem onClick={() => window.open('https://github.com/bldrs-ai/Share/wiki', '_blank')}>
           <InfoOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            Bldrs Wiki
-          </Typography>
+          <Typography>Bldrs Wiki</Typography>
         </MenuItem>
+
         <Divider/>
-        <MenuItem onClick={handleThemeToggle} data-testid={isDay ? 'change-theme-to-night' : 'change-theme-to-day'}>
-          {isDay ?
-            <NightlightOutlinedIcon className='icon-share'/> :
-            <WbSunnyOutlinedIcon className='icon-share'/>
-          }
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>
-            {isDay ? 'Night' : 'Day'} theme
-          </Typography>
+
+        {/* Theme menu items */}
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.System)
+            onCloseMenu()
+          }}
+          role='menuitemradio'
+          aria-checked={theme.isSystemMode}
+          data-testid='control-button-profile-menu-item-theme-system'
+        >
+          <SettingsBrightnessOutlinedIcon/>
+          <Typography>Use system theme</Typography>
+          {theme.isSystemMode && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.Day)
+            onCloseMenu()
+          }}
+          role='menuitemradio'
+          aria-checked={!theme.isSystemMode && isDay}
+          data-testid='control-button-profile-menu-item-theme-day'
+        >
+          <WbSunnyOutlinedIcon/>
+          <Typography>Day theme</Typography>
+          {!theme.isSystemMode && isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            theme.setTheme(Themes.Night)
+            onCloseMenu()
+          }}
+          role='menuitemradio'
+          aria-checked={!theme.isSystemMode && !isDay}
+          data-testid='control-button-profile-menu-item-theme-night'
+        >
+          <NightlightOutlinedIcon/>
+          <Typography>Night theme</Typography>
+          {!theme.isSystemMode && !isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        {/* End of theme menu items */}
+
+        <Divider/>
+
+        <MenuItem
+          onClick={async () => {
+            onCloseMenu()
+            try {
+              await clearOPFSCache()
+            } catch (err) {
+              console.error('Clear OPFS cache failed (reloading anyway)', err)
+              captureException(err)
+            } finally {
+              window.location.reload()
+            }
+          }}
+          data-testid='clear-local-cache'
+        >
+          <CleaningServicesOutlinedIcon/>
+          <Typography>Clear Local Cache</Typography>
         </MenuItem>
       </Menu>
+
+      <LoginDialog
+        isDialogDisplayed={isLoginVisible}
+        setIsDialogDisplayed={(isDisplayed) => setIsLoginVisible(isDisplayed)}
+        onLogin={onLoginClick}
+        isGoogleEnabled={isGoogleEnabled}
+      />
     </>
   )
 }
+
+
+export const useMock = process.env.OAUTH2_CLIENT_ID === 'cypresstestaudience'

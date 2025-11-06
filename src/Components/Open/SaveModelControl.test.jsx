@@ -1,6 +1,7 @@
 import React from 'react'
-import {act, fireEvent, render, renderHook} from '@testing-library/react'
+import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import {getOrganizations} from '../../net/github/Organizations'
+import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {
   mockedUseAuth0,
@@ -8,24 +9,45 @@ import {
   mockedUserLoggedOut,
 } from '../../__mocks__/authentication'
 import {SaveModelControlFixture} from './SaveModelControl.fixture'
+import {MOCK_ORGANIZATIONS} from '../../net/github/Organizations.fixture'
 
 
 jest.mock('../../net/github/Organizations', () => ({
   getOrganizations: jest.fn(),
 }))
+jest.mock('../../net/github/Branches', () => ({
+  getBranches: jest.fn(),
+}))
 
 
 describe('SaveModelControl', () => {
-  it('Renders a login message if the user is not logged in', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
+    getOrganizations.mockResolvedValue(MOCK_ORGANIZATIONS.data)
+    // Reset store state
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => {
+      result.current.setIsSaveModelVisible(false)
+      result.current.setAccessToken(null)
+      result.current.setOpfsFile(null)
+    })
+  })
+
+  it('Renders a login message if the user is not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTestId, getByText} = render(<SaveModelControlFixture/>)
+    const {getByTestId, getByText, getByRole} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
+
+    const dialog = await waitFor(() => getByRole('dialog'))
+    expect(dialog).toBeVisible()
+
     const loginTextMatcher = (content, node) => {
       const hasText = (_node) => _node.textContent.includes('log in to Share with your GitHub credentials')
       const nodeHasText = hasText(node)
       const childrenDontHaveText = Array.from(node.children).every(
-          (child) => !hasText(child),
+        (child) => !hasText(child),
       )
       return nodeHasText && childrenDontHaveText
     }
@@ -33,15 +55,35 @@ describe('SaveModelControl', () => {
     expect(loginText).toBeInTheDocument()
   })
 
-   it('Renders file selector if the user is logged in', async () => {
+  it('Renders branch selector after selecting a repository', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {getByTestId} = render(<SaveModelControlFixture/>)
+    // Set up store state using renderHook and act
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setAccessToken('test-token')
+      result.current.setOpfsFile(new File(['test'], 'test.ifc', {type: 'application/octet-stream'}))
+    })
+
+    const {getByTestId, getByRole} = render(<SaveModelControlFixture/>)
     const saveControlButton = getByTestId('control-button-save')
     fireEvent.click(saveControlButton)
-    const File = getByTestId('CreateFileId')
-    const Repository = await getByTestId('saveRepository')
-    expect(File).toBeInTheDocument()
-    expect(Repository).toBeInTheDocument()
+
+    // Wait for dialog to be visible
+    const dialog = await waitFor(() => getByRole('dialog'))
+    expect(dialog).toBeVisible()
+
+    // Wait for the repository selector to be available and click it
+    const repoSelect = await waitFor(() => getByTestId('saveRepository'))
+    fireEvent.mouseDown(repoSelect)
+
+    // Wait for the organization selector to be available and click it
+    // TODO(pablo): Should select the 'bldrs-ai' organization, but it's not working
+    const orgSelect = await waitFor(() => getByTestId('saveOrganization'))
+    fireEvent.click(orgSelect)
+
+    // Wait for the branch selector to appear
+    const branchSelect = await waitFor(() => getByTestId('saveBranch'))
+    expect(branchSelect).toBeInTheDocument()
   })
 
   it('Does not fetch repo info on initial render when isSaveModelVisible=false in zustand', async () => {

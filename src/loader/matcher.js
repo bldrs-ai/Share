@@ -13,8 +13,8 @@
  *     // no match!
  *   })
  *
- * @param {string} The string to text
- * @param {RegExp} The regex to use
+ * @param {string} str The string to test
+ * @param {RegExp} regex The regex to use
  * @return {Function} A fluent continuation
  */
 export default function matcher(str, regex) {

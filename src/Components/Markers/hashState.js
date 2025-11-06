@@ -33,7 +33,9 @@ export function getActivePlaceMarkHash() {
 
 
 /**
- * @param {string} urlStr
+ * @param {string} hash - The URL hash
+ * @param {string} _issueID - The issue ID
+ * @param {string} _commentID - The comment ID
  * @return {string} The transformed URL
  */
 export function modifyPlaceMarkHash(hash, _issueID, _commentID) {

@@ -9,7 +9,8 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
 import * as Filetype from '../Filetype'
 import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
-import {assert, assertDefined} from '../utils/assert'
+import {HTTP_NOT_FOUND} from '../net/http'
+import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
@@ -21,13 +22,14 @@ import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
+import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
- * @param {string} path Either a url or filepath
+ * @param {string|URL} path Either a url or filepath
  * @param {object} viewer WebIfcViewer
  * @param {Function} onProgress
- * @param {boolean} setOpfsFile
+ * @param {boolean} isOpfsAvailable
  * @param {Function} setOpfsFile
  * @param {string} accessToken
  * @return {object} The model or undefined
@@ -41,8 +43,12 @@ export async function load(
   accessToken = '',
 ) {
   assertDefined(path, viewer, onProgress, isOpfsAvailable, setOpfsFile, accessToken)
-  debug().log('Loader#load: in with path:', path)
+  // HACK: pathArg can be a URL or a string
+  if (path instanceof URL) {
+    path = path.toString()
+  }
 
+  // TODO(pablo): we should pass in the routeResult instead of the path
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
   const isUploadedFile = testUuid(path)
@@ -58,7 +64,7 @@ export async function load(
   let isCacheHit
   let isBase64
   // Should be true of all locally hosted files, e.g. /index.ifc.  Uploads will have "blob:" prefix
-  const isLocallyHostedFile = path.indexOf('/') === 0
+  const isLocallyHostedFile = !path.startsWith('blob:') && !path.startsWith('http')
   debug().log(`Loader#load: isLocallyHostedFile:${isLocallyHostedFile} if path has leading slash:`, path)
   if (!isOpfsAvailable) {
     debug().log('Loader#load: download1:', path, accessToken, isOpfsAvailable)
@@ -80,6 +86,7 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
+  onProgress(`Determining file type...`)
   const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
@@ -90,6 +97,7 @@ export async function load(
 
   let modelData
   if (isOpfsAvailable) {
+    onProgress('Preparing file download...')
     // download to file using caching system or else...
     let file
     if (isUploadedFile) {
@@ -116,14 +124,13 @@ export async function load(
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
-
         // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
         if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
         }
 
         if (isBase64) {
-         file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
         } else {
           debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
           file = await downloadModel(
@@ -152,13 +159,16 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
+    onProgress('Reading model data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
+      onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
+    onProgress('Downloading model data...')
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }
@@ -167,14 +177,39 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb)
+  let model
+  try {
+    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
+  } catch (e) {
+    if (isOutOfMemoryError(e)) {
+      e.isOutOfMemory = true
+    }
+    throw e
+  }
+
+  if (model === null || model === undefined) {
+    // If loader captured a last error, surface that
+    const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
+    if (isOutOfMemoryError(lastErr)) {
+      lastErr.isOutOfMemory = true
+    }
+    throw lastErr
+  }
+
+  model.isUploadedFile = isUploadedFile
+  // Used for automatic naming, page title and other areas that need a mime type.
+  model.mimeType = loader.type
 
   if (!isIfc) {
+    onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
+
+  // Used for GA stats
+  model.type = loader.type
 
   return model
 }
@@ -212,14 +247,13 @@ async function axiosDownload(path, isFormatText, onProgress) {
       {
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
-        onDownloadProgress: (event) => onProgressHandler(event, onProgress),
+        onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),
       },
     )).data
   } catch (error) {
     if (error.response) {
-      const httpNotFound = 404
       console.warn('error.response.status:', error.response.status)
-      if (error.response.status === httpNotFound) {
+      if (error.response.status === HTTP_NOT_FOUND) {
         throw new NotFoundError('File not found')
       } else {
         throw new Error(`Error response from server: status(${error.response.status}), message(${error.response.data})`)
@@ -237,6 +271,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
  * to have it not crash helpers for the main viewer.
  *
  * @param {Mesh} model
+ * @param {object} viewer
  * @return {Mesh}
  */
 function convertToShareModel(model, viewer) {
@@ -246,13 +281,14 @@ function convertToShareModel(model, viewer) {
    * Recursively visit the model and its children to add `expressID` and
    * `type` properties to each.
    *
-   * @param {Object3D} model
+   * @param {Object3D} obj3d
+   * @param {number} depth
    */
-  function recursiveDecorate(obj3d) {
+  function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || {value: 'Object'}
-    obj3d.LongName = obj3d.LongName || {value: 'Object'}
+    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
+    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
     const id = objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     if (obj3d.geometry) {
@@ -282,19 +318,29 @@ function convertToShareModel(model, viewer) {
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
-      obj3d.children.forEach((m) => recursiveDecorate(m))
+      obj3d.children.forEach((m) => recursiveDecorate(m, depth + 1))
     }
   }
+
   recursiveDecorate(model)
 
   // Override for root
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
-  model.Name = model.Name || {value: 'Model'}
-  model.LongName = model.LongName || {value: 'Model'}
+  model.Name = model.Name || {value: `${model.mimeType} model`}
+  model.LongName = model.LongName || {value: `${model.mimeType} model`}
+  // This is used for page title and other areas that need a model name, so if it's not
+  // useful, set to undefined and we'll use the modelPath later instead.
+  if (model.name === undefined || model.name === null || model.name === '') {
+    model.name = model.LongName?.value ?? model.Name?.value
+    if (model.name === undefined || model.name === null || model.name === '') {
+      model.name = undefined
+    }
+  }
+
   // model.ifcManager = viewer.IFC
   model.ifcManager = viewer.IFC.loader.ifcManager
-  model.ifcManager.getSpatialStructure = (modelId, flatten) => {
+  model.ifcManager.getSpatialStructure = () => {
     return model
   }
   model.ifcManager.getExpressId = (geom, faceNdx) => {
@@ -316,9 +362,10 @@ function convertToShareModel(model, viewer) {
  * @param {boolean} isIfc
  * @param {object} viewer passed to convertToShareModel and optionally to fixupCb
  * @param {Function} [fixupCb] to modify the model
+ * @param {Function} [onProgress] progress callback for IFC loading
  * @return {object}
  */
-export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb) {
+export async function readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress) {
   let model
   // GLTFLoader is unique so far in using an onLoad and onError.
   // TODO(pablo): GLTF also generates errors for texture loads, but
@@ -337,16 +384,30 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     })
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
-    model = await loader.parse(modelData, basePath)
+    if (isIfc && onProgress) {
+      model = await loader.parse(modelData, onProgress)
+    } else {
+      if (onProgress) {
+        onProgress('Parsing model data...')
+      }
+      model = await loader.parse(modelData, basePath)
+    }
   } else {
     debug().log(`sync loader(->) parsing data:`, loader, modelData)
+    if (onProgress) {
+      onProgress('Processing model data...')
+    }
     model = loader.parse(modelData, basePath)
   }
+
   if (!model) {
     throw new Error('Loader could not read model')
   }
 
   if (fixupCb) {
+    if (onProgress) {
+      onProgress('Applying model fixups...')
+    }
     model = fixupCb(model, viewer)
   }
 
@@ -361,8 +422,12 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
         break
       }
     }
-    assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
-    console.warn('Only using first mesh for some operations')
+
+    // TODO(pablo): temporarily removed to get glb working, but seems to work
+    // pretty well.  This involved hardening other uses of .geometry
+    // assert(model.geometry !== undefined, 'Could not find geometry to work with in model')
+    // This is too chatty.
+    // console.warn('Could not identify default mesh to use for some operations')
   }
 
   return model
@@ -371,6 +436,7 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
 
 /**
  * @param {string} pathname
+ * @param {object} viewer
  * @return {Function|undefined}
  */
 async function findLoader(pathname, viewer) {
@@ -471,6 +537,8 @@ async function findLoader(pathname, viewer) {
     */
     default: throw new Error(`Unsupported filetype; ${extension}`)
   }
+  // Reported to GA
+  loader.type = extension
   return [loader, isLoaderAsync, isFormatText, isIfc, fixupCb]
 }
 
@@ -491,10 +559,13 @@ function newGltfLoader() {
  * Sets up the IFCLoader to use the wasm module and move the model to
  * the origin on load.
  *
+ * @param {object} viewer
  * @return {object} Loader with parse function
  */
 function newIfcLoader(viewer) {
   const loader = viewer.IFC
+  // Track last IFC parse error (especially when parse returns null)
+  loader.ifcLastError = null
   // Loader is web-ifc-viewer/viewer/src/components/ifc/ifc-manager.ts
   // It internally uses web-ifc-three/Loader
   // Hot patch buffer-based parse alternative.
@@ -507,19 +578,62 @@ function newIfcLoader(viewer) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
     try {
+      if (onProgress) {
+        onProgress('Configuring loader...')
+      }
       await this.loader.ifcManager.applyWebIfcConfig({
         COORDINATE_TO_ORIGIN: true,
         USE_FAST_BOOLS: true,
       })
+
+      if (onProgress) {
+        onProgress('Parsing model geometry...')
+      }
       const ifcModel = await this.loader.parse(buffer, onProgress)
       this.addIfcModel(ifcModel)
+
+      if (onProgress) {
+        onProgress('Setting up coordinate system...')
+      }
       // eslint-disable-next-line new-cap
       const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
       const matrix = new Matrix4().fromArray(matrixArr)
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
+
+      if (onProgress) {
+        onProgress('Fitting model to frame...')
+      }
       this.context.fitToFrame()
+
+      if (onProgress) {
+        onProgress('Gathering model statistics...')
+      }
+      const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
+      ifcModel.name = statsApi.projectName ?? undefined
+      const loadStats = {
+        loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
+        geometryMemory: statsApi.getGeometryMemory(),
+        geometryTime: statsApi.getGeometryTime(),
+        ifcVersion: statsApi.getVersion(),
+        loadStatus: statsApi.getLoadStatus(),
+        originatingSystem: statsApi.getOriginatingSystem(),
+        preprocessorVersion: statsApi.getPreprocessorVersion(),
+        parseTime: statsApi.getParseTime(),
+        totalTime: statsApi.getTotalTime(),
+      }
+      ifcModel.loadStats = loadStats
+
+      if (onProgress) {
+        onProgress('Model loaded successfully!')
+      }
       return ifcModel
     } catch (err) {
+      loader.ifcLastError = err
+      // Rethrow OOM so callers can present a tailored UX message.
+      if (isOutOfMemoryError(err)) {
+        err.isOutOfMemory = true // tag for convenience
+        throw err
+      }
       console.error(err)
       if (onError) {
         onError(err)
@@ -537,7 +651,7 @@ function newIfcLoader(viewer) {
  * @param {Event} progressEvent
  * @param {Function} onProgress
  */
-function onProgressHandler(progressEvent, onProgress) {
+function onDownloadProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
     const loadedBytes = progressEvent.loaded
     // eslint-disable-next-line no-magic-numbers

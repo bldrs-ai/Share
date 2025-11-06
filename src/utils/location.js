@@ -4,7 +4,7 @@ import debug from './debug'
 
 
 // Init
-/** @type {Object<string, Function>} */
+/** @type {{[key: string]: Function}} */
 const hashListeners = {}
 window.onhashchange = () => {
   // console.log('HASH CHANGE: ', window.location.hash)
@@ -34,7 +34,7 @@ export function addHashListener(name, onHashCb) {
  *
  * @param {string} hashString The original hash string (including `#`).
  * @param {string} name A unique name for the params.
- * @param {Object<string, any>} [params] The parameters to encode. If null or empty, adds key with no value.
+ * @param {Record<string, any>} [params] The parameters to encode. If null or empty, adds key with no value.
  * @param {boolean} includeNames Whether or not to include the parameter names in the encoding.
  * @return {string} The updated hash string.
  */
@@ -51,15 +51,15 @@ export function setParamsToHash(hashString, name, params = {}, includeNames = fa
   const existingHash = hashString.substring(1) // Remove the `#` prefix
   const sets = existingHash.split(FEATURE_SEP)
 
-  /** @type {Object<string, string>} */
+  /** @type {{[key: string]: string}} */
   const setMap = {}
 
   // Parse existing sets into a map
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (!set) {
-continue
-}
+      continue
+    }
 
     const [setName, ...setValueParts] = set.split(':')
     const setValue = setValueParts.join(':')
@@ -85,7 +85,7 @@ continue
  * Passhtru to addHashParams, with window.location
  *
  * @param {string} name A unique name for the params
- * @param {Object<string, any>} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -100,7 +100,7 @@ export function addParams(name, params, includeNames = false) {
  *
  * @param {Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {Object<string, any>} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -122,7 +122,7 @@ export function addHashParams(location, name, params, includeNames = false) {
 
   const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
   const sets = location.hash.substring(1).split(FEATURE_SEP)
-  /** @type {Object<string, string>} */
+  /** @type {{[key: string]: string}} */
   const setMap = {}
 
   for (let i = 0; i < sets.length; i++) {
@@ -155,7 +155,9 @@ const FEATURE_SEP = ';'
 
 
 /**
- * @param {object} objectParams
+ * @param {Record<string, any>} objectParams
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
  * @return {string}
  */
 export function getEncodedParam(objectParams, includeNames = false) {
@@ -183,7 +185,7 @@ export function getEncodedParam(objectParams, includeNames = false) {
 
 /**
  * @param {string} hashParams
- * @return {object}
+ * @return {Record<string, any>}
  */
 export function getObjectParams(hashParams) {
   if (!hashParams) {
@@ -341,7 +343,7 @@ export function removeParamsFromHash(hashString, name, paramKeys = []) {
     throw new Error('Invalid hash string: must start with "#"')
   }
 
-   // Remove `#` and split by FEATURE_SEP
+  // Remove `#` and split by FEATURE_SEP
   const sets = hashString.substring(1).split(FEATURE_SEP)
   const prefix = `${name}:`
   const newSets = []
@@ -363,7 +365,7 @@ export function removeParamsFromHash(hashString, name, paramKeys = []) {
         newSets.push(set)
       } else {
         // For key-value style sets, filter out specified param keys
-        /** @type {Object<string, any>} */
+        /** @type {{[key: string]: any}} */
         const objectSet = getObjectParams(set)
         paramKeys.forEach((paramKey) => {
           delete objectSet[paramKey]
@@ -409,7 +411,7 @@ export function stripHashParams(location, name, paramKeys = []) {
         continue // Skip this set entirely if no paramKeys and matches prefix
       }
 
-      // eslint-disable-next-line jsdoc/no-undefined-types
+
       /** @type {Record<string, any>} */
       const objectSet = getObjectParams(set)
       paramKeys.forEach((paramKey) => {
@@ -475,7 +477,7 @@ export function removeHashParams(location, name, paramKeys = []) {
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(
-        '', document.title, window.location.pathname + window.location.search)
+      '', document.title, window.location.pathname + window.location.search)
   }
 }
 
@@ -484,7 +486,7 @@ export function removeHashParams(location, name, paramKeys = []) {
  * Passthru to setHashParams, with window.location
  *
  * @param {string} name A unique name for the params
- * @param {Object<string, any>} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -498,7 +500,7 @@ export function setParams(name, params, includeNames = false) {
  *
  * @param {Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {Object<string, any>} params The parameters to encode
+ * @param {Record<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -537,7 +539,13 @@ export function getAllHashParams(url) {
 
 /**
  * @param {string} path the pathname part of a url, e.g. `/the/path/to/file.ifc`
- * @return {object} owner, repo, branch, filePath, commitHash
+ * @return {{
+ * owner: string,
+ * repo: string,
+ * branch: string,
+ * filePath: string,
+ * isPublic: boolean
+ * }} owner, repo, branch, filePath, isPublic
  */
 export function parseGitHubPath(path) {
   const decodedPath = decodeURIComponent(path)

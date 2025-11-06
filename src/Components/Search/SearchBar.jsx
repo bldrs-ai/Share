@@ -3,10 +3,12 @@ import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {processExternalUrl} from '../../routes/routes'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navWithSearchParamRemoved} from '../../utils/navigate'
+import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
+import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -15,18 +17,16 @@ import CloseIcon from '@mui/icons-material/Close'
  * file paths
  *
  * @property {string} [placeholder] Text to display when search bar is inactive
- * @property {string} [helperText] Text to display under the TextField
  * @property {boolean} [isGitHubSearch] Strict screening for GH only links
  * @property {Function} [onSuccess] Optional callback when search succeeds
  * @return {ReactElement}
  */
 export default function SearchBar({
-  placeholder = 'Search',
-  helperText = 'Search building or paste model link',
+  placeholder = SEARCH_BAR_PLACEHOLDER_TEXT,
   isGitHubSearch = false,
   onSuccess = null,
 }) {
-  assertDefined(placeholder, helperText, isGitHubSearch)
+  assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -70,7 +70,7 @@ export default function SearchBar({
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
         disablePageReloadApprovalCheck()
-        navigate(modelPath, {replace: true})
+        navigateToModel(modelPath, navigate)
         if (onSuccess) {
           onSuccess()
         }
@@ -79,6 +79,21 @@ export default function SearchBar({
       }
       return
     }
+
+    const result = processExternalUrl(window.location.href, inputText)
+    if (result) {
+      try {
+        disablePageReloadApprovalCheck()
+        navigate(`/share/v/u/${inputText}`)
+        if (onSuccess) {
+          onSuccess()
+        }
+      } catch (e) {
+        setError(`Please enter a valid url.`)
+      }
+      return
+    }
+
 
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
@@ -117,7 +132,7 @@ export default function SearchBar({
             inputRef={searchInputRef}
             size='small'
             error={!!error.length}
-            placeholder='Search'
+            placeholder={placeholder}
             variant='outlined'
             sx={{
               width: '100%',

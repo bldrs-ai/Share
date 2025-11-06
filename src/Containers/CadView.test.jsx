@@ -148,7 +148,7 @@ describe('CadView', () => {
   it('renders with mock IfcViewerAPIExtended', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
@@ -162,7 +162,7 @@ describe('CadView', () => {
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTestId(aboutControlTestId))
     const getPropsCalls = viewer.getProperties.mock.calls
@@ -189,7 +189,7 @@ describe('CadView', () => {
     global.Worker = jest.fn(() => mockWorker)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     // Wait for component to be fully loaded
     // Necessary to wait for some of the component to render to avoid
@@ -237,7 +237,7 @@ describe('CadView', () => {
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(
       <ShareMock>
-        <CadView installPrefix={'/'} appPrefix={''} pathPrefix={''} modelPath={{filepath: '/index.ifc'}}/>
+        <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
       </ShareMock>,
     )
     await actAsyncFlush()
@@ -263,7 +263,7 @@ describe('CadView', () => {
     })
 
     const {getByTestId} =
-          render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+          render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
@@ -316,7 +316,7 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toBe(selectedIdsAsString)
 
     const {getByTestId} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
 
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
@@ -341,7 +341,7 @@ describe('CadView', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
     await actAsyncFlush()
     expect(getByTitle('Section')).toBeInTheDocument()
     await act(() => {
@@ -351,6 +351,32 @@ describe('CadView', () => {
     expect(viewer.preselectElementsByIds)
       .toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
     await actAsyncFlush()
+  })
+
+  it('sets OOM alert object when loader throws out-of-memory error', async () => {
+    // Spy on load (indirectly invoked through loadModel -> load) to throw OOM
+    const oomErr = new Error('Out of memory: wasm memory allocate failed')
+    oomErr.isOutOfMemory = true
+    jest.spyOn(Loader, 'load').mockImplementation(() => {
+      throw oomErr
+    })
+    // mock console.error and check that it was called
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+    // mock captureException and check that it was called
+    const Sentry = require('@sentry/react')
+    const captureExceptionSpy = jest.spyOn(Sentry, 'captureException').mockImplementation(() => {})
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => {
+      const alert = result.current.alert
+      expect(alert).toBeTruthy()
+      expect(alert.type).toBe('oom')
+      expect(alert.message.toLowerCase()).toContain('out of memory')
+    })
+    expect(consoleErrorSpy).toHaveBeenCalledWith(oomErr)
+    expect(captureExceptionSpy).toHaveBeenCalledWith(oomErr)
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

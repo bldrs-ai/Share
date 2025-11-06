@@ -1,21 +1,20 @@
 import React, {useState, ReactElement} from 'react'
+import {v4 as uuid} from 'uuid'
 // import {MessageBox} from 'react-chat-elements'
 import {
-  Fab, useTheme, Paper, IconButton, Box, Typography, InputBase,
+  Fab, useTheme, IconButton, Box, InputBase, Card, CardHeader,
 } from '@mui/material'
+import useStore from '../../store/useStore'
+import ChatMessage from './ChatMessage'
+import {askLLM} from './openRouterClient'
 import ChatIcon from '@mui/icons-material/Chat'
 import CloseIcon from '@mui/icons-material/Close'
 import SendIcon from '@mui/icons-material/Send'
 import 'react-chat-elements/dist/main.css'
-import './chat-bubbles.css' // ← step 2 (see CSS below)
-import ChatMessage from './ChatMessage'
-import useStore from '../../store/useStore'
-import {askLLM} from './openRouterClient'
-import {v4 as uuid} from 'uuid' // npm i uuid   (tiny helper)
+import './chat-bubbles.css' // ← step 2 (see CSS below)a
 
-/**
- * @return {ReactElement}
- */
+
+/** @return {ReactElement} */
 export default function FloatingChat() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState([])
@@ -29,6 +28,7 @@ export default function FloatingChat() {
   const botBg = theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[200]
   const botText = theme.palette.getContrastText(botBg)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_api_key') ?? '')
+  const [isApiKeyEditing, setIsApiKeyEditing] = useState(false)
 
   /* eslint-disable max-len */
 
@@ -70,26 +70,27 @@ export default function FloatingChat() {
   /* eslint-enable max-len */
 
   /**
+   * @param {string} text - The text to parse.
    * @return {string | null} JSON string or nothing if not found
    */
   function safeJsonFromCodeBlock(text) {
     const match = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```/i)
     if (!match) {
-return null
-}
+      return null
+    }
     try {
-    return JSON.parse(match[1])
+      return JSON.parse(match[1])
     } catch {
-    return null
+      return null
+    }
   }
-}
 
   /* ---------------- main callback ---------------- */
   const handleSend = async () => {
-      if (!apiKey || apiKey === '') { // ← guard early
-        alert('Please enter your OpenRouter API key first.')
-        return
-      }
+    if (!apiKey || apiKey === '') { // ← guard early
+      alert('Please enter your OpenRouter API key first.')
+      return
+    }
     const content = input.trim()
     if (!content) {
       return
@@ -135,7 +136,6 @@ return null
 
       /* … unchanged code … */
       const raw = await askLLM({
-        model: 'deepseek/deepseek-chat-v3-0324:free',
         messages: prompt,
         apiKey, // ← pass it through
       })
@@ -153,16 +153,16 @@ return null
         setSelectedElements(strIds)
       }
 
-       /* 6️⃣  execute client_code if provided */
-    /* 7️⃣ execute client_code if provided */
-    if (typeof payload.client_code === 'string') {
-      try {
-        /* Wrap the code, then invoke any function it defines */
-        // eslint-disable-next-line no-console
-        console.log(payload.client_code)
+      /* 6️⃣  execute client_code if provided */
+      /* 7️⃣ execute client_code if provided */
+      if (typeof payload.client_code === 'string') {
+        try {
+          /* Wrap the code, then invoke any function it defines */
+          // eslint-disable-next-line no-console
+          console.log(payload.client_code)
 
 
-       const asyncWrapper = `
+          const asyncWrapper = `
          // wrap client_code in an async IIFE so await works
          return (async (viewer, store, setSelectedElements) => {
            ${payload.client_code}
@@ -173,35 +173,35 @@ return null
            return undefined;
          })(viewer, store, setSelectedElements);
        `
-       const fn = new Function('viewer', 'store', 'setSelectedElements', asyncWrapper)
-       const result = await fn(viewer, useStore.getState(), setSelectedElements)
-        // unwrap WebIFC.Vector or similar
-        let ids = []
-        if (Array.isArray(result)) {
-          ids = result
-        } else if (result && typeof result.size === 'function' && typeof result.get === 'function') {
-          const n = result.size()
-          for (let i = 0; i < n; i++) {
-            ids.push(result.get(i))
+          const fn = new Function('viewer', 'store', 'setSelectedElements', asyncWrapper)
+          const result = await fn(viewer, useStore.getState(), setSelectedElements)
+          // unwrap WebIFC.Vector or similar
+          let ids = []
+          if (Array.isArray(result)) {
+            ids = result
+          } else if (result && typeof result.size === 'function' && typeof result.get === 'function') {
+            const n = result.size()
+            for (let i = 0; i < n; i++) {
+              ids.push(result.get(i))
+            }
           }
-        }
-        if (ids.length) {
-          setSelectedElements(ids.map(String))
-        }
+          if (ids.length) {
+            setSelectedElements(ids.map(String))
+          }
 
-        if (payload?.shouldIsolate) {
-          viewer.isolator.initTemporaryIsolationSubset(ids)
-        } else if (payload?.shouldHide) {
-          viewer.isolator.hideElementsById(ids)
+          if (payload?.shouldIsolate) {
+            viewer.isolator.initTemporaryIsolationSubset(ids)
+          } else if (payload?.shouldHide) {
+            viewer.isolator.hideElementsById(ids)
+          }
+        } catch (e) {
+          console.warn('client_code execution error:', e)
         }
-      } catch (e) {
-        console.warn('client_code execution error:', e)
       }
-    }
 
-    /* 7️⃣  final assistant bubble */
-    const aiMsg = {id: uuid(), position: 'left', title: 'Assistant:', text: assistantText, date: new Date()}
-    setMessages((p) => [...p.filter((m) => m.id !== phId), aiMsg])
+      /* 7️⃣  final assistant bubble */
+      const aiMsg = {id: uuid(), position: 'left', title: 'Assistant:', text: assistantText, date: new Date()}
+      setMessages((p) => [...p.filter((m) => m.id !== phId), aiMsg])
     } catch (err) {
       console.error(err)
       setMessages((prev) =>
@@ -211,56 +211,59 @@ return null
   }
 
   return (
-    <>
-      <Fab
-        color="primary"
-        aria-label="chat"
-        onClick={() => setIsOpen((o) => !o)}
-        sx={{position: 'fixed', bottom: 24, right: 24, zIndex: 1300}}
-      >
-        <ChatIcon/>
-      </Fab>
+    <Box sx={{margin: '2em'}}>
+      {!isOpen &&
+       <Fab
+         color='secondary'
+         aria-label='chat'
+         onClick={() => setIsOpen((o) => !o)}
+       >
+         <ChatIcon/>
+       </Fab>
+      }
 
       {isOpen && (
-        <Paper
+        <Card
           elevation={6}
           sx={{
-            position: 'fixed',
-            bottom: 96,
-            right: 24,
             width: 360,
             height: 520,
             borderRadius: 3,
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 1299,
             overflow: 'hidden',
-            backgroundColor: theme.palette.background.paper,
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1299,
           }}
         >
           {/* header */}
-          <Box sx={{
-            backgroundColor: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
-            p: 2, display: 'flex', justifyContent: 'space-between',
-          }}
-          >
-            <Typography variant="subtitle1" fontWeight="bold">Bldrs AI Assistant</Typography>
-            <IconButton onClick={() => setIsOpen(false)} sx={{color: 'inherit'}}>
-              <CloseIcon/>
-            </IconButton>
-          </Box>
+          <CardHeader
+            title='Assistant'
+            action={
+              <IconButton onClick={() => setIsOpen(false)} sx={{color: 'inherit'}}>
+                <CloseIcon/>
+              </IconButton>
+            }
+            sx={{
+              p: '1em 1em 0 1em',
+            }}
+          />
 
           {/* API-key row – add right under the header */}
           <Box sx={{display: 'flex', gap: 1, p: 1, borderBottom: (theme_) => `1px solid ${theme_.palette.divider}`}}>
             <InputBase
               fullWidth
+              type={isApiKeyEditing ? 'text' : 'password'}
               value={apiKey}
-              placeholder="Paste your OpenRouter API Key…"
+              placeholder='Paste your OpenRouter API Key…'
               onChange={(e) => {
                 setApiKey(e.target.value)
                 localStorage.setItem('openrouter_api_key', e.target.value)
               }}
+              onFocus={() => setIsApiKeyEditing(true)}
+              onBlur={() => setIsApiKeyEditing(false)}
               sx={{
                 fontSize: 14,
                 backgroundColor: (theme__) => theme__.palette.mode === 'dark' ?
@@ -273,37 +276,37 @@ return null
 
           {/* messages */}
           <Box
-          sx={{
-            'flex': 1,
-            'overflowY': 'auto',
-            'p': 1,
-            'backgroundColor': theme.palette.grey[100],
-            /* vertical rhythm without turning the box into flex */
-            '& .rce-mbox': {marginBottom: 8},
-          }}
-          >
-          {messages.map((m, i) => (
-          <ChatMessage
-            key={i}
-            position={m.position} // 'right' or 'left'
-            type="text"
-            title={m.title}
-            titleColor={m.position === 'right' ? userText : botText}
-            text={
-              <span style={{color: m.position === 'right' ? userText : botText}}>
-                {m.text}
-              </span>
-            }
-            date={m.date}
-            notch={false}
-            /* bubble colour + left / right alignment */
-            style={{
-              backgroundColor: m.position === 'right' ? userBg : botBg,
-              alignSelf: m.position === 'right' ? 'flex-end' : 'flex-start',
-              maxWidth: '80%', // keeps long messages tidy
+            sx={{
+              'flex': 1,
+              'overflowY': 'auto',
+              'p': 1,
+              'backgroundColor': theme.palette.background.paper,
+              /* vertical rhythm without turning the box into flex */
+              '& .rce-mbox': {marginBottom: 8},
             }}
-          />
-        ))}
+          >
+            {messages.map((m, i) => (
+              <ChatMessage
+                key={i}
+                position={m.position} // 'right' or 'left'
+                type='text'
+                title={m.title}
+                titleColor={m.position === 'right' ? userText : botText}
+                text={
+                  <span style={{color: m.position === 'right' ? userText : botText}}>
+                    {m.text}
+                  </span>
+                }
+                date={m.date}
+                notch={false}
+                /* bubble colour + left / right alignment */
+                style={{
+                  backgroundColor: m.position === 'right' ? userBg : botBg,
+                  alignSelf: m.position === 'right' ? 'flex-end' : 'flex-start',
+                  maxWidth: '80%', // keeps long messages tidy
+                }}
+              />
+            ))}
           </Box>
 
           {/* input row */}
@@ -312,7 +315,7 @@ return null
               fullWidth value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Type a message…"
+              placeholder='Type a message…'
               sx={{
                 color: theme.palette.text.primary,
                 backgroundColor: theme.palette.background.default,
@@ -320,10 +323,10 @@ return null
                 boxShadow: `inset 0 0 0 1px ${theme.palette.divider}`,
               }}
             />
-            <IconButton onClick={handleSend} color="primary"><SendIcon/></IconButton>
+            <IconButton onClick={handleSend} color='primary'><SendIcon/></IconButton>
           </Box>
-        </Paper>
+        </Card>
       )}
-    </>
+    </Box>
   )
 }

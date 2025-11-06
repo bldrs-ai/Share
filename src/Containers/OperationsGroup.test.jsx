@@ -36,11 +36,11 @@ describe('OperationsGroup', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {queryByTitle} = render(
-        <ShareMock
-          initialEntries={['/v/p/index.ifc#p:x']}
-        >
-          <OperationsGroup deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock
+        initialEntries={['/v/p/index.ifc#p:x']}
+      >
+        <OperationsGroup deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const propertiesButton = queryByTitle('Properties')
     fireEvent.click(propertiesButton)

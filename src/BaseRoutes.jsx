@@ -15,8 +15,10 @@ import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
-import usePageTracking from './hooks/usePageTracking'
 import About from './pages/About'
+import Ipsum from './pages/Ipsum'
+import Privacy from './pages/Privacy'
+import TOS from './pages/TOS'
 import BlogRoutes from './pages/blog/BlogRoutes'
 import {initializeOctoKitAuthenticated, initializeOctoKitUnauthenticated} from './net/github/OctokitExport'
 import useStore from './store/useStore'
@@ -49,6 +51,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix}/`
   const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
+  const setHasGithubIdentity = useStore((state) => state.setHasGithubIdentity)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
@@ -66,7 +69,7 @@ export default function BaseRoutes({testElt = null}) {
     if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
       window.store = useStore
     }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setAppPrefix, appPrefix])
 
   useEffect(() => {
@@ -95,6 +98,7 @@ export default function BaseRoutes({testElt = null}) {
     } else if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
         authorizationParams: {
+          // audience: 'https://bldrs.us.auth0.com/userinfo',
           audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
@@ -107,6 +111,7 @@ export default function BaseRoutes({testElt = null}) {
             if (token.access_token && token.access_token === 'mock_access_token') {
               initializeOctoKitAuthenticated()
               setAccessToken(token)
+              setHasGithubIdentity(true)
               return
             }
             const decodedToken = jwtDecode(token)
@@ -121,8 +126,22 @@ export default function BaseRoutes({testElt = null}) {
                 setReauthModalOpen(true)
               } else {
                 setAppMetadata(appData)
-                initializeOctoKitAuthenticated()
-                setAccessToken(token)
+
+                const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
+
+                if (identities.length > 0) {
+                  const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
+
+                  if (hasGitHubIdentity) {
+                    initializeOctoKitAuthenticated()
+                    setAccessToken(token)
+                    setHasGithubIdentity(true)
+                  } else {
+                    initializeOctoKitUnauthenticated()
+                    setAccessToken('')
+                    setHasGithubIdentity(false)
+                  }
+                }
               }
             }
           } else {
@@ -150,6 +169,7 @@ export default function BaseRoutes({testElt = null}) {
     getAccessTokenSilently,
     setAccessToken,
     setAppMetadata,
+    setHasGithubIdentity,
     logout,
   ])
 
@@ -159,7 +179,6 @@ export default function BaseRoutes({testElt = null}) {
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
           <SentryRoutes>
-            {usePageTracking()}
             <Route path={basePath} element={<Outlet/>}>
               <Route
                 path='share/*'
@@ -173,6 +192,9 @@ export default function BaseRoutes({testElt = null}) {
                 }
               />
               <Route path='about' element={<About/>}/>
+              <Route path='privacy' element={<Privacy/>}/>
+              <Route path='tos' element={<TOS/>}/>
+              <Route path='ipsum' element={<Ipsum/>}/>
               <Route path='blog/*' element={<BlogRoutes/>}/>
             </Route>
             <Route path='popup-auth' element={<PopupAuth/>}/>
@@ -190,7 +212,7 @@ export default function BaseRoutes({testElt = null}) {
         <DialogActions>
           <Button
             onClick={() => {
-              window.open(`/popup-auth?scope=${reauthScope}`, 'authPopup', 'width=600,height=600')
+              window.open(`/popup-auth?scope=${reauthScope}&connection=github`, 'authPopup', 'width=600,height=600')
               setReauthModalOpen(false)
             }}
           >

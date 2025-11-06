@@ -11,17 +11,17 @@ describe('net/github/utils', () => {
   describe('parseGitHubRepositoryUrl', () => {
     it('throws an error if given a non-qualified Url', () => {
       expect(() => parseGitHubRepositoryUrl('hello'))
-          .toThrowError('URL must be fully qualified and contain scheme')
+        .toThrowError('URL must be fully qualified and contain scheme')
     })
 
     it('bubbles up an error if standard library cannot parse URL', () => {
       expect(() => parseGitHubRepositoryUrl('://dotdotdash.com'))
-          .toThrowError()
+        .toThrowError()
     })
 
     it('throws an error if given a non-GitHub repository URL', () => {
       expect(() => parseGitHubRepositoryUrl('https://notgithub.com/owner/repository'))
-          .toThrowError('Not a valid GitHub repository URL')
+        .toThrowError('Not a valid GitHub repository URL')
     })
 
     it('returns a repository path structure with correct values', () => {

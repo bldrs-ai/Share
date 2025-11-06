@@ -1,7 +1,8 @@
 import {assertDefined} from '../../utils/assert'
-import {octokit} from './OctokitExport'
-import {getGitHub, getGitHubResource} from './Http' // TODO(pablo): don't use octokit directly
+import {HTTP_CREATED, HTTP_NOT_MODIFIED, HTTP_NOT_FOUND} from '../http'
 import {checkCache, updateCache} from './Cache'
+import {getGitHub, getGitHubResource} from './Http'
+import {octokit} from './OctokitExport'
 
 
 /**
@@ -20,7 +21,7 @@ import {checkCache, updateCache} from './Cache'
  * @param {string} message The commit message
  * @param {string} branch The branch to which the commit will be made
  * @param {string} accessToken The access token for authentication
- * @return {string} newCommitSha
+ * @return {Promise<string>} A promise that resolves to the new commit SHA
  */
 export async function commitFile(owner, repo, path, file, message, branch, accessToken) {
   assertDefined(...arguments)
@@ -47,18 +48,21 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   }
 
   let cacheKey = `${owner}/${repo}/${path}/getRef`
-  let cached = checkCache(cacheKey)
+  let cached = await checkCache(cacheKey)
 
-  // If we have a cached ETag, add If-None-Match header
-  if (cached && cached.headers && cached.headers.etag) {
-    headers['If-None-Match'] = cached.headers.get('etag')
-  } else {
-    headers['If-None-Match'] = ''
+  const addIfNoneMatchHeader = (headersObj, cachedObj) => {
+    if (cachedObj && cachedObj.headers && cachedObj.headers.etag) {
+      headersObj['If-None-Match'] = cachedObj.headers.etag
+    } else {
+      headersObj['If-None-Match'] = ''
+    }
   }
+  addIfNoneMatchHeader(headers, cached)
 
   let refData
+  let response
   try {
-    const response = await octokit.rest.git.getRef({
+    response = await octokit.rest.git.getRef({
       owner,
       repo,
       ref: `heads/${branch}`,
@@ -67,12 +71,54 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
     refData = response.data
     await updateCache(cacheKey, response)
   } catch (error) {
-    const NOTMODIFIED = 304
-    if (error.status === NOTMODIFIED && cached) {
-      refData = cached
+    if (error.status === HTTP_NOT_MODIFIED && cached) {
+      refData = cached.data
+    } else if (
+      error.status === HTTP_NOT_FOUND &&
+      error.message.includes('https://docs.github.com/rest/git/refs#get-a-reference')) {
+      // If the branch doesn't exist, create it.
+      // 1. Get the default branch
+      let newRefResponse
+      try {
+        const repoInfo = await octokit.rest.repos.get({
+          owner,
+          repo,
+          headers,
+        })
+        const defaultBranch = repoInfo.data.default_branch
+        // 2. Get the latest commit on the default branch
+        const baseRefResponse = await octokit.rest.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${defaultBranch}`,
+          headers,
+        })
+        const baseSha = baseRefResponse.data.object.sha
+        // 3. Create a new branch with the default branch as the base
+        newRefResponse = await octokit.rest.git.createRef({
+          owner,
+          repo,
+          ref: `refs/heads/${branch}`, // must include "refs/"
+          sha: baseSha,
+          headers,
+        })
+
+        if (newRefResponse.status !== HTTP_CREATED) {
+          throw new Error('Failed to create new branch')
+        }
+      } catch (err) {
+        throw new Error(`Failed to create branch: ${err.message}`)
+      }
+
+      refData = newRefResponse.data
+      await updateCache(cacheKey, newRefResponse)
     } else {
       throw error
     }
+  }
+
+  if (!refData || !refData.object || !refData.object.sha) {
+    throw new Error('Failed to get or create branch reference')
   }
 
   const parentSha = refData.object.sha
@@ -80,16 +126,12 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   cacheKey = `${owner}/${repo}/${path}/getCommit`
   cached = await checkCache(cacheKey)
 
-  if (cached && cached.headers && cached.headers.etag) {
-    headers['If-None-Match'] = cached.headers.get('etag')
-  } else {
-    headers['If-None-Match'] = ''
-  }
+  addIfNoneMatchHeader(headers, cached)
 
   let commitData
   try {
     // 2. Get the SHA of the tree associated with the latest commit
-    const response = await octokit.rest.git.getCommit({
+    response = await octokit.rest.git.getCommit({
       owner,
       repo,
       commit_sha: parentSha,
@@ -98,9 +140,8 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
     commitData = response.data
     await updateCache(cacheKey, response)
   } catch (error) {
-    const NOTMODIFIED = 304
-    if (error.status === NOTMODIFIED && cached) {
-      commitData = cached
+    if (error.status === HTTP_NOT_MODIFIED && cached) {
+      commitData = cached.data
     } else {
       throw error
     }
@@ -273,6 +314,8 @@ export async function getDownloadUrl(repository, path, ref = '', accessToken = '
  * @param {string} repository
  * @param {string} path
  * @param {boolean} useCache
+ * @param {string} ref
+ * @param {string} accessToken
  * @return {Array<string>} [downloadUrl, sha, isCacheHit]
  */
 export async function getPathContents(repository, path, useCache, ref = '', accessToken = '') {
@@ -339,7 +382,10 @@ export async function getFiles(owner, repo, accessToken = '') {
 /**
  * Retrieves files and folders associated with a repository
  *
- * @param {string} [accessToken]
+ * @param {string} repo
+ * @param {string} owner
+ * @param {string} subfolder
+ * @param {string} accessToken
  * @return {object} the list files and folders in the repo
  */
 export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {

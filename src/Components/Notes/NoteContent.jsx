@@ -2,6 +2,7 @@ import React, {ReactElement, useMemo} from 'react'
 import Markdown from 'react-markdown'
 import useStore from '../../store/useStore'
 import CardContent from '@mui/material/CardContent'
+import Typography from '@mui/material/Typography'
 import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {getHashParamsFromHashStr, getObjectParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
@@ -67,16 +68,21 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
           event.preventDefault() // Prevent the default navigation
         }
       } else if (noteHash) {
-          const params = Object.values(getObjectParams(`#${noteHash}`))
+        const params = Object.values(getObjectParams(`#${noteHash}`))
 
-          if (params) {
-            const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
-            setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
-            setSelectedPlaceMarkId(Number(params[0]))
-            event.preventDefault() // Prevent the default navigation
+        if (params) {
+          const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
+          setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
+          setSelectedPlaceMarkId(Number(params[0]))
+          event.preventDefault() // Prevent the default navigation
         }
       }
     }
+  }
+
+  const headerStyle = {
+    fontWeight: 'bold',
+    margin: '0.5em 0 0.5em 0',
   }
 
   return (
@@ -92,6 +98,15 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
               {children}
             </a>
           ),
+          h1: ({children}) => <Typography variant='h1' sx={headerStyle}>{children}</Typography>,
+          h2: ({children}) => <Typography variant='h2' sx={headerStyle}>{children}</Typography>,
+          h3: ({children}) => <Typography variant='h3' sx={headerStyle}>{children}</Typography>,
+          h4: ({children}) => <Typography variant='h4' sx={headerStyle}>{children}</Typography>,
+          h5: ({children}) => <Typography variant='h5' sx={headerStyle}>{children}</Typography>,
+          h6: ({children}) => <Typography variant='h6' sx={headerStyle}>{children}</Typography>,
+          p: ({children}) => <Typography variant='body1'>{children}</Typography>,
+          ul: ({children}) => <Typography variant='body1'><ul>{children}</ul></Typography>,
+          ol: ({children}) => <Typography variant='body1'><ol>{children}</ol></Typography>,
         }}
       >
         {noteContentLinksLocalized}

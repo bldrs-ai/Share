@@ -54,20 +54,20 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         sx={{width: '100%', height: '100%'}}
         data-testid='CenterPane'
       >
-         <Box sx={{opacity: 0.5}}>
-           <Paper
-             elevation={0}
-             sx={{
-               position: 'absolute',
-               top: 0,
-               height: 58,
-               width: '100%',
-               backgroundColor: theme.palette.secondary.backgroundColor,
-               borderRadius: 0,
-             }}
-             data-testid='RootLandscape-ToolbarPaper'
-           />
-         </Box>
+        <Box sx={{opacity: 0.5}}>
+          <Paper
+            elevation={0}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              height: 58,
+              width: '100%',
+              backgroundColor: theme.palette.secondary.backgroundColor,
+              borderRadius: 0,
+            }}
+            data-testid='RootLandscape-ToolbarPaper'
+          />
+        </Box>
         <Stack
           direction='row'
           justifyContent='space-between'
@@ -91,13 +91,13 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         </Box>
       </Stack>
       {isMobile ?
-       <TabbedPanels
-         pathPrefix={pathPrefix}
-         branch={branch}
-         selectWithShiftClickEvents={selectWithShiftClickEvents}
-       /> :
-       // On non-mobile, use RightSideDrawers for the combined drawer logic
-       <RightSideDrawers/>
+        <TabbedPanels
+          pathPrefix={pathPrefix}
+          branch={branch}
+          selectWithShiftClickEvents={selectWithShiftClickEvents}
+        /> :
+      // On non-mobile, use RightSideDrawers for the combined drawer logic
+        <RightSideDrawers/>
       }
     </Stack>
   )

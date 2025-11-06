@@ -8,7 +8,7 @@ describe('useVersions', () => {
     const {result} = renderHook(() => useVersions(TEST_PARAMS))
     await waitFor(() => expect(result.current.loading).toBe(true))
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.commits.length).toEqual(MOCK_COMMITS.length)
+    expect(result.current.commits.length).toEqual(MOCK_COMMITS.data.length)
     expect(result.current.error).toBe(null)
   })
 })

@@ -1,4 +1,7 @@
 import {Mesh} from 'three'
+import {areDefinedAndNotNull} from '../utils/assert'
+
+
 // From https://github.com/ThatOpen/web-ifc-viewer/blob/master/viewer/src/components/ifc/selection/selection.ts
 
 /** Highlights selected elements */
@@ -28,11 +31,12 @@ export default class Selection {
    * @param {object} item
    * @param {boolean} focusSelection
    * @param {boolean} removePrevious
+   * @return {Promise<{modelID: number, id: number}|null>}
    */
   async pick(item, focusSelection = false, removePrevious = true) {
     const mesh = item.object
     let tmp
-    if (item.faceIndex === undefined ||
+    if (!areDefinedAndNotNull(mesh.geometry, item.faceIndex) ||
         ((tmp = this.selectedFaces[mesh.modelID]) === null ||
          tmp === undefined ? undefined : tmp.has(item.faceIndex))) {
       return null
@@ -103,7 +107,6 @@ export default class Selection {
    *
    * @param {number} modelID
    * @param {Set<number>} ids
-   * @param {boolean} focusSelection
    * @param {boolean} removePrevious
    * @return {Mesh}
    */
@@ -151,13 +154,21 @@ export default class Selection {
   }
 
 
-  /** Toggles all referenced mesh to visibilities */
+  /**
+   * Toggles all referenced mesh to visibilities
+   *
+   * @param {boolean} visible - Visibility state
+   */
   toggleVisibility(visible) {
     this.meshes.forEach((mesh) => (mesh.visible = visible))
   }
 
 
-  /** Target given mesh and apply postproduction to it if active */
+  /**
+   * Target given mesh and apply postproduction to it if active
+   *
+   * @param {object} mesh - The mesh to focus
+   */
   async focusSelection(mesh) {
     const postproductionActive = this.context.renderer.postProduction.active
     this.context.renderer.postProduction.active = false

@@ -5,7 +5,7 @@ import path from 'path'
 import {fileURLToPath} from 'url'
 
 /**
- * @param {string} proxiedHost The host to which traffic will be sent. E.g. localhost
+ * @param {string} host The host to which traffic will be sent. E.g. localhost
  * @param {number} port The port to which traffic will be sent.  E.g. 8079
  * @param {boolean} useHttps Whether to use HTTPS for the proxied server
  * @return {object} Proxy server
@@ -19,9 +19,9 @@ export function createProxyServer(host, port, useHttps = false) {
 
   const serverOptions = useHttps ?
     {
-        key: fs.readFileSync(path.join(__dirname, './certificate/server.key')),
-        cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')),
-      } :
+      key: fs.readFileSync(path.join(__dirname, './certificate/server.key')),
+      cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')),
+    } :
     {}
 
   const server = useHttps ?
@@ -29,7 +29,8 @@ export function createProxyServer(host, port, useHttps = false) {
     http.createServer(handleRequest)
 
   /**
-   *
+   * @param {object} req - Request object
+   * @param {object} res - Response object
    */
   function handleRequest(req, res) {
     req.url = rewriteUrl(req.url)
@@ -93,7 +94,11 @@ const HTTP_FOUND = 200
 const HTTP_NOT_FOUND = 404
 const HTTP_SERVER_ERROR = 500
 
-/** Serve a 200 bounce page for missing resources. */
+/**
+ * Serve a 200 bounce page for missing resources.
+ *
+ * @param {object} res - Response object
+ */
 const serveNotFound = (res) => {
   res.writeHead(HTTP_FOUND, {
     'Content-Type': 'text/html',

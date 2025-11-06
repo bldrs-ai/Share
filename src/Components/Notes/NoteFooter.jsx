@@ -7,7 +7,7 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 import {MARKER_COLOR_ACTIVE_CSS, MARKER_COLOR_INACTIVE_CSS} from '../Markers/component'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import AddLocationIcon from '@mui/icons-material/AddLocationOutlined'
@@ -25,7 +25,6 @@ import PlaceIcon from '@mui/icons-material/Place'
  * @return {ReactElement}
  */
 export default function NoteFooter({
-  accessToken,
   editMode,
   embeddedCameras,
   id,
@@ -221,13 +220,13 @@ export default function NoteFooter({
           }
         </Stack>
         <Stack direction='row'>
-           <TooltipIconButton
-             title='Open in Github'
-             size='small'
-             placement='bottom'
-             onClick={isNote ? openGithubIssue : openGithubComment}
-             icon={<GitHubIcon className='icon-share'/>}
-           />
+          <TooltipIconButton
+            title='Open in Github'
+            size='small'
+            placement='bottom'
+            onClick={isNote ? openGithubIssue : openGithubComment}
+            icon={<GitHubIcon className='icon-share'/>}
+          />
 
           {selected &&
            <TooltipIconButton

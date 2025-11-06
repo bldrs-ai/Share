@@ -19,7 +19,6 @@ export default function NavTreeNode({
   hasHideIcon,
   model,
   style,
-  isNavTree,
 }) {
   const handleLabelClick = (event) => handleSelect(event)
 

@@ -1,10 +1,24 @@
 import dev from './vars.dev.js'
 import cypress from './vars.cypress.js'
+import playwright from './vars.playwright.js'
 import prod from './vars.prod.js'
 
 
-// Exported for testing only
-/** @return {Object<string,string>} */
+/**
+ * We configure our esbuild from a combination of file-based defines, imported
+ * here, and process.env overrides for CLI ergonomics.
+ */
+
+
+/**
+ * This brings in overrides from process.env for the config vars we have already
+ * defined.
+ *
+ * Exported for testing only.
+ *
+ * @param {object} config - Configuration object
+ * @return {object}
+ */
 export function zipEnvWithConfig(config) {
   const defines = {}
   Object.keys(config).forEach((name) => {
@@ -21,9 +35,11 @@ export function zipEnvWithConfig(config) {
 }
 
 
-// Exported for testing only
 /**
  * Convert simple env var strings to js types
+ *
+ * @param {string} envStr - Environment variable string
+ * Exported for testing only.
  *
  * @return {boolean|number|string}
  */
@@ -53,6 +69,7 @@ let config
 switch (process.env.SHARE_CONFIG) {
   case 'dev': config = dev; break
   case 'cypress': config = cypress; break
+  case 'playwright': config = playwright; break
   case 'prod': // fallthru
   default: config = prod; break
 }

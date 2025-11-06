@@ -6,6 +6,7 @@ import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
 import createNotesSlice from './NotesSlice'
+import createOnboardingSlice from './OnboardingSlice'
 import createOpenSlice from './OpenSlice'
 import createPropertiesSlice from './PropertiesSlice'
 import createRepositorySlice from './RepositorySlice'
@@ -25,6 +26,7 @@ const useStore = create((set, get) => ({
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
   ...createNotesSlice(set, get),
+  ...createOnboardingSlice(set, get),
   ...createOpenSlice(set, get),
   ...createPropertiesSlice(set, get),
   ...createRepositorySlice(set, get),

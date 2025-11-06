@@ -11,12 +11,12 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 
 
 /**
- * ElementGroup contains tools for controlling element visibility
+ * ElementsControl contains tools for controlling element visibility
  *
  * @property {Function} deselectItems deselects currently selected element
  * @return {ReactElement}
  */
-export default function ElementGroup({deselectItems}) {
+export default function ElementsControl({deselectItems}) {
   const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
   const [isIsolate, setIsIsolate] = useState(false)
@@ -82,9 +82,7 @@ export default function ElementGroup({deselectItems}) {
         {isSelected() && !isIsolate &&
          <TooltipIconButton
            title='Clear'
-           onClick={() => {
-             deselectItems()
-           }}
+           onClick={deselectItems}
            icon={<CloseIcon className='icon-share'/>}
            placement='top'
            variant='solid'

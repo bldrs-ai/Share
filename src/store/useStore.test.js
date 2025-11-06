@@ -27,11 +27,11 @@ describe('IFC slice', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
       result.current.setSelectedElement(
-          {Name: {
-            type: 1,
-            value: 'Together',
-          },
-          })
+        {Name: {
+          type: 1,
+          value: 'Together',
+        },
+        })
     })
     expect(result.current.selectedElement).toEqual({Name: {
       type: 1,
@@ -58,5 +58,20 @@ describe('IFC slice', () => {
       result.current.setViewer(viewer)
     })
     expect(result.current.viewer).toEqual(viewer)
+  })
+})
+
+describe('Repository slice', () => {
+  it('sets and clears repository', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => {
+      result.current.setRepository('testOrg', 'testRepo')
+    })
+    expect(result.current.repository).toEqual({orgName: 'testOrg', name: 'testRepo'})
+
+    act(() => {
+      result.current.setRepository()
+    })
+    expect(result.current.repository).toBeNull()
   })
 })

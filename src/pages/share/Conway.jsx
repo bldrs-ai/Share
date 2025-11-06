@@ -1,4 +1,5 @@
 import React, {ReactElement} from 'react'
+import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 import TitledLayout from '../../layouts/TitledLayout'
@@ -14,22 +15,37 @@ export default function Conway() {
         IFC and STEP formats, offers advanced geometric representation, enabling teams to
         open and visualize intricate models with exceptional accuracy and speed.
       </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
+          margin: '0 0 1em 2em',
+        }}
+      >
+        <img
+          src='/speedtest.png'
+          alt='Conway vs Industry Leaders - Speed test graph'
+          width='100%'
+        />
+      </Box>
       <Typography variant='h2'>
         <strong>Key Advancements of Conway Engine</strong>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         <strong>Unified Core for IFC & STEP Standards</strong>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         <strong>conway-geom</strong> is Bldrs’ rewrite of web-ifc, engineered for
         high-performance and to support the full suite of open CAD standards within the
         IFC and STEP families.
         <ul>
           <li><strong>Fast near-exact CSG</strong>: Our cutting-edge implementation of
             Constructive Solid Geometry (CSG) partly based on
-            <Link href="https://arxiv.org/pdf/2405.12949">
+          <Link href="https://arxiv.org/pdf/2405.12949">
               “Exact predicates, exact constructions and combinatorics for mesh CSG”
-            </Link> - Lévy et al. 2024, with
+          </Link> - Lévy et al. 2024, with
             robust handling of real-world model data, tailored for the web environment.
           </li>
           <li><strong>Seamless NURBS and Advanced BREP</strong>: Conway ensures smooth
@@ -50,10 +66,10 @@ export default function Conway() {
           </li>
         </ul>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         <strong>Complete coverage of IFC 2x3 & 4</strong>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         Conway fully covers IFC standards with high-fidelity, high-performance BIM support,
         offering parsing and validation bindings for 900+ IFC entities across over 7,000 pages of
         specifications.
@@ -67,10 +83,10 @@ export default function Conway() {
           </li>
         </ul>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         <strong>Preliminary support for STEP AP214</strong>
       </Typography>
-      <Typography variant='h2'>
+      <Typography variant='h3'>
         Initial support for STEP AP214 expands Conway’s capabilities to include automotive and
         3D printing applications.
       </Typography>

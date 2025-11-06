@@ -1,15 +1,12 @@
-import React, {ReactElement, useEffect, useMemo} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
-import {HASH_PREFIX_CAMERA} from './Components/Camera/hashState'
 import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
-import {disablePageReloadApprovalCheck} from './utils/event'
-import {navWith} from './utils/navigate'
-import {testUuid} from './utils/strings'
-import {splitAroundExtension} from './Filetype'
+import {navToDefault} from './utils/navigate'
+import {handleRoute} from './routes/routes'
 
 
 /**
@@ -17,29 +14,32 @@ import {splitAroundExtension} from './Filetype'
  *
  * @property {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
  * @property {string} appPrefix e.g. /share is the prefix for this component.
- * @property {string} pathPrefix e.g. v/p for CadView, currently the only child.
+ * @property {string} pathPrefix The full path prefix, e.g. /share/v/p for /share/v/p/index.ifc.
  * @return {ReactElement}
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
-  const urlParams = useParams()
+  const routeParams = useParams()
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const model = useStore((state) => state.model)
   const setIsVersionsEnabled = useStore((state) => state.setIsVersionsEnabled)
-  const repository = useStore((state) => state.repository)
+  const setIsShareEnabled = useStore((state) => state.setIsShareEnabled)
+  const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const setRepository = useStore((state) => state.setRepository)
+  const widgetApiRef = useRef(null)
 
-  useMemo(() => {
-    if (isAppsEnabled) {
-      new WidgetApi(navigate, searchIndex)
+  useEffect(() => {
+    if (isAppsEnabled && !widgetApiRef.current) {
+      widgetApiRef.current = new WidgetApi(navigate, searchIndex)
     }
   }, [isAppsEnabled, navigate, searchIndex])
 
 
   /**
-   * On a change to urlParams, setting a new model path will clear the
+   * On a change to routeParams, setting a new model path will clear the
    * scene and load the new model IFC.  If there's not a valid IFC,
    * the helper will redirect to the index file.
    *
@@ -49,7 +49,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   useEffect(() => {
     /** A demux to help forward to the index file, load a new model or do nothing. */
     const onChangeUrlParams = (() => {
-      const mp = getModelPath(installPrefix, pathPrefix, urlParams)
+      debug().log('pathPrefix: ', pathPrefix)
+      const mp = handleRoute(pathPrefix, routeParams)
       if (mp === null) {
         navToDefault(navigate, appPrefix)
         return
@@ -65,25 +66,45 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     onChangeUrlParams()
 
     // TODO(pablo): currently expect these to both be defined.
-    const {org, repo} = urlParams
+    const {org, repo} = routeParams
     if (org && repo) {
+      debug().log(`Requested repo: ${org}/${repo}`)
       setRepository(org, repo)
       setIsVersionsEnabled(true)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(true)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
+      setIsVersionsEnabled(true)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(true)
+    } else if (
+      pathPrefix.startsWith('/share/v/u') || // generic url
+        pathPrefix === '/share/v/g' // google
+    ) {
+      debug().log('Model path is external URL:', modelPath)
+      setRepository('external', 'content')
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(true)
+      setIsNotesEnabled(false)
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
+      // Local /v/new models have no repository
+      setRepository(null, null)
+      setIsVersionsEnabled(false)
+      setIsShareEnabled(false)
+      setIsNotesEnabled(false)
     }
-  }, [appPrefix, installPrefix, modelPath, navigate, pathPrefix,
-      setIsVersionsEnabled, setModelPath, setRepository, urlParams])
+  }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
+    setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
+    setModelPath, setRepository, routeParams])
 
-
-  // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
+  const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (
     modelPath &&
     <>
-      <ModelTitle repository={repository} modelPath={modelPath}/>
+      <PageTitle modelPath={modelPath} modelName={modelName} isUploadedFile={model?.isUploadedFile}/>
       <CadView
         installPrefix={installPrefix}
         appPrefix={appPrefix}
@@ -94,109 +115,48 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 }
 
 
-/** @return {ReactElement} */
-function ModelTitle({repository, modelPath}) {
-  const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
-
-  // Check if repository is available and construct the title accordingly
-  const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
+/**
+ * @param {object} modelPath The model path from routes
+ * @param {string|undefined} modelName The model name extracted from loader and set on store.model
+ * @param {boolean} isUploadedFile Whether the model is an uploaded file
+ * @return {ReactElement}
+ */
+function PageTitle({modelPath, modelName, isUploadedFile}) {
+  let titleStr = ''
+  const modelPathFilename = modelPath.filepath?.split('/').pop()
+  switch (modelPath.kind) {
+    case 'file':
+      if (isUploadedFile) {
+        titleStr = `New: ${modelName}`
+      } else {
+        titleStr = `${modelName || modelPathFilename}`
+      }
+      break
+    case 'provider':
+      switch (modelPath.provider) {
+        case 'google':
+          titleStr = `Google: ${modelName || 'file'}`
+          break
+        case 'github':
+          if (modelName === undefined) {
+            modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
+          }
+          titleStr = `GitHub: ${modelName}`
+          break
+        default:
+          titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
+      }
+      break
+    case 'srcUrl':
+      titleStr = modelName || modelPathFilename
+      break
+    default:
+      titleStr = `Loading...`
+  }
 
   return (
     <Helmet>
-      <title>{title}</title>
+      <title>{titleStr}</title>
     </Helmet>
   )
-}
-
-
-/**
- * Navigate to index.ifc with nice camera setting.
- *
- * @param {Function} navigate
- * @param {string} appPrefix
- */
-export function navToDefault(navigate, appPrefix) {
-  // TODO: probe for index.ifc
-  const mediaSizeTabletWith = 900
-  disablePageReloadApprovalCheck()
-  const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
-  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-        `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
-  navWith(navigate, defaultPath, {
-    search: location.search,
-    hash: cameraHash,
-  })
-}
-
-
-/**
- * Returns a reference to a model file.  For use by IfcViewerAPIExtended.load.
- *
- * Format is either a reference within this project's serving directory:
- *   {filepath: '/file.ifc'}
- *
- * or a global GitHub path:
- *   {gitpath: 'http://host/share/v/gh/bldrs-ai/Share/main/index.ifc'}
- *
- * or an uploaded path:
- *   {filepath: '/xxxx-xxxx-xxxx-xxxx'}
- *
- * @param {string} installPrefix e.g. /share
- * @param {string} pathPrefix e.g. /share/v/p
- * @param {object} urlParams e.g.:
- *     .../:org/:repo/:branch/ with .../a/b/c/d
- *   becomes:
- *     {
- *       '*': 'a/b/c/d',
- *       'org': 'a',
- *       ...
- *     }
- * @return {object}
- */
-export function getModelPath(installPrefix, pathPrefix, urlParams) {
-  // TODO: combine modelPath methods into class.
-  let m = null
-  let filepath = urlParams['*']
-  if (filepath === '') {
-    return null
-  }
-  let parts
-  let extension
-  try {
-    ({parts, extension} = splitAroundExtension(filepath))
-  } catch (e) {
-    if (testUuid(filepath)) {
-      return {filepath, extension: null}
-    }
-    alert(`Unsupported filetype: ${filepath}`)
-    debug().error(e)
-    return null
-  }
-  filepath = `/${parts[0]}${extension}`
-  if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // * param is defined in ../Share.jsx, e.g.:
-    //   /v/p/*.  It should be only the filename.
-    // Filepath is a reference rooted in the serving directory.
-    // e.g. /haus.ifc or /ifc-files/haus.ifc
-    m = {
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
-  } else if (pathPrefix.endsWith('/gh')) {
-    m = {
-      org: urlParams['org'],
-      repo: urlParams['repo'],
-      branch: urlParams['branch'],
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
-    m.gitpath = `https://github.com${m.getRepoPath()}`
-    debug().log('Share#getModelPath: is a remote GitHub file: ', m)
-  } else {
-    throw new Error('Empty view type from pathPrefix')
-  }
-  return m
 }

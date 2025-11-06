@@ -29,7 +29,7 @@ export function arrayDiff(a, b) {
 /**
  * check if two arrays are equal.
  *
- * @param {object[]} array
+ * @param {object[]} arr
  * @param {object} element to remove
  * @return {object[]} new array after removing the element
  */

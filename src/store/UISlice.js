@@ -1,6 +1,7 @@
 import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
 import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
 import {isVisibleInitially as imagineIsVisibleInitially} from '../Components/Imagine/hashState'
+import {isVisibleInitially as loginIsVisibleInitially} from '../Components/Profile/hashState'
 import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
 
 
@@ -33,6 +34,9 @@ export default function createUISlice(set, get) {
     isImagineVisible: imagineIsVisibleInitially(),
     setIsImagineVisible: (is) => set(() => ({isImagineVisible: is})),
 
+    isLoginVisible: loginIsVisibleInitially(),
+    setIsLoginVisible: (is) => set(() => ({isLoginVisible: is})),
+
     isSaveModelVisible: false,
     setIsSaveModelVisible: (is) => set(() => ({isSaveModelVisible: is})),
 
@@ -41,9 +45,6 @@ export default function createUISlice(set, get) {
 
     isThemeEnabled: isThemeEnabled,
     setIsThemeEnabled: (is) => set(() => ({isThemeEnabled: is})),
-
-    levelInstance: null,
-    setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
 
     snackMessage: null,
     setSnackMessage: (msg) => set(() => ({snackMessage: msg})),

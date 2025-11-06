@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/react'
-import * as Analytics from '../privacy/analytics'
+import {gtagEvent} from '../privacy/analytics'
 
 
 /**
@@ -21,7 +21,7 @@ export function trackAlert(message, error = null) {
   }
 
   // Track in Google Analytics (just the message)
-  Analytics.recordEvent('alert', {
+  gtagEvent('alert', {
     message: message,
   })
 }

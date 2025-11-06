@@ -97,31 +97,31 @@ jest.mock('@auth0/auth0-react', () => {
 })
 
 describe('MarkerControl', () => {
-    let viewer
+  let viewer
 
-    let originalWorker
+  let originalWorker
 
-    beforeAll(() => {
-      // Store the original Worker in case other tests need it
-      originalWorker = global.Worker
+  beforeAll(() => {
+    // Store the original Worker in case other tests need it
+    originalWorker = global.Worker
+  })
+
+
+  // TODO: `document.createElement` can't be used in testing-library directly,
+  // need to move this after fixing that issue
+  beforeEach(() => {
+    viewer = new IfcViewerAPIExtended()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
     })
+  })
 
 
-    // TODO: `document.createElement` can't be used in testing-library directly,
-    // need to move this after fixing that issue
-    beforeEach(() => {
-      viewer = new IfcViewerAPIExtended()
-      viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
-      viewer.context.getDomElement = jest.fn(() => {
-        return document.createElement('div')
-      })
-    })
-
-
-    afterEach(() => {
-      jest.clearAllMocks()
-      global.Worker = originalWorker
-    })
+  afterEach(() => {
+    jest.clearAllMocks()
+    global.Worker = originalWorker
+  })
 
   // Properly mock viewer context
   const mockCanvas = document.createElement('canvas')
@@ -162,12 +162,12 @@ describe('MarkerControl', () => {
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     const {container} = render(
       <ShareMock>
-       <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
-          <MarkerControl
-            context={mockContext}
-            oppositeObjects={mockOppositeObjects}
-            postProcessor={mockPostProcessor}
-          />
+        <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
+        <MarkerControl
+          context={mockContext}
+          oppositeObjects={mockOppositeObjects}
+          postProcessor={mockPostProcessor}
+        />
       </ShareMock>,
     )
     await actAsyncFlush()
@@ -180,11 +180,11 @@ describe('MarkerControl', () => {
     render(
       <ShareMock>
         <CadView installPrefix='/' appPrefix='' pathPrefix='' modelPath={{filepath: '/index.ifc'}}/>
-          <MarkerControl
-            context={mockContext}
-            oppositeObjects={mockOppositeObjects}
-            postProcessor={mockPostProcessor}
-          />
+        <MarkerControl
+          context={mockContext}
+          oppositeObjects={mockOppositeObjects}
+          postProcessor={mockPostProcessor}
+        />
       </ShareMock>,
     )
 

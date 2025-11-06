@@ -18,8 +18,13 @@ import debug from '../utils/debug'
 /**
  * Write model to OPFS.
  *
- * @param {string} filepath
- * @return {File}
+ * @param {File} modelFile - The model file
+ * @param {string} originalFilePath - Original file path
+ * @param {string} commitHash - Commit hash
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
+ * @return {Promise<File>}
  */
 export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
   return new Promise((resolve, reject) => {
@@ -51,7 +56,10 @@ export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHas
 /**
  * Retrieve model from OPFS.
  *
- * @param {string} filepath
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
+ * @param {string} filepath - File path
  * @return {File}
  */
 export function getModelFromOPFS(owner, repo, branch, filepath) {
@@ -88,25 +96,30 @@ export function getModelFromOPFS(owner, repo, branch, filepath) {
  * Download model to OPFS if it doesn't already exist
  * with a matching commit hash.
  *
- * @param {string} filepath
- * @param {string} commitHash
- * @return {File}
+ * @param {string} objectUrl - Object URL
+ * @param {string} originalFilePath - Original file path
+ * @param {string} commitHash - Commit hash
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {string} branch - Branch name
+ * @param {Function} onProgress - Progress callback
+ * @return {Promise<File>}
  */
 export function downloadToOPFS(
+  objectUrl,
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch,
+  onProgress) {
+  assertDefined(
     objectUrl,
     originalFilePath,
     commitHash,
     owner,
     repo,
-    branch,
-    onProgress) {
-  assertDefined(
-      objectUrl,
-      originalFilePath,
-      commitHash,
-      owner,
-      repo,
-      branch)
+    branch)
 
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
@@ -337,14 +350,14 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 export function doesFileExistInOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
@@ -353,10 +366,13 @@ export function doesFileExistInOPFS(
 /**
  * Prints a snapshot of the OPFS directory structure
  *
- * @return {boolean}
+ * @param {number} previewWindow - Preview window size
+ * @return {Promise<boolean>}
  */
-export function snapshotOPFS() {
-  return makePromise(opfsSnapshotCache, null, null, null, null, null, 'snapshot')
+export function snapshotOPFS(previewWindow = 0) {
+  // Wrap opfsSnapshotCache so makePromise still receives a callback with standard signature
+  const callback = () => opfsSnapshotCache(previewWindow)
+  return makePromise(callback, null, null, null, null, null, 'snapshot')
 }
 
 /**
@@ -377,14 +393,14 @@ export function clearOPFSCache() {
  * @param {string} owner
  * @param {string} repo
  * @param {string} branch
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 export function deleteFileFromOPFS(
-    originalFilePath,
-    commitHash,
-    owner,
-    repo,
-    branch) {
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDeleteModel, originalFilePath, commitHash, owner, repo, branch, 'deleted')
@@ -404,7 +420,6 @@ export function saveDnDFileToOpfs(file, type, callback) {
   let workerRef = null
   workerRef = initializeWorker()
 
-  debug().log('OPFS/utils#saveDnDFileToOpfs: event:', event)
   const tmpUrl = URL.createObjectURL(file)
   debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
   // Post message to the worker to handle the file

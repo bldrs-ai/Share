@@ -5,7 +5,8 @@ import './index.css'
 
 // Utility to get query parameters
 /**
- *  @return {string|null} The value of the query parameter or null if not found.
+ * @param {string} param - The query parameter name
+ * @return {string|null} The value of the query parameter or null if not found.
  */
 function getQueryParam(param) {
   const params = new URLSearchParams(window.location.search)
