@@ -913,6 +913,17 @@ export async function initializeConwayAndExportGlb({
   opfsFilename,
   elementTypesMap,
 }) {
+  // Wait for WASM initialization to complete
+  // The early callback from viewer.js should have started this already,
+  // so this will either wait for completion or return immediately if done
+  const wasmModule = viewer.IFC.loader.ifcManager.ifcAPI.getWasmModule()
+  const wasmInitialized = await initializeWasm('/static/js/ConwayGeomWasmWebMT.js', wasmModule)
+
+  if (!wasmInitialized) {
+    console.error('Conway WASM initialization failed')
+    return
+  }
+
   // Gather aggregated geometry and validate pointers
   const aggregatedGeometry = viewer.IFC.loader?.ifcManager?.ifcAPI?.getAggregatedGeometry()
 
@@ -963,11 +974,8 @@ export async function initializeConwayAndExportGlb({
   }
 
   // Initialize Conway WASM in OPFS worker and export to GLB if available
-  if (viewer.IFC.loader?.ifcManager?.ifcAPI && typeof initializeWasm === 'function') {
+  if (viewer.IFC.loader?.ifcManager?.ifcAPI) {
     try {
-      // eslint-disable-next-line no-console
-      console.log('Initializing Conway WASM module in worker...')
-
       let serializedGeometryProperties = null
       const serializeGeometryPropertiesFn = viewer.IFC.loader?.ifcManager?.ifcAPI?.SerializeGeometryProperties
       if (typeof serializeGeometryPropertiesFn === 'function') {
@@ -982,46 +990,39 @@ export async function initializeConwayAndExportGlb({
           console.error('Failed to serialize geometry properties for GLB export:', error)
         }
       }
-      const wasmModule = viewer.IFC.loader.ifcManager.ifcAPI.getWasmModule()
-      // Initialize Conway WASM module in the worker and wait for completion
-      const wasmInitialized = await initializeWasm('/static/js/ConwayGeomWasmWebMT.js', wasmModule)
 
-      if (wasmInitialized) {
-        // eslint-disable-next-line no-console
-        console.log('Conway WASM successfully initialized in worker')
+      // eslint-disable-next-line no-console
+      console.log('Conway WASM successfully initialized, proceeding with export')
 
-        // Derive a file base name when possible
-        let fileNameNoExtension
-        if (filePath) {
-          const base = filePath.split('/').pop() || ''
-          fileNameNoExtension = base.replace(/\.[^/.]+$/, '')
-        } else {
-          fileNameNoExtension = 'model'
-        }
-        // eslint-disable-next-line no-console
-        console.log('Exporting aggregated geometry to GLB via OPFS worker...')
-        const scaleFactor = viewer.IFC.loader?.ifcManager?.ifcAPI?.getLinearScalingFactor(0)
-        console.log('Using scale factor for export:', scaleFactor)
-        // Export to GLB using Conway in the worker
-        opfsExportToGlb(
-          geometryPtr,
-          materialsPtr,
-          chunks,
-          fileNameNoExtension,
-          owner,
-          repo,
-          branch,
-          filePath,
-          opfsFilename,
-          serializedGeometryProperties,
-          elementTypesMap,
-          scaleFactor,
-        )
+      // Derive a file base name when possible
+      let fileNameNoExtension
+      if (filePath) {
+        const base = filePath.split('/').pop() || ''
+        fileNameNoExtension = base.replace(/\.[^/.]+$/, '')
       } else {
-        console.error('Conway WASM initialization failed')
+        fileNameNoExtension = 'model'
       }
+      // eslint-disable-next-line no-console
+      console.log('Exporting aggregated geometry to GLB via OPFS worker...')
+      const scaleFactor = viewer.IFC.loader?.ifcManager?.ifcAPI?.getLinearScalingFactor(0)
+      console.log('Using scale factor for export:', scaleFactor)
+      // Export to GLB using Conway in the worker
+      opfsExportToGlb(
+        geometryPtr,
+        materialsPtr,
+        chunks,
+        fileNameNoExtension,
+        owner,
+        repo,
+        branch,
+        filePath,
+        opfsFilename,
+        serializedGeometryProperties,
+        elementTypesMap,
+        scaleFactor,
+      )
     } catch (error) {
-      console.error('Failed to initialize Conway WASM or export GLB:', error)
+      console.error('Failed to export GLB:', error)
     }
   }
 }

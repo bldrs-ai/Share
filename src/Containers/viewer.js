@@ -1,5 +1,6 @@
 import {Color} from 'three'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import {initializeWasm} from '../OPFS/OPFSService'
 
 
 /**
@@ -18,8 +19,24 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     backgroundColor: new Color(backgroundColorStr),
   })
 
+  // Set up callback to initialize Conway WASM after IFC WASM is ready
+  // This callback will be called from ifc_api.ts Init() method
+  // It starts the initialization early so it can run in parallel with model loading
+  globalThis.__onIfcWasmInitialized = async (wasmModule) => {
+    console.log('IFC WASM initialized, starting Conway WASM initialization...')
+    if (typeof initializeWasm === 'function' && wasmModule) {
+      try {
+        await initializeWasm('/static/js/ConwayGeomWasmWebMT.js', wasmModule)
+        console.log('Conway WASM initialization completed')
+      } catch (error) {
+        console.error('Failed to initialize Conway WASM:', error)
+      }
+    }
+  }
+
   // Path to web-ifc.wasm in serving directory.
   viewer.IFC.setWasmPath('./static/js/')
+  
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
 
