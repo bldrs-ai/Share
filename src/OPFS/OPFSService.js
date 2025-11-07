@@ -9,14 +9,15 @@ let workerRef = null
  * Initializes and returns a reference to a web worker.
  *
  * Checks if a web worker reference already exists; if not, it creates a new web worker
- * instance using the specified script path ('/OPFS.Worker.js'). This ensures that only one
- * instance of the worker is created and reused across the application, optimizing resource usage.
+ * instance using the specified script path. This ensures that only one instance of the
+ * worker is created and reused across the application, optimizing resource usage.
+ * Uses ESM module worker with {type: 'module'}.
  *
  * @return {Worker} The reference to the initialized web worker.
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker('/OPFS.Worker.js')
+    workerRef = new Worker(new URL('/OPFS.Worker.js', import.meta.url), {type: 'module'})
 
     workerRef.postMessage({
       command: 'initializeWorker',
