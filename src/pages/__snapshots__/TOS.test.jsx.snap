@@ -16,13 +16,13 @@ exports[`Terms renders 1`] = `
           class="MuiBox-root css-1dukxs6"
         >
           <svg
-            data-filename="src/assets/LogoBWithDomain.svg"
+            data-filename="src/assets/LogoB.svg"
           />
         </div>
       </a>
     </div>
     <div
-      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1xgkhtk-MuiPaper-root"
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-i0wy4-MuiPaper-root"
     >
       <h1
         class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
@@ -196,6 +196,25 @@ exports[`Terms renders 1`] = `
         </p>
       </div>
     </div>
+    <p
+      class="MuiTypography-root MuiTypography-body2 css-14vjj1r-MuiTypography-root"
+    >
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+        href="/tos"
+      >
+        Terms
+      </a>
+       
+      -
+       
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+        href="/privacy"
+      >
+        Privacy
+      </a>
+    </p>
   </div>
 </div>
 `;

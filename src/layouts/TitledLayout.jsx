@@ -3,7 +3,8 @@ import {Helmet} from 'react-helmet-async'
 import Link from '@mui/material/Link'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import {LogoBWithDomain} from '../Components/Logo/Logo'
+import {useIsMobile} from '../Components/Hooks'
+import {LogoB} from '../Components/Logo/Logo'
 import {assertDefined} from '../utils/assert'
 
 
@@ -15,6 +16,7 @@ import {assertDefined} from '../utils/assert'
  * @return {ReactElement}
  */
 export default function TitledLayout({title, children}) {
+  const isMobile = useIsMobile()
   assertDefined(title, children)
   return (
     <>
@@ -32,7 +34,7 @@ export default function TitledLayout({title, children}) {
           }}
         >
           <Link href="/">
-            <LogoBWithDomain sx={{width: '125px', height: '125px'}}/>
+            <LogoB sx={{width: '75px', height: '75px', margin: isMobile ? '0' : '1em 0 0 1em'}}/>
           </Link>
         </Paper>
         <Paper
@@ -49,12 +51,16 @@ export default function TitledLayout({title, children}) {
             '& .MuiTypography-p + .MuiTypography-p': {
               display: 'block',
             },
-            'margin': {xs: '0 0 1rem 0', md: '0 8rem 1rem 0'}, // Margin for wrapping
+            'margin': {xs: '0', md: '0 8rem 1rem 0'}, // Margin for wrapping
           }}
         >
           <Typography variant='h1'>{title}</Typography>
           {children}
         </Paper>
+        <Typography variant='body2' sx={{fontSize: '0.9em', opacity: 0.75, textAlign: 'center'}}>
+          <Link href='/tos'>Terms</Link>
+          {' '}-{' '}<Link href='/privacy'>Privacy</Link>
+        </Typography>
       </Paper>
     </>
   )

@@ -49,6 +49,7 @@ export default function Dialog({
     }
   }
   const onCloseClick = () => setIsDialogDisplayed(false)
+  const dataTestIdSuffix = slugify(headerText)
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -68,12 +69,13 @@ export default function Dialog({
           justifyContent: 'center',
           alignItems: 'center',
           gap: '1em',
+          fontSize: '20px',
         }}
       >
         {headerIcon && headerIcon}
         {headerText}
       </DialogTitle>
-      <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${slugify(headerText)}`}/>
+      <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
       <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
         <DialogActions>
