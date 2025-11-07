@@ -1,8 +1,12 @@
-import React, {useState, ReactElement} from 'react'
+import React, {
+  useCallback,
+  useRef,
+  useState,
+  ReactElement,
+} from 'react'
 import {v4 as uuid} from 'uuid'
-// import {MessageBox} from 'react-chat-elements'
 import {
-  Fab, useTheme, IconButton, Box, InputBase, Card, CardHeader,
+  Box, Card, CardHeader, Fab, IconButton, InputBase, Stack, useTheme,
 } from '@mui/material'
 import useStore from '../../store/useStore'
 import ChatMessage from './ChatMessage'
@@ -10,6 +14,8 @@ import {askLLM} from './openRouterClient'
 import ChatIcon from '@mui/icons-material/Chat'
 import CloseIcon from '@mui/icons-material/Close'
 import SendIcon from '@mui/icons-material/Send'
+import PushPinIcon from '@mui/icons-material/PushPin'
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
 import 'react-chat-elements/dist/main.css'
 import './chat-bubbles.css' // ← step 2 (see CSS below)a
 import {safeJsonFromCodeBlock} from './eval'
@@ -22,6 +28,14 @@ export default function FloatingChat() {
   const [input, setInput] = useState('')
   const theme = useTheme()
   const viewer = useStore((state) => state.viewer)
+  const [isPinned, setIsPinned] = useState(true)
+  const [position, setPosition] = useState(getDefaultPosition)
+  const dragState = useRef({
+    dragging: false,
+    pointerId: null,
+    startPointer: {x: 0, y: 0},
+    startPosition: {x: 0, y: 0},
+  })
 
   /*  theme-aware colours  */
   const userBg = theme.palette.primary.main
@@ -30,6 +44,66 @@ export default function FloatingChat() {
   const botText = theme.palette.getContrastText(botBg)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('openrouter_api_key') ?? '')
   const [isApiKeyEditing, setIsApiKeyEditing] = useState(false)
+
+  const clampPosition = useCallback((next) => {
+    if (typeof window === 'undefined') {
+      return next
+    }
+    const maxX = Math.max(CARD_MARGIN, window.innerWidth - CARD_WIDTH - CARD_MARGIN)
+    const maxY = Math.max(CARD_MARGIN, window.innerHeight - CARD_HEIGHT - CARD_MARGIN)
+    return {
+      x: Math.min(Math.max(next.x, CARD_MARGIN), maxX),
+      y: Math.min(Math.max(next.y, CARD_MARGIN), maxY),
+    }
+  }, [])
+
+  const handlePointerDown = useCallback((event) => {
+    if (isPinned) {
+      return
+    }
+    const handleEl = event.currentTarget
+    handleEl.setPointerCapture(event.pointerId)
+    dragState.current = {
+      dragging: true,
+      pointerId: event.pointerId,
+      startPointer: {x: event.clientX, y: event.clientY},
+      startPosition: position,
+    }
+  }, [isPinned, position])
+
+  const handlePointerMove = useCallback((event) => {
+    if (!dragState.current.dragging || dragState.current.pointerId !== event.pointerId) {
+      return
+    }
+    const deltaX = event.clientX - dragState.current.startPointer.x
+    const deltaY = event.clientY - dragState.current.startPointer.y
+    const nextPosition = {
+      x: dragState.current.startPosition.x + deltaX,
+      y: dragState.current.startPosition.y + deltaY,
+    }
+    setPosition(clampPosition(nextPosition))
+  }, [clampPosition])
+
+  const endDrag = useCallback((event) => {
+    if (!dragState.current.dragging || dragState.current.pointerId !== event.pointerId) {
+      return
+    }
+    dragState.current.dragging = false
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }, [])
+
+  const togglePinned = useCallback(() => {
+    setIsPinned((prev) => {
+      if (prev) {
+        // switching to unpinned; ensure position is initialised relative to current viewport
+        setPosition((current) => clampPosition(current || getDefaultPosition()))
+        return false
+      }
+      // switching to pinned → snap back to default corner
+      setPosition(getDefaultPosition())
+      return true
+    })
+  }, [clampPosition])
 
   /* eslint-disable max-len */
 
@@ -196,12 +270,21 @@ export default function FloatingChat() {
   }
 
   return (
-    <Box sx={{margin: '2em'}}>
+    <Box
+      sx={{
+        margin: '2em',
+      }}
+    >
       {!isOpen &&
        <Fab
          color='secondary'
          aria-label='chat'
          onClick={() => setIsOpen((o) => !o)}
+         sx={{
+           position: 'fixed',
+           bottom: '0.5em',
+           right: '0.5em',
+         }}
        >
          <ChatIcon/>
        </Fab>
@@ -218,21 +301,63 @@ export default function FloatingChat() {
             flexDirection: 'column',
             overflow: 'hidden',
             position: 'fixed',
-            bottom: 24,
-            right: 24,
+            ...(isPinned ? {
+              bottom: CARD_MARGIN,
+              right: CARD_MARGIN,
+            } : {
+              top: position.y,
+              left: position.x,
+            }),
             zIndex: 1299,
           }}
         >
           {/* header */}
           <CardHeader
-            title='Assistant'
+            disableTypography
+            title={(
+              (
+                <Box
+                  data-drag-handle='true'
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontWeight: 600,
+                    fontSize: 18,
+                    cursor: isPinned ? 'default' : 'grab',
+                    userSelect: 'none',
+                    flexGrow: 1,
+                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                >
+                  Assistant
+                </Box>
+              )
+            )}
             action={
-              <IconButton onClick={() => setIsOpen(false)} sx={{color: 'inherit'}}>
-                <CloseIcon/>
-              </IconButton>
+              <Stack direction='row' spacing={0.5}>
+                <IconButton
+                  aria-label={isPinned ? 'Unpin assistant' : 'Pin assistant'}
+                  aria-pressed={!isPinned}
+                  onClick={togglePinned}
+                  sx={{color: 'inherit'}}
+                >
+                  {isPinned ? <PushPinOutlinedIcon/> : <PushPinIcon/>}
+                </IconButton>
+                <IconButton
+                  onClick={() => setIsOpen(false)}
+                  sx={{color: 'inherit'}}
+                >
+                  <CloseIcon/>
+                </IconButton>
+              </Stack>
             }
             sx={{
               p: '1em 1em 0 1em',
+              display: 'flex',
+              alignItems: 'center',
             }}
           />
 
@@ -260,7 +385,9 @@ export default function FloatingChat() {
           </Box>
 
           {/* messages */}
-          <Box
+          <Stack
+            direction='column'
+            spacing={2}
             sx={{
               'flex': 1,
               'overflowY': 'auto',
@@ -292,7 +419,7 @@ export default function FloatingChat() {
                 }}
               />
             ))}
-          </Box>
+          </Stack>
 
           {/* input row */}
           <Box sx={{display: 'flex', gap: 1, p: 1.5, borderTop: `1px solid ${theme.palette.divider}`}}>
@@ -314,4 +441,24 @@ export default function FloatingChat() {
       )}
     </Box>
   )
+}
+
+
+const CARD_WIDTH = 360
+const CARD_HEIGHT = 520
+const CARD_MARGIN = 24
+
+/**
+ * Compute the default chat position relative to the viewport.
+ *
+ * @return {{x: number, y: number}} Position coordinates.
+ */
+function getDefaultPosition() {
+  if (typeof window === 'undefined') {
+    return {x: CARD_MARGIN, y: CARD_MARGIN}
+  }
+  return {
+    x: Math.max(CARD_MARGIN, window.innerWidth - CARD_WIDTH - CARD_MARGIN),
+    y: Math.max(CARD_MARGIN, window.innerHeight - CARD_HEIGHT - CARD_MARGIN),
+  }
 }
