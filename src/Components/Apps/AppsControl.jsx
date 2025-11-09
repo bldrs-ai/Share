@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_APPS} from './hashState'
-import WidgetsIcon from '@mui/icons-material/WidgetsOutlined'
+import {WidgetsOutlined as WidgetsIcon} from '@mui/icons-material'
 
 
 /**

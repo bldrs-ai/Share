@@ -1,6 +1,5 @@
 import React, {ReactElement, useRef} from 'react'
-import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
+import {Box, Paper} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'

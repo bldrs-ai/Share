@@ -1,13 +1,7 @@
 import React, {useState} from 'react'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import IconButton from '@mui/material/IconButton'
-import Input from '@mui/material/Input'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
-import EditIcon from '@mui/icons-material/Edit'
-import SubmitIcon from '@mui/icons-material/Done'
+import {Box, Stack, Typography, IconButton, Input, Select, MenuItem} from '@mui/material'
+import {Done as SubmitIcon, Edit as EditIcon} from '@mui/icons-material'
+
 
 /**
  * Editable table row to be used to edit properties

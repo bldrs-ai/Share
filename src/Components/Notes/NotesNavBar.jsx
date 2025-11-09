@@ -1,14 +1,16 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams} from '../Camera/CameraControl'
 import {removeCameraUrlParams} from '../Camera/hashState'
 import {navBackToIssue, setHashParams} from './hashState'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
-import NavigateNextIcon from '@mui/icons-material/NavigateNext'
+import {
+  AddCommentOutlined as AddCommentOutlinedIcon,
+  ArrowBack as ArrowBackIcon,
+  NavigateBefore as NavigateBeforeIcon,
+  NavigateNext as NavigateNextIcon,
+} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */

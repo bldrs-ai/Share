@@ -18,9 +18,9 @@ import Dialog from '../Dialog'
 import {useMock} from './ProfileControl'
 import {
   AccountBoxOutlined as AccountBoxOutlinedIcon,
+  GitHub as GitHubIcon,
+  Google as GoogleIcon,
 } from '@mui/icons-material'
-import GitHubIcon from '@mui/icons-material/GitHub'
-import GoogleIcon from '@mui/icons-material/Google'
 
 
 /**

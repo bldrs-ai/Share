@@ -1,6 +1,5 @@
 import React, {useState, ReactElement} from 'react'
-import MuiTabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
+import {Tabs as MuiTabs, Tab} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 import {slugify} from '../utils/strings'
 

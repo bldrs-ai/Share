@@ -1,7 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {filetypeRegex} from '../Filetype'

@@ -1,7 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import Link from '@mui/material/Link'
+import {Stack, Typography, Link} from '@mui/material'
 import * as Analytics from '../../privacy/analytics'
 import Toggle from '../Toggle'
 

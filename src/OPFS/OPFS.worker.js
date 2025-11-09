@@ -555,8 +555,8 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
  *
  * @param {string} shaHash - The SHA hash value to include in the response headers.
  * @return {Response} A mock Response object with JSON content and specified headers.
-  */
-function generateMockResponse(shaHash) {
+ */
+export function generateMockResponse(shaHash) {
   // Mock response body data
   const mockBody = JSON.stringify({
     cached: false,

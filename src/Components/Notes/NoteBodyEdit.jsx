@@ -1,7 +1,5 @@
 import React, {ReactElement} from 'react'
-import CardContent from '@mui/material/CardContent'
-import InputBase from '@mui/material/InputBase'
-import Stack from '@mui/material/Stack'
+import {CardContent, InputBase, Stack} from '@mui/material'
 
 
 /**

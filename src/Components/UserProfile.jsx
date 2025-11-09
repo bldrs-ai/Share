@@ -4,15 +4,8 @@ import {
   bindTrigger,
   bindMenu,
 } from 'material-ui-popup-state/hooks'
-import Avatar from '@mui/material/Avatar'
-import IconButton from '@mui/material/IconButton'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
-import Typography from '@mui/material/Typography'
-import Divider from '@mui/material/Divider'
-import GitHubIcon from '@mui/icons-material/GitHub'
-import LogoutIcon from '@mui/icons-material/Logout'
+import {Avatar, IconButton, ListItemIcon, Menu, MenuItem, Typography, Divider} from '@mui/material'
+import {GitHub as GitHubIcon, Logout as LogoutIcon} from '@mui/icons-material'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 
 

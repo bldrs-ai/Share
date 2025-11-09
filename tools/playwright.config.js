@@ -7,15 +7,17 @@ import debug from '../src/utils/debug.js'
 
 const isCI = !!process.env.CI
 
-// Invoke helper to write port
-execFileSync('node', ['--trace-warnings', 'tools/get-port-please.js'], {encoding: 'utf8'}).trim()
-
-const file = path.resolve('/tmp/pw-port')
-const portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
-debug(true).warn(`playwright.config: READ portState:`, portState)
-
-const port = portState.port
+let port // = 8080
+if (port === undefined) {
+  // Invoke helper to write port
+  execFileSync('node', ['--trace-warnings', 'tools/get-port-please.js'], {encoding: 'utf8'}).trim()
+  const file = path.resolve('/tmp/pw-port')
+  const portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
+  debug(true).warn(`playwright.config: READ portState:`, portState)
+  port = portState.port
+}
 const url = `http://localhost:${port}`
+console.warn(`Using test server: ${url}`)
 
 
 export default defineConfig({
@@ -72,7 +74,7 @@ export default defineConfig({
   // Run your local dev server before starting the tests.
   webServer: {
     command: `yarn test-flows-build-and-serve ${port}`,
-    url: url,
+    url,
     env: {
       SHARE_CONFIG: 'playwright',
       PORT: port,
@@ -98,6 +100,7 @@ export default defineConfig({
 
   // cleanup after tests
   onFinish: ({config, suite, results}) => {
-    fs.rmSync('/tmp/.pw-port.json')
+    fs.rmSync('/tmp/pw-port')
+    console.warn('Cleaned up port status')
   },
 })

@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
+import {Box, Paper} from '@mui/material'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
 import PanelTitle, {PANEL_TITLE_HEIGHT} from './PanelTitle'

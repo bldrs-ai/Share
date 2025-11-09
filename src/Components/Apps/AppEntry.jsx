@@ -1,10 +1,5 @@
 import React, {ReactElement} from 'react'
-import Card from '@mui/material/Card'
-import CardActionArea from '@mui/material/CardActionArea'
-import CardContent from '@mui/material/CardContent'
-import CardMedia from '@mui/material/CardMedia'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
+import {Card, CardActionArea, CardContent, CardMedia, Paper, Typography} from '@mui/material'
 
 
 /**

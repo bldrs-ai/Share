@@ -1,6 +1,5 @@
 import React from 'react'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
+import {Paper, Typography} from '@mui/material'
 import AttentionIcon from '../assets/icons/Attention.svg'
 
 
