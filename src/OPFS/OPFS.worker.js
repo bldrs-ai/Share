@@ -90,7 +90,7 @@ self.addEventListener('message', async (event) => {
  *
  * @param {number} [previewWindow] Number of leading bytes (per file) to include as hex via traverseDirectory.
  */
-async function snapshotCache(previewWindow = 0) {
+export async function snapshotCache(previewWindow = 0) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   const directoryStructure = await traverseDirectory(opfsRoot, '', previewWindow)
@@ -119,7 +119,7 @@ async function snapshotCache(previewWindow = 0) {
  * @param {number} [previewLength] If > 0 include the first N bytes of each file in hex.
  * @return {Promise<string>} Accumulated textual listing.
  */
-async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
+export async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
   let entries = ''
 
   // Helper: compute SHA-1 hash (raw file contents, not Git blob format) and optional preview
@@ -178,7 +178,7 @@ async function traverseDirectory(dirHandle, path = '', previewLength = 0) {
 /**
  * Clear OPFS cache
  */
-async function clearCache() {
+export async function clearCache() {
   const opfsRoot = await navigator.storage.getDirectory()
   await deleteAllEntries(opfsRoot)
 
@@ -193,7 +193,7 @@ async function clearCache() {
  * @param {FileSystemDirectoryHandle} dirHandle - The directory handle to delete all entries from.
  * @return {Promise<void>}
  */
-async function deleteAllEntries(dirHandle) {
+export async function deleteAllEntries(dirHandle) {
   for await (const [name, handle] of dirHandle.entries()) {
     if (handle.kind === 'directory') {
       await deleteAllEntries(handle)
@@ -216,7 +216,7 @@ async function deleteAllEntries(dirHandle) {
  * @param {string} branch - The branch to fetch the latest commit hash from.
  * @return {Promise<string>} The latest commit hash.
  */
-async function fetchLatestCommitHash(baseURL, owner, repo, filePath, accessToken, branch) {
+export async function fetchLatestCommitHash(baseURL, owner, repo, filePath, accessToken, branch) {
   const url = `${baseURL}/repos/${owner}/${repo}/commits?sha=${branch}&path=${filePath}`
   const headers = accessToken ? {Authorization: `Bearer ${accessToken}`} : {}
 
@@ -245,7 +245,7 @@ async function fetchLatestCommitHash(baseURL, owner, repo, filePath, accessToken
  * @param {string} modelUrl - The URL to fetch the model from.
  * @return {Promise<Response>} The response from the request.
  */
-async function fetchRGHUC(modelUrl) {
+export async function fetchRGHUC(modelUrl) {
   try {
     // fetch model
     const modelResponse = await fetch(modelUrl)
@@ -269,7 +269,7 @@ async function fetchRGHUC(modelUrl) {
  * @param {string} etag_ - The ETag to use for the request.
  * @return {Promise<Response>} The response from the request.
  */
-async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
+export async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
   try {
     const STATUS_NOT_MODIFIED = 304
     // Step 1: Fetch the JSON response with ETag header if provided
@@ -312,7 +312,7 @@ async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
  * @param {FileSystemFileHandle} modelBlobFileHandle - The File handle to compute the SHA-1 hash for.
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
-async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
+export async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
   // Create FileSystemSyncAccessHandle on the file
   const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
@@ -357,7 +357,7 @@ async function computeGitBlobSha1FromHandle(modelBlobFileHandle) {
  * @param {File} file - The File object to compute the SHA-1 hash for.
  * @return {Promise<string>} The computed SHA-1 hash in hexadecimal format.
  */
-async function computeGitBlobSha1FromFile(file) {
+export async function computeGitBlobSha1FromFile(file) {
   // Get the size of the file
   const fileSize = file.size
 
@@ -396,7 +396,7 @@ async function computeGitBlobSha1FromFile(file) {
  * @param {Function} onProgress - The function to call when the progress changes.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onProgress) {
+export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null
@@ -505,7 +505,7 @@ async function writeTemporaryFileToOPFS(response, originalFilePath, _etag, onPro
  * @param {string} _etag - The ETag to use for the request.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag) {
+export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag) {
   const opfsRoot = await navigator.storage.getDirectory()
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null
@@ -555,7 +555,7 @@ async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath, _etag)
  *
  * @param {string} shaHash - The SHA hash value to include in the response headers.
  * @return {Response} A mock Response object with JSON content and specified headers.
- */
+  */
 function generateMockResponse(shaHash) {
   // Mock response body data
   const mockBody = JSON.stringify({
@@ -588,7 +588,7 @@ function generateMockResponse(shaHash) {
  * @param {string} mimeType - The MIME type
  * @return {Blob} The Blob object created from the base64 string.
  */
-function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+export function base64ToBlob(base64, mimeType = 'application/octet-stream') {
   const binaryString = atob(base64)
   const len = binaryString.length
   const bytes = new Uint8Array(len)
@@ -612,7 +612,7 @@ function base64ToBlob(base64, mimeType = 'application/octet-stream') {
  * @param {string} branch - The branch name
  * @param {string} accessToken - The access token
  */
-async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
+export async function writeBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken) {
   let _etag = null
   let commitHash = null
   let cleanEtag = null
@@ -732,7 +732,7 @@ async function writeBase64Model(content, shaHash, originalFilePath, owner, repo,
  * @param {Function} onProgress - The function to call when the progress changes.
  * @return {Promise<void>}
  */
-async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
+export async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
   let _etag = null
   let commitHash = null
   let cleanEtag = null
@@ -1006,7 +1006,7 @@ async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, 
  * @param {Function} onProgress - Progress callback
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
+export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   let ownerFolderHandle = null
@@ -1190,7 +1190,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
  * @param {string} commitHash - The commit hash to use for the request.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
+export async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1234,7 +1234,7 @@ async function writeFileToPath(rootHandle, filePath, etag, commitHash = null) {
  * @param {boolean} shouldCreate - Whether to create the file if it doesn't exist.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
+export async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1279,7 +1279,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
  * @param {boolean} create - Whether to create the file if it doesn't exist.
  * @return {Promise<[FileSystemDirectoryHandle, FileSystemFileHandle]>} The directory and file handles.
  */
-async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
+export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, create = false) {
   const pathSegments = safePathSplit(filePath)
   let currentHandle = rootHandle
 
@@ -1331,7 +1331,7 @@ async function retrieveFileWithPathNew(rootHandle, filePath, etag, commitHash, c
  * @param {File} modelFile - The model file.
  * @return {Promise<boolean>} True if the file was written successfully, false otherwise.
  */
-async function writeFileToHandle(blobAccessHandle, modelFile) {
+export async function writeFileToHandle(blobAccessHandle, modelFile) {
   try {
     // Step 1: Convert the File to an ArrayBuffer
     const arrayBuffer = await modelFile.arrayBuffer()
@@ -1364,7 +1364,7 @@ async function writeFileToHandle(blobAccessHandle, modelFile) {
  * @param {string} repo - The repository name.
  * @param {string} branch - The branch name
  */
-async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
+export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
 
   // Compute file git sha1 hash
@@ -1408,7 +1408,7 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
  * @param {object} opts - Options
  * @return {Promise<FileSystemFileHandle>}
  */
-async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts = {}) {
+export async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts = {}) {
   const {overwrite = true} = opts
 
   // If the target exists, decide whether to overwrite or bail.
@@ -1478,7 +1478,7 @@ async function renameFileInOPFS(parentDirectory, fileHandle, newFileName, opts =
  * @param {*} branch
  * @return {string} postmessage specifying operation status
  */
-async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
+export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
   let modelDirectoryHandle = null
@@ -1529,7 +1529,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {string} branch - The branch to use for the request.
  * @return {Promise<void>}
  */
-async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
+export async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
   let repoFolderHandle = null
@@ -1608,7 +1608,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {string} originalFileName - The name of the original file.
  * @return {Promise<void>}
  */
-async function writeModelToOPFS(objectUrl, objectKey) {
+export async function writeModelToOPFS(objectUrl, objectKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1669,7 +1669,7 @@ async function writeModelToOPFS(objectUrl, objectKey) {
  * @param {string} objectKey - The object key to use for the request.
  * @return {Promise<void>}
  */
-async function readModelFromOPFS(objectKey) {
+export async function readModelFromOPFS(objectKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1709,7 +1709,7 @@ async function readModelFromOPFS(objectKey) {
  * @param {string} fileName - The name of the file.
  * @return {Promise<void>}
  */
-async function writeFileToOPFS(objectUrl, fileName) {
+export async function writeFileToOPFS(objectUrl, fileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1764,7 +1764,7 @@ async function writeFileToOPFS(objectUrl, fileName) {
  * @param {string} fileName - The name of the file.
  * @return {Promise<void>}
  */
-async function readFileFromOPFS(fileName) {
+export async function readFileFromOPFS(fileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -1801,7 +1801,7 @@ async function readFileFromOPFS(fileName) {
  * @return {Record<string, any>} obj That object that was passed in, if valid
  * @throws If any argument is not defined.
  */
-function assertValues(obj, keys) {
+export function assertValues(obj, keys) {
   const undefinedKeys = keys.filter((key) => obj[key] === undefined)
   if (undefinedKeys.length > 0) {
     throw new Error(`The following keys are undefined: 
@@ -1818,7 +1818,7 @@ function assertValues(obj, keys) {
  * @param {string} pathStr - The path to split.
  * @return {string[]} The path segments.
  */
-function safePathSplit(pathStr) {
+export function safePathSplit(pathStr) {
   const parts = pathStr.split('/')
   if (parts[0] === '') {
     parts.shift()
@@ -1827,40 +1827,4 @@ function safePathSplit(pathStr) {
     parts.pop()
   }
   return parts
-}
-
-// Export functions when running under Node (e.g. for Jest tests)
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    snapshotCache,
-    traverseDirectory,
-    clearCache,
-    deleteAllEntries,
-    fetchLatestCommitHash,
-    fetchRGHUC,
-    fetchAndHeadRequest,
-    computeGitBlobSha1FromHandle,
-    computeGitBlobSha1FromFile,
-    writeTemporaryFileToOPFS,
-    writeTemporaryBase64BlobFileToOPFS,
-    generateMockResponse,
-    base64ToBlob,
-    writeBase64Model,
-    downloadModel,
-    downloadModelToOPFS,
-    writeFileToPath,
-    retrieveFileWithPath,
-    retrieveFileWithPathNew,
-    writeFileToHandle,
-    writeModelToOPFSFromFile,
-    renameFileInOPFS,
-    doesFileExistInOPFS,
-    deleteModelFromOPFS,
-    writeModelToOPFS,
-    readModelFromOPFS,
-    writeFileToOPFS,
-    readFileFromOPFS,
-    assertValues,
-    safePathSplit,
-  }
 }

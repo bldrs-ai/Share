@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1811",
+  "version": "1.0.1812",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -169,6 +169,7 @@
   "engines": {
     "node": ">=20"
   },
+  "type": "module",
   "msw": {
     "workerDirectory": "public"
   }

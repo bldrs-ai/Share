@@ -1,29 +1,44 @@
 import path from 'node:path'
 import fs from 'fs'
 import {getPort} from 'get-port-please'
+import debug from '../src/utils/debug.js'
 
 
-export default async () => {
-  const port = String(await getPort({random: true}))
-  const url = `http://localhost:${port}`
-  fs.writeFileSync('/tmp/.pw-env.json', JSON.stringify({port, url}))
-}
+const serverConfigFilename = '/tmp/pw-port'
 
+const file = path.resolve(serverConfigFilename)
 
-const file = path.resolve('.pw-run-port')
-
+const port = await getPort({random: true})
+let portState
 try {
-  // Try to create the file exclusively — only one process wins
   const fd = fs.openSync(file, 'wx')
-  const port = await getPort({random: true})
-  fs.writeFileSync(fd, String(port))
+  portState = {port, date: new Date}
+  fs.writeFileSync(fd, JSON.stringify(portState))
   fs.closeSync(fd)
-  process.stdout.write(String(port))
+  debug().error('gpp: Wrote NEW PORT state:', portState)
 } catch (err) {
   if (err.code === 'EEXIST') {
     // Another process already created it — just read it
-    const port = fs.readFileSync(file, 'utf8').trim()
-    process.stdout.write(port)
+    portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
+    debug().warn('gpp: (FOUND PORT state):', portState)
+    if (portState === undefined) {
+      throw new Error('Could not read existing port state')
+    } else {
+      const now = new Date()
+      const old = Date.parse(portState.date)
+      const oneMin = 60_000
+      const fiveMins = 5 * oneMin
+      if (now - old < fiveMins) { // TODO
+        // In-use file.
+        debug().warn('gpp: It\'s new! continuing')
+      } else {
+        // Old file.  Overwrite.
+        const fd = fs.openSync(file, 'w') // NB: no x
+        fs.writeFileSync(fd, JSON.stringify({port, date: new Date}))
+        fs.closeSync(fd)
+        debug().warn('gpp: But it\'s old!  Wrote UPDATED PORT state:', portState, `now: ${now}, old: ${portState.date}`)
+      }
+    }
   } else {
     throw err
   }
