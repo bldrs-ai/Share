@@ -7,7 +7,7 @@ import debug from '../src/utils/debug.js'
 
 const isCI = !!process.env.CI
 
-let port // = 8080
+let port = isCI ? 8080 : undefined
 if (port === undefined) {
   // Invoke helper to write port
   execFileSync('node', ['--trace-warnings', 'tools/get-port-please.js'], {encoding: 'utf8'}).trim()
