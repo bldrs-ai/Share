@@ -1,25 +1,10 @@
-import path from 'node:path'
-import fs from 'node:fs'
 import {defineConfig, devices} from '@playwright/test'
-import {execFileSync} from 'node:child_process'
-import debug from '../src/utils/debug.js'
 
 
 const isCI = !!process.env.CI
 
-const defaultPort = 8080
-let port = isCI ? defaultPort : undefined
-if (port === undefined) {
-  // Invoke helper to write port
-  execFileSync('node', ['tools/get-port-please.js'], {encoding: 'utf8'}).trim()
-  const file = path.resolve('/tmp/pw-port')
-  const portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
-  debug(true).warn(`playwright.config: READ portState:`, portState)
-  port = portState.port
-}
+const port = 8080
 const url = `http://localhost:${port}`
-console.warn(`Using test server: ${url}`)
-
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
@@ -82,7 +67,7 @@ export default defineConfig({
     },
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
-    reuseExistingServer: true, // !isCI,
+    reuseExistingServer: false, // !isCI,
   },
 
   expect: {
@@ -98,10 +83,4 @@ export default defineConfig({
 
   snapshotPathTemplate:
     '{testDir}/{testFilePath}-snapshots/{arg}{ext}',
-
-  // cleanup after tests
-  onFinish: ({config, suite, results}) => {
-    fs.rmSync('/tmp/pw-port')
-    console.warn('Cleaned up port status')
-  },
 })

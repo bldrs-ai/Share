@@ -15,12 +15,12 @@ try {
   portState = {port, date: new Date}
   fs.writeFileSync(fd, JSON.stringify(portState))
   fs.closeSync(fd)
-  debug().error('gpp: Wrote NEW PORT state:', portState)
+  debug(true).error('gpp: Wrote NEW PORT state:', portState)
 } catch (err) {
   if (err.code === 'EEXIST') {
     // Another process already created it — just read it
     portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
-    debug().warn('gpp: (FOUND PORT state):', portState)
+    debug(true).warn('gpp: (FOUND PORT state):', portState)
     if (portState === undefined) {
       throw new Error('Could not read existing port state')
     } else {
@@ -30,13 +30,13 @@ try {
       const fiveMins = 5 * oneMin
       if (now - old < fiveMins) { // TODO
         // In-use file.
-        debug().warn('gpp: It\'s new! continuing')
+        debug(true).warn('gpp: It\'s new! continuing')
       } else {
         // Old file.  Overwrite.
         const fd = fs.openSync(file, 'w') // NB: no x
         fs.writeFileSync(fd, JSON.stringify({port, date: new Date}))
         fs.closeSync(fd)
-        debug().warn('gpp: But it\'s old!  Wrote UPDATED PORT state:', portState, `now: ${now}, old: ${portState.date}`)
+        debug(true).warn('gpp: But it\'s old!  Wrote UPDATED PORT state:', portState, `now: ${now}, old: ${portState.date}`)
       }
     }
   } else {

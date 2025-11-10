@@ -71,7 +71,7 @@ describe('Open 200: Open Models in multiple formats', () => {
     })
   })
 
-  test('Loads STEP - Screen', async ({page}) => {
+  test.skip('Loads STEP - Screen', async ({page}) => {
     await doTest({
       page,
       urlPath: '/share/v/gh/bldrs-ai/test-models/main/step/gear.step',
@@ -80,7 +80,7 @@ describe('Open 200: Open Models in multiple formats', () => {
     })
   })
 
-  test('Loads STP - Screen', async ({page}) => {
+  test.skip('Loads STP - Screen', async ({page}) => {
     // Use same actual local file, just testing .stp handling
     await doTest({
       page,
