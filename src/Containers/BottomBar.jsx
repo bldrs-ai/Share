@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Stack from '@mui/material/Stack'
+import {Stack} from '@mui/material'
 import AboutControl from '../Components/About/AboutControl'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'

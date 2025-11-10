@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import GlobalStyles from '@mui/material/GlobalStyles'
+import {GlobalStyles} from '@mui/material'
 
 
 /**

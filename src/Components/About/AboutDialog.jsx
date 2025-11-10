@@ -1,18 +1,13 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
-import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Stack from '@mui/material/Stack'
-import SvgIcon from '@mui/material/SvgIcon'
-import Typography from '@mui/material/Typography'
+import {Box, Link, Stack, SvgIcon, Typography} from '@mui/material'
+import {Email as EmailIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
 import {LogoB} from '../Logo/Logo'
 import {ABOUT_MISSION, ABOUT_PAGE_TITLE} from './component'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
-import GitHubIcon from '@mui/icons-material/GitHub'
-import EmailIcon from '@mui/icons-material/Email'
 import DiscordIcon from './Discord.svg'
 
 

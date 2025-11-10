@@ -9,7 +9,7 @@ import Panel from '../SideDrawer/Panel'
 import VersionsTimeline from './VersionsTimeline'
 import {VERSIONS_TITLE} from './component'
 import useVersions from './useVersions'
-import RestartAltIcon from '@mui/icons-material/RestartAlt'
+import {RestartAlt as RestartAltIcon} from '@mui/icons-material'
 
 
 /**

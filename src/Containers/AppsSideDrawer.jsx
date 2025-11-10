@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import AppsPanel from '../Components/Apps/AppsPanel'
 import AppPanel from '../Components/Apps/AppPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'

@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Link from '@mui/material/Link'
+import {Link} from '@mui/material'
 import BlogLayout from '../../layouts/BlogLayout'
 
 

@@ -1,7 +1,7 @@
 import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import Autocomplete from '@mui/material/Autocomplete'
-import TextField from '@mui/material/TextField'
+import {Autocomplete, TextField} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import {githubUrlToSharePath} from '../../routes/github'
 import {processExternalUrl} from '../../routes/routes'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
@@ -9,7 +9,6 @@ import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
-import CloseIcon from '@mui/icons-material/Close'
 
 
 /**

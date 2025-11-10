@@ -1,11 +1,9 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import IconButton from '@mui/material/IconButton'
-import Snackbar from '@mui/material/Snackbar'
-import Typography from '@mui/material/Typography'
+import {IconButton, Snackbar, Typography} from '@mui/material'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import CloseIcon from '@mui/icons-material/Close'
+import {Close as CloseIcon} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */

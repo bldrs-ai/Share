@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_IMAGINE} from './hashState'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
+import {AutoFixHighOutlined as AutoFixHighOutlinedIcon} from '@mui/icons-material'
 import ImagineDialog from './ImagineDialog'
 
 

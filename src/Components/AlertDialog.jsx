@@ -2,12 +2,11 @@ import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Markdown from 'react-markdown'
 import {useNavigate} from 'react-router-dom'
-import Alert from '@mui/material/Alert'
-import Link from '@mui/material/Link'
+import {Alert, Link} from '@mui/material'
 import useStore from '../store/useStore'
 import {trackAlert} from '../utils/alertTracking'
 import Dialog from './Dialog'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
+import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
 
 
 /**

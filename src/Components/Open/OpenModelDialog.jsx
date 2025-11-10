@@ -1,8 +1,5 @@
 import React, {ReactElement} from 'react'
-import Button from '@mui/material/Button'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import TextField from '@mui/material/TextField'
+import {Button, Stack, Typography, TextField} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
@@ -16,13 +13,8 @@ import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import {
-  GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT,
-  LABEL_LOCAL,
-  LABEL_GITHUB,
-  LABEL_SAMPLES,
-} from './component'
-import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import {GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT, LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
 /**

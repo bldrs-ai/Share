@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1812",
+  "version": "1.0.1818",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -56,7 +56,7 @@
     "test-flows": "playwright test --config=tools/playwright.config.js",
     "test-flows-build": "yarn clean && SHARE_CONFIG=playwright yarn build-share-conway",
     "test-flows-build-and-serve": "yarn test-flows-build && yarn test-flows-serve",
-    "test-flows-serve": "npx http-server docs -p 8080 -c-1",
+    "test-flows-serve": "npx http-server docs -c-1 -p",
     "typecheck": "tsc",
     "update-version": "./tools/updateVersion.mjs"
   },
@@ -153,6 +153,7 @@
     "eslint-plugin-react": "7.30.1",
     "eslint-plugin-react-hooks": "4.6.0",
     "eslint-plugin-testing-library": "5.9.1",
+    "get-port-please": "^3.2.0",
     "http-server": "14.1.1",
     "husky": "8.0.1",
     "identity-obj-proxy": "3.0.0",
@@ -168,6 +169,7 @@
   "engines": {
     "node": ">=20"
   },
+  "type": "module",
   "msw": {
     "workerDirectory": "public"
   }

@@ -1,23 +1,23 @@
 import React, {ReactElement, useState} from 'react'
-import Box from '@mui/material/Box'
-import CardActions from '@mui/material/CardActions'
-import Stack from '@mui/material/Stack'
+import {Box, CardActions, Stack} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import useExistInFeature from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
 import {MARKER_COLOR_ACTIVE_CSS, MARKER_COLOR_INACTIVE_CSS} from '../Markers/component'
-import useExistInFeature from '../../hooks/useExistInFeature'
-import useStore from '../../store/useStore'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
-import AddLocationIcon from '@mui/icons-material/AddLocationOutlined'
-import CheckIcon from '@mui/icons-material/Check'
-import CloseIcon from '@mui/icons-material/Close'
-import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
-import GitHubIcon from '@mui/icons-material/GitHub'
-import PhotoCameraIcon from '@mui/icons-material/PhotoCameraOutlined'
-import ShareIcon from '@mui/icons-material/Share'
-import PlaceIcon from '@mui/icons-material/Place'
+import {
+  AddCommentOutlined as AddCommentOutlinedIcon,
+  AddLocationOutlined as AddLocationIcon,
+  Check as CheckIcon,
+  Close as CloseIcon,
+  ForumOutlined as ForumOutlinedIcon,
+  GitHub as GitHubIcon,
+  PhotoCameraOutlined as PhotoCameraIcon,
+  Place as PlaceIcon,
+  Share as ShareIcon,
+} from '@mui/icons-material'
 
 
 /**

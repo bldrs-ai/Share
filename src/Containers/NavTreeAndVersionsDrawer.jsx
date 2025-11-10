@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import useStore from '../store/useStore'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import VersionsPanel from '../Components/Versions/VersionsPanel'

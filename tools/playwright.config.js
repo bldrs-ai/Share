@@ -1,7 +1,12 @@
 import {defineConfig, devices} from '@playwright/test'
+import {runGetPortPlease} from './utils'
 
 
+const ciPort = 8080
 const isCI = !!process.env.CI
+const port = isCI ? ciPort : runGetPortPlease()
+const url = `http://localhost:${port}`
+
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
@@ -26,7 +31,7 @@ export default defineConfig({
 
   use: {
     // Base URL to use in actions like `await page.goto('/')`.
-    baseURL: 'http://localhost:8080',
+    baseURL: url,
     // don’t record unless failure
     screenshot: 'on-first-retry',
     trace: 'on-first-retry',
@@ -56,14 +61,15 @@ export default defineConfig({
 
   // Run your local dev server before starting the tests.
   webServer: {
-    command: `yarn test-flows-build-and-serve > build.log 2>&1`,
-    url: 'http://localhost:8080',
+    command: `yarn test-flows-build-and-serve ${port}`,
+    url,
     env: {
       SHARE_CONFIG: 'playwright',
+      PORT: port,
     },
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
-    reuseExistingServer: !isCI,
+    reuseExistingServer: false, // !isCI,
   },
 
   expect: {
