@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_SEARCH} from './hashState'
-import SearchIcon from '@mui/icons-material/Search'
+import {Search as SearchIcon} from '@mui/icons-material'
 
 
 /**

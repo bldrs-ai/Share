@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
-import Divider from '@mui/material/Divider'
-import Stack from '@mui/material/Stack'
+import {Divider, Stack} from '@mui/material'
 import AppsControl from '../Components/Apps/AppsControl'
 import CameraControl from '../Components/Camera/CameraControl'
 import MarkerControl from '../Components/Markers/MarkerControl'

@@ -1,7 +1,6 @@
 import React, {ReactElement} from 'react'
 import ReactMarkdown from 'react-markdown'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
+import {Link, Typography} from '@mui/material'
 import BlogPostLayout from '../layouts/BlogPostLayout'
 import {assertDefined} from '../utils/assert'
 

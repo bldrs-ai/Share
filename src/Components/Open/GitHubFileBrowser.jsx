@@ -1,8 +1,6 @@
 
 import React, {ReactElement, useState} from 'react'
-import Button from '@mui/material/Button'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import {Button, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'

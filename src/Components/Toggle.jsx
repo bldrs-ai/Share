@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Switch from '@mui/material/Switch'
+import {Switch} from '@mui/material'
 
 
 /**

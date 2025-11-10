@@ -6,14 +6,12 @@ import TimelineDot from '@mui/lab/TimelineDot'
 import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineSeparator from '@mui/lab/TimelineSeparator'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import {Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {styled} from '@mui/system'
+import {Commit as CommitIcon} from '@mui/icons-material'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import CommitIcon from '@mui/icons-material/Commit'
 
 
 /**

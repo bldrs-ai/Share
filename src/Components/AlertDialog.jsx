@@ -1,10 +1,10 @@
 import React, {ReactElement} from 'react'
-import Link from '@mui/material/Link'
+import {Link} from '@mui/material'
+import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
 import {NotFoundError} from '../loader/Loader'
 import useStore from '../store/useStore'
-import Dialog from './Dialog'
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
 import {trackAlert} from '../utils/alertTracking'
+import Dialog from './Dialog'
 
 
 /**

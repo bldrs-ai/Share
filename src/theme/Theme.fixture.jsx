@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import CssBaseline from '@mui/material/CssBaseline'
+import {CssBaseline} from '@mui/material'
 import {ThemeProvider} from '@mui/material/styles'
 import Styles from '../Styles'
 import useShareTheme from './Theme'

@@ -1,5 +1,5 @@
 import React, {useState} from 'react'
-import Typography from '@mui/material/Typography'
+import {Typography} from '@mui/material'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import debug from '../../utils/debug'
 import {stoi} from '../../utils/strings'

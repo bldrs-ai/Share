@@ -1,11 +1,7 @@
 // PricingDialog.js
 import React, {ReactElement} from 'react'
-import Dialog from '@mui/material/Dialog'
-import AppBar from '@mui/material/AppBar'
-import Toolbar from '@mui/material/Toolbar'
-import IconButton from '@mui/material/IconButton'
-import Typography from '@mui/material/Typography'
-import CloseIcon from '@mui/icons-material/Close'
+import {Dialog, AppBar, Toolbar, IconButton, Typography} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import PricingTable from '../Stripe/PricingTable'
 
 

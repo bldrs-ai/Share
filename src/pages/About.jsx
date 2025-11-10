@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Typography from '@mui/material/Typography'
+import {Typography} from '@mui/material'
 import TitledLayout from '../layouts/TitledLayout'
 
 

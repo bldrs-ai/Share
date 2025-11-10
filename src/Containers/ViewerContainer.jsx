@@ -1,6 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {useIsMobile} from '../Components/Hooks'
 import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
 import useStore from '../store/useStore'

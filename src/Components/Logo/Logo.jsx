@@ -1,9 +1,8 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import {Box, SvgIcon} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
-import SvgIcon from '@mui/material/SvgIcon'
 
 
 /** @return {ReactElement} */
