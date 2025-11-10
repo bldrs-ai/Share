@@ -25,13 +25,13 @@ This file defines autonomous and semi-autonomous agents used in this repository.
 - `yarn typecheck` - Run TypeScript type checking only
 - `yarn precommit` - Run lint and test (pre-commit hook)
 
-### Cypress E2E Testing
-- `yarn cy` - Run Cypress tests headlessly in Chrome
-- `yarn cy-headed` - Run Cypress tests with UI
-- `yarn cy-spec` - Run specific test spec
-- `yarn cy-build` - Build for Cypress testing with MSW enabled
-- `yarn cy-parallel` - Run tests in parallel for faster execution
-- `yarn cy-percy` - Run visual regression tests with Percy
+### Playwright E2E Testing
+Playwright tests are run using the `yarn test-flows` command.  Here are some examples.  Paths and flags can be combined as well.
+
+- `yarn test-flows` - Run Playwright tests headlessly
+- `yarn test-flows --ui --headed` - Run Playwright tests with UI and browser visible
+- `yarn test-flows src/Components/Search/Search.spec.ts` - Run specific test spec
+- `yarn test-flows --update-snapshots` - Update visual regression test snapshots
 
 ## Architecture Overview
 
@@ -95,13 +95,13 @@ GitHub API integration for model versioning and collaboration:
 ### Build System
 - **ESBuild** configuration in `tools/esbuild/`
 - Dual build targets: Conway engine (default) and web-ifc
-- Environment-specific configs: dev, prod, cypress
+- Environment-specific configs: dev, prod, playwright
 - Multi-threading support with Conway engine
 - Bundle analysis and optimization tools
 
 ### Testing Strategy
 - **Jest** for unit tests with jsdom environment
-- **Cypress** for E2E testing with visual regression (Percy)
+- **Playwright** for E2E testing with visual regression
 - **React Cosmos** for component development and testing
 - **MSW** for API mocking in tests
 - Separate test configs for source code and build tools

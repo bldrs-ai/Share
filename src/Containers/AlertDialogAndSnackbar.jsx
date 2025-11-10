@@ -1,26 +1,19 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
 import {IconButton, Snackbar, Typography} from '@mui/material'
-import {Close as CloseIcon} from '@mui/icons-material'
 import AlertDialog from '../Components/AlertDialog'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import {navToDefault} from '../utils/navigate'
+import {Close as CloseIcon} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */
 export default function AlertAndSnackbar() {
-  const appPrefix = useStore((state) => state.appPrefix)
-
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const [isSnackOpen, setIsSnackOpen] = useState(false)
   const [text, setText] = useState(null)
   const [duration, setDuration] = useState(null)
-
-  const navigate = useNavigate()
-
 
   useEffect(() => {
     if (snackMessage === null) {
@@ -48,7 +41,6 @@ export default function AlertAndSnackbar() {
       <AlertDialog
         onClose={() => {
           setSnackMessage(null)
-          navToDefault(navigate, appPrefix)
         }}
       />
       <Snackbar

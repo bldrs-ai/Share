@@ -4,7 +4,7 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
-import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {setupGithubPathIntercept} from '../../tests/e2e/models'
 import {expectScreen} from '../../tests/screens'
 
 
@@ -33,74 +33,57 @@ describe('Versions 100: Show a specific version', () => {
         await auth0Login(page)
       })
 
-      const percyLabelPrefix = 'Versions 100: Show a specific version,'
+      const screenLabelPrefix = 'Versions 100: Show a specific version,'
 
       // TODO(https://github.com/bldrs-ai/Share/issues/1178)
-      test.skip('Open Momentum.ifc, open versions component, select three versions', async ({page}) => {
+      test('Open Momentum.ifc, open versions component, select three versions', async ({page}) => {
         await page.getByTestId('control-button-open').click()
-        await page.getByTestId('textfield-sample-projects').click()
+        const openDialog = page.getByRole('dialog', {name: 'Open'})
+        openDialog.getByRole('tab', {name: 'Samples'}).click()
 
+        const fixturePathname = 'test-models/ifc/misc/box.ifc'
         // set up initial momentum.ifc load
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha1testsha1testsha1testsha1testsha1/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha2 commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha2testsha2testsha2testsha2testsha2/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        // set up versioned momentum.ifc load (testsha3 commit)
-        await setupVirtualPathIntercept(
-          page,
-          '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha3testsha3testsha3testsha3testsha3/Momentum.ifc',
-          '/Momentum.ifc',
-        )
-
-        await page.getByText('Momentum').click()
-        await waitForModelReady(page)
+        let branch = 'main'
+        let githubPath = `/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        let gotoPath = `/share/v/gh/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        const gotoMainWait = await setupGithubPathIntercept(page, githubPath, gotoPath, fixturePathname)
+        const momentumChip = openDialog.getByText('Momentum')
+        await momentumChip.click()
+        await gotoMainWait()
 
         // first commit version test
+        branch = 'testsha1testsha1testsha1testsha1testsha1'
+        githubPath = `/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        gotoPath = `/share/v/gh/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        const goto1Wait = await setupGithubPathIntercept(page, githubPath, gotoPath, fixturePathname)
         await page.getByTestId('control-button-versions').click()
         const firstTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(0)
         await firstTimelineItem.click()
-        await waitForModelReady(page)
-
+        await goto1Wait()
         await page.getByTestId('control-button-versions').click()
-
-        const animWaitTimeMs = 1000
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} first commit model visible with matching version selected.png`)
+        await expectScreen(page, `${screenLabelPrefix} first commit model visible with matching version selected.png`)
 
         // second commit version test
+        branch = 'testsha2testsha2testsha2testsha2testsha2'
+        githubPath = `/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        gotoPath = `/share/v/gh/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        const goto2Wait = await setupGithubPathIntercept(page, githubPath, gotoPath, fixturePathname)
         const secondTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(1)
         await secondTimelineItem.click()
-        await waitForModelReady(page)
-
+        await goto2Wait()
         await page.getByTestId('control-button-versions').click()
-
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} second commit model visible with matching version selected.png`)
+        await expectScreen(page, `${screenLabelPrefix} second commit model visible with matching version selected.png`)
 
         // third commit version test
+        branch = 'testsha3testsha3testsha3testsha3testsha3'
+        githubPath = `/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        gotoPath = `/share/v/gh/Swiss-Property-AG/Momentum-Public/${branch}/Momentum.ifc`
+        const goto3Wait = await setupGithubPathIntercept(page, githubPath, gotoPath, fixturePathname)
         const thirdTimelineItem = page.getByTestId('timeline-list').locator('.MuiTimelineItem-root').nth(2)
         await thirdTimelineItem.click()
-        await waitForModelReady(page)
-
+        await goto3Wait()
         await page.getByTestId('control-button-versions').click()
-        await page.waitForTimeout(animWaitTimeMs)
-        await expectScreen(page, `${percyLabelPrefix} third commit model visible with matching version selected.png`)
+        await expectScreen(page, `${screenLabelPrefix} third commit model visible with matching version selected.png`)
       })
     })
   })
