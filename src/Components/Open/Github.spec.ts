@@ -48,7 +48,7 @@ describe('Open 100: GitHub Integration', () => {
       test('Model loads - Screen', async ({page}) => {
         await page.getByTestId('control-button-open').click()
         // Note this includes {enter} at end to simulate Enter keypress
-        const searchInput = page.getByPlaceholder(GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT)
+        const searchInput = page.getByRole('textbox', {name: GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT})
         await searchInput.fill(`https://github.com${githubPathname}`)
         await waitForModelReadyCallback()
         await expectScreen(page, 'Github-link-model-loaded.png')
