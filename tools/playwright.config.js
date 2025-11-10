@@ -1,10 +1,12 @@
 import {defineConfig, devices} from '@playwright/test'
+import {runGetPortPlease} from './utils'
 
 
+const ciPort = 8080
 const isCI = !!process.env.CI
-
-const port = 8080
+const port = isCI ? ciPort : runGetPortPlease()
 const url = `http://localhost:${port}`
+
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.

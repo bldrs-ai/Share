@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1817",
+  "version": "1.0.1818",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -56,7 +56,7 @@
     "test-flows": "playwright test --config=tools/playwright.config.js",
     "test-flows-build": "yarn clean && SHARE_CONFIG=playwright yarn build-share-conway",
     "test-flows-build-and-serve": "yarn test-flows-build && yarn test-flows-serve",
-    "test-flows-serve": "npx http-server docs -c-1 -p 8080",
+    "test-flows-serve": "npx http-server docs -c-1 -p",
     "typecheck": "tsc",
     "update-version": "./tools/updateVersion.mjs"
   },

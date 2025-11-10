@@ -1,45 +1,23 @@
-import path from 'node:path'
-import fs from 'fs'
+// Invoked from utils.js to get a port number that is unique to
+// the playwright process.  Total facepalm worthy.
 import {getPort} from 'get-port-please'
-import debug from '../src/utils/debug.js'
+import {findAncestorByName} from './find-ancestor-by-name.js'
 
-
-const serverConfigFilename = '/tmp/pw-port'
-
-const file = path.resolve(serverConfigFilename)
-
-const port = await getPort({random: true})
-let portState
-try {
-  const fd = fs.openSync(file, 'wx')
-  portState = {port, date: new Date}
-  fs.writeFileSync(fd, JSON.stringify(portState))
-  fs.closeSync(fd)
-  debug(true).error('gpp: Wrote NEW PORT state:', portState)
-} catch (err) {
-  if (err.code === 'EEXIST') {
-    // Another process already created it — just read it
-    portState = JSON.parse(fs.readFileSync(file, 'utf8').trim())
-    debug(true).warn('gpp: (FOUND PORT state):', portState)
-    if (portState === undefined) {
-      throw new Error('Could not read existing port state')
-    } else {
-      const now = new Date()
-      const old = Date.parse(portState.date)
-      const oneMin = 60_000
-      const fiveMins = 5 * oneMin
-      if (now - old < fiveMins) { // TODO
-        // In-use file.
-        debug(true).warn('gpp: It\'s new! continuing')
-      } else {
-        // Old file.  Overwrite.
-        const fd = fs.openSync(file, 'w') // NB: no x
-        fs.writeFileSync(fd, JSON.stringify({port, date: new Date}))
-        fs.closeSync(fd)
-        debug(true).warn('gpp: But it\'s old!  Wrote UPDATED PORT state:', portState, `now: ${now}, old: ${portState.date}`)
-      }
-    }
-  } else {
-    throw err
-  }
+// So basically, if we can find the playwright ancestor process,
+// we can use the process ID to get a port number that is unique
+// to the playwright process.  If not, try 8080, or again search
+// that range.  Should be stable for most use cases.
+const minPort = 20000
+const maxPort = 29999
+let desiredPort = 8080
+const ancestor = await findAncestorByName({matcher: /.bin\/playwright/i})
+if (ancestor) {
+  const rangeSize = maxPort - minPort
+  desiredPort = minPort + (ancestor.pid % rangeSize)
+} else {
+  console.error('Playwright ancestor process not identified')
 }
+
+// Parent parses stdout to get port number
+// eslint-disable-next-line no-console
+console.log(await getPort({port: desiredPort, range: [minPort, maxPort]}))
