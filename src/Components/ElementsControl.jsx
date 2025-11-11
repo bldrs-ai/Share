@@ -1,13 +1,14 @@
 import React, {ReactElement, useState} from 'react'
-import ButtonGroup from '@mui/material/ButtonGroup'
-import Stack from '@mui/material/Stack'
+import {ButtonGroup, Stack} from '@mui/material'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneMenu from './CutPlane/CutPlaneMenu'
-import CloseIcon from '@mui/icons-material/Close'
-import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import {
+  Close as CloseIcon,
+  FilterCenterFocus as FilterCenterFocusIcon,
+  HideSourceOutlined as HideSourceOutlinedIcon,
+  VisibilityOutlined as VisibilityOutlinedIcon,
+} from '@mui/icons-material'
 
 
 /**

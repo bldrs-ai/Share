@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Typography from '@mui/material/Typography'
+import {Typography} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 import TitledLayout from './TitledLayout'
 

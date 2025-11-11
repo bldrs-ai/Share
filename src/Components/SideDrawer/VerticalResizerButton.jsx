@@ -1,7 +1,6 @@
 import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
-import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
+import {Box, Paper} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {isNumber} from '../../utils/strings'

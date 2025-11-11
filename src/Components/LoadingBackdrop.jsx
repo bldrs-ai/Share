@@ -1,7 +1,6 @@
 import React, {ReactElement} from 'react'
-import Backdrop from '@mui/material/Backdrop'
+import {Backdrop, CircularProgress} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
-import CircularProgress from '@mui/material/CircularProgress'
 import useStore from '../store/useStore'
 
 

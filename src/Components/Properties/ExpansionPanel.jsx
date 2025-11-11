@@ -1,9 +1,6 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import Accordion from '@mui/material/Accordion'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import Typography from '@mui/material/Typography'
-import PsetOpenIcon from '@mui/icons-material/KeyboardArrowDown'
+import {Accordion, AccordionDetails, AccordionSummary, Typography} from '@mui/material'
+import {KeyboardArrowDown as PsetOpenIcon} from '@mui/icons-material'
 
 
 /**

@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_NAV_TREE} from './hashState'
-import ListIcon from '@mui/icons-material/Segment'
+import {Segment as ListIcon} from '@mui/icons-material'
 
 
 /**

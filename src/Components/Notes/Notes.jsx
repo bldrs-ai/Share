@@ -1,7 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
-import List from '@mui/material/List'
-import ListItem from '@mui/material/ListItem'
+import {Box, List, ListItem} from '@mui/material'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import debug from '../../utils/debug'
