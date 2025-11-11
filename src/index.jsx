@@ -16,6 +16,7 @@ import ApplicationError from './Components/ApplicationError'
 import {flags} from './FeatureFlags'
 import './compat'
 import './index.css'
+import 'react-chat-elements/dist/main.css'
 import '@fontsource/roboto/latin-300.css'
 import '@fontsource/roboto/latin-400.css'
 import '@fontsource/roboto/latin-500.css'
@@ -61,6 +62,7 @@ if (process.env.MSW_IS_ENABLED) {
     OAUTH2_CLIENT_ID: process.env.OAUTH2_CLIENT_ID,
     RAW_GIT_PROXY_URL: process.env.RAW_GIT_PROXY_URL,
     RAW_GIT_PROXY_URL_NEW: process.env.RAW_GIT_PROXY_URL_NEW,
+    OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL,
   })
   worker.start({
     onUnhandledRequest(req) {
