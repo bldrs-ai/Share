@@ -1,20 +1,20 @@
 import React, {ReactElement} from 'react'
 import {Stack} from '@mui/material'
 import AboutControl from '../Components/About/AboutControl'
-import AssistantChat from '../Components/Assistant/AssistantChat'
+import BotChat from '../Components/Bot/BotChat'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'
 import useExistInFeature from '../hooks/useExistInFeature'
 
 
 /**
- * BottomBar contains AboutControl, ElementsControl, AssistantChat and HelpControl
+ * BottomBar contains AboutControl, ElementsControl, BotChat and HelpControl
  *
  * @property {Function} deselectItems deselects currently selected element
  * @return {ReactElement}
  */
 export default function BottomBar({deselectItems}) {
-  const isAssistantEnabled = useExistInFeature('assistant')
+  const isBotEnabled = useExistInFeature('bot')
   return (
     <Stack
       spacing={2}
@@ -26,7 +26,7 @@ export default function BottomBar({deselectItems}) {
     >
       <AboutControl/>
       <ElementsControl deselectItems={deselectItems}/>
-      {isAssistantEnabled ? <AssistantChat/> : <HelpControl/>}
+      {isBotEnabled ? <BotChat/> : <HelpControl/>}
     </Stack>
   )
 }

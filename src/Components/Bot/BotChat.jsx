@@ -10,15 +10,17 @@ import {
 } from '@mui/material'
 import useStore from '../../store/useStore'
 import ChatMessage from './ChatMessage'
-import {askLLM} from './openRouterClient'
-import ChatIcon from '@mui/icons-material/Chat'
-import CloseIcon from '@mui/icons-material/Close'
-import SendIcon from '@mui/icons-material/Send'
-import PushPinIcon from '@mui/icons-material/PushPin'
-import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
-import 'react-chat-elements/dist/main.css'
-import './chat-bubbles.css' // ← step 2 (see CSS below)a
 import {safeJsonFromCodeBlock} from './eval'
+import {askLLM} from './openRouterClient'
+import {
+  Chat as ChatIcon,
+  Close as CloseIcon,
+  Send as SendIcon,
+  PushPin as PushPinIcon,
+  PushPinOutlined as PushPinOutlinedIcon,
+} from '@mui/icons-material'
+import 'react-chat-elements/dist/main.css'
+import './chat-bubbles.css'
 
 
 /** @return {ReactElement} */
@@ -110,7 +112,7 @@ export default function FloatingChat() {
   const BASE_SYSTEM_MSG = {
     role: 'system',
     content: [
-      'You are Bldrs AI, an IFC model assistant.',
+      'You are Bldrs AI, an IFC model viewer assistant.',
       'When context is small, return JSON with:',
       '- "assistant_response": string  (always shown to the user)',
       '- optional "selectedElements": [expressID,…]  (we will highlight via setSelectedElements)',
@@ -332,14 +334,14 @@ export default function FloatingChat() {
                   onPointerUp={endDrag}
                   onPointerCancel={endDrag}
                 >
-                  Assistant
+                  Bot
                 </Box>
               )
             )}
             action={
               <Stack direction='row' spacing={0.5}>
                 <IconButton
-                  aria-label={isPinned ? 'Unpin assistant' : 'Pin assistant'}
+                  aria-label={isPinned ? 'Unpin bot' : 'Pin bot'}
                   aria-pressed={!isPinned}
                   onClick={togglePinned}
                   sx={{color: 'inherit'}}
