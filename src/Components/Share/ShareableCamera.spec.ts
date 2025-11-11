@@ -3,7 +3,6 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
-import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
@@ -29,6 +28,8 @@ describe('view 100: Shareable camera position', () => {
       await expect(page.getByTestId('img-qrcode')).toBeVisible()
       await expect(page.getByTestId('textfield-link')).toBeVisible()
       await expect(page.getByTestId('toggle-camera')).toBeVisible()
+      // TODO(pablo): screenshot, but port varies between local an prod, so need
+      // to mock.
 
       // Mock clipboard API
       await page.addInitScript(() => {
