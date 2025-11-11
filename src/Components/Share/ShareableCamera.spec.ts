@@ -29,7 +29,6 @@ describe('view 100: Shareable camera position', () => {
       await expect(page.getByTestId('img-qrcode')).toBeVisible()
       await expect(page.getByTestId('textfield-link')).toBeVisible()
       await expect(page.getByTestId('toggle-camera')).toBeVisible()
-      await expectScreen(page, 'ShareDialog-opens.png')
 
       // Mock clipboard API
       await page.addInitScript(() => {

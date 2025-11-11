@@ -4,7 +4,7 @@ import {runGetPortPlease} from './utils'
 
 const ciPort = 8080
 const isCI = process.env.CI === 'true'
-const port = isCI ? ciPort : runGetPortPlease()
+const port = 8080 // isCI ? ciPort : runGetPortPlease()
 const url = `http://localhost:${port}`
 
 
