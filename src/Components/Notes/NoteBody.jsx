@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import CardActionArea from '@mui/material/CardActionArea'
+import {CardActionArea} from '@mui/material'
 import NoteContent from './NoteContent'
 
 

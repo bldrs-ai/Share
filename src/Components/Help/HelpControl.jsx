@@ -1,32 +1,29 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import ButtonGroup from '@mui/material/ButtonGroup'
-import ListItem from '@mui/material/ListItem'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import ListItemText from '@mui/material/ListItemText'
-import SvgIcon from '@mui/material/SvgIcon'
-import Stack from '@mui/material/Stack'
+import {ButtonGroup, ListItem, ListItemIcon, ListItemText, SvgIcon, Stack} from '@mui/material'
+import {
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
+  AutoFixHighOutlined as AutoFixHighOutlinedIcon,
+  ChatOutlined as ChatOutlinedIcon,
+  Close as CloseIcon,
+  CreateNewFolderOutlined as CreateNewFolderOutlinedIcon,
+  CropOutlined as CropOutlinedIcon,
+  FileUpload as ShiftIcon,
+  FilterCenterFocus as FilterCenterFocusIcon,
+  FormatListBulleted as FormatListBulletedIcon,
+  HelpOutline as HelpOutlineIcon,
+  HideSourceOutlined as HideSourceOutlinedIcon,
+  History as HistoryIcon,
+  Portrait as PortraitIcon,
+  Search as SearchIcon,
+  Share as ShareIcon,
+  TouchAppOutlined as TouchAppOutlinedIcon,
+  VisibilityOutlined as VisibilityOutlinedIcon,
+} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
 import OnboardingOverlay from '../Onboarding/OnboardingOverlay'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import CloseIcon from '@mui/icons-material/Close'
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import HistoryIcon from '@mui/icons-material/History'
-import PortraitIcon from '@mui/icons-material/Portrait'
-import SearchIcon from '@mui/icons-material/Search'
-import ShareIcon from '@mui/icons-material/Share'
-import ShiftIcon from '@mui/icons-material/FileUpload'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import TreeIcon from '../../assets/icons/Tree.svg'
 
 

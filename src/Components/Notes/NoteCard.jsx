@@ -1,7 +1,5 @@
 import React, {ReactElement, useState, useEffect, useRef} from 'react'
-import Avatar from '@mui/material/Avatar'
-import Card from '@mui/material/Card'
-import CardHeader from '@mui/material/CardHeader'
+import {Avatar, Card, CardHeader} from '@mui/material'
 import NoteBodyEdit from './NoteBodyEdit'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {updateComment} from '../../net/github/Comments'

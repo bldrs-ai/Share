@@ -1,8 +1,5 @@
 import React, {ReactElement} from 'react'
-import Divider from '@mui/material/Divider'
-import Paper from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
+import {Divider, Paper, Link, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 
 

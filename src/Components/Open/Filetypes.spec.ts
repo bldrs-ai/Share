@@ -35,7 +35,7 @@ describe('Open 200: Open Models in multiple formats', () => {
     await setIsReturningUser(page.context())
   })
 
-  test.skip('Loads FBX - Screen', async ({page}) => {
+  test('Loads FBX - Screen', async ({page}) => {
     await doTest({
       page,
       urlPath: '/share/v/gh/bldrs-ai/test-models/main/fbx/samba-dancing.fbx',
@@ -62,7 +62,7 @@ describe('Open 200: Open Models in multiple formats', () => {
     })
   })
 
-  test.skip('Loads STL (binary) - Screen', async ({page}) => {
+  test('Loads STL (binary) - Screen', async ({page}) => {
     await doTest({
       page,
       urlPath: '/share/v/gh/bldrs-ai/test-models/main/stl/pr2_head_pan.stl',

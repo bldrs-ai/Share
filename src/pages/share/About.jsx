@@ -1,7 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
+import {Box, Link, Typography} from '@mui/material'
 import {useIsMobile} from '../../Components/Hooks'
 import TitledLayout from '../../layouts/TitledLayout'
 

@@ -1,6 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {Grid, Chip, Typography} from '@mui/material'
-import AccessibilityIcon from '@mui/icons-material/AccessibilityOutlined'
+import {AccessibilityOutlined as AccessibilityIcon} from '@mui/icons-material'
 import Bplaza from '../../assets/icons/Bplaza.svg'
 import Gear from '../../assets/icons/Gear.svg'
 import Momentum from '../../assets/icons/Momentum.svg'

@@ -1,12 +1,10 @@
 import React, {ReactElement, useState} from 'react'
-import IconButton from '@mui/material/IconButton'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
-import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import MoreVertIcon from '@mui/icons-material/MoreVert'
+import {IconButton, Menu, MenuItem, Tooltip, Typography} from '@mui/material'
+import {
+  DeleteOutlineOutlined as DeleteOutlineOutlinedIcon,
+  EditOutlined as EditOutlinedIcon,
+  MoreVert as MoreVertIcon,
+} from '@mui/icons-material'
 
 
 /**

@@ -1,6 +1,5 @@
 import React, {ReactElement, useState} from 'react'
-import MenuItem from '@mui/material/MenuItem'
-import TextField from '@mui/material/TextField'
+import {MenuItem, TextField} from '@mui/material'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 

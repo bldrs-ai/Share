@@ -1,6 +1,6 @@
 import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {disablePageTextSelect, reenablePageTextSelect} from '../../utils/event'
 import {isNumber} from '../../utils/strings'

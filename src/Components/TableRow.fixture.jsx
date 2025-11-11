@@ -1,5 +1,5 @@
 import React from 'react'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {ThemeCtx} from '../theme/Theme.fixture'
 import TableRow from './TableRow'
 
