@@ -1,15 +1,12 @@
 import React from 'react'
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
-import {MemoryRouter} from 'react-router'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
-import {StoreCtx} from '../../store/Store.fixture'
 import useStore from '../../store/useStore'
-import {ThemeCtx} from '../../theme/Theme.fixture'
 import BotChat from './BotChat'
 
 
 describe('BotChat', () => {
-  let viewerMock: any
+  let viewerMock
   beforeEach(() => {
     window.alert = jest.fn()
     viewerMock = {

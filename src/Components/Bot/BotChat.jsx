@@ -9,6 +9,7 @@ import {
   Box, Card, CardHeader, Fab, IconButton, InputBase, Stack, useTheme,
 } from '@mui/material'
 import useStore from '../../store/useStore'
+import debug from '../../utils/debug'
 import ChatMessage from './ChatMessage'
 import {safeJsonFromCodeBlock} from './eval'
 import {askLLM} from './openRouterClient'
@@ -204,8 +205,7 @@ export default function FloatingChat() {
       /* 5️⃣ extract JSON payload */
       const payload = safeJsonFromCodeBlock(raw)
 
-      // eslint-disable-next-line no-console
-      console.log('LLM response:', payload)
+      debug().log('LLM response:', payload)
       const assistantText = payload?.assistant_response || raw
 
       /* 6️⃣ update selected elements if present */
