@@ -6,18 +6,14 @@ import {log} from './utils.js'
 
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
-const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
-const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 const buildDir = path.resolve(repoRoot, 'docs')
 const plugins = makePlugins(repoRoot, buildDir)
 
-log('using config\n', defines)
+log('using defines\n', defines)
 
 // The build config with two entry points:
 // One for your main app (index.jsx) and one for your subscribe page.
 export default {
-  // Add both entry points here. ESBuild will output a separate bundle for each.
-  entryPoints: [indexFile, subscribeFile],
   outdir: buildDir,
   // Optionally, use outbase to preserve your folder structure.
   outbase: path.resolve(repoRoot, 'src'),

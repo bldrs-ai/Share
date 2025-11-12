@@ -1,28 +1,46 @@
-import esbuild from 'esbuild'
 import fs from 'node:fs'
 import * as path from 'node:path'
+import esbuild from 'esbuild'
 import {fileURLToPath} from 'url'
 import config from './common.js'
 
 
-const mainBuild = esbuild.build(config)
+const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
+
+// Main build
+const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
+const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
+const mainBuild = esbuild.build({
+  ...config,
+  entryPoints: [indexFile, subscribeFile],
+})
 
 // Worker
-const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
 const workerFile = path.resolve(repoRoot, 'src', 'OPFS', 'OPFS.worker.js')
 const buildDir = path.resolve(repoRoot, 'docs')
-const workerBuild = esbuild.build({
+const outfileBase = path.join(buildDir, 'OPFS.worker')
+
+// ESM worker
+const workerBuildESM = esbuild.build({
   ...config,
   entryPoints: [workerFile],
-  outfile: path.join(buildDir, 'OPFS.Worker.js'),
   outdir: undefined,
-  // Build worker as ESM bundle - requires {type: 'module'} when loading
+  outfile: `${outfileBase}.js`,
   format: 'esm',
+})
+
+// old iOS, Samsung Internet, quirky Chromes
+const workerBuildClassic = esbuild.build({
+  ...config,
+  entryPoints: [workerFile],
+  outdir: undefined,
+  outfile: `${outfileBase}.classic.js`,
+  format: 'iife',
 })
 
 
 // Wait for both builds to complete
-Promise.all([mainBuild, workerBuild])
+Promise.all([mainBuild, workerBuildESM, workerBuildClassic])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {
