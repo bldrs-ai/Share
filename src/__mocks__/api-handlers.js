@@ -90,7 +90,7 @@ function workersAndWasmPassthrough() {
   return [
     // Caching + OPFS
     http.get(/\/Cache\.js$/, () => passthrough()),
-    http.get(/\/OPFS\.Worker\.js$/, () => passthrough()),
+    http.get(/\/OPFS\.worker\.js$/, () => passthrough()),
     // Conway
     http.get(/ConwayGeomWasmWebMT\.wasm$/i, () => passthrough()),
     http.get(/ConwayGeomWasmWebMT\.js$/i, () => passthrough()),
