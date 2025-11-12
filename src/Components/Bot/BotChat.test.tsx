@@ -29,6 +29,8 @@ describe('BotChat', () => {
     act(() => {
       setStoreState({viewer: viewerMock, selectedElements: [], isBotVisible: true})
     })
+
+    localStorage.setItem('openrouter_api_key', 'test-key')
   })
 
   afterEach(() => {
@@ -57,11 +59,6 @@ describe('BotChat', () => {
     render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     fireEvent.change(
-      screen.getByPlaceholderText('Paste your OpenRouter API Key…'),
-      {target: {value: 'test-key'}},
-    )
-
-    fireEvent.change(
       screen.getByPlaceholderText('Type a message…'),
       {target: {value: 'Hello bot'}},
     )
@@ -83,11 +80,6 @@ describe('BotChat', () => {
     Object.defineProperty(endNode, 'scrollIntoView', {value: scrollIntoView, writable: true})
 
     fireEvent.change(
-      screen.getByPlaceholderText('Paste your OpenRouter API Key…'),
-      {target: {value: 'test-key'}},
-    )
-
-    fireEvent.change(
       screen.getByPlaceholderText('Type a message…'),
       {target: {value: 'Scroll test'}},
     )
@@ -101,5 +93,18 @@ describe('BotChat', () => {
     await waitFor(() => {
       expect(scrollIntoView).toHaveBeenCalled()
     })
+  })
+
+  it('updates API key from settings panel', () => {
+    localStorage.setItem('openrouter_api_key', 'old-key')
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    fireEvent.click(screen.getByTestId('BotSettings-OpenButton'))
+    const input = screen.getByTestId('BotSettings-ApiKeyInput') as HTMLInputElement
+    fireEvent.change(input, {target: {value: 'new-key'}})
+    fireEvent.click(screen.getByTestId('BotSettings-OkButton'))
+
+    expect(localStorage.getItem('openrouter_api_key')).toBe('new-key')
+    expect(screen.queryByTestId('BotSettings')).not.toBeInTheDocument()
   })
 })
