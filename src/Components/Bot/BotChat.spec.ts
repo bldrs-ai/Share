@@ -29,7 +29,18 @@ describe('BotChat', () => {
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
     await waitForModel(page)
 
+    // Click the settings button
+    await page.getByTestId('BotSettings-OpenButton').click()
+    await expect(page.getByTestId('BotSettings')).toBeVisible()
+
+    // Fill the API key input
     await page.getByPlaceholder('Paste your OpenRouter API Key…').fill('test-key')
+
+    // Click the OK button
+    await page.getByTestId('BotSettings-OkButton').click()
+    await expect(page.getByTestId('BotSettings')).not.toBeVisible()
+
+    // Fill the message input
     await page.getByPlaceholder('Type a message…').fill('Hello from Playwright')
     await page.getByTestId('BotChat-SendButton').click()
 
