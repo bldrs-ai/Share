@@ -16,11 +16,12 @@ describe('BotChat', () => {
 
   test('feature flag toggles BotChat visibility', async ({page}) => {
     await returningUserVisitsHomepageWaitForModel(page)
-    await expect(page.getByRole('button', {name: 'chat'})).toHaveCount(0)
+    await expect(page.getByTestId('control-button-bot')).toHaveCount(0)
 
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
     await waitForModel(page)
-    await expect(page.getByRole('button', {name: 'chat'})).toBeVisible()
+    await expect(page.getByTestId('control-button-bot')).toBeVisible()
+    await expect(page.getByTestId('BotPanelContainer')).toBeVisible()
   })
 
   test('sends a message and captures the assistant response', async ({page}) => {
@@ -28,13 +29,9 @@ describe('BotChat', () => {
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
     await waitForModel(page)
 
-    const chatButton = page.getByRole('button', {name: 'chat'})
-    await expect(chatButton).toBeVisible()
-    await chatButton.click()
-
     await page.getByPlaceholder('Paste your OpenRouter API Key…').fill('test-key')
     await page.getByPlaceholder('Type a message…').fill('Hello from Playwright')
-    await page.getByTestId('SendIcon').locator('..').click()
+    await page.getByTestId('BotChat-SendButton').click()
 
     await expect(page.getByText('Test received.')).toBeVisible()
     await expectScreen(page, 'BotChat-response.png')

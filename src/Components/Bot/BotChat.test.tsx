@@ -5,6 +5,15 @@ import useStore from '../../store/useStore'
 import BotChat from './BotChat'
 
 
+type StoreState = ReturnType<typeof useStore.getState> & {
+  viewer?: unknown
+  selectedElements: string[]
+  isBotVisible: boolean
+}
+
+const setStoreState = useStore.setState as unknown as (partial: Record<string, unknown>) => void
+
+
 describe('BotChat', () => {
   let viewerMock
   beforeEach(() => {
@@ -18,45 +27,34 @@ describe('BotChat', () => {
     }
 
     act(() => {
-      useStore.setState({viewer: viewerMock, selectedElements: []})
+      setStoreState({viewer: viewerMock, selectedElements: [], isBotVisible: true})
     })
   })
 
   afterEach(() => {
     act(() => {
-      useStore.setState({
+      setStoreState({
         viewer: undefined,
         selectedElements: [],
+        isBotVisible: true,
       })
     })
     localStorage.clear()
     jest.clearAllMocks()
   })
 
-  it('opens, toggles pin state, and closes', () => {
-    const {container} = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const openButton = screen.getByRole('button', {name: /chat/i})
-    fireEvent.click(openButton)
+  it('closes when the panel close button is clicked', () => {
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     expect(screen.getByText('Bot')).toBeInTheDocument()
 
-    const pinButton = screen.getByRole('button', {name: 'Unpin bot'})
-    expect(pinButton).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByRole('button', {name: 'Close'}))
 
-    fireEvent.click(pinButton)
-    expect(screen.getByRole('button', {name: 'Pin bot'})).toHaveAttribute('aria-pressed', 'true')
-
-    const closeButton = container.querySelector('button [data-testid="CloseIcon"]')?.parentElement as HTMLButtonElement
-    expect(closeButton).toBeTruthy()
-    fireEvent.click(closeButton)
-
-    expect(screen.queryByText('Bot')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', {name: /chat/i})).toBeInTheDocument()
+    expect((useStore.getState() as StoreState).isBotVisible).toBe(false)
   })
 
   it('sends a message and displays the MSW mock response', async () => {
-    const {container} = render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
-    fireEvent.click(screen.getByRole('button', {name: /chat/i}))
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
 
     fireEvent.change(
       screen.getByPlaceholderText('Paste your OpenRouter API Key…'),
@@ -68,14 +66,40 @@ describe('BotChat', () => {
       {target: {value: 'Hello bot'}},
     )
 
-    const sendButton = container.querySelector('button [data-testid="SendIcon"]')?.parentElement as HTMLButtonElement
-    expect(sendButton).toBeTruthy()
-    fireEvent.click(sendButton)
+    fireEvent.click(screen.getByTestId('BotChat-SendButton'))
 
     await waitFor(() => {
       expect(screen.getByText('Test received.')).toBeInTheDocument()
     })
 
     expect(viewerMock.getSelectedElementsProps).toHaveBeenCalledWith([])
+  })
+
+  it('scrolls to the latest message when messages update', async () => {
+    render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
+
+    const endNode = await screen.findByTestId('BotChat-MessagesEnd')
+    const scrollIntoView = jest.fn()
+    Object.defineProperty(endNode, 'scrollIntoView', {value: scrollIntoView, writable: true})
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Paste your OpenRouter API Key…'),
+      {target: {value: 'test-key'}},
+    )
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Type a message…'),
+      {target: {value: 'Scroll test'}},
+    )
+
+    fireEvent.click(screen.getByTestId('BotChat-SendButton'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Test received.')).toBeInTheDocument()
+    })
+
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalled()
+    })
   })
 })
