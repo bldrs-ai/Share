@@ -17,7 +17,8 @@ let workerRef = null
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker(new URL('/OPFS.worker.js', import.meta.url), {type: 'module'})
+    const workerUrl = new URL('./OPFS.worker.js', import.meta.url)
+    workerRef = new Worker(workerUrl, {type: 'module', name: 'OPFS Worker'})
 
     workerRef.postMessage({
       command: 'initializeWorker',
