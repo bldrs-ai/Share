@@ -1,34 +1,35 @@
-import {Vector3, Plane, ArrowHelper, Raycaster, Vector2} from 'three'
+import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere} from 'three'
 import debug from '../utils/debug'
+import CutPlaneArrowHelper from './CutPlaneArrowHelper'
+
 
 /**
- * GLB Clipper - Manages clipping planes with interactive drag controls for GLB models
+ * Manages clipping planes with interactive drag controls for GLB models.
  */
-export class GlbClipper {
+export default class GlbClipper {
   /**
    * @param {object} viewer - The viewer instance
    * @param {object} model - The 3D model to apply clipping to
    */
   constructor(viewer, model) {
     this.viewer = viewer
+    this.canvas = viewer.context.getDomElement()
     this.model = model
     this.planes = [] // Array of {plane, arrow, direction, offset}
     this.draggingArrow = null
     this.hoveredArrow = null
     this.raycaster = new Raycaster()
     this.mouse = new Vector2()
+    this.interactionEnabled = false
+    this.modelBoundingSphere = this.computeModelBoundingSphere()
+    this.arrowScale = this.computeArrowScale()
 
     // Bind event handlers
     this.onMouseDown = this.onMouseDown.bind(this)
     this.onMouseMove = this.onMouseMove.bind(this)
     this.onMouseUp = this.onMouseUp.bind(this)
-
-    // Add event listeners
-    const canvas = this.viewer.context.getDomElement()
-    canvas.addEventListener('mousedown', this.onMouseDown)
-    canvas.addEventListener('mousemove', this.onMouseMove)
-    canvas.addEventListener('mouseup', this.onMouseUp)
   }
+
 
   /**
    * Creates a clipping plane with interactive arrow control
@@ -43,49 +44,32 @@ export class GlbClipper {
     const plane = new Plane()
     plane.setFromNormalAndCoplanarPoint(normal, point)
 
-    // Create arrow helpers for visualization and interaction (both directions)
-    const arrowLength = 2
-    const arrowColor = 0x0066ff
-    const arrowColorHighlight = 0xffff00 // Yellow for hover/select
+    const arrowColor = 0x00ff00
+    const arrowColorHighlight = 0xffff00
 
-    // Positive direction arrow
-    // eslint-disable-next-line no-magic-numbers
-    const arrow1 = new ArrowHelper(normal, point, arrowLength, arrowColor, 0.5, 0.3)
-    arrow1.userData.isClippingControl = true
-    arrow1.userData.planeData = {direction, offset}
-    arrow1.userData.defaultColor = arrowColor
-    arrow1.userData.highlightColor = arrowColorHighlight
+    const arrow = new CutPlaneArrowHelper(normal, arrowColor)
+    const scale = this.arrowScale
+    arrow.scale.set(scale, scale, scale)
+    arrow.position.copy(point)
+    arrow.userData.isClippingControl = true
+    arrow.userData.planeData = {direction, offset}
+    arrow.userData.defaultColor = arrowColor
+    arrow.userData.highlightColor = arrowColorHighlight
 
-    // Negative direction arrow
-    // eslint-disable-next-line no-magic-numbers
-    const arrow2 = new ArrowHelper(normal.clone().negate(), point, arrowLength, arrowColor, 0.5, 0.3)
-    arrow2.userData.isClippingControl = true
-    arrow2.userData.planeData = {direction, offset}
-    arrow2.userData.defaultColor = arrowColor
-    arrow2.userData.highlightColor = arrowColorHighlight
-
-    // Make arrows always visible over geometry
-    arrow1.traverse((child) => {
-      if (child.material) {
-        child.material.depthTest = false
-        child.renderOrder = 999
-      }
-    })
-    arrow2.traverse((child) => {
+    // Make arrow always visible over geometry
+    arrow.traverse((child) => {
       if (child.material) {
         child.material.depthTest = false
         child.renderOrder = 999
       }
     })
 
-    this.viewer.context.getScene().add(arrow1)
-    this.viewer.context.getScene().add(arrow2)
+    this.viewer.context.getScene().add(arrow)
 
     // Store plane info
     const planeData = {
       plane,
-      arrow1,
-      arrow2,
+      arrow,
       direction,
       offset,
       normal: normal.clone(),
@@ -103,14 +87,55 @@ export class GlbClipper {
     return planeData
   }
 
+
+  /**
+   * Computes the bounding sphere for the model
+   *
+   * @return {Sphere|null}
+   */
+  computeModelBoundingSphere() {
+    if (!this.model) {
+      return null
+    }
+
+    const box = new Box3().setFromObject(this.model)
+    if (box.isEmpty()) {
+      return null
+    }
+
+    const boundingSphere = new Sphere()
+    box.getBoundingSphere(boundingSphere)
+    return boundingSphere
+  }
+
+
+  /**
+   * Computes an appropriate arrow scale based on the model bounding sphere
+   *
+   * @return {number}
+   */
+  computeArrowScale() {
+    if (!this.modelBoundingSphere) {
+      return DEFAULT_ARROW_SCALE
+    }
+
+    const radius = this.modelBoundingSphere.radius
+    if (!radius || Number.isNaN(radius)) {
+      return DEFAULT_ARROW_SCALE
+    }
+
+    const scaled = radius * ARROW_SCALE_RATIO
+    return Math.min(MAX_ARROW_SCALE, Math.max(MIN_ARROW_SCALE, scaled))
+  }
+
+
   /**
    * Deletes all clipping planes and controls
    */
   deleteAllPlanes() {
     // Remove arrows from scene
     this.planes.forEach((planeData) => {
-      this.viewer.context.getScene().remove(planeData.arrow1)
-      this.viewer.context.getScene().remove(planeData.arrow2)
+      this.viewer.context.getScene().remove(planeData.arrow)
     })
 
     this.planes = []
@@ -120,6 +145,30 @@ export class GlbClipper {
     debug().log('GlbClipper: Deleted all planes')
   }
 
+
+  /**
+   * Enables or disables user interaction controls for clipping arrows
+   *
+   * @param {boolean} enabled
+   */
+  setInteractionEnabled(enabled) {
+    if (enabled && !this.interactionEnabled) {
+      this.canvas.addEventListener('mousedown', this.onMouseDown)
+      this.canvas.addEventListener('mousemove', this.onMouseMove)
+      this.canvas.addEventListener('mouseup', this.onMouseUp)
+      this.interactionEnabled = true
+    } else if (!enabled && this.interactionEnabled) {
+      this.canvas.removeEventListener('mousedown', this.onMouseDown)
+      this.canvas.removeEventListener('mousemove', this.onMouseMove)
+      this.canvas.removeEventListener('mouseup', this.onMouseUp)
+      this.canvas.style.cursor = 'default'
+      this.draggingArrow = null
+      this.hoveredArrow = null
+      this.interactionEnabled = false
+    }
+  }
+
+
   /**
    * Updates the renderer's clipping planes array
    */
@@ -128,6 +177,7 @@ export class GlbClipper {
     renderer.clippingPlanes = this.planes.map((pd) => pd.plane)
     renderer.localClippingEnabled = this.planes.length > 0
   }
+
 
   /**
    * Applies clipping planes to all materials in the model
@@ -161,6 +211,7 @@ export class GlbClipper {
     }
   }
 
+
   /**
    * Clears clipping from all materials
    */
@@ -190,6 +241,7 @@ export class GlbClipper {
     }
   }
 
+
   /**
    * Sets arrow color
    *
@@ -204,41 +256,54 @@ export class GlbClipper {
     })
   }
 
+
+  /**
+   * Sets the mouse position
+   *
+   * @param {MouseEvent} event
+   */
+  setMousePosition(event) {
+    const rect = this.canvas.getBoundingClientRect()
+    this.mouse.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
+    this.mouse.y = -(((event.clientY - rect.top) / rect.height) * 2) + 1
+  }
+
+
+  /**
+   * Gets the intersects with the arrows
+   *
+   * @return {Array<object>} Intersection objects with the arrows (if any).
+   */
+  getIntersects() {
+    const arrows = []
+    this.planes.forEach((pd) => {
+      arrows.push(pd.arrow)
+    })
+    return this.raycaster.intersectObjects(arrows, true)
+  }
+
+
   /**
    * Mouse down handler - check if clicking on an arrow
    *
    * @param {MouseEvent} event
    */
   onMouseDown(event) {
-    const canvas = this.viewer.context.getDomElement()
-    const rect = canvas.getBoundingClientRect()
-
-    // eslint-disable-next-line no-mixed-operators
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    // eslint-disable-next-line no-mixed-operators
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-
+    this.setMousePosition(event)
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
 
     // Check intersection with arrows
-    const arrows = []
-    this.planes.forEach((pd) => {
-      arrows.push(pd.arrow1, pd.arrow2)
-    })
-    const intersects = this.raycaster.intersectObjects(arrows, true)
+    const intersects = this.getIntersects()
 
     if (intersects.length > 0) {
       // Find which plane's arrow was clicked
       for (const planeData of this.planes) {
-        if (intersects[0].object === planeData.arrow1 ||
-            intersects[0].object.parent === planeData.arrow1 ||
-            intersects[0].object === planeData.arrow2 ||
-            intersects[0].object.parent === planeData.arrow2) {
+        if (intersects[0].object === planeData.arrow ||
+            intersects[0].object.parent === planeData.arrow) {
           this.draggingArrow = planeData
 
           // Highlight the selected arrow
-          this.setArrowColor(planeData.arrow1, planeData.arrow1.userData.highlightColor)
-          this.setArrowColor(planeData.arrow2, planeData.arrow2.userData.highlightColor)
+          this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
 
           // Disable orbit controls while dragging
           if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
@@ -252,54 +317,38 @@ export class GlbClipper {
     }
   }
 
+
   /**
    * Mouse move handler - update plane position if dragging
    *
    * @param {MouseEvent} event
    */
   onMouseMove(event) {
-    const canvas = this.viewer.context.getDomElement()
-    const rect = canvas.getBoundingClientRect()
-
-    // eslint-disable-next-line no-mixed-operators
-    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-    // eslint-disable-next-line no-mixed-operators
-    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
-
+    this.setMousePosition(event)
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
 
     // Handle hover highlighting when not dragging
     if (!this.draggingArrow) {
-      const arrows = []
-      this.planes.forEach((pd) => {
-        arrows.push(pd.arrow1, pd.arrow2)
-      })
-      const intersects = this.raycaster.intersectObjects(arrows, true)
+      const intersects = this.getIntersects()
 
       // Reset previous hover
       if (this.hoveredArrow && (!intersects.length ||
-          (intersects[0].object !== this.hoveredArrow.arrow1 &&
-           intersects[0].object.parent !== this.hoveredArrow.arrow1 &&
-           intersects[0].object !== this.hoveredArrow.arrow2 &&
-           intersects[0].object.parent !== this.hoveredArrow.arrow2))) {
-        this.setArrowColor(this.hoveredArrow.arrow1, this.hoveredArrow.arrow1.userData.defaultColor)
-        this.setArrowColor(this.hoveredArrow.arrow2, this.hoveredArrow.arrow2.userData.defaultColor)
+          (intersects[0].object !== this.hoveredArrow.arrow &&
+           intersects[0].object.parent !== this.hoveredArrow.arrow))) {
+        this.setArrowColor(this.hoveredArrow.arrow, this.hoveredArrow.arrow.userData.defaultColor)
         this.hoveredArrow = null
-        canvas.style.cursor = 'default'
+        this.canvas.style.cursor = 'default'
       }
 
       // Set new hover
       if (intersects.length > 0) {
         for (const planeData of this.planes) {
-          if (intersects[0].object === planeData.arrow1 ||
-              intersects[0].object.parent === planeData.arrow1 ||
-              intersects[0].object === planeData.arrow2 ||
-              intersects[0].object.parent === planeData.arrow2) {
+          if (intersects[0].object === planeData.arrow ||
+              intersects[0].object.parent === planeData.arrow) {
             if (this.hoveredArrow !== planeData) {
               this.hoveredArrow = planeData
-              this.setArrowColor(planeData.arrow1, planeData.arrow1.userData.highlightColor)
-              this.setArrowColor(planeData.arrow2, planeData.arrow2.userData.highlightColor)
-              canvas.style.cursor = 'pointer'
+              this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
+              this.canvas.style.cursor = 'pointer'
             }
             break
           }
@@ -335,8 +384,7 @@ export class GlbClipper {
       )
 
       // Update arrow positions
-      this.draggingArrow.arrow1.position.copy(newPoint)
-      this.draggingArrow.arrow2.position.copy(newPoint)
+      this.draggingArrow.arrow.position.copy(newPoint)
 
       // Update offset
       this.draggingArrow.offset += projectedMovement
@@ -347,6 +395,7 @@ export class GlbClipper {
     }
   }
 
+
   /**
    * Mouse up handler - stop dragging
    */
@@ -355,8 +404,7 @@ export class GlbClipper {
       debug().log('GlbClipper: Stopped dragging arrow')
 
       // Reset arrow color to default (will be re-highlighted by hover if still over it)
-      this.setArrowColor(this.draggingArrow.arrow1, this.draggingArrow.arrow1.userData.defaultColor)
-      this.setArrowColor(this.draggingArrow.arrow2, this.draggingArrow.arrow2.userData.defaultColor)
+      this.setArrowColor(this.draggingArrow.arrow, this.draggingArrow.arrow.userData.defaultColor)
 
       this.draggingArrow = null
 
@@ -367,18 +415,18 @@ export class GlbClipper {
     }
   }
 
+
   /**
    * Cleanup - remove event listeners
    */
   dispose() {
-    const canvas = this.viewer.context.getDomElement()
-    canvas.removeEventListener('mousedown', this.onMouseDown)
-    canvas.removeEventListener('mousemove', this.onMouseMove)
-    canvas.removeEventListener('mouseup', this.onMouseUp)
-
-    // Reset cursor
-    canvas.style.cursor = 'default'
-
+    this.setInteractionEnabled(false)
     this.deleteAllPlanes()
   }
 }
+
+
+const DEFAULT_ARROW_SCALE = 5
+const ARROW_SCALE_RATIO = 0.25
+const MIN_ARROW_SCALE = 2
+const MAX_ARROW_SCALE = 40
