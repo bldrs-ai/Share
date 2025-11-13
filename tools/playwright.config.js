@@ -3,7 +3,7 @@ import {runGetPortPlease} from './utils'
 
 
 const ciPort = 9081
-const isCI = true //process.env.CI === 'true'
+const isCI = process.env.CI === 'true'
 const port = isCI ? ciPort : runGetPortPlease()
 const url = `http://localhost:${port}`
 

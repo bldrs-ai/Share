@@ -198,7 +198,6 @@ export default function BotChat() {
         flexDirection: 'column',
         height: '100%',
         gap: '0.75em',
-        border: '1px solid red',
       }}
       data-testid='BotChat'
     >
