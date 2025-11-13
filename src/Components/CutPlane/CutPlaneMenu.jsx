@@ -154,13 +154,9 @@ export default function CutPlaneMenu() {
         setIsCutPlaneActive(false)
         if (isGlbModel && glbClipper) {
           glbClipper.setInteractionEnabled(false)
-        } else {
-          viewer.clipper.active = false
         }
       } else if (isGlbModel && glbClipper) {
         glbClipper.setInteractionEnabled(true)
-      } else {
-        viewer.clipper.active = true
       }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
@@ -174,7 +170,6 @@ export default function CutPlaneMenu() {
       } else {
         // For IFC: use clipper
         viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
-        viewer.clipper.active = true
       }
 
       setIsCutPlaneActive(true)
@@ -188,7 +183,7 @@ export default function CutPlaneMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Section'}
+        title='Section'
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}

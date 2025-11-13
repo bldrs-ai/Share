@@ -71,7 +71,7 @@ export default defineConfig({
     },
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
-    reuseExistingServer: false, // !isCI,
+    reuseExistingServer: true, // !isCI,
   },
 
   expect: {
