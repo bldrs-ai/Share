@@ -473,6 +473,9 @@ export default function CadView({
 
   /** Reset global state */
   function resetState() {
+    // TODO(pablo): use or remove level code
+    setLevelInstance(null)
+
     resetSelection()
     resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)
