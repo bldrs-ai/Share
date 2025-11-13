@@ -1,17 +1,46 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
-import {Vector3} from 'three'
-import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
+import {Vector3, Box3} from 'three'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
+import SvgIcon from '@mui/material/SvgIcon'
+import Typography from '@mui/material/Typography'
 import useStore from '../../store/useStore'
+import {GlbClipper} from '../../Infrastructure/GlbClipper'
 import debug from '../../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
 import {floatStrTrim, isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {HASH_PREFIX_CUT_PLANE} from './hashState'
-import {Close as CloseIcon, CropOutlined as CropOutlinedIcon} from '@mui/icons-material'
+import CloseIcon from '@mui/icons-material/Close'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import ElevationIcon from '../../assets/icons/Elevation.svg'
 import PlanIcon from '../../assets/icons/Plan.svg'
 import SectionIcon from '../../assets/icons/Section.svg'
+
+
+/**
+ * Gets the center of a model's bounding box
+ * Works for both IFC models (with geometry.boundingBox) and GLB models
+ *
+ * @param {object} model - The model object
+ * @return {Vector3} The center point of the model
+ */
+function getModelCenter(model) {
+  const modelCenter = new Vector3()
+
+  if (model?.geometry?.boundingBox) {
+    // IFC model with geometry.boundingBox
+    model.geometry.boundingBox.getCenter(modelCenter)
+  } else if (model) {
+    // GLB or other model - compute bounding box
+    const box = new Box3()
+    box.setFromObject(model)
+    box.getCenter(modelCenter)
+  }
+
+  return modelCenter
+}
 
 
 /**
@@ -25,12 +54,14 @@ export default function CutPlaneMenu() {
   const cutPlanes = useStore((state) => state.cutPlanes)
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
 
   const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
   const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
 
   const [anchorEl, setAnchorEl] = useState(null)
+  const [glbClipper, setGlbClipper] = useState(null)
 
   const location = useLocation()
 
@@ -43,10 +74,37 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
+  // Initialize GlbClipper when model changes
+  useEffect(() => {
+    if (model && viewer) {
+      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
+      if (isGlbModel) {
+        const clipper = new GlbClipper(viewer, model)
+        setGlbClipper(clipper)
+        viewer.glbClipper = clipper // Store on viewer for access in other functions
+        debug().log('CutPlaneMenu: Initialized GlbClipper')
+
+        return () => {
+          clipper.dispose()
+          setGlbClipper(null)
+          delete viewer.glbClipper
+        }
+      }
+    }
+  }, [model, viewer])
+
   useEffect(() => {
     const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
     if (planeHash && model && viewer) {
+      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
+
+      // For GLB models, wait for glbClipper to be initialized
+      if (isGlbModel && !glbClipper) {
+        debug().log('CutPlaneMenu#useEffect: Waiting for glbClipper to initialize')
+        return
+      }
+
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
@@ -57,27 +115,45 @@ export default function CutPlaneMenu() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model])
+  }, [model, glbClipper])
 
   const togglePlane = ({direction, offset = 0}) => {
-    const modelCenter = new Vector3
-    model?.geometry.boundingBox.getCenter(modelCenter)
+    if (setLevelInstance) {
+      setLevelInstance(null)
+    }
+    const modelCenter = getModelCenter(model)
     setAnchorEl(null)
     const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, direction, offset})
     debug().log('CutPlaneMenu#togglePlane: normal: ', normal)
     debug().log('CutPlaneMenu#togglePlane: modelCenterOffset: ', modelCenterOffset)
-    debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
+
+    const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
       debug().log('CutPlaneMenu#togglePlane: found: ', true)
       removeParams(HASH_PREFIX_CUT_PLANE, [direction])
       removeCutPlaneDirection(direction)
-      viewer.clipper.deleteAllPlanes()
+
+      if (isGlbModel && glbClipper) {
+        // For GLB: use GlbClipper
+        glbClipper.deleteAllPlanes()
+      } else {
+        // For IFC: use clipper
+        viewer.clipper.deleteAllPlanes()
+      }
+
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
       restCutPlanes.forEach((restCutPlane) => {
         const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
-        viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
+
+        if (isGlbModel && glbClipper) {
+          // Create GLB clipping plane with controls
+          glbClipper.createPlane(planeInfo.normal, planeInfo.modelCenterOffset, restCutPlane.direction, restCutPlane.offset)
+        } else {
+          viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
+        }
       })
+
       if (restCutPlanes.length === 0) {
         setIsCutPlaneActive(false)
       }
@@ -85,19 +161,23 @@ export default function CutPlaneMenu() {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
       addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
-      viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
+
+      if (isGlbModel && glbClipper) {
+        // For GLB: use GlbClipper with drag controls
+        glbClipper.createPlane(normal, modelCenterOffset, direction, offset)
+      } else {
+        // For IFC: use clipper
+        viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
+      }
+
       setIsCutPlaneActive(true)
     }
-  }
-
-  const isSelected = (direction) => {
-    return cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1
   }
 
   return (
     <>
       <TooltipIconButton
-        title='Section'
+        title={'Section'}
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}
@@ -117,30 +197,27 @@ export default function CutPlaneMenu() {
       >
         <MenuItem
           onClick={() => togglePlane({direction: 'y'})}
-          selected={isSelected('y')}
-          aria-checked={isSelected('y') ? 'true' : 'false'}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
           data-testid='menu-item-plan'
         >
           <SvgIcon><PlanIcon className='icon-share'/></SvgIcon>
-          <Typography>Plan</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'x'})}
-          selected={isSelected('x')}
-          aria-checked={isSelected('x') ? 'true' : 'false'}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
           data-testid='menu-item-section'
         >
           <SvgIcon><SectionIcon className='icon-share'/></SvgIcon>
-          <Typography>Section</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'z'})}
-          selected={isSelected('z')}
-          aria-checked={isSelected('z') ? 'true' : 'false'}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
           data-testid='menu-item-elevation'
         >
           <SvgIcon><ElevationIcon className='icon-share'/></SvgIcon>
-          <Typography>Elevation</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -150,7 +227,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
-          <Typography>Clear all</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
         </MenuItem>
       </Menu>
     </>
@@ -182,10 +259,18 @@ export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
  * @param {object} viewer bounding box
  */
 export function removePlanes(viewer) {
-  viewer?.clipper.deleteAllPlanes()
-  const clippingPlanes = viewer?.clipper['context'].clippingPlanes
-  for (const plane of clippingPlanes) {
-    viewer?.clipper['context'].removeClippingPlane(plane)
+  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+
+  if (isGlbModel && viewer.glbClipper) {
+    // For GLB: use GlbClipper
+    viewer.glbClipper.deleteAllPlanes()
+  } else if (!isGlbModel) {
+    // For IFC: use clipper
+    viewer?.clipper.deleteAllPlanes()
+    const clippingPlanes = viewer?.clipper['context'].clippingPlanes
+    for (const plane of clippingPlanes) {
+      viewer?.clipper['context'].removeClippingPlane(plane)
+    }
   }
 }
 
@@ -198,18 +283,25 @@ export function removePlanes(viewer) {
  * @return {object} {x: 0, y: 0, ...}
  */
 export function getPlanesOffset(viewer, ifcModel) {
-  if (viewer.clipper.planes.length > 0) {
+  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+  const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
+
+  if (planes && planes.length > 0) {
     let planeNormal
     let planeAxisCenter
     let planeOffsetFromCenter
     const planesOffset = {}
-    const modelCenter = new Vector3
-    ifcModel?.geometry.boundingBox.getCenter(modelCenter)
+    const modelCenter = getModelCenter(ifcModel)
     debug().log('CutPlaneMenu#getPlanesOffset: modelCenter: ', modelCenter)
-    viewer.clipper.planes.forEach((plane) => {
-      for (const [key, value] of Object.entries(plane.plane.normal)) {
+
+    planes.forEach((planeData) => {
+      const plane = isGlbModel ? planeData.plane : planeData.plane
+      const normal = plane.normal
+      const constant = plane.constant
+
+      for (const [key, value] of Object.entries(normal)) {
         if (value !== 0) {
-          const planeOffsetFromModelBoundary = plane.plane.constant
+          const planeOffsetFromModelBoundary = constant
           planeNormal = key
           planeAxisCenter = modelCenter[planeNormal]
           planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
@@ -230,7 +322,10 @@ export function getPlanesOffset(viewer, ifcModel) {
  * @param {object} ifcModel
  */
 export function addPlanesToHashState(viewer, ifcModel) {
-  if (viewer.clipper.planes.length > 0) {
+  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+  const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
+
+  if (planes && planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
     addHashParams(window.location, HASH_PREFIX_CUT_PLANE, planeInfo, true)
