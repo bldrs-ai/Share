@@ -4,6 +4,7 @@ import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import TabbedPanels from './TabbedPanels'
 import {useIsMobile} from '../Components/Hooks'
+import {BOT_TITLE} from '../Components/Bot/component'
 
 
 jest.mock('../Components/Hooks', () => ({
@@ -122,7 +123,7 @@ describe('TabbedPanels', () => {
     await act(async () => {
       await result.current.setIsBotVisible(true)
     })
-    expect(await screen.findByText('Bot')).toBeVisible()
+    expect(await screen.findByText(BOT_TITLE)).toBeVisible()
 
     await act(async () => {
       await result.current.setIsBotVisible(false)
