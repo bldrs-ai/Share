@@ -14,6 +14,7 @@ export class GlbClipper {
     this.model = model
     this.planes = [] // Array of {plane, arrow, direction, offset}
     this.draggingArrow = null
+    this.hoveredArrow = null
     this.raycaster = new Raycaster()
     this.mouse = new Vector2()
 
@@ -45,18 +46,23 @@ export class GlbClipper {
     // Create arrow helpers for visualization and interaction (both directions)
     const arrowLength = 2
     const arrowColor = 0x0066ff
+    const arrowColorHighlight = 0xffff00 // Yellow for hover/select
 
     // Positive direction arrow
     // eslint-disable-next-line no-magic-numbers
     const arrow1 = new ArrowHelper(normal, point, arrowLength, arrowColor, 0.5, 0.3)
     arrow1.userData.isClippingControl = true
     arrow1.userData.planeData = {direction, offset}
+    arrow1.userData.defaultColor = arrowColor
+    arrow1.userData.highlightColor = arrowColorHighlight
 
     // Negative direction arrow
     // eslint-disable-next-line no-magic-numbers
     const arrow2 = new ArrowHelper(normal.clone().negate(), point, arrowLength, arrowColor, 0.5, 0.3)
     arrow2.userData.isClippingControl = true
     arrow2.userData.planeData = {direction, offset}
+    arrow2.userData.defaultColor = arrowColor
+    arrow2.userData.highlightColor = arrowColorHighlight
 
     // Make arrows always visible over geometry
     arrow1.traverse((child) => {
@@ -185,6 +191,20 @@ export class GlbClipper {
   }
 
   /**
+   * Sets arrow color
+   *
+   * @param {object} arrow - Arrow helper object
+   * @param {number} color - Hex color value
+   */
+  setArrowColor(arrow, color) {
+    arrow.traverse((child) => {
+      if (child.material) {
+        child.material.color.setHex(color)
+      }
+    })
+  }
+
+  /**
    * Mouse down handler - check if clicking on an arrow
    *
    * @param {MouseEvent} event
@@ -216,6 +236,10 @@ export class GlbClipper {
             intersects[0].object.parent === planeData.arrow2) {
           this.draggingArrow = planeData
 
+          // Highlight the selected arrow
+          this.setArrowColor(planeData.arrow1, planeData.arrow1.userData.highlightColor)
+          this.setArrowColor(planeData.arrow2, planeData.arrow2.userData.highlightColor)
+
           // Disable orbit controls while dragging
           if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
             this.viewer.context.ifcCamera.cameraControls.enabled = false
@@ -234,10 +258,6 @@ export class GlbClipper {
    * @param {MouseEvent} event
    */
   onMouseMove(event) {
-    if (!this.draggingArrow) {
-      return
-    }
-
     const canvas = this.viewer.context.getDomElement()
     const rect = canvas.getBoundingClientRect()
 
@@ -247,6 +267,46 @@ export class GlbClipper {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
 
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
+
+    // Handle hover highlighting when not dragging
+    if (!this.draggingArrow) {
+      const arrows = []
+      this.planes.forEach((pd) => {
+        arrows.push(pd.arrow1, pd.arrow2)
+      })
+      const intersects = this.raycaster.intersectObjects(arrows, true)
+
+      // Reset previous hover
+      if (this.hoveredArrow && (!intersects.length ||
+          (intersects[0].object !== this.hoveredArrow.arrow1 &&
+           intersects[0].object.parent !== this.hoveredArrow.arrow1 &&
+           intersects[0].object !== this.hoveredArrow.arrow2 &&
+           intersects[0].object.parent !== this.hoveredArrow.arrow2))) {
+        this.setArrowColor(this.hoveredArrow.arrow1, this.hoveredArrow.arrow1.userData.defaultColor)
+        this.setArrowColor(this.hoveredArrow.arrow2, this.hoveredArrow.arrow2.userData.defaultColor)
+        this.hoveredArrow = null
+        canvas.style.cursor = 'default'
+      }
+
+      // Set new hover
+      if (intersects.length > 0) {
+        for (const planeData of this.planes) {
+          if (intersects[0].object === planeData.arrow1 ||
+              intersects[0].object.parent === planeData.arrow1 ||
+              intersects[0].object === planeData.arrow2 ||
+              intersects[0].object.parent === planeData.arrow2) {
+            if (this.hoveredArrow !== planeData) {
+              this.hoveredArrow = planeData
+              this.setArrowColor(planeData.arrow1, planeData.arrow1.userData.highlightColor)
+              this.setArrowColor(planeData.arrow2, planeData.arrow2.userData.highlightColor)
+              canvas.style.cursor = 'pointer'
+            }
+            break
+          }
+        }
+      }
+      return
+    }
 
     // Create a plane perpendicular to camera and containing the arrow
     const cameraDirection = new Vector3()
@@ -293,6 +353,11 @@ export class GlbClipper {
   onMouseUp() {
     if (this.draggingArrow) {
       debug().log('GlbClipper: Stopped dragging arrow')
+
+      // Reset arrow color to default (will be re-highlighted by hover if still over it)
+      this.setArrowColor(this.draggingArrow.arrow1, this.draggingArrow.arrow1.userData.defaultColor)
+      this.setArrowColor(this.draggingArrow.arrow2, this.draggingArrow.arrow2.userData.defaultColor)
+
       this.draggingArrow = null
 
       // Re-enable orbit controls
@@ -310,6 +375,9 @@ export class GlbClipper {
     canvas.removeEventListener('mousedown', this.onMouseDown)
     canvas.removeEventListener('mousemove', this.onMouseMove)
     canvas.removeEventListener('mouseup', this.onMouseUp)
+
+    // Reset cursor
+    canvas.style.cursor = 'default'
 
     this.deleteAllPlanes()
   }

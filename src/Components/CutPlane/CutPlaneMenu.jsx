@@ -15,7 +15,6 @@ import PlanIcon from '../../assets/icons/Plan.svg'
 import SectionIcon from '../../assets/icons/Section.svg'
 
 
-
 /**
  * Gets the center of a model's bounding box
  * Works for both IFC models (with geometry.boundingBox) and GLB models
