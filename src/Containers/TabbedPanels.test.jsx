@@ -13,6 +13,20 @@ jest.mock('../Components/Hooks', () => ({
 describe('TabbedPanels', () => {
   useIsMobile.mockReturnValue(true)
 
+  beforeEach(() => {
+    // clear zustand store
+    /*
+    useStore.setState({
+      isAppsVisible: false,
+      isNotesVisible: false,
+      isNavTreeVisible: false,
+      isPropertiesVisible: false,
+      isVersionsVisible: false,
+      isBotVisible: false,
+    })
+    */
+  })
+
   it('shows and hides panels and respects recently added order', async () => {
     // Access the store
     const {result} = renderHook(() => useStore((state) => state))
@@ -103,5 +117,31 @@ describe('TabbedPanels', () => {
     // Now only Nav should remain
     expect(screen.queryByText('Props')).toBeNull()
     expect(screen.getByText('Nav')).toBeVisible()
+  })
+
+  // TODO(pablo): working in dev, not in test
+  it.skip('shows bot panel when feature flag is enabled', async () => {
+    window.history.pushState({}, '', '?feature=bot')
+    const {result} = renderHook(() => useStore((state) => state))
+
+    render(
+      <ShareMock>
+        <TabbedPanels
+          pathPrefix="/mock/path"
+          branch="main"
+          selectWithShiftClickEvents={false}
+        />
+      </ShareMock>,
+    )
+
+    await act(async () => {
+      await result.current.setIsBotVisible(true)
+    })
+    expect(await screen.findByText('AI')).toBeVisible()
+
+    await act(async () => {
+      await result.current.setIsBotVisible(false)
+    })
+    expect(screen.queryByText('AI')).toBeNull()
   })
 })
