@@ -4,9 +4,11 @@ import {runGetPortPlease} from './utils'
 
 const ciPort = 9081
 const isCI = process.env.CI === 'true'
-const port = isCI ? ciPort : runGetPortPlease()
+// In CI we use a fixed port.  Locally, there may be multiple instances of this
+// process, so it's desired but not assured.
+const port = isCI ? ciPort : runGetPortPlease(ciPort)
 const url = `http://localhost:${port}`
-
+console.warn('Using test server:', url)
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
