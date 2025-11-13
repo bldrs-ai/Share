@@ -1,3 +1,6 @@
+import {isVisibleInitially} from '../Components/Bot/hashState'
+
+
 /**
  * Data stored in Zustand for Bot state.
  *
@@ -7,7 +10,7 @@
  */
 export default function createBotSlice(set) {
   return {
-    isBotVisible: true,
+    isBotVisible: isVisibleInitially(),
     setIsBotVisible: (isVisible) => set(() => ({isBotVisible: isVisible})),
     toggleIsBotVisible: () => set((state) => ({isBotVisible: !state.isBotVisible})),
   }

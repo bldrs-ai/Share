@@ -104,4 +104,29 @@ describe('TabbedPanels', () => {
     expect(screen.queryByText('Props')).toBeNull()
     expect(screen.getByText('Nav')).toBeVisible()
   })
+
+  it('shows bot panel when feature flag is enabled', async () => {
+    window.history.pushState({}, '', '?feature=bot')
+    const {result} = renderHook(() => useStore((state) => state))
+
+    render(
+      <ShareMock>
+        <TabbedPanels
+          pathPrefix="/mock/path"
+          branch="main"
+          selectWithShiftClickEvents={false}
+        />
+      </ShareMock>,
+    )
+
+    await act(async () => {
+      await result.current.setIsBotVisible(true)
+    })
+    expect(await screen.findByText('Bot')).toBeVisible()
+
+    await act(async () => {
+      await result.current.setIsBotVisible(false)
+    })
+    expect(screen.queryByText('Bot')).toBeNull()
+  })
 })

@@ -22,6 +22,7 @@ export default function setupMSW() {
       OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL,
       RAW_GIT_PROXY_URL: process.env.RAW_GIT_PROXY_URL,
       RAW_GIT_PROXY_URL_NEW: process.env.RAW_GIT_PROXY_URL_NEW,
+      ESBUILD_WATCH: process.env.ESBUILD_WATCH,
     })
     worker.start({
       onUnhandledRequest(req) {
