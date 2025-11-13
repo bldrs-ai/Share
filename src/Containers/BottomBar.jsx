@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
 import {Stack} from '@mui/material'
 import AboutControl from '../Components/About/AboutControl'
-import BotChat from '../Components/Bot/BotChat'
+import BotControl from '../Components/Bot/BotControl'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'
 import useExistInFeature from '../hooks/useExistInFeature'
@@ -26,7 +26,7 @@ export default function BottomBar({deselectItems}) {
     >
       <AboutControl/>
       <ElementsControl deselectItems={deselectItems}/>
-      {isBotEnabled ? <BotChat/> : <HelpControl/>}
+      {isBotEnabled ? <BotControl/> : <HelpControl/>}
     </Stack>
   )
 }

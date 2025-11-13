@@ -1,5 +1,6 @@
 import create from 'zustand'
 import createAppsSlice from './AppsSlice'
+import createBotSlice from './BotSlice'
 import createBrowserSlice from './BrowserSlice'
 import createCutPlanesSlice from './CutPlanesSlice'
 import createIFCSlice from './IFCSlice'
@@ -20,6 +21,7 @@ import createVersionsSlice from './VersionsSlice'
 
 const useStore = create((set, get) => ({
   ...createAppsSlice(set, get),
+  ...createBotSlice(set, get),
   ...createBrowserSlice(set, get),
   ...createCutPlanesSlice(set, get),
   ...createIFCSlice(set, get),

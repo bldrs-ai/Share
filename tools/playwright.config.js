@@ -2,7 +2,7 @@ import {defineConfig, devices} from '@playwright/test'
 import {runGetPortPlease} from './utils'
 
 
-const ciPort = 8080
+const ciPort = 9081
 const isCI = process.env.CI === 'true'
 const port = isCI ? ciPort : runGetPortPlease()
 const url = `http://localhost:${port}`
