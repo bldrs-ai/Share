@@ -1,10 +1,7 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3, Box3} from 'three'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
-import SvgIcon from '@mui/material/SvgIcon'
-import Typography from '@mui/material/Typography'
+import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
 import {GlbClipper} from '../../Infrastructure/GlbClipper'
 import debug from '../../utils/debug'
@@ -12,11 +9,11 @@ import {addHashParams, getHashParams, getObjectParams, removeParams} from '../..
 import {floatStrTrim, isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {HASH_PREFIX_CUT_PLANE} from './hashState'
-import CloseIcon from '@mui/icons-material/Close'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+import {Close as CloseIcon, CropOutlined as CropOutlinedIcon} from '@mui/icons-material'
 import ElevationIcon from '../../assets/icons/Elevation.svg'
 import PlanIcon from '../../assets/icons/Plan.svg'
 import SectionIcon from '../../assets/icons/Section.svg'
+
 
 
 /**
