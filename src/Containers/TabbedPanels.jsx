@@ -163,7 +163,7 @@ export default function TabbedPanels({
       null,
     bot: shouldShowBotPanel ?
       {
-        label: createTabLabel('Bot', () => setIsBotVisible(false)),
+        label: createTabLabel('AI', () => setIsBotVisible(false)),
         panel: <BotChat/>,
       } :
       null,

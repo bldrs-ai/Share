@@ -123,7 +123,7 @@ describe('TabbedPanels', () => {
     await act(async () => {
       await result.current.setIsBotVisible(true)
     })
-    expect(await screen.findByText(BOT_TITLE)).toBeVisible()
+    expect(await screen.findByText('AI')).toBeVisible()
 
     await act(async () => {
       await result.current.setIsBotVisible(false)
