@@ -122,6 +122,7 @@ const impl = {
   },
   clipper: {
     active: false,
+    setActive: jest.fn(),
     deleteAllPlanes: jest.fn(() => {
       return 'cutPlane'
     }),

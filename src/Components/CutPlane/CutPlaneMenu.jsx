@@ -3,7 +3,7 @@ import {useLocation} from 'react-router-dom'
 import {Vector3, Box3} from 'three'
 import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
-import {GlbClipper} from '../../Infrastructure/GlbClipper'
+import GlbClipper from '../../Infrastructure/GlbClipper'
 import debug from '../../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
 import {floatStrTrim, isNumeric} from '../../utils/strings'
@@ -152,6 +152,15 @@ export default function CutPlaneMenu() {
 
       if (restCutPlanes.length === 0) {
         setIsCutPlaneActive(false)
+        if (isGlbModel && glbClipper) {
+          glbClipper.setInteractionEnabled(false)
+        } else {
+          viewer.clipper.setActive(false)
+        }
+      } else if (isGlbModel && glbClipper) {
+        glbClipper.setInteractionEnabled(true)
+      } else {
+        viewer.clipper.setActive(true)
       }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
@@ -161,9 +170,11 @@ export default function CutPlaneMenu() {
       if (isGlbModel && glbClipper) {
         // For GLB: use GlbClipper with drag controls
         glbClipper.createPlane(normal, modelCenterOffset, direction, offset)
+        glbClipper.setInteractionEnabled(true)
       } else {
         // For IFC: use clipper
         viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
+        viewer.clipper.setActive(true)
       }
 
       setIsCutPlaneActive(true)
