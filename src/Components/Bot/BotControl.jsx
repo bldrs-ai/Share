@@ -1,26 +1,35 @@
 import React, {ReactElement} from 'react'
-import {Chat as ChatIcon} from '@mui/icons-material'
+import {Box} from '@mui/material'
 import useStore from '../../store/useStore'
-import {TooltipIconButton} from '../Buttons'
+import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_BOT} from './hashState'
+import {AutoAwesome as BotIcon} from '@mui/icons-material'
 
 
-/** @return {ReactElement} */
+/**
+ * Control button for the bot.
+ *
+ * @return {ReactElement} The bot control button
+ */
 export default function BotControl() {
   const isBotVisible = useStore((state) => state.isBotVisible)
   const toggleIsBotVisible = useStore((state) => state.toggleIsBotVisible)
-
   return (
-    <TooltipIconButton
-      title='Bot'
-      onClick={toggleIsBotVisible}
-      icon={<ChatIcon className='icon-share'/>}
-      selected={isBotVisible}
-      variant='control'
-      color='success'
-      size='small'
-      placement='top'
-      dataTestId='control-button-bot'
-    />
+    <Box
+      sx={{
+        '& [data-testid="control-button-ai_assistant"]': {
+          margin: 0,
+        },
+      }}
+    >
+      <ControlButtonWithHashState
+        title='AI Assistant'
+        icon={<BotIcon className='icon-share'/>}
+        isDialogDisplayed={isBotVisible}
+        setIsDialogDisplayed={toggleIsBotVisible}
+        hashPrefix={HASH_PREFIX_BOT}
+        placement='right'
+      />
+    </Box>
   )
 }
-

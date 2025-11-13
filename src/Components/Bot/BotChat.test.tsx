@@ -3,6 +3,7 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
 import BotChat from './BotChat'
+import {BOT_TITLE} from './component'
 
 
 type StoreState = ReturnType<typeof useStore.getState> & {
@@ -48,7 +49,7 @@ describe('BotChat', () => {
   it('closes when the panel close button is clicked', () => {
     render(<BotChat/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    expect(screen.getByText('Bot')).toBeInTheDocument()
+    expect(screen.getByText(BOT_TITLE)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', {name: 'Close'}))
 

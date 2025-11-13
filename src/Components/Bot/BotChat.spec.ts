@@ -16,11 +16,11 @@ describe('BotChat', () => {
 
   test('feature flag toggles BotChat visibility', async ({page}) => {
     await returningUserVisitsHomepageWaitForModel(page)
-    await expect(page.getByTestId('control-button-bot')).toHaveCount(0)
+    await expect(page.getByTestId('control-button-ai-assistant')).toHaveCount(0)
 
     await page.goto('/share/v/p/index.ifc?feature=bot', {waitUntil: 'domcontentloaded'})
     await waitForModel(page)
-    await expect(page.getByTestId('control-button-bot')).toBeVisible()
+    await expect(page.getByTestId('control-button-ai-assistant')).toBeVisible()
     await expect(page.getByTestId('BotPanelContainer')).toBeVisible()
   })
 

@@ -274,7 +274,7 @@ export default function BotChat() {
 
   return (
     <Panel
-      title={isSettingsOpen ? 'Bot Settings' : 'Bot'}
+      title='AI Assistant'
       onClose={handleClose}
       actions={settingsActions}
       data-testid='BotPanel'

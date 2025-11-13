@@ -7,6 +7,7 @@ import useHashState from '../hooks/useHashState'
 import {Close as CloseIcon} from '@mui/icons-material'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
+import {slugify} from '../utils/strings'
 
 
 /**
@@ -119,7 +120,7 @@ export function ControlButton({
         variant='control'
         color='success'
         size='small'
-        dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
+        dataTestId={dataTestId || `control-button-${slugify(title)}`}
         {...props}
       />
       {children}
