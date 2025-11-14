@@ -9,6 +9,7 @@ const ctx = await esbuild.context(config)
 
 if (defines['process.env.ESBUILD_WATCH'] === 'true') {
   await ctx.watch()
+  console.warn('Esbuild hot reload ENABLED')
 } else {
   console.warn('Esbuild hot reload DISABLED')
 }

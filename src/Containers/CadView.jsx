@@ -61,6 +61,7 @@ export default function CadView({
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   const rootElement = useStore((state) => state.rootElement)
   const setRootElement = useStore((state) => state.setRootElement)
@@ -473,6 +474,9 @@ export default function CadView({
 
   /** Reset global state */
   function resetState() {
+    // TODO(pablo): use or remove level code
+    setLevelInstance(null)
+
     resetSelection()
     resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)

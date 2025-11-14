@@ -507,6 +507,7 @@ async function findLoader(pathname, viewer) {
     }
     case 'glb':
     case 'gltf': {
+      viewer.IFC.type = 'glb'
       loader = newGltfLoader()
       fixupCb = glbToThree
       break
