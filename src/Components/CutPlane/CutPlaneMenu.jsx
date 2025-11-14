@@ -208,7 +208,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-plan'
         >
           <SvgIcon><PlanIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
+          <Typography>Plan</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'x'})}
@@ -217,7 +217,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-section'
         >
           <SvgIcon><SectionIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
+          <Typography>Section</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => togglePlane({direction: 'z'})}
@@ -226,7 +226,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-elevation'
         >
           <SvgIcon><ElevationIcon className='icon-share'/></SvgIcon>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
+          <Typography>Elevation</Typography>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -236,7 +236,7 @@ export default function CutPlaneMenu() {
           data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
+          <Typography>Clear all</Typography>
         </MenuItem>
       </Menu>
     </>
