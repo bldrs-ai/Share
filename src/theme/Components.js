@@ -5,6 +5,31 @@
  */
 export function getComponentOverrides(palette, typography) {
   return {
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          // Strong break-all behavior for potentially long error messages.
+          'overflowWrap': 'anywhere',
+          'whiteSpace': 'normal',
+          'overflowY': 'hidden',
+          '& .MuiAlert-message': {
+            textAlign: 'left',
+            overflowY: 'scroll',
+            minHeight: '3em',
+            maxHeight: '8.8em', // cuts last line to make overflow visible
+          },
+          '& p': {
+            marginTop: '0px',
+          },
+          '& ul': {
+            paddingLeft: '1em',
+          },
+          '& ol': {
+            paddingLeft: '1em',
+          },
+        },
+      },
+    },
     MuiAutocomplete: {
       styleOverrides: {
         root: {

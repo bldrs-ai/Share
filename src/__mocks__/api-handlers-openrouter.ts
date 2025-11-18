@@ -99,6 +99,7 @@ const OPENROUTER_CORS_HEADERS: Record<string, string> = {
 }
 
 
-interface Defines {
+// Types
+export interface Defines {
   OPENROUTER_BASE_URL: string
 }

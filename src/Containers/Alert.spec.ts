@@ -1,4 +1,5 @@
 import {expect, Page, test} from '@playwright/test'
+import {OutOfMemoryError} from 'src/Alerts'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
@@ -6,21 +7,74 @@ import {
 
 
 /**
- * Helper to set alert in the Zustand store
+ * Helper to set alert in the Zustand store, including serializing errors.
  *
  * @param page Playwright page object
  * @param alert Alert value (string, Error, or object)
  */
-async function setAlert(page: Page, alert: string | Error | {type: string, message: string}) {
-  await page.evaluate((alertValue: unknown) => {
+async function setAlert(page: Page, alert: string | Error | {type: string; message: string}) {
+  if (alert instanceof Error) {
+    // serialize in Node/Playwright realm
+    const errorWithToJSON = alert as Error & {toJSON?: () => Record<string, unknown>}
+    const payload = typeof errorWithToJSON.toJSON === 'function' ?
+      errorWithToJSON.toJSON() :
+      {name: alert.name, message: alert.message, stack: alert.stack}
+
+    await page.evaluate((json) => {
+      const w = window as unknown as WindowWithStore
+      if (!w.store) {
+        throw new Error('store not found on window')
+      }
+
+      // Ensure fromJSON is available in the app bundle for tests
+      // e.g. export BaseError and keep it on w.Errors.BaseError or similar.
+      const Errors = (w as unknown as {Errors?: {BaseError?: {fromJSON?: (obj: Record<string, unknown>) => Error}}}).Errors ?? {}
+
+      // Prefer the app's factory if present; otherwise fallback.
+      const err = Errors.BaseError?.fromJSON ?
+        Errors.BaseError.fromJSON(json) :
+        Object.assign(new Error(json.message as string), json)
+
+      w.store.getState().setAlert(err)
+    }, payload)
+    return
+  }
+
+  // strings / simple objects are already serializable
+  await page.evaluate((a) => {
+    const w = window as unknown as WindowWithStore
+    if (!w.store) {
+      throw new Error('store not found on window')
+    }
+
+    if (typeof a === 'object' && a && 'type' in a) {
+      const {type, message} = a as {type: string; message: string}
+      const Errors = (w as unknown as {Errors?: Record<string, new (msg: string) => Error>}).Errors
+      const Ctor = (Errors && Errors[type]) || Error
+      w.store.getState().setAlert(new Ctor(message))
+    } else {
+      w.store.getState().setAlert(a)
+    }
+  }, alert)
+}
+
+
+/**
+ * Helper to get alert from the Zustand store
+ *
+ * @param page Playwright page object
+ * @return Alert value (string, Error, or object)
+ */
+async function getAlert(page: Page) {
+  return await page.evaluate(() => {
     if (!(window as unknown as WindowWithStore).store) {
       throw new Error(
         'Zustand store not found on window – make sure win.store is set in test builds.',
       )
     }
 
-    (window as unknown as WindowWithStore).store?.getState().setAlert(alertValue)
-  }, alert)
+    return (window as unknown as WindowWithStore).store?.getState().alert
+  })
 }
 
 
@@ -46,7 +100,8 @@ async function setSnackMessage(page: Page, message: string | {text: string, auto
 type WindowWithStore = Window & {
   store?: {
     getState: () => {
-      setAlert: (alert: unknown) => void
+      alert: string | Error | {type: string, message: string} | null
+      setAlert: (alert: string | Error | {type: string, message: string} | null) => void
       setSnackMessage: (message: unknown) => void
     }
   }
@@ -66,6 +121,9 @@ describe('Alert and Snackbar', () => {
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
       await expect(dialog.getByRole('heading', {name: 'Error'})).toBeVisible()
+      // Description should be set with msg
+      const alert = await getAlert(page)
+      expect(alert).toBe('Test error message')
       await expect(dialog.getByText('Test error message')).toBeVisible()
       await expect(dialog.getByTestId('button-dialog-main-action')).toHaveText('Reset')
     })
@@ -87,12 +145,13 @@ describe('Alert and Snackbar', () => {
     })
 
     test('AlertDialog shows Out of Memory alert with Refresh button', async ({page}) => {
-      await setAlert(page, {type: 'oom', message: 'Out of memory error'})
+      const msg = 'Test out of memory error'
+      await setAlert(page, new OutOfMemoryError(msg))
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
       await expect(dialog.getByRole('heading', {name: 'Out of Memory'})).toBeVisible()
-      await expect(dialog.getByText('Out of memory error')).toBeVisible()
-      await expect(dialog.getByTestId('button-dialog-main-action')).toHaveText('Refresh')
+      await expect(dialog.getByText(msg)).toBeVisible()
+      await expect(dialog.getByTestId('button-dialog-main-action')).toHaveText('Reset')
       await expect(page.getByTestId('button-close-dialog-out-of-memory')).toBeVisible()
     })
 

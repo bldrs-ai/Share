@@ -15,14 +15,14 @@ import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {parseGitHubPath} from '../utils/location'
 import {testUuid} from '../utils/strings'
-import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {CacheException, NotFoundAlert} from './Alerts'
+import {dereferenceAndProxyDownloadContents} from './urls'
 import glbToThree from './glb'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
-import {isOutOfMemoryError} from '../utils/oom'
 
 
 /**
@@ -95,24 +95,17 @@ export async function load(
     throw new Error(`Unknown filetype for: ${path}`)
   }
 
+  onProgress('Downloading model...')
   let modelData
   if (isOpfsAvailable) {
-    onProgress('Preparing file download...')
     // download to file using caching system or else...
-    let file
+    let modelFile
     if (isUploadedFile) {
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      modelFile = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
     } else if (isLocallyHostedFile) {
       debug().log('Loader#load: local file:', path)
-      file = await downloadToOPFS(
-        path,
-        path,
-        'bldrs-ai',
-        'BldrsLocalStorage',
-        'V1',
-        'Projects',
-        onProgress)
+      modelFile = await downloadToOPFS(path, path, 'bldrs-ai', 'BldrsLocalStorage', 'V1', 'Projects', onProgress)
     } else {
       let pathUrl
       try {
@@ -130,10 +123,10 @@ export async function load(
         }
 
         if (isBase64) {
-          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          modelFile = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
         } else {
           debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-          file = await downloadModel(
+          modelFile = await downloadModel(
             derefPath,
             shaHash,
             filePath,
@@ -147,7 +140,7 @@ export async function load(
       } else {
         const opfsFilename = pathUrl.pathname
         debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
-        file = await downloadToOPFS(
+        modelFile = await downloadToOPFS(
           path,
           opfsFilename,
           pathUrl.host,
@@ -157,10 +150,13 @@ export async function load(
           onProgress)
       }
     }
-    debug().log('Loader#load: File from OPFS:', file)
-    setOpfsFile(file)
     onProgress('Reading model data...')
-    modelData = await file.arrayBuffer()
+    debug().log('Loader#load: Model from OPFS:', modelFile)
+    setOpfsFile(modelFile)
+    if (modelFile.size === 0) {
+      throw new CacheException('Empty model')
+    }
+    modelData = await modelFile.arrayBuffer()
     if (isFormatText) {
       onProgress('Decoding model data...')
       const decoder = new TextDecoder('utf-8')
@@ -168,7 +164,6 @@ export async function load(
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
   } else {
-    onProgress('Downloading model data...')
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
     debug().log('Loader#load: modelData from axios download:', modelData)
   }
@@ -177,22 +172,12 @@ export async function load(
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
 
-  let model
-  try {
-    model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
-  } catch (e) {
-    if (isOutOfMemoryError(e)) {
-      e.isOutOfMemory = true
-    }
-    throw e
-  }
+  // Throws
+  const model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
 
   if (model === null || model === undefined) {
     // If loader captured a last error, surface that
     const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
-    if (isOutOfMemoryError(lastErr)) {
-      lastErr.isOutOfMemory = true
-    }
     throw lastErr
   }
 
@@ -254,7 +239,7 @@ async function axiosDownload(path, isFormatText, onProgress) {
     if (error.response) {
       console.warn('error.response.status:', error.response.status)
       if (error.response.status === HTTP_NOT_FOUND) {
-        throw new NotFoundError('File not found')
+        throw new NotFoundAlert('File not found on server')
       } else {
         throw new Error(`Error response from server: status(${error.response.status}), message(${error.response.data})`)
       }
@@ -576,71 +561,58 @@ function newIfcLoader(viewer) {
     onError,
   ) {
     if (this.context.items.ifcModels.length !== 0) {
-      throw new Error('Model cannot be loaded.  A model is already present')
+      throw new Error('Attempt to load a model into an already-used viewer instance')
     }
-    try {
-      if (onProgress) {
-        onProgress('Configuring loader...')
-      }
-      await this.loader.ifcManager.applyWebIfcConfig({
-        COORDINATE_TO_ORIGIN: true,
-        USE_FAST_BOOLS: true,
-      })
 
-      if (onProgress) {
-        onProgress('Parsing model geometry...')
-      }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
-      this.addIfcModel(ifcModel)
-
-      if (onProgress) {
-        onProgress('Setting up coordinate system...')
-      }
-      // eslint-disable-next-line new-cap
-      const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
-      const matrix = new Matrix4().fromArray(matrixArr)
-      this.loader.ifcManager.setupCoordinationMatrix(matrix)
-
-      if (onProgress) {
-        onProgress('Fitting model to frame...')
-      }
-      this.context.fitToFrame()
-
-      if (onProgress) {
-        onProgress('Gathering model statistics...')
-      }
-      const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
-      ifcModel.name = statsApi.projectName ?? undefined
-      const loadStats = {
-        loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
-        geometryMemory: statsApi.getGeometryMemory(),
-        geometryTime: statsApi.getGeometryTime(),
-        ifcVersion: statsApi.getVersion(),
-        loadStatus: statsApi.getLoadStatus(),
-        originatingSystem: statsApi.getOriginatingSystem(),
-        preprocessorVersion: statsApi.getPreprocessorVersion(),
-        parseTime: statsApi.getParseTime(),
-        totalTime: statsApi.getTotalTime(),
-      }
-      ifcModel.loadStats = loadStats
-
-      if (onProgress) {
-        onProgress('Model loaded successfully!')
-      }
-      return ifcModel
-    } catch (err) {
-      loader.ifcLastError = err
-      // Rethrow OOM so callers can present a tailored UX message.
-      if (isOutOfMemoryError(err)) {
-        err.isOutOfMemory = true // tag for convenience
-        throw err
-      }
-      console.error(err)
-      if (onError) {
-        onError(err)
-      }
-      return null
+    if (onProgress) {
+      onProgress('Configuring loader...')
     }
+    await this.loader.ifcManager.applyWebIfcConfig({
+      COORDINATE_TO_ORIGIN: true,
+      USE_FAST_BOOLS: true,
+    })
+
+    if (onProgress) {
+      onProgress('Parsing model geometry...')
+    }
+    const ifcModel = await this.loader.parse(buffer, onProgress)
+    this.addIfcModel(ifcModel)
+
+    if (onProgress) {
+      onProgress('Setting up coordinate system...')
+    }
+    // eslint-disable-next-line new-cap
+    const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
+    const matrix = new Matrix4().fromArray(matrixArr)
+    this.loader.ifcManager.setupCoordinationMatrix(matrix)
+
+    if (onProgress) {
+      onProgress('Fitting model to frame...')
+    }
+    this.context.fitToFrame()
+
+    if (onProgress) {
+      onProgress('Gathering model statistics...')
+    }
+    const statsApi = this.loader.ifcManager.ifcAPI.getStatistics(0)
+    ifcModel.name = statsApi.projectName ?? undefined
+    const loadStats = {
+      loaderVersion: this.loader.ifcManager.ifcAPI.getConwayVersion(),
+      geometryMemory: statsApi.getGeometryMemory(),
+      geometryTime: statsApi.getGeometryTime(),
+      ifcVersion: statsApi.getVersion(),
+      loadStatus: statsApi.getLoadStatus(),
+      originatingSystem: statsApi.getOriginatingSystem(),
+      preprocessorVersion: statsApi.getPreprocessorVersion(),
+      parseTime: statsApi.getParseTime(),
+      totalTime: statsApi.getTotalTime(),
+    }
+    ifcModel.loadStats = loadStats
+
+    if (onProgress) {
+      onProgress('Model loaded successfully!')
+    }
+    return ifcModel
   }
   return loader
 }
@@ -659,18 +631,5 @@ function onDownloadProgressHandler(progressEvent, onProgress) {
     const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
     debug().log(`Loader#loadModel$onProgress, ${loadedBytes} bytes`)
     onProgress(`${loadedMegs} MB`)
-  }
-}
-
-
-/** For network or file resources that are not found. */
-export class NotFoundError extends Error {
-  /** @param {string} message */
-  constructor(message) {
-    super(message)
-    this.name = 'NotFoundError'
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
-    }
   }
 }

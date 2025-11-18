@@ -4,7 +4,7 @@ import {
   returningUserVisitsHomepageWaitForModel,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
-import {waitForModelReady, setupVirtualPathIntercept} from '../../tests/e2e/models'
+import {setupGithubPathIntercept, setupGoogleDrivePathIntercept, waitForModelReady} from '../../tests/e2e/models'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
 import {expectScreen} from '../../tests/screens'
 
@@ -51,21 +51,55 @@ describe('Search 100', () => {
     })
 
     describe('with GitHub link to box.ifc', () => {
+      let waitForModelReadyCallback: () => Promise<void>
       beforeEach(async ({page}) => {
-        await setupVirtualPathIntercept(
+        waitForModelReadyCallback = await setupGithubPathIntercept(
           page,
-          '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc',
-          'box.ifc',
+          '/bldrs-ai/test-models/main/ifc/misc/box.ifc',
+          undefined, // we're initiating the navigation below, so no auto-navigate needed
+          'test-models/ifc/misc/box.ifc',
         )
-        await page.getByTestId('control-button-search').click()
-        const searchInput = page.getByPlaceholder(SEARCH_BAR_PLACEHOLDER_TEXT)
-        await searchInput.fill('https://github.com/bldrs-ai/test-models/main/ifc/misc/box.ifc')
-        await searchInput.press('Enter')
       })
 
       test('box.ifc loads - Screen', async ({page}) => {
-        await waitForModelReady(page)
+        await page.getByTestId('control-button-search').click()
+        const searchInput = page.getByPlaceholder(SEARCH_BAR_PLACEHOLDER_TEXT)
+        await searchInput.fill('https://github.com/bldrs-ai/test-models/blob/main/ifc/misc/box.ifc')
+        await searchInput.press('Enter') // initiate navigation
+        await waitForModelReadyCallback()
         await expectScreen(page, 'box-github-link-loaded.png')
+      })
+    })
+
+    describe('with Google Drive link', () => {
+      const fileId = '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO'
+      let waitForModelReadyCallback: () => Promise<void>
+      beforeEach(async ({page}) => {
+        waitForModelReadyCallback = await setupGoogleDrivePathIntercept(
+          page,
+          fileId,
+          undefined, // we're initiating the navigation below, so no auto-navigate needed
+          'test-models/ifc/misc/box.ifc',
+        )
+      })
+
+      test('Google Drive URL navigates to /share/v/g/ path - Screen', async ({page}) => {
+        await page.getByTestId('control-button-search').click()
+        const searchInput = page.getByPlaceholder(SEARCH_BAR_PLACEHOLDER_TEXT)
+        const userInputUrl = `https://drive.google.com/file/d/${fileId}/view`
+        await searchInput.fill(userInputUrl)
+        await searchInput.press('Enter')
+        await waitForModelReadyCallback()
+        await expect(page).toHaveURL(/\/share\/v\/g\//)
+        await expectScreen(page, 'box-google-drive-link-loaded.png')
+      })
+
+      test.afterEach(async ({page}, testInfo) => {
+        const failed = testInfo.status !== testInfo.expectedStatus // catches fail + unexpected pass
+        if (failed) {
+          console.warn(`⏸  Pausing on failure: ${testInfo.title}`)
+          await page.pause() // keeps browser open; resume/step in Inspector
+        }
       })
     })
   })

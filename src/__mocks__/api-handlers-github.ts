@@ -1,7 +1,6 @@
 import {http, HttpHandler} from 'msw'
 import {
   HTTP_AUTHORIZATION_REQUIRED,
-  HTTP_BAD_REQUEST,
   HTTP_CREATED,
   HTTP_NOT_FOUND,
   HTTP_NO_CONTENT,
@@ -14,13 +13,8 @@ import {MOCK_FILES} from '../net/github/Files.fixture'
 import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
+import {HTTP_OK_JSON, HTTP_BAD_JSON, HTTP_NOT_FOUND_JSON} from './api-handlers'
 
-
-interface Defines {
-  GITHUB_BASE_URL: string
-  GITHUB_BASE_URL_UNAUTHENTICATED: string
-  RAW_GIT_PROXY_URL?: string
-}
 
 let commentDeleted = false
 
@@ -41,10 +35,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       const createdIssues = createMockIssues(org, repo, sampleIssues)
       return new Response(
         JSON.stringify(createdIssues),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -61,18 +52,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
           commentDeleted = false
           return new Response(
             JSON.stringify(MOCK_COMMENTS_POST_DELETION.data),
-            {
-              status: HTTP_OK,
-              headers: {'Content-Type': 'application/json'},
-            },
+            HTTP_OK_JSON,
           )
         }
         return new Response(
           JSON.stringify(MOCK_COMMENTS.data),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_OK_JSON,
         )
       }),
 
@@ -112,10 +97,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
                 html: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
               },
             }),
-            {
-              status: HTTP_OK,
-              headers: {'Content-Type': 'application/json'},
-            },
+            HTTP_OK_JSON,
           )
         }
 
@@ -125,10 +107,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
               message: 'Not Found',
               documentation_url: 'https://docs.github.com/http/reference/repos#get-repository-content',
             }),
-            {
-              status: HTTP_NOT_FOUND,
-              headers: {'Content-Type': 'application/json'},
-            },
+            HTTP_NOT_FOUND_JSON,
           )
         }
 
@@ -189,10 +168,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
               html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
             },
           }),
-          {
-            status: HTTP_OK,
-            headers: {'content-type': 'application/json; charset=utf-8'},
-          },
+          HTTP_OK_JSON,
         )
       }),
 
@@ -204,10 +180,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
           JSON.stringify({
             message: 'Not Found',
           }),
-          {
-            status: HTTP_NOT_FOUND,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_NOT_FOUND_JSON,
         )
       }
 
@@ -291,20 +264,14 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
 
       return new Response(
         JSON.stringify(MOCK_ORGANIZATIONS.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user/repos`, () => {
       return new Response(
         JSON.stringify(MOCK_USER_REPOSITORIES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -313,30 +280,21 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         JSON.stringify({
           data: [MOCK_REPOSITORY],
         }),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/contents`, () => {
       return new Response(
         JSON.stringify(MOCK_FILES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/branches`, () => {
       return new Response(
         JSON.stringify(MOCK_BRANCHES.data),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -347,19 +305,13 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         if (params.owner === 'failurecaseowner' && params.repo === 'failurecaserepo') {
           return new Response(
             JSON.stringify({sha: 'error'}),
-            {
-              status: HTTP_NOT_FOUND,
-              headers: {'Content-Type': 'application/json'},
-            },
+            HTTP_NOT_FOUND_JSON,
           )
         // Handle non existent file request
         } else if (params.owner === 'nonexistentowner' && params.repo === 'nonexistentrepo') {
           return new Response(
             JSON.stringify([]),
-            {
-              status: HTTP_OK,
-              headers: {'Content-Type': 'application/json'},
-            },
+            HTTP_OK_JSON,
           )
         // Handle unauthenticated case
         } else if (params.owner === 'unauthedcaseowner' && params.repo === 'unauthedcaserepo' ) {
@@ -368,18 +320,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
           if ( requestUrl.includes(GH_BASE_AUTHED)) {
             return new Response(
               JSON.stringify({sha: 'error'}),
-              {
-                status: HTTP_NOT_FOUND,
-                headers: {'Content-Type': 'application/json'},
-              },
+              HTTP_NOT_FOUND_JSON,
             )
           } else {
             return new Response(
               JSON.stringify(MOCK_COMMITS.data),
-              {
-                status: HTTP_OK,
-                headers: {'Content-Type': 'application/json'},
-              },
+              HTTP_OK_JSON,
             )
           }
         // Handle authenticated case
@@ -389,28 +335,19 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
           if ( requestUrl.includes(GH_BASE_UNAUTHED)) {
             return new Response(
               JSON.stringify({sha: 'error'}),
-              {
-                status: HTTP_NOT_FOUND,
-                headers: {'Content-Type': 'application/json'},
-              },
+              HTTP_NOT_FOUND_JSON,
             )
           } else {
             return new Response(
               JSON.stringify(MOCK_COMMITS.data),
-              {
-                status: HTTP_OK,
-                headers: {'Content-Type': 'application/json'},
-              },
+              HTTP_OK_JSON,
             )
           }
         }
         // For all other cases, return a success response
         return new Response(
           JSON.stringify(MOCK_COMMITS.data),
-          {
-            status: HTTP_OK,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_OK_JSON,
         )
       }),
 
@@ -423,10 +360,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/ref/:ref`, () => {
       return new Response(
         JSON.stringify({object: {sha: 'parentSha'}}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -434,10 +368,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/:owner/:repo/git/commits/:commit_sha`, () => {
       return new Response(
         JSON.stringify({tree: {sha: 'treeSha'}}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -447,18 +378,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       if (content === undefined || encoding === undefined) {
         return new Response(
           JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_BAD_JSON,
         )
       }
       return new Response(
         JSON.stringify({sha: 'blobSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -470,18 +395,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       if (base_tree === undefined || tree === undefined) {
         return new Response(
           JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_BAD_JSON,
         )
       }
       return new Response(
         JSON.stringify({sha: 'newTreeSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -491,18 +410,12 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       if (message === undefined || tree === undefined || parents === undefined) {
         return new Response(
           JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_BAD_JSON,
         )
       }
       return new Response(
         JSON.stringify({sha: 'newCommitSha'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
 
@@ -512,19 +425,21 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       if (sha === undefined) {
         return new Response(
           JSON.stringify({success: false}),
-          {
-            status: HTTP_BAD_REQUEST,
-            headers: {'Content-Type': 'application/json'},
-          },
+          HTTP_BAD_JSON,
         )
       }
       return new Response(
         JSON.stringify({sha: 'smth'}),
-        {
-          status: HTTP_OK,
-          headers: {'Content-Type': 'application/json'},
-        },
+        HTTP_OK_JSON,
       )
     }),
   ]
+}
+
+
+// Types
+export interface Defines {
+  GITHUB_BASE_URL: string
+  GITHUB_BASE_URL_UNAUTHENTICATED: string
+  RAW_GIT_PROXY_URL?: string
 }

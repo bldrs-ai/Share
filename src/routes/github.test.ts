@@ -1,4 +1,4 @@
-import processGitHubFile from './github'
+import processGitHubFile, {processGithubUrl, githubUrlToSharePath} from './github'
 
 
 describe('processGitHubFile', () => {
@@ -84,5 +84,110 @@ describe('processGitHubFile', () => {
         gitpath: downloadUrl.toString(),
       })
     })
+  })
+})
+
+
+describe('processGithubUrl', () => {
+  const originalUrl = new URL('http://bldrs.ai/share/v/gh/test-org/test-repo/main/model.ifc')
+
+  it('processes valid GitHub URL with blob path', () => {
+    const githubUrl = new URL('https://github.com/test-org/test-repo/blob/main/path/to/model.ifc')
+    const result = processGithubUrl(originalUrl, githubUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL('https://github.com/test-org/test-repo/main/path/to/model.ifc'),
+      kind: 'provider',
+      provider: 'github',
+      org: 'test-org',
+      repo: 'test-repo',
+      branch: 'main',
+      filepath: 'path/to/model.ifc',
+      getRepoPath: expect.any(Function),
+      gitpath: 'https://github.com/test-org/test-repo/main/path/to/model.ifc',
+    })
+  })
+
+  it('processes valid GitHub URL with raw path', () => {
+    const githubUrl = new URL('https://raw.githubusercontent.com/test-org/test-repo/main/path/to/model.ifc')
+    const result = processGithubUrl(originalUrl, githubUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL('https://github.com/test-org/test-repo/main/path/to/model.ifc'),
+      kind: 'provider',
+      provider: 'github',
+      org: 'test-org',
+      repo: 'test-repo',
+      branch: 'main',
+      filepath: 'path/to/model.ifc',
+      getRepoPath: expect.any(Function),
+      gitpath: 'https://github.com/test-org/test-repo/main/path/to/model.ifc',
+    })
+  })
+
+  it('processes GitHub URL with element path', () => {
+    const githubUrl = new URL('https://github.com/test-org/test-repo/blob/main/path/to/model.ifc/1/2/3')
+    const result = processGithubUrl(originalUrl, githubUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL('https://github.com/test-org/test-repo/main/path/to/model.ifc'),
+      kind: 'provider',
+      provider: 'github',
+      org: 'test-org',
+      repo: 'test-repo',
+      branch: 'main',
+      filepath: 'path/to/model.ifc',
+      eltPath: '1/2/3',
+      getRepoPath: expect.any(Function),
+      gitpath: 'https://github.com/test-org/test-repo/main/path/to/model.ifc',
+    })
+  })
+
+  it('returns null for non-GitHub URL', () => {
+    const nonGithubUrl = new URL('https://drive.google.com/file/d/123/view')
+    const result = processGithubUrl(originalUrl, nonGithubUrl)
+
+    expect(result).toBeNull()
+  })
+
+  it('returns null for invalid GitHub URL format', () => {
+    const invalidGithubUrl = new URL('https://github.com/invalid-format')
+    const result = processGithubUrl(originalUrl, invalidGithubUrl)
+
+    expect(result).toBeNull()
+  })
+})
+
+
+describe('githubUrlToSharePath', () => {
+  it('converts valid GitHub URL to share path', () => {
+    const githubUrl = 'https://github.com/test-org/test-repo/blob/main/path/to/model.ifc'
+    const result = githubUrlToSharePath(githubUrl)
+
+    expect(result).toBe('/share/v/gh/test-org/test-repo/main/path/to/model.ifc')
+  })
+
+  it('converts raw GitHub URL to share path', () => {
+    const githubUrl = 'https://raw.githubusercontent.com/test-org/test-repo/main/path/to/model.ifc'
+    const result = githubUrlToSharePath(githubUrl)
+
+    expect(result).toBe('/share/v/gh/test-org/test-repo/main/path/to/model.ifc')
+  })
+
+  it('returns null for non-GitHub URL', () => {
+    const nonGithubUrl = 'https://drive.google.com/file/d/123/view'
+    const result = githubUrlToSharePath(nonGithubUrl)
+
+    expect(result).toBeNull()
+  })
+
+  it('returns null for invalid GitHub URL format', () => {
+    const invalidGithubUrl = 'https://github.com/invalid-format'
+    const result = githubUrlToSharePath(invalidGithubUrl)
+
+    expect(result).toBeNull()
   })
 })

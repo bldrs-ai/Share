@@ -1,10 +1,9 @@
 import React, {ReactElement} from 'react'
-import {Button, Dialog as MuiDialog, DialogActions, DialogContent, DialogTitle, Typography} from '@mui/material'
+import {Button, Dialog as MuiDialog, DialogActions, DialogContent, DialogTitle} from '@mui/material'
 import useStore from '../store/useStore'
 import {assertDefined, assertString} from '../utils/assert'
 import {slugify} from '../utils/strings'
 import {CloseButton} from './Buttons'
-import {useIsMobile} from './Hooks'
 
 
 /**
@@ -47,7 +46,6 @@ export default function Dialog({
   }
   const onCloseClick = () => setIsDialogDisplayed(false)
   const dataTestIdSuffix = slugify(headerText)
-  const isMobile = useIsMobile()
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -67,11 +65,12 @@ export default function Dialog({
           justifyContent: 'center',
           alignItems: 'center',
           gap: '1em',
+          fontSize: '20px',
         }}
       >
         {headerIcon && headerIcon}
+        {headerText}
       </DialogTitle>
-      <Typography variant='h2' className='dialog-header-text' sx={{margin: isMobile ? '0 0 1em 0' : '1em 0'}}>{headerText}</Typography>
       <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
       <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :

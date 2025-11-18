@@ -19,7 +19,6 @@ import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
-import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -30,6 +29,7 @@ import {initViewer} from './viewer'
 
 
 let count = 0
+
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -164,6 +164,11 @@ export default function CadView({
       return
     }
 
+    if (viewer.IFC.context.items.ifcModels.length > 0) {
+      debug(true).warn('CadView#onViewer: viewer already has a model loaded')
+      return
+    }
+
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -186,35 +191,14 @@ export default function CadView({
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
     let tmpModelRef
-    let isOOM = false
     try {
       tmpModelRef = await loadModel(modelPath)
     } catch (e) {
-      if (isOutOfMemoryError(e)) {
-        isOOM = true
-      }
-      if (isOOM) {
-        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
-        setAlert({
-          type: 'oom',
-          message: 'We ran out of memory attempting to load this model. ' +
-            'Try opening it on a desktop browser with more memory or ' +
-            'refresh the page.',
-        })
-      } else {
-        setAlert(e)
-      }
-
       console.error(e)
       captureException(e)
+      setAlert(e)
       return
     }
-    if (!tmpModelRef && !isOOM) {
-      setAlert('Failed to parse model')
-      return
-    }
-    setIsModelLoading(false)
-    setSnackMessage(null)
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
@@ -262,6 +246,7 @@ export default function CadView({
    * @param {object} routeResult
    * @param {string} gitpath to use for constructing API endpoints
    * @return {object} loaded model
+   * @throws {Error} If model cannot be loaded
    */
   async function loadModel(routeResult) {
     const filepath = routeResult.downloadUrl || routeResult.filepath
@@ -289,22 +274,16 @@ export default function CadView({
       }
       setSnackMessage(`${loadingMessageBase}: ${msg}`)
     }
+
     let loadedModel
     try {
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
-    } catch (error) {
-      if (isOutOfMemoryError(error)) {
-        error.isOutOfMemory = true
-        throw error
-      }
-
-      setAlert(error)
-      return
+      // let caller handle the error
     } finally {
       setIsModelLoading(false)
+      setSnackMessage(null)
     }
-
 
     // Fix for https://github.com/bldrs-ai/Share/issues/91
     //
