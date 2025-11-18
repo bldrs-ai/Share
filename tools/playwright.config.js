@@ -2,11 +2,13 @@ import {defineConfig, devices} from '@playwright/test'
 import {runGetPortPlease} from './utils'
 
 
-const ciPort = 8080
-const isCI = !!process.env.CI
-const port = isCI ? ciPort : runGetPortPlease()
+const ciPort = 9081
+const isCI = process.env.CI === 'true'
+// In CI we use a fixed port.  Locally, there may be multiple instances of this
+// process, so it's desired but not assured.
+const port = isCI ? ciPort : runGetPortPlease(ciPort)
 const url = `http://localhost:${port}`
-
+console.warn('Using test server:', url)
 
 export default defineConfig({
   // Look for test files in the "src" directory, relative to this configuration file.
@@ -69,7 +71,7 @@ export default defineConfig({
     },
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
-    reuseExistingServer: false, // !isCI,
+    reuseExistingServer: true, // !isCI,
   },
 
   expect: {

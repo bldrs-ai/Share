@@ -61,6 +61,7 @@ export default function CadView({
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   const rootElement = useStore((state) => state.rootElement)
   const setRootElement = useStore((state) => state.setRootElement)
@@ -338,14 +339,24 @@ export default function CadView({
       console.warn('CadView#onModel, model without manager:', m)
       return
     }
-    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    window.ondblclick = canvasDoubleClickHandler
+    setKeydownListeners(viewer, selectItemsInScene)
+    // Everything below here needs the rootElt, which may not be available
+    // if we can't read the full model structure.
+    let rootElt
+    try {
+      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    } catch (e) {
+      setAlert('Could not read full model structure.  Only model geometry will be available.')
+      captureException(e, 'Could not read full model structure')
+      console.error(e)
+      return
+    }
     debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
-    window.ondblclick = canvasDoubleClickHandler
-    setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
     const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
@@ -452,6 +463,9 @@ export default function CadView({
 
   /** Reset global state */
   function resetState() {
+    // TODO(pablo): use or remove level code
+    setLevelInstance(null)
+
     resetSelection()
     resetCutPlaneState(location, viewer, setCutPlaneDirections, setIsCutPlaneActive)
     setIsSearchBarVisible(false)

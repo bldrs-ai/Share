@@ -101,9 +101,13 @@ GitHub API integration for model versioning and collaboration:
 
 ### Testing Strategy
 - **Jest** for unit tests with jsdom environment
-- **Playwright** for E2E testing with visual regression
+  - Common base mock fixtures (MemoryRouter, ThemeProvider, etc.) are in `src/Share.fixture.jsx`
+  - Prefer the wrappers in in `src/Share.fixture.jsx` as the React Testing Library `wrapper` when a component needs context providers: helmet, store, router, theme or combinations thereof. Pass them eg: `render(<Component/>, {wrapper: HelmetStoreRouteThemeCtx})` instead of recreating providers.
+  - MSW is started globally in `tools/jest/setupTests.js`; do not call `initServer` or `server.listen()` inside individual test files.
+- **Playwright** for E2E testing
+  - Test specs are defined alongside their corresponding component files in `src/Components/`, eg `src/Components/Bot/{BotChat.jsx,BotChat.spec.tsx}`.
 - **React Cosmos** for component development and testing
-- **MSW** for API mocking in tests
+- **MSW** for API mocking in tests is setup in `src/__mocks__/api-handlers.js`
 - Separate test configs for source code and build tools
 
 ### State Management Architecture
@@ -316,6 +320,7 @@ export default function ExampleComponent({title, onClose}) {
 - **IDE integration**: Configure your editor to show ESLint warnings
 - **Auto-fix**: Use `yarn lint --fix` for automatic corrections
 
-- style is looking good!  remember 2 spaces after imports and always have a newline at EOF
-- for playwright and cypress tests avoid specifying timeouts (use the default), or keep them short eg 5 seconds.
-- always follow style rules as you go, and run yarn lint on the files you modify to identify style fixes to make
+#### Misc
+- Remember 2 spaces after imports and always have a newline at EOF
+- For jest and playwright tests avoid specifying timeouts (use the default), or keep them short eg 5 seconds.
+- Always follow style rules as you go, and run yarn lint on the files you modify to identify style fixes to make

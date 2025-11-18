@@ -3,12 +3,16 @@ import {Box, Stack, Tab, Tabs} from '@mui/material'
 import {Close as CloseIcon} from '@mui/icons-material'
 import AppsPanel from '../Components/Apps/AppsPanel'
 import AppPanel from '../Components/Apps/AppPanel'
+import BotChat from '../Components/Bot/BotChat'
+import {HASH_PREFIX_BOT} from '../Components/Bot/hashState'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
+import useExistInFeature from '../hooks/useExistInFeature'
+import {hasParams} from '../utils/location'
 
 
 /**
@@ -41,6 +45,10 @@ export default function TabbedPanels({
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
 
+  const isBotVisible = useStore((state) => state.isBotVisible)
+  const setIsBotVisible = useStore((state) => state.setIsBotVisible)
+  const isBotEnabled = useExistInFeature('bot')
+
   // Next two are used by NavTree and Versions
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -50,7 +58,7 @@ export default function TabbedPanels({
   const modelPath = useStore((state) => state.modelPath)
 
   // This state tracks the order in which panels were opened.
-  // We'll store keys like 'apps', 'nav', 'notes', 'props', 'versions'.
+  // We'll store keys like 'apps', 'nav', 'notes', 'props', 'bot', 'versions'.
   const [openPanels, setOpenPanels] = useState([])
 
   const [value, setValue] = useState(0)
@@ -69,12 +77,15 @@ export default function TabbedPanels({
     }
   }
 
+  const shouldShowBotPanel = isBotVisible && (isBotEnabled || hasParams(HASH_PREFIX_BOT))
+
   const isDrawerVisible =
         isAppsVisible ||
         isNavTreeVisible ||
         isNotesVisible ||
         isPropertiesVisible ||
-        isVersionsVisible
+        isVersionsVisible ||
+        shouldShowBotPanel
 
 
   /**
@@ -150,6 +161,12 @@ export default function TabbedPanels({
         panel: <PropertiesPanel/>,
       } :
       null,
+    bot: shouldShowBotPanel ?
+      {
+        label: createTabLabel('AI', () => setIsBotVisible(false)),
+        panel: <BotChat/>,
+      } :
+      null,
     versions: isVersionsEnabled && isVersionsVisible ?
       {
         label: createTabLabel('Versions', () => setIsVersionsVisible(false)),
@@ -162,7 +179,7 @@ export default function TabbedPanels({
   // If a panel is newly visible and not in openPanels, add it.
   // If a panel is no longer visible and is in openPanels, remove it.
   useEffect(() => {
-    const panelKeys = ['apps', 'nav', 'notes', 'props', 'versions']
+    const panelKeys = ['apps', 'nav', 'notes', 'props', 'bot', 'versions']
     setOpenPanels((prev) => {
       let newOpenPanels = [...prev]
 
@@ -183,7 +200,7 @@ export default function TabbedPanels({
       return newOpenPanels
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAppsVisible, isNavTreeVisible, isNotesVisible, isPropertiesVisible, isVersionsVisible])
+  }, [isAppsVisible, isNavTreeVisible, isNotesVisible, isPropertiesVisible, shouldShowBotPanel, isVersionsVisible])
 
   // Generate labelAndPanels according to openPanels order
   const labelAndPanels = openPanels

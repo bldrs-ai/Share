@@ -23,8 +23,29 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
 
-  // Highlight items when hovering over them
-  window.onmousemove = () => viewer.highlightIfcItem()
+  window.onmousedown = () => {
+    viewer.clipper.clickDrag = true
+  }
+  window.onmouseup = () => {
+    viewer.clipper.clickDrag = false
+  }
+
+  let lastPickTime = 0
+  const PICK_INTERVAL = 33 // 30fps
+  // Highlight items when hovering over them. Sample when mouse-over.
+  // Disable during a click-drag for rotation.
+  window.onmousemove = () => {
+    if (!viewer.clipper.clickDrag) {
+      const now = performance.now()
+      if (now - lastPickTime < PICK_INTERVAL) {
+        return
+      }
+      lastPickTime = now
+      // NB: This is VERY EXPENSIVE, so we sample it.
+      // If we're dragging, we don't need to highlight.
+      viewer.highlightIfcItem()
+    }
+  }
 
   viewer.container = container
 

@@ -43,6 +43,9 @@ export default {
   // API_KEYS
   GOOGLE_API_KEY: null,
 
+  // OpenRouter
+  OPENROUTER_BASE_URL: 'https://openrouter.ai',
+
   // Testing
   MSW_IS_ENABLED: false,
   // Off for performance in prod

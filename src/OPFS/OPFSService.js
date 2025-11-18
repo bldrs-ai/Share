@@ -1,8 +1,7 @@
 import debug from '../utils/debug'
 import {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} from '../net/github/OctokitExport'
 
-// TODO(pablo): probably don't need global state, can
-// pass worker refs as needed.
+
 let workerRef = null
 
 /**
@@ -17,7 +16,22 @@ let workerRef = null
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker(new URL('/OPFS.Worker.js', import.meta.url), {type: 'module'})
+    let supportsModuleWorkers
+    try {
+      const u = URL.createObjectURL(new Blob([''], {type: 'application/javascript'}))
+      new Worker(u, {type: 'module'}).terminate()
+      URL.revokeObjectURL(u)
+      supportsModuleWorkers = true
+    } catch {
+      supportsModuleWorkers = false
+    }
+
+    const workerUrl = new URL(
+      supportsModuleWorkers ? './OPFS.worker.js' : './OPFS.worker.classic.js',
+      import.meta.url,
+    )
+    const opts = supportsModuleWorkers ? {type: 'module'} : {}
+    workerRef = new Worker(workerUrl, opts)
 
     workerRef.postMessage({
       command: 'initializeWorker',
