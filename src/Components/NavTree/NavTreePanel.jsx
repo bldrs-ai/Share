@@ -290,8 +290,8 @@ const RenderRow = ({index, style, data}) => {
   const hasChildren = node.hasChildren
   let isSelected = false
 
-  if (!hasChildren) {
-    // For element nodes: use expressID for selection
+  // Check if this node is selected by its expressID
+  if (node.expressID) {
     const expressIDStr = node.expressID.toString()
     isSelected = selectedNodeIds.includes(expressIDStr)
   }

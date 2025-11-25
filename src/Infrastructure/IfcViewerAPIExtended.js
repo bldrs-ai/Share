@@ -560,12 +560,9 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   getGeometricHighlightMaterial() {
     return new MeshLambertMaterial({
-      color: 0xffa500,
-      emissive: 0xff7a00,
-      emissiveIntensity: 0.6,
+      color: 0x00f0ff,
       transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
+      depthTest: true,
       clippingPlanes: this.context.getClippingPlanes(),
     })
   }
