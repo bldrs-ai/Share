@@ -39,6 +39,9 @@ export default function NavTreePanel({
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
   const isNavTree = navigationMode === 'spatial-tree'
 
+  // Track which nodes have loaded their geometric parts
+  const [loadedParts, setLoadedParts] = useState({})
+
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(0)
 
@@ -83,9 +86,9 @@ export default function NavTreePanel({
 
   // Flatten the tree into a list of visible nodes
   useEffect(() => {
-    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model)
+    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedParts)
     setVisibleNodes(nodes)
-  }, [treeData, expandedNodeIds, isNavTree, model])
+  }, [treeData, expandedNodeIds, isNavTree, model, loadedParts])
 
   // Scroll to selected element
   useEffect(() => {
@@ -160,6 +163,8 @@ export default function NavTreePanel({
               viewer,
               setItemSize,
               isNavTree,
+              loadedParts,
+              setLoadedParts,
             }}
           >
             {RenderRow}
@@ -177,9 +182,10 @@ export default function NavTreePanel({
  * @param {Array} expandedNodeIds - IDs of expanded nodes
  * @param {boolean} isNavTree - Whether this is a nav tree
  * @param {object} model - The model object
+ * @param {object} loadedParts - Map of expressID to loaded geometric parts
  * @return {Array} nodes
  */
-function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
+function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedParts = {}) {
   const visibleNodes = []
 
   /**
@@ -205,12 +211,37 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
    * @return {object} node
    */
   function mapSpatialNode(node) {
+    const nodeId = node.expressID.toString()
+    const parts = loadedParts[nodeId]
+    const baseChildren = node.children ? node.children.map(mapSpatialNode) : []
+
+    // Add geometric parts if they've been loaded
+    const geometricParts = parts ? parts.map((part, idx) => ({
+      nodeId: part.expressID.toString(),
+      label: part.label,
+      expressID: part.expressID, // The actual part's expressID
+      parentExpressID: part.parentExpressID,
+      partIndex: part.partIndex,
+      hasChildren: false,
+      children: [],
+      isGeometricPart: true,
+    })) : []
+
+    const allChildren = [...baseChildren, ...geometricParts]
+
+    // Determine if this node could have geometric parts to load
+    // We'll mark it as having potential children if it has base children OR could have parts
+    const couldHaveParts = node.expressID !== undefined &&
+                          !parts && // Haven't loaded parts yet
+                          baseChildren.length === 0 // Only leaf nodes can have geometric parts
+
     return {
-      nodeId: node.expressID.toString(),
+      nodeId,
       label: reifyName({properties: model}, node),
       expressID: node.expressID,
-      hasChildren: node.children && node.children.length > 0,
-      children: node.children ? node.children.map(mapSpatialNode) : [],
+      hasChildren: allChildren.length > 0 || couldHaveParts,
+      hasGeometricParts: couldHaveParts,
+      children: allChildren,
     }
   }
 
@@ -249,6 +280,8 @@ const RenderRow = ({index, style, data}) => {
     viewer,
     setItemSize,
     isNavTree,
+    loadedParts,
+    setLoadedParts,
   } = data
 
   const {node, depth} = visibleNodes[index]
@@ -258,8 +291,9 @@ const RenderRow = ({index, style, data}) => {
   let isSelected = false
 
   if (!hasChildren) {
-    // For element nodes
-    isSelected = selectedNodeIds.includes(node.expressID.toString())
+    // For element nodes: use expressID for selection
+    const expressIDStr = node.expressID.toString()
+    isSelected = selectedNodeIds.includes(expressIDStr)
   }
 
   const rowRef = useRef(null)
@@ -288,12 +322,56 @@ const RenderRow = ({index, style, data}) => {
   }, [index, setItemSize, node.label, model])
 
 
-  const handleToggle = (event) => {
+  const handleToggle = async (event) => {
     event.stopPropagation()
     if (isExpanded) {
       setExpandedNodeIds(expandedNodeIds.filter((id) => id !== nodeId))
     } else {
+      // Expand the node first
       setExpandedNodeIds([...expandedNodeIds, nodeId])
+
+      // Check if we need to lazy load geometric parts
+      if (isNavTree && node.hasGeometricParts && !loadedParts[nodeId] && model?.ifcManager) {
+        try {
+          const props = await model.ifcManager.getItemProperties(0, node.expressID, true)
+          const parts = []
+          const representations = props?.Representation?.Representations || []
+
+          for (const rep of representations) {
+            const isBody = rep?.RepresentationIdentifier?.value === 'Body'
+            const items = Array.isArray(rep?.Items) ? rep.Items : []
+            if (!isBody || items.length <= 1) {
+              continue
+            }
+
+            const placedGeometryIds = viewer ? getPlacedGeometryExpressIds(viewer, node.expressID) : []
+            items.forEach((item, idx) => {
+              if (typeof item?.expressID !== 'number') {
+                return
+              }
+              const geometryExpressID = Number.isFinite(placedGeometryIds[idx]) ? placedGeometryIds[idx] : item.expressID
+              parts.push({
+                label: `Part ${idx + 1}`,
+                parentExpressID: node.expressID,
+                partIndex: idx,
+                expressID: item.expressID,
+              })
+              viewer?.registerGeometricPart(item.expressID, {
+                parentExpressID: node.expressID,
+                modelID: 0,
+                partIndex: idx,
+                geometryExpressID,
+              })
+            })
+            break
+          }
+
+          setLoadedParts((prev) => ({...prev, [nodeId]: parts}))
+        } catch (error) {
+          console.warn('Failed to load geometric parts for node:', nodeId, error)
+          setLoadedParts((prev) => ({...prev, [nodeId]: []}))
+        }
+      }
     }
   }
 
@@ -329,6 +407,40 @@ const RenderRow = ({index, style, data}) => {
       />
     </div>
   )
+}
+
+
+/**
+ * Get placed geometry express IDs
+ *
+ * @param {object} viewer - The viewer instance
+ * @param {number} parentExpressID - The parent express ID
+ * @return {Array<number>} - Array of placed geometry express IDs
+ */
+function getPlacedGeometryExpressIds(viewer, parentExpressID) {
+  const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+  if (!ifcAPI?.GetFlatMesh) {
+    return []
+  }
+  try {
+    // eslint-disable-next-line new-cap
+    const flatMesh = ifcAPI.GetFlatMesh(0, parentExpressID)
+    const geometries = flatMesh?.geometries
+    const size = typeof geometries?.size === 'function' ? geometries.size() : 0
+    if (!size) {
+      return []
+    }
+    const geometryExpressIds = []
+    for (let idx = 0; idx < size; idx += 1) {
+      const placedGeometry = geometries.get(idx)
+      const geometryExpressID = placedGeometry?.geometryExpressID
+      geometryExpressIds.push(Number.isFinite(geometryExpressID) ? geometryExpressID : null)
+    }
+    return geometryExpressIds
+  } catch (error) {
+    console.warn('Failed to resolve placed geometries for element', parentExpressID, error)
+    return []
+  }
 }
 
 /**
