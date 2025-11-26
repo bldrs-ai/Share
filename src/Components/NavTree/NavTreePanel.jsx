@@ -86,9 +86,9 @@ export default function NavTreePanel({
 
   // Flatten the tree into a list of visible nodes
   useEffect(() => {
-    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedParts)
+    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, loadedParts)
     setVisibleNodes(nodes)
-  }, [treeData, expandedNodeIds, isNavTree, model, loadedParts])
+  }, [treeData, expandedNodeIds, isNavTree, model, loadedParts, viewer])
 
   // Scroll to selected element
   useEffect(() => {
@@ -182,10 +182,11 @@ export default function NavTreePanel({
  * @param {Array} expandedNodeIds - IDs of expanded nodes
  * @param {boolean} isNavTree - Whether this is a nav tree
  * @param {object} model - The model object
+ * @param {object} viewer - The viewer instance
  * @param {object} loadedParts - Map of expressID to loaded geometric parts
  * @return {Array} nodes
  */
-function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedParts = {}) {
+function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, loadedParts = {}) {
   const visibleNodes = []
 
   /**
@@ -201,6 +202,31 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedPart
       for (const child of node.children) {
         traverse(child, depth + 1)
       }
+    }
+  }
+
+  /**
+   * Check if a node has geometric parts by inspecting its flat mesh
+   *
+   * @param {number} expressID - The express ID to check
+   * @return {boolean} - True if the node has multiple geometric parts
+   */
+  function hasMultipleGeometricParts(expressID) {
+    if (!viewer) {
+      return false
+    }
+    const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+    if (!ifcAPI?.GetFlatMesh) {
+      return false
+    }
+    try {
+      // eslint-disable-next-line new-cap
+      const flatMesh = ifcAPI.GetFlatMesh(0, expressID)
+      const geometries = flatMesh?.geometries
+      const size = typeof geometries?.size === 'function' ? geometries.size() : 0
+      return size > 1
+    } catch (error) {
+      return false
     }
   }
 
@@ -230,10 +256,11 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, loadedPart
     const allChildren = [...baseChildren, ...geometricParts]
 
     // Determine if this node could have geometric parts to load
-    // We'll mark it as having potential children if it has base children OR could have parts
+    // Check if it's a leaf node that might have multiple geometric parts
     const couldHaveParts = node.expressID !== undefined &&
                           !parts && // Haven't loaded parts yet
-                          baseChildren.length === 0 // Only leaf nodes can have geometric parts
+                          baseChildren.length === 0 && // Only leaf nodes can have geometric parts
+                          hasMultipleGeometricParts(node.expressID)
 
     return {
       nodeId,
