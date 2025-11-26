@@ -374,6 +374,7 @@ export default function CadView({
       return
     }
     debug().log('CadView#onModel: rootElt: ', rootElt)
+
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
@@ -529,8 +530,9 @@ export default function CadView({
       setSelectedElements(resIds)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
-        const firstId = resultIDs.slice(0, 1)
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
+        const firstId = parseInt(resultIDs.slice(0, 1)[0])
+
+        const pathIds = getParentPathIdsForElement(elementsById, firstId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const enabledFeatures = searchParams.get('feature')
         const elementPath = pathIds.join('/')
@@ -674,17 +676,35 @@ export default function CadView({
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
-      // Update The selection on the scene pick/unpick
-      const ids = selectedElements.map((id) => parseInt(id))
-      await viewer.setSelection(0, ids)
-      // If current selection is not empty
+      const ids = selectedElements
+        .map((id) => parseInt(id))
+        .filter((id) => Number.isFinite(id))
+      const geometricPartIds = ids.filter((id) => !elementsById[id])
+      const elementIds = ids.filter((id) => elementsById[id])
+
+      try {
+        if (elementIds.length > 0) {
+          await viewer.setSelection(0, elementIds)
+        } else {
+          await viewer.setSelection(0, [])
+        }
+        if (viewer.highlightGeometricParts) {
+          await viewer.highlightGeometricParts(0, geometricPartIds)
+        }
+      } catch (error) {
+        console.error('Error updating selection:', error.message)
+      }
+
       if (selectedElements.length > 0) {
-        // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)[0]
-        const props = await viewer.getProperties(0, Number(lastId))
-        setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
+        const lastId = parseInt(selectedElements.slice(-1)[0])
+        try {
+          const props = await viewer.getProperties(0, lastId)
+          setSelectedElement(props)
+        } catch (error) {
+          debug().log('CadView#selectionEffect: Unable to fetch properties for element:', lastId, error.message)
+          setSelectedElement(null)
+        }
+        const pathIds = getParentPathIdsForElement(elementsById, lastId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }

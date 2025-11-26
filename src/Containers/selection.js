@@ -13,11 +13,25 @@ import {getDescendantExpressIds} from '../utils/TreeUtils'
  */
 export function elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId) {
   if (!viewer.isolator.canBePickedInScene(expressId)) {
+    debug().warn('elementSelection: Element cannot be picked in scene:', expressId)
     return
   }
   const selectedElt = elementsById[expressId]
   if (!selectedElt) {
-    debug().error(`selection#getParentPathIdsForElement(${expressId}) missing in table:`, elementsById)
+    debug().warn('elementSelection: Element not in elementsById, treating as geometric part:', expressId)
+    // Geometric parts (individual Items) aren't in elementsById, but can still be selected
+    const selectedInViewer = new Set(viewer.getSelectedIds())
+    if (isShiftKeyDown) {
+      if (selectedInViewer.has(expressId)) {
+        selectedInViewer.delete(expressId)
+      } else {
+        selectedInViewer.add(expressId)
+      }
+    } else {
+      selectedInViewer.clear()
+      selectedInViewer.add(expressId)
+    }
+    selectItemsInScene(Array.from(selectedInViewer), true)
     return
   }
   const descendantIds = getDescendantExpressIds(selectedElt)
