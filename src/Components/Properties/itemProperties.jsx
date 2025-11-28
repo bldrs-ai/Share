@@ -173,8 +173,8 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
           throw new Error('Array contains non-reference type')
         }
         const refId = stoi(p.value)
-        if (model.getItemProperties) {
-          const ifcElt = await model.getItemProperties(refId)
+        if (model.getProperties) {
+          const ifcElt = await model.getProperties(refId)
           ifcToRowCb(ifcElt, rows)
         } else {
           debug().warn('model has no getProperties method: ', model)

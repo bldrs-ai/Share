@@ -356,8 +356,8 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
-    if (!m.ifcManager) {
-      console.warn('CadView#onModel, model without manager:', m)
+    if (!m.getRootElement) {
+      console.warn('CadView#onModel, model does not support Model interface:', m)
       return
     }
     window.ondblclick = canvasDoubleClickHandler
@@ -366,7 +366,7 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      rootElt = await m.getRootElement()
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')
@@ -375,12 +375,17 @@ export default function CadView({
     }
     debug().log('CadView#onModel: rootElt: ', rootElt)
 
-    if (rootElt.expressID === undefined) {
-      throw new Error('Model has undefined root express ID')
+    if (rootElt.elementID === undefined && rootElt.expressID === undefined) {
+      throw new Error('Model has undefined root element ID')
+    }
+    // Ensure expressID exists for backward compatibility
+    if (rootElt.expressID === undefined && rootElt.elementID !== undefined) {
+      rootElt.expressID = rootElt.elementID
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     initSearch(m, rootElt)
-    const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    const elementID = rootElt.elementID ?? rootElt.expressID
+    const tmpProps = m.getProperties ? await m.getProperties(elementID) : await viewer.getProperties(0, elementID)
     const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName

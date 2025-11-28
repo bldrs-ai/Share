@@ -23,6 +23,7 @@ import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isOutOfMemoryError} from '../utils/oom'
+import {createIfcModel} from './ifc'
 
 
 /**
@@ -206,6 +207,19 @@ export async function load(
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
+  }
+
+  // Create Model interface for IFC models
+  if (isIfc && model.ifcManager && viewer) {
+    const ifcAPI = model.ifcManager.ifcAPI
+    const modelInterface = createIfcModel(model, model.ifcManager, ifcAPI, viewer)
+    // Attach Model interface methods to model object
+    model.getRootElement = modelInterface.getRootElement.bind(modelInterface)
+    model.getChildren = modelInterface.getChildren.bind(modelInterface)
+    model.getProperties = modelInterface.getProperties.bind(modelInterface)
+    model.getPropertySets = modelInterface.getPropertySets.bind(modelInterface)
+    model.hasChildren = modelInterface.hasChildren.bind(modelInterface)
+    model.getElement = modelInterface.getElement.bind(modelInterface)
   }
 
   // Used for GA stats
