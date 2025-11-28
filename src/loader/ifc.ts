@@ -1,6 +1,7 @@
 /**
  * IFC-specific implementation of Model interface
  */
+import {BaseModel} from './BaseModel'
 import {Element, GeometricPart, Model, PropertyObject, PropertySet} from './Model'
 
 
@@ -139,7 +140,163 @@ async function getGeometricParts(
 
 
 /**
- * Create IFC model implementation of Model interface
+ * IFC Model implementation extending BaseModel
+ */
+export class IfcModel extends BaseModel {
+  private geometricPartsCache = new Map<number, GeometricPart[]>()
+
+  /**
+   * @param ifcModel Root IFC model object
+   * @param ifcManager IFC manager for accessing IFC data
+   * @param ifcAPI IFC API for geometric operations
+   * @param viewer Optional viewer for geometric part registration
+   */
+  constructor(
+    private ifcModel: {
+      expressID?: number
+      children?: Array<{expressID?: number, [key: string]: unknown}>
+    },
+    private ifcManager: {
+      getSpatialStructure?: (modelID: number, includeProperties: boolean) => Promise<unknown>
+      getItemProperties?: (modelID: number, expressID: number, includeProperties: boolean) => Promise<unknown>
+      getPropertySets?: (modelID: number, expressID: number) => Promise<unknown[]>
+    },
+    private ifcAPI: {GetFlatMesh?: (modelID: number, expressID: number) => unknown},
+    private viewer?: {
+      registerGeometricPart?: (
+        partExpressID: number,
+        metadata: {parentExpressID: number, modelID: number, partIndex: number, geometryExpressID: number}
+      ) => void
+    },
+  ) {
+    super()
+  }
+
+  /**
+   * Convert IFC element to generic Element
+   * Override BaseModel's toElement to handle IFC-specific structure
+   *
+   * @return Generic Element
+   */
+  protected toElement(ifcElt: {
+    expressID?: number
+    children?: unknown[]
+    [key: string]: unknown
+  }): Element {
+    const children: Element[] | undefined = Array.isArray(ifcElt.children) ?
+      (ifcElt.children.map((child) =>
+        this.toElement(child as {expressID?: number, children?: unknown[], [key: string]: unknown}),
+      ) as Element[]) :
+      undefined
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const {children: _unused, ...rest} = ifcElt
+    const elementID = ifcElt.expressID ?? 0
+    const result: Element = {
+      ...rest,
+      elementID,
+      expressID: elementID, // Set expressID for backward compatibility (same as elementID)
+      label: (ifcElt as {Name?: {value?: string}}).Name?.value,
+      children,
+    }
+    return result
+  }
+
+  /**
+   * Convert geometric part to Element
+   *
+   * @return Element representation of geometric part
+   */
+  private partToElement(part: GeometricPart): Element {
+    return {
+      elementID: part.elementID,
+      label: part.label,
+      children: [],
+      parentElementID: part.parentElementID,
+      partIndex: part.partIndex,
+      geometryElementID: part.geometryElementID,
+      isGeometricPart: true,
+    }
+  }
+
+  /**
+   * Get the root element of the model
+   *
+   * @return Root element
+   */
+  async getRootElement(): Promise<Element> {
+    if (this.rootElementCache) {
+      return this.rootElementCache
+    }
+    if (!this.ifcManager?.getSpatialStructure) {
+      throw new Error('IFC manager does not support getSpatialStructure')
+    }
+    // Pass true to include properties needed for reifyName labels
+    // Warning is transient and only appears once during initial load
+    const rootElt = await this.ifcManager.getSpatialStructure(0, true) as {expressID?: number, children?: unknown[], [key: string]: unknown}
+    this.rootElementCache = this.toElement(rootElt)
+    return this.rootElementCache
+  }
+
+  /**
+   * Get children for an element (spatial + geometric parts)
+   * Override BaseModel to handle geometric parts
+   *
+   * @return Array of child elements
+   */
+  async getChildren(elementID: number): Promise<Element[]> {
+    // First get spatial children using base implementation
+    const spatialChildren = await super.getChildren(elementID)
+
+    // Check if element has geometric parts and is a leaf node
+    const hasParts = spatialChildren.length === 0 &&
+      hasGeometricParts(elementID, this.ifcAPI)
+
+    if (hasParts) {
+      // Get geometric parts (use cache if available)
+      let parts = this.geometricPartsCache.get(elementID)
+      if (!parts) {
+        parts = await getGeometricParts(elementID, this.ifcManager, this.ifcAPI, this.viewer)
+        this.geometricPartsCache.set(elementID, parts)
+      }
+      // Combine spatial children (empty) with geometric parts
+      return [...spatialChildren, ...parts.map((part) => this.partToElement(part))]
+    }
+
+    return spatialChildren
+  }
+
+  /**
+   * Get properties for an element
+   * Override BaseModel to use IFC manager
+   *
+   * @return Properties object
+   */
+  async getProperties(elementID: number): Promise<PropertyObject> {
+    if (!this.ifcManager?.getItemProperties) {
+      return {}
+    }
+    const props = await this.ifcManager.getItemProperties(0, elementID, true) as PropertyObject
+    return props || {}
+  }
+
+  /**
+   * Get property sets for an element
+   * Override BaseModel to use IFC manager
+   *
+   * @return Array of property sets
+   */
+  async getPropertySets(elementID: number): Promise<PropertySet[]> {
+    if (!this.ifcManager?.getPropertySets) {
+      return []
+    }
+    const psets = await this.ifcManager.getPropertySets(0, elementID) as PropertySet[]
+    return psets || []
+  }
+}
+
+
+/**
+ * Factory function to create IFC Model instance
  *
  * @return Model interface implementation
  */
@@ -161,176 +318,6 @@ export function createIfcModel(
     ) => void
   },
 ): Model {
-  // Cache for geometric parts to avoid re-fetching
-  const geometricPartsCache = new Map<number, GeometricPart[]>()
-
-  // Cache for spatial structure
-  let rootElementCache: Element | null = null
-
-  /**
-   * Convert IFC element to generic Element
-   *
-   * @return Generic Element
-   */
-  function toElement(ifcElt: {
-    expressID?: number
-    children?: unknown[]
-    [key: string]: unknown
-  }): Element {
-    const children: Element[] | undefined = Array.isArray(ifcElt.children) ?
-      (ifcElt.children.map((child) =>
-        toElement(child as {expressID?: number, children?: unknown[], [key: string]: unknown}),
-      ) as Element[]) :
-      undefined
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const {children: _unused, ...rest} = ifcElt
-    const result: Element = {
-      ...rest,
-      elementID: ifcElt.expressID ?? 0,
-      label: (ifcElt as {Name?: {value?: string}}).Name?.value,
-      children,
-    }
-    return result
-  }
-
-  /**
-   * Convert geometric part to Element
-   *
-   * @return Element representation of geometric part
-   */
-  function partToElement(part: GeometricPart): Element {
-    return {
-      elementID: part.elementID,
-      label: part.label,
-      children: [],
-      parentElementID: part.parentElementID,
-      partIndex: part.partIndex,
-      geometryElementID: part.geometryElementID,
-      isGeometricPart: true,
-    }
-  }
-
-  return {
-    /**
-     * Get the root element of the model
-     *
-     * @return Root element
-     */
-    async getRootElement(): Promise<Element> {
-      if (rootElementCache) {
-        return rootElementCache
-      }
-      if (!ifcManager?.getSpatialStructure) {
-        throw new Error('IFC manager does not support getSpatialStructure')
-      }
-      // Pass true to include properties needed for reifyName labels
-      // Warning is transient and only appears once during initial load
-      const rootElt = await ifcManager.getSpatialStructure(0, true) as {expressID?: number, children?: unknown[], [key: string]: unknown}
-      rootElementCache = toElement(rootElt)
-      return rootElementCache
-    },
-
-    /**
-     * Get children for an element (spatial + geometric parts)
-     *
-     * @return Array of child elements
-     */
-    async getChildren(elementID: number): Promise<Element[]> {
-      // First get spatial children
-      const rootElt = await this.getRootElement()
-
-      /**
-       * Find element in tree
-       *
-       * @return Found element or null
-       */
-      function findElement(node: Element): Element | null {
-        if (node.elementID === elementID) {
-          return node
-        }
-        if (node.children) {
-          for (const child of node.children) {
-            const found = findElement(child)
-            if (found) {
-              return found
-            }
-          }
-        }
-        return null
-      }
-
-      const element = findElement(rootElt)
-      const spatialChildren = element?.children || []
-
-      // Check if element has geometric parts and is a leaf node
-      const hasParts = spatialChildren.length === 0 &&
-        hasGeometricParts(elementID, ifcAPI)
-
-      if (hasParts) {
-        // Get geometric parts (use cache if available)
-        let parts = geometricPartsCache.get(elementID)
-        if (!parts) {
-          parts = await getGeometricParts(elementID, ifcManager, ifcAPI, viewer)
-          geometricPartsCache.set(elementID, parts)
-        }
-        // Combine spatial children (empty) with geometric parts
-        return [...spatialChildren, ...parts.map(partToElement)]
-      }
-
-      return spatialChildren
-    },
-
-    async getProperties(elementID: number): Promise<PropertyObject> {
-      if (!ifcManager?.getItemProperties) {
-        return {}
-      }
-      const props = await ifcManager.getItemProperties(0, elementID, true) as PropertyObject
-      return props || {}
-    },
-
-    async getPropertySets(elementID: number): Promise<PropertySet[]> {
-      if (!ifcManager?.getPropertySets) {
-        return []
-      }
-      const psets = await ifcManager.getPropertySets(0, elementID) as PropertySet[]
-      return psets || []
-    },
-
-    async hasChildren(elementID: number): Promise<boolean> {
-      const children = await this.getChildren(elementID)
-      return children.length > 0
-    },
-
-    /**
-     * Get element by ID
-     *
-     * @return Element or null if not found
-     */
-    async getElement(elementID: number): Promise<Element | null> {
-      const rootElt = await this.getRootElement()
-
-      /**
-       * Find element in tree
-       *
-       * @return Found element or null
-       */
-      function findElement(node: Element): Element | null {
-        if (node.elementID === elementID) {
-          return node
-        }
-        if (node.children) {
-          for (const child of node.children) {
-            const found = findElement(child)
-            if (found) {
-              return found
-            }
-          }
-        }
-        return null
-      }
-
-      return findElement(rootElt)
-    },
-  }
+  return new IfcModel(ifcModel, ifcManager, ifcAPI, viewer)
 }
 

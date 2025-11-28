@@ -5,8 +5,8 @@ import CustomPostProcessor from './CustomPostProcessor'
 
 
 /**
- *  Overrides the default render functionality in the viewer
- * and adds a postprocessing effect (outlining selected elements)
+ * Highlights and outlines selected elements using post-processing effects
+ * Format-agnostic: works with any Three.js Mesh objects (IFC, OBJ, FBX, GLB, etc.)
  */
 export default class IfcHighlighter {
   highlightedMeshes = null

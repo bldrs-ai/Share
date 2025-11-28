@@ -378,7 +378,7 @@ export default function CadView({
     if (rootElt.elementID === undefined && rootElt.expressID === undefined) {
       throw new Error('Model has undefined root element ID')
     }
-    // Ensure expressID exists for backward compatibility
+    // Ensure expressID exists for backward compatibility (should already be set by Model interface)
     if (rootElt.expressID === undefined && rootElt.elementID !== undefined) {
       rootElt.expressID = rootElt.elementID
     }
@@ -414,8 +414,10 @@ export default function CadView({
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point
       viewer.setHighlighted([mesh])
+      // Get elementID from mesh (expressID on mesh equals elementID for Model interface)
+      let elementId
       if (mesh.expressID !== undefined) {
-        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
+        elementId = mesh.expressID
       } else {
         const geom = mesh.geometry
         if (!areDefinedAndNotNull(geom, geom.index)) {
@@ -424,9 +426,9 @@ export default function CadView({
         }
         const geoIndex = geom.index.array
         const IdAttrName = 'expressID'
-        const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
-        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+        elementId = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
       }
+      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, elementId)
     } catch (e) {
       console.error(e)
     }

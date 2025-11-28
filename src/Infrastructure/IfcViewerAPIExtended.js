@@ -13,6 +13,7 @@ import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
+import {findMeshesByElementIds} from './selectionUtils'
 import debug from '../utils/debug'
 import {areDefinedAndNotNull} from '../utils/assert'
 
@@ -206,40 +207,63 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
 
   /**
-   * sets the current selected expressIds in the scene
+   * Sets the current selected elements in the scene
+   * Accepts elementIDs (Model interface abstraction)
    *
    * @param {number} modelID
-   * @param {number[]} expressIds express Ids of the elements
+   * @param {number[]} elementIds elementIDs of the elements (Model interface)
    * @param {boolean} focusSelection Whether to focus on selection
    */
-  async setSelection(modelID, expressIds, focusSelection) {
-    if (this.IFC.type !== 'ifc') {
-      debug().warn('setSelection is not supported for this type of model')
-      return
-    }
-    this._selectedExpressIds = expressIds
+  async setSelection(modelID, elementIds, focusSelection) {
+    this._selectedExpressIds = elementIds
     const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
       // if not specified, only focus on item if it was the first one to be selected
       focusSelection = toBeSelected.length === 1
     }
-    if (toBeSelected.length !== 0) {
-      this.clearGeometricPartHighlight()
-      try {
-        debug().log('IfcViewerAPIExtended#setSelection, with Array<toBeSelected>: ', toBeSelected)
-        const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
-        const removePrevious = true
-        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
-        debug().log('IfcViewerAPIExtended#setSelection, meshes: ', this.IFC.selector.selection.meshes)
-        this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
-      } catch (e) {
-        console.warn('selection failure', e)
-        debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
+
+    const scene = this.context.getScene()
+    let selectedMeshes = []
+
+    if (this.IFC.type === 'ifc') {
+      // IFC: Use selector for selection state management, but also find meshes directly
+      // This ensures highlighting works even if selector has issues
+      // Note: IFC selector internally uses expressID, but elementID = expressID for IFC
+      if (toBeSelected.length !== 0) {
+        this.clearGeometricPartHighlight()
+        try {
+          debug().log('IfcViewerAPIExtended#setSelection, with Array<toBeSelected>: ', toBeSelected)
+          const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
+          const removePrevious = true
+          await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
+          debug().log('IfcViewerAPIExtended#setSelection, meshes: ', this.IFC.selector.selection.meshes)
+          // Use selector's meshes if available, otherwise fall back to direct search
+          selectedMeshes = this.IFC.selector.selection.meshes && this.IFC.selector.selection.meshes.length > 0 ?
+            Array.from(this.IFC.selector.selection.meshes) :
+            findMeshesByElementIds(scene, toBeSelected)
+        } catch (e) {
+          console.warn('selection failure', e)
+          debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
+          // Fall back to direct mesh finding on error
+          selectedMeshes = findMeshesByElementIds(scene, toBeSelected)
+        }
+      } else {
+        this.clearGeometricPartHighlight()
+        this.highlighter.setHighlighted(null)
+        this.IFC.selector.unpickIfcItems()
+        return
       }
     } else {
-      this.clearGeometricPartHighlight()
+      // Object3D models (OBJ, FBX, GLB, etc.): Find meshes directly
+      // elementID = expressID for Object3D models, so search by expressID on meshes
+      selectedMeshes = findMeshesByElementIds(scene, toBeSelected)
+    }
+
+    // Unified highlighting for all formats
+    if (selectedMeshes.length > 0) {
+      this.highlighter.setHighlighted(selectedMeshes)
+    } else {
       this.highlighter.setHighlighted(null)
-      this.IFC.selector.unpickIfcItems()
     }
   }
 

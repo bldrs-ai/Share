@@ -241,6 +241,8 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, ma
     const baseChildren = node.children ? node.children.map(mapSpatialNode) : []
 
     // Merge materialized children (including geometric parts) if available
+    // Only materialize if baseChildren is empty (for lazy loading geometric parts in IFC)
+    // For Object3D models, children are already in the tree structure
     const materialized = materializedChildren[nodeId] || []
     const materializedElements = materialized.map((child) => {
       // Preserve all properties from child (including IFC properties for reifyName)
@@ -260,7 +262,9 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, ma
       }
     })
 
-    const allChildren = [...baseChildren, ...materializedElements]
+    // Only include materialized children if baseChildren is empty (for geometric parts)
+    // This prevents duplicates when children are already in the tree structure
+    const allChildren = baseChildren.length > 0 ? baseChildren : materializedElements
 
     return {
       nodeId,

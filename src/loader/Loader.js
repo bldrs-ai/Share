@@ -24,6 +24,7 @@ import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isOutOfMemoryError} from '../utils/oom'
 import {createIfcModel} from './ifc'
+import {createObject3DModel} from './BaseModel'
 
 
 /**
@@ -209,11 +210,20 @@ export async function load(
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
 
-  // Create Model interface for IFC models
+  // Create Model interface for all models
   if (isIfc && model.ifcManager && viewer) {
     const ifcAPI = model.ifcManager.ifcAPI
     const modelInterface = createIfcModel(model, model.ifcManager, ifcAPI, viewer)
     // Attach Model interface methods to model object
+    model.getRootElement = modelInterface.getRootElement.bind(modelInterface)
+    model.getChildren = modelInterface.getChildren.bind(modelInterface)
+    model.getProperties = modelInterface.getProperties.bind(modelInterface)
+    model.getPropertySets = modelInterface.getPropertySets.bind(modelInterface)
+    model.hasChildren = modelInterface.hasChildren.bind(modelInterface)
+    model.getElement = modelInterface.getElement.bind(modelInterface)
+  } else if (!isIfc && model) {
+    // Attach Model interface for non-IFC models (OBJ, FBX, GLB, STL, XYZ, PDB)
+    const modelInterface = createObject3DModel(model)
     model.getRootElement = modelInterface.getRootElement.bind(modelInterface)
     model.getChildren = modelInterface.getChildren.bind(modelInterface)
     model.getProperties = modelInterface.getProperties.bind(modelInterface)
@@ -301,8 +311,10 @@ function convertToShareModel(model, viewer) {
   function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
-    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
+    // Extract label from Object3D.name if present, otherwise default to 'Object'
+    const nameValue = obj3d.name && obj3d.name.trim() !== '' ? obj3d.name : (depth === 0 ? undefined : 'Object')
+    obj3d.Name = obj3d.Name || (nameValue ? {value: nameValue} : undefined)
+    obj3d.LongName = obj3d.LongName || (nameValue ? {value: nameValue} : undefined)
     const id = objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     if (obj3d.geometry) {
@@ -341,8 +353,10 @@ function convertToShareModel(model, viewer) {
   // Override for root
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
-  model.Name = model.Name || {value: `${model.mimeType} model`}
-  model.LongName = model.LongName || {value: `${model.mimeType} model`}
+  // Use "Model" by default, or "Model (type)" if mimeType is available and useful
+  const rootLabel = model.mimeType ? `Model (${model.mimeType})` : 'Model'
+  model.Name = model.Name || {value: rootLabel}
+  model.LongName = model.LongName || {value: rootLabel}
   // This is used for page title and other areas that need a model name, so if it's not
   // useful, set to undefined and we'll use the modelPath later instead.
   if (model.name === undefined || model.name === null || model.name === '') {
