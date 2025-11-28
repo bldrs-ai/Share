@@ -49,19 +49,24 @@ export function createProxyServer(host, port, useHttps = false) {
         return
       }
 
-      const contentType = getContentType(req.url)
-      if (contentType) {
-        res.setHeader('Content-Type', contentType)
+      // Don't modify headers for /esbuild (EventSource hot reload) or /subscribe
+      const isPassthroughPath = req.url.startsWith('/esbuild') || req.url.startsWith('/subscribe')
+      
+      if (!isPassthroughPath) {
+        const contentType = getContentType(req.url)
+        if (contentType) {
+          res.setHeader('Content-Type', contentType)
+        }
+
+        if (isCacheable(req.url)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000')
+        }
       }
 
-      if (isCacheable(req.url)) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000')
-      }
-
-      // If the request is for /subscribe, do not add COOP/COEP headers.
+      // If the request is for /subscribe or /esbuild, do not add COOP/COEP headers.
       // Otherwise, add the headers needed for cross-origin isolation.
       let headersToSend = {}
-      if (req.url.startsWith('/subscribe')) {
+      if (isPassthroughPath) {
         headersToSend = {
           ...proxyResponse.headers,
         }

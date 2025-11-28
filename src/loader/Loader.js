@@ -604,7 +604,7 @@ function newIfcLoader(viewer) {
       if (onProgress) {
         onProgress('Fitting model to frame...')
       }
-      this.context.fitToFrame()
+      // this.context.fitToFrame()
 
       if (onProgress) {
         onProgress('Gathering model statistics...')
