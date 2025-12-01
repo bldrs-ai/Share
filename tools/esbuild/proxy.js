@@ -51,7 +51,7 @@ export function createProxyServer(host, port, useHttps = false) {
 
       // Don't modify headers for /esbuild (EventSource hot reload) or /subscribe
       const isPassthroughPath = req.url.startsWith('/esbuild') || req.url.startsWith('/subscribe')
-      
+
       if (!isPassthroughPath) {
         const contentType = getContentType(req.url)
         if (contentType) {
