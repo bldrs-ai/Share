@@ -13,6 +13,7 @@ import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {adaptCameraPlanes, adaptCameraZoomLimits} from '../utils/cameraPlanes'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
@@ -323,7 +324,20 @@ export default function CadView({
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
     if (!isCamHashSet) {
+      console.log('CadView#loadModel: not isCamHashSet, fitting model to frame')
       viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
+      // Adaptively adjust camera near/far planes based on model size
+      // This ensures users can zoom out far enough to see the entire model
+      const camera = viewer.context.getCamera()
+      adaptCameraPlanes(camera, loadedModel)
+      window.camera = camera
+
+      // Adaptively adjust camera controls zoom limits (minDistance/maxDistance)
+      // This ensures mouse zoom can go out far enough to see the entire model
+      const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
+      const scene = viewer.IFC.context.getScene()
+      console.log('CadView#loadModel: loadedModel', loadedModel)
+      adaptCameraZoomLimits(camera, cameraControls, loadedModel, scene)
     }
 
     // TODO(pablo): centralize capability check somewhere
