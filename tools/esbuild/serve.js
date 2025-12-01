@@ -1,18 +1,26 @@
 import esbuild from 'esbuild'
+import * as path from 'node:path'
+import {fileURLToPath} from 'url'
 import config from './common.js'
 import {createProxyServer} from './proxy.js'
 import {log} from './utils.js'
 import defines from './defines.js'
 
 
-const ctx = await esbuild.context(config)
+const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
+const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
+const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 
-if (defines['process.env.ESBUILD_WATCH'] === 'true') {
-  await ctx.watch()
-  console.warn('Esbuild hot reload ENABLED')
-} else {
-  console.warn('Esbuild hot reload DISABLED')
+// Add entry points for watch mode to know what to rebuild
+const serveConfig = {
+  ...config,
+  entryPoints: [indexFile, subscribeFile],
 }
+
+const ctx = await esbuild.context(serveConfig)
+
+// Do initial rebuild to ensure files are up to date
+await ctx.rebuild()
 
 /**
  * "It's not possible to hook into esbuild's local server to customize
@@ -30,6 +38,14 @@ const {host, port} = await ctx.serve({
   port: SERVE_PORT - 1,
   servedir: config.outdir,
 })
+
+// Start watch mode after serve is set up
+if (defines['process.env.ESBUILD_WATCH'] === 'true') {
+  await ctx.watch()
+  console.warn('Esbuild hot reload ENABLED')
+} else {
+  console.warn('Esbuild hot reload DISABLED')
+}
 log(`Esbuild's backend server 👆\n`)
 createProxyServer(host, port, (process.env.serveHttps === 'true')).listen(SERVE_PORT)
 
