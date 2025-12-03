@@ -10,7 +10,7 @@
     "appName": "Create App",
     "description": "AI Create",
     "image": "//localhost:8080/icons/CreateApp.svg",
-    "action": "http://localhost:5174/",
+    "action": "http://localhost:8888/",
     "icon": "//localhost:8080/icons/CreateApp.svg"
   }
 ]
