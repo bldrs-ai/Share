@@ -356,8 +356,8 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     // TODO(pablo): centralize capability check somewhere
-    if (!m.ifcManager) {
-      console.warn('CadView#onModel, model without manager:', m)
+    if (!m.getRootElement) {
+      console.warn('CadView#onModel, model does not support Model interface:', m)
       return
     }
     window.ondblclick = canvasDoubleClickHandler
@@ -366,7 +366,7 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      rootElt = await m.getRootElement()
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')
@@ -374,12 +374,18 @@ export default function CadView({
       return
     }
     debug().log('CadView#onModel: rootElt: ', rootElt)
-    if (rootElt.expressID === undefined) {
-      throw new Error('Model has undefined root express ID')
+
+    if (rootElt.elementID === undefined && rootElt.expressID === undefined) {
+      throw new Error('Model has undefined root element ID')
+    }
+    // Ensure expressID exists for backward compatibility (should already be set by Model interface)
+    if (rootElt.expressID === undefined && rootElt.elementID !== undefined) {
+      rootElt.expressID = rootElt.elementID
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     initSearch(m, rootElt)
-    const tmpProps = await viewer.getProperties(0, rootElt.expressID)
+    const elementID = rootElt.elementID ?? rootElt.expressID
+    const tmpProps = m.getProperties ? await m.getProperties(elementID) : await viewer.getProperties(0, elementID)
     const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
@@ -408,8 +414,10 @@ export default function CadView({
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point
       viewer.setHighlighted([mesh])
+      // Get elementID from mesh (expressID on mesh equals elementID for Model interface)
+      let elementId
       if (mesh.expressID !== undefined) {
-        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
+        elementId = mesh.expressID
       } else {
         const geom = mesh.geometry
         if (!areDefinedAndNotNull(geom, geom.index)) {
@@ -418,9 +426,9 @@ export default function CadView({
         }
         const geoIndex = geom.index.array
         const IdAttrName = 'expressID'
-        const eid = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
-        elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, eid)
+        elementId = geom.attributes[IdAttrName].getX(geoIndex[3 * picked.faceIndex])
       }
+      elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, elementId)
     } catch (e) {
       console.error(e)
     }
@@ -529,8 +537,9 @@ export default function CadView({
       setSelectedElements(resIds)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
-        const firstId = resultIDs.slice(0, 1)
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
+        const firstId = parseInt(resultIDs.slice(0, 1)[0])
+
+        const pathIds = getParentPathIdsForElement(elementsById, firstId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const enabledFeatures = searchParams.get('feature')
         const elementPath = pathIds.join('/')
@@ -674,17 +683,35 @@ export default function CadView({
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
-      // Update The selection on the scene pick/unpick
-      const ids = selectedElements.map((id) => parseInt(id))
-      await viewer.setSelection(0, ids)
-      // If current selection is not empty
+      const ids = selectedElements
+        .map((id) => parseInt(id))
+        .filter((id) => Number.isFinite(id))
+      const geometricPartIds = ids.filter((id) => !elementsById[id])
+      const elementIds = ids.filter((id) => elementsById[id])
+
+      try {
+        if (elementIds.length > 0) {
+          await viewer.setSelection(0, elementIds)
+        } else {
+          await viewer.setSelection(0, [])
+        }
+        if (viewer.highlightGeometricParts) {
+          await viewer.highlightGeometricParts(0, geometricPartIds)
+        }
+      } catch (error) {
+        console.error('Error updating selection:', error.message)
+      }
+
       if (selectedElements.length > 0) {
-        // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)[0]
-        const props = await viewer.getProperties(0, Number(lastId))
-        setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
+        const lastId = parseInt(selectedElements.slice(-1)[0])
+        try {
+          const props = await viewer.getProperties(0, lastId)
+          setSelectedElement(props)
+        } catch (error) {
+          debug().log('CadView#selectionEffect: Unable to fetch properties for element:', lastId, error.message)
+          setSelectedElement(null)
+        }
+        const pathIds = getParentPathIdsForElement(elementsById, lastId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }

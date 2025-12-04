@@ -77,20 +77,50 @@ export default function NavTreePanel({
   const treeData = isNavTree ? rootElement : elementTypesMap
 
   const [visibleNodes, setVisibleNodes] = useState([])
+  // Cache for materialized children (including geometric parts)
+  const [materializedChildren, setMaterializedChildren] = useState({})
 
   // Map to store item heights
   const itemHeights = useRef({})
 
+  // Materialize children when nodes are expanded
+  useEffect(() => {
+    if (!isNavTree || !model?.getChildren) {
+      return
+    }
+    setMaterializedChildren((prev) => {
+      const newMaterialized = {...prev}
+      for (const nodeId of expandedNodeIds) {
+        if (!newMaterialized[nodeId]) {
+          // Start async materialization
+          const elementID = parseInt(nodeId, 10)
+          if (Number.isFinite(elementID)) {
+            model.getChildren(elementID).then((children) => {
+              setMaterializedChildren((current) => ({...current, [nodeId]: children}))
+            }).catch((error) => {
+              console.warn('Failed to materialize children for node:', nodeId, error)
+              setMaterializedChildren((current) => ({...current, [nodeId]: []}))
+            })
+          }
+        }
+      }
+      return newMaterialized
+    })
+  }, [expandedNodeIds, isNavTree, model])
+
   // Flatten the tree into a list of visible nodes
   useEffect(() => {
-    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model)
+    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, materializedChildren)
     setVisibleNodes(nodes)
-  }, [treeData, expandedNodeIds, isNavTree, model])
+  }, [treeData, expandedNodeIds, isNavTree, model, viewer, materializedChildren])
 
-  // Scroll to selected element
+  // Scroll to selected element (only when selection changes, not when visibleNodes changes)
+  const prevSelectedRef = useRef(selectedElements[0])
   useEffect(() => {
     const nodeId = selectedElements[0]
-    if (nodeId) {
+    // Only scroll if selection actually changed
+    if (nodeId && nodeId !== prevSelectedRef.current) {
+      prevSelectedRef.current = nodeId
       const index = visibleNodes.findIndex(
         ({node}) => node.expressID && node.expressID.toString() === nodeId,
       )
@@ -177,9 +207,11 @@ export default function NavTreePanel({
  * @param {Array} expandedNodeIds - IDs of expanded nodes
  * @param {boolean} isNavTree - Whether this is a nav tree
  * @param {object} model - The model object
+ * @param {object} viewer - The viewer instance
+ * @param {object} materializedChildren - Map of nodeId to materialized children
  * @return {Array} nodes
  */
-function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
+function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, viewer, materializedChildren = {}) {
   const visibleNodes = []
 
   /**
@@ -205,12 +237,41 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
    * @return {object} node
    */
   function mapSpatialNode(node) {
+    const nodeId = node.expressID.toString()
+    const baseChildren = node.children ? node.children.map(mapSpatialNode) : []
+
+    // Merge materialized children (including geometric parts) if available
+    // Only materialize if baseChildren is empty (for lazy loading geometric parts in IFC)
+    // For Object3D models, children are already in the tree structure
+    const materialized = materializedChildren[nodeId] || []
+    const materializedElements = materialized.map((child) => {
+      // Preserve all properties from child (including IFC properties for reifyName)
+      // Don't set label here - let NavTreeNode use reifyName to get proper label
+      return {
+        nodeId: child.elementID.toString(),
+        expressID: child.elementID,
+        hasChildren: (child.children?.length || 0) > 0,
+        children: child.children ? child.children.map((c) => ({
+          nodeId: c.elementID.toString(),
+          expressID: c.elementID,
+          hasChildren: false,
+          children: [],
+          ...c, // Preserve properties for reifyName
+        })) : [],
+        ...child, // Spread all properties (Name, LongName, etc.) for reifyName to work
+      }
+    })
+
+    // Only include materialized children if baseChildren is empty (for geometric parts)
+    // This prevents duplicates when children are already in the tree structure
+    const allChildren = baseChildren.length > 0 ? baseChildren : materializedElements
+
     return {
-      nodeId: node.expressID.toString(),
+      nodeId,
       label: reifyName({properties: model}, node),
       expressID: node.expressID,
-      hasChildren: node.children && node.children.length > 0,
-      children: node.children ? node.children.map(mapSpatialNode) : [],
+      hasChildren: allChildren.length > 0,
+      children: allChildren,
     }
   }
 
@@ -257,9 +318,10 @@ const RenderRow = ({index, style, data}) => {
   const hasChildren = node.hasChildren
   let isSelected = false
 
-  if (!hasChildren) {
-    // For element nodes
-    isSelected = selectedNodeIds.includes(node.expressID.toString())
+  // Check if this node is selected by its expressID
+  if (node.expressID) {
+    const expressIDStr = node.expressID.toString()
+    isSelected = selectedNodeIds.includes(expressIDStr)
   }
 
   const rowRef = useRef(null)
@@ -293,7 +355,9 @@ const RenderRow = ({index, style, data}) => {
     if (isExpanded) {
       setExpandedNodeIds(expandedNodeIds.filter((id) => id !== nodeId))
     } else {
+      // Expand the node first
       setExpandedNodeIds([...expandedNodeIds, nodeId])
+      // Children will be materialized by the useEffect hook
     }
   }
 

@@ -104,18 +104,26 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       if (propValue.type === 0) {
         return null
       }
-      return (
-        <Row
-          d1={label}
-          d2={
-            await deref(
-              propValue, model, serial,
-              // TODO(pablo): there's no 4th param in deref
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
-          }
-          key={serial}
-        />
-      )
+      if (!model) {
+        debug().warn('prettyProps: model is undefined, skipping deref for propName:', propName)
+        return null
+      }
+      try {
+        const derefValue = await deref(
+          propValue, model, serial,
+          // TODO(pablo): there's no 4th param in deref
+          async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
+        return (
+          <Row
+            d1={label}
+            d2={derefValue}
+            key={serial}
+          />
+        )
+      } catch (error) {
+        debug().warn('prettyProps: deref failed for propName:', propName, error.message)
+        return null
+      }
     }
   }
 }
@@ -165,8 +173,8 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
           throw new Error('Array contains non-reference type')
         }
         const refId = stoi(p.value)
-        if (model.getItemProperties) {
-          const ifcElt = await model.getItemProperties(refId)
+        if (model.getProperties) {
+          const ifcElt = await model.getProperties(refId)
           ifcToRowCb(ifcElt, rows)
         } else {
           debug().warn('model has no getProperties method: ', model)

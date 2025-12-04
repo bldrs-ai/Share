@@ -46,6 +46,7 @@ export default function NavTreeNode({
         alignItems: 'flex-start', // Align items at the top for multiline labels
         backgroundColor: isSelected ? theme.palette.secondary.selected : 'transparent',
         cursor: 'pointer',
+        userSelect: 'none', // Prevent text selection to avoid Google Translate popup
       }}
     >
       {/* Expand/Collapse Icon */}
