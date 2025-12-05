@@ -22,9 +22,11 @@ export default function PleaseLogin() {
         <Divider sx={{margin: '.5em 0em'}}/>
          Visit our{' '}
         <Link
-          href='https://github.com/bldrs-ai/Share/wiki'
+          href='https://github.com/bldrs-ai/Share/wiki/Hosting:-GitHub'
           color='inherit'
           variant='caption'
+          target='_blank'
+          rel='noopener'
         >
           wiki
         </Link> to learn more about GitHub
