@@ -4,6 +4,8 @@
 
 [build]
   command = """
+    # Build Share first so its /index.js lives in the publish directory
+    npm run build && \
     # Clone and build bolt.new (private repo - requires GITHUB_BOLT_TOKEN)
     git clone https://${GITHUB_BOLT_TOKEN}@github.com/bldrs-ai/bolt.new.git temp-bolt && \
     cd temp-bolt && \
@@ -11,19 +13,17 @@
     NODE_ENV=development pnpm install && \
     pnpm run build && \
     cd .. && \
-    # Copy bolt.new client bundle to Share's public/build
-    rm -rf public/build && \
-    mkdir -p public/build && \
-    cp -R temp-bolt/build/client/* public/build/ && \
+    # Place bolt.new client bundle under Share's build/build (served at /build/*)
+    rm -rf build/build && \
+    mkdir -p build/build && \
+    cp -R temp-bolt/build/client/* build/build/ && \
     # Copy bolt.new server bundle into Netlify functions directory
     rm -rf netlify/functions/bolt && \
     mkdir -p netlify/functions/bolt && \
     cp -R temp-bolt/build/server/* netlify/functions/bolt/ && \
-    rm -rf temp-bolt && \
-    # Build Share (add your Share build command here)
-    npm run build
+    rm -rf temp-bolt
   """
-  publish = "public"
+  publish = "build"
   functions = "netlify/functions"
 
 # bolt.new's Remix server runs from /.netlify/functions/bolt
@@ -33,7 +33,7 @@
   # GITHUB_BOLT_TOKEN must be set in Netlify environment variables
   # Create a GitHub Personal Access Token with 'repo' scope at:
   # https://github.com/settings/tokens
-  # Add it to Netlify: Site settings > Build & deploy > Environment > Environment variables
+  # Add it to Netlify: Site settings > Build & deploy > Environment > Environment variables (name it GITHUB_BOLT_TOKEN)
 
 # Apply strict cross-origin isolation for all routes by default
 [[headers]]
