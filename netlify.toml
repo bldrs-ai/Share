@@ -1,25 +1,36 @@
 # Configuration for integrating bolt.new into Share at /build path
+# Note: This approach copies bolt.new's built files but may require additional
+# configuration in bolt.new's vite.config.ts to set base: '/build/'
 
 [build]
   command = """
-    # Clone and build bolt.new (private repo - requires GITHUB_BOLT_TOKEN)
-    git clone https://${GITHUB_BOLT_TOKEN}@github.com/bldrs-ai/bolt.new.git temp-bolt && \
+    # Clone and build bolt.new (private repo - requires GITHUB_TOKEN)
+    git clone https://${GITHUB_TOKEN}@github.com/bldrs-ai/bolt.new.git temp-bolt && \
     cd temp-bolt && \
     corepack enable && \
     NODE_ENV=development pnpm install && \
     pnpm run build && \
     cd .. && \
+    # Copy bolt.new client bundle to Share's public/build
+    rm -rf public/build && \
     mkdir -p public/build && \
-    cp -r temp-bolt/build/client/* public/build/ && \
+    cp -R temp-bolt/build/client/* public/build/ && \
+    # Copy bolt.new server bundle into Netlify functions directory
+    rm -rf netlify/functions/bolt && \
+    mkdir -p netlify/functions/bolt && \
+    cp -R temp-bolt/build/server/* netlify/functions/bolt/ && \
     rm -rf temp-bolt && \
-    # Build Share
-    yarn build
+    # Build Share (add your Share build command here)
+    npm run build
   """
   publish = "public"
+  functions = "netlify/functions"
+
+# bolt.new's Remix server runs from /.netlify/functions/bolt
 
 [build.environment]
   NODE_VERSION = "20"
-  # GITHUB_BOLT_TOKEN must be set in Netlify environment variables
+  # GITHUB_TOKEN must be set in Netlify environment variables
   # Create a GitHub Personal Access Token with 'repo' scope at:
   # https://github.com/settings/tokens
   # Add it to Netlify: Site settings > Build & deploy > Environment > Environment variables
@@ -59,8 +70,19 @@
   status = 301
   force = true
 
-# Rewrites for bolt.new SPA routing at /build
+# Keep bolt.new static assets served from /build/assets without hitting the function
+[[redirects]]
+  from = "/build/assets/*"
+  to = "/build/assets/:splat"
+  status = 200
+
+# Route everything else under /build to the bolt Remix server function
+[[redirects]]
+  from = "/build"
+  to = "/.netlify/functions/bolt"
+  status = 200
+
 [[redirects]]
   from = "/build/*"
-  to = "/build/index.html"
+  to = "/.netlify/functions/bolt"
   status = 200
