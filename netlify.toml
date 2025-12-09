@@ -6,7 +6,7 @@
     git clone https://${GITHUB_BOLT_TOKEN}@github.com/bldrs-ai/bolt.new.git temp-bolt && \
     cd temp-bolt && \
     corepack enable && \
-    pnpm install && \
+    NODE_ENV=development pnpm install && \
     pnpm run build && \
     cd .. && \
     mkdir -p public/build && \
