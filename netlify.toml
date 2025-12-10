@@ -22,6 +22,8 @@
     mkdir -p netlify/functions/bolt && \
     cp -R temp-bolt/build/server/* netlify/functions/bolt/ && \
     rm -rf temp-bolt
+    # Build Share
+    yarn build
   """
   publish = "build"
   functions = "netlify/functions"
