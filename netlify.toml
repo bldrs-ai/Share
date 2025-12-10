@@ -4,8 +4,8 @@
 
 [build]
   command = """
-    # Build Share first so its /index.js lives in the publish directory
-    npm run build && \
+    # Build Share first so its assets land in docs/
+    yarn build && \
     # Clone and build bolt.new (private repo - requires GITHUB_BOLT_TOKEN)
     git clone https://${GITHUB_BOLT_TOKEN}@github.com/bldrs-ai/bolt.new.git temp-bolt && \
     cd temp-bolt && \
@@ -13,19 +13,17 @@
     NODE_ENV=development pnpm install && \
     pnpm run build && \
     cd .. && \
-    # Place bolt.new client bundle under Share's build/build (served at /build/*)
-    rm -rf build/build && \
-    mkdir -p build/build && \
-    cp -R temp-bolt/build/client/* build/build/ && \
+    # Place bolt.new client bundle under Share's docs/build (served at /build/*)
+    rm -rf docs/build && \
+    mkdir -p docs/build && \
+    cp -R temp-bolt/build/client/* docs/build/ && \
     # Copy bolt.new server bundle into Netlify functions directory
     rm -rf netlify/functions/bolt && \
     mkdir -p netlify/functions/bolt && \
     cp -R temp-bolt/build/server/* netlify/functions/bolt/ && \
     rm -rf temp-bolt
-    # Build Share
-    yarn build
   """
-  publish = "build"
+  publish = "docs"
   functions = "netlify/functions"
 
 # bolt.new's Remix server runs from /.netlify/functions/bolt
