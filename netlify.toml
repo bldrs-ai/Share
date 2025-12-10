@@ -18,15 +18,15 @@
     mkdir -p docs/build && \
     cp -R temp-bolt/build/client/* docs/build/ && \
     # Copy bolt.new server bundle into Netlify functions directory
-    rm -rf netlify/functions/bolt && \
-    mkdir -p netlify/functions/bolt && \
-    cp -R temp-bolt/build/server/* netlify/functions/bolt/ && \
+    rm -rf netlify/functions/server && \
+    mkdir -p netlify/functions/server && \
+    cp -R temp-bolt/build/server/* netlify/functions/server/ && \
     rm -rf temp-bolt
   """
   publish = "docs"
   functions = "netlify/functions"
 
-# bolt.new's Remix server runs from /.netlify/functions/bolt
+# bolt.new's Remix server runs from /.netlify/functions/server (per build/server/server.js output)
 
 [build.environment]
   NODE_VERSION = "20"
@@ -79,10 +79,10 @@
 # Route everything else under /build to the bolt Remix server function
 [[redirects]]
   from = "/build"
-  to = "/.netlify/functions/bolt"
+  to = "/.netlify/functions/server"
   status = 200
 
 [[redirects]]
   from = "/build/*"
-  to = "/.netlify/functions/bolt"
+  to = "/.netlify/functions/server"
   status = 200
