@@ -13,7 +13,7 @@ from any device.
 ## Features
 ### Fast and easy access to your models for free
 Open your models on any device in our browser-based viewer.
-- Drag-n-drop models to view, no data upload, offline capable
+- Drag-n-drop models to view, no data upload, offline capable 
 - Navigate and search elements, crop with section planes
 - Property editing, save changes locally (early access)
 - Powerful data slice-n-dice, csv export (early access)
