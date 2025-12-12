@@ -10,7 +10,7 @@
     "appName": "Create App",
     "description": "AI Create",
     "image": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/CreateApp.svg",
-    "action": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/build",
+    "action": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/build/",
     "icon": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/CreateApp.svg"
   }
 ]
