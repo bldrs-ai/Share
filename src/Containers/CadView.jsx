@@ -52,6 +52,8 @@ export default function CadView({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -68,7 +70,7 @@ export default function CadView({
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewer = useStore((state) => state.setViewer)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const sidebarWidth = (isNotesVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0)
   const viewer = useStore((state) => state.viewer)
 
   // AppSlice

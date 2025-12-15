@@ -3,6 +3,7 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
+import {TITLE_NOTES} from '../Notes/component'
 import {TITLE_APPS} from './component'
 
 
@@ -46,6 +47,42 @@ describe('AppsSideDrawer', () => {
         const MIN_FULLSCREEN_WIDTH = 1000
         expect(parseInt(width)).toBeGreaterThan(MIN_FULLSCREEN_WIDTH)
       })
+    })
+
+    test('resizing Notes drawer does not push Apps off-screen', async ({page}) => {
+      // Open both Notes and Apps.
+      await page.getByTestId('control-button-notes').click()
+      await page.getByTestId('control-button-apps').click()
+
+      // Sanity: both titles visible.
+      await expect(page.getByTestId(`PanelTitle-${TITLE_NOTES}`)).toBeVisible()
+      await expect(page.getByTestId(`PanelTitle-${TITLE_APPS}`)).toBeVisible()
+
+      const notesDrawer = page.getByTestId('NotesAndPropertiesDrawer')
+      const appsDrawer = page.getByTestId('AppsDrawer')
+
+      const handle = notesDrawer.getByTestId('resize-handle-x')
+      const handleBox = await handle.boundingBox()
+      expect(handleBox).toBeTruthy()
+
+      // Drag left to widen Notes (this used to push Apps out of view).
+      await page.mouse.move(
+        handleBox!.x + handleBox!.width / 2,
+        handleBox!.y + handleBox!.height / 2,
+      )
+      await page.mouse.down()
+      await page.mouse.move(handleBox!.x - 250, handleBox!.y + handleBox!.height / 2)
+      await page.mouse.up()
+
+      // Apps should remain visible and inside the viewport.
+      await expect(page.getByTestId(`PanelTitle-${TITLE_APPS}`)).toBeVisible()
+
+      const appsBox = await appsDrawer.boundingBox()
+      expect(appsBox).toBeTruthy()
+
+      const vw = await page.evaluate(() => window.innerWidth)
+      expect(appsBox!.x).toBeGreaterThanOrEqual(0)
+      expect(appsBox!.x + appsBox!.width).toBeLessThanOrEqual(vw + 1)
     })
   })
 })
