@@ -50,8 +50,6 @@ export default function CadView({
   const hasGitHubIdentity = useStore((state) => state.hasGithubIdentity)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const isAppsVisible = useStore((state) => state.isAppsVisible)
-  const isNotesVisible = useStore((state) => state.isNotesVisible)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -68,7 +66,6 @@ export default function CadView({
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewer = useStore((state) => state.setViewer)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
   // AppSlice
@@ -703,17 +700,8 @@ export default function CadView({
   /* eslint-enable */
 
 
-  // Shrink the scene viewer when drawer is open.  This recenters the
-  // view in the new shrunk canvas, which preserves what the user is
-  // looking at.
-  // TODO(pablo): add render testing
-  useEffect(() => {
-    const isDrawerOpen = isNotesVisible || isAppsVisible
-    if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100vw - ${sidebarWidth}px)` : '100vw'
-      viewer.context.resize()
-    }
-  }, [isNotesVisible, isAppsVisible, isMobile, viewer, sidebarWidth])
+  // NOTE: Do not resize the 3D canvas when drawers open/resize.
+  // Drawers should overlay the viewer without changing its dimensions.
 
   useEffect(() => {
     const setViewportHeight = () => {
