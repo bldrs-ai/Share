@@ -9,7 +9,7 @@ app.get('/.netlify/functions/proxy-handler', async (req, res) => {
   const origin = req.headers.origin
   const url = new URL(`http://localhost${req.originalUrl}`)
   const headers = new Headers({origin})
-  
+
   const request = new Request(url.toString(), {
     method: 'GET',
     headers,
@@ -28,10 +28,13 @@ app.get('/.netlify/functions/proxy-handler', async (req, res) => {
     const reader = response.body.getReader()
     const stream = new ReadableStream({
       async start(controller) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          controller.enqueue(value)
+        let done = false
+        while (!done) {
+          const result = await reader.read()
+          done = result.done
+          if (!done) {
+            controller.enqueue(result.value)
+          }
         }
         controller.close()
       },
@@ -46,12 +49,16 @@ app.get('/.netlify/functions/proxy-handler', async (req, res) => {
 })
 
 
+/**
+ * @param {ReadableStream} webStream - Web stream to convert
+ * @return {Promise<Readable>} Node.js readable stream
+ */
 async function streamToNodeReadable(webStream) {
-  const { Readable } = await import('stream')
+  const {Readable} = await import('stream')
   const reader = webStream.getReader()
   return new Readable({
     async read() {
-      const { done, value } = await reader.read()
+      const {done, value} = await reader.read()
       if (done) {
         this.push(null)
       } else {
@@ -64,5 +71,5 @@ async function streamToNodeReadable(webStream) {
 
 const HTTP_PORT = 8090
 app.listen(HTTP_PORT, () => {
-  console.log(`Dev server running on http://localhost:${HTTP_PORT}`)
+  console.warn(`Dev server running on http://localhost:${HTTP_PORT}`)
 })

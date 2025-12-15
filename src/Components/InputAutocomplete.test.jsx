@@ -13,7 +13,7 @@ describe('InputAutocomplete', () => {
   it('renders the input with placeholder', () => {
     const placeholderText = 'Type something'
     const {getByPlaceholderText} = render(
-        <InputAutocomplete elements={elements} placeholder={placeholderText}/>,
+      <InputAutocomplete elements={elements} placeholder={placeholderText}/>,
     )
     const inputElement = getByPlaceholderText(placeholderText)
     expect(inputElement).toBeInTheDocument()
@@ -21,7 +21,7 @@ describe('InputAutocomplete', () => {
 
   it('displays suggestions when typing', () => {
     const {getByPlaceholderText, getByText} = render(
-        <InputAutocomplete elements={elements} placeholder="Type something"/>,
+      <InputAutocomplete elements={elements} placeholder="Type something"/>,
     )
 
     const inputElement = getByPlaceholderText('Type something')

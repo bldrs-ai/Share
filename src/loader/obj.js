@@ -1,10 +1,10 @@
-import {BufferGeometry, Mesh} from 'three'
+import {BufferGeometry} from 'three'
 import {mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils'
 
 
 /**
- * @param {BufferGeometry} objGeometry
- * @return {Mesh}
+ * @param {BufferGeometry} objGroup
+ * @return {BufferGeometry}
  */
 export default function objToThree(objGroup) {
   objGroup.children[0].geometry = mergeVertices(objGroup.children[0].geometry)

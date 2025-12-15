@@ -1,7 +1,5 @@
 import React, {ReactElement} from 'react'
-import MenuItem from '@mui/material/MenuItem'
-import Typography from '@mui/material/Typography'
-import TextField from '@mui/material/TextField'
+import {MenuItem, TextField, Typography} from '@mui/material'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 
 
@@ -15,7 +13,6 @@ import {disablePageReloadApprovalCheck} from '../../utils/event'
  * @return {ReactElement}
  */
 export default function SelectorSeparator({
-  setIsDialogDisplayed,
   label,
   selected,
   setSelected,

@@ -7,6 +7,12 @@
 cypress/downloads
 cypress/e2e/logs
 
+# playwright
+tools/playwright-report
+tools/test-results
+test-results
+.cache
+
 /coverage
 
 # symlink for test-models repo

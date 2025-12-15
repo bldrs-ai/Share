@@ -1,30 +1,30 @@
-name: Build & Unit Tests (jest)
+name: build
 
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - 'README.md'
   pull_request:
     branches: [ main ]
-
   workflow_dispatch:
 
 jobs:
   build:
+    timeout-minutes: 10
+    concurrency:
+      group: build-group
+      cancel-in-progress: true
     env:
       SHARE_CONFIG: dev
-
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Run a multi-line script
-        run: |
-          echo Running tests
-          yarn install
-          yarn lint
-          yarn test
+      - run: yarn install
+      - run: yarn build-prod
+      - run: yarn lint
+      - run: yarn test

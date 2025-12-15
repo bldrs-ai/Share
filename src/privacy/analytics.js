@@ -27,8 +27,8 @@ export function setIsAllowed(allowed) {
  * @param {string} eventName
  * @param {object} parameters
  */
-export function gtag(eventName, parameters) {
-  if (isAllowed() && window.gtag) {
+export function gtagEvent(eventName, parameters) {
+  if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
   }
 }

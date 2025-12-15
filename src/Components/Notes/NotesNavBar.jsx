@@ -1,14 +1,16 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams} from '../Camera/CameraControl'
 import {removeCameraUrlParams} from '../Camera/hashState'
 import {navBackToIssue, setHashParams} from './hashState'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
-import NavigateNextIcon from '@mui/icons-material/NavigateNext'
+import {
+  AddCommentOutlined as AddCommentOutlinedIcon,
+  ArrowBack as ArrowBackIcon,
+  NavigateBefore as NavigateBeforeIcon,
+  NavigateNext as NavigateNextIcon,
+} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */
@@ -32,7 +34,7 @@ export default function NotesNavBar() {
    * Navigation through notes, updating url state token and setting
    * camera if note has attached view
    *
-   * @param {string} 'previous' or 'next'
+   * @param {string} direction 'previous' or 'next'
    */
   function onNavClick(direction) {
     const index = direction === 'next' ? selectedNoteIndex + 1 : selectedNoteIndex - 1
@@ -129,14 +131,14 @@ export default function NotesNavBar() {
             size='medium'
             variant='noBackground'
           /> :
-            <TooltipIconButton
-              title='Add a note'
-              onClick={toggleIsCreateNoteVisible}
-              icon={<AddCommentOutlinedIcon className='icon-share'/>}
-              placement='bottom'
-              size='medium'
-              variant='noBackground'
-            />
+          <TooltipIconButton
+            title='Add a note'
+            onClick={toggleIsCreateNoteVisible}
+            icon={<AddCommentOutlinedIcon className='icon-share'/>}
+            placement='bottom'
+            size='medium'
+            variant='noBackground'
+          />
         )}
       </Box>
     </Box>

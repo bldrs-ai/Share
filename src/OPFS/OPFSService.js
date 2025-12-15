@@ -1,22 +1,37 @@
 import debug from '../utils/debug'
 import {GITHUB_BASE_URL_AUTHED, GITHUB_BASE_URL_UNAUTHED} from '../net/github/OctokitExport'
 
-// TODO(pablo): probably don't need global state, can
-// pass worker refs as needed.
+
 let workerRef = null
 
 /**
  * Initializes and returns a reference to a web worker.
  *
  * Checks if a web worker reference already exists; if not, it creates a new web worker
- * instance using the specified script path ('/OPFS.Worker.js'). This ensures that only one
- * instance of the worker is created and reused across the application, optimizing resource usage.
+ * instance using the specified script path. This ensures that only one instance of the
+ * worker is created and reused across the application, optimizing resource usage.
+ * Uses ESM module worker with {type: 'module'}.
  *
  * @return {Worker} The reference to the initialized web worker.
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker('/OPFS.Worker.js')
+    let supportsModuleWorkers
+    try {
+      const u = URL.createObjectURL(new Blob([''], {type: 'application/javascript'}))
+      new Worker(u, {type: 'module'}).terminate()
+      URL.revokeObjectURL(u)
+      supportsModuleWorkers = true
+    } catch {
+      supportsModuleWorkers = false
+    }
+
+    const workerUrl = new URL(
+      supportsModuleWorkers ? './OPFS.worker.js' : './OPFS.worker.classic.js',
+      import.meta.url,
+    )
+    const opts = supportsModuleWorkers ? {type: 'module'} : {}
+    workerRef = new Worker(workerUrl, opts)
 
     workerRef.postMessage({
       command: 'initializeWorker',
@@ -157,7 +172,7 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
  * model files within a specific owner's repository and branch.
  *
  * @param {File} file The file to be written to the repository
- * @param {string} originalFileName The original name of the file being written
+ * @param {string} originalFilePath The original name of the file being written
  * @param {string} commitHash The commit hash associated with the file write operation
  * @param {string} owner The owner of the repository where the file is to be written
  * @param {string} repo The name of the repository
@@ -341,9 +356,11 @@ export function opfsClearCache() {
 }
 
 /**
- * Retrives a directory snapshot of the opfs cache.
+ * Retrieves a directory snapshot of the OPFS cache.
+ *
+ * @param {number} [previewWindow] Number of leading bytes per file to include (0 = disabled).
  */
-export function opfsSnapshotCache() {
+export function opfsSnapshotCache(previewWindow = 0) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -351,6 +368,7 @@ export function opfsSnapshotCache() {
 
   workerRef.postMessage({
     command: 'snapshotCache',
+    previewWindow: previewWindow,
   })
 }
 

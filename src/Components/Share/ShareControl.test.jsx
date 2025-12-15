@@ -8,9 +8,7 @@ import ShareControl from './ShareControl'
 describe('ShareControl', () => {
   let controlButton
   let findByTestId
-
-
-  context('no cutplanes active', () => {
+  describe('no cutplanes active', () => {
     beforeEach(async () => {
       const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
       findByTestId = fbti
@@ -19,7 +17,7 @@ describe('ShareControl', () => {
 
     it('Renders', () => expect(controlButton).toBeInTheDocument())
 
-    context('Click ShareControl', () => {
+    describe('Click ShareControl', () => {
       beforeEach(() => fireEvent.click(controlButton))
 
       it('Has controls and page title updated', async () => {
@@ -32,7 +30,7 @@ describe('ShareControl', () => {
   })
 
 
-  context('Cutplanes active', () => {
+  describe('Cutplanes active', () => {
     beforeEach(async () => {
       const {result} = renderHook(() => useStore((state) => state.setIsCutPlaneActive))
       result.current(true)

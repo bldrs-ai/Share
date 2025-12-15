@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import Typography from '@mui/material/Typography'
+import {Typography} from '@mui/material'
 import TitledLayout from '../layouts/TitledLayout'
 
 
@@ -26,7 +26,7 @@ export default function About() {
         unfair advantage.
       </Typography>
       <Typography variant='p'>
-        Build Every Thing Together
+        Smarter Building Together
       </Typography>
     </TitledLayout>
   )

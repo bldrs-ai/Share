@@ -6,6 +6,7 @@
 export const excludedNodeModules = [
   '@bldrs-ai',
   'bail',
+  'character-entities',
   'comma-separated-tokens',
   'decode-named-character-reference',
   'hast-util-whitespace',

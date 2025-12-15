@@ -32,34 +32,34 @@ export class IFrameCommunicationChannel {
    * @param {*} event the data received from the iframe
    */
   messageHandler = async (event) => {
-    const { cmd, payload } = event.data ?? {};
+    const {cmd, payload} = event.data ?? {}
 
-  switch (cmd) {
-    case 'getLoadedFile':
-      this.sendMessage(cmd, useStore.getState().loadedFileInfo);
-      break;
+    switch (cmd) {
+      case 'getLoadedFile':
+        this.sendMessage(cmd, useStore.getState().loadedFileInfo)
+        break
 
-    case 'getSelectedElements':
-      this.sendMessage(cmd, useStore.getState().selectedElements);
-      break;
+      case 'getSelectedElements':
+        this.sendMessage(cmd, useStore.getState().selectedElements)
+        break
 
-    case 'getIdsByType': {
-      const { type } = payload;               // e.g. "IfcWindow"
-      const viewer = useStore.getState().viewer;
-      const ids   = viewer.IFC.loader.ifcManager.idsByType(0, type);
-      this.sendMessage(cmd, ids);
-      break;
-    }
+      case 'getIdsByType': {
+        const {type} = payload // e.g. "IfcWindow"
+        const viewer = useStore.getState().viewer
+        const ids = viewer.IFC.loader.ifcManager.idsByType(0, type)
+        this.sendMessage(cmd, ids)
+        break
+      }
 
-    case 'getElementPropertiesByType': {
-      const { type } = payload;               // e.g. "IfcWindow"
-      const viewer = useStore.getState().viewer;
-      const elementProps = await viewer.getElementPropsByType(type);
-      this.sendMessage(cmd, elementProps);
-      break;
-    }
+      case 'getElementPropertiesByType': {
+        const {type} = payload // e.g. "IfcWindow"
+        const viewer = useStore.getState().viewer
+        const elementProps = await viewer.getElementPropsByType(type)
+        this.sendMessage(cmd, elementProps)
+        break
+      }
 
-   /* case 'getProperties': {
+      /* case 'getProperties': {
       const { ids } = payload;                // e.g. [12,42,77]
       const viewer = useStore.getState().viewer;
       const props  = await Promise.all(
@@ -69,15 +69,16 @@ export class IFrameCommunicationChannel {
       break;
     }*/
 
-    default:
-      break;
-  }
+      default:
+        break
+    }
   }
 
   /**
    * Send any kind of data to the iframe through the MessageChannel
    *
-   * @param {*} data the data to be sent to the iframe
+   * @param {string} action - The action type
+   * @param {*} response - The data to be sent to the iframe
    */
   sendMessage = (action, response) => {
     this.port1.postMessage({action, response})

@@ -1,7 +1,7 @@
 import React, {useState} from 'react'
 import {ControlButton} from '../../Components/Buttons'
 import {ThemeCtx} from '../../theme/Theme.fixture'
-import AnnouncementIcon from '@mui/icons-material/Announcement'
+import {Announcement as AnnouncementIcon} from '@mui/icons-material'
 
 
 /**
@@ -21,11 +21,11 @@ export default function ControlButtonFixture() {
         dialog={
           <div style={{border: 'solid 1px black'}}>
             {isDisplayed ?
-             <div>
-               <h1>Controlled component</h1>
-               <button onClick={() => setIsDisplayed(false)}>Close</button>
-             </div> :
-             null}
+              <div>
+                <h1>Controlled component</h1>
+                <button onClick={() => setIsDisplayed(false)}>Close</button>
+              </div> :
+              null}
           </div>
         }
         placement={'left'}

@@ -1,6 +1,6 @@
 import React, {ReactElement, useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {disablePageTextSelect, reenablePageTextSelect} from '../../utils/event'
 import {isNumber} from '../../utils/strings'
@@ -37,7 +37,7 @@ export default function HorizonResizerButton({
 
   const startResizing = useCallback(() => setIsResizing(true), [])
   const stopResizing = useCallback(() => setIsResizing(false), [])
-  const onResizerDblTap = useDoubleTap((e) => setIsExpanded(!isExpanded))
+  const onResizerDblTap = useDoubleTap(() => setIsExpanded(!isExpanded))
 
   useEffect(() => {
     if (isResizing) {
@@ -117,7 +117,7 @@ export default function HorizonResizerButton({
           break
       }
     }
-    const onTouchEnd = (e) => {
+    const onTouchEnd = () => {
       stopResizing()
     }
     const onTouchMove = (e) => {
@@ -152,8 +152,8 @@ export default function HorizonResizerButton({
     } else {
       const width =
             isNumber(drawerWidthInitial) ?
-            Math.min(window.innerWidth, drawerWidthInitial) :
-            drawerWidthInitial
+              Math.min(window.innerWidth, drawerWidthInitial) :
+              drawerWidthInitial
       setDrawerWidth(width, isExpanded)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

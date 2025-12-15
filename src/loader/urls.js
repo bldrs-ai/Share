@@ -63,7 +63,7 @@ export function parseUrl(url) {
       }
     })
     .or(/\/share\/v\/p\/index.ifc/)
-    .then((match) => {
+    .then(() => {
       parsed.type = SOURCE_TYPE.VCS
       parsed.target = {
         organization: 'bldrs-ai',

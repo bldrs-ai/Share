@@ -3,8 +3,8 @@ import esbuild from 'esbuild'
 
 esbuild.build({
   // Add both entry points here. ESBuild will output a separate bundle for each.
-  entryPoints: ['cypress/fixtures/bldrs-inside-iframe.js'],
-  outfile: 'cypress/fixtures/bldrs-inside-iframe-bundle.js',
+  entryPoints: ['src/tests/fixtures/bldrs-inside-iframe.js'],
+  outfile: 'src/tests/fixtures/bldrs-inside-iframe-bundle.js',
   format: 'esm',
   platform: 'browser',
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],

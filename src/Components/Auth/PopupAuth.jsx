@@ -15,6 +15,8 @@ function PopupAuth() {
   useEffect(() => {
     // Extract scope from the query parameters
     const params = new URLSearchParams(window.location.search)
+    const connection = params.get('connection') || 'github'
+    const linkToken = params.get('linkToken') // ← NEW
 
     if (params.get('scope')) {
       const scope = params.get('scope')
@@ -24,17 +26,19 @@ function PopupAuth() {
         authorizationParams: {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
-          connection: 'github',
+          connection: connection,
           connection_scope: scope,
+          ...(linkToken && {linkToken}), // ← forward it
         },
-     })
+      })
     } else {
       // Trigger the Auth0 login redirect
       loginWithRedirect({
         authorizationParams: {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
-          connection: 'github',
+          connection: connection,
+          ...(linkToken && {linkToken}), // ← forward it
         },
       })
     }

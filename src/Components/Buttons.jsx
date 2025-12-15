@@ -1,16 +1,13 @@
-import React, {ReactElement, useEffect, useState} from 'react'
-import {useLocation} from 'react-router'
-import IconButton from '@mui/material/IconButton'
-import SvgIcon from '@mui/material/SvgIcon'
-import ToggleButton from '@mui/material/ToggleButton'
-import Tooltip from '@mui/material/Tooltip'
+import React, {ReactElement, useState} from 'react'
+import {IconButton, SvgIcon, ToggleButton, Tooltip} from '@mui/material'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams, hasHashParams, removeHashParams} from '../utils/location'
 import {useIsMobile} from './Hooks'
-import CloseIcon from '@mui/icons-material/Close'
+import useHashState from '../hooks/useHashState'
+import {Close as CloseIcon} from '@mui/icons-material'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
+import {slugify} from '../utils/strings'
 
 
 /**
@@ -123,7 +120,7 @@ export function ControlButton({
         variant='control'
         color='success'
         size='small'
-        dataTestId={dataTestId || `control-button-${title.toLowerCase()}`}
+        dataTestId={dataTestId || `control-button-${slugify(title)}`}
         {...props}
       />
       {children}
@@ -144,33 +141,18 @@ export function ControlButtonWithHashState({
   hashPrefix,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  children,
   ...props
 }) {
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
 
-  const location = useLocation()
-  useEffect(() => {
-    // If dialog displayed by initial state value (e.g. About for isFirstTime)
-    // or if hashPrefix is present
-    const isActiveHash = hasHashParams(window.location, hashPrefix)
-    if (isDialogDisplayed) {
-      if (!isActiveHash) {
-        addHashParams(window.location, hashPrefix)
-      }
-    } else if (isActiveHash) {
-      removeHashParams(window.location, hashPrefix)
-    }
-  }, [hashPrefix, isDialogDisplayed, location])
+  useHashState(hashPrefix, isDialogDisplayed)
 
   return (
     <ControlButton
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
       {...props}
-    >
-      {children}
-    </ControlButton>
+    />
   )
 }
 

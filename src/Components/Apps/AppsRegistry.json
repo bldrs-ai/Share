@@ -2,15 +2,15 @@
   {
     "appName": "ExampleApp",
     "description": "Events Logger",
-    "image": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/LogoBWithDomain.svg",
+    "image": "//icons/LogoBWithDomain.svg",
     "action": "/widgets/event-logger.html",
-    "icon": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/LogoB.svg"
+    "icon": "//icons/LogoB.svg"
   },
   {
     "appName": "Create App",
     "description": "AI Create",
-    "image": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/CreateApp.svg",
-    "action": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/build/",
-    "icon": "https://deploy-preview-1398--bldrs-share-dev.netlify.app/icons/CreateApp.svg"
+    "image": "//icons/CreateApp.svg",
+    "action": "//build/",
+    "icon": "//icons/CreateApp.svg"
   }
 ]

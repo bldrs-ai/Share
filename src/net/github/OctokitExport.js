@@ -16,18 +16,18 @@ initializeOctoKitUnauthenticated()
  * Initialize an instance of Octokit authenticated.
  */
 export function initializeOctoKitAuthenticated() {
-    octokit = new Octokit({
+  octokit = new Octokit({
     baseUrl: GITHUB_BASE_URL_AUTHED,
     userAgent: `bldrs/${PkgJson.version}`,
-    })
+  })
 }
 
 /**
  * Initialize an instance of Octokit unauthenticated.
  */
 export function initializeOctoKitUnauthenticated() {
-    octokit = new Octokit({
+  octokit = new Octokit({
     baseUrl: GITHUB_BASE_URL_UNAUTHED,
     userAgent: `bldrs/${PkgJson.version}`,
-    })
+  })
 }

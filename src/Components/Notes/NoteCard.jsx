@@ -1,7 +1,5 @@
 import React, {ReactElement, useState, useEffect, useRef} from 'react'
-import Avatar from '@mui/material/Avatar'
-import Card from '@mui/material/Card'
-import CardHeader from '@mui/material/CardHeader'
+import {Avatar, Card, CardHeader} from '@mui/material'
 import NoteBodyEdit from './NoteBodyEdit'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {updateComment} from '../../net/github/Comments'
@@ -67,7 +65,6 @@ export default function NoteCard({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const [showCreateComment, setShowCreateComment] = useState(false)
 
-
   const setEditModeGlobal = useStore((state) => state.setEditMode)
   const editModes = useStore((state) => state.editModes)
   const setEditBodyGlobal = useStore((state) => state.setEditBody)
@@ -80,48 +77,49 @@ export default function NoteCard({
 
   const signalCommentMutated = useStore((state) => state.signalCommentMutated)
 
-
   const handleEditBodyChange = (newBody) => {
     setEditBody(newBody) // Update local editBody state
     setEditBodyGlobal(id, newBody) // Update global editBody state
   }
 
-
   const {user} = useAuth0()
 
-   // Reference to the NoteCard element for scrolling
-   const noteCardRef = useRef(null)
-   const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
+  // Reference to the NoteCard element for scrolling
+  const noteCardRef = useRef(null)
+  const setActiveNoteCardId = useStore((state) => state.setActiveNoteCardId)
 
-   useEffect(() => {
+  useEffect(() => {
     setActiveNoteCardId(id)
     return () => setActiveNoteCardId(null) // Reset when component unmounts
   }, [id, setActiveNoteCardId])
 
-    // Sync local editMode with global editModes[id]
-    useEffect(() => {
-      if (editModes[id] !== undefined && editModes[id] !== editMode) {
-        setEditMode(editModes[id])
-      }
-    }, [editModes, id, editMode])
 
-      // Sync local editBody with global editBodies[id]
+  // Sync local editMode with global editModes[id]
+  useEffect(() => {
+    if (editModes[id] !== undefined && editModes[id] !== editMode) {
+      setEditMode(editModes[id])
+    }
+  }, [editModes, id, editMode])
+
+
+  // Sync local editBody with global editBodies[id]
   useEffect(() => {
     if (editBodies[id] !== undefined && editBodies[id] !== editBody) {
       setEditBody(editBodies[id])
     }
   }, [editBodies, id, editBody])
 
+
   const embeddedCameraParams = findUrls(body)
-      .filter((url) => {
-        if (url.indexOf('#') === -1) {
-          return false
-        }
-        const encoded = getHashParamsFromHashStr(
-            url.substring(url.indexOf('#') + 1),
-            HASH_PREFIX_CAMERA)
-        return encoded && parseHashParams(encoded)
-      })
+    .filter((url) => {
+      if (url.indexOf('#') === -1) {
+        return false
+      }
+      const encoded = getHashParamsFromHashStr(
+        url.substring(url.indexOf('#') + 1),
+        HASH_PREFIX_CAMERA)
+      return encoded && parseHashParams(encoded)
+    })
 
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const dateParts = date.split('T')
@@ -159,71 +157,80 @@ export default function NoteCard({
     }
   }
 
+
   /** Copies location which contains the issue id, camera position and selected element path */
   function shareIssue() {
     navigator.clipboard.writeText(window.location.href)
     setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
-    /** Copies location which contains the issue id, comment ID, camera position, and selected element path */
-    function shareComment(issueID, commentID, clearHash = true) {
-      // Get the current URL
-      const href = new URL(window.location.href)
 
-      // Initialize the hash components based on the clearHash flag
-      let updatedHash
-      if (clearHash) {
-        // Only include `i` and `gc` if clearHash is true
-        updatedHash = `${HASH_PREFIX_NOTES}:${issueID}`
-        if (commentID) {
-          updatedHash += `;${HASH_PREFIX_COMMENT}:${commentID}`
+  /**
+   * Copies location which contains the issue id, comment ID, camera position, and selected element path
+   *
+   * @param {number} issueID
+   * @param {number} commentID
+   * @param {boolean} clearHash
+   */
+  function shareComment(issueID, commentID, clearHash = true) {
+    // Get the current URL
+    const href = new URL(window.location.href)
+
+    // Initialize the hash components based on the clearHash flag
+    let updatedHash
+    if (clearHash) {
+      // Only include `i` and `gc` if clearHash is true
+      updatedHash = `${HASH_PREFIX_NOTES}:${issueID}`
+      if (commentID) {
+        updatedHash += `;${HASH_PREFIX_COMMENT}:${commentID}`
+      }
+    } else {
+      // Start with the existing hash (without the leading `#`)
+      const currentHash = href.hash.slice(1)
+
+      // Split the existing hash into parts based on `;`
+      const hashParts = currentHash ? currentHash.split(';') : []
+      const hashMap = {}
+
+      // Populate hashMap with existing values
+      hashParts.forEach((part) => {
+        const [key, value] = part.split(':')
+        if (key && value) {
+          hashMap[key] = value
         }
-      } else {
-        // Start with the existing hash (without the leading `#`)
-        const currentHash = href.hash.slice(1)
+      })
 
-        // Split the existing hash into parts based on `;`
-        const hashParts = currentHash ? currentHash.split(';') : []
-        const hashMap = {}
-
-        // Populate hashMap with existing values
-        hashParts.forEach((part) => {
-          const [key, value] = part.split(':')
-          if (key && value) {
-            hashMap[key] = value
-          }
-        })
-
-        // Set or update `i` and `gc` values in the hashMap
-        hashMap[HASH_PREFIX_NOTES] = issueID // Always set the issueID
-        if (commentID) {
-          hashMap[HASH_PREFIX_COMMENT] = commentID // Set commentID if it’s provided
-        }
-
-        // Reconstruct the hash string from hashMap
-        updatedHash = Object.entries(hashMap)
-          .map(([key, value]) => `${key}:${value}`)
-          .join(';')
+      // Set or update `i` and `gc` values in the hashMap
+      hashMap[HASH_PREFIX_NOTES] = issueID // Always set the issueID
+      if (commentID) {
+        hashMap[HASH_PREFIX_COMMENT] = commentID // Set commentID if it’s provided
       }
 
-      // Update the URL hash with the newly constructed value
-      href.hash = updatedHash
-
-      // Copy the updated URL to the clipboard
-      navigator.clipboard.writeText(href.toString())
-        .then(() => {
-          setSnackMessage({text: 'The URL path is copied to the clipboard', autoDismiss: true})
-        })
-        .catch((err) => {
-          setSnackMessage({text: 'Failed to copy URL', autoDismiss: true})
-        })
+      // Reconstruct the hash string from hashMap
+      updatedHash = Object.entries(hashMap)
+        .map(([key, value]) => `${key}:${value}`)
+        .join(';')
     }
+
+    // Update the URL hash with the newly constructed value
+    href.hash = updatedHash
+
+    // Copy the updated URL to the clipboard
+    navigator.clipboard.writeText(href.toString())
+      .then(() => {
+        setSnackMessage({text: 'The URL path is copied to the clipboard', autoDismiss: true})
+      })
+      .catch(() => {
+        setSnackMessage({text: 'Failed to copy URL', autoDismiss: true})
+      })
+  }
 
 
   /**
    * Closes the issue.  TODO(pablo): this isn't a delete
    *
-   * @param {number} noteNumber obtained from github issue
+   * @param {number} noteNumberToDelete obtained from github issue
+   * @return {Promise<Response>} the response from the server
    */
   async function onDeleteNote(noteNumberToDelete) {
     // TODO(pablo): handle response
@@ -234,8 +241,12 @@ export default function NoteCard({
     return res
   }
 
+
   /**
+   * Delete comment from repository.
    *
+   * @param {number} commentID
+   * @return {Promise<void>}
    */
   async function onDeleteComment(commentID) {
     // TODO(nickcastel50): handle response
@@ -278,12 +289,14 @@ export default function NoteCard({
     signalCommentMutated()
   }
 
-   /**
-    * Update comment in github
-    *
-    * @param {number} commentId
-    */
-   async function submitCommentUpdate(commentId) {
+
+  /**
+   * Update comment in github
+   *
+   * @param {number} commentId
+   * @return {Promise<Response>} the response from the server
+   */
+  async function submitCommentUpdate(commentId) {
     // eslint-disable-next-line no-unused-vars
     const updatedComment = await updateComment(repository, commentId, editBody, accessToken)
     setEditMode(false)
@@ -294,26 +307,26 @@ export default function NoteCard({
 
   return (
     <Card elevation={1} data-testid='note-card' ref={noteCardRef}>
-       <CardHeader
-         title={title}
-         avatar={<Avatar alt={username} src={avatarUrl}/>}
-         sx={{alignItems: 'flex-start'}}
-         subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
-         action={
-           synched && user && user.nickname === username &&
+      <CardHeader
+        title={title}
+        avatar={<Avatar alt={username} src={avatarUrl}/>}
+        sx={{alignItems: 'flex-start'}}
+        subheader={<>{username}<br/>{dateParts[0]} {dateParts[1]}</>}
+        action={
+          synched && user && user.nickname === username &&
              <NoteMenu
                onEditClick={() => {
-                setEditMode(true)
-                setEditModeGlobal(id, true)
-                setEditBody(body)
-                setEditOriginalBody(id, body)
-                setEditBodyGlobal(id, body) // Update global editBody state
-              }}
+                 setEditMode(true)
+                 setEditModeGlobal(id, true)
+                 setEditBody(body)
+                 setEditOriginalBody(id, body)
+                 setEditBodyGlobal(id, body) // Update global editBody state
+               }}
                onDeleteClick={() => isNote ? onDeleteNote(noteNumber) : onDeleteComment(id)}
                noteNumber={noteNumber}
              />
-         }
-       />
+        }
+      />
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody} issueID={id} commentID={null}/>}
       {selected && !editMode && <NoteContent markdownContent={editBody}/>}

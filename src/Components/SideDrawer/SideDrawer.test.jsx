@@ -37,7 +37,7 @@ describe('SideDrawer', () => {
     expect(mockSetDrawerWidth).toHaveBeenCalledWith(dragEnd, false)
   })
 
-  context('mobile renders and drags', () => {
+  describe('mobile renders and drags', () => {
     it('renders vertical', async () => {
       const initHeight = 10
       const {result} = renderHook(() => useStore((state) => state))

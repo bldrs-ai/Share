@@ -4,6 +4,9 @@
  * It is also used to compress the response from Google Drive.
  * It is also used to cache the response from Google Drive.
  * It is also used to serve the response from Google Drive.
+ *
+ * @param {Request} req - The incoming request
+ * @return {Promise<Response>} The proxied response
  */
 export default async (req) => {
   const url = new URL(req.url)

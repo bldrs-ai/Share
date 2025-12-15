@@ -20,7 +20,7 @@ describe('<CustomTableRow />', () => {
 
   it('switches to select editing mode', () => {
     const {getByTestId} = render(
-        <CustomTableRow heading="Test Heading" subtext="Option 1" inputType="select" options={['Option 1', 'Option 2']}/>,
+      <CustomTableRow heading="Test Heading" subtext="Option 1" inputType="select" options={['Option 1', 'Option 2']}/>,
     )
 
     fireEvent.click(screen.getByRole('button')) // Click the edit button

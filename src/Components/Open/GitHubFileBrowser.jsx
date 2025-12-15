@@ -1,9 +1,8 @@
 
 import React, {ReactElement, useState} from 'react'
-import Button from '@mui/material/Button'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import {Button, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
@@ -124,52 +123,50 @@ export default function GitHubFileBrowser({
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
       const branch = branchName || 'main'
-      navigate({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)})
+      navigateToModel({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)}, navigate)
       setIsDialogDisplayed(false)
     }
   }
   return (
     <Stack data-testid={'stack_gitHub_access_controls'}>
       <Stack>
-          <Typography variant='overline'>
-            Browse files on Github
-          </Typography>
-          <Selector
-            label='Organization'
-            list={orgNamesArrWithAt}
-            selected={selectedOrgName}
-            setSelected={selectOrg}
-            data-testid='openOrganization'
-          />
-          <Selector
-            label='Repository'
-            list={repoNamesArr}
-            selected={selectedRepoName}
-            setSelected={selectRepo}
-            data-testid='openRepository'
-          />
-          <Selector
-            label='Branch'
-            list={branchesArr}
-            selected={selectedBranchName}
-            setSelected={selectBranch}
-            data-testid='openBranch'
-          />
-          <SelectorSeparator
-            label={(currentPath === '') ? 'Folder' :
-                    `Folder: ${currentPath}`}
-            list={foldersArr}
-            selected={selectedFolderName}
-            setSelected={selectFolder}
-            data-testid='saveFolder'
-          />
-          <Selector
-            label='File'
-            list={filesArr}
-            selected={selectedFileIndex}
-            setSelected={setSelectedFileIndex}
-            data-testid='openFile'
-          />
+        <Typography sx={{marginBottom: '10px'}}>Browse files on Github</Typography>
+        <Selector
+          label='Organization'
+          list={orgNamesArrWithAt}
+          selected={selectedOrgName}
+          setSelected={selectOrg}
+          data-testid='openOrganization'
+        />
+        <Selector
+          label='Repository'
+          list={repoNamesArr}
+          selected={selectedRepoName}
+          setSelected={selectRepo}
+          data-testid='openRepository'
+        />
+        <Selector
+          label='Branch'
+          list={branchesArr}
+          selected={selectedBranchName}
+          setSelected={selectBranch}
+          data-testid='openBranch'
+        />
+        <SelectorSeparator
+          label={(currentPath === '') ? 'Folder' :
+            `Folder: ${currentPath}`}
+          list={foldersArr}
+          selected={selectedFolderName}
+          setSelected={selectFolder}
+          data-testid='saveFolder'
+        />
+        <Selector
+          label='File'
+          list={filesArr}
+          selected={selectedFileIndex}
+          setSelected={setSelectedFileIndex}
+          data-testid='openFile'
+        />
       </Stack>
       <Button
         onClick={navigateToFile}

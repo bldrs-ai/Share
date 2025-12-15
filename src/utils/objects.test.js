@@ -1,8 +1,10 @@
 import {
+  addProperties,
   deepCloneObject,
   deletePropertyRecursive,
   deleteStringValueMatchRecursive,
   filterObject,
+  prefixObjectKeys,
 } from './objects'
 import {UUID_REGEX} from './strings'
 
@@ -76,5 +78,24 @@ describe('objects util', () => {
       return true
     })
     expect(filteredObject).toStrictEqual({b: 2, c: 3})
+  })
+
+
+  it('prefixObjectKeys', () => {
+    const testObj = {a: 1, b: 2}
+    const prefixedObj = prefixObjectKeys(testObj, 'prefix_')
+    expect(prefixedObj).toStrictEqual({prefix_a: 1, prefix_b: 2})
+  })
+
+
+  it('addProperties', () => {
+    const testObj = {a: 1, b: 2}
+    const sourceObj = {c: 3, d: 4}
+    addProperties(testObj, sourceObj)
+    expect(testObj).toStrictEqual({a: 1, b: 2, c: 3, d: 4})
+
+    const testObj2 = {a: 1, b: 2}
+    addProperties(testObj2, sourceObj, 'prefix_')
+    expect(testObj2).toStrictEqual({a: 1, b: 2, prefix_c: 3, prefix_d: 4})
   })
 })

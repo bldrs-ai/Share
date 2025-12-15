@@ -1,8 +1,6 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
-import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
+import {Box, Paper, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useIsMobile} from '../Hooks'
 import Toggle from '../Toggle'
@@ -85,14 +83,13 @@ export default function Properties() {
         </Box>
       }
     </Paper>
-)
+  )
 }
 
 
 /**
  * @param {object} model IFC model
  * @param {object} element IFC element
- * @param {object} classes Styles
  * @param {boolean} expandAll React state expansion toggle
  * @return {Array<ReactElement>} A list of property elts
  */
@@ -108,7 +105,7 @@ async function createPsetsList(model, element, expandAll) {
             detail={await createPropertyTable(model, ps, true, 0)}
             expandState={expandAll}
           />
-          )
+        )
       }),
     ),
   ]

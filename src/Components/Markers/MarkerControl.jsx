@@ -186,9 +186,21 @@ export function PlacemarkHandlers() {
 
       placeMarkGroupMap.clear()
 
+      // HACK(pablo): clear this test tracker; this effect is being called twice,
+      // but doesn't cause double-display of markers.  Should really not use this
+      // out-of-band variable for testing.
+      if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
+        if (!window.markerScene) {
+          window.markerScene = {}
+        }
+        if (!window.markerScene.markerObjects) {
+          window.markerScene.markerObjects = new Set
+        }
+        window.markerScene.markerObjects.clear()
+      }
       // Loop over markers to place each one in the scene
       for (const marker of markers) {
-        if (!placeMarkGroupMap[marker.id]) {
+        if (!placeMarkGroupMap.has(marker.id)) {
           const svgGroup = await placeMark.putDown({
             point: new Vector3(marker.coordinates[0], marker.coordinates[1], marker.coordinates[2]),
             normal: new Vector3(marker.coordinates[3], marker.coordinates[4], marker.coordinates[5]),
@@ -204,21 +216,15 @@ export function PlacemarkHandlers() {
           svgGroup.userData.id = marker.commentId ? marker.commentId : marker.id
           // testing purposes
           if (OAUTH_2_CLIENT_ID === 'cypresstestaudience') {
-            if (!window.markerScene) {
-              window.markerScene = {}
-            }
-            if (!window.markerScene.markerObjects) {
-              window.markerScene.markerObjects = []
-            }
-            window.markerScene.markerObjects.push(svgGroup)
+            window.markerScene.markerObjects.add(svgGroup)
           }
 
           placeMarkGroupMap.set(svgGroup.userData.id, svgGroup)
         }
       }
 
-      // eslint-disable-next-line no-unused-vars
-      for (const [_, value] of placeMarkGroupMap.entries()) {
+
+      for (const [, value] of placeMarkGroupMap.entries()) {
         if (value.userData.isActive) {
           // set color to active if active
           value.userData.color = value.userData.activeColor
@@ -375,7 +381,7 @@ export function PlacemarkHandlers() {
     }
   }
   /**
-   *
+   * @param {string} id - The marker ID
    */
   function togglePlaceMarkActive(id) {
     const deactivatePlaceMark = () => {

@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
@@ -8,6 +7,7 @@ import {ControlButtonWithHashState} from '../Buttons'
 import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from '../Markers/component'
 import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
+import {ChatOutlined as ChatOutlinedIcon} from '@mui/icons-material'
 
 
 /**
@@ -44,7 +44,7 @@ export default function NotesControl() {
   // Fetch issues/notes
   useEffect(() => {
     if (isNotesVisible) {
-      if (!model) {
+      if (!model || !repository) {
         return
       }
 
@@ -53,7 +53,7 @@ export default function NotesControl() {
         return
       }
 
-       // Clear markers each time useEffect is called
+      // Clear markers each time useEffect is called
       // writeMarkers(null)
 
       (async () => {
@@ -65,7 +65,7 @@ export default function NotesControl() {
           debug().log('Notes#useEffect: issueArr: ', issueArr)
 
           // Accumulate markers from all issues
-          const allMarkers = issueArr.reverse().flatMap((issue, index) => {
+          const allMarkers = issueArr.reverse().flatMap((issue) => {
             newNotes.push({
               index: issueIndex++,
               id: issue.id,
@@ -86,18 +86,20 @@ export default function NotesControl() {
           setNotes(newNotes)
           toggleSynchSidebar()
           writeMarkers(tempMarker ? [tempMarker, ...allMarkers] : allMarkers)
-          toggleIsLoadingNotes()
         } catch (e) {
           setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
+        } finally {
+          toggleIsLoadingNotes()
         }
       })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNotesVisible, model, isCreateNoteVisible, selectedNoteId])
+  }, [isNotesVisible, model, repository, isCreateNoteVisible, selectedNoteId])
 
   /**
    * Parses a temporary marker if no markers are active
    *
+   * @param {Array} markers_ - Array of marker objects
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function parseTempMarker(markers_) {
@@ -136,6 +138,7 @@ export default function NotesControl() {
   /**
    * Parses marker from issue
    *
+   * @param {object} issue - The issue object
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function parseMarker(issue) {
@@ -194,12 +197,12 @@ export default function NotesControl() {
    * @param {number} commentId - The ID of the comment to scroll to.
    */
   function scrollToComment(commentId) {
-      const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
-      if (commentElement) {
-          commentElement.scrollIntoView({behavior: 'smooth', block: 'center'})
-          // Uncomment the following if camera position setting is required
-          // setCameraFromParams(firstCamera, cameraControls);
-      }
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
+    if (commentElement) {
+      commentElement.scrollIntoView({behavior: 'smooth', block: 'center'})
+      // Uncomment the following if camera position setting is required
+      // setCameraFromParams(firstCamera, cameraControls);
+    }
   }
 
   /**
@@ -216,26 +219,26 @@ export default function NotesControl() {
   }
 
   useEffect(() => {
-   // Only proceed if `noteCardRef` is set and `selectedCommentId` has changed
-   if (selectedCommentId) {
-     if (selectedCommentId === -1) {
-       scrollToNote()
-     } else if (selectedCommentId) {
-       scrollToComment(selectedCommentId)
-     }
-     // Store the last scrolled-to comment ID
-     lastScrolledCommentId.current = selectedCommentId
-   }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
- }, [selectedCommentId, activeNoteCardId])
+    // Only proceed if `noteCardRef` is set and `selectedCommentId` has changed
+    if (selectedCommentId) {
+      if (selectedCommentId === -1) {
+        scrollToNote()
+      } else if (selectedCommentId) {
+        scrollToComment(selectedCommentId)
+      }
+      // Store the last scrolled-to comment ID
+      lastScrolledCommentId.current = selectedCommentId
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCommentId, activeNoteCardId])
 
- useEffect(() => {
+  useEffect(() => {
   // When the selected note ID is set, scroll to that specific note
-  if (selectedNoteId) {
-    scrollToNote(selectedNoteId)
-  }
+    if (selectedNoteId) {
+      scrollToNote(selectedNoteId)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [selectedNoteId])
+  }, [selectedNoteId])
 
   // TODO(pablo): hack, move into helper
   // nickcastel50: this wasn't running if the hash changed - cleaned it up

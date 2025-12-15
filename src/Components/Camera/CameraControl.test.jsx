@@ -53,7 +53,7 @@ describe('CameraControl', () => {
     expect(cam).toStrictEqual(expectCam)
   })
 
-  context('with fake timers', () => {
+  describe('with fake timers', () => {
     let addEventListenerSpy
     // Use fake timers so we can fast-forward through the debounce delay
     beforeAll(() => {

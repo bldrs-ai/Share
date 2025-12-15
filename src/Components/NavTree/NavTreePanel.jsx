@@ -2,17 +2,14 @@ import PropTypes from 'prop-types'
 import React, {ReactElement, useEffect, useState, useRef, useCallback} from 'react'
 import {VariableSizeList} from 'react-window'
 import {reifyName} from '@bldrs-ai/ifclib'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
-import Tooltip from '@mui/material/Tooltip'
+import {AccountTree as AccountTreeIcon, List as ListIcon} from '@mui/icons-material'
+import {ToggleButton, ToggleButtonGroup, Tooltip} from '@mui/material'
 import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
 import NavTreeNode from './NavTreeNode'
 import {removeHashParams} from './hashState'
-import ListIcon from '@mui/icons-material/List'
 
 
 /**
@@ -176,6 +173,10 @@ export default function NavTreePanel({
 /**
  * Get visible nodes
  *
+ * @param {Array} treeData - The tree data
+ * @param {Array} expandedNodeIds - IDs of expanded nodes
+ * @param {boolean} isNavTree - Whether this is a nav tree
+ * @param {object} model - The model object
  * @return {Array} nodes
  */
 function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
@@ -183,6 +184,9 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
 
   /**
    * traverse nodes
+   *
+   * @param {object} node - The node to traverse
+   * @param {number} depth - Current depth
    */
   function traverse(node, depth) {
     visibleNodes.push({node, depth})
@@ -197,6 +201,7 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
   /**
    * map the spatial nodes
    *
+   * @param {object} node - The node to map
    * @return {object} node
    */
   function mapSpatialNode(node) {

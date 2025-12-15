@@ -3,8 +3,10 @@ import React, {ReactElement} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import {useTheme} from '@mui/material/styles'
 import HideToggleButton from '../HideToggleButton'
-import NodeClosedIcon from '@mui/icons-material/KeyboardArrowRight'
-import NodeOpenIcon from '@mui/icons-material/KeyboardArrowDown'
+import {
+  KeyboardArrowDown as NodeOpenIcon,
+  KeyboardArrowRight as NodeClosedIcon,
+} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */
@@ -19,7 +21,6 @@ export default function NavTreeNode({
   hasHideIcon,
   model,
   style,
-  isNavTree,
 }) {
   const handleLabelClick = (event) => handleSelect(event)
 

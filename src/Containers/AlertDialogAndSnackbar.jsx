@@ -1,13 +1,11 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
-import IconButton from '@mui/material/IconButton'
-import Snackbar from '@mui/material/Snackbar'
-import Typography from '@mui/material/Typography'
+import {IconButton, Snackbar, Typography} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import AlertDialog from '../Components/AlertDialog'
-import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
 import {assert} from '../utils/assert'
-import CloseIcon from '@mui/icons-material/Close'
+import {navToDefault} from '../utils/navigate'
 
 
 /** @return {ReactElement} */
@@ -34,9 +32,9 @@ export default function AlertAndSnackbar() {
       setDuration(null)
     } else {
       assert(typeof snackMessage.text === 'string' && snackMessage.text.length > 0,
-             'snackMessage.text must be valid string')
+        'snackMessage.text must be valid string')
       assert(typeof snackMessage.autoDismiss === 'boolean' && snackMessage.autoDismiss,
-             'snackMessage.autoDismiss must be true')
+        'snackMessage.autoDismiss must be true')
       setText(snackMessage.text)
       const dismissTimeMs = 5000
       setDuration(dismissTimeMs)
@@ -58,7 +56,7 @@ export default function AlertAndSnackbar() {
         autoHideDuration={duration}
         sx={{marginBottom: '-.3em'}}
         open={isSnackOpen}
-        onClose={(event, reason) => setIsSnackOpen(false)}
+        onClose={() => setIsSnackOpen(false)}
         action={
           <IconButton
             onClick={() => setIsSnackOpen(false)}

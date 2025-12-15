@@ -1,32 +1,29 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import ButtonGroup from '@mui/material/ButtonGroup'
-import ListItem from '@mui/material/ListItem'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import ListItemText from '@mui/material/ListItemText'
-import SvgIcon from '@mui/material/SvgIcon'
-import Stack from '@mui/material/Stack'
+import {ButtonGroup, ListItem, ListItemIcon, ListItemText, SvgIcon, Stack} from '@mui/material'
+import {
+  ArrowBack as ArrowBackIcon,
+  ArrowForward as ArrowForwardIcon,
+  AutoFixHighOutlined as AutoFixHighOutlinedIcon,
+  ChatOutlined as ChatOutlinedIcon,
+  Close as CloseIcon,
+  CreateNewFolderOutlined as CreateNewFolderOutlinedIcon,
+  CropOutlined as CropOutlinedIcon,
+  FileUpload as ShiftIcon,
+  FilterCenterFocus as FilterCenterFocusIcon,
+  FormatListBulleted as FormatListBulletedIcon,
+  HelpOutline as HelpOutlineIcon,
+  HideSourceOutlined as HideSourceOutlinedIcon,
+  History as HistoryIcon,
+  Portrait as PortraitIcon,
+  Search as SearchIcon,
+  Share as ShareIcon,
+  TouchAppOutlined as TouchAppOutlinedIcon,
+  VisibilityOutlined as VisibilityOutlinedIcon,
+} from '@mui/icons-material'
 import useStore from '../../store/useStore'
-import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
+import {TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
-import {HASH_PREFIX_HELP} from './hashState'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import CloseIcon from '@mui/icons-material/Close'
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import HistoryIcon from '@mui/icons-material/History'
-import PortraitIcon from '@mui/icons-material/Portrait'
-import SearchIcon from '@mui/icons-material/Search'
-import ShareIcon from '@mui/icons-material/Share'
-import ShiftIcon from '@mui/icons-material/FileUpload'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import OnboardingOverlay from '../Onboarding/OnboardingOverlay'
 import TreeIcon from '../../assets/icons/Tree.svg'
 
 
@@ -39,26 +36,64 @@ export default function HelpControl() {
   const isHelpVisible = useStore((state) => state.isHelpVisible)
   const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
   const setIsHelpTooltipsVisible = useStore((state) => state.setIsHelpTooltipsVisible)
+  const isOnboardingOverlayVisible = useStore((state) => state.isOnboardingOverlayVisible)
+  const onboardingOverlaySource = useStore((state) => state.onboardingOverlaySource)
+  const setIsOnboardingOverlayVisible = useStore((state) => state.setIsOnboardingOverlayVisible)
+
+  const [shouldShowHelpAfterOnboarding, setShouldShowHelpAfterOnboarding] = useState(false)
+
+  // Handle Help button click - always show onboarding first
+  const handleHelpClick = () => {
+    if (!isOnboardingOverlayVisible) {
+      // Show onboarding overlay first
+      setIsOnboardingOverlayVisible(true, 'help')
+      setShouldShowHelpAfterOnboarding(true)
+    } else {
+      // Toggle help dialog if overlay is already visible
+      setIsHelpVisible(!isHelpVisible)
+    }
+  }
+
+  // Handle onboarding overlay close - then show help dialog unless file was processed
+  const handleOnboardingClose = (skipHelp = false) => {
+    setIsOnboardingOverlayVisible(false)
+    if (shouldShowHelpAfterOnboarding && !skipHelp) {
+      setShouldShowHelpAfterOnboarding(false)
+      setIsHelpVisible(true)
+    } else if (shouldShowHelpAfterOnboarding) {
+      // Reset flag even if skipping help
+      setShouldShowHelpAfterOnboarding(false)
+    }
+  }
 
   useEffect(() => {
     setIsHelpTooltipsVisible(isHelpVisible)
   }, [isHelpVisible, setIsHelpTooltipsVisible])
 
   return (
-    <ControlButtonWithHashState
-      title={'Help'}
-      icon={<HelpOutlineIcon className='icon-share'/>}
-      isDialogDisplayed={isHelpVisible}
-      setIsDialogDisplayed={setIsHelpVisible}
-      hashPrefix={HASH_PREFIX_HELP}
-      placement='top'
-      dataTestId={testId}
-    >
+    <>
+      <TooltipIconButton
+        title={'Help'}
+        onClick={handleHelpClick}
+        icon={<HelpOutlineIcon className='icon-share'/>}
+        selected={isHelpVisible}
+        variant='control'
+        color='success'
+        size='small'
+        placement='top'
+        dataTestId={testId}
+      />
       <HelpDialog
         isDialogDisplayed={isHelpVisible}
         setIsDialogDisplayed={setIsHelpVisible}
       />
-    </ControlButtonWithHashState>
+      {onboardingOverlaySource === 'help' && (
+        <OnboardingOverlay
+          isVisible={isOnboardingOverlayVisible}
+          onClose={handleOnboardingClose}
+        />
+      )}
+    </>
   )
 }
 
@@ -198,7 +233,7 @@ const HelpList = ({pageIndex}) => {
 
   return (
     <Stack>
-      {pageContents[pageIndex].map((item, index) => item)}
+      {pageContents[pageIndex].map((item) => item)}
     </Stack>
   )
 }

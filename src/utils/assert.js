@@ -14,6 +14,40 @@ export function assert(cond, msg) {
 
 
 /**
+ * @param {any} value Value to test
+ * @return {boolean} True if value is defined and not null
+ */
+export function isDefinedAndNotNull(value) {
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      if (!isDefinedAndNotNull(value[i])) {
+        return false
+      }
+    }
+  }
+
+  return value !== null && value !== undefined
+}
+
+
+/**
+ * @param {any} args Variable length arguments to assert are defined and not null.
+ * @return {boolean} True if all arguments are defined and not null.
+ */
+export function areDefinedAndNotNull(...args) {
+  for (const ndx in args) {
+    if (Object.prototype.hasOwnProperty.call(args, ndx)) {
+      const arg = args[ndx]
+      if (!isDefinedAndNotNull(arg)) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
+
+/**
  * Equivalent to calling assertDefined on each parameter.
  *
  * @param {any} args Variable length arguments to assert are defined.
@@ -24,30 +58,31 @@ export function assertDefined(...args) {
   for (const ndx in args) {
     if (Object.prototype.hasOwnProperty.call(args, ndx)) {
       const arg = args[ndx]
-      assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined: ${arg}`)
-      if (Array.isArray(arg)) {
-        for (let i = 0; i < arg.length; i++) {
-          assertDefined(arg[i], `Arg ${ndx} is an array with undefined index ${i}`)
-        }
+      if (!isDefinedAndNotNull(arg)) {
+        throw new Error(`Arg ${ndx} is not defined or is null (zero-based index)`)
       }
     }
   }
-  if (args.length === 1) {
-    return args[0]
-  }
-  return args
+  return true
 }
 
 
 /**
  * @param {boolean} arg Value to test
  * @return {boolean} The argument
+ * @throws If the argument is not a boolean
  */
 export function assertDefinedBoolean(arg) {
-  if (arg) {
-    return true
+  if (arg === undefined) {
+    throw new Error('Argument must be defined')
   }
-  return false
+  if (arg === null) {
+    throw new Error('Argument must be not null')
+  }
+  if (typeof arg !== 'boolean') {
+    throw new Error('Argument must be a boolean')
+  }
+  return arg
 }
 
 

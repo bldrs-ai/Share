@@ -1,14 +1,9 @@
 import {excludedNodeModules} from './common.js'
 
 
-global.TextEncoder = global.TextEncoder || require('util').TextEncoder
-global.TextDecoder = global.TextDecoder || require('util').TextDecoder
-
-
 export default {
   verbose: false,
-  testEnvironment: 'jsdom',
-  testPathIgnorePatterns: [],
+  testEnvironment: 'jest-fixed-jsdom',
   rootDir: '../../',
   roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
   transform: {
@@ -16,12 +11,17 @@ export default {
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
     '\\.md$': '<rootDir>/tools/jest/mdTransform.js',
   },
+  testPathIgnorePatterns: [
+    '.*\\.spec\\.[jt]s$',
+  ],
   transformIgnorePatterns: [
     `/node_modules/(?!${excludedNodeModules}/)`,
+    '.*\\.spec\\.[jt]s$',
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
   },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'node'],
   setupFilesAfterEnv: [
     '<rootDir>/tools/jest/setupTests.js',
     '<rootDir>/tools/jest/setupNodeFetch.cjs',

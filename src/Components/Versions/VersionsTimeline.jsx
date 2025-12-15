@@ -6,14 +6,12 @@ import TimelineDot from '@mui/lab/TimelineDot'
 import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineSeparator from '@mui/lab/TimelineSeparator'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
+import {Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {styled} from '@mui/system'
+import {Commit as CommitIcon} from '@mui/icons-material'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import CommitIcon from '@mui/icons-material/Commit'
 
 
 /**
@@ -75,8 +73,8 @@ export default function VersionsTimeline({commits, currentRef, commitNavigateCb}
 function TimelineInfo({commit, active}) {
   const theme = useTheme()
   const dotColor = active ?
-      theme.palette.secondary.highlight :
-      theme.palette.secondary.main
+    theme.palette.secondary.highlight :
+    theme.palette.secondary.main
   return (
     <>
       <TimelineSeparator>
@@ -144,7 +142,7 @@ function TimelineInfo({commit, active}) {
  * with specific styles applied when the MuiTimelineItem-missingOppositeContent
  * class is present.
  */
-const CustomTimelineItem = styled(TimelineItem)(({theme}) => ({
+const CustomTimelineItem = styled(TimelineItem)(() => ({
   '&.MuiTimelineItem-missingOppositeContent': {
     '&::before': {
       padding: 0,

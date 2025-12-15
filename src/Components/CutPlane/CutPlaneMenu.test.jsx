@@ -58,11 +58,11 @@ describe('CutPlaneMenu', () => {
 
   it('X Section in URL', async () => {
     render(
-        <ShareMock
-          initialEntries={[`/v/p/index.ifc#${HASH_PREFIX_CUT_PLANE}:x`]}
-        >
-          <CutPlaneMenu/>
-        </ShareMock>)
+      <ShareMock
+        initialEntries={[`/v/p/index.ifc#${HASH_PREFIX_CUT_PLANE}:x`]}
+      >
+        <CutPlaneMenu/>
+      </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
@@ -75,10 +75,10 @@ describe('CutPlaneMenu', () => {
 
   it('Plane in the scene', async () => {
     const {getByTestId, getByText, getByTitle} = render(
-        <ShareMock>
-          <CutPlaneMenu/>
-          <ShareControl/>
-        </ShareMock>)
+      <ShareMock>
+        <CutPlaneMenu/>
+        <ShareControl/>
+      </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
     // mock contains one plane
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
@@ -118,13 +118,13 @@ describe('CutPlaneMenu', () => {
       result.current.setModel(model)
     })
     render(
-        <ShareMock
-          initialEntries={[
-            pathname,
-          ]}
-        >
-          <CutPlaneMenu/>
-        </ShareMock>)
+      <ShareMock
+        initialEntries={[
+          pathname,
+        ]}
+      >
+        <CutPlaneMenu/>
+      </ShareMock>)
     expect(result.current.cutPlanes[0].direction).toBe('y')
     expect(result.current.cutPlanes[0].offset).toBe(offset)
     delete global.window.location

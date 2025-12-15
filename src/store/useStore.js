@@ -1,11 +1,13 @@
 import create from 'zustand'
 import createAppsSlice from './AppsSlice'
+import createBotSlice from './BotSlice'
 import createBrowserSlice from './BrowserSlice'
 import createCutPlanesSlice from './CutPlanesSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
 import createNotesSlice from './NotesSlice'
+import createOnboardingSlice from './OnboardingSlice'
 import createOpenSlice from './OpenSlice'
 import createPropertiesSlice from './PropertiesSlice'
 import createRepositorySlice from './RepositorySlice'
@@ -19,12 +21,14 @@ import createVersionsSlice from './VersionsSlice'
 
 const useStore = create((set, get) => ({
   ...createAppsSlice(set, get),
+  ...createBotSlice(set, get),
   ...createBrowserSlice(set, get),
   ...createCutPlanesSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
   ...createNotesSlice(set, get),
+  ...createOnboardingSlice(set, get),
   ...createOpenSlice(set, get),
   ...createPropertiesSlice(set, get),
   ...createRepositorySlice(set, get),

@@ -15,9 +15,9 @@ test('Properties for single element', async () => {
   })
 
   const {getByText} = render(
-      <ShareMock>
-        <Properties/>
-      </ShareMock>)
+    <ShareMock>
+      <Properties/>
+    </ShareMock>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })

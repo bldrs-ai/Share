@@ -21,7 +21,7 @@ export default class BLDLoader {
    * @param {Function} onError
    * @return {Object3D}
    */
-  async parse(data, basePath, onLoad, onError) {
+  async parse(data, basePath) {
     assertDefined(data)
     const model = JSON.parse(data)
     const root = new Object3D

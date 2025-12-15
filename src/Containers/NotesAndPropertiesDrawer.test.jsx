@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, render, renderHook, fireEvent} from '@testing-library/react'
+import {act, render, renderHook, fireEvent, screen} from '@testing-library/react'
 import {useIsMobile} from '../Components/Hooks'
 import {TITLE_NOTES} from '../Components/Notes/component'
 import {TITLE as TITLE_PROPS} from '../Components/Properties/component'
@@ -29,9 +29,11 @@ describe('NotesAndPropertiesDrawer', () => {
     const mockSetDrawerWidth = jest.fn()
     const mobileHook = renderHook(() => useIsMobile())
     const storeHook = renderHook(() => useStore((state) => state))
-    const notesAndPropsRender = render(<ShareMock>
-      <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
-                                       </ShareMock>)
+    const notesAndPropsRender = render(
+      <ShareMock>
+        <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
+      </ShareMock>,
+    )
     await act(() => {
       storeHook.result.current.toggleIsNotesVisible()
     })
@@ -46,5 +48,31 @@ describe('NotesAndPropertiesDrawer', () => {
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
     expect(storeHook.result.current.leftDrawerWidth).toBe(leftDrawerWidthInitial)
+  })
+
+  // TODO(pablo): working in dev, not in test
+  it.skip('renders bot panel when feature flag is enabled', async () => {
+    const mockSetDrawerWidth = jest.fn()
+    window.history.pushState({}, '', '?feature=bot')
+    const storeHook = renderHook(() => useStore((state) => ({
+      setIsNotesVisible: state.setIsNotesVisible,
+      setIsPropertiesVisible: state.setIsPropertiesVisible,
+      setIsBotVisible: state.setIsBotVisible,
+    })))
+
+    render(
+      <ShareMock>
+        <NotesAndPropertiesDrawer setDrawerWidth={mockSetDrawerWidth}/>
+      </ShareMock>,
+    )
+
+    await act(() => {
+      storeHook.result.current.setIsNotesVisible(false)
+      storeHook.result.current.setIsPropertiesVisible(false)
+      storeHook.result.current.setIsBotVisible(true)
+    })
+
+    await screen.findByTestId('BotPanel')
+    expect(screen.getByTestId('BotPanel')).toBeVisible()
   })
 })

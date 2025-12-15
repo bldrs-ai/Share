@@ -1,11 +1,7 @@
 // PricingDialog.js
 import React, {ReactElement} from 'react'
-import Dialog from '@mui/material/Dialog'
-import AppBar from '@mui/material/AppBar'
-import Toolbar from '@mui/material/Toolbar'
-import IconButton from '@mui/material/IconButton'
-import Typography from '@mui/material/Typography'
-import CloseIcon from '@mui/icons-material/Close'
+import {Dialog, AppBar, Toolbar, IconButton, Typography} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import PricingTable from '../Stripe/PricingTable'
 
 
@@ -35,34 +31,34 @@ export default function PricingDialog({openPricing, handleClosePricing, isDay}) 
         },
       }}
     >
-    <AppBar sx={{position: 'relative'}}>
-      <Toolbar sx={{position: 'relative'}}>
-        {/* Absolutely‐positioned icon on the left */}
-        <IconButton
-          edge='start'
-          color='inherit'
-          onClick={handleClosePricing}
-          aria-label='close'
-          sx={{
-            position: 'absolute',
-            left: 0,
-          }}
-        >
-          <CloseIcon/>
-        </IconButton>
+      <AppBar sx={{position: 'relative'}}>
+        <Toolbar sx={{position: 'relative'}}>
+          {/* Absolutely‐positioned icon on the left */}
+          <IconButton
+            edge='start'
+            color='inherit'
+            onClick={handleClosePricing}
+            aria-label='close'
+            sx={{
+              position: 'absolute',
+              left: 0,
+            }}
+          >
+            <CloseIcon/>
+          </IconButton>
 
-        {/* Centered title in a 100%-width container */}
-        <Typography
-          variant='h3'
-          sx={{
-            width: '100%',
-            textAlign: 'center',
-          }}
-        >
+          {/* Centered title in a 100%-width container */}
+          <Typography
+            variant='h3'
+            sx={{
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
           Manage Subscription
-        </Typography>
-      </Toolbar>
-    </AppBar>
+          </Typography>
+        </Toolbar>
+      </AppBar>
 
       {/* The Stripe Pricing Table. May grow to fill available width/height */}
       <PricingTable theme={isDay ? 'light' : 'dark'}/>

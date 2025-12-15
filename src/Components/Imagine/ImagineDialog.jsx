@@ -1,17 +1,12 @@
 import axios from 'axios'
 import React, {ReactElement, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
-import Button from '@mui/material/Button'
-import IconButton from '@mui/material/IconButton'
-import InputAdornment from '@mui/material/InputAdornment'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
+import {Button, IconButton, InputAdornment, Box, Stack, TextField} from '@mui/material'
+import {Clear as ClearIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import Dialog from '../Dialog'
 import Loader from '../Loader'
-import ClearIcon from '@mui/icons-material/Clear'
 import BotIcon from '../../assets/icons/Bot2.svg'
 
 
@@ -140,7 +135,11 @@ export default function ImagineDialog({
 }
 
 
-/** @param {string} dataUrl The screenshot */
+/**
+ * @param {string} dataUrl The screenshot
+ * @param {string} prompt The prompt text
+ * @param {Function} onReady Callback when ready
+ */
 function sendToWarhol(dataUrl, prompt, onReady) {
   const base64Content = dataUrl.split(',')[1]
 

@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
+import {Box, Stack} from '@mui/material'
 import {useIsMobile} from '../Components/Hooks'
 import AppsSideDrawer from './AppsSideDrawer'
 import NotesAndProperties from './NotesAndProperties'

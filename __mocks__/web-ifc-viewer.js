@@ -23,43 +23,66 @@ const loadedModel = {
   },
 }
 
+const contextMock = {
+  fitToFrame: jest.fn(),
+  getCamera: jest.fn(() => {
+    return {
+      currentNavMode: {
+        fitModelToFrame: jest.fn(),
+      },
+    }
+  }),
+  getClippingPlanes: jest.fn(() => {
+    return []
+  }),
+  getDomElement: jest.fn(() => ({
+    setAttribute: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  })),
+  getRenderer: jest.fn(),
+  getScene: jest.fn(() => {
+    return {
+      add: jest.fn(),
+    }
+  }),
+  ifcCamera: {
+    cameraControls: {
+      addEventListener: jest.fn(),
+      setPosition: jest.fn((x, y, z) => {
+        return {}
+      }),
+      getPosition: jest.fn((x, y, z) => {
+        const position = [0, 0, 0]
+        return position
+      }),
+      setTarget: jest.fn((x, y, z) => {
+        return {}
+      }),
+      getTarget: jest.fn((x, y, z) => {
+        const target = [0, 0, 0]
+        return target
+      }),
+    },
+    currentNavMode: {
+      fitModelToFrame: jest.fn(),
+    },
+  },
+  items: {
+    ifcModels: [],
+  },
+  renderer: {
+    newScreenshot: jest.fn(),
+  },
+  resize: jest.fn(),
+}
 
 const impl = {
   _isMock: true,
   _loadedModel: loadedModel,
   IFC: {
     addIfcModel: jest.fn(),
-    context: {
-      fitToFrame: jest.fn(),
-      getCamera: jest.fn(),
-      getRenderer: jest.fn(),
-      getScene: jest.fn(),
-      ifcCamera: {
-        cameraControls: {
-          addEventListener: jest.fn(),
-          setPosition: jest.fn((x, y, z) => {
-            return {}
-          }),
-          getPosition: jest.fn((x, y, z) => {
-            const position = [0, 0, 0]
-            return position
-          }),
-          setTarget: jest.fn((x, y, z) => {
-            return {}
-          }),
-          getTarget: jest.fn((x, y, z) => {
-            const target = [0, 0, 0]
-            return target
-          }),
-        },
-        currentNavMode: {
-          fitModelToFrame: jest.fn(),
-        },
-      },
-      items: {
-        ifcModels: [],
-      },
-    },
+    context: contextMock,
     setWasmPath: jest.fn(),
     selector: {
       unpickIfcItems: jest.fn(),
@@ -99,6 +122,7 @@ const impl = {
   },
   clipper: {
     active: false,
+    setActive: jest.fn(),
     deleteAllPlanes: jest.fn(() => {
       return 'cutPlane'
     }),
@@ -118,28 +142,7 @@ const impl = {
   container: {
     style: {},
   },
-  context: {
-    getRenderer: jest.fn(),
-    getScene: jest.fn(() => {
-      return {
-        add: jest.fn(),
-      }
-    }),
-    getCamera: jest.fn(() => {
-      return {
-        currentNavMode: {
-          fitModelToFrame: jest.fn(),
-        },
-      }
-    }),
-    getClippingPlanes: jest.fn(() => {
-      return []
-    }),
-    renderer: {
-      newScreenshot: jest.fn(),
-    },
-    resize: jest.fn(),
-  },
+  context: contextMock,
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   loadIfcFile: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {

@@ -1,7 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
-import List from '@mui/material/List'
-import ListItem from '@mui/material/ListItem'
+import {Box, List, ListItem} from '@mui/material'
 import * as Sentry from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import debug from '../../utils/debug'
@@ -46,8 +44,8 @@ export default function Notes() {
 
   const selectedNote =
         (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] :
-        null
+          notes.filter((issue) => issue.id === selectedNoteId)[0] :
+          null
 
   const handleError = (err) => {
     if (!err) {
@@ -184,6 +182,7 @@ export default function Notes() {
   /**
    * Gets a marker given a marker ID
    *
+   * @param {string} id - The marker ID
    * @return {object[]} An array of marker objects with coordinates and other properties.
    */
   function getMarkerById(id) {

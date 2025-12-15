@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
+import {Box, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 
 
@@ -9,7 +8,7 @@ import {useTheme} from '@mui/material/styles'
  *
  * @return {ReactElement}
  */
-export default function AboutDescription({setIsDialogDisplayed}) {
+export default function AboutDescription() {
   const theme = useTheme()
 
   return (

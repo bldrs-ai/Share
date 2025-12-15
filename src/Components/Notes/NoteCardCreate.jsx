@@ -1,13 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
-import Avatar from '@mui/material/Avatar'
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardActions from '@mui/material/CardActions'
-import CardContent from '@mui/material/CardContent'
-import CardHeader from '@mui/material/CardHeader'
-import InputBase from '@mui/material/InputBase'
-import Stack from '@mui/material/Stack'
+import {Avatar, Box, Card, CardActions, CardContent, CardHeader, InputBase, Stack} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {createIssue, getIssueComments} from '../../net/github/Issues'
@@ -15,8 +8,7 @@ import {createComment} from '../../net/github/Comments'
 import {assertStringNotEmpty} from '../../utils/assert'
 import {TooltipIconButton} from '../Buttons'
 import {PlacemarkHandlers as placemarkHandlers} from '../Markers/MarkerControl'
-import CheckIcon from '@mui/icons-material/Check'
-import AddLocationIcon from '@mui/icons-material/AddLocationOutlined'
+import {AddLocationOutlined as AddLocationIcon, Check as CheckIcon} from '@mui/icons-material'
 
 
 /**
@@ -96,7 +88,11 @@ export default function NoteCardCreate({
     setComments(newComments)
   }
 
-  /** create new comment based on the selected note Id*/
+  /**
+   * Create new comment based on the selected note Id.
+   *
+   * @return {Promise<any>}
+   */
   async function createNewComment() {
     assertStringNotEmpty(body)
     const commentPayload = {
@@ -149,12 +145,12 @@ export default function NoteCardCreate({
               inputProps={{maxLength: 256}}
             />}
           avatar={
-          isAuthenticated ?
-            <Avatar
-              alt={user.name}
-              src={user.picture}
-            /> :
-            <Avatar alt={username} src={avatarUrl}/>
+            isAuthenticated ?
+              <Avatar
+                alt={user.name}
+                src={user.picture}
+              /> :
+              <Avatar alt={username} src={avatarUrl}/>
           }
         />
       }

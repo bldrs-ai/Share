@@ -6,7 +6,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import OpenModelDialog from './OpenModelDialog'
 import {HASH_PREFIX_OPEN_MODEL} from './hashState'
-import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
 /**

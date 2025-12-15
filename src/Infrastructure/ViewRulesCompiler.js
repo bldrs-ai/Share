@@ -26,7 +26,7 @@ import {interpolateColors, parseColor} from './ColorHelperFunctions'
  * @param {number} rules
  * @return {IfcCustomViewSettings} the view settings
  */
-export async function compileViewRules(api, modelID, rules) {
+export async function compileViewRules(api, modelID) {
   // Apply desired logic on model before loading
   const propRelLines = await api.GetLineIDsWithType(modelID, IFCRELDEFINESBYPROPERTIES)
   const allPropObjects = []
@@ -38,7 +38,7 @@ export async function compileViewRules(api, modelID, rules) {
   const objectsAndPropVal = psetObjects.map((a) =>
     ({o: a.RelatedObjects[0]?.expressID,
       p: a.RelatingPropertyDefinition.HasProperties?.find(
-          (s) => s.Name.value === 'Verlust' ||
+        (s) => s.Name.value === 'Verlust' ||
             s.Name.value === 'SIA380-1.TransmissionHeatLoss')?.NominalValue?.value * 1})).filter((x) => x.p)
 
   const valArr = objectsAndPropVal.map((a) => a.p)

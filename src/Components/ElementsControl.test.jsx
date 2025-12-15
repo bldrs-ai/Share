@@ -7,10 +7,11 @@ import ElementsControl from './ElementsControl'
 
 
 describe('ElementsControl', () => {
-  const deselectItems = jest.fn()
+  let deselectItems
   let viewer
 
   beforeAll(async () => {
+    deselectItems = jest.fn()
     const {result} = renderHook(() => useStore((state) => state))
     viewer = __getIfcViewerAPIExtendedMockSingleton()
     viewer.isolator = {
@@ -23,11 +24,15 @@ describe('ElementsControl', () => {
     })
   })
 
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
   it('should render CutPlaneMenu component when isIsolate is false', () => {
     const {queryByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const cutPlaneMenuButton = queryByTitle('Section')
     expect(cutPlaneMenuButton).toBeInTheDocument()
@@ -39,13 +44,14 @@ describe('ElementsControl', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {queryByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const clearButton = queryByTitle('Clear')
-    fireEvent.click(clearButton)
     expect(clearButton).toBeInTheDocument()
+    fireEvent.click(clearButton)
+    expect(deselectItems).toHaveBeenCalled()
   })
 
   it('render and trigger Hide button with selected element and not in Isolate mode', async () => {
@@ -54,9 +60,9 @@ describe('ElementsControl', () => {
       result.current.setSelectedElement({id: 123})
     })
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
@@ -65,9 +71,9 @@ describe('ElementsControl', () => {
 
   it('should toggle the isolation mode when Isolate button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const isolateButton = getByTitle('Isolate')
     fireEvent.click(isolateButton)
@@ -76,9 +82,9 @@ describe('ElementsControl', () => {
 
   it('should trigger unHideAllElements when Show all button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
@@ -89,23 +95,12 @@ describe('ElementsControl', () => {
 
   it('should trigger hideSelectedElements when Hide button is clicked', () => {
     const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
+      <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+        <ElementsControl deselectItems={deselectItems}/>
+      </ShareMock>,
     )
     const hideButton = getByTitle('Hide')
     fireEvent.click(hideButton)
     expect(viewer.isolator.hideSelectedElements).toHaveBeenCalled()
-  })
-
-  it('should trigger deselectItems prop function when Clear button is clicked', () => {
-    const {getByTitle} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <ElementsControl deselectItems={deselectItems}/>
-        </ShareMock>,
-    )
-    const clearButton = getByTitle('Clear')
-    fireEvent.click(clearButton)
-    expect(deselectItems).toHaveBeenCalled()
   })
 })

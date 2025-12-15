@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import * as process from 'node:process'
 import {fileURLToPath} from 'url'
 import defines from './defines.js'
 import makePlugins from './plugins.js'
@@ -7,26 +6,30 @@ import {log} from './utils.js'
 
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
-const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
-const subscribeFile = path.resolve(repoRoot, 'src', 'subscribe', 'index.jsx')
 const buildDir = path.resolve(repoRoot, 'docs')
 const plugins = makePlugins(repoRoot, buildDir)
 
-log('using config\n', defines)
+log('using defines\n', defines)
 
 // The build config with two entry points:
 // One for your main app (index.jsx) and one for your subscribe page.
 export default {
-  // Add both entry points here. ESBuild will output a separate bundle for each.
-  entryPoints: [indexFile, subscribeFile],
   outdir: buildDir,
   // Optionally, use outbase to preserve your folder structure.
   outbase: path.resolve(repoRoot, 'src'),
   format: 'esm',
   platform: 'browser',
+  // Roughly 2018-era browsers
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
-  external: ['*.woff', '*.woff2'],
+  loader: {
+    '.css': 'css',
+    '.woff': 'file',
+    '.woff2': 'file',
+    '.md': 'text',
+    '.ts': 'ts',
+    '.tsx': 'tsx',
+  },
   minify: (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODO: have had breakage without this
   splitting: false,
@@ -35,7 +38,5 @@ export default {
   logLevel: 'info',
   define: defines,
   plugins: plugins,
-  loader: {
-    '.md': 'text',
-  },
+  resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'],
 }

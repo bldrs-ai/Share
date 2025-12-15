@@ -1,7 +1,6 @@
 import React, {ReactElement} from 'react'
 import ReactMarkdown from 'react-markdown'
-import Link from '@mui/material/Link'
-import Typography from '@mui/material/Typography'
+import {Link, Typography} from '@mui/material'
 import BlogPostLayout from '../layouts/BlogPostLayout'
 import {assertDefined} from '../utils/assert'
 
@@ -18,19 +17,19 @@ export default function MarkdownBlogPost({title, dateline, markdownContent}) {
     <BlogPostLayout title={title} dateline={dateline}>
       <ReactMarkdown
         components={{
-          h1: ({node, ...props}) => (
+          h1: ({...props}) => (
             <Typography variant='h1' gutterBottom {...props}/>
           ),
-          h2: ({node, ...props}) => (
+          h2: ({...props}) => (
             <Typography variant='h2' gutterBottom {...props}/>
           ),
-          h3: ({node, ...props}) => (
+          h3: ({...props}) => (
             <Typography variant='h3' gutterBottom {...props}/>
           ),
-          p: ({node, ...props}) => (
+          p: ({...props}) => (
             <Typography variant='body1' paragraph {...props}/>
           ),
-          a: ({node, ...props}) => <Link {...props}/>,
+          a: ({...props}) => <Link {...props}/>,
           // etc. for other elements (img, blockquote, etc.)
         }}
       >

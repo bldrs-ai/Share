@@ -10,12 +10,48 @@ import {MOCK_FILES} from './Files.fixture'
 describe('net/github/Files', () => {
   describe('commit file', () => {
     it('commits a file and returns the new commit SHA', async () => {
-      // Mock file data that should parse properly
-      const file = new Blob(['test content'], {type: 'text/plain'})
+      // Mock FileReader to work around jest-fixed-jsdom compatibility issue
+      const originalFileReader = global.FileReader
+      /**
+       * Mock FileReader class to work around compatibility issues.
+       */
+      global.FileReader = class MockFileReader {
+        /**
+         * Constructor for MockFileReader.
+         */
+        constructor() {
+          this.result = null
+          this.onload = null
+          this.onerror = null
+        }
 
-      // if token passed but isn't valid, should throw 'Bad Credentials'
-      expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken'))
-        .toBe('newCommitSha')
+        /**
+         * Mock implementation of FileReader.readAsDataURL.
+         *
+         * @param {Blob} file - The file to read.
+         */
+        readAsDataURL(file) {
+          // Mock the base64 encoding
+          setTimeout(() => {
+            this.result = 'data:text/plain;base64,dGVzdCBjb250ZW50' // base64 of "test content"
+            if (this.onload) {
+              this.onload()
+            }
+          }, 0)
+        }
+      }
+
+      try {
+        // Mock file data that should parse properly
+        const file = new Blob(['test content'], {type: 'text/plain'})
+
+        // if token passed but isn't valid, should throw 'Bad Credentials'
+        const result = await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken')
+        expect(result).toBe('newCommitSha')
+      } finally {
+        // Restore original FileReader
+        global.FileReader = originalFileReader
+      }
     })
   })
 

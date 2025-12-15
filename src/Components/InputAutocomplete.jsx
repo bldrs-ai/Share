@@ -1,8 +1,7 @@
 import React from 'react'
-import Autocomplete from '@mui/material/Autocomplete'
-import TextField from '@mui/material/TextField'
-import Stack from '@mui/material/Stack'
+import {Autocomplete, TextField, Stack} from '@mui/material'
 import {assertDefined} from '../utils/assert'
+
 
 /**
  * Input with autocomplete feature.

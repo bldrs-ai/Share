@@ -1,7 +1,15 @@
-import React, {ReactElement, useEffect, useRef} from 'react'
-import Box from '@mui/material/Box'
+import React, {ReactElement, useRef, useEffect} from 'react'
+import {Box} from '@mui/material'
 import {IFrameCommunicationChannel} from './AppsMessagesHandler'
 
+
+/**
+ * AppIFrame renders an iframe for the given app item and sets up communication
+ * channel between the parent window and the iframe content.
+ *
+ * @property {object} itemJson - The JSON object representing the app item.
+ * @return {ReactElement} The rendered iframe component.
+ */
 export default function AppIFrame({itemJson}) {
   const appFrameRef = useRef(null) // Use useRef for a stable reference to the iframe element.
 
@@ -19,7 +27,7 @@ export default function AppIFrame({itemJson}) {
 
       // Check if the applet is requesting the communication channel.
       if (event.data === 'request-channel') {
-        console.log("Share: Received 'request-channel' from applet. Sending back port.");
+        // console.log('Share: Received \'request-channel\' from applet. Sending back port.')
         // Create the channel and send the 'init' message, as before.
         new IFrameCommunicationChannel(iframeEl)
       }

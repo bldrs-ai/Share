@@ -1,17 +1,18 @@
 import React, {ReactElement, useState, useEffect} from 'react'
-import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
-import Tab from '@mui/material/Tab'
-import Tabs from '@mui/material/Tabs'
+import {Box, Stack, Tab, Tabs} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import AppsPanel from '../Components/Apps/AppsPanel'
 import AppPanel from '../Components/Apps/AppPanel'
-import {CloseButton} from '../Components/Buttons'
+import BotChat from '../Components/Bot/BotChat'
+import {HASH_PREFIX_BOT} from '../Components/Bot/hashState'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import NotesPanel from '../Components/Notes/NotesPanel'
 import PropertiesPanel from '../Components/Properties/PropertiesPanel'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
+import useExistInFeature from '../hooks/useExistInFeature'
+import {hasParams} from '../utils/location'
 
 
 /**
@@ -44,6 +45,10 @@ export default function TabbedPanels({
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
 
+  const isBotVisible = useStore((state) => state.isBotVisible)
+  const setIsBotVisible = useStore((state) => state.setIsBotVisible)
+  const isBotEnabled = useExistInFeature('bot')
+
   // Next two are used by NavTree and Versions
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -53,7 +58,7 @@ export default function TabbedPanels({
   const modelPath = useStore((state) => state.modelPath)
 
   // This state tracks the order in which panels were opened.
-  // We'll store keys like 'apps', 'nav', 'notes', 'props', 'versions'.
+  // We'll store keys like 'apps', 'nav', 'notes', 'props', 'bot', 'versions'.
   const [openPanels, setOpenPanels] = useState([])
 
   const [value, setValue] = useState(0)
@@ -72,47 +77,48 @@ export default function TabbedPanels({
     }
   }
 
+  const shouldShowBotPanel = isBotVisible && (isBotEnabled || hasParams(HASH_PREFIX_BOT))
+
   const isDrawerVisible =
         isAppsVisible ||
         isNavTreeVisible ||
         isNotesVisible ||
         isPropertiesVisible ||
-        isVersionsVisible
+        isVersionsVisible ||
+        shouldShowBotPanel
 
 
-        /** @return {boolean} */
-  function samePageLinkNavigation(event) {
-    if (
-      event.defaultPrevented ||
-        event.button !== 0 || // ignore everything but left-click
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        event.shiftKey
-    ) {
-      return false
-    }
-    return true
-  }
-
-  /** @return {ReactElement} */
-  function LinkTab({label, onClose, ...props}) {
+  /**
+   * @param {string} label - The tab label
+   * @param {Function} onClose - Close handler
+   * @return {ReactElement}
+   */
+  function createTabLabel(label, onClose) {
     return (
-      <Tab
-        label={
-          <Stack direction='row' alignItems='center'>
-            {label}
-            <CloseButton onCloseClick={onClose} className='share-button-tab-close'/>
-          </Stack>
-        }
-        onClick={(event) => {
-          // Routing libraries handle this, you can remove the onClick handle when using them.
-          if (samePageLinkNavigation(event)) {
-            event.preventDefault()
-          }
-        }}
-        aria-current={props.selected && 'page'}
-      />
+      <Stack direction='row' alignItems='center'>
+        {label}
+        <Box
+          component='span'
+          onClick={(event) => {
+            event.stopPropagation()
+            onClose()
+          }}
+          className='share-button-tab-close'
+          sx={{
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'center',
+            'cursor': 'pointer',
+            'padding': '4px',
+            'borderRadius': '50%',
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.04)',
+            },
+          }}
+        >
+          <CloseIcon sx={{fontSize: '16px'}}/>
+        </Box>
+      </Stack>
     )
   }
 
@@ -121,45 +127,51 @@ export default function TabbedPanels({
   const panelsMap = {
     apps: isAppsEnabled && isAppsVisible ?
       {
-          label: <LinkTab label='Apps' onClose={() => setIsAppsVisible(false)}/>,
-          panel: !selectedApp ? <AppsPanel/> : <AppPanel itemJson={selectedApp}/>,
-        } :
+        label: createTabLabel('Apps', () => setIsAppsVisible(false)),
+        panel: !selectedApp ? <AppsPanel/> : <AppPanel itemJson={selectedApp}/>,
+      } :
       null,
     nav: isNavTreeEnabled && isNavTreeVisible ?
       {
-          label: <LinkTab label='Nav' onClose={() => setIsNavTreeVisible(false)}/>,
-          panel: model && rootElement && (
-            <NavTreePanel
-              model={model}
-              pathPrefix={
-                pathPrefix + (
-                  modelPath.gitpath ?
-                    modelPath.getRepoPath() :
-                    modelPath.filepath
-                )
-              }
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-            />
-          ),
-        } :
+        label: createTabLabel('Nav', () => setIsNavTreeVisible(false)),
+        panel: model && rootElement && (
+          <NavTreePanel
+            model={model}
+            pathPrefix={
+              pathPrefix + (
+                modelPath.gitpath ?
+                  modelPath.getRepoPath() :
+                  modelPath.filepath
+              )
+            }
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+        ),
+      } :
       null,
     notes: isNotesEnabled && isNotesVisible ?
       {
-          label: <LinkTab label='Notes' onClose={() => setIsNotesVisible(false)}/>,
-          panel: <NotesPanel/>,
-        } :
+        label: createTabLabel('Notes', () => setIsNotesVisible(false)),
+        panel: <NotesPanel/>,
+      } :
       null,
     props: isPropertiesEnabled && isPropertiesVisible ?
       {
-          label: <LinkTab label='Props' onClose={() => setIsPropertiesVisible(false)}/>,
-          panel: <PropertiesPanel/>,
-        } :
+        label: createTabLabel('Props', () => setIsPropertiesVisible(false)),
+        panel: <PropertiesPanel/>,
+      } :
+      null,
+    bot: shouldShowBotPanel ?
+      {
+        label: createTabLabel('AI', () => setIsBotVisible(false)),
+        panel: <BotChat/>,
+      } :
       null,
     versions: isVersionsEnabled && isVersionsVisible ?
       {
-          label: <LinkTab label='Versions' onClose={() => setIsVersionsVisible(false)}/>,
-          panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
-        } :
+        label: createTabLabel('Versions', () => setIsVersionsVisible(false)),
+        panel: modelPath.repo !== undefined && <VersionsPanel filePath={modelPath.filepath} currentRef={branch}/>,
+      } :
       null,
   }
 
@@ -167,7 +179,7 @@ export default function TabbedPanels({
   // If a panel is newly visible and not in openPanels, add it.
   // If a panel is no longer visible and is in openPanels, remove it.
   useEffect(() => {
-    const panelKeys = ['apps', 'nav', 'notes', 'props', 'versions']
+    const panelKeys = ['apps', 'nav', 'notes', 'props', 'bot', 'versions']
     setOpenPanels((prev) => {
       let newOpenPanels = [...prev]
 
@@ -188,7 +200,7 @@ export default function TabbedPanels({
       return newOpenPanels
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAppsVisible, isNavTreeVisible, isNotesVisible, isPropertiesVisible, isVersionsVisible])
+  }, [isAppsVisible, isNavTreeVisible, isNotesVisible, isPropertiesVisible, shouldShowBotPanel, isVersionsVisible])
 
   // Generate labelAndPanels according to openPanels order
   const labelAndPanels = openPanels
@@ -199,12 +211,16 @@ export default function TabbedPanels({
   useEffect(() => {
     if (labelAndPanels.length > 0) {
       // Select the last added panel (which should be the last in openPanels, hence last in labelAndPanels)
-      setValue(labelAndPanels.length - 1)
+      const newValue = labelAndPanels.length - 1
+      setValue(newValue)
     } else {
       // No panels left
       setValue(0)
     }
   }, [labelAndPanels.length])
+
+  // Ensure value is always within bounds of available tabs
+  const safeValue = Math.min(value, Math.max(0, labelAndPanels.length - 1))
 
   return (
     isDrawerVisible && (
@@ -234,7 +250,7 @@ export default function TabbedPanels({
           >
             <Box sx={{position: 'sticky', top: 0, zIndex: 1}}>
               <Tabs
-                value={value}
+                value={safeValue}
                 onChange={handleChange}
                 variant='scrollable'
                 scrollButtons='auto'
@@ -265,7 +281,7 @@ export default function TabbedPanels({
             </Box>
             <Box sx={{flex: 1, overflow: 'auto'}}>
               {labelAndPanels.map((entry, index) => (
-                <CustomTabPanel value={value} index={index} key={index}>
+                <CustomTabPanel value={safeValue} index={index} key={index}>
                   {entry.panel}
                 </CustomTabPanel>
               ))}

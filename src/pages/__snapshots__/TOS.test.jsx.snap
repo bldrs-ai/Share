@@ -1,0 +1,220 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Terms renders 1`] = `
+<div>
+  <div
+    class="MuiPaper-root MuiPaper-page-background MuiPaper-rounded css-1qmtcj9-MuiPaper-root"
+  >
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-1deatua-MuiPaper-root"
+    >
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+        href="/"
+      >
+        <div
+          class="MuiBox-root css-1dukxs6"
+        >
+          <svg
+            data-filename="src/assets/LogoB.svg"
+          />
+        </div>
+      </a>
+    </div>
+    <div
+      class="MuiPaper-root MuiPaper-page MuiPaper-rounded css-i0wy4-MuiPaper-root"
+    >
+      <h1
+        class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+      >
+        Terms of Service
+      </h1>
+      <div
+        class="MuiBox-root css-lgj0h8"
+      >
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          <strong>
+            Effective Date:
+          </strong>
+           January 1, 2022
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          <strong>
+            Last Updated:
+          </strong>
+           October 23, 2025
+        </p>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Welcome to Bldrs Share (“Service”). By accessing or using the Service or related open-source code, you agree to these Terms.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          1. Description of Service
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Bldrs Share provides browser-based tools for viewing and collaborating on 3D model files. You may use our hosted instance at 
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+            href="https://bldrs.ai"
+            rel="noopener"
+            target="_blank"
+          >
+            bldrs.ai
+          </a>
+           or deploy self-hosted instances.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          2. Open Source Licensing
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Most components of Bldrs Share and the Conway Engine are licensed under the
+           
+          <strong>
+            GNU AGPL
+          </strong>
+          . If you host or distribute modified versions, you must make source code available under the same license. Certain proxy/connectors may be under separate licenses.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          3. Your Responsibilities
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          You agree to use the Service lawfully; not infringe others’ rights; maintain account security; and ensure that any data you upload or share is permitted. For self-hosted deployments, you are solely responsible for your own infrastructure, security, and privacy practices.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          4. Intellectual Property
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Bldrs trademarks, the Conway Engine, and related technology are owned by Bldrs, Inc. and contributors. You retain ownership of the 3D models and content you load into the Service.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          5. Data Handling and Hosting
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          By default, we do not persist model data on our servers; processing occurs in your browser. Future optional hosted features (e.g., Firestore for sharing) may store limited collaboration data; these terms and privacy documentation will be updated accordingly.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          6. Third-Party Services
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Integrations (e.g., Google Drive) are provided “as is” and are governed by those providers’ terms. You are responsible for complying with third-party terms when enabling integrations.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          7. Warranty Disclaimer
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          The Service is provided “as is” and “as available,” without warranties of any kind, express or implied, including merchantability, fitness for a particular purpose, and non-infringement. We do not guarantee uninterrupted or error-free operation.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          8. Limitation of Liability
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          To the fullest extent permitted by law, Bldrs shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or for lost profits, data, or business, arising from or related to use of the Service.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          9. Modifications
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          We may update these Terms from time to time. Changes take effect upon posting. Your continued use of the Service constitutes acceptance of the updated Terms.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          10. Governing Law
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          These Terms are governed by the laws of the State of Delaware, USA, without regard to conflict-of-law rules.
+        </p>
+        <h1
+          class="MuiTypography-root MuiTypography-h1 css-1kqtlju-MuiTypography-root"
+        >
+          11. Contact
+        </h1>
+        <p
+          class="MuiTypography-root MuiTypography-body1 css-vdgfig-MuiTypography-root"
+        >
+          Questions? Email 
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+            href="mailto:support@bldrs.ai"
+          >
+            support@bldrs.ai
+          </a>
+           or visit
+           
+          <a
+            class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+            href="https://bldrs.ai"
+            rel="noopener"
+            target="_blank"
+          >
+            https://bldrs.ai
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+    <p
+      class="MuiTypography-root MuiTypography-body2 css-14vjj1r-MuiTypography-root"
+    >
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+        href="/tos"
+      >
+        Terms
+      </a>
+       
+      -
+       
+      <a
+        class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1onfuse-MuiTypography-root-MuiLink-root"
+        href="/privacy"
+      >
+        Privacy
+      </a>
+    </p>
+  </div>
+</div>
+`;

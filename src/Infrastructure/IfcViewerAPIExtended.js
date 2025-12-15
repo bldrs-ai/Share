@@ -5,6 +5,7 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
+import {areDefinedAndNotNull} from '../utils/assert'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -22,7 +23,9 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
-  /**  */
+  /**
+   * @param {object} options - Configuration options
+   */
   constructor(options) {
     super(options)
     const renderer = this.context.getRenderer()
@@ -63,7 +66,13 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     return results
   }
 
-    async getElementPropsByType(type) {
+  /**
+   * Gets all elements of a given type in the current model
+   *
+   * @param {*} type
+   * @return {Promise<Array>} results
+   */
+  async getElementPropsByType(type) {
     const manager = this.IFC.loader.ifcManager
     // TODO: Update this to use the modelID
     const modelID = 0
@@ -85,6 +94,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     return results
   }
 
+
   /**
    *
    * @param {number} floorNumber
@@ -95,24 +105,26 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const manager = this.IFC.loader.ifcManager
     const structure = await manager.getSpatialStructure(0, true)
     const projectNode = Array.isArray(structure) ?
-    structure[0] :
-    structure
-  if (!projectNode) {
-    console.warn('No project node found in spatial structure')
-    return []
-  }
+      structure[0] :
+      structure
+    if (!projectNode) {
+      console.warn('No project node found in spatial structure')
+      return []
+    }
 
     // helper: pull out every IfcBuildingStorey node
     /**
+     * @param {object} node
+     * @param {Array} out
      * @return {Array} storeys
      */
     function collectStoreys(node, out = []) {
       if (node.type === 'IFCBUILDINGSTOREY') {
-out.push(node)
-}
+        out.push(node)
+      }
       for (const c of node.children || []) {
-collectStoreys(c, out)
-}
+        collectStoreys(c, out)
+      }
       return out
     }
 
@@ -133,8 +145,10 @@ collectStoreys(c, out)
     }
     const floorNode = storeys[idx].node
 
-     // 4. collect all expressIDs under this storey via node.children
+    // 4. collect all expressIDs under this storey via node.children
     /**
+     * @param {object} node
+     * @param {Array} out
      * @return {Array} elements
      */
     function collectElements(node) {
@@ -162,7 +176,7 @@ collectStoreys(c, out)
    *
    * @param {string} url IFC as URL.
    * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
-   * @param {Function(event)} onProgress (optional) a callback function to report on downloading progress
+   * @param {Function} onProgress (optional) a callback function to report on downloading progress
    * @param {Function} onError (optional) a callback function to report on loading errors
    * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
    * @return {IfcModel} ifcModel object
@@ -213,8 +227,13 @@ collectStoreys(c, out)
    *
    * @param {number} modelID
    * @param {number[]} expressIds express Ids of the elements
+   * @param {boolean} focusSelection Whether to focus on selection
    */
   async setSelection(modelID, expressIds, focusSelection) {
+    if (this.IFC.type !== 'ifc') {
+      debug().warn('setSelection is not supported for this type of model')
+      return
+    }
     this._selectedExpressIds = expressIds
     const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
@@ -251,7 +270,7 @@ collectStoreys(c, out)
       return
     }
     const id = this.getPickedItemId(found)
-    if (this.isolator.canBePickedInScene(id)) {
+    if (this.IFC.type === 'ifc' && this.isolator.canBePickedInScene(id)) {
       await this.IFC.selector.preselection.pick(found)
       this.highlightPreselection()
     }
@@ -261,7 +280,7 @@ collectStoreys(c, out)
   /**
    * applies Preselection effect on an Element by Id
    *
-   * @param {number} modelID
+   * @param {number} modelId
    * @param {number[]} expressIds express Ids of the elements
    */
   async preselectElementsByIds(modelId, expressIds) {
@@ -304,7 +323,7 @@ collectStoreys(c, out)
    */
   getPickedItemId(picked) {
     const mesh = picked.object
-    if (picked.faceIndex === undefined) {
+    if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }
     const ifcManager = this.IFC

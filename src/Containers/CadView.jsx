@@ -1,22 +1,25 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
-import Box from '@mui/material/Box'
+import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
+import {captureException} from '@sentry/react'
 import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtag} from '../privacy/analytics'
+import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined} from '../utils/assert'
+import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
+import {addProperties} from '../utils/objects'
+import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
 import RootLandscape from './RootLandscape'
@@ -44,6 +47,7 @@ export default function CadView({
   // Begin useStore //
 
   const accessToken = useStore((state) => state.accessToken)
+  const hasGitHubIdentity = useStore((state) => state.hasGithubIdentity)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
@@ -102,7 +106,6 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
-  const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
 
   // Drag and Drop
   // Add a new state for drag over effect
@@ -126,9 +129,13 @@ export default function CadView({
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
-      const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.primary.sceneBackground))
+      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
+      if (!sceneBackground) {
+        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
+        console.error(error.message)
+        captureException(error)
+      }
+      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
@@ -152,7 +159,8 @@ export default function CadView({
       return
     }
 
-    if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
+    if (isAuthLoading || (!isAuthLoading &&
+      (isAuthenticated && ( accessToken === '' && !hasGitHubIdentity )))) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }
@@ -178,15 +186,31 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
-    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     let tmpModelRef
+    let isOOM = false
     try {
-      tmpModelRef = await loadModel(pathToLoad, modelPath.gitpath)
+      tmpModelRef = await loadModel(modelPath)
     } catch (e) {
-      setAlert(e)
+      if (isOutOfMemoryError(e)) {
+        isOOM = true
+      }
+      if (isOOM) {
+        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
+        setAlert({
+          type: 'oom',
+          message: 'We ran out of memory attempting to load this model. ' +
+            'Try opening it on a desktop browser with more memory or ' +
+            'refresh the page.',
+        })
+      } else {
+        setAlert(e)
+      }
+
+      console.error(e)
+      captureException(e)
       return
     }
-    if (!tmpModelRef) {
+    if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
@@ -196,15 +220,17 @@ export default function CadView({
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
 
+    const pathToLoad = modelPath.srcUrl || modelPath.gitpath || (installPrefix + modelPath.filepath)
     selectElementBasedOnFilepath(pathToLoad)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+      .filter(([, value]) => value === true).map(([key]) => Number(key))
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
 
+    modelPath.title = tmpModelRef.name // maybe undefined
     setIsViewerLoaded(true)
     setIsModelReady(true)
 
@@ -214,7 +240,7 @@ export default function CadView({
       const now = Date.now()
       const debounceWaitMs = 10000
       if (now - lastSent > debounceWaitMs) { // e.g. send once every 10s
-        gtag('model_interact', {
+        gtagEvent('model_interact', {
           interaction_type: 'rotate_or_zoom',
         })
         lastSent = now
@@ -226,7 +252,6 @@ export default function CadView({
     // Would like to use zero but doesn't work
     // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
     cameraControls.addEventListener('rest', () => {
-      setIsCameraAtRest(true)
       trackModelInteraction()
     })
   }
@@ -235,11 +260,13 @@ export default function CadView({
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
-   * @param {string} filepath
+   * @param {object} routeResult
    * @param {string} gitpath to use for constructing API endpoints
    * @return {object} loaded model
    */
-  async function loadModel(filepath, gitpath) {
+  async function loadModel(routeResult) {
+    const filepath = routeResult.downloadUrl || routeResult.filepath
+    const gitpath = routeResult.gitpath
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
@@ -268,6 +295,11 @@ export default function CadView({
       loadedModel = await load(filepath, viewer, onProgress,
         (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
     } catch (error) {
+      if (isOutOfMemoryError(error)) {
+        error.isOutOfMemory = true
+        throw error
+      }
+
       setAlert(error)
       return
     } finally {
@@ -302,10 +334,15 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    gtag('select_content', {
-      content_type: 'ifc',
+    const selectContentObj = {
+      content_type: loadedModel.type || 'undefined',
       content_id: filepath,
-    })
+    }
+    // TODO(pablo): currently only IFC/STEP are populated with stats.
+    if (loadedModel.loadStats) {
+      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
+    }
+    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }
@@ -324,14 +361,24 @@ export default function CadView({
       console.warn('CadView#onModel, model without manager:', m)
       return
     }
-    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    window.ondblclick = canvasDoubleClickHandler
+    setKeydownListeners(viewer, selectItemsInScene)
+    // Everything below here needs the rootElt, which may not be available
+    // if we can't read the full model structure.
+    let rootElt
+    try {
+      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    } catch (e) {
+      setAlert('Could not read full model structure.  Only model geometry will be available.')
+      captureException(e, 'Could not read full model structure')
+      console.error(e)
+      return
+    }
     debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
-    window.ondblclick = canvasDoubleClickHandler
-    setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
     const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
@@ -342,7 +389,11 @@ export default function CadView({
   }
 
 
-  /** Handle double click event on canvas. */
+  /**
+   * Handle double click event on canvas.
+   *
+   * @param {Event} event - The double click event
+   */
   function canvasDoubleClickHandler(event) {
     try {
       if (!event.target || event.target.tagName !== 'CANVAS') {
@@ -362,8 +413,9 @@ export default function CadView({
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
         const geom = mesh.geometry
-        if (!geom.index) {
-          throw new Error('Geometry does not have index information.')
+        if (!areDefinedAndNotNull(geom, geom.index)) {
+          // throw new Error('Geometry does not have index information.')
+          return
         }
         const geoIndex = geom.index.array
         const IdAttrName = 'expressID'
@@ -409,12 +461,12 @@ export default function CadView({
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       const types = elementTypesMap
-            .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
-            .map((t) => t.name)
+        .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
+        .map((t) => t.name)
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      gtag('search', {
+      gtagEvent('search', {
         search_term: query,
       })
     } else {
@@ -451,9 +503,13 @@ export default function CadView({
       viewer.clipper.deleteAllPlanes()
     }
     resetState()
-    const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    let repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     disablePageReloadApprovalCheck()
-    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
+    // TODO(pablo): repoFilePath is getting prefixed with a slash, need to remove it
+    if (repoFilePath.startsWith('/')) {
+      repoFilePath = repoFilePath.substring(1)
+    }
+    navWith(navigate, `${pathPrefix}/${repoFilePath}`, {search: '', hash: ''})
   }
 
 
@@ -461,6 +517,7 @@ export default function CadView({
    * Pick the given items in the scene.
    *
    * @param {Array} resultIDs Array of expressIDs
+   * @param {boolean} updateNavigation Whether to update navigation
    */
   function selectItemsInScene(resultIDs, updateNavigation = true) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
@@ -482,10 +539,6 @@ export default function CadView({
         if (enabledFeatures) {
           path += `?feature=${enabledFeatures}`
         }
-        // TODO(pablo): without a log before nav, some page crashes simply blank
-        // the screen and leave no trace
-        // eslint-disable-next-line no-console
-        console.log('navigate:', pathIds, elementPath, path)
         navWith(
           navigate,
           path,
@@ -526,10 +579,14 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
-   *
-   * @param {string} modelUrlStr the final modelUrl that was passed to the viewer
    */
-  function updateLoadedFileInfo(modelUrlStr) {
+  function updateLoadedFileInfo() {
+    setLoadedFileInfo({
+      source: 'share', info: {
+        url: 'Foo',
+      },
+    })
+    /*
     const githubRegex = /(raw.githubusercontent|github.com)/gi
     if (modelUrlStr.indexOf('/') === 0) {
       setLoadedFileInfo({
@@ -540,6 +597,7 @@ export default function CadView({
     } else if (githubRegex.test(modelUrlStr)) {
       setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
     }
+    */
   }
 
 
@@ -556,7 +614,7 @@ export default function CadView({
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
-          (isAuthenticated && accessToken !== '') ||
+          (isAuthenticated && ( accessToken !== '' || !hasGitHubIdentity )) ||
           (!isAuthLoading && !isAuthenticated) && isOpfsAvailable !== null) {
         (async () => {
           await onViewer()
@@ -634,7 +692,7 @@ export default function CadView({
         const types = elementTypesMap.filter(
           (t) => t.elements.filter(
             (e) => ids.includes(e.expressID)).length > 0)
-              .map((t) => t.name)
+          .map((t) => t.name)
         if (types.length > 0) {
           setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
@@ -683,11 +741,7 @@ export default function CadView({
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
-      {<ViewerContainer
-         data-testid='cadview-dropzone'
-         data-model-ready={isModelReady}
-         data-is-camera-at-rest={isCameraAtRest}
-       />}
+      {<ViewerContainer/>}
       {viewer && (
         <RootLandscape
           pathPrefix={pathPrefix}

@@ -1,22 +1,23 @@
-import React, { useState } from 'react'
-import ButtonGroup from '@mui/material/ButtonGroup'
-import Stack from '@mui/material/Stack'
+import React, {ReactElement, useState} from 'react'
+import {ButtonGroup, Stack} from '@mui/material'
 import useStore from '../store/useStore'
-import { TooltipIconButton } from './Buttons'
+import {TooltipIconButton} from './Buttons'
 import CutPlaneMenu from './CutPlane/CutPlaneMenu'
-import CloseIcon from '@mui/icons-material/Close'
-import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong'
+import {
+  Close as CloseIcon,
+  FilterCenterFocus as FilterCenterFocusIcon,
+  HideSourceOutlined as HideSourceOutlinedIcon,
+  VisibilityOutlined as VisibilityOutlinedIcon,
+} from '@mui/icons-material'
+
 
 /**
- * ElementGroup contains tools for controlling element visibility
+ * ElementsControl contains tools for controlling element visibility
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {JSX.Element}
+ * @return {ReactElement} The rendered ElementsControl component.
  */
-export default function ElementGroup({ deselectItems }) {
+export default function ElementsControl({deselectItems}) {
   const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
   const [isIsolate, setIsIsolate] = useState(false)
@@ -39,13 +40,13 @@ export default function ElementGroup({ deselectItems }) {
           onClick={() => {
             viewer.context.fitToFrame()
           }}
-          icon={<CenterFocusStrongIcon className='icon-share' />}
+          icon={<FilterCenterFocusIcon className='icon-share'/>}
           placement='top'
           variant='solid'
         />
         {/* ---------------------------------------------------------------- */}
 
-        {!isIsolate && <CutPlaneMenu />}
+        {!isIsolate && <CutPlaneMenu/>}
 
         {isSelected() && (
           <TooltipIconButton
@@ -54,7 +55,7 @@ export default function ElementGroup({ deselectItems }) {
               viewer.isolator.toggleIsolationMode()
               setIsIsolate(!isIsolate)
             }}
-            icon={<FilterCenterFocusIcon className='icon-share' />}
+            icon={<FilterCenterFocusIcon className='icon-share'/>}
             placement='top'
             variant='solid'
             selected={isIsolate}
@@ -68,7 +69,7 @@ export default function ElementGroup({ deselectItems }) {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
             }}
-            icon={<VisibilityOutlinedIcon className='icon-share' />}
+            icon={<VisibilityOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
           />
@@ -81,21 +82,20 @@ export default function ElementGroup({ deselectItems }) {
               viewer.isolator.hideSelectedElements()
               setIsHidden(true)
             }}
-            icon={<HideSourceOutlinedIcon className='icon-share' />}
+            icon={<HideSourceOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
           />
         )}
 
-        {isSelected() && !isIsolate && (
-          <TooltipIconButton
-            title='Clear'
-            onClick={deselectItems}
-            icon={<CloseIcon className='icon-share' />}
-            placement='top'
-            variant='solid'
-          />
-        )}
+        {isSelected() && !isIsolate &&
+         <TooltipIconButton
+           title='Clear'
+           onClick={deselectItems}
+           icon={<CloseIcon className='icon-share'/>}
+           placement='top'
+           variant='solid'
+         />}
       </ButtonGroup>
     </Stack>
   )

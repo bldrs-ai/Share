@@ -1,0 +1,6 @@
+/* These are here by suggestions of CG to normalize font rendering between
+   prod and GitHub Actions. */
+body {
+  font-family: "Roboto", sans-serif !important;
+  font-synthesis: none;
+}

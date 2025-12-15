@@ -1,13 +1,14 @@
 import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import Autocomplete from '@mui/material/Autocomplete'
-import TextField from '@mui/material/TextField'
+import {Autocomplete, TextField} from '@mui/material'
+import {Close as CloseIcon} from '@mui/icons-material'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {processExternalUrl} from '../../routes/routes'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
-import {navWithSearchParamRemoved} from '../../utils/navigate'
+import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
-import CloseIcon from '@mui/icons-material/Close'
+import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
 
 
 /**
@@ -20,7 +21,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * @return {ReactElement}
  */
 export default function SearchBar({
-  placeholder = 'Model query or GitHub model link',
+  placeholder = SEARCH_BAR_PLACEHOLDER_TEXT,
   isGitHubSearch = false,
   onSuccess = null,
 }) {
@@ -68,7 +69,7 @@ export default function SearchBar({
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
         disablePageReloadApprovalCheck()
-        navigate(modelPath, {replace: true})
+        navigateToModel(modelPath, navigate)
         if (onSuccess) {
           onSuccess()
         }
@@ -77,6 +78,21 @@ export default function SearchBar({
       }
       return
     }
+
+    const result = processExternalUrl(window.location.href, inputText)
+    if (result) {
+      try {
+        disablePageReloadApprovalCheck()
+        navigate(`/share/v/u/${inputText}`)
+        if (onSuccess) {
+          onSuccess()
+        }
+      } catch (e) {
+        setError(`Please enter a valid url.`)
+      }
+      return
+    }
+
 
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {

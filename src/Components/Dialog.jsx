@@ -1,12 +1,10 @@
 import React, {ReactElement} from 'react'
-import Button from '@mui/material/Button'
-import MuiDialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogTitle from '@mui/material/DialogTitle'
-import {assertDefined} from '../utils/assert'
+import {Button, Dialog as MuiDialog, DialogActions, DialogContent, DialogTitle, Typography} from '@mui/material'
 import useStore from '../store/useStore'
+import {assertDefined, assertString} from '../utils/assert'
+import {slugify} from '../utils/strings'
 import {CloseButton} from './Buttons'
+import {useIsMobile} from './Hooks'
 
 
 /**
@@ -32,6 +30,10 @@ export default function Dialog({
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
+  assertString(headerText)
+  if (props['data-testid']) {
+    throw new Error(`data-testid is not allowed on Dialog component`)
+  }
   const setAlert = useStore((state) => state.setAlert)
   // Used eg for SaveModelControl's exceptions, on saveFile, to handle error from
   // GitHub.
@@ -44,11 +46,18 @@ export default function Dialog({
     }
   }
   const onCloseClick = () => setIsDialogDisplayed(false)
+  const dataTestIdSuffix = slugify(headerText)
+  const isMobile = useIsMobile()
   return (
     <MuiDialog
       open={isDialogDisplayed}
       onClose={onCloseClick}
-      data-testid={props['data-testid'] || 'mui-dialog'}
+      fullWidth
+      maxWidth='xs'
+      // There's a warning without this due to a bug in MUI Dialog. When the dialog
+      // is closed, the transition animation is not played.
+      closeAfterTransition={false}
+      // don't use data-testid, use getByRole('dialog') instead
     >
       <DialogTitle
         variant='h1'
@@ -61,19 +70,19 @@ export default function Dialog({
         }}
       >
         {headerIcon && headerIcon}
-        {headerText}
       </DialogTitle>
-      <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
-      <DialogContent>{children}</DialogContent>
+      <Typography variant='h2' className='dialog-header-text' sx={{margin: isMobile ? '0 0 1em 0' : '1em 0'}}>{headerText}</Typography>
+      <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
+      <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :
-       <DialogActions>
-         {typeof actionTitle === 'string' ?
-          <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
-            {actionTitle}
-          </Button> :
-          <>{actionTitle}</>
-         }
-       </DialogActions>
+        <DialogActions>
+          {typeof actionTitle === 'string' ?
+            <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
+              {actionTitle}
+            </Button> :
+            <>{actionTitle}</>
+          }
+        </DialogActions>
       }
     </MuiDialog>
   )

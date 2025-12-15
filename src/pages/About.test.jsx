@@ -6,8 +6,9 @@ import About from './About'
 
 describe('About', () => {
   it('renders', () => {
-    const {getByText} = render(<About/>, {wrapper: HelmetThemeCtx})
+    const {container, getByText} = render(<About/>, {wrapper: HelmetThemeCtx})
     const title = getByText('About Bldrs')
     expect(title).toBeInTheDocument()
+    expect(container).toMatchSnapshot()
   })
 })

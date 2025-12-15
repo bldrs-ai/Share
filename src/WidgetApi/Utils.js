@@ -16,7 +16,7 @@ export default class Utils {
   /**
    * get global ids of elements.
    *
-   * @param {string[]} array of express ids
+   * @param {string[]} elementsExpressIds array of express ids
    * @return {string[]} array of global ids
    */
   getElementsGlobalIds(elementsExpressIds) {

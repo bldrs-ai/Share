@@ -1,24 +1,21 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
+import {IconButton, Stack, TextField, Typography} from '@mui/material'
+import {Clear as ClearIcon, SaveOutlined as SaveOutlinedIcon} from '@mui/icons-material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import IconButton from '@mui/material/IconButton'
-import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
+import {navigateBaseOnModelPath} from '../../utils/location'
+import {navigateToModel} from '../../utils/navigate'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
-import ClearIcon from '@mui/icons-material/Clear'
-import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
-import {navigateBaseOnModelPath} from '../../utils/location'
 
 
 /**
@@ -124,18 +121,18 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
       const branchName = requestCreateBranch ? createBranchName : branchesArr[selectedBranchName] || 'main'
       fileSave(
-          file,
-          pathWithFileName,
-          selectedFileName,
-          orgName,
-          repoName,
-          branchName,
-          accessToken,
-          isOpfsAvailable,
-          setSnackMessage,
-          (pathname) => {
-            navigate({pathname: pathname})
-          },
+        file,
+        pathWithFileName,
+        selectedFileName,
+        orgName,
+        repoName,
+        branchName,
+        accessToken,
+        isOpfsAvailable,
+        setSnackMessage,
+        (pathname) => {
+          navigateToModel({pathname}, navigate)
+        },
       )
       // Store the branch name for subsequent saves
       if (requestCreateBranch) {
@@ -417,13 +414,13 @@ async function fileSave(
       setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
 
       const commitHash = await commitFile(
-          orgName,
-          repoName,
-          pathWithFileName,
-          file,
-          `Created file ${selectedFileName}`,
-          branchName,
-          accessToken)
+        orgName,
+        repoName,
+        pathWithFileName,
+        file,
+        `Created file ${selectedFileName}`,
+        branchName,
+        accessToken)
 
       if (commitHash !== null) {
         // save to opfs

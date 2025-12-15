@@ -1,8 +1,7 @@
 import React, {ReactElement, useMemo} from 'react'
 import Markdown from 'react-markdown'
+import {CardContent, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
-import CardContent from '@mui/material/CardContent'
-import Typography from '@mui/material/Typography'
 import {modifyPlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {getHashParamsFromHashStr, getObjectParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
@@ -68,13 +67,13 @@ export default function NoteContent({markdownContent, issueID, commentID}) {
           event.preventDefault() // Prevent the default navigation
         }
       } else if (noteHash) {
-          const params = Object.values(getObjectParams(`#${noteHash}`))
+        const params = Object.values(getObjectParams(`#${noteHash}`))
 
-          if (params) {
-            const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
-            setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
-            setSelectedPlaceMarkId(Number(params[0]))
-            event.preventDefault() // Prevent the default navigation
+        if (params) {
+          const cameraHash_ = getHashParamsFromHashStr(url.hash, HASH_PREFIX_CAMERA)
+          setSelectedPlaceMarkInNoteIdData(params[0], cameraHash_, !forceMarkerNoteSync)
+          setSelectedPlaceMarkId(Number(params[0]))
+          event.preventDefault() // Prevent the default navigation
         }
       }
     }
