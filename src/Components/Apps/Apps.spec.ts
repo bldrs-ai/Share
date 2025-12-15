@@ -3,7 +3,24 @@ import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
+import {TITLE_NOTES} from '../Notes/component'
 import {TITLE_APPS} from './component'
+
+
+/**
+ * Assert `value` is not null.
+ *
+ * @template T
+ * @param value
+ * @param msg
+ * @return value
+ */
+function assertNotNull<T>(value: T | null, msg: string): T {
+  if (!value) {
+    throw new Error(msg)
+  }
+  return value
+}
 
 
 const {beforeEach, describe} = test
@@ -46,6 +63,59 @@ describe('AppsSideDrawer', () => {
         const MIN_FULLSCREEN_WIDTH = 1000
         expect(parseInt(width)).toBeGreaterThan(MIN_FULLSCREEN_WIDTH)
       })
+    })
+
+    test('resizing Notes drawer does not push Apps off-screen', async ({page}) => {
+      // Open both Notes and Apps.
+      await page.getByTestId('control-button-notes').click()
+      await page.getByTestId('control-button-apps').click()
+
+      // Sanity: both titles visible.
+      await expect(page.getByTestId(`PanelTitle-${TITLE_NOTES}`)).toBeVisible()
+      await expect(page.getByTestId(`PanelTitle-${TITLE_APPS}`)).toBeVisible()
+
+      const notesDrawer = page.getByTestId('NotesAndPropertiesDrawer')
+      const appsDrawer = page.getByTestId('AppsDrawer')
+
+      const handle = notesDrawer.getByTestId('resize-handle-x')
+      const handleBox = assertNotNull(
+        await handle.boundingBox(),
+        'Expected Notes resize handle to have a bounding box',
+      )
+      const viewerContainer = page.locator('#viewer-container')
+      const viewerBoxBefore = assertNotNull(
+        await viewerContainer.boundingBox(),
+        'Expected viewer container to have a bounding box',
+      )
+
+      // Drag left to widen Notes (this used to push Apps out of view).
+      await page.mouse.move(
+        handleBox.x + (handleBox.width / 2),
+        handleBox.y + (handleBox.height / 2),
+      )
+      await page.mouse.down()
+      const dragDistance = 250
+      await page.mouse.move(handleBox.x - dragDistance, handleBox.y + (handleBox.height / 2))
+      await page.mouse.up()
+
+      // Apps should remain visible and inside the viewport.
+      await expect(page.getByTestId(`PanelTitle-${TITLE_APPS}`)).toBeVisible()
+
+      const appsBox = assertNotNull(
+        await appsDrawer.boundingBox(),
+        'Expected Apps drawer to have a bounding box',
+      )
+      const vw = await page.evaluate(() => window.innerWidth)
+      expect(appsBox.x).toBeGreaterThanOrEqual(0)
+      expect(appsBox.x + (appsBox.width)).toBeLessThanOrEqual(vw + 1)
+
+      // Viewer should not resize when drawers open/resize (drawers overlay the canvas).
+      const viewerBoxAfter = assertNotNull(
+        await viewerContainer.boundingBox(),
+        'Expected viewer container to have a bounding box after resize',
+      )
+      expect(Math.abs(viewerBoxAfter.width - viewerBoxBefore.width)).toBeLessThanOrEqual(1)
+      expect(Math.abs(viewerBoxAfter.width - vw)).toBeLessThanOrEqual(2)
     })
   })
 })

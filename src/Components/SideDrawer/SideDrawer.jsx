@@ -44,7 +44,9 @@ export default function SideDrawer({
       sx={Object.assign({
         display: isDrawerVisible ? 'flex' : 'none',
         flexDirection: 'row',
-        flexGrow: 1,
+        // Desktop drawers must be fixed-width flex items.
+        // If they grow/shrink, resizing one drawer can push siblings off-screen.
+        ...(isMobile ? {} : {flex: '0 0 auto', flexShrink: 0}),
       }, isMobile ? {
         width: '100%',
         height: drawerHeight,

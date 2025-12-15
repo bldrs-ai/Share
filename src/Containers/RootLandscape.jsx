@@ -28,16 +28,17 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   return (
     <Stack
       direction='row'
-      justifyContent='space-between'
-      alignItems='center'
-      sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh'}}
+      justifyContent='flex-start'
+      alignItems='stretch'
+      sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh', overflow: 'hidden'}}
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
        <Box
          sx={{
-           flexBasis: '0%',
-           flexGrow: 1,
+           // Left drawer should take only its own width.
+           flex: '0 0 auto',
+           flexShrink: 0,
          }}
        >
          <NavTreeAndVersionsDrawer
@@ -49,7 +50,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       }
       <Stack
         justifyContent='space-between'
-        sx={{width: '100%', height: '100%'}}
+        sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
         <Box sx={{opacity: 0.5}}>
@@ -71,7 +72,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           justifyContent='space-between'
           // This pushes bottom bar down
           flexGrow={1}
-          sx={{width: '100%'}}
+          sx={{width: '100%', minWidth: 0}}
           data-testid='RootLandscape-CenterPaneTopStack'
         >
           <ControlsGroup/>
