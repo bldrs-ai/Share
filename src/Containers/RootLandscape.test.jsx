@@ -4,9 +4,15 @@ import ShareMock from '../ShareMock'
 import RootLandscape from './RootLandscape'
 
 
-jest.mock('./ControlsGroup', () => () => <div data-testid='MockControlsGroup'/>)
-jest.mock('./OperationsGroup', () => () => <div data-testid='MockOperationsGroup'/>)
+jest.mock('./ControlsGroup', () => ({
+  __esModule: true,
+  default: () => <div data-testid='MockControlsGroup'/>,
+}))
 
+jest.mock('./OperationsGroup', () => ({
+  __esModule: true,
+  default: () => <div data-testid='MockOperationsGroup'/>,
+}))
 
 describe('RootLandscape', () => {
   it('center pane is flex and root does not overflow', () => {
