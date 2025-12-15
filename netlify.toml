@@ -30,6 +30,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  GEMINI_API_KEY = "${GEMINI_API_KEY}"
+  ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
   # GITHUB_BOLT_TOKEN must be set in Netlify environment variables
   # Create a GitHub Personal Access Token with 'repo' scope at:
   # https://github.com/settings/tokens
