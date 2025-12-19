@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1912",
+  "version": "1.0.1913",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -25,6 +25,8 @@
     "build-share-copy-wasm-conway-MT": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-copy-wasm-conway-profile": "shx cp node_modules/@bldrs-ai/conway-web-ifc-adapter/node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/* docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
+    "sync-bolt": "node tools/esbuild/sync-to-share.cjs ${BOLT_PATH:-../bldrsbolt.new}",
+    "serve-with-bolt": "yarn build && yarn sync-bolt && netlify dev",
     "clean": "shx rm -rf docs",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",

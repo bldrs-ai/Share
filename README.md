@@ -38,6 +38,7 @@ Start using Bldrs Share today to transform your CAD workflows. Join our communit
 ### Getting Started
 - Visit our [wiki](https://github.com/bldrs-ai/Share/wiki) for Share's Design, Developer Guide and instructions for hosting your models.
   - See our [Conway engine](https://github.com/bldrs-ai/conway) repository
+  - See [Bolt.md](Bolt.md) for bolt.new integration and AI-powered code generation
 - Join us on [Bldrs Discord](https://discord.gg/9SxguBkFfQ)
 - Follow us on [X @bldrs_ai](https://x.com/bldrs_ai)
 - Connect with us on [LinkedIn](https://www.linkedin.com/company/bldrs-ai/)

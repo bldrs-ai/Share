@@ -1,5 +1,5 @@
 # 1. Let Bolt static assets be served directly
-/build/assets/*   /build/assets/:splat   200
+/build/assets/*   /build/assets/:splat   200!
 
 # 2. Send /build and /build/* to the Remix server function
 /build            /.netlify/functions/server   200!
