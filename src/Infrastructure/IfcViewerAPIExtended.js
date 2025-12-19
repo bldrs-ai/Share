@@ -67,6 +67,35 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   }
 
   /**
+   * Gets all elements of a given type in the current model
+   *
+   * @param {*} type
+   * @return {Promise<Array>} results
+   */
+  async getElementPropsByType(type) {
+    const manager = this.IFC.loader.ifcManager
+    // TODO: Update this to use the modelID
+    const modelID = 0
+    const results = []
+    const hitsVector = await manager.idsByType(modelID, type)
+
+    // Convert Vector<number> to a plain array
+    const hits = []
+    for (let i = 0; i < hitsVector.size(); i++) {
+      hits.push(hitsVector.get(i))
+    }
+    for (const expressID of hits) {
+      const properties = await this.IFC.getProperties(modelID, expressID, false, false)
+
+      properties.type = manager.getIfcType(modelID, expressID)
+
+      results.push({modelID, expressID, properties})
+    }
+    return results
+  }
+
+
+  /**
    *
    * @param {number} floorNumber
    * @return {Array} structure

@@ -29,3 +29,5 @@ public/test-models
 
 # Local Netlify folder
 .netlify
+.env
+deno.lock

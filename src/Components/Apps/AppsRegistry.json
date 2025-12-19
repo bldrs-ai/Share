@@ -5,5 +5,12 @@
     "image": "/icons/LogoBWithDomain.svg",
     "action": "/widgets/event-logger.html",
     "icon": "/icons/LogoB.svg"
+  },
+  {
+    "appName": "Create App",
+    "description": "AI Create",
+    "image": "/icons/CreateApp.svg",
+    "action": "/build/",
+    "icon": "/icons/CreateApp.svg"
   }
 ]
