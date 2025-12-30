@@ -2,7 +2,7 @@ import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import {Autocomplete, TextField} from '@mui/material'
 import {Close as CloseIcon} from '@mui/icons-material'
-import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {githubUrlToSharePath} from '../../routes/github'
 import {processExternalUrl} from '../../routes/routes'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
@@ -64,33 +64,45 @@ export default function SearchBar({
       setError('')
     }
 
-    // if url is typed into the search bar open the model
-    if (looksLikeLink(inputText)) {
+    // Check if input starts with http
+    if (inputText.startsWith('http')) {
       try {
-        const modelPath = githubUrlOrPathToSharePath(inputText)
-        disablePageReloadApprovalCheck()
-        navigateToModel(modelPath, navigate)
-        if (onSuccess) {
-          onSuccess()
-        }
-      } catch (e) {
-        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
-      }
-      return
-    }
+        // Construct originalUrl from the inputText itself
+        const originalUrl = new URL(inputText)
+        const result = processExternalUrl(originalUrl, inputText)
 
-    const result = processExternalUrl(window.location.href, inputText)
-    if (result) {
-      try {
+        if (result === null) {
+          setError('Invalid URL. Needs eg google or github file URL')
+          return
+        }
+
         disablePageReloadApprovalCheck()
-        navigate(`/share/v/u/${inputText}`)
+
+        if (result.kind === 'provider' && result.provider === 'github') {
+          // Navigate to GitHub route
+          const sharePath = githubUrlToSharePath(inputText)
+          if (sharePath) {
+            navigateToModel(sharePath, navigate)
+          } else {
+            setError('Invalid GitHub URL format')
+            return
+          }
+        } else if (result.kind === 'provider' && result.provider === 'google') {
+          // Navigate to Google Drive route
+          navigate(`/share/v/g/${inputText}`)
+        } else {
+          // Navigate to generic URL route
+          navigate(`/share/v/u/${inputText}`)
+        }
+
         if (onSuccess) {
           onSuccess()
         }
+        return
       } catch (e) {
-        setError(`Please enter a valid url.`)
+        setError('Invalid URL. Needs eg google or github file URL')
+        return
       }
-      return
     }
 
 
