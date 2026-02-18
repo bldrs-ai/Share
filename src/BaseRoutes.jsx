@@ -9,7 +9,9 @@ import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
-import About from './pages/About'
+import MarketingAbout from './pages/marketing/MarketingAbout'
+import MarketingPricing from './pages/marketing/MarketingPricing'
+import MarketingServices from './pages/marketing/MarketingServices'
 import Ipsum from './pages/Ipsum'
 import Privacy from './pages/Privacy'
 import TOS from './pages/TOS'
@@ -185,7 +187,9 @@ export default function BaseRoutes({testElt = null}) {
                   )
                 }
               />
-              <Route path='about' element={<About/>}/>
+              <Route path='about' element={<MarketingAbout/>}/>
+              <Route path='pricing' element={<MarketingPricing/>}/>
+              <Route path='services' element={<MarketingServices/>}/>
               <Route path='privacy' element={<Privacy/>}/>
               <Route path='tos' element={<TOS/>}/>
               <Route path='ipsum' element={<Ipsum/>}/>
