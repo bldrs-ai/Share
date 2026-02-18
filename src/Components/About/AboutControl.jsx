@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -18,7 +17,6 @@ import PkgJson from '../../../package.json'
  * @return {ReactElement}
  */
 export default function AboutControl() {
-  const navigate = useNavigate()
   const isAboutVisible = useStore((state) => state.isAboutVisible)
   const setIsAboutVisible = useStore((state) => state.setIsAboutVisible)
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
@@ -66,11 +64,12 @@ export default function AboutControl() {
   }
 
   // Logo click: first-time visitors see splash dialog, returning users go to marketing page
+  // Opens in a new tab to preserve the user's model state and viewer context
   const handleLogoClick = () => {
     if (isFirst()) {
       setIsAboutVisible(true)
     } else {
-      navigate('/about')
+      window.open('/about', '_blank')
     }
   }
 
