@@ -3,6 +3,7 @@ import {Button, Stack, Typography, TextField} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {getUserTier, canLoadModel, recordModelLoad} from '../../privacy/usageTracking'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
@@ -33,14 +34,35 @@ export default function OpenModelDialog({
   const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
+  const appMetadata = useStore((state) => state.appMetadata)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
   const currentTab = useStore((state) => state.currentTab)
+  const setIsUsageLimitDialogVisible = useStore((state) => state.setIsUsageLimitDialogVisible)
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
+  const userTier = getUserTier(isAuthenticated, appMetadata)
 
+  /**
+   * Show usage limit dialog and close this dialog.
+   *
+   * @param {object} check Rate limit check result
+   */
+  const showLimitDialog = (check) => {
+    setIsDialogDisplayed(false)
+    setIsUsageLimitDialogVisible(true, {reason: check.reason, stats: check.stats})
+  }
 
   const openFile = () => {
+    // Rate-limit check for local file open
+    if (userTier !== 'pro') {
+      const check = canLoadModel(userTier)
+      if (!check.allowed) {
+        showLimitDialog(check)
+        return
+      }
+    }
     const onLoad = (filename) => {
+      recordModelLoad()
       // Use full reload when opening a new local file
       disablePageReloadApprovalCheck()
       navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
@@ -106,6 +128,14 @@ export default function OpenModelDialog({
               onChange={(event) => {
                 const ghPath = event.target.value
                 if (looksLikeLink(ghPath)) {
+                  if (userTier !== 'pro') {
+                    const check = canLoadModel(userTier)
+                    if (!check.allowed) {
+                      showLimitDialog(check)
+                      return
+                    }
+                    recordModelLoad()
+                  }
                   setIsDialogDisplayed(false)
                   navigateToModel(githubUrlOrPathToSharePath(ghPath), navigate)
                 }
@@ -117,6 +147,8 @@ export default function OpenModelDialog({
                orgNamesArr={orgNamesArr}
                user={user}
                setIsDialogDisplayed={setIsDialogDisplayed}
+               userTier={userTier}
+               onLimitReached={(check) => showLimitDialog(check)}
              />}
             {!isAuthenticated && <PleaseLogin/>}
           </Stack>
