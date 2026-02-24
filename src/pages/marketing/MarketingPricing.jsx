@@ -1,5 +1,4 @@
 import React, {ReactElement, useState} from 'react'
-import {Link as RouterLink} from 'react-router-dom'
 import {Helmet} from 'react-helmet-async'
 import {
   Accordion,
@@ -237,7 +236,6 @@ export default function MarketingPricing() {
       <Container maxWidth="lg" sx={{pb: 6}}>
         <Grid container spacing={3} alignItems="stretch">
           {PLANS.map((plan, i) => {
-            const isMailto = plan.ctaLink.startsWith('mailto:')
             return (
               <Grid item xs={12} md={4} key={i}>
                 <Card sx={{
@@ -247,6 +245,7 @@ export default function MarketingPricing() {
                   bgcolor: plan.highlight ? 'rgba(0,255,0,0.05)' : 'rgba(255,255,255,0.03)',
                   border: plan.highlight ? '2px solid lime' : '1px solid rgba(255,255,255,0.08)',
                   position: 'relative',
+                  overflow: 'visible',
                   transition: 'border-color 0.2s',
                   '&:hover': {borderColor: plan.highlight ? 'lime' : 'rgba(0,240,255,0.3)'},
                 }}>
@@ -311,9 +310,7 @@ export default function MarketingPricing() {
 
                     <Box sx={{mt: 'auto', pt: 2}}>
                       <Button
-                        component={isMailto ? 'a' : RouterLink}
-                        href={isMailto ? plan.ctaLink : undefined}
-                        to={isMailto ? undefined : plan.ctaLink}
+                        href={plan.ctaLink}
                         variant={plan.ctaVariant}
                         fullWidth
                         startIcon={plan.highlight ? <RocketIcon/> : undefined}
@@ -455,8 +452,7 @@ export default function MarketingPricing() {
           </Typography>
           <Stack direction={{xs: 'column', sm: 'row'}} spacing={2} justifyContent="center">
             <Button
-              component={RouterLink}
-              to="/share"
+              href="/share"
               variant="contained"
               size="large"
               startIcon={<RocketIcon/>}

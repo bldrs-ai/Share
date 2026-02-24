@@ -1,5 +1,4 @@
 import React, {ReactElement} from 'react'
-import {Link as RouterLink} from 'react-router-dom'
 import {Helmet} from 'react-helmet-async'
 import {
   Box,
@@ -484,8 +483,7 @@ export default function MarketingServices() {
               Schedule Consultation
             </Button>
             <Button
-              component={RouterLink}
-              to="/share"
+              href="/share"
               variant="outlined"
               size="large"
               startIcon={<RocketIcon/>}

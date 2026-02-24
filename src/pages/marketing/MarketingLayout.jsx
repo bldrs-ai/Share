@@ -1,14 +1,13 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import {Link as RouterLink, useLocation} from 'react-router-dom'
 import {
-  AppBar,
   Box,
   Button,
   Container,
   Link,
   Stack,
-  Toolbar,
   Typography,
+  useTheme,
 } from '@mui/material'
 import {Rocket as RocketIcon} from '@mui/icons-material'
 import {LogoB} from '../../Components/Logo/Logo'
@@ -29,6 +28,20 @@ const NAV_ITEMS = [
  */
 export default function MarketingLayout({children}) {
   const location = useLocation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  // Marketing pages need scrolling, override the global overflow:hidden on body
+  useEffect(() => {
+    document.body.style.overflow = 'auto'
+    document.body.style.position = 'static'
+    document.body.style.height = 'auto'
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.position = ''
+      document.body.style.height = ''
+    }
+  }, [])
 
   return (
     <Box sx={{
@@ -39,16 +52,23 @@ export default function MarketingLayout({children}) {
       color: 'text.primary',
     }}>
       {/* Navigation Bar */}
-      <AppBar
-        position="sticky"
-        elevation={0}
+      <Box
+        component="nav"
         sx={{
-          bgcolor: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: 'blur(10px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1100,
+          bgcolor: isDark ? '#000000' : '#ffffff',
+          color: isDark ? '#ffffff' : '#000000',
+          borderBottom: 1,
+          borderColor: 'divider',
+          px: 2,
+          py: 1,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
-        <Toolbar sx={{justifyContent: 'space-between'}}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <LogoB sx={{width: 36, height: 36}}/>
             <Typography
@@ -84,8 +104,7 @@ export default function MarketingLayout({children}) {
               </Button>
             ))}
             <Button
-              component={RouterLink}
-              to="/share"
+              href="/share"
               variant="contained"
               startIcon={<RocketIcon/>}
               sx={{
@@ -100,8 +119,7 @@ export default function MarketingLayout({children}) {
               Launch App
             </Button>
           </Stack>
-        </Toolbar>
-      </AppBar>
+      </Box>
 
       {/* Page Content */}
       <Box sx={{flex: 1}}>
@@ -112,7 +130,8 @@ export default function MarketingLayout({children}) {
       <Box
         component="footer"
         sx={{
-          borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          borderTop: 1,
+          borderColor: 'divider',
           py: 4,
           px: 2,
         }}
