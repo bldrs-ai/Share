@@ -1,17 +1,18 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
-import {ControlButtonWithHashState} from '../Buttons'
+import {TooltipIconButton} from '../Buttons'
 import {LogoB} from '../Logo/Logo'
 import AboutDialog from './AboutDialog'
 import OnboardingOverlay from '../Onboarding/OnboardingOverlay'
-import {HASH_PREFIX_ABOUT} from './hashState'
 import PkgJson from '../../../package.json'
 
 
 /**
- * Button to toggle About panel on and off.  Default state is open until
- * firstTime cookie is set, then closed.
+ * Button to toggle About panel on and off.
+ *
+ * - First-time visitors: shows the AboutDialog splash screen
+ * - Returning visitors: navigates to the /about marketing page
  *
  * @return {ReactElement}
  */
@@ -62,23 +63,34 @@ export default function AboutControl() {
     setIsOnboardingOverlayVisible(false)
   }
 
+  // Logo click: first-time visitors see splash dialog, returning users go to marketing page
+  // Opens in a new tab to preserve the user's model state and viewer context
+  const handleLogoClick = () => {
+    if (isFirst()) {
+      setIsAboutVisible(true)
+    } else {
+      window.open('/about', '_blank')
+    }
+  }
+
   return (
     <>
-      <ControlButtonWithHashState
+      <TooltipIconButton
         title={`About Bldrs\n${PkgJson.version}`}
         icon={<LogoB/>}
+        onClick={handleLogoClick}
+        placement='right'
+        selected={isAboutVisible}
+        variant='control'
+        color='success'
+        size='small'
+        dataTestId={testId}
+      />
+      <AboutDialog
         isDialogDisplayed={isAboutVisible}
         setIsDialogDisplayed={setIsAboutVisible}
-        hashPrefix={HASH_PREFIX_ABOUT}
-        placement='right'
-        dataTestId={testId}
-      >
-        <AboutDialog
-          isDialogDisplayed={isAboutVisible}
-          setIsDialogDisplayed={setIsAboutVisible}
-          onClose={handleDialogClose}
-        />
-      </ControlButtonWithHashState>
+        onClose={handleDialogClose}
+      />
       {onboardingOverlaySource === 'about' && (
         <OnboardingOverlay
           isVisible={isOnboardingOverlayVisible}
