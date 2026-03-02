@@ -7,6 +7,7 @@ import {useAuth0} from './Auth0/Auth0Proxy'
 import PopupAuth from './Components/Auth/PopupAuth'
 import PopupCallback from './Components/Auth/PopupCallback'
 import {checkOPFSAvailability, setUpGlobalDebugFunctions} from './OPFS/utils'
+import {initUsageFromOPFS} from './privacy/usageTracking'
 import ShareRoutes from './ShareRoutes'
 import Styles from './Styles'
 import About from './pages/About'
@@ -72,6 +73,7 @@ export default function BaseRoutes({testElt = null}) {
 
       if (available) {
         setUpGlobalDebugFunctions()
+        initUsageFromOPFS()
       }
 
       setIsOpfsAvailable(available)

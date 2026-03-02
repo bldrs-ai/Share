@@ -4,7 +4,13 @@ import Expires from './Expires'
 
 const STORAGE_KEY = 'bldrs_model_usage'
 const COOKIE_NAME = 'mu'
+const OPFS_DIR = '.bldrs'
+const OPFS_FILE = 'usage.json'
 const VERSION = 1
+
+
+/** Module-level cache populated asynchronously by initUsageFromOPFS() */
+let _opfsCache = null
 
 
 /** Rate limits by user tier */
@@ -84,6 +90,33 @@ export function getUsageStats(userTier) {
 }
 
 
+/**
+ * Initialize usage data from OPFS. Call once at app startup.
+ * Populates _opfsCache so loadUsage() can read it synchronously.
+ * If OPFS has data but localStorage/cookie are empty, restores to those layers.
+ */
+export async function initUsageFromOPFS() {
+  const opfsData = await loadFromOPFS()
+  if (opfsData) {
+    _opfsCache = opfsData
+
+    // Restore to localStorage/cookie if they're empty
+    const hasLocalStorage = (() => {
+      try {
+        return !!localStorage.getItem(STORAGE_KEY)
+      } catch {
+        return false
+      }
+    })()
+    const hasCookie = !!Cookies.get(COOKIE_NAME)
+
+    if (!hasLocalStorage || !hasCookie) {
+      saveUsage(resetIfNeeded(opfsData))
+    }
+  }
+}
+
+
 // --- Internal helpers ---
 
 
@@ -148,6 +181,48 @@ function defaultUsage() {
 
 
 /**
+ * Read usage data from OPFS (.bldrs/usage.json).
+ *
+ * @return {Promise<object|null>} Parsed usage object or null
+ */
+async function loadFromOPFS() {
+  try {
+    const root = await navigator.storage.getDirectory()
+    const dir = await root.getDirectoryHandle(OPFS_DIR)
+    const fileHandle = await dir.getFileHandle(OPFS_FILE)
+    const file = await fileHandle.getFile()
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    if (parsed && parsed.version === VERSION) {
+      return parsed
+    }
+  } catch {
+    // OPFS unavailable, directory/file doesn't exist, or parse error
+  }
+  return null
+}
+
+
+/**
+ * Write usage data to OPFS (.bldrs/usage.json). Creates directory if needed.
+ *
+ * @param {object} usage
+ */
+async function saveToOPFS(usage) {
+  try {
+    const root = await navigator.storage.getDirectory()
+    const dir = await root.getDirectoryHandle(OPFS_DIR, {create: true})
+    const fileHandle = await dir.getFileHandle(OPFS_FILE, {create: true})
+    const writable = await fileHandle.createWritable()
+    await writable.write(JSON.stringify(usage))
+    await writable.close()
+  } catch {
+    // OPFS unavailable or write error — silently ignore
+  }
+}
+
+
+/**
  * Parse the compact cookie string back to a usage object.
  * Cookie format: d:3,m:15,dt:2026-02-23,mt:2026-02
  *
@@ -190,7 +265,7 @@ function toCookieStr(usage) {
 
 
 /**
- * Load usage from localStorage, falling back to cookie if needed.
+ * Load usage from OPFS cache, localStorage, or cookie (in priority order).
  * If the checksum is invalid, treat as max usage (limits reached).
  *
  * @return {object} usage
@@ -198,21 +273,28 @@ function toCookieStr(usage) {
 function loadUsage() {
   let usage = null
 
-  // Try localStorage first
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (parsed && parsed.version === VERSION) {
-        const expected = computeChecksum(parsed)
-        if (parsed.checksum === expected) {
-          usage = parsed
+  // Try OPFS cache first (populated async at startup)
+  if (_opfsCache && _opfsCache.version === VERSION) {
+    usage = _opfsCache
+  }
+
+  // Try localStorage
+  if (!usage) {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed && parsed.version === VERSION) {
+          const expected = computeChecksum(parsed)
+          if (parsed.checksum === expected) {
+            usage = parsed
+          }
+          // Checksum mismatch — fall through to cookie or treat as tampered
         }
-        // Checksum mismatch — fall through to cookie or treat as tampered
       }
+    } catch {
+      // localStorage unavailable or corrupted
     }
-  } catch {
-    // localStorage unavailable or corrupted
   }
 
   // Fallback to cookie
@@ -234,7 +316,7 @@ function loadUsage() {
 
 
 /**
- * Save usage to both localStorage and cookie.
+ * Save usage to localStorage, cookie, and OPFS.
  *
  * @param {object} usage
  */
@@ -248,8 +330,12 @@ function saveUsage(usage) {
   }
 
   Cookies.set(COOKIE_NAME, toCookieStr(usage), {expires: Expires.DAYS})
+
+  // Fire-and-forget write to OPFS
+  _opfsCache = usage
+  saveToOPFS(usage)
 }
 
 
 // Exported for testing
-export {STORAGE_KEY, COOKIE_NAME, LIMITS}
+export {STORAGE_KEY, COOKIE_NAME, OPFS_DIR, OPFS_FILE, LIMITS}
