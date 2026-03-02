@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
+import UsageLimitDialog from './Components/UsageLimitDialog'
 import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
@@ -110,6 +111,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         appPrefix={appPrefix}
         pathPrefix={pathPrefix}
       />
+      <UsageLimitDialog/>
     </>
   )
 }

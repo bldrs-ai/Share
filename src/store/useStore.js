@@ -16,6 +16,7 @@ import createShareSlice from './ShareSlice'
 import createSideDrawerSlice from './SideDrawerSlice'
 import createUIEnabledSlice from './UIEnabledSlice'
 import createUISlice from './UISlice'
+import createUsageLimitSlice from './UsageLimitSlice'
 import createVersionsSlice from './VersionsSlice'
 
 
@@ -37,6 +38,7 @@ const useStore = create((set, get) => ({
   ...createSideDrawerSlice(set, get),
   ...createUIEnabledSlice(set, get),
   ...createUISlice(set, get),
+  ...createUsageLimitSlice(set, get),
   ...createVersionsSlice(set, get),
 }))
 

@@ -3,6 +3,8 @@ import {useNavigate} from 'react-router-dom'
 import {Box, Fade, Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {FileUpload as FileUploadIcon} from '@mui/icons-material'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {getUserTier} from '../../privacy/usageTracking'
 import useStore from '../../store/useStore'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../../utils/dragAndDrop'
 
@@ -21,9 +23,13 @@ export default function OnboardingOverlay({isVisible, onClose}) {
 
   // Store state and navigation
   const appPrefix = useStore((state) => state.appPrefix)
+  const appMetadata = useStore((state) => state.appMetadata)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAlert = useStore((state) => state.setAlert)
+  const setIsUsageLimitDialogVisible = useStore((state) => state.setIsUsageLimitDialogVisible)
+  const {isAuthenticated} = useAuth0()
   const navigate = useNavigate()
+  const userTier = getUserTier(isAuthenticated, appMetadata)
 
   // Find actual button positions when overlay becomes visible
   useEffect(() => {
@@ -73,6 +79,12 @@ export default function OnboardingOverlay({isVisible, onClose}) {
       isOpfsAvailable,
       setAlert,
       () => onClose(true), // onSuccess callback - close overlay and skip help dialog
+      undefined,
+      userTier,
+      (info) => {
+        onClose(false)
+        setIsUsageLimitDialogVisible(true, info)
+      },
     )
   }
 

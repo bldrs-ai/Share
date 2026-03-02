@@ -1,5 +1,6 @@
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {canLoadModel, recordModelLoad} from '../privacy/usageTracking'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
@@ -17,9 +18,23 @@ import debug from './debug'
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
+ * @param {string} [userTier] User tier for rate limiting ('anonymous'|'free'|'pro')
+ * @param {Function} [onLimitReached] Callback when rate limit is exceeded, receives {reason, stats}
  */
-export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError) {
+export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, userTier, onLimitReached) {
   event.preventDefault()
+
+  // Rate-limit check for file drops (always user-initiated, never sample models)
+  if (userTier && userTier !== 'pro') {
+    const check = canLoadModel(userTier)
+    if (!check.allowed) {
+      if (onLimitReached) {
+        onLimitReached({reason: check.reason, stats: check.stats})
+      }
+      return
+    }
+  }
+
   const files = event.dataTransfer.files
 
   if (files.length === 0) {
@@ -56,6 +71,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
 
   /** @param {string} fileName The filename the upload was given */
   function onWritten(fileName) {
+    recordModelLoad()
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
     navigateToModel(`${appPrefix}/v/new/${fileName}`, navigate)

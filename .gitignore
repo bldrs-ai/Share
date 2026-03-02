@@ -18,6 +18,10 @@ test-results
 # symlink for test-models repo
 public/test-models
 
+# local environment
+.env
+.env.local
+
 # misc
 .DS_Store
 .vscode
