@@ -13,7 +13,8 @@ import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+import SourcesTab from '../Connections/SourcesTab'
+import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
@@ -30,7 +31,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
+  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -122,6 +123,12 @@ export default function OpenModelDialog({
           </Stack>
         }
         { currentTab === 2 &&
+          <SourcesTab
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        }
+        { currentTab === 3 &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}

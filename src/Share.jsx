@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
+import useConnectionsInit from './connections/useConnectionsInit'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
@@ -30,6 +31,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const setRepository = useStore((state) => state.setRepository)
   const widgetApiRef = useRef(null)
+
+  // Hydrate persisted Connections & Sources from localStorage
+  useConnectionsInit()
 
   useEffect(() => {
     if (isAppsEnabled && !widgetApiRef.current) {
