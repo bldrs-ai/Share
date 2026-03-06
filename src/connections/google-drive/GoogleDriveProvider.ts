@@ -44,12 +44,17 @@ export const googleDriveProvider: ConnectionProvider = {
     }
 
     return new Promise<Connection>((resolve, reject) => {
+      let settled = false
+
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
         callback: (response: TokenResponse) => {
           if (response.error) {
-            reject(new Error(`Google OAuth error: ${response.error} - ${response.error_description || ''}`))
+            if (!settled) {
+              settled = true
+              reject(new Error(`Google OAuth error: ${response.error} - ${response.error_description || ''}`))
+            }
             return
           }
 
@@ -63,21 +68,33 @@ export const googleDriveProvider: ConnectionProvider = {
 
           // Fetch user info to get email for the label
           fetchUserEmail(response.access_token).then((email) => {
-            const connection: Connection = {
-              id: connectionId,
-              providerId: 'google-drive',
-              label: email ? `Google Drive (${email})` : 'Google Drive',
-              status: 'connected',
-              auth0Connection: 'google-oauth2',
-              createdAt: new Date().toISOString(),
-              lastRefreshedAt: new Date().toISOString(),
-              meta: email ? {email} : {},
+            if (!settled) {
+              settled = true
+              const connection: Connection = {
+                id: connectionId,
+                providerId: 'google-drive',
+                label: email ? `Google Drive (${email})` : 'Google Drive',
+                status: 'connected',
+                auth0Connection: 'google-oauth2',
+                createdAt: new Date().toISOString(),
+                lastRefreshedAt: new Date().toISOString(),
+                meta: email ? {email} : {},
+              }
+              resolve(connection)
             }
-            resolve(connection)
           })
         },
         error_callback: (error) => {
-          reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`))
+          // popup_closed fires prematurely on some browsers while the user
+          // is still completing auth. Ignore it — a real failure will come
+          // through the callback with response.error instead.
+          if (error.type === 'popup_closed') {
+            return
+          }
+          if (!settled) {
+            settled = true
+            reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`))
+          }
         },
       })
 
@@ -124,13 +141,18 @@ export const googleDriveProvider: ConnectionProvider = {
     }
 
     return new Promise<string>((resolve, reject) => {
+      let settled = false
+
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
         hint: (connection.meta.email as string) || undefined,
         callback: (response: TokenResponse) => {
           if (response.error) {
-            reject(new Error(`Google OAuth refresh error: ${response.error}`))
+            if (!settled) {
+              settled = true
+              reject(new Error(`Google OAuth refresh error: ${response.error}`))
+            }
             return
           }
 
@@ -140,10 +162,19 @@ export const googleDriveProvider: ConnectionProvider = {
             expiresAt: Date.now() + expiresInMs,
           })
 
-          resolve(response.access_token)
+          if (!settled) {
+            settled = true
+            resolve(response.access_token)
+          }
         },
         error_callback: (error) => {
-          reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
+          if (error.type === 'popup_closed') {
+            return
+          }
+          if (!settled) {
+            settled = true
+            reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
+          }
         },
       })
 
