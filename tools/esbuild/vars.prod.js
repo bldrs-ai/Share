@@ -42,6 +42,8 @@ export default {
 
   // API_KEYS
   GOOGLE_API_KEY: null,
+  GOOGLE_OAUTH2_CLIENT_ID: null,
+  GOOGLE_APP_ID: null,
 
   // OpenRouter
   OPENROUTER_BASE_URL: 'https://openrouter.ai',
