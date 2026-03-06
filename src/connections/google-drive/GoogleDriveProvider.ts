@@ -45,11 +45,15 @@ export const googleDriveProvider: ConnectionProvider = {
 
     return new Promise<Connection>((resolve, reject) => {
       let settled = false
+      let gotCallback = false
 
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
         callback: (response: TokenResponse) => {
+          gotCallback = true
+          console.log('[GDrive] OAuth callback received, error:', response.error || 'none')
+
           if (response.error) {
             if (!settled) {
               settled = true
@@ -58,6 +62,7 @@ export const googleDriveProvider: ConnectionProvider = {
             return
           }
 
+          console.log('[GDrive] Token received, expires_in:', response.expires_in)
           const connectionId = generateId()
           const expiresInMs = (response.expires_in || 3600) * 1000
 
@@ -68,6 +73,7 @@ export const googleDriveProvider: ConnectionProvider = {
 
           // Fetch user info to get email for the label
           fetchUserEmail(response.access_token).then((email) => {
+            console.log('[GDrive] User email:', email || 'unknown')
             if (!settled) {
               settled = true
               const connection: Connection = {
@@ -82,13 +88,38 @@ export const googleDriveProvider: ConnectionProvider = {
               }
               resolve(connection)
             }
+          }).catch((err) => {
+            console.error('[GDrive] fetchUserEmail failed:', err)
+            // Still resolve even if email fetch fails
+            if (!settled) {
+              settled = true
+              const connection: Connection = {
+                id: connectionId,
+                providerId: 'google-drive',
+                label: 'Google Drive',
+                status: 'connected',
+                auth0Connection: 'google-oauth2',
+                createdAt: new Date().toISOString(),
+                lastRefreshedAt: new Date().toISOString(),
+                meta: {},
+              }
+              resolve(connection)
+            }
           })
         },
         error_callback: (error) => {
-          // popup_closed fires prematurely on some browsers while the user
-          // is still completing auth. Ignore it — a real failure will come
-          // through the callback with response.error instead.
+          console.log('[GDrive] error_callback:', error.type, error.message, 'gotCallback:', gotCallback)
+
+          // popup_closed fires when the popup window closes. If we already
+          // got a successful callback, ignore it. If not, wait briefly to
+          // see if the callback arrives (GIS sometimes fires this first).
           if (error.type === 'popup_closed') {
+            setTimeout(() => {
+              if (!settled && !gotCallback) {
+                settled = true
+                reject(new Error('Google sign-in was cancelled'))
+              }
+            }, 1000)
             return
           }
           if (!settled) {

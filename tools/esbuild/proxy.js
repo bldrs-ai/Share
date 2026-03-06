@@ -19,8 +19,8 @@ export function createProxyServer(host, port, useHttps = false) {
 
   const serverOptions = useHttps ?
     {
-      key: fs.readFileSync(path.join(__dirname, './certificate/server.key')),
-      cert: fs.readFileSync(path.join(__dirname, './certificate/server.cert')),
+      key: fs.readFileSync(path.join(__dirname, './certificate/localhost+2-key.pem')),
+      cert: fs.readFileSync(path.join(__dirname, './certificate/localhost+2.pem')),
     } :
     {}
 
