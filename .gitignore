@@ -27,5 +27,8 @@ public/test-models
 \#*
 .\#*
 
+# Certs
+*.pem
+
 # Local Netlify folder
 .netlify
