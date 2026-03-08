@@ -17,16 +17,24 @@ jest.mock('../store/useStore', () => {
     // For simplicity, we can just assume they're all "happy path" default values
     const state = {
       appPrefix: '/app',
+      appMetadata: {},
       isModelReady: true,
       isOpfsAvailable: true, // or toggle this for specific tests
       vh: 800,
       setAlert: jest.fn(),
+      setIsUsageLimitDialogVisible: jest.fn(),
     }
     return selector(state)
   })
 })
 
 jest.mock('react-router-dom', () => ({useNavigate: jest.fn()}))
+jest.mock('../Auth0/Auth0Proxy', () => ({useAuth0: jest.fn().mockReturnValue({isAuthenticated: false})}))
+jest.mock('../privacy/usageTracking', () => ({
+  getUserTier: jest.fn().mockReturnValue('pro'),
+  canLoadModel: jest.fn().mockReturnValue({allowed: true, reason: null, stats: {}}),
+  recordModelLoad: jest.fn(),
+}))
 jest.mock('../Filetype', () => ({guessTypeFromFile: jest.fn()}))
 jest.mock('../OPFS/utils', () => ({saveDnDFileToOpfs: jest.fn()}))
 jest.mock('../utils/loader', () => ({saveDnDFileToOpfsFallback: jest.fn()}))
@@ -53,10 +61,12 @@ describe('ViewerContainer', () => {
     useStore.mockImplementation((selector) => {
       const state = {
         appPrefix: '/app',
+        appMetadata: {},
         isModelReady: true,
         isOpfsAvailable: true,
         vh: 800,
         setAlert: mockSetAlert,
+        setIsUsageLimitDialogVisible: jest.fn(),
       }
       return selector(state)
     })
@@ -186,10 +196,12 @@ describe('ViewerContainer', () => {
     useStore.mockImplementation((selector) => {
       const state = {
         appPrefix: '/app',
+        appMetadata: {},
         isModelReady: true,
         isOpfsAvailable: false, // now false
         vh: 800,
         setAlert: mockSetAlert,
+        setIsUsageLimitDialogVisible: jest.fn(),
       }
       return selector(state)
     })

@@ -3,6 +3,7 @@ import React, {ReactElement, useState} from 'react'
 import {Button, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
+import {canLoadModel, recordModelLoad} from '../../privacy/usageTracking'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
@@ -23,6 +24,8 @@ export default function GitHubFileBrowser({
   navigate,
   orgNamesArr,
   setIsDialogDisplayed,
+  userTier,
+  onLimitReached,
 }) {
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
@@ -122,6 +125,16 @@ export default function GitHubFileBrowser({
 
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
+      if (userTier && userTier !== 'pro') {
+        const check = canLoadModel(userTier)
+        if (!check.allowed) {
+          if (onLimitReached) {
+            onLimitReached(check)
+          }
+          return
+        }
+        recordModelLoad()
+      }
       const branch = branchName || 'main'
       navigateToModel({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)}, navigate)
       setIsDialogDisplayed(false)

@@ -1,8 +1,10 @@
 import React, {ReactElement, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Box} from '@mui/material'
+import {useAuth0} from '../Auth0/Auth0Proxy'
 import {useIsMobile} from '../Components/Hooks'
 import {PlacemarkHandlers as placemarkHandlers} from '../Components/Markers/MarkerControl'
+import {getUserTier} from '../privacy/usageTracking'
 import useStore from '../store/useStore'
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../utils/dragAndDrop'
 
@@ -10,16 +12,20 @@ import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from '../utils/d
 /** @return {ReactElement} */
 export default function ViewerContainer() {
   const appPrefix = useStore((state) => state.appPrefix)
+  const appMetadata = useStore((state) => state.appMetadata)
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAlert = useStore((state) => state.setAlert)
+  const setIsUsageLimitDialogVisible = useStore((state) => state.setIsUsageLimitDialogVisible)
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
+  const {isAuthenticated} = useAuth0()
   const vh = useStore((state) => state.vh)
   const isMobile = useIsMobile()
 
   const [, setIsDragActive] = useState(false)
 
   const navigate = useNavigate()
+  const userTier = getUserTier(isAuthenticated, appMetadata)
 
   /**
    * Handles file drop into drag-n-drop area
@@ -28,7 +34,12 @@ export default function ViewerContainer() {
    */
   async function onDrop(event) {
     setIsDragActive(false)
-    await handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert)
+    await handleFileDrop(
+      event, navigate, appPrefix, isOpfsAvailable, setAlert,
+      undefined, undefined,
+      userTier,
+      (info) => setIsUsageLimitDialogVisible(true, info),
+    )
   }
 
 

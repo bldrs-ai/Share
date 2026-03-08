@@ -2,8 +2,12 @@ import React, {ReactElement, useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import {Autocomplete, TextField} from '@mui/material'
 import {Close as CloseIcon} from '@mui/icons-material'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
+import {getUserTier, canLoadModel, recordModelLoad} from '../../privacy/usageTracking'
+import {isSampleOrExemptPath} from '../../privacy/sampleModelPaths'
 import {processExternalUrl} from '../../routes/routes'
+import useStore from '../../store/useStore'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navWithSearchParamRemoved, navigateToModel} from '../../utils/navigate'
 import {assertDefined} from '../../utils/assert'
@@ -28,10 +32,38 @@ export default function SearchBar({
   assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
   const navigate = useNavigate()
+  const {isAuthenticated} = useAuth0()
+  const appMetadata = useStore((state) => state.appMetadata)
+  const setIsUsageLimitDialogVisible = useStore((state) => state.setIsUsageLimitDialogVisible)
+  const userTier = getUserTier(isAuthenticated, appMetadata)
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
+
+  /**
+   * Check rate limit and show dialog if exceeded.
+   *
+   * @param {string|object} modelPath The model path to check
+   * @return {boolean} true if rate-limited (blocked)
+   */
+  const checkRateLimit = (modelPath) => {
+    if (userTier === 'pro') {
+      return false
+    }
+    // Sample/exempt paths don't count
+    const pathStr = typeof modelPath === 'string' ? modelPath : modelPath?.pathname || ''
+    if (isSampleOrExemptPath(pathStr)) {
+      return false
+    }
+    const check = canLoadModel(userTier)
+    if (!check.allowed) {
+      setIsUsageLimitDialogVisible(true, {reason: check.reason, stats: check.stats})
+      return true
+    }
+    recordModelLoad()
+    return false
+  }
 
 
   useEffect(() => {
@@ -68,6 +100,9 @@ export default function SearchBar({
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
+        if (checkRateLimit(modelPath)) {
+          return
+        }
         disablePageReloadApprovalCheck()
         navigateToModel(modelPath, navigate)
         if (onSuccess) {
@@ -82,6 +117,9 @@ export default function SearchBar({
     const result = processExternalUrl(window.location.href, inputText)
     if (result) {
       try {
+        if (checkRateLimit(`/share/v/u/${inputText}`)) {
+          return
+        }
         disablePageReloadApprovalCheck()
         navigate(`/share/v/u/${inputText}`)
         if (onSuccess) {
