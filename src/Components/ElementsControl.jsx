@@ -15,7 +15,7 @@ import {
  * ElementsControl contains tools for controlling element visibility
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {ReactElement}
+ * @return {ReactElement} The rendered ElementsControl component.
  */
 export default function ElementsControl({deselectItems}) {
   const viewer = useStore((state) => state.viewer)
@@ -23,13 +23,7 @@ export default function ElementsControl({deselectItems}) {
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null
-    )
-    return ifSelected
-  }
-
+  const isSelected = () => selectedElement !== null
 
   return (
     <Stack
@@ -40,22 +34,35 @@ export default function ElementsControl({deselectItems}) {
       data-testid='element-group'
     >
       <ButtonGroup orientation='horizontal' variant='controls'>
+        {/* -------- Recenter Button --------------------------------------- */}
+        <TooltipIconButton
+          title='Recenter'
+          onClick={() => {
+            viewer.context.fitToFrame()
+          }}
+          icon={<FilterCenterFocusIcon className='icon-share'/>}
+          placement='top'
+          variant='solid'
+        />
+        {/* ---------------------------------------------------------------- */}
+
         {!isIsolate && <CutPlaneMenu/>}
 
-        {isSelected() && selectedElement !== null &&
-         <TooltipIconButton
-           title='Isolate'
-           onClick={() => {
-             viewer.isolator.toggleIsolationMode()
-             setIsIsolate(!isIsolate)
-           }}
-           icon={<FilterCenterFocusIcon className='icon-share'/>}
-           placement='top'
-           variant='solid'
-           selected={isIsolate}
-         />}
+        {isSelected() && (
+          <TooltipIconButton
+            title='Isolate'
+            onClick={() => {
+              viewer.isolator.toggleIsolationMode()
+              setIsIsolate(!isIsolate)
+            }}
+            icon={<FilterCenterFocusIcon className='icon-share'/>}
+            placement='top'
+            variant='solid'
+            selected={isIsolate}
+          />
+        )}
 
-        {isHidden && !isIsolate &&
+        {isHidden && !isIsolate && (
           <TooltipIconButton
             title='Show all'
             onClick={() => {
@@ -65,20 +72,21 @@ export default function ElementsControl({deselectItems}) {
             icon={<VisibilityOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
-          />}
+          />
+        )}
 
-        {isSelected() && !isIsolate &&
-         <TooltipIconButton
-           title='Hide'
-           onClick={() => {
-             viewer.isolator.hideSelectedElements()
-             setIsHidden(true)
-           }}
-           icon={<HideSourceOutlinedIcon className='icon-share'/>}
-           placement='top'
-           variant='solid'
-           selected={isIsolate}
-         />}
+        {isSelected() && !isIsolate && (
+          <TooltipIconButton
+            title='Hide'
+            onClick={() => {
+              viewer.isolator.hideSelectedElements()
+              setIsHidden(true)
+            }}
+            icon={<HideSourceOutlinedIcon className='icon-share'/>}
+            placement='top'
+            variant='solid'
+          />
+        )}
 
         {isSelected() && !isIsolate &&
          <TooltipIconButton

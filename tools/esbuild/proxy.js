@@ -153,6 +153,10 @@ function rewriteUrl(url) {
     return '/static/js/ConwayGeomWasmWebMT.js'
   }
 
+  if (url.includes('app.js')) {
+    return '/widgets/app.js'
+  }
+
   return url
 }
 

@@ -31,6 +31,10 @@
       var msgHandlers = {}
       var $messageContainer = document.querySelector("#message-from-parent");
       window.addEventListener("message", initPort);
+       // --- Handshake Step 1: Proactively request the communication channel from the host ---
+      // This is the NEW and CRITICAL part.
+      //logEvent("Applet loaded. Requesting communication channel from Share host...");
+      window.parent.postMessage('request-channel', '*');
       // Setup the transfered port
       function initPort(e) {
         if (e.data === "init") {

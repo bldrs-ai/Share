@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Share Applet</title>
+        <style>
+          body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+          }
+          button {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+          }
+          button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+          }
+          #event-log {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            background-color: #f9f9f9;
+          }
+          #event-log li {
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #eee;
+          }
+        </style>
+    </head>
+    <body>
+        <h1>Applet Controls</h1>
+        <div>
+          <button id="loadModelBtn" disabled>Load Model</button>
+          <button id="hideBtn" disabled>Hide Selected</button>
+          <button id="unhideAllBtn" disabled>Unhide All</button>
+        </div>
+        
+        <h2>Event Log</h2>
+        <ul id="event-log"></ul>
+
+        <script type="module" src="/app.js"></script>
+    </body>
+    </html>

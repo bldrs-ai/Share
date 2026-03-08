@@ -1,1 +1,9 @@
-/* /index.html 200
+# 1. Let Bolt static assets be served directly
+/build/assets/*   /build/assets/:splat   200!
+
+# 2. Send /build and /build/* to the Remix server function
+/build            /.netlify/functions/server   200!
+/build/*          /.netlify/functions/server   200!
+
+# 3. Fallback: Share SPA handles everything else
+/*                /index.html   200
