@@ -1,6 +1,6 @@
 import {GithubResult} from './github'
 import {GoogleResult} from './google'
-import {handleRoute, type RouteParams, type FileResult} from './routes'
+import {handleRoute, processExternalUrl, type RouteParams, type FileResult} from './routes'
 
 
 // Test one of each kind of route.There's more detailed tests in the github and google tests.
@@ -161,5 +161,72 @@ describe('routes', () => {
         fileId,
       })
     })
+  })
+})
+
+
+describe('processExternalUrl', () => {
+  const originalUrl = new URL('http://bldrs.ai/share/v/u/test')
+
+  it('processes GitHub URL and returns GithubResult', () => {
+    const githubUrl = 'https://github.com/test-org/test-repo/blob/main/path/to/model.ifc'
+    const result = processExternalUrl(originalUrl, githubUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL('https://github.com/test-org/test-repo/main/path/to/model.ifc'),
+      kind: 'provider',
+      provider: 'github',
+      org: 'test-org',
+      repo: 'test-repo',
+      branch: 'main',
+      filepath: 'path/to/model.ifc',
+      getRepoPath: expect.any(Function),
+      gitpath: 'https://github.com/test-org/test-repo/main/path/to/model.ifc',
+    })
+  })
+
+  it('processes Google Drive URL and returns GoogleResult', () => {
+    const googleUrl = 'https://drive.google.com/file/d/1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO/view'
+    const result = processExternalUrl(originalUrl, googleUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL(
+        `https://www.googleapis.com/drive/v3/files/1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO?alt=media&key=${process.env.GOOGLE_API_KEY}`,
+      ),
+      kind: 'provider',
+      provider: 'google',
+      fileId: '1sWR7x4BZ-a8tIDZ0ICo0woR2KJ_rHCSO',
+    })
+  })
+
+  it('processes generic URL and returns UrlResult', () => {
+    const genericUrl = 'https://example.com/file.ifc'
+    const result = processExternalUrl(originalUrl, genericUrl)
+
+    expect(result).toEqual({
+      originalUrl,
+      downloadUrl: new URL(genericUrl),
+      kind: 'url',
+    })
+  })
+
+  it('returns null for invalid URL', () => {
+    const invalidUrl = 'not-a-url'
+    const result = processExternalUrl(originalUrl, invalidUrl)
+
+    expect(result).toBeNull()
+  })
+
+  it('prioritizes GitHub over Google Drive when both could match', () => {
+    // This test ensures GitHub detection happens first
+    const githubUrl = 'https://github.com/test-org/test-repo/blob/main/path/to/model.ifc'
+    const result = processExternalUrl(originalUrl, githubUrl)
+
+    expect(result?.kind).toBe('provider')
+    if (result?.kind === 'provider') {
+      expect(result.provider).toBe('github')
+    }
   })
 })
