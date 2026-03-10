@@ -43,9 +43,39 @@ export const googleDriveProvider: ConnectionProvider = {
       throw new Error('GOOGLE_OAUTH2_CLIENT_ID environment variable is not set')
     }
 
+    console.log('[GDrive] Starting connect, clientId:', clientId.substring(0, 8) + '...')
+
     return new Promise<Connection>((resolve, reject) => {
       let settled = false
       let gotCallback = false
+
+      // Safety timeout — never let the promise hang forever
+      const overallTimeout = setTimeout(() => {
+        if (!settled) {
+          settled = true
+          console.error('[GDrive] Connect timed out after 120s. gotCallback:', gotCallback)
+          reject(new Error('Google Drive connection timed out. Please check your GCP OAuth settings and try again.'))
+        }
+      }, 120_000)
+
+      const settle = (fn: () => void) => {
+        if (!settled) {
+          settled = true
+          clearTimeout(overallTimeout)
+          fn()
+        }
+      }
+
+      const makeConnection = (connectionId: string, email?: string | null): Connection => ({
+        id: connectionId,
+        providerId: 'google-drive',
+        label: email ? `Google Drive (${email})` : 'Google Drive',
+        status: 'connected',
+        auth0Connection: 'google-oauth2',
+        createdAt: new Date().toISOString(),
+        lastRefreshedAt: new Date().toISOString(),
+        meta: email ? {email} : {},
+      })
 
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
@@ -55,10 +85,9 @@ export const googleDriveProvider: ConnectionProvider = {
           console.log('[GDrive] OAuth callback received, error:', response.error || 'none')
 
           if (response.error) {
-            if (!settled) {
-              settled = true
-              reject(new Error(`Google OAuth error: ${response.error} - ${response.error_description || ''}`))
-            }
+            settle(() => reject(new Error(
+              `Google OAuth error: ${response.error} - ${response.error_description || ''}`,
+            )))
             return
           }
 
@@ -71,41 +100,21 @@ export const googleDriveProvider: ConnectionProvider = {
             expiresAt: Date.now() + expiresInMs,
           })
 
-          // Fetch user info to get email for the label
-          fetchUserEmail(response.access_token).then((email) => {
-            console.log('[GDrive] User email:', email || 'unknown')
-            if (!settled) {
-              settled = true
-              const connection: Connection = {
-                id: connectionId,
-                providerId: 'google-drive',
-                label: email ? `Google Drive (${email})` : 'Google Drive',
-                status: 'connected',
-                auth0Connection: 'google-oauth2',
-                createdAt: new Date().toISOString(),
-                lastRefreshedAt: new Date().toISOString(),
-                meta: email ? {email} : {},
-              }
-              resolve(connection)
-            }
-          }).catch((err) => {
-            console.error('[GDrive] fetchUserEmail failed:', err)
-            // Still resolve even if email fetch fails
-            if (!settled) {
-              settled = true
-              const connection: Connection = {
-                id: connectionId,
-                providerId: 'google-drive',
-                label: 'Google Drive',
-                status: 'connected',
-                auth0Connection: 'google-oauth2',
-                createdAt: new Date().toISOString(),
-                lastRefreshedAt: new Date().toISOString(),
-                meta: {},
-              }
-              resolve(connection)
-            }
-          })
+          // Fetch user email with a 5s timeout — don't let it block connection
+          const emailPromise = Promise.race([
+            fetchUserEmail(response.access_token),
+            new Promise<null>((r) => setTimeout(() => r(null), 5000)),
+          ])
+
+          emailPromise
+            .then((email) => {
+              console.log('[GDrive] User email:', email || 'unknown')
+              settle(() => resolve(makeConnection(connectionId, email)))
+            })
+            .catch((err) => {
+              console.error('[GDrive] fetchUserEmail failed:', err)
+              settle(() => resolve(makeConnection(connectionId)))
+            })
         },
         error_callback: (error) => {
           console.log('[GDrive] error_callback:', error.type, error.message, 'gotCallback:', gotCallback)
@@ -116,19 +125,16 @@ export const googleDriveProvider: ConnectionProvider = {
           if (error.type === 'popup_closed') {
             setTimeout(() => {
               if (!settled && !gotCallback) {
-                settled = true
-                reject(new Error('Google sign-in was cancelled'))
+                settle(() => reject(new Error('Google sign-in was cancelled')))
               }
-            }, 1000)
+            }, 2000)
             return
           }
-          if (!settled) {
-            settled = true
-            reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`))
-          }
+          settle(() => reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`)))
         },
       })
 
+      console.log('[GDrive] Calling requestAccessToken...')
       client.requestAccessToken()
     })
   },
