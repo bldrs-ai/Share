@@ -1,9 +1,9 @@
 [
   {
-    "appName": "ExampleApp",
-    "description": "Events Logger",
+    "appName": "Dashboard App",
+    "description": "Building KPI analytics from IFC model data",
     "image": "/icons/LogoBWithDomain.svg",
-    "action": "/widgets/event-logger.html",
+    "action": "/widgets/dashboard-app/index.html",
     "icon": "/icons/LogoB.svg"
   }
 ]

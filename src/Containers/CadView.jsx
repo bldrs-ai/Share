@@ -575,25 +575,27 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {string} fileUrl URL or path of the loaded model
    */
-  function updateLoadedFileInfo() {
-    setLoadedFileInfo({
-      source: 'share', info: {
-        url: 'Foo',
-      },
-    })
-    /*
+  function updateLoadedFileInfo(fileUrl) {
+    const urlStr = String(fileUrl)
     const githubRegex = /(raw.githubusercontent|github.com)/gi
-    if (modelUrlStr.indexOf('/') === 0) {
-      setLoadedFileInfo({
-        source: 'share', info: {
-          url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
-        },
-      })
-    } else if (githubRegex.test(modelUrlStr)) {
-      setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
+    if (githubRegex.test(urlStr)) {
+      setLoadedFileInfo({source: 'github', info: {url: urlStr}})
+    } else {
+      // Extract pathname so the iframe can resolve it against its own origin
+      try {
+        const pathname = new URL(urlStr, window.location.origin).pathname
+        setLoadedFileInfo({
+          source: 'share', info: {
+            url: `${window.location.origin}${pathname}`,
+          },
+        })
+      } catch {
+        setLoadedFileInfo({source: 'share', info: {url: urlStr}})
+      }
     }
-    */
   }
 
 

@@ -22,7 +22,7 @@ export class IFrameCommunicationChannel {
     this.port1.onmessage = this.messageHandler
     /* Step 3: Sending out the port2 on load */
     // Transfer port2 to the iframe
-    iframe.contentWindow.postMessage('init', iframe.src, [this.channel.port2])
+    iframe.contentWindow.postMessage('init', '*', [this.channel.port2])
     this.iframe = iframe
   }
 
@@ -31,16 +31,69 @@ export class IFrameCommunicationChannel {
    *
    * @param {*} event the data received from the iframe
    */
-  messageHandler = (event) => {
+  messageHandler = async (event) => {
     switch (event.data) {
       case 'getLoadedFile':
         this.sendMessage(event.data, useStore.getState().loadedFileInfo)
+        break
+      case 'getFileData':
+        await this.handleGetFileData()
         break
       case 'getSelectedElements':
         this.sendMessage(event.data, useStore.getState().selectedElements)
         break
       default:
         break
+    }
+  }
+
+  /**
+   * Send the loaded model's raw bytes through the channel.
+   * Uses the OPFS-cached File when available, falls back to fetch.
+   */
+  async handleGetFileData() {
+    try {
+      // Prefer the OPFS-cached file — works for all sources (upload, GitHub, local)
+      const opfsFile = useStore.getState().opfsFile
+      if (opfsFile && opfsFile.size > 0) {
+        const buffer = await opfsFile.arrayBuffer()
+        this.port1.postMessage(
+          {action: 'getFileData', response: buffer},
+          [buffer],
+        )
+        return
+      }
+
+      // Fallback: fetch by URL
+      const fileInfo = useStore.getState().loadedFileInfo
+      if (!fileInfo || !fileInfo.info?.url) {
+        this.sendMessage('getFileData', null)
+        return
+      }
+
+      let url = fileInfo.info.url
+      const u = new URL(url, window.location.origin)
+      if (u.host === 'github.com') {
+        u.hostname = 'raw.githubusercontent.com'
+        u.host = 'raw.githubusercontent.com'
+        url = u.toString()
+      } else if (!url.startsWith('http')) {
+        url = new URL(url, window.location.origin).href
+      }
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        this.sendMessage('getFileData', null)
+        return
+      }
+      const buffer = await response.arrayBuffer()
+      this.port1.postMessage(
+        {action: 'getFileData', response: buffer},
+        [buffer],
+      )
+    } catch (err) {
+      console.warn('[Apps] Failed to get file data:', err)
+      this.sendMessage('getFileData', null)
     }
   }
 
