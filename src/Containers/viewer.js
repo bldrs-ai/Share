@@ -2,6 +2,35 @@ import {Color} from 'three'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 
 
+/** Track the current viewer so we can dispose it before creating a new one */
+let currentViewer = null
+
+
+/**
+ * Dispose the previous viewer, releasing WebGL context, geometries,
+ * materials, textures, and render loop resources.
+ */
+export function disposeViewer() {
+  if (!currentViewer) {
+    return
+  }
+  const viewer = currentViewer
+  currentViewer = null
+
+  // Remove global event handlers that capture the old viewer in closure
+  window.onmousedown = null
+  window.onmouseup = null
+  window.onmousemove = null
+
+  try {
+    // IfcViewerAPI.dispose() tears down renderer, scene, animation loop, etc.
+    viewer.dispose()
+  } catch (e) {
+    console.warn('Error disposing viewer:', e)
+  }
+}
+
+
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
@@ -9,6 +38,9 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
  *     referencing its container.
  */
 export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
+  // Dispose previous viewer to free WebGL/GPU resources
+  disposeViewer()
+
   const container = document.getElementById('viewer-container')
 
   // Clear any existing scene.
@@ -53,5 +85,6 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   const canvas = viewer.context.getDomElement()
   canvas.setAttribute('tabIndex', '0')
 
+  currentViewer = viewer
   return viewer
 }

@@ -1,4 +1,4 @@
-import React, {ReactElement, useCallback} from 'react'
+import React, {ReactElement, useCallback, useRef} from 'react'
 import {Box} from '@mui/material'
 import {IFrameCommunicationChannel} from './AppsMessagesHandler'
 
@@ -8,12 +8,24 @@ import {IFrameCommunicationChannel} from './AppsMessagesHandler'
  * @return {ReactElement}
  */
 export default function AppIFrame({itemJson}) {
+  const channelRef = useRef(null)
+
   const appFrameRef = useCallback((elt) => {
-    if (elt) {
-      elt.addEventListener('load', () => {
-        new IFrameCommunicationChannel(elt)
-      })
+    if (!elt) {
+      // Cleanup on unmount
+      if (channelRef.current) {
+        channelRef.current.dispose()
+        channelRef.current = null
+      }
+      return
     }
+    const onLoad = () => {
+      if (channelRef.current) {
+        channelRef.current.dispose()
+      }
+      channelRef.current = new IFrameCommunicationChannel(elt)
+    }
+    elt.addEventListener('load', onLoad)
   }, [])
 
   return (

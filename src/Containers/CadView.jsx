@@ -26,10 +26,11 @@ import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
-import {initViewer} from './viewer'
+import {disposeViewer, initViewer} from './viewer'
 
 
 let count = 0
+let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -138,6 +139,11 @@ export default function CadView({
     if (isModelReady) {
       resetState()
     }
+    // Remove previous theme change listener to prevent accumulation
+    if (previousThemeChangeCb) {
+      theme.removeThemeChangeListener(previousThemeChangeCb)
+    }
+    previousThemeChangeCb = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }

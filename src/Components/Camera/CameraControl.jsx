@@ -4,6 +4,7 @@ import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {
   addHashListener,
+  removeHashListener,
   addHashParams,
   getHashParams,
 } from '../../utils/location'
@@ -34,7 +35,8 @@ export default function CameraControl() {
   useEffect(() => {
     setCameraControls(cameraControls)
     onHash(location, cameraControls)
-    onLoad(location, cameraControls, viewer)
+    const cleanup = onLoad(location, cameraControls, viewer)
+    return cleanup
   }, [location, cameraControls, setCameraControls, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
@@ -63,10 +65,6 @@ function onLoad(location, cameraControls, viewer) {
       }
       isMouseMoved = false
     }
-    canvas.removeEventListener('mousemove', onMouseMove)
-    canvas.addEventListener('mousemove', onMouseMove)
-
-    // https://stackoverflow.com/questions/3515446/jquery-mousewheel-detecting-when-the-wheel-stops/28371047#28371047
     const onWheel = () => {
       clearTimeout(document.wheeling)
       document.wheeling = setTimeout(() => {
@@ -74,11 +72,21 @@ function onLoad(location, cameraControls, viewer) {
         removeCameraUrlParams()
       }, WHEEL_DEBOUNCE_WAIT_MS)
     }
+    canvas.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('wheel', onWheel)
-
-    canvas.removeEventListener('mouseup', onMouseUp)
-    canvas.removeEventListener('touchend', onMouseUp)
     canvas.addEventListener('mouseup', onMouseUp)
+    canvas.addEventListener('touchend', onMouseUp)
+
+    return () => {
+      removeHashListener('camera')
+      canvas.removeEventListener('mousemove', onMouseMove)
+      canvas.removeEventListener('wheel', onWheel)
+      canvas.removeEventListener('mouseup', onMouseUp)
+      canvas.removeEventListener('touchend', onMouseUp)
+    }
+  }
+  return () => {
+    removeHashListener('camera')
   }
 }
 

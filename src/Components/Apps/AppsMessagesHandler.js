@@ -26,6 +26,17 @@ export class IFrameCommunicationChannel {
     this.iframe = iframe
   }
 
+  /** Close the message channel ports and release references */
+  dispose() {
+    if (this.port1) {
+      this.port1.onmessage = null
+      this.port1.close()
+    }
+    this.channel = null
+    this.port1 = null
+    this.iframe = null
+  }
+
   /**
    * Handle incoming messages from the iframe through the MessageChannel
    *
