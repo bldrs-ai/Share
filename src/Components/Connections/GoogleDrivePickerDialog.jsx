@@ -2,6 +2,13 @@ import {useCallback, useEffect, useRef} from 'react'
 import {loadPickerScript} from '../../connections/google-drive/loadGisScript'
 
 
+// MUI Dialog sits at z-index 1300; Google Picker must render above it.
+// The Picker injects .picker-dialog-bg and .picker-dialog into <body> with its
+// own z-index values, so we override them here.
+const PICKER_Z_INDEX_STYLE_ID = 'google-picker-z-index'
+const PICKER_Z_INDEX = 1400
+
+
 /**
  * Opens a native Google Drive Picker for file or folder selection.
  *
@@ -23,6 +30,25 @@ export default function GoogleDrivePickerDialog({
   onCancel,
 }) {
   const pickerRef = useRef(null)
+
+  // Inject CSS to lift Google Picker's overlay above the MUI Dialog.
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+    const existing = document.getElementById(PICKER_Z_INDEX_STYLE_ID)
+    if (existing) {
+      return undefined
+    }
+    const style = document.createElement('style')
+    style.id = PICKER_Z_INDEX_STYLE_ID
+    style.textContent = [
+      `.picker-dialog-bg { z-index: ${PICKER_Z_INDEX} !important; }`,
+      `.picker-dialog { z-index: ${PICKER_Z_INDEX + 1} !important; }`,
+    ].join('\n')
+    document.head.appendChild(style)
+    return () => style.remove()
+  }, [isOpen])
 
   const handlePickerCallback = useCallback((data) => {
     const action = data[google.picker.Response.ACTION]

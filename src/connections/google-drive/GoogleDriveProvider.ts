@@ -12,7 +12,10 @@ import {loadGisScript} from './loadGisScript'
 import type {TokenResponse} from './loadGisScript'
 
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.readonly'
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
+].join(' ')
 
 interface CachedToken {
   token: string

@@ -1,10 +1,11 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useState} from 'react'
 import {Button, Stack, Typography, TextField} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {loadFileById} from '../../connections/loadFromSource'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -14,6 +15,7 @@ import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
 import SourcesTab from '../Connections/SourcesTab'
+import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
@@ -39,6 +41,37 @@ export default function OpenModelDialog({
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
 
+  const [pickerToken, setPickerToken] = useState(null)
+  const [pickerConnection, setPickerConnection] = useState(null)
+
+  const handlePickerReady = (token, connection) => {
+    setIsDialogDisplayed(false)
+    setPickerToken(token)
+    setPickerConnection(connection)
+  }
+
+  const handlePickerSelect = async (docs) => {
+    if (!pickerConnection || !docs || docs.length === 0) {
+      return
+    }
+    const doc = docs[0]
+    const connection = pickerConnection
+    setPickerToken(null)
+    setPickerConnection(null)
+    try {
+      await loadFileById(connection, doc.id, doc.name, (filename) => {
+        disablePageReloadApprovalCheck()
+        navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
+      })
+    } catch (err) {
+      console.error('Failed to open file from Google Drive:', err)
+    }
+  }
+
+  const handlePickerCancel = () => {
+    setPickerToken(null)
+    setPickerConnection(null)
+  }
 
   const openFile = () => {
     const onLoad = (filename) => {
@@ -55,29 +88,30 @@ export default function OpenModelDialog({
   }
 
   return (
-    <Dialog
-      headerIcon={<FolderOpenIcon className='icon-share'/>}
-      headerText='Open'
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-    >
-      <Tabs
-        tabLabels={tabLabels}
-        currentTab={currentTab}
-        actionCb={(value) => setCurrentTab(value)}
-        isScrollable={false}
-      />
-      <Stack
-        spacing={1}
-        direction='column'
-        sx={{
-          mt: 2,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-        data-testid={`dialog-open-model-tabs-stack`}
+    <>
+      <Dialog
+        headerIcon={<FolderOpenIcon className='icon-share'/>}
+        headerText='Open'
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
       >
-        { currentTab === 0 &&
+        <Tabs
+          tabLabels={tabLabels}
+          currentTab={currentTab}
+          actionCb={(value) => setCurrentTab(value)}
+          isScrollable={false}
+        />
+        <Stack
+          spacing={1}
+          direction='column'
+          sx={{
+            mt: 2,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          data-testid={`dialog-open-model-tabs-stack`}
+        >
+          { currentTab === 0 &&
           <Stack data-testid='dialog-open-model-local' spacing={1}>
             {!isMobile &&
                 <>
@@ -98,8 +132,8 @@ export default function OpenModelDialog({
                Browse files...
             </Button>
           </Stack>
-        }
-        { currentTab === 1 &&
+          }
+          { currentTab === 1 &&
           <Stack data-testid={`dialog-open-model-github`} spacing={1}>
             <TextField
               label='GitHub Model URL'
@@ -121,20 +155,28 @@ export default function OpenModelDialog({
              />}
             {!isAuthenticated && <PleaseLogin/>}
           </Stack>
-        }
-        { currentTab === 2 &&
+          }
+          { currentTab === 2 &&
           <SourcesTab
-            navigate={navigate}
-            setIsDialogDisplayed={setIsDialogDisplayed}
+            onPickerReady={handlePickerReady}
           />
-        }
-        { currentTab === 3 &&
+          }
+          { currentTab === 3 &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}
           />
-        }
-      </Stack>
-    </Dialog>
+          }
+        </Stack>
+      </Dialog>
+
+      <GoogleDrivePickerDialog
+        accessToken={pickerToken}
+        isOpen={pickerConnection !== null}
+        mode='file'
+        onSelect={handlePickerSelect}
+        onCancel={handlePickerCancel}
+      />
+    </>
   )
 }

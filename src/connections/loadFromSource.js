@@ -30,9 +30,47 @@ export async function loadFileFromSource(connection, source, file, onLoad) {
 
   debug().log('loadFromSource: downloading', file.name, 'from', connection.providerId)
 
-  // Download the file content
   const download = await browser.getFileDownload(connection, source, file.id)
+  return writeAndOpen(download, file.name, provider, connection, onLoad)
+}
 
+
+/**
+ * Load a file from a Connection by file ID, without a Source context.
+ * Used for Picker-selected files where no Source folder was pre-configured.
+ *
+ * @param {object} connection The Connection object
+ * @param {string} fileId Provider-specific file ID
+ * @param {string} fileName Filename (used as fallback if metadata unavailable)
+ * @param {Function} onLoad Callback with filename once ready for navigation
+ * @return {Promise<void>}
+ */
+export async function loadFileById(connection, fileId, fileName, onLoad) {
+  const provider = getProvider(connection.providerId)
+  const browser = getBrowser(connection.providerId)
+
+  if (!provider || !browser) {
+    throw new Error(`No provider registered for ${connection.providerId}`)
+  }
+
+  debug().log('loadFromSource: downloading by id', fileId, 'from', connection.providerId)
+
+  const download = await browser.getFileDownload(connection, null, fileId)
+  return writeAndOpen(download, fileName, provider, connection, onLoad)
+}
+
+
+/**
+ * Write a downloaded file to OPFS (or blob URL fallback) and call onLoad.
+ *
+ * @param {object} download FileDownloadResult from the browser
+ * @param {string} fallbackName Filename to use if download.filename is absent
+ * @param {object} provider The ConnectionProvider (for auth token refresh)
+ * @param {object} connection The Connection object
+ * @param {Function} onLoad Callback with filename once ready for navigation
+ * @return {Promise<void>}
+ */
+async function writeAndOpen(download, fallbackName, provider, connection, onLoad) {
   let blob = download.blob
   if (!blob && download.downloadUrl) {
     // Need to fetch with auth header
@@ -50,7 +88,7 @@ export async function loadFileFromSource(connection, source, file, onLoad) {
     throw new Error('No file content received')
   }
 
-  const filename = download.filename || file.name
+  const filename = download.filename || fallbackName
 
   // Try to write to OPFS (matches the local file upload pattern)
   if (checkOPFSAvailability()) {
