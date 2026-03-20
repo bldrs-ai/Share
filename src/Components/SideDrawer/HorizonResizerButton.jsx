@@ -42,21 +42,10 @@ export default function HorizonResizerButton({
   useEffect(() => {
     if (isResizing) {
       disablePageTextSelect()
-      document.querySelectorAll('iframe').forEach((f) => {
-        f.style.pointerEvents = 'none'
-      })
     } else {
       reenablePageTextSelect()
-      document.querySelectorAll('iframe').forEach((f) => {
-        f.style.pointerEvents = ''
-      })
     }
-    return () => {
-      reenablePageTextSelect()
-      document.querySelectorAll('iframe').forEach((f) => {
-        f.style.pointerEvents = ''
-      })
-    }
+    return () => reenablePageTextSelect()
   }, [isResizing])
 
   const half = 0.5
