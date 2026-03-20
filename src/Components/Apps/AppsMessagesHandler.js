@@ -24,6 +24,15 @@ export class IFrameCommunicationChannel {
     // Transfer port2 to the iframe
     iframe.contentWindow.postMessage('init', '*', [this.channel.port2])
     this.iframe = iframe
+
+    // Push selection changes to the iframe
+    this.unsubscribe = useStore.subscribe(
+      (state) => state.selectedElement,
+      (selectedElement) => {
+        const globalId = selectedElement?.GlobalId?.value ?? selectedElement?.GlobalId ?? null
+        this.sendMessage('selectionChanged', globalId)
+      },
+    )
   }
 
   /**
