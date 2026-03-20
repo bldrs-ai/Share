@@ -41,8 +41,9 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const installPrefix = ''
-  const basePath = '/'
+  const isGhPages = window.location.hostname.indexOf('github.io') !== -1
+  const installPrefix = isGhPages ? '/' + window.location.pathname.split('/')[1] : ''
+  const basePath = `${installPrefix}/`
   const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
   const setHasGithubIdentity = useStore((state) => state.setHasGithubIdentity)

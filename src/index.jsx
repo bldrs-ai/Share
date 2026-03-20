@@ -25,10 +25,6 @@ setupEsbuildWatch()
 
 const root = createRoot(document.getElementById('root'))
 
-// On GitHub Pages, strip the repo name prefix so routes match correctly
-const isGhPages = window.location.hostname.indexOf('github.io') !== -1
-const basename = isGhPages ? '/' + window.location.pathname.split('/')[1] : ''
-
 /** @return {ReactElement} The app with its context. */
 function AppWithContext() {
   return (
@@ -37,7 +33,7 @@ function AppWithContext() {
         <Helmet>
           <title>Bldrs.ai</title>
         </Helmet>
-        <BrowserRouter basename={basename}>
+        <BrowserRouter>
           <Auth0ProviderWithHistory>
             <BaseRoutes/>
           </Auth0ProviderWithHistory>
