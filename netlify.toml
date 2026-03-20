@@ -18,3 +18,9 @@
   to = "/subscribe/"
   status = 301
   force = true
+
+# SPA fallback — serve index.html for all unknown routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
