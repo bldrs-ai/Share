@@ -26,13 +26,15 @@ export class IFrameCommunicationChannel {
     this.iframe = iframe
 
     // Push selection changes to the iframe
-    this.unsubscribe = useStore.subscribe(
-      (state) => state.selectedElement,
-      (selectedElement) => {
+    let prevSelectedElement = useStore.getState().selectedElement
+    this.unsubscribe = useStore.subscribe(() => {
+      const selectedElement = useStore.getState().selectedElement
+      if (selectedElement !== prevSelectedElement) {
+        prevSelectedElement = selectedElement
         const globalId = selectedElement?.GlobalId?.value ?? selectedElement?.GlobalId ?? null
         this.sendMessage('selectionChanged', globalId)
-      },
-    )
+      }
+    })
   }
 
   /**
