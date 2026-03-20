@@ -33,24 +33,14 @@
         color: CanvasText;
       }
     </style>
-    <script type="application/javascript">
-      (function() {
-        var p = window.location.pathname.toLowerCase();
-        var base = p.startsWith('/share') ? '/' + window.location.pathname.split('/')[1] : '';
-        var link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = base + '/index.css';
-        document.head.appendChild(link);
-      })();
-    </script>
+    <link rel="stylesheet" href="/index.css">
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script type="application/javascript">
       const loader = document.createElement('script')
-      const lcPath = window.location.pathname.toLowerCase()
-      const pathPrefix = lcPath.startsWith('/share') ? '/' + window.location.pathname.split('/')[1] : ''
+      const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
       loader.setAttribute('type', 'module')
       loader.setAttribute('src', pathPrefix + '/index.js')
       document.body.appendChild(loader)

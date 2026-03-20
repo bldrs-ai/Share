@@ -116,7 +116,7 @@ const serveNotFound = (res) => {
     <meta charset="utf-8">
     <title>BLDRS - Redirect</title>
     <script type="text/javascript">
-      var pathSegmentsToKeep = window.location.hostname.indexOf('github.io') !== -1 ? 1 : 0
+      var pathSegmentsToKeep = window.location.pathname.startsWith('/Share') ? 1 : 0
       var l = window.location
       var u1 = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '')
       var u2 = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/'
