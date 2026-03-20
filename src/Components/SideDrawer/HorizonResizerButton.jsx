@@ -42,7 +42,6 @@ export default function HorizonResizerButton({
   useEffect(() => {
     if (isResizing) {
       disablePageTextSelect()
-      // Prevent iframes from stealing mouse events during drag
       document.querySelectorAll('iframe').forEach((f) => {
         f.style.pointerEvents = 'none'
       })
