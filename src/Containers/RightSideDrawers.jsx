@@ -89,8 +89,7 @@ export default function RightSideDrawers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAppsVisible])
 
-  // Hardcoded width for now
-  const availableWidth = 1200
+  const availableWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
   return (
     <Stack direction='row' sx={{flexShrink: 0, overflow: 'hidden'}}>
