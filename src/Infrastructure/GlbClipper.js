@@ -1,6 +1,6 @@
 import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere} from 'three'
 import debug from '../utils/debug'
-import CutPlaneArrowHelper from './CutPlaneArrowHelper'
+import CutPlaneGizmo from './CutPlaneGizmo'
 
 
 /**
@@ -15,14 +15,13 @@ export default class GlbClipper {
     this.viewer = viewer
     this.canvas = viewer.context.getDomElement()
     this.model = model
-    this.planes = [] // Array of {plane, arrow, direction, offset}
-    this.draggingArrow = null
-    this.hoveredArrow = null
+    this.planes = [] // Array of {plane, gizmo, direction, offset}
+    this.draggingPlane = null
+    this.hoveredPlane = null
     this.raycaster = new Raycaster()
     this.mouse = new Vector2()
     this.interactionEnabled = false
     this.modelBoundingSphere = this.computeModelBoundingSphere()
-    this.arrowScale = this.computeArrowScale()
 
     // Bind event handlers
     this.onMouseDown = this.onMouseDown.bind(this)
@@ -44,32 +43,19 @@ export default class GlbClipper {
     const plane = new Plane()
     plane.setFromNormalAndCoplanarPoint(normal, point)
 
-    const arrowColor = 0x00ff00
-    const arrowColorHighlight = 0xffff00
+    const gizmoColor = 0xFF6B35
+    const gizmoSize = this.computeGizmoSize()
+    const gizmo = new CutPlaneGizmo(normal, gizmoSize, gizmoColor)
+    gizmo.position.copy(point)
+    gizmo.userData.isClippingControl = true
+    gizmo.userData.planeData = {direction, offset}
 
-    const arrow = new CutPlaneArrowHelper(normal, arrowColor)
-    const scale = this.arrowScale
-    arrow.scale.set(scale, scale, scale)
-    arrow.position.copy(point)
-    arrow.userData.isClippingControl = true
-    arrow.userData.planeData = {direction, offset}
-    arrow.userData.defaultColor = arrowColor
-    arrow.userData.highlightColor = arrowColorHighlight
-
-    // Make arrow always visible over geometry
-    arrow.traverse((child) => {
-      if (child.material) {
-        child.material.depthTest = false
-        child.renderOrder = 999
-      }
-    })
-
-    this.viewer.context.getScene().add(arrow)
+    this.viewer.context.getScene().add(gizmo)
 
     // Store plane info
     const planeData = {
       plane,
-      arrow,
+      gizmo,
       direction,
       offset,
       normal: normal.clone(),
@@ -110,22 +96,19 @@ export default class GlbClipper {
 
 
   /**
-   * Computes an appropriate arrow scale based on the model bounding sphere
+   * Computes gizmo plane size based on model bounding sphere
    *
    * @return {number}
    */
-  computeArrowScale() {
+  computeGizmoSize() {
     if (!this.modelBoundingSphere) {
-      return DEFAULT_ARROW_SCALE
+      return 10
     }
-
     const radius = this.modelBoundingSphere.radius
     if (!radius || Number.isNaN(radius)) {
-      return DEFAULT_ARROW_SCALE
+      return 10
     }
-
-    const scaled = radius * ARROW_SCALE_RATIO
-    return Math.min(MAX_ARROW_SCALE, Math.max(MIN_ARROW_SCALE, scaled))
+    return radius * 2.5
   }
 
 
@@ -133,9 +116,9 @@ export default class GlbClipper {
    * Deletes all clipping planes and controls
    */
   deleteAllPlanes() {
-    // Remove arrows from scene
+    // Remove gizmos from scene
     this.planes.forEach((planeData) => {
-      this.viewer.context.getScene().remove(planeData.arrow)
+      this.viewer.context.getScene().remove(planeData.gizmo)
     })
 
     this.planes = []
@@ -162,8 +145,8 @@ export default class GlbClipper {
       this.canvas.removeEventListener('mousemove', this.onMouseMove)
       this.canvas.removeEventListener('mouseup', this.onMouseUp)
       this.canvas.style.cursor = 'default'
-      this.draggingArrow = null
-      this.hoveredArrow = null
+      this.draggingPlane = null
+      this.hoveredPlane = null
       this.interactionEnabled = false
     }
   }
@@ -243,17 +226,15 @@ export default class GlbClipper {
 
 
   /**
-   * Sets arrow color
+   * Sets gizmo highlight state
    *
-   * @param {object} arrow - Arrow helper object
-   * @param {number} color - Hex color value
+   * @param {object} gizmo - CutPlaneGizmo object
+   * @param {boolean} highlighted - Whether gizmo is highlighted
    */
-  setArrowColor(arrow, color) {
-    arrow.traverse((child) => {
-      if (child.material) {
-        child.material.color.setHex(color)
-      }
-    })
+  setGizmoHighlight(gizmo, highlighted) {
+    if (gizmo.setHighlight) {
+      gizmo.setHighlight(highlighted)
+    }
   }
 
 
@@ -275,11 +256,11 @@ export default class GlbClipper {
    * @return {Array<object>} Intersection objects with the arrows (if any).
    */
   getIntersects() {
-    const arrows = []
+    const gizmos = []
     this.planes.forEach((pd) => {
-      arrows.push(pd.arrow)
+      gizmos.push(pd.gizmo)
     })
-    return this.raycaster.intersectObjects(arrows, true)
+    return this.raycaster.intersectObjects(gizmos, true)
   }
 
 
@@ -296,22 +277,23 @@ export default class GlbClipper {
     const intersects = this.getIntersects()
 
     if (intersects.length > 0) {
-      // Find which plane's arrow was clicked
+      // Find which plane's gizmo was clicked
       for (const planeData of this.planes) {
-        if (intersects[0].object === planeData.arrow ||
-            intersects[0].object.parent === planeData.arrow) {
-          this.draggingArrow = planeData
+        let obj = intersects[0].object
+        while (obj) {
+          if (obj === planeData.gizmo) {
+            this.draggingPlane = planeData
+            this.setGizmoHighlight(planeData.gizmo, true)
 
-          // Highlight the selected arrow
-          this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
+            // Disable orbit controls while dragging
+            if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
+              this.viewer.context.ifcCamera.cameraControls.enabled = false
+            }
 
-          // Disable orbit controls while dragging
-          if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
-            this.viewer.context.ifcCamera.cameraControls.enabled = false
+            debug().log('GlbClipper: Started dragging plane for direction', planeData.direction)
+            return
           }
-
-          debug().log('GlbClipper: Started dragging arrow for direction', planeData.direction)
-          break
+          obj = obj.parent
         }
       }
     }
@@ -328,40 +310,55 @@ export default class GlbClipper {
     this.raycaster.setFromCamera(this.mouse, this.viewer.context.getCamera())
 
     // Handle hover highlighting when not dragging
-    if (!this.draggingArrow) {
+    if (!this.draggingPlane) {
       const intersects = this.getIntersects()
 
       // Reset previous hover
-      if (this.hoveredArrow && (!intersects.length ||
-          (intersects[0].object !== this.hoveredArrow.arrow &&
-           intersects[0].object.parent !== this.hoveredArrow.arrow))) {
-        this.setArrowColor(this.hoveredArrow.arrow, this.hoveredArrow.arrow.userData.defaultColor)
-        this.hoveredArrow = null
-        this.canvas.style.cursor = 'default'
+      if (this.hoveredPlane) {
+        let stillHovered = false
+        if (intersects.length > 0) {
+          let obj = intersects[0].object
+          while (obj) {
+            if (obj === this.hoveredPlane.gizmo) {
+              stillHovered = true
+              break
+            }
+            obj = obj.parent
+          }
+        }
+        if (!stillHovered) {
+          this.setGizmoHighlight(this.hoveredPlane.gizmo, false)
+          this.hoveredPlane = null
+          this.canvas.style.cursor = 'default'
+        }
       }
 
       // Set new hover
-      if (intersects.length > 0) {
+      if (intersects.length > 0 && !this.hoveredPlane) {
         for (const planeData of this.planes) {
-          if (intersects[0].object === planeData.arrow ||
-              intersects[0].object.parent === planeData.arrow) {
-            if (this.hoveredArrow !== planeData) {
-              this.hoveredArrow = planeData
-              this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
-              this.canvas.style.cursor = 'pointer'
+          let obj = intersects[0].object
+          while (obj) {
+            if (obj === planeData.gizmo) {
+              this.hoveredPlane = planeData
+              this.setGizmoHighlight(planeData.gizmo, true)
+              this.canvas.style.cursor = 'grab'
+              break
             }
-            break
+            obj = obj.parent
           }
+          if (this.hoveredPlane) break
         }
       }
       return
     }
 
-    // Create a plane perpendicular to camera and containing the arrow
+    this.canvas.style.cursor = 'grabbing'
+
+    // Create a plane perpendicular to camera and containing the gizmo
     const cameraDirection = new Vector3()
     this.viewer.context.getCamera().getWorldDirection(cameraDirection)
     const dragPlane = new Plane()
-    dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, this.draggingArrow.point)
+    dragPlane.setFromNormalAndCoplanarPoint(cameraDirection, this.draggingPlane.point)
 
     // Find intersection point
     const intersectionPoint = new Vector3()
@@ -369,25 +366,25 @@ export default class GlbClipper {
 
     if (intersectionPoint) {
       // Project movement onto the plane normal direction
-      const movement = intersectionPoint.clone().sub(this.draggingArrow.point)
-      const projectedMovement = movement.dot(this.draggingArrow.normal) * this.draggingArrow.normal.length()
+      const movement = intersectionPoint.clone().sub(this.draggingPlane.point)
+      const projectedMovement = movement.dot(this.draggingPlane.normal) * this.draggingPlane.normal.length()
 
       // Update plane position
-      const newPoint = this.draggingArrow.point.clone().add(
-        this.draggingArrow.normal.clone().multiplyScalar(projectedMovement),
+      const newPoint = this.draggingPlane.point.clone().add(
+        this.draggingPlane.normal.clone().multiplyScalar(projectedMovement),
       )
 
-      this.draggingArrow.point.copy(newPoint)
-      this.draggingArrow.plane.setFromNormalAndCoplanarPoint(
-        this.draggingArrow.normal,
+      this.draggingPlane.point.copy(newPoint)
+      this.draggingPlane.plane.setFromNormalAndCoplanarPoint(
+        this.draggingPlane.normal,
         newPoint,
       )
 
-      // Update arrow positions
-      this.draggingArrow.arrow.position.copy(newPoint)
+      // Update gizmo position
+      this.draggingPlane.gizmo.position.copy(newPoint)
 
       // Update offset
-      this.draggingArrow.offset += projectedMovement
+      this.draggingPlane.offset += projectedMovement
 
       // Update rendering
       this.updateRendererPlanes()
@@ -400,13 +397,12 @@ export default class GlbClipper {
    * Mouse up handler - stop dragging
    */
   onMouseUp() {
-    if (this.draggingArrow) {
-      debug().log('GlbClipper: Stopped dragging arrow')
+    if (this.draggingPlane) {
+      debug().log('GlbClipper: Stopped dragging plane')
 
-      // Reset arrow color to default (will be re-highlighted by hover if still over it)
-      this.setArrowColor(this.draggingArrow.arrow, this.draggingArrow.arrow.userData.defaultColor)
-
-      this.draggingArrow = null
+      this.setGizmoHighlight(this.draggingPlane.gizmo, false)
+      this.draggingPlane = null
+      this.canvas.style.cursor = 'default'
 
       // Re-enable orbit controls
       if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
@@ -426,7 +422,3 @@ export default class GlbClipper {
 }
 
 
-const DEFAULT_ARROW_SCALE = 5
-const ARROW_SCALE_RATIO = 0.25
-const MIN_ARROW_SCALE = 2
-const MAX_ARROW_SCALE = 40
