@@ -32,3 +32,4 @@ public/test-models
 
 # Local Netlify folder
 .netlify
+testdata/
