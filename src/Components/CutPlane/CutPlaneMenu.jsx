@@ -70,21 +70,18 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
-  // Initialize GlbClipper when model changes
+  // Initialize unified clipper for all model types
   useEffect(() => {
     if (model && viewer) {
-      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
-      if (isGlbModel) {
-        const clipper = new GlbClipper(viewer, model)
-        setGlbClipper(clipper)
-        viewer.glbClipper = clipper // Store on viewer for access in other functions
-        debug().log('CutPlaneMenu: Initialized GlbClipper')
+      const clipper = new GlbClipper(viewer, model)
+      setGlbClipper(clipper)
+      viewer.glbClipper = clipper
+      debug().log('CutPlaneMenu: Initialized unified clipper')
 
-        return () => {
-          clipper.dispose()
-          setGlbClipper(null)
-          delete viewer.glbClipper
-        }
+      return () => {
+        clipper.dispose()
+        setGlbClipper(null)
+        delete viewer.glbClipper
       }
     }
   }, [model, viewer])
@@ -92,15 +89,7 @@ export default function CutPlaneMenu() {
   useEffect(() => {
     const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
-    if (planeHash && model && viewer) {
-      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
-
-      // For GLB models, wait for glbClipper to be initialized
-      if (isGlbModel && !glbClipper) {
-        debug().log('CutPlaneMenu#useEffect: Waiting for glbClipper to initialize')
-        return
-      }
-
+    if (planeHash && model && viewer && glbClipper) {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
@@ -123,53 +112,36 @@ export default function CutPlaneMenu() {
     debug().log('CutPlaneMenu#togglePlane: normal: ', normal)
     debug().log('CutPlaneMenu#togglePlane: modelCenterOffset: ', modelCenterOffset)
 
-    const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
-
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
-      debug().log('CutPlaneMenu#togglePlane: found: ', true)
+      // Remove this plane
       removeParams(HASH_PREFIX_CUT_PLANE, [direction])
       removeCutPlaneDirection(direction)
 
-      if (isGlbModel && glbClipper) {
-        // For GLB: use GlbClipper
+      if (glbClipper) {
         glbClipper.deleteAllPlanes()
-      } else {
-        // For IFC: use clipper
-        viewer.clipper.deleteAllPlanes()
-      }
 
-      const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      restCutPlanes.forEach((restCutPlane) => {
-        const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
-
-        if (isGlbModel && glbClipper) {
-          // Create GLB clipping plane with controls
+        // Re-create remaining planes
+        const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+        restCutPlanes.forEach((restCutPlane) => {
+          const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
           glbClipper.createPlane(planeInfo.normal, planeInfo.modelCenterOffset, restCutPlane.direction, restCutPlane.offset)
-        } else {
-          viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
-        }
-      })
+        })
 
-      if (restCutPlanes.length === 0) {
-        setIsCutPlaneActive(false)
-        if (isGlbModel && glbClipper) {
+        if (restCutPlanes.length === 0) {
+          setIsCutPlaneActive(false)
           glbClipper.setInteractionEnabled(false)
+        } else {
+          glbClipper.setInteractionEnabled(true)
         }
-      } else if (isGlbModel && glbClipper) {
-        glbClipper.setInteractionEnabled(true)
       }
     } else {
-      debug().log('CutPlaneMenu#togglePlane: found: ', false)
+      // Add this plane
       addHashParams(window.location, HASH_PREFIX_CUT_PLANE, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
 
-      if (isGlbModel && glbClipper) {
-        // For GLB: use GlbClipper with drag controls
+      if (glbClipper) {
         glbClipper.createPlane(normal, modelCenterOffset, direction, offset)
         glbClipper.setInteractionEnabled(true)
-      } else {
-        // For IFC: use clipper
-        viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
       }
 
       setIsCutPlaneActive(true)
@@ -268,18 +240,8 @@ export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
  * @param {object} viewer bounding box
  */
 export function removePlanes(viewer) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
-
-  if (isGlbModel && viewer.glbClipper) {
-    // For GLB: use GlbClipper
+  if (viewer?.glbClipper) {
     viewer.glbClipper.deleteAllPlanes()
-  } else if (!isGlbModel) {
-    // For IFC: use clipper
-    viewer?.clipper.deleteAllPlanes()
-    const clippingPlanes = viewer?.clipper['context'].clippingPlanes
-    for (const plane of clippingPlanes) {
-      viewer?.clipper['context'].removeClippingPlane(plane)
-    }
   }
 }
 
@@ -292,8 +254,7 @@ export function removePlanes(viewer) {
  * @return {object} {x: 0, y: 0, ...}
  */
 export function getPlanesOffset(viewer, ifcModel) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
-  const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
+  const planes = viewer?.glbClipper ? viewer.glbClipper.planes : []
 
   if (planes && planes.length > 0) {
     let planeNormal
@@ -331,8 +292,7 @@ export function getPlanesOffset(viewer, ifcModel) {
  * @param {object} ifcModel
  */
 export function addPlanesToHashState(viewer, ifcModel) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
-  const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
+  const planes = viewer?.glbClipper ? viewer.glbClipper.planes : []
 
   if (planes && planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
