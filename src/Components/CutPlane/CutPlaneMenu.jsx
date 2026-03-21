@@ -9,7 +9,8 @@ import {addHashParams, getHashParams, getObjectParams, removeParams} from '../..
 import {floatStrTrim, isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {HASH_PREFIX_CUT_PLANE} from './hashState'
-import {Close as CloseIcon, CropOutlined as CropOutlinedIcon} from '@mui/icons-material'
+import {Close as CloseIcon} from '@mui/icons-material'
+import {Scissors as CropOutlinedIcon} from 'lucide-react'
 import ElevationIcon from '../../assets/icons/Elevation.svg'
 import PlanIcon from '../../assets/icons/Plan.svg'
 import SectionIcon from '../../assets/icons/Section.svg'
@@ -156,7 +157,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title='Section'
-        icon={<CropOutlinedIcon className='icon-share'/>}
+        icon={<CropOutlinedIcon size={18} strokeWidth={1.75}/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}
         variant='control'

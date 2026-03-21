@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_SHARE} from './hashState'
-import {ShareOutlined as ShareIcon} from '@mui/icons-material'
+import {Share2 as ShareIcon} from 'lucide-react'
 import ShareDialog from './ShareDialog'
 
 
@@ -19,7 +19,7 @@ export default function ShareControl() {
   return (
     <ControlButtonWithHashState
       title='Share'
-      icon={<ShareIcon className='icon-share'/>}
+      icon={<ShareIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isShareVisible}
       setIsDialogDisplayed={setIsShareVisible}
       hashPrefix={HASH_PREFIX_SHARE}

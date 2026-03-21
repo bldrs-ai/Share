@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_NAV_TREE} from './hashState'
-import {SegmentOutlined as ListIcon} from '@mui/icons-material'
+import {List as ListIcon} from 'lucide-react'
 
 
 /**
@@ -16,7 +16,7 @@ export default function NavTreeControl() {
   return (
     <ControlButtonWithHashState
       title='Navigation'
-      icon={<ListIcon className='icon-share'/>}
+      icon={<ListIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isNavTreeVisible}
       setIsDialogDisplayed={setIsNavTreeVisible}
       hashPrefix={HASH_PREFIX_NAV_TREE}

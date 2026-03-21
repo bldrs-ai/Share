@@ -56,8 +56,8 @@ export default function Styles({theme}) {
           marginRight: 'auto',
         },
         '.icon-share': {
-          width: '24px',
-          height: '24px',
+          width: '18px',
+          height: '18px',
           fill: theme.palette.primary.contrastText,
         },
         '.icon-small': {

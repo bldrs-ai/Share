@@ -1,0 +1,69 @@
+.svg-floorplan-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1A1A1A;
+}
+
+.svg-floorplan-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid #3D3D3D;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.svg-floorplan-toolbar button {
+  padding: 4px 10px;
+  border: 1px solid #3D3D3D;
+  background: transparent;
+  color: #999;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.svg-floorplan-toolbar button:hover {
+  border-color: #FF6B35;
+  color: #FF6B35;
+}
+
+.svg-floorplan-toolbar button.active {
+  border-color: #FF6B35;
+  background: rgba(255, 107, 53, 0.1);
+  color: #FF6B35;
+}
+
+.svg-floorplan-toolbar .separator {
+  width: 1px;
+  height: 20px;
+  background: #3D3D3D;
+  margin: 0 4px;
+}
+
+.svg-floorplan-viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  cursor: crosshair;
+}
+
+.svg-floorplan-viewport svg {
+  width: 100%;
+  height: 100%;
+}
+
+.svg-floorplan-status {
+  padding: 4px 8px;
+  border-top: 1px solid #3D3D3D;
+  font-size: 11px;
+  color: #666;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Snap indicator */
+.snap-point {
+  pointer-events: none;
+}

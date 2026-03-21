@@ -10,6 +10,7 @@ import {
   Divider,
 } from '@mui/material'
 import {Close as CloseIcon} from '@mui/icons-material'
+import {Layers} from 'lucide-react'
 import useStore from '../../store/useStore'
 import FloorPlanManager from './FloorPlanManager'
 import {getFloorFromHash, addFloorToHash, removeFloorFromHash} from './hashState'
@@ -170,7 +171,7 @@ export default function FloorPlanControl() {
     <>
       <TooltipIconButton
         title='Floor Plans'
-        icon={<SvgIcon><LevelsIcon className='icon-share'/></SvgIcon>}
+        icon={<Layers size={18} strokeWidth={1.75}/>}
         onClick={(e) => setAnchorEl(e.currentTarget)}
         selected={isFloorPlanMode}
         variant='control'

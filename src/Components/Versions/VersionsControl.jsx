@@ -3,7 +3,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {VERSIONS_TITLE} from './component'
 import {HASH_PREFIX_VERSIONS} from './hashState'
-import {HistoryOutlined as HistoryIcon} from '@mui/icons-material'
+import {History as HistoryIcon} from 'lucide-react'
 
 
 /**
@@ -17,7 +17,7 @@ export default function VersionsControl() {
   return (
     <ControlButtonWithHashState
       title={VERSIONS_TITLE}
-      icon={<HistoryIcon className='icon-share'/>}
+      icon={<HistoryIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isVersionsVisible}
       setIsDialogDisplayed={setIsVersionsVisible}
       hashPrefix={HASH_PREFIX_VERSIONS}

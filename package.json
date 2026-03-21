@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1924",
+  "version": "1.0.1927",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -97,6 +97,7 @@
     "html-webpack-plugin": "5.5.3",
     "js-cookie": "3.0.5",
     "jwt-decode": "4.0.0",
+    "lucide-react": "^0.577.0",
     "material-ui-popup-state": "5.0.4",
     "matrix-widget-api": "1.13.1",
     "msw": "2.10.4",

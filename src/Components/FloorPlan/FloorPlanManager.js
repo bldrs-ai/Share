@@ -92,7 +92,8 @@ export default class FloorPlanManager {
       }
 
       this.floors = allStoreys
-      debug().log('FloorPlanManager: Found', allStoreys.length, 'floors, unitScale=', unitScale)
+      console.log('FloorPlanManager: Found', allStoreys.length, 'floors, unitScale=', unitScale,
+        allStoreys.map((f) => `${f.name}@${f.elevation.toFixed(2)}`).join(', '))
       return allStoreys
     } catch (e) {
       debug().log('FloorPlanManager: Error getting floors:', e)
@@ -209,9 +210,9 @@ export default class FloorPlanManager {
       }
     })
 
-    // Log for debugging
+    // Always log clip range vs model bounds (critical for debugging)
     const box = new Box3().setFromObject(this.model)
-    debug().log(
+    console.log(
       'FloorPlan clip: Y', elevation.toFixed(2), '→', (elevation + cutHeight).toFixed(2),
       '| model Y:', box.min.y.toFixed(2), '→', box.max.y.toFixed(2),
     )
@@ -287,36 +288,57 @@ export default class FloorPlanManager {
    * coordinate system. IFC files may use mm, cm, or m for elevation.
    * The viewer geometry is always in meters (Conway converts on load).
    *
-   * Compares the IFC elevation range to the model's Y bounding box range.
-   * Returns a multiplier to convert IFC elevations to viewer Y coords.
+   * Strategy: the highest storey elevation should be INSIDE the model's
+   * Y bounding box. We find the scale factor (from known IFC units:
+   * 0.001, 0.01, 0.1, 1.0) that makes the max elevation fit best
+   * within the model bounds.
    */
   detectUnitScale(storeys) {
     if (storeys.length < 2) return 1
 
+    let modelHeight
+    let modelMinY
+    let modelMaxY
     try {
       const box = new Box3().setFromObject(this.model)
       if (!box || !box.max || !box.min) return 1
-      var modelHeight = box.max.y - box.min.y
+      modelHeight = box.max.y - box.min.y
+      modelMinY = box.min.y
+      modelMaxY = box.max.y
     } catch (_) {
       return 1
     }
     if (!modelHeight || modelHeight <= 0 || !isFinite(modelHeight)) return 1
 
-    const ifcElevRange = storeys[storeys.length - 1].elevation - storeys[0].elevation
-    if (ifcElevRange <= 0) return 1
+    const maxElev = storeys[storeys.length - 1].elevation
+    if (maxElev <= 0) return 1
 
-    const ratio = ifcElevRange / modelHeight
-    debug().log('FloorPlanManager: unitScale detection — ifcRange:', ifcElevRange,
-      'modelHeight:', modelHeight.toFixed(2), 'ratio:', ratio.toFixed(1))
+    // Try each known scale and pick the one where maxElev*scale
+    // fits best inside the model's Y range
+    const candidates = [1, 0.1, 0.01, 0.001, 0.0001]
+    let bestScale = 1
+    let bestFit = Infinity
 
-    // If IFC elevations are ~1000x the model height → millimeters
-    if (ratio > 500) return 0.001
-    // If ~100x → centimeters
-    if (ratio > 50) return 0.01
-    // If ~10x → decimeters (rare)
-    if (ratio > 5) return 0.1
-    // Otherwise assume same units (meters)
-    return 1
+    for (const scale of candidates) {
+      const scaledMax = maxElev * scale
+      // The scaled max elevation should be inside the model bounds
+      // and be a reasonable fraction of the model height (20-95%)
+      if (scaledMax > modelMinY && scaledMax < modelMaxY) {
+        const fraction = scaledMax / modelHeight
+        // Prefer scales where the top storey is at 40-90% of model height
+        const fit = Math.abs(fraction - 0.65)
+        if (fit < bestFit) {
+          bestFit = fit
+          bestScale = scale
+        }
+      }
+    }
+
+    console.log('FloorPlanManager: unitScale — maxElev:', maxElev,
+      'modelY:', modelMinY.toFixed(2), '→', modelMaxY.toFixed(2),
+      'chosen scale:', bestScale)
+
+    return bestScale
   }
 
 

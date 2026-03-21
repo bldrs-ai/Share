@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_PROPERTIES} from './hashState'
-import {FormatListBulletedOutlined as PropertiesIcon} from '@mui/icons-material'
+import {ClipboardList as PropertiesIcon} from 'lucide-react'
 
 
 /**
@@ -16,7 +16,7 @@ export default function PropertiesControl() {
   return (
     <ControlButtonWithHashState
       title='Properties'
-      icon={<PropertiesIcon className='icon-share'/>}
+      icon={<PropertiesIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isPropertiesVisible}
       setIsDialogDisplayed={setIsPropertiesVisible}
       hashPrefix={HASH_PREFIX_PROPERTIES}

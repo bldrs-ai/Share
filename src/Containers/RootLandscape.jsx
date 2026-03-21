@@ -11,6 +11,7 @@ import OperationsGroup from './OperationsGroup'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
 import NavCube from '../Components/NavCube/NavCube'
+import SVGFloorPlanView from '../Components/FloorPlan/SVGFloorPlan/SVGFloorPlanView'
 import useStore from '../store/useStore'
 
 
@@ -25,6 +26,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const isMobile = useIsMobile()
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
+  const isFloorPlanMode = useStore((state) => state.isFloorPlanMode)
 
   return (
     <Stack
@@ -74,7 +76,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           pointerEvents: 'none',
           color: theme.palette.primary.contrastText,
         }}>
-          build 016
+          build 020
         </Box>
         <Stack
           direction='row'
@@ -91,6 +93,16 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           <LoadingBackdrop/>
         </Box>
       </Stack>
+      {isFloorPlanMode && !isMobile && (
+        <Box sx={{
+          width: '400px',
+          flexShrink: 0,
+          borderLeft: `1px solid ${theme.palette.secondary.dark}`,
+          overflow: 'hidden',
+        }}>
+          <SVGFloorPlanView/>
+        </Box>
+      )}
       {isMobile ?
         <TabbedPanels
           pathPrefix={pathPrefix}

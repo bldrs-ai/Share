@@ -1,5 +1,5 @@
 import React, {ReactElement, useState} from 'react'
-import {Box, IconButton, Stack, SvgIcon, Tooltip, Typography} from '@mui/material'
+import {Box, IconButton, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {
   ChevronRight as ExpandIcon,
@@ -22,7 +22,6 @@ import SearchControl from '../Components/Search/SearchControl'
 import SearchBar from '../Components/Search/SearchBar'
 import ShareControl from '../Components/Share/ShareControl'
 import VersionsControl from '../Components/Versions/VersionsControl'
-import LogoB from '../assets/icons/Bldrs.svg'
 import useStore from '../store/useStore'
 
 
@@ -128,9 +127,12 @@ export default function LeftToolbar() {
         padding: '8px 4px',
         opacity: 0.4,
       }}>
-        <SvgIcon sx={{width: 24, height: 24}}>
-          <LogoB/>
-        </SvgIcon>
+        <Box
+          component='img'
+          src='/icons/LogoB.svg'
+          alt='bldrs'
+          sx={{width: 20, height: 20}}
+        />
         {expanded && (
           <Typography sx={{ml: '4px', fontSize: '11px', fontWeight: 600, opacity: 0.8}}>
             bldrs.ai

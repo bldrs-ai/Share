@@ -34,6 +34,10 @@ Build number shown top-center of the viewport. Increment in `src/Containers/Root
 | 014 | Recent Models tab in Open dialog |
 | 015 | Test Models tab: browseable local IFC test models from testdata/ |
 | 016 | Floor plan view feature |
+| 017 | Icons 20px, buttons 2em, stroke-width experiment |
+| 018 | All toolbar icons replaced with Lucide React (thin strokes) |
+| 019 | Profile + FloorPlan icons switched to Lucide |
+| 020 | Fixed Bldrs logo (use img instead of SvgIcon) |
 
 ## Our Changes vs Upstream
 

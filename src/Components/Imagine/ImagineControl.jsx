@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_IMAGINE} from './hashState'
-import {AutoFixHighOutlined as AutoFixHighOutlinedIcon} from '@mui/icons-material'
+import {Sparkles as AutoFixHighOutlinedIcon} from 'lucide-react'
 import ImagineDialog from './ImagineDialog'
 
 
@@ -18,7 +18,7 @@ export default function ImagineControl() {
   return (
     <ControlButtonWithHashState
       title='Rendering'
-      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
+      icon={<AutoFixHighOutlinedIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isImagineVisible}
       setIsDialogDisplayed={setIsImagineVisible}
       hashPrefix={HASH_PREFIX_IMAGINE}
