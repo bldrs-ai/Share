@@ -117,5 +117,19 @@ export class IFrameCommunicationChannel {
   sendMessage = (action, response) => {
     this.port1.postMessage({action, response})
   }
+
+  dispose() {
+    if (this.unsubscribe) {
+      this.unsubscribe()
+      this.unsubscribe = null
+    }
+    if (this.port1) {
+      this.port1.onmessage = null
+      this.port1.close()
+      this.port1 = null
+    }
+    this.channel = null
+    this.iframe = null
+  }
 }
 

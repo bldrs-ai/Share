@@ -2,56 +2,105 @@ import {Color} from 'three'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 
 
+// Track the current viewer for cleanup
+let currentViewer = null
+let mouseDownHandler = null
+let mouseUpHandler = null
+let mouseMoveHandler = null
+
+
+/**
+ * Dispose the previous viewer and all its resources.
+ */
+export function disposeViewer() {
+  if (currentViewer) {
+    try {
+      // Remove global event handlers
+      if (mouseDownHandler) window.removeEventListener('mousedown', mouseDownHandler)
+      if (mouseUpHandler) window.removeEventListener('mouseup', mouseUpHandler)
+      if (mouseMoveHandler) window.removeEventListener('mousemove', mouseMoveHandler)
+      mouseDownHandler = null
+      mouseUpHandler = null
+      mouseMoveHandler = null
+
+      // Dispose Three.js resources
+      const scene = currentViewer.context.getScene()
+      scene.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose()
+        if (obj.material) {
+          const materials = Array.isArray(obj.material) ? obj.material : [obj.material]
+          materials.forEach((mat) => {
+            if (mat.map) mat.map.dispose()
+            mat.dispose()
+          })
+        }
+      })
+
+      const renderer = currentViewer.context.getRenderer()
+      if (renderer?.dispose) renderer.dispose()
+
+      // Dispose clipper
+      if (currentViewer.glbClipper) {
+        currentViewer.glbClipper.dispose()
+        currentViewer.glbClipper = null
+      }
+
+      currentViewer = null
+    } catch (e) {
+      console.warn('Error disposing viewer:', e)
+    }
+  }
+}
+
+
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {object} IfcViewerAPIExtended viewer, width a .container property
+ * @return {object} IfcViewerAPIExtended viewer, with a .container property
  *     referencing its container.
  */
 export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
-  const container = document.getElementById('viewer-container')
+  // Dispose previous viewer first
+  disposeViewer()
 
-  // Clear any existing scene.
+  const container = document.getElementById('viewer-container')
   container.textContent = ''
+
   const viewer = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
 
-  // Path to web-ifc.wasm in serving directory.
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
 
-  window.onmousedown = () => {
-    viewer.clipper.clickDrag = true
-  }
-  window.onmouseup = () => {
-    viewer.clipper.clickDrag = false
-  }
+  // Use addEventListener so we can remove them later
+  mouseDownHandler = () => { viewer.clipper.clickDrag = true }
+  mouseUpHandler = () => { viewer.clipper.clickDrag = false }
 
   let lastPickTime = 0
-  const PICK_INTERVAL = 33 // 30fps
-  // Highlight items when hovering over them. Sample when mouse-over.
-  // Disable during a click-drag for rotation.
-  window.onmousemove = () => {
+  const PICK_INTERVAL = 33
+  mouseMoveHandler = () => {
     if (!viewer.clipper.clickDrag) {
       const now = performance.now()
       if (now - lastPickTime < PICK_INTERVAL) {
         return
       }
       lastPickTime = now
-      // NB: This is VERY EXPENSIVE, so we sample it.
-      // If we're dragging, we don't need to highlight.
       viewer.highlightIfcItem()
     }
   }
 
+  window.addEventListener('mousedown', mouseDownHandler)
+  window.addEventListener('mouseup', mouseUpHandler)
+  window.addEventListener('mousemove', mouseMoveHandler)
+
   viewer.container = container
 
-  // This is necessary so that canvas can receive key events for shortcuts.
   const canvas = viewer.context.getDomElement()
   canvas.setAttribute('tabIndex', '0')
 
+  currentViewer = viewer
   return viewer
 }

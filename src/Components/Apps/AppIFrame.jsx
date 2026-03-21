@@ -1,4 +1,4 @@
-import React, {ReactElement, useCallback} from 'react'
+import React, {ReactElement, useCallback, useRef} from 'react'
 import {Box} from '@mui/material'
 import useStore from '../../store/useStore'
 import {IFrameCommunicationChannel} from './AppsMessagesHandler'
@@ -10,16 +10,23 @@ import {IFrameCommunicationChannel} from './AppsMessagesHandler'
  */
 export default function AppIFrame({itemJson}) {
   const appPrefix = useStore((state) => state.appPrefix)
-  // Resolve widget URL relative to the site root, not the current page
   const basePath = appPrefix ? appPrefix.replace(/\/share$/, '/') : '/'
   const iframeSrc = itemJson.action.startsWith('http') ?
     itemJson.action :
     `${basePath}${itemJson.action}`
 
+  const channelRef = useRef(null)
+
   const appFrameRef = useCallback((elt) => {
+    // Dispose previous channel
+    if (channelRef.current) {
+      channelRef.current.dispose()
+      channelRef.current = null
+    }
     if (elt) {
       elt.addEventListener('load', () => {
-        new IFrameCommunicationChannel(elt)
+        if (channelRef.current) channelRef.current.dispose()
+        channelRef.current = new IFrameCommunicationChannel(elt)
       })
     }
   }, [])

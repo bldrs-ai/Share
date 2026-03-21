@@ -3,7 +3,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {VERSIONS_TITLE} from './component'
 import {HASH_PREFIX_VERSIONS} from './hashState'
-import {History as HistoryIcon} from '@mui/icons-material'
+import {HistoryOutlined as HistoryIcon} from '@mui/icons-material'
 
 
 /**

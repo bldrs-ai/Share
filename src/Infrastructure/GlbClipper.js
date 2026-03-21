@@ -55,7 +55,7 @@ export default class GlbClipper {
 
     // Visual gizmo
     const gizmoSize = this.computeGizmoSize()
-    const gizmo = new CutPlaneGizmo(normal, gizmoSize, 0xFF6B35)
+    const gizmo = new CutPlaneGizmo(normal, gizmoSize)
     gizmo.position.copy(point)
     this.viewer.context.getScene().add(gizmo)
 
@@ -82,6 +82,7 @@ export default class GlbClipper {
   deleteAllPlanes() {
     this.planes.forEach((pd) => {
       this.viewer.context.getScene().remove(pd.gizmo)
+      if (pd.gizmo.dispose) pd.gizmo.dispose()
       if (this.isIfcModel) {
         this.viewer.clipper.context.removeClippingPlane(pd.plane)
       }

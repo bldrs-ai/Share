@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_PROPERTIES} from './hashState'
-import {FormatListBulleted as PropertiesIcon} from '@mui/icons-material'
+import {FormatListBulletedOutlined as PropertiesIcon} from '@mui/icons-material'
 
 
 /**

@@ -277,10 +277,10 @@ export function getComponentOverrides(palette, typography) {
 
 const StandardButton = {
   fontSize: '1rem',
-  width: '3em',
-  height: '3em',
-  borderRadius: '10px',
-  margin: '5px',
-  padding: '5px',
+  width: '2.25em',
+  height: '2.25em',
+  borderRadius: '8px',
+  margin: '3px',
+  padding: '4px',
   border: 'none',
 }

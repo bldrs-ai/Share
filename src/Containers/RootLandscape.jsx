@@ -5,7 +5,7 @@ import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
-import ControlsGroup from './ControlsGroup'
+import LeftToolbar from './LeftToolbar'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
 import RightSideDrawers from './RightSideDrawers'
@@ -35,13 +35,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
-       <Box
-         sx={{
-           // Left drawer should take only its own width.
-           flex: '0 0 auto',
-           flexShrink: 0,
-         }}
-       >
+       <Box sx={{flex: '0 0 auto', flexShrink: 0}}>
          <NavTreeAndVersionsDrawer
            pathPrefix={pathPrefix}
            branch={branch}
@@ -68,24 +62,31 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
             data-testid='RootLandscape-ToolbarPaper'
           />
         </Box>
+        <Box sx={{
+          position: 'absolute',
+          top: 4,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1,
+          opacity: 0.4,
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          pointerEvents: 'none',
+          color: theme.palette.primary.contrastText,
+        }}>
+          build 013
+        </Box>
         <Stack
           direction='row'
           justifyContent='space-between'
-          // This pushes bottom bar down
           flexGrow={1}
           sx={{width: '100%', minWidth: 0}}
           data-testid='RootLandscape-CenterPaneTopStack'
         >
-          <ControlsGroup/>
-          <OperationsGroup/>
+          {!isMobile && <LeftToolbar/>}
         </Stack>
-        <Box
-          sx={{
-            width: '100%',
-          }}
-          data-testid='RootLandscape-CenterPaneBottomBox'
-        >
-          <BottomBar deselectItems={deselectItems}/>
+        <Box sx={{width: '100%'}} data-testid='RootLandscape-CenterPaneBottomBox'>
+          <BottomBar/>
           <AlertDialogAndSnackbar/>
           <LoadingBackdrop/>
         </Box>
@@ -96,7 +97,6 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           branch={branch}
           selectWithShiftClickEvents={selectWithShiftClickEvents}
         /> :
-      // On non-mobile, use RightSideDrawers for the combined drawer logic
         <RightSideDrawers/>
       }
       {!isMobile && <NavCube/>}

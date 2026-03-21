@@ -1,8 +1,7 @@
 import React, {ReactElement} from 'react'
-import {Divider, Stack} from '@mui/material'
+import {Stack} from '@mui/material'
 import AppsControl from '../Components/Apps/AppsControl'
-import CameraControl from '../Components/Camera/CameraControl'
-import MarkerControl from '../Components/Markers/MarkerControl'
+import HelpControl from '../Components/Help/HelpControl'
 import ImagineControl from '../Components/Imagine/ImagineControl'
 import NotesControl from '../Components/Notes/NotesControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
@@ -12,8 +11,7 @@ import useStore from '../store/useStore'
 
 
 /**
- * OperationsGroup contains tools for profile, sharing, notes, properties and
- * imagine
+ * Top-right toolbar: profile, apps, share, help, and context-sensitive controls.
  *
  * @return {ReactElement}
  */
@@ -27,11 +25,6 @@ export default function OperationsGroup() {
   const selectedElement = useStore((state) => state.selectedElement)
   const isAnElementSelected = selectedElement !== null
 
-  // required for MarkerControl
-  const viewer = useStore((state) => state.viewer)
-  const isModelReady = useStore((state) => state.isModelReady)
-  const model = useStore((state) => state.model)
-
   return (
     <Stack
       sx={{
@@ -43,22 +36,12 @@ export default function OperationsGroup() {
         {isLoginEnabled && <ProfileControl/>}
         {isAppsEnabled && <AppsControl/>}
         {isShareEnabled && <ShareControl/>}
+        <HelpControl/>
       </Stack>
-      <Stack sx={{pointerEvents: 'auto', height: '100%'}}>
-        <Divider/>
+      <Stack sx={{pointerEvents: 'auto'}}>
         {isNotesEnabled && <NotesControl/>}
         {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
-        {(viewer && isModelReady) && (
-          <MarkerControl
-            context={viewer.context ? viewer.context : null}
-            oppositeObjects={[model ? model : null]}
-            postProcessor={viewer ? viewer.postProcessor : null}
-            data-testid='markerControl'
-          />
-        )}
         {isImagineEnabled && <ImagineControl/>}
-        {/* Invisible */}
-        <CameraControl/>
       </Stack>
     </Stack>
   )
