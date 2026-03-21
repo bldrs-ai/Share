@@ -12,8 +12,12 @@ import {useIsMobile} from '../Hooks'
 import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
+import LocalModels from './LocalModels'
+import RecentModels from './RecentModels'
 import SampleModels from './SampleModels'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+import {LABEL_LOCAL, LABEL_RECENT, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+
+const LABEL_TEST_MODELS = 'Test Models'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
@@ -30,7 +34,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
+  const tabLabels = [LABEL_LOCAL, LABEL_RECENT, LABEL_TEST_MODELS, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -99,6 +103,18 @@ export default function OpenModelDialog({
           </Stack>
         }
         { currentTab === 1 &&
+          <RecentModels
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        }
+        { currentTab === 2 &&
+          <LocalModels
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        }
+        { currentTab === 3 &&
           <Stack data-testid={`dialog-open-model-github`} spacing={1}>
             <TextField
               label='GitHub Model URL'
@@ -121,7 +137,7 @@ export default function OpenModelDialog({
             {!isAuthenticated && <PleaseLogin/>}
           </Stack>
         }
-        { currentTab === 2 &&
+        { currentTab === 4 &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}

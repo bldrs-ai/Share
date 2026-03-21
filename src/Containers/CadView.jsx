@@ -26,6 +26,7 @@ import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
+import {addRecentModel} from '../Components/Open/RecentModels'
 import {initViewer} from './viewer'
 
 
@@ -315,6 +316,10 @@ export default function CadView({
     // For App API.  TODO(pablo): doublecheck this method still works with this
     // arg.. expected a url
     updateLoadedFileInfo(filepath)
+
+    // Track in recent models
+    const modelName = loadedModel.name || String(filepath).split('/').pop() || 'Model'
+    addRecentModel(modelName, window.location.pathname + window.location.hash)
 
     viewer.context.getScene().add(loadedModel)
 
