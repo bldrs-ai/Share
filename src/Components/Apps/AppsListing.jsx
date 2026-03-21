@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import {Grid} from '@mui/material'
+import {Box} from '@mui/material'
 import useStore from '../../store/useStore'
 import AppEntry from './AppEntry'
 import AppsRegistry from './AppsRegistry.json'
@@ -9,15 +9,14 @@ import AppsRegistry from './AppsRegistry.json'
 export default function AppsListing() {
   const setSelectedApp = useStore((state) => state.setSelectedApp)
   return (
-    <Grid container spacing={1}>
+    <Box sx={{display: 'flex', flexDirection: 'column', gap: '2px'}}>
       {AppsRegistry.map((itemJson, index) => (
-        <Grid key={index}>
-          <AppEntry
-            onClickCb={() => setSelectedApp(itemJson)}
-            itemJson={itemJson}
-          />
-        </Grid>
+        <AppEntry
+          key={index}
+          onClickCb={() => setSelectedApp(itemJson)}
+          itemJson={itemJson}
+        />
       ))}
-    </Grid>
+    </Box>
   )
 }

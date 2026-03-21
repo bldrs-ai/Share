@@ -5,5 +5,12 @@
     "image": "/icons/LogoBWithDomain.svg",
     "action": "widgets/dashboard-app/index.html",
     "icon": "/icons/LogoB.svg"
+  },
+  {
+    "appName": "IFC Inspector",
+    "description": "Analyse IFC file structure, detect version, and validate",
+    "image": "/widgets/ifc-inspector/icons/ifc-inspector.svg",
+    "action": "widgets/ifc-inspector/index.html",
+    "icon": "/widgets/ifc-inspector/icons/ifc-inspector.svg"
   }
 ]

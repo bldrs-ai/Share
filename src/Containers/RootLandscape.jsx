@@ -10,6 +10,7 @@ import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
+import NavCube from '../Components/NavCube/NavCube'
 import useStore from '../store/useStore'
 
 
@@ -98,6 +99,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       // On non-mobile, use RightSideDrawers for the combined drawer logic
         <RightSideDrawers/>
       }
+      {!isMobile && <NavCube/>}
     </Stack>
   )
 }
