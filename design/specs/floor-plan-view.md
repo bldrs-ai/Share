@@ -2,7 +2,7 @@
 
 ```yaml
 id: share-spec-001
-status: approved
+status: implementing
 author: solution-architect
 created: 2026-03-21
 tracks:

@@ -9,6 +9,7 @@ import {useAuth0} from '../Auth0/Auth0Proxy'
 import AppsControl from '../Components/Apps/AppsControl'
 import CameraControl from '../Components/Camera/CameraControl'
 import CutPlaneMenu from '../Components/CutPlane/CutPlaneMenu'
+import FloorPlanControl from '../Components/FloorPlan/FloorPlanControl'
 import HelpControl from '../Components/Help/HelpControl'
 import ImagineControl from '../Components/Imagine/ImagineControl'
 import NavTreeControl from '../Components/NavTree/NavTreeControl'
@@ -104,6 +105,7 @@ export default function LeftToolbar() {
         {isNavTreeEnabled && <Item label='Nav Tree'><NavTreeControl/></Item>}
         {isVersionsEnabled && <Item label='Versions'><VersionsControl/></Item>}
         <Item label='Section'><CutPlaneMenu/></Item>
+        {isModelReady && <Item label='Floor Plans'><FloorPlanControl/></Item>}
         {isNotesEnabled && <Item label='Notes'><NotesControl/></Item>}
         {isPropertiesEnabled && isAnElementSelected && <Item label='Properties'><PropertiesControl/></Item>}
         {isImagineEnabled && <Item label='Imagine'><ImagineControl/></Item>}

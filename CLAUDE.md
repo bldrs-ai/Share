@@ -33,6 +33,7 @@ Build number shown top-center of the viewport. Increment in `src/Containers/Root
 | 013 | Memory leak fixes: viewer disposal, GPU cleanup, event handler cleanup |
 | 014 | Recent Models tab in Open dialog |
 | 015 | Test Models tab: browseable local IFC test models from testdata/ |
+| 016 | Floor plan view feature |
 
 ## Our Changes vs Upstream
 

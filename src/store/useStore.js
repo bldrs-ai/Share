@@ -3,6 +3,7 @@ import createAppsSlice from './AppsSlice'
 import createBotSlice from './BotSlice'
 import createBrowserSlice from './BrowserSlice'
 import createCutPlanesSlice from './CutPlanesSlice'
+import createFloorPlanSlice from './FloorPlanSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
@@ -24,6 +25,7 @@ const useStore = create((set, get) => ({
   ...createBotSlice(set, get),
   ...createBrowserSlice(set, get),
   ...createCutPlanesSlice(set, get),
+  ...createFloorPlanSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
