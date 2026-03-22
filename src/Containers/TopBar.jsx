@@ -2,6 +2,7 @@ import React, {ReactElement} from 'react'
 import {Box, IconButton, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {BarChart3, FileSearch, Ruler, Settings} from 'lucide-react'
+import {useIsMobile} from '../Components/Hooks'
 import HelpControl from '../Components/Help/HelpControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
 import FloorPlanControl from '../Components/FloorPlan/FloorPlanControl'
@@ -20,6 +21,8 @@ const appIcons = {
 
 export default function TopBar() {
   const theme = useTheme()
+  const isMobile = useIsMobile()
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const viewer = useStore((state) => state.viewer)
@@ -52,7 +55,7 @@ export default function TopBar() {
         height: '40px',
         zIndex: 10,
         pointerEvents: 'none',
-        padding: '0 8px 0 50px',
+        padding: isMobile ? '0 8px' : '0 8px 0 50px',
         backgroundColor: theme.palette.secondary.backgroundColor,
         backdropFilter: theme.palette.secondary.backdropFilter,
         borderBottom: `1px solid ${theme.palette.secondary.dark}`,
@@ -61,14 +64,16 @@ export default function TopBar() {
     >
       {/* Left: build version + project selector */}
       <Stack direction='row' alignItems='center' spacing={1} sx={{pointerEvents: 'auto'}}>
-        <Typography sx={{
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          opacity: 0.4,
-          pointerEvents: 'none',
-        }}>
-          build 060
-        </Typography>
+        {!isMobile && (
+          <Typography sx={{
+            fontSize: '11px',
+            fontFamily: 'monospace',
+            opacity: 0.4,
+            pointerEvents: 'none',
+          }}>
+            build 060
+          </Typography>
+        )}
         <ProjectSelector/>
       </Stack>
 
@@ -105,32 +110,34 @@ export default function TopBar() {
         </Stack>
       )}
 
-      {/* Right: manage + profile + help */}
+      {/* Right: manage (localhost only) + profile + help */}
       <Stack
         direction='row'
         alignItems='center'
         sx={{pointerEvents: 'auto'}}
       >
-        <Tooltip title='Project Management' placement='bottom'>
-          <IconButton
-            size='small'
-            onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
-            sx={{
-              width: 32,
-              height: 32,
-              borderRadius: '6px',
-              color: theme.palette.primary.contrastText,
-              opacity: 0.7,
-              '&:hover': {opacity: 1},
-            }}
-          >
-            <Settings size={16} strokeWidth={1.75}/>
-          </IconButton>
-        </Tooltip>
+        {isLocalhost && (
+          <Tooltip title='Project Management' placement='bottom'>
+            <IconButton
+              size='small'
+              onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: '6px',
+                color: theme.palette.primary.contrastText,
+                opacity: 0.7,
+                '&:hover': {opacity: 1},
+              }}
+            >
+              <Settings size={16} strokeWidth={1.75}/>
+            </IconButton>
+          </Tooltip>
+        )}
         {isLoginEnabled && <ProfileControl/>}
         <HelpControl/>
       </Stack>
-      <ProjectAdminDialog/>
+      {isLocalhost && <ProjectAdminDialog/>}
     </Stack>
   )
 }

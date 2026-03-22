@@ -222,19 +222,21 @@ export async function importSeedData(repo: ProjectRepository): Promise<void> {
     return
   }
 
-  // Check if this exact seed has already been imported
+  // Check if this exact seed has already been imported — but re-import if DB is empty
   const seedHash = simpleHash(JSON.stringify(seed))
-  if (getSeedImportedVersion() === seedHash) return
+  const existingCompanies = await repo.listCompanies()
+  if (getSeedImportedVersion() === seedHash && existingCompanies.length > 0) return
 
-  // Import companies
+  // Import companies (skip if same ID or same name exists)
   for (const company of seed.companies) {
-    const existing = await repo.getCompany(company.id)
-    if (!existing) {
+    const byId = existingCompanies.find((c) => c.id === company.id)
+    const byName = existingCompanies.find((c) => c.name === company.name)
+    if (!byId && !byName) {
       await repo.saveCompany(company)
     }
   }
 
-  // Import projects
+  // Import projects (skip if same ID exists)
   for (const project of seed.projects) {
     const existing = await repo.getProject(project.id)
     if (!existing) {
@@ -242,7 +244,7 @@ export async function importSeedData(repo: ProjectRepository): Promise<void> {
     }
   }
 
-  // Import models
+  // Import models (skip if same ID exists)
   for (const model of seed.models) {
     const existing = await repo.getModel(model.id)
     if (!existing) {

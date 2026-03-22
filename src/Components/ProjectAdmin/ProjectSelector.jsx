@@ -15,6 +15,7 @@ import useStore from '../../store/useStore'
 export default function ProjectSelector() {
   const theme = useTheme()
   const navigate = useNavigate()
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const companies = useStore((state) => state.companies)
   const projects = useStore((state) => state.projects)
   const modelRefs = useStore((state) => state.modelRefs)
@@ -120,37 +121,37 @@ export default function ProjectSelector() {
       </ButtonBase>
 
       {currentModel?.currentVersionId && (
-        <>
-          <Tooltip title='Load project model' placement='bottom'>
-            <IconButton
-              size='small'
-              onClick={handleLoadModel}
-              sx={{
-                width: 24,
-                height: 24,
-                opacity: 0.5,
-                '&:hover': {opacity: 1, color: '#00ff00'},
-              }}
-            >
-              <RefreshCw size={13} strokeWidth={1.75}/>
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={saved ? 'View saved' : 'Save current view'} placement='bottom'>
-            <IconButton
-              size='small'
-              onClick={handleSaveView}
-              sx={{
-                width: 24,
-                height: 24,
-                opacity: saved ? 1 : 0.5,
-                color: saved ? '#4caf50' : undefined,
-                '&:hover': {opacity: 1},
-              }}
-            >
-              <Save size={13} strokeWidth={1.75}/>
-            </IconButton>
-          </Tooltip>
-        </>
+        <Tooltip title='Load project model' placement='bottom'>
+          <IconButton
+            size='small'
+            onClick={handleLoadModel}
+            sx={{
+              width: 24,
+              height: 24,
+              opacity: 0.5,
+              '&:hover': {opacity: 1, color: '#00ff00'},
+            }}
+          >
+            <RefreshCw size={13} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
+      )}
+      {currentModel?.currentVersionId && isLocalhost && (
+        <Tooltip title={saved ? 'View saved' : 'Save current view'} placement='bottom'>
+          <IconButton
+            size='small'
+            onClick={handleSaveView}
+            sx={{
+              width: 24,
+              height: 24,
+              opacity: saved ? 1 : 0.5,
+              color: saved ? '#4caf50' : undefined,
+              '&:hover': {opacity: 1},
+            }}
+          >
+            <Save size={13} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
       )}
 
       <Menu

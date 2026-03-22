@@ -52,7 +52,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
-        {!isMobile && <TopBar/>}
+        <TopBar/>
         <Stack
           direction='row'
           justifyContent='space-between'
@@ -93,7 +93,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         /> :
         <RightSideDrawers/>
       }
-      {!isMobile && <ViewerToolbar/>}
+      <ViewerToolbar/>
       {!isMobile && <NavCube/>}
     </Stack>
   )
