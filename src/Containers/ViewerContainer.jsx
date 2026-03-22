@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Box} from '@mui/material'
 import {useIsMobile} from '../Components/Hooks'
@@ -16,6 +16,33 @@ export default function ViewerContainer() {
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
   const vh = useStore((state) => state.vh)
   const isMobile = useIsMobile()
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const viewer = useStore((state) => state.viewer)
+
+  // Resize Three.js renderer when apps drawer opens/closes
+  const viewerWidth = (!isMobile && isAppsVisible) ? `calc(100vw - ${appsDrawerWidth}px)` : '100vw'
+
+  useEffect(() => {
+    if (!viewer) return
+    const timer = setTimeout(() => {
+      const container = document.getElementById('viewer-container')
+      if (!container) return
+      const w = container.clientWidth
+      const h = container.clientHeight
+      if (w <= 0 || h <= 0) return
+      try {
+        const renderer = viewer.context.getRenderer()
+        renderer.setSize(w, h)
+        const camera = viewer.context.getCamera()
+        if (camera.isPerspectiveCamera) {
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
+      } catch { /* */ }
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [isAppsVisible, appsDrawerWidth, viewer])
 
   const [, setIsDragActive] = useState(false)
 
@@ -39,8 +66,9 @@ export default function ViewerContainer() {
         position: 'absolute',
         top: 0,
         left: 0,
-        width: '100vw',
+        width: viewerWidth,
         height: isMobile ? `${vh}px` : '100vh',
+        transition: 'width 0.2s ease',
         margin: 0,
         padding: 0,
         textAlign: 'center',

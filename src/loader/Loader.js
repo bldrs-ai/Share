@@ -599,6 +599,7 @@ function newIfcLoader(viewer) {
       // eslint-disable-next-line new-cap
       const matrixArr = await this.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
       const matrix = new Matrix4().fromArray(matrixArr)
+      ifcModel.coordinationMatrix = matrix
       this.loader.ifcManager.setupCoordinationMatrix(matrix)
 
       if (onProgress) {

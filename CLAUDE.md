@@ -12,9 +12,13 @@ MSW_IS_ENABLED=false SHARE_CONFIG=prod serveHttps=false yarn serve-share-conway
 After restart, clear site data in Chrome DevTools → Application → Storage.
 Enable "Disable cache" in DevTools → Network tab.
 
+Port 8080 (frontend) + 8079 (esbuild backend).
+
 ## Build Versioning
 
-Build number shown top-center of the viewport. Increment in `src/Containers/RootLandscape.jsx` on each deploy.
+Build number shown top-center of the viewport. Increment in `src/Containers/TopBar.jsx` on each deploy.
+
+Current build: **059**
 
 | Build | Changes |
 |-------|---------|
@@ -48,39 +52,78 @@ Build number shown top-center of the viewport. Increment in `src/Containers/Root
 | 035 | Light/shadow toggle, BLDRS skyline model |
 | 036 | Individual app icons replace app store, Divider separator |
 | 037-038 | PanelLeft toggle icon (Insight style), CSS width transition |
+| 039-058 | TopBar, ViewerToolbar, apps drawer, section plane grid, LightManager, NavCube |
+| 059 | NavSphere: brighter wireframe, background disc, drag-to-orbit, clickable axis dots |
+
+## UI Architecture (Overlay-based)
+
+The UI uses absolute-positioned overlays on top of the Three.js canvas. A VS Code-style flex layout was attempted (builds 039-048) but caused blank pages because Three.js needs real pixel dimensions at canvas creation time. The flex approach (AppShell.jsx) was abandoned.
+
+**Layout stack (z-index order):**
+- `ViewerContainer` — Three.js canvas, absolute top:0 left:0, adjusts width for apps drawer
+- `LeftToolbar` — absolute left strip (40px collapsed, 160px expanded), top:40px
+- `TopBar` — absolute top bar (40px tall), contains build version + app icons + profile/help
+- `ViewerToolbar` — floating pill bar centered below top bar (camera/light/wireframe/projection controls)
+- `NavCube` — bottom center, shifts left when apps drawer opens
+- `SideDrawer` — right-side panels (NavTree, Properties, Apps, etc.)
+
+**Key state:**
+- `isAppsVisible` / `appsDrawerWidth` — controls viewer canvas width + NavCube position
+- `selectedElement` — drives Properties panel + selection sync to iframe apps
+- `isModelReady` — gates terrain, floor plan, app icons in TopBar
 
 ## Our Changes vs Upstream
 
 Key files changed from upstream `bldrs-ai/Share`:
+
+**Layout & containers:**
 - `src/Containers/CadView.jsx` — fixed updateLoadedFileInfo, added recent model tracking
-- `src/Containers/viewer.js` — disposeViewer() for proper cleanup
-- `src/Containers/LeftToolbar.jsx` — new: consolidated vertical toolbar
-- `src/Containers/RootLandscape.jsx` — new layout with left toolbar
-- `src/Containers/BottomBar.jsx` — simplified (About + Bot only)
-- `src/Containers/OperationsGroup.jsx` — simplified (unused in current layout)
-- `src/Components/Apps/AppsMessagesHandler.js` — getFileData handler, selection push, dispose()
-- `src/Components/Apps/AppsRegistry.json` — Dashboard App, IFC Inspector, IFC Quantities
+- `src/Containers/viewer.js` — disposeViewer() for proper cleanup, ResizeObserver
+- `src/Containers/LeftToolbar.jsx` — new: consolidated vertical toolbar (expandable)
+- `src/Containers/TopBar.jsx` — new: top bar with build version, app icons, profile/help
+- `src/Containers/ViewerToolbar.jsx` — new: floating viewer controls (fit, reset, light, wireframe, projection)
+- `src/Containers/ViewerContainer.jsx` — width adjusts for apps drawer, ResizeObserver for resize
+- `src/Containers/RootLandscape.jsx` — new layout with all overlay components
+
+**Components:**
+- `src/Components/NavCube/NavCube.jsx` — Three.js NavSphere with drag-to-orbit, axis dots, background disc
+- `src/Components/Apps/AppsMessagesHandler.js` — getFileData via OPFS, selection sync, dispose()
+- `src/Components/Apps/AppsRegistry.json` — 3 apps: Dashboard, IFC Inspector, IFC Quantities
 - `src/Components/Apps/AppIFrame.jsx` — appPrefix URL resolution, channel cleanup
-- `src/Components/Apps/AppEntry.jsx` — compact layout with appName
-- `src/Components/Apps/AppsListing.jsx` — vertical list layout
-- `src/Components/NavCube/NavCube.jsx` — new: orientation cube
-- `src/Components/Open/LocalModels.jsx` — new: test model browser
-- `src/Components/Open/RecentModels.jsx` — new: recent models
-- `src/Components/Open/OpenModelDialog.jsx` — added Recent + Test Models tabs
-- `src/Infrastructure/CutPlaneGizmo.ts` — new: grid-pattern section plane visual
+- `src/Components/Open/LocalModels.jsx` — browseable test models from testdata/
+- `src/Components/Open/RecentModels.jsx` — recent models in localStorage
+- `src/Components/Open/OpenModelDialog.jsx` — 5 tabs: Local, Recent, Test, GitHub, Samples
+- `src/Components/Terrain/TerrainControl.jsx` — terrain overlay toggle
+- `src/Components/FloorPlan/SVGFloorPlan/SVGFloorPlanView.jsx` — floor plan rendering
+
+**Infrastructure:**
+- `src/Infrastructure/CutPlaneGizmo.ts` — grid-pattern section plane visual
 - `src/Infrastructure/GlbClipper.js` — unified clipper for IFC + GLB
-- `src/Components/CutPlane/CutPlaneMenu.jsx` — simplified, no IFC/GLB branching
-- `src/Styles.jsx` — 24px icons
-- `src/theme/Components.js` — smaller button sizes
+- `src/Infrastructure/LightManager.js` — directional light + shadow toggle
+
+**Store:**
+- `src/store/useStore.js` — added TerrainSlice
+- `src/store/SideDrawerSlice.jsx` — apps drawer default = 50% screen width
+- `src/store/TerrainSlice.js` — terrain state
+
+**Theme & styles:**
+- `src/Styles.jsx` — 18px icons, hover-to-show nav tree hide buttons
+- `src/theme/Components.js` — 2em buttons, 6px radius, bldrs green (#00ff00) for selected
 - `src/privacy/firstTime.js` — onboarding disabled
+
+**Build & deploy:**
 - `public/index.html` — cache-busting headers, SW unregister
 - `tools/esbuild/proxy.js` — serves /testdata/ from disk
 - `netlify.toml` — SPA fallback redirect
+- `package.json` — added lucide-react dependency
 
-## Upstream Baseline
+## Known Issues & Deferred Work
 
-Branch `upstream-baseline` tracks `bldrs-ai/Share` main exactly.
-Compare with: `git diff upstream-baseline --stat -- src/ public/ netlify.toml`
+- **VS Code flex layout**: AppShell.jsx exists but is NOT wired in. Three.js needs pixel dimensions at init.
+- **Section planes**: Work but could be improved (stencil caps, TransformControls for positioning).
+- **Netlify free tier**: Bandwidth can be exhausted by frequent deploys.
+- **Style/theme page**: User wants a theme selector (like Insight's Warm/Cool/Yello) — not yet built.
+- **Architect agent**: Can generate IFC files via direct STEP text. More building models wanted.
 
 ## IFC File Creation
 

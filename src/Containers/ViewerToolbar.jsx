@@ -1,0 +1,147 @@
+import React, {ReactElement, useState, useCallback} from 'react'
+import {IconButton, Stack, Tooltip} from '@mui/material'
+import {useTheme} from '@mui/material/styles'
+import {
+  Sun,
+  Scissors,
+  Maximize,
+  RotateCcw,
+  Box as BoxIcon,
+  Grid3x3,
+} from 'lucide-react'
+import LightManager from '../Infrastructure/LightManager'
+import useStore from '../store/useStore'
+
+
+/**
+ * Viewer toolbar — floating bar centered above the 3D viewport.
+ * Contains tools that directly affect the 3D view.
+ */
+export default function ViewerToolbar() {
+  const theme = useTheme()
+  const viewer = useStore((state) => state.viewer)
+  const isModelReady = useStore((state) => state.isModelReady)
+  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+
+  const [lightOn, setLightOn] = useState(false)
+  const [lightManager, setLightManager] = useState(null)
+  const [wireframe, setWireframe] = useState(false)
+  const [ortho, setOrtho] = useState(false)
+
+  const toggleLight = useCallback(() => {
+    if (!viewer) return
+    let mgr = lightManager
+    if (!mgr) {
+      mgr = new LightManager(viewer)
+      setLightManager(mgr)
+    }
+    setLightOn(mgr.toggle())
+  }, [viewer, lightManager])
+
+  const fitToView = useCallback(() => {
+    if (!viewer) return
+    try {
+      viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
+    } catch { /* */ }
+  }, [viewer])
+
+  const resetCamera = useCallback(() => {
+    if (!viewer) return
+    try {
+      const controls = viewer.IFC.context.ifcCamera.cameraControls
+      controls.reset(true)
+    } catch { /* */ }
+  }, [viewer])
+
+  const toggleWireframe = useCallback(() => {
+    if (!viewer) return
+    const scene = viewer.context.getScene()
+    const newState = !wireframe
+    scene.traverse((obj) => {
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+        mats.forEach((mat) => {
+          mat.wireframe = newState
+        })
+      }
+    })
+    setWireframe(newState)
+  }, [viewer, wireframe])
+
+  const toggleProjection = useCallback(() => {
+    if (!viewer) return
+    try {
+      const camera = viewer.context.getCamera()
+      const controls = viewer.IFC.context.ifcCamera.cameraControls
+      if (camera.isPerspectiveCamera) {
+        // Switch to orthographic-like by setting very small FOV
+        controls.camera.fov = ortho ? 45 : 1
+        controls.camera.updateProjectionMatrix()
+        setOrtho(!ortho)
+      }
+    } catch { /* */ }
+  }, [viewer, ortho])
+
+  if (!viewer || !isModelReady) return null
+
+  const btnSx = (active) => ({
+    width: 30,
+    height: 30,
+    borderRadius: '6px',
+    color: active ? '#00ff00' : theme.palette.primary.contrastText,
+    opacity: active ? 1 : 0.6,
+    '&:hover': {opacity: 1},
+  })
+
+  return (
+    <Stack
+      direction='row'
+      alignItems='center'
+      spacing={0.25}
+      sx={{
+        position: 'absolute',
+        top: '48px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 5,
+        pointerEvents: 'auto',
+        backgroundColor: theme.palette.secondary.backgroundColor,
+        backdropFilter: theme.palette.secondary.backdropFilter,
+        borderRadius: '10px',
+        padding: '3px 8px',
+        border: `1px solid ${theme.palette.secondary.dark}`,
+      }}
+      data-testid='ViewerToolbar'
+    >
+      <Tooltip title='Fit to view' placement='bottom'>
+        <IconButton size='small' onClick={fitToView} sx={btnSx(false)}>
+          <Maximize size={15} strokeWidth={1.75}/>
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title='Reset camera' placement='bottom'>
+        <IconButton size='small' onClick={resetCamera} sx={btnSx(false)}>
+          <RotateCcw size={15} strokeWidth={1.75}/>
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title={lightOn ? 'Light off' : 'Light on'} placement='bottom'>
+        <IconButton size='small' onClick={toggleLight} sx={btnSx(lightOn)}>
+          <Sun size={15} strokeWidth={1.75}/>
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title={wireframe ? 'Solid' : 'Wireframe'} placement='bottom'>
+        <IconButton size='small' onClick={toggleWireframe} sx={btnSx(wireframe)}>
+          <Grid3x3 size={15} strokeWidth={1.75}/>
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title={ortho ? 'Perspective' : 'Orthographic'} placement='bottom'>
+        <IconButton size='small' onClick={toggleProjection} sx={btnSx(ortho)}>
+          <BoxIcon size={15} strokeWidth={1.75}/>
+        </IconButton>
+      </Tooltip>
+    </Stack>
+  )
+}

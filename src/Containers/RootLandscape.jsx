@@ -11,6 +11,7 @@ import TopBar from './TopBar'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
 import NavCube from '../Components/NavCube/NavCube'
+import ViewerToolbar from './ViewerToolbar'
 import SVGFloorPlanView from '../Components/FloorPlan/SVGFloorPlan/SVGFloorPlanView'
 import useStore from '../store/useStore'
 
@@ -91,6 +92,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         /> :
         <RightSideDrawers/>
       }
+      {!isMobile && <ViewerToolbar/>}
       {!isMobile && <NavCube/>}
     </Stack>
   )

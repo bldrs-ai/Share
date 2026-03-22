@@ -281,7 +281,7 @@ export default function SVGFloorPlanView() {
       if (areaPoints.length >= 3) {
         const first = areaPoints[0]
         const dist = Math.sqrt((pt[0] - first[0]) ** 2 + (pt[1] - first[1]) ** 2)
-        const closeThreshold = viewBox ? viewBox.width * 0.015 : 0.3
+        const closeThreshold = viewBox ? viewBox.width * 0.03 : 0.5
         if (dist < closeThreshold) {
           // Close the polygon — compute area
           const areaMeasurement = createAreaMeasurement(areaPoints)
@@ -354,9 +354,25 @@ export default function SVGFloorPlanView() {
     setStatus('Measurements cleared')
   }, [])
 
-  const handleDeleteLastMeasurement = useCallback(() => {
-    setMeasurements((prev) => prev.slice(0, -1))
-  }, [])
+  const handleUndo = useCallback(() => {
+    // If we're in the middle of placing area points, remove the last point
+    if (areaPoints.length > 0) {
+      setAreaPoints((prev) => prev.slice(0, -1))
+      setStatus(areaPoints.length > 1 ? `${areaPoints.length - 1} points` : 'Area tool: click to start')
+      return
+    }
+    // If we have a pending distance point, cancel it
+    if (pendingPoint) {
+      setPendingPoint(null)
+      setStatus('Measurement cancelled')
+      return
+    }
+    // Otherwise remove the last completed measurement
+    if (measurements.length > 0) {
+      setMeasurements((prev) => prev.slice(0, -1))
+      setStatus('Last measurement removed')
+    }
+  }, [areaPoints, pendingPoint, measurements])
 
   if (!isFloorPlanMode || !currentFloor) {
     return null
@@ -395,10 +411,19 @@ export default function SVGFloorPlanView() {
     const r = viewBox ? viewBox.width * 0.005 : 0.08
     let areaOverlay = ''
 
-    // Filled polygon preview (if 3+ points)
+    // Filled polygon preview + live area calculation (if 3+ points)
     if (areaPoints.length >= 3) {
       const pts = areaPoints.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
       areaOverlay += `<polygon points="${pts}" fill="rgba(0,150,200,0.15)" stroke="#0096c8" stroke-width="${sw}" stroke-dasharray="${sw * 4},${sw * 2}"/>`
+
+      // Live area value at centroid
+      const liveArea = createAreaMeasurement(areaPoints)
+      let cx = 0, cz = 0
+      for (const [x, z] of areaPoints) { cx += x; cz += z }
+      cx /= areaPoints.length; cz /= areaPoints.length
+      const fontSize = viewBox ? viewBox.width * 0.02 : 0.25
+      const areaLabel = liveArea.area >= 1 ? `${liveArea.area.toFixed(1)} m²` : `${(liveArea.area * 10000).toFixed(0)} cm²`
+      areaOverlay += `<text x="${cx.toFixed(4)}" y="${cz.toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" fill="#0096c8" text-anchor="middle" dominant-baseline="middle" font-weight="600">${areaLabel}</text>`
     }
 
     // Lines connecting points
@@ -406,17 +431,29 @@ export default function SVGFloorPlanView() {
       const [x1, z1] = areaPoints[i]
       const [x2, z2] = areaPoints[i + 1]
       areaOverlay += `<line x1="${x1.toFixed(4)}" y1="${z1.toFixed(4)}" x2="${x2.toFixed(4)}" y2="${z2.toFixed(4)}" stroke="#0096c8" stroke-width="${sw}"/>`
+
+      // Edge length label
+      const edgeLen = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2)
+      if (edgeLen > 0.3) {
+        const emx = (x1 + x2) / 2, emz = (z1 + z2) / 2
+        const edgeFontSize = viewBox ? viewBox.width * 0.012 : 0.15
+        areaOverlay += `<text x="${emx.toFixed(4)}" y="${emz.toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="${edgeFontSize}" fill="#0096c8" text-anchor="middle" dominant-baseline="middle">${edgeLen.toFixed(2)}</text>`
+      }
     }
 
-    // Point markers
-    for (const [x, z] of areaPoints) {
+    // Point markers with numbers
+    for (let i = 0; i < areaPoints.length; i++) {
+      const [x, z] = areaPoints[i]
       areaOverlay += `<circle cx="${x.toFixed(4)}" cy="${z.toFixed(4)}" r="${r}" fill="#0096c8"/>`
     }
 
-    // First point highlight (close target)
+    // First point highlight — large target for closing
     if (areaPoints.length >= 3) {
       const [fx, fz] = areaPoints[0]
-      areaOverlay += `<circle cx="${fx.toFixed(4)}" cy="${fz.toFixed(4)}" r="${r * 2.5}" fill="none" stroke="#0096c8" stroke-width="${sw}" stroke-dasharray="${sw * 2},${sw}"/>`
+      const closeR = r * 4 // larger close target
+      areaOverlay += `<circle cx="${fx.toFixed(4)}" cy="${fz.toFixed(4)}" r="${closeR}" fill="rgba(0,150,200,0.1)" stroke="#0096c8" stroke-width="${sw}" stroke-dasharray="${sw * 3},${sw}"/>`
+      const labelSize = viewBox ? viewBox.width * 0.01 : 0.12
+      areaOverlay += `<text x="${fx.toFixed(4)}" y="${(fz - closeR - labelSize).toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="${labelSize}" fill="#0096c8" text-anchor="middle">click to close</text>`
     }
 
     liveSvg = liveSvg.replace('</svg>', `${areaOverlay}\n</svg>`)
@@ -458,10 +495,16 @@ export default function SVGFloorPlanView() {
           Area
         </button>
         <div className='separator'/>
-        <button onClick={handleDeleteLastMeasurement} disabled={measurements.length === 0}>
+        <button
+          onClick={handleUndo}
+          disabled={measurements.length === 0 && areaPoints.length === 0 && !pendingPoint}
+        >
           Undo
         </button>
-        <button onClick={handleClearMeasurements} disabled={measurements.length === 0}>
+        <button
+          onClick={handleClearMeasurements}
+          disabled={measurements.length === 0 && areaPoints.length === 0}
+        >
           Clear
         </button>
         <div className='separator'/>

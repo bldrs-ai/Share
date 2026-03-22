@@ -15,6 +15,7 @@ import createRepositorySlice from './RepositorySlice'
 import createSearchSlice from './SearchSlice'
 import createShareSlice from './ShareSlice'
 import createSideDrawerSlice from './SideDrawerSlice'
+import createTerrainSlice from './TerrainSlice'
 import createUIEnabledSlice from './UIEnabledSlice'
 import createUISlice from './UISlice'
 import createVersionsSlice from './VersionsSlice'
@@ -37,6 +38,7 @@ const useStore = create((set, get) => ({
   ...createShareSlice(set, get),
   ...createSearchSlice(set, get),
   ...createSideDrawerSlice(set, get),
+  ...createTerrainSlice(set, get),
   ...createUIEnabledSlice(set, get),
   ...createUISlice(set, get),
   ...createVersionsSlice(set, get),
