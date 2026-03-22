@@ -46,6 +46,7 @@ export default function AppIFrame({itemJson}) {
         src={iframeSrc}
         width='100%'
         height='100%'
+        style={{border: 'none'}}
       />
     </Box>
   )
