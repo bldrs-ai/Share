@@ -5,9 +5,13 @@ import {renderSVG} from './SVGRenderer'
 import {
   findSnapPoint,
   createDistanceMeasurement,
+  createAreaMeasurement,
   svgEventToWorldCoords,
 } from './MeasurementTool'
 import {downloadSVG, generateFilename} from './ExportManager'
+import {renderWithTemplate} from './templates/TemplateRenderer'
+import {createDocument, saveDocument, createNewVersion, getDocumentsForModel} from './storage/DocumentStore'
+import DocumentBar from './DocumentBar'
 import './svgStyles.css'
 
 
@@ -25,11 +29,15 @@ export default function SVGFloorPlanView() {
   const [elements, setElements] = useState([])
   const [measurements, setMeasurements] = useState([])
   const [annotations, setAnnotations] = useState([])
-  const [activeTool, setActiveTool] = useState('select') // select | measure | text
+  const [activeTool, setActiveTool] = useState('select') // select | measure | area
   const [pendingPoint, setPendingPoint] = useState(null)
+  const [areaPoints, setAreaPoints] = useState([]) // accumulates points for area measurement
   const [snapIndicator, setSnapIndicator] = useState(null)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
+  const [currentDoc, setCurrentDoc] = useState(null)
+  const [saveStatus, setSaveStatus] = useState('')
+  const autoSaveTimerRef = useRef(null)
 
   // Zoom & pan state: [x, y, width, height] of the viewBox
   const [viewBox, setViewBox] = useState(null)
@@ -68,6 +76,111 @@ export default function SVGFloorPlanView() {
 
     return () => { cancelled = true }
   }, [viewer, model, currentFloor, isFloorPlanMode])
+
+  // Create or load document when floor changes
+  useEffect(() => {
+    if (!currentFloor || !isFloorPlanMode) return
+
+    // Check for existing document for this floor
+    const modelId = window.location.pathname || 'local'
+    const existing = getDocumentsForModel(modelId)
+    const forFloor = existing.find((d) => d.storeyName === currentFloor.name)
+
+    if (forFloor) {
+      setCurrentDoc(forFloor)
+      setMeasurements(forFloor.measurements || [])
+      setAnnotations(forFloor.annotations || [])
+      setSaveStatus('Loaded')
+    } else {
+      const doc = createDocument({
+        modelId,
+        name: currentFloor.name,
+        storeyName: currentFloor.name,
+        storeyElevation: currentFloor.elevation,
+      })
+      setCurrentDoc(doc)
+      setSaveStatus('New')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFloor, isFloorPlanMode])
+
+  // Auto-save on changes (debounced 2s)
+  useEffect(() => {
+    if (!currentDoc) return
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    setSaveStatus('Unsaved')
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      const updated = {
+        ...currentDoc,
+        measurements,
+        annotations,
+        viewBox,
+      }
+      saveDocument(updated)
+      setCurrentDoc(updated)
+      setSaveStatus('Saved')
+    }, 2000)
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measurements, annotations, viewBox])
+
+  // Document management callbacks
+  const handleDocNameChange = useCallback((name) => {
+    if (!currentDoc) return
+    const updated = {...currentDoc, name}
+    saveDocument(updated)
+    setCurrentDoc(updated)
+  }, [currentDoc])
+
+  const handleTemplateChange = useCallback((templateId) => {
+    if (!currentDoc) return
+    const updated = {...currentDoc, templateId}
+    saveDocument(updated)
+    setCurrentDoc(updated)
+  }, [currentDoc])
+
+  const handleScaleChange = useCallback((scale) => {
+    if (!currentDoc) return
+    const updated = {...currentDoc, scale}
+    saveDocument(updated)
+    setCurrentDoc(updated)
+  }, [currentDoc])
+
+  const handleNewVersion = useCallback(() => {
+    if (!currentDoc) return
+    const updated = createNewVersion({...currentDoc, measurements, annotations, viewBox})
+    setCurrentDoc(updated)
+    setSaveStatus(`Version ${updated.version}`)
+    setStatus(`Created version ${updated.version}`)
+  }, [currentDoc, measurements, annotations, viewBox])
+
+  const handleOpenDoc = useCallback((doc) => {
+    setCurrentDoc(doc)
+    setMeasurements(doc.measurements || [])
+    setAnnotations(doc.annotations || [])
+    if (doc.viewBox) setViewBox(doc.viewBox)
+    setSaveStatus('Loaded')
+  }, [])
+
+  const handleNewDoc = useCallback(() => {
+    const modelId = window.location.pathname || 'local'
+    const doc = createDocument({
+      modelId,
+      name: `${currentFloor?.name || 'Floor'} - New`,
+      storeyName: currentFloor?.name || '',
+      storeyElevation: currentFloor?.elevation || 0,
+    })
+    setCurrentDoc(doc)
+    setMeasurements([])
+    setAnnotations([])
+    setViewBox(null)
+    setSaveStatus('New')
+  }, [currentFloor])
 
   // Reset viewBox when elements change
   useEffect(() => {
@@ -140,30 +253,64 @@ export default function SVGFloorPlanView() {
 
   // Handle SVG click for measurements
   const handleSVGClick = useCallback((event) => {
-    if (activeTool !== 'measure') return
+    if (activeTool !== 'measure' && activeTool !== 'area') return
 
     const svgEl = svgContainerRef.current?.querySelector('svg')
     if (!svgEl) return
 
     const [wx, wz] = svgEventToWorldCoords(event, svgEl)
     const snap = findSnapPoint(wx, wz, elements)
+    const pt = [snap.x, snap.z]
 
-    if (!pendingPoint) {
-      // First click — start measurement
-      setPendingPoint([snap.x, snap.z])
-      setStatus('Click second point to measure distance')
-    } else {
-      // Second click — complete measurement
-      const m = createDistanceMeasurement(pendingPoint, [snap.x, snap.z])
-      setMeasurements((prev) => [...prev, m])
-      setPendingPoint(null)
-      setStatus(`Distance: ${m.distance.toFixed(2)}m`)
+    if (activeTool === 'measure') {
+      // Distance: two-point measurement
+      if (!pendingPoint) {
+        setPendingPoint(pt)
+        setStatus('Click second point to measure distance')
+      } else {
+        const m = createDistanceMeasurement(pendingPoint, pt)
+        setMeasurements((prev) => [...prev, m])
+        setPendingPoint(null)
+        setStatus(`Distance: ${m.distance.toFixed(2)}m`)
+      }
+    } else if (activeTool === 'area') {
+      // Area: multi-point polygon
+      const newPoints = [...areaPoints, pt]
+
+      // Close polygon if clicking near the first point (and we have 3+ points)
+      if (areaPoints.length >= 3) {
+        const first = areaPoints[0]
+        const dist = Math.sqrt((pt[0] - first[0]) ** 2 + (pt[1] - first[1]) ** 2)
+        const closeThreshold = viewBox ? viewBox.width * 0.015 : 0.3
+        if (dist < closeThreshold) {
+          // Close the polygon — compute area
+          const areaMeasurement = createAreaMeasurement(areaPoints)
+          setMeasurements((prev) => [...prev, areaMeasurement])
+          setAreaPoints([])
+          setStatus(`Area: ${areaMeasurement.area.toFixed(2)} m²`)
+          return
+        }
+      }
+
+      setAreaPoints(newPoints)
+      setStatus(`${newPoints.length} points — click near first point to close (${newPoints.length >= 3 ? 'ready' : 'need 3+'})`)
     }
-  }, [activeTool, pendingPoint, elements])
+  }, [activeTool, pendingPoint, areaPoints, elements, viewBox])
+
+  // Handle double-click to close area polygon
+  const handleSVGDoubleClick = useCallback((event) => {
+    if (activeTool !== 'area' || areaPoints.length < 3) return
+    event.preventDefault()
+
+    const areaMeasurement = createAreaMeasurement(areaPoints)
+    setMeasurements((prev) => [...prev, areaMeasurement])
+    setAreaPoints([])
+    setStatus(`Area: ${areaMeasurement.area.toFixed(2)} m²`)
+  }, [activeTool, areaPoints])
 
   // Handle mouse move for snap indicator
   const handleMouseMove = useCallback((event) => {
-    if (activeTool !== 'measure') {
+    if (activeTool !== 'measure' && activeTool !== 'area') {
       setSnapIndicator(null)
       return
     }
@@ -182,19 +329,28 @@ export default function SVGFloorPlanView() {
   }, [activeTool, elements])
 
   const handleExport = useCallback(() => {
-    const svg = renderSVG(elements, measurements, annotations, {
-      scale: 100,
-      title: 'Model',
+    const scale = currentDoc?.scale || 100
+    const templateId = currentDoc?.templateId || 'minimal'
+    const baseSvg = renderSVG(elements, measurements, annotations, {
+      scale,
       storey: currentFloor?.name || 'Unknown',
     })
-    const filename = generateFilename('model', currentFloor?.name)
+    const svg = renderWithTemplate(baseSvg, templateId, {
+      project: currentDoc?.name || 'Untitled',
+      storey: currentFloor?.name || '',
+      scale: `1:${scale}`,
+      date: new Date().toLocaleDateString(),
+      revision: String(currentDoc?.version || 1),
+    })
+    const filename = generateFilename(currentDoc?.name || 'model', currentFloor?.name)
     downloadSVG(svg, filename)
     setStatus(`Exported: ${filename}`)
-  }, [elements, measurements, annotations, currentFloor])
+  }, [elements, measurements, annotations, currentFloor, currentDoc])
 
   const handleClearMeasurements = useCallback(() => {
     setMeasurements([])
     setPendingPoint(null)
+    setAreaPoints([])
     setStatus('Measurements cleared')
   }, [])
 
@@ -233,6 +389,39 @@ export default function SVGFloorPlanView() {
     liveSvg = liveSvg.replace('</svg>', `${pendingCircle}\n</svg>`)
   }
 
+  // Draw in-progress area polygon
+  if (areaPoints.length > 0) {
+    const sw = viewBox ? viewBox.width * 0.003 : 0.03
+    const r = viewBox ? viewBox.width * 0.005 : 0.08
+    let areaOverlay = ''
+
+    // Filled polygon preview (if 3+ points)
+    if (areaPoints.length >= 3) {
+      const pts = areaPoints.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+      areaOverlay += `<polygon points="${pts}" fill="rgba(0,150,200,0.15)" stroke="#0096c8" stroke-width="${sw}" stroke-dasharray="${sw * 4},${sw * 2}"/>`
+    }
+
+    // Lines connecting points
+    for (let i = 0; i < areaPoints.length - 1; i++) {
+      const [x1, z1] = areaPoints[i]
+      const [x2, z2] = areaPoints[i + 1]
+      areaOverlay += `<line x1="${x1.toFixed(4)}" y1="${z1.toFixed(4)}" x2="${x2.toFixed(4)}" y2="${z2.toFixed(4)}" stroke="#0096c8" stroke-width="${sw}"/>`
+    }
+
+    // Point markers
+    for (const [x, z] of areaPoints) {
+      areaOverlay += `<circle cx="${x.toFixed(4)}" cy="${z.toFixed(4)}" r="${r}" fill="#0096c8"/>`
+    }
+
+    // First point highlight (close target)
+    if (areaPoints.length >= 3) {
+      const [fx, fz] = areaPoints[0]
+      areaOverlay += `<circle cx="${fx.toFixed(4)}" cy="${fz.toFixed(4)}" r="${r * 2.5}" fill="none" stroke="#0096c8" stroke-width="${sw}" stroke-dasharray="${sw * 2},${sw}"/>`
+    }
+
+    liveSvg = liveSvg.replace('</svg>', `${areaOverlay}\n</svg>`)
+  }
+
   const handleClose = useCallback(() => {
     // Exit floor plan mode entirely
     const setIsFloorPlanMode = useStore.getState().setIsFloorPlanMode
@@ -258,9 +447,15 @@ export default function SVGFloorPlanView() {
         </button>
         <button
           className={activeTool === 'measure' ? 'active' : ''}
-          onClick={() => setActiveTool('measure')}
+          onClick={() => { setActiveTool('measure'); setAreaPoints([]) }}
         >
-          Measure
+          Distance
+        </button>
+        <button
+          className={activeTool === 'area' ? 'active' : ''}
+          onClick={() => { setActiveTool('area'); setPendingPoint(null) }}
+        >
+          Area
         </button>
         <div className='separator'/>
         <button onClick={handleDeleteLastMeasurement} disabled={measurements.length === 0}>
@@ -274,10 +469,21 @@ export default function SVGFloorPlanView() {
           Export SVG
         </button>
       </div>
+      <DocumentBar
+        document={currentDoc}
+        onNameChange={handleDocNameChange}
+        onTemplateChange={handleTemplateChange}
+        onScaleChange={handleScaleChange}
+        onNewVersion={handleNewVersion}
+        onOpen={handleOpenDoc}
+        onNew={handleNewDoc}
+        saveStatus={saveStatus}
+      />
       <div
         className='svg-floorplan-viewport'
         ref={svgContainerRef}
         onClick={handleSVGClick}
+        onDoubleClick={handleSVGDoubleClick}
         onMouseMove={(e) => { handleMouseMove(e); handlePanMove(e) }}
         onMouseDown={handlePanStart}
         onMouseUp={handlePanEnd}

@@ -58,7 +58,7 @@ export default function TopBar() {
         opacity: 0.4,
         pointerEvents: 'none',
       }}>
-        build 038
+        build 045
       </Typography>
 
       {/* Center: model tools */}

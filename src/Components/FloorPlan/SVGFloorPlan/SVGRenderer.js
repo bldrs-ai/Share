@@ -73,10 +73,21 @@ export function renderSVG(elements, measurements = [], annotations = [], options
     lines.push(`  </g>`)
   }
 
-  // User measurements only (no auto-dimensions — too noisy with bounding boxes)
-  if (measurements.length > 0) {
+  // User measurements: distance lines + area polygons
+  const distMeasurements = measurements.filter((m) => m.type === 'distance')
+  const areaMeasurements = measurements.filter((m) => m.type === 'area')
+
+  if (areaMeasurements.length > 0) {
+    lines.push(`  <g class="layer-areas" data-layer="areas">`)
+    for (const a of areaMeasurements) {
+      lines.push(renderAreaMeasurement(a))
+    }
+    lines.push(`  </g>`)
+  }
+
+  if (distMeasurements.length > 0) {
     lines.push(`  <g class="layer-dimensions" data-layer="dimensions">`)
-    for (const m of measurements) {
+    for (const m of distMeasurements) {
       lines.push(renderDimLine(m))
     }
     lines.push(`  </g>`)
@@ -124,6 +135,21 @@ function generateAutoDimensions(elements) {
     }
   }
   return dims
+}
+
+
+/**
+ * Render a completed area measurement: filled polygon + area label at centroid.
+ */
+function renderAreaMeasurement(a) {
+  const pts = a.points.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+  const c = centroid(a.points)
+  const label = a.area >= 1 ? `${a.area.toFixed(1)} m²` : `${(a.area * 10000).toFixed(0)} cm²`
+
+  return [
+    `    <polygon points="${pts}" fill="rgba(0,150,200,0.12)" stroke="#0096c8" stroke-width="0.02"/>`,
+    `    <text x="${c[0].toFixed(4)}" y="${c[1].toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="0.25" fill="#0096c8" text-anchor="middle" dominant-baseline="middle" font-weight="500">${label}</text>`,
+  ].join('\n')
 }
 
 

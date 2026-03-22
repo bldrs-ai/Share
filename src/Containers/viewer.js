@@ -23,6 +23,12 @@ export function disposeViewer() {
       mouseUpHandler = null
       mouseMoveHandler = null
 
+      // Disconnect resize observer
+      if (currentViewer._resizeObserver) {
+        currentViewer._resizeObserver.disconnect()
+        currentViewer._resizeObserver = null
+      }
+
       // Dispose Three.js resources
       const scene = currentViewer.context.getScene()
       scene.traverse((obj) => {
@@ -100,6 +106,27 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   const canvas = viewer.context.getDomElement()
   canvas.setAttribute('tabIndex', '0')
+
+  // Resize renderer when container size changes (flex layout)
+  const resizeObserver = new ResizeObserver(() => {
+    const w = container.clientWidth
+    const h = container.clientHeight
+    if (w > 0 && h > 0) {
+      try {
+        const renderer = viewer.context.getRenderer()
+        renderer.setSize(w, h)
+        const camera = viewer.context.getCamera()
+        if (camera.isPerspectiveCamera) {
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
+      } catch (e) {
+        // Viewer may be disposed
+      }
+    }
+  })
+  resizeObserver.observe(container)
+  viewer._resizeObserver = resizeObserver
 
   currentViewer = viewer
   return viewer

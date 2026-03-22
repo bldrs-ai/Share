@@ -87,3 +87,92 @@
   border-color: #c00;
   color: #c00;
 }
+
+/* Document bar */
+.svg-floorplan-docbar {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #e0e0e0;
+  align-items: center;
+  background: #f5f5f5;
+  font-family: 'Helvetica', 'Arial', sans-serif;
+  font-size: 11px;
+}
+
+.docbar-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.docbar-name-text {
+  cursor: pointer;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  font-weight: 500;
+  color: #333;
+}
+
+.docbar-name-text:hover {
+  border-color: #ccc;
+  background: #fff;
+}
+
+.docbar-name-input {
+  padding: 2px 6px;
+  border: 1px solid #0096c8;
+  border-radius: 2px;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  width: 140px;
+}
+
+.docbar-version {
+  font-size: 9px;
+  color: #999;
+  padding: 1px 4px;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+}
+
+.docbar-select {
+  padding: 2px 4px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  font-size: 10px;
+  font-family: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+
+.docbar-status {
+  margin-left: auto;
+  font-size: 10px;
+  color: #999;
+}
+
+.svg-floorplan-docbar button {
+  padding: 2px 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #555;
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.svg-floorplan-docbar button:hover {
+  border-color: #999;
+  color: #333;
+}
+
+.svg-floorplan-docbar .separator {
+  width: 1px;
+  height: 16px;
+  background: #ddd;
+  margin: 0 2px;
+}
