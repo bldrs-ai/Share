@@ -14,6 +14,9 @@ export default function ModelList() {
   const theme = useTheme()
   const modelRefs = useStore((state) => state.modelRefs)
   const activeProjectId = useStore((state) => state.activeProjectId)
+  const projects = useStore((state) => state.projects)
+  const companies = useStore((state) => state.companies)
+  const activeCompanyId = useStore((state) => state.activeCompanyId)
   const addModelToProject = useStore((state) => state.addModelToProject)
   const deleteModelFromProject = useStore((state) => state.deleteModelFromProject)
   const setActiveProject = useStore((state) => state.setActiveProject)
@@ -47,16 +50,27 @@ export default function ModelList() {
     setExpandedModelId((prev) => prev === modelId ? null : modelId)
   }, [])
 
+  const activeCompany = companies.find((c) => c.id === activeCompanyId)
+  const activeProject = projects.find((p) => p.id === activeProjectId)
+
   if (!activeProjectId) {
     return (
-      <Typography variant='body2' sx={{opacity: 0.5, textAlign: 'center', py: 3, fontSize: '13px'}}>
-        Select a project first
-      </Typography>
+      <Stack spacing={1} sx={{py: 3, textAlign: 'center'}}>
+        <Typography variant='body2' sx={{opacity: 0.5, fontSize: '13px'}}>
+          Select a company and project first
+        </Typography>
+        <Typography variant='caption' sx={{opacity: 0.3, fontSize: '11px'}}>
+          Use the Companies and Projects tabs to create one
+        </Typography>
+      </Stack>
     )
   }
 
   return (
     <Stack spacing={0.5}>
+      <Typography variant='caption' sx={{opacity: 0.4, fontSize: '10px', textTransform: 'uppercase', px: '10px', pb: 0.5}}>
+        {activeCompany?.name} / {activeProject?.name}
+      </Typography>
       {modelRefs.map((model) => (
         <Box key={model.id}>
           {editingModelId === model.id ? (

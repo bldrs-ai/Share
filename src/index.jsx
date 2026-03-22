@@ -23,6 +23,9 @@ setupSentry()
 setupMSW()
 setupEsbuildWatch()
 
+// Detect base path for GH Pages subpath deployment
+window.__ASSET_BASE__ = window.location.hostname.endsWith('.github.io') ? '/share' : ''
+
 const root = createRoot(document.getElementById('root'))
 
 /** @return {ReactElement} The app with its context. */

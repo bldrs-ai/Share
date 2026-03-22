@@ -33,7 +33,7 @@ export default function AppEntry({itemJson, onClickCb}) {
       >
         <Box
           component='img'
-          src={itemJson.icon}
+          src={`${window.__ASSET_BASE__ || ''}${itemJson.icon}`}
           alt={itemJson.appName}
           sx={{
             width: 28,

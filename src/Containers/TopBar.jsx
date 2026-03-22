@@ -94,7 +94,7 @@ export default function TopBar() {
                 >
                   {LucideIcon ?
                     <LucideIcon size={16} strokeWidth={1.75}/> :
-                    <Box component='img' src={app.icon} alt={app.appName} sx={{width: 16, height: 16}}/>
+                    <Box component='img' src={`${window.__ASSET_BASE__ || ''}${app.icon}`} alt={app.appName} sx={{width: 16, height: 16}}/>
                   }
                 </IconButton>
               </Tooltip>

@@ -21,6 +21,18 @@ export interface Project {
 
 export type ProjectStatus = 'active' | 'archived'
 
+export interface ModelViewState {
+  camera: {
+    position: [number, number, number]
+    target: [number, number, number]
+  }
+  light?: {
+    on: boolean
+    azimuth: number
+    elevation: number
+  }
+}
+
 export interface ModelRef {
   id: string
   projectId: string
@@ -29,6 +41,7 @@ export interface ModelRef {
   source: ModelSource
   addedAt: string
   lastOpenedAt: string
+  viewState?: ModelViewState | null
 }
 
 export type ModelSource = 'local' | 'github' | 'upload' | 'sample'

@@ -5,6 +5,7 @@ import {
   deleteModelDirectory,
   computeFileHash,
 } from '../Infrastructure/ProjectData/ProjectFileStore'
+import {importSeedData} from '../Infrastructure/ProjectData/SeedManager'
 
 
 const ACTIVE_COMPANY_KEY = 'bldrs-active-company'
@@ -33,6 +34,9 @@ export default function createProjectSlice(set, get) {
     projects: [],
     modelRefs: [],
     modelVersions: [],
+
+    // Pending view state to restore after model loads
+    pendingViewState: null,
 
     // Admin dialog
     isProjectAdminVisible: false,
@@ -202,7 +206,29 @@ export default function createProjectSlice(set, get) {
       set({modelVersions: versions, modelRefs})
     },
 
+    saveModelViewState: async (viewState) => {
+      const projectId = get().activeProjectId
+      if (!projectId) return
+
+      const modelRefs = get().modelRefs
+      if (modelRefs.length === 0) return
+
+      // Save to the most recently opened model
+      const sorted = [...modelRefs].sort((a, b) =>
+        new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+      )
+      const model = sorted[0]
+      model.viewState = viewState
+      await repo.saveModel(model)
+
+      const updatedRefs = await repo.listModels(projectId)
+      set({modelRefs: updatedRefs})
+    },
+
     restoreProjectContext: async () => {
+      // Import seed data from server if available (first run on GH Pages)
+      await importSeedData(repo)
+
       const companies = await repo.listCompanies()
       set({companies})
 

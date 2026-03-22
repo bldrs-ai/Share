@@ -1,0 +1,115 @@
+{
+  "companies": [
+    {
+      "id": "aaff33b1-f752-4858-b472-7cfe96e0d3a5",
+      "name": "NoName",
+      "description": "just me my bot an I",
+      "logoDataUrl": null,
+      "createdAt": "2026-03-22T14:42:27.965Z",
+      "updatedAt": "2026-03-22T14:42:27.965Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "8d7dc9d5-117e-4280-9960-f8b77ca6d69e",
+      "companyId": "aaff33b1-f752-4858-b472-7cfe96e0d3a5",
+      "name": "Home",
+      "description": "",
+      "status": "active",
+      "createdAt": "2026-03-22T14:48:40.712Z",
+      "updatedAt": "2026-03-22T14:48:40.712Z"
+    },
+    {
+      "id": "91ff69e2-bcc8-4276-acba-6b59689dc80f",
+      "companyId": "aaff33b1-f752-4858-b472-7cfe96e0d3a5",
+      "name": "Seestrasse",
+      "description": "",
+      "status": "active",
+      "createdAt": "2026-03-22T14:42:34.652Z",
+      "updatedAt": "2026-03-22T14:42:34.652Z"
+    },
+    {
+      "id": "f1de2f77-3914-429f-9361-302a5eef955f",
+      "companyId": "aaff33b1-f752-4858-b472-7cfe96e0d3a5",
+      "name": "Schependomlaan",
+      "description": "",
+      "status": "active",
+      "createdAt": "2026-03-22T14:45:39.465Z",
+      "updatedAt": "2026-03-22T14:45:39.465Z"
+    }
+  ],
+  "models": [
+    {
+      "id": "eb540a54-6334-4ace-8a0c-17d8ac3662c6",
+      "projectId": "91ff69e2-bcc8-4276-acba-6b59689dc80f",
+      "name": "SEESTRASSE.ifc",
+      "currentVersionId": "dd449fb5-1f34-449d-beb0-08798d92553a",
+      "source": "local",
+      "addedAt": "2026-03-22T14:42:40.245Z",
+      "lastOpenedAt": "2026-03-22T14:42:40.245Z",
+      "viewState": {
+        "camera": {
+          "position": [
+            -10.009539837128502,
+            59.84724489367698,
+            -5.874091400916426
+          ],
+          "target": [
+            -10.009586334228516,
+            11.660000175237656,
+            -5.874078750610352
+          ]
+        }
+      }
+    },
+    {
+      "id": "23d5135c-b0e6-48dd-b980-603233f28dbe",
+      "projectId": "f1de2f77-3914-429f-9361-302a5eef955f",
+      "name": "Schependomlaan.ifc",
+      "currentVersionId": "320e9c16-7562-4866-a55f-8b3844c536c7",
+      "source": "local",
+      "addedAt": "2026-03-22T14:45:48.064Z",
+      "lastOpenedAt": "2026-03-22T14:45:48.064Z",
+      "viewState": {
+        "camera": {
+          "position": [
+            -12.751566116857177,
+            15.978596122478432,
+            35.94381642927815
+          ],
+          "target": [
+            6.838724179492227,
+            4.261197921275159,
+            1.8865141978523445
+          ]
+        }
+      }
+    }
+  ],
+  "versions": [
+    {
+      "id": "dd449fb5-1f34-449d-beb0-08798d92553a",
+      "modelId": "eb540a54-6334-4ace-8a0c-17d8ac3662c6",
+      "versionNumber": 1,
+      "comment": "Initial upload",
+      "fileHash": "5c0d00daf8b05a77adca2ad82f6d66082fac37a9ebeaf753334c523caa57c323",
+      "fileSizeBytes": 25358508,
+      "originalFileName": "SEESTRASSE.ifc",
+      "opfsPath": "bldrs-projects/91ff69e2-bcc8-4276-acba-6b59689dc80f/eb540a54-6334-4ace-8a0c-17d8ac3662c6/v1.ifc",
+      "createdAt": "2026-03-22T14:42:40.244Z",
+      "seedFilePath": "models/SEESTRASSE.ifc"
+    },
+    {
+      "id": "320e9c16-7562-4866-a55f-8b3844c536c7",
+      "modelId": "23d5135c-b0e6-48dd-b980-603233f28dbe",
+      "versionNumber": 1,
+      "comment": "Initial upload",
+      "fileHash": "2c3565ca1904f2aa61adab92024cf3755b2c5b21a498144d3094d7cb58cebec7",
+      "fileSizeBytes": 49286967,
+      "originalFileName": "Schependomlaan.ifc",
+      "opfsPath": "bldrs-projects/f1de2f77-3914-429f-9361-302a5eef955f/23d5135c-b0e6-48dd-b980-603233f28dbe/v1.ifc",
+      "createdAt": "2026-03-22T14:45:48.064Z",
+      "seedFilePath": "models/Schependomlaan.ifc"
+    }
+  ]
+}

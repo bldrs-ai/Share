@@ -118,7 +118,7 @@ export default function LeftToolbar() {
       }}>
         <Box
           component='img'
-          src='/icons/LogoB.svg'
+          src={`${window.__ASSET_BASE__ || ''}/icons/LogoB.svg`}
           alt='bldrs'
           sx={{width: 16, height: 16}}
         />

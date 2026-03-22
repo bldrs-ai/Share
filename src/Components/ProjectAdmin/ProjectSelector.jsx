@@ -2,7 +2,7 @@ import React, {useState, useCallback} from 'react'
 import {Box, ButtonBase, Divider, IconButton, Menu, MenuItem, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {useNavigate} from 'react-router-dom'
-import {ChevronDown, Building2, FolderOpen, RefreshCw} from 'lucide-react'
+import {ChevronDown, Building2, FolderOpen, RefreshCw, Save} from 'lucide-react'
 import {readProjectFile} from '../../Infrastructure/ProjectData/ProjectFileStore'
 import {saveDnDFileToOpfs} from '../../OPFS/utils'
 import {navigateToModel} from '../../utils/navigate'
@@ -50,21 +50,53 @@ export default function ProjectSelector() {
     setAnchorEl(null)
   }
 
+  const viewer = useStore((state) => state.viewer)
+  const saveModelViewState = useStore((state) => state.saveModelViewState)
+  const [saved, setSaved] = useState(false)
+
   const handleLoadModel = useCallback(async () => {
     if (!currentModel?.currentVersionId) return
+    console.log('[ProjectSelector] Loading model:', currentModel.name, 'viewState:', currentModel.viewState)
     try {
       const version = await repo.getVersion(currentModel.currentVersionId)
       if (!version) return
       const file = await readProjectFile(version.opfsPath)
       const ext = version.originalFileName.split('.').pop() || 'ifc'
-      // Use the same DnD flow: write to OPFS cache, then navigate
+      // Store pending view state before navigating — CadView will restore it
+      if (currentModel.viewState) {
+        console.log('[ProjectSelector] Setting pendingViewState:', currentModel.viewState)
+        useStore.setState({pendingViewState: currentModel.viewState})
+      } else {
+        console.log('[ProjectSelector] No viewState on model')
+      }
       saveDnDFileToOpfs(file, ext, (fileName) => {
+        console.log('[ProjectSelector] Navigating, pendingViewState in store:', useStore.getState().pendingViewState)
         navigateToModel(`${appPrefix}/v/new/${fileName}`, navigate)
       })
     } catch (err) {
       console.warn('[ProjectSelector] Failed to load model:', err)
     }
   }, [currentModel, repo, appPrefix, navigate])
+
+  const handleSaveView = useCallback(() => {
+    if (!viewer?.context) return
+    try {
+      const cc = viewer.IFC.context.ifcCamera.cameraControls
+      const pos = cc.getPosition()
+      const tgt = cc.getTarget()
+      const viewState = {
+        camera: {
+          position: [pos.x, pos.y, pos.z],
+          target: [tgt.x, tgt.y, tgt.z],
+        },
+      }
+      saveModelViewState(viewState)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      console.warn('[ProjectSelector] Failed to save view:', err)
+    }
+  }, [viewer, saveModelViewState])
 
   return (
     <>
@@ -88,20 +120,37 @@ export default function ProjectSelector() {
       </ButtonBase>
 
       {currentModel?.currentVersionId && (
-        <Tooltip title='Load project model' placement='bottom'>
-          <IconButton
-            size='small'
-            onClick={handleLoadModel}
-            sx={{
-              width: 24,
-              height: 24,
-              opacity: 0.5,
-              '&:hover': {opacity: 1, color: '#00ff00'},
-            }}
-          >
-            <RefreshCw size={13} strokeWidth={1.75}/>
-          </IconButton>
-        </Tooltip>
+        <>
+          <Tooltip title='Load project model' placement='bottom'>
+            <IconButton
+              size='small'
+              onClick={handleLoadModel}
+              sx={{
+                width: 24,
+                height: 24,
+                opacity: 0.5,
+                '&:hover': {opacity: 1, color: '#00ff00'},
+              }}
+            >
+              <RefreshCw size={13} strokeWidth={1.75}/>
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={saved ? 'View saved' : 'Save current view'} placement='bottom'>
+            <IconButton
+              size='small'
+              onClick={handleSaveView}
+              sx={{
+                width: 24,
+                height: 24,
+                opacity: saved ? 1 : 0.5,
+                color: saved ? '#4caf50' : undefined,
+                '&:hover': {opacity: 1},
+              }}
+            >
+              <Save size={13} strokeWidth={1.75}/>
+            </IconButton>
+          </Tooltip>
+        </>
       )}
 
       <Menu

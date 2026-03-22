@@ -1,15 +1,16 @@
-import React, {ReactElement, useState, useCallback} from 'react'
-import {IconButton, Stack, Tooltip} from '@mui/material'
+import React, {useState, useCallback} from 'react'
+import {IconButton, Slider, Stack, Tooltip} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {
   Sun,
-  Scissors,
   Maximize,
   RotateCcw,
+  RotateCw,
   Box as BoxIcon,
   Grid3x3,
 } from 'lucide-react'
 import LightManager from '../Infrastructure/LightManager'
+import SunCompass from '../Components/Sun/SunCompass'
 import useStore from '../store/useStore'
 
 
@@ -21,10 +22,12 @@ export default function ViewerToolbar() {
   const theme = useTheme()
   const viewer = useStore((state) => state.viewer)
   const isModelReady = useStore((state) => state.isModelReady)
-  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
 
   const [lightOn, setLightOn] = useState(false)
   const [lightManager, setLightManager] = useState(null)
+  const [azimuth, setAzimuth] = useState(225)
+  const [elevation, setElevation] = useState(53)
+  const [isRotating, setIsRotating] = useState(false)
   const [wireframe, setWireframe] = useState(false)
   const [ortho, setOrtho] = useState(false)
 
@@ -35,8 +38,39 @@ export default function ViewerToolbar() {
       mgr = new LightManager(viewer)
       setLightManager(mgr)
     }
-    setLightOn(mgr.toggle())
-  }, [viewer, lightManager])
+    const nowOn = mgr.toggle()
+    setLightOn(nowOn)
+    if (!nowOn && isRotating) {
+      setIsRotating(false)
+    }
+    if (nowOn) {
+      setAzimuth(mgr.getAzimuth())
+      setElevation(mgr.getElevation())
+    }
+  }, [viewer, lightManager, isRotating])
+
+  const onAzimuthChange = useCallback((deg) => {
+    if (!lightManager) return
+    lightManager.setAzimuth(deg)
+    setAzimuth(deg)
+  }, [lightManager])
+
+  const onElevationChange = useCallback((_, val) => {
+    if (!lightManager) return
+    lightManager.setElevation(val)
+    setElevation(val)
+  }, [lightManager])
+
+  const toggleRotation = useCallback(() => {
+    if (!lightManager) return
+    if (isRotating) {
+      lightManager.stopRotation()
+      setIsRotating(false)
+    } else {
+      lightManager.startRotation((az) => setAzimuth(Math.round(az)))
+      setIsRotating(true)
+    }
+  }, [lightManager, isRotating])
 
   const fitToView = useCallback(() => {
     if (!viewer) return
@@ -74,7 +108,6 @@ export default function ViewerToolbar() {
       const camera = viewer.context.getCamera()
       const controls = viewer.IFC.context.ifcCamera.cameraControls
       if (camera.isPerspectiveCamera) {
-        // Switch to orthographic-like by setting very small FOV
         controls.camera.fov = ortho ? 45 : 1
         controls.camera.updateProjectionMatrix()
         setOrtho(!ortho)
@@ -105,6 +138,19 @@ export default function ViewerToolbar() {
     opacity: active ? 1 : 0.6,
     '&:hover': {opacity: 1},
   })
+
+  const sliderSx = {
+    width: 60,
+    color: theme.palette.primary.contrastText,
+    opacity: 0.6,
+    '& .MuiSlider-thumb': {
+      width: 10,
+      height: 10,
+    },
+    '& .MuiSlider-rail': {
+      opacity: 0.3,
+    },
+  }
 
   return (
     <Stack
@@ -144,6 +190,34 @@ export default function ViewerToolbar() {
           <Sun size={15} strokeWidth={1.75}/>
         </IconButton>
       </Tooltip>
+
+      {lightOn && (
+        <>
+          <Tooltip title={`Azimuth: ${azimuth}°`} placement='bottom'>
+            <span style={{display: 'flex', alignItems: 'center'}}>
+              <SunCompass azimuth={azimuth} onChange={onAzimuthChange} active={lightOn}/>
+            </span>
+          </Tooltip>
+
+          <Tooltip title={`Elevation: ${elevation}°`} placement='bottom'>
+            <Slider
+              size='small'
+              min={5}
+              max={85}
+              step={1}
+              value={elevation}
+              onChange={onElevationChange}
+              sx={sliderSx}
+            />
+          </Tooltip>
+
+          <Tooltip title={isRotating ? 'Stop rotation' : 'Rotate sun'} placement='bottom'>
+            <IconButton size='small' onClick={toggleRotation} sx={btnSx(isRotating)}>
+              <RotateCw size={15} strokeWidth={1.75}/>
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
 
       <Tooltip title={wireframe ? 'Solid' : 'Wireframe'} placement='bottom'>
         <IconButton size='small' onClick={toggleWireframe} sx={btnSx(wireframe)}>

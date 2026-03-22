@@ -325,7 +325,30 @@ export default function CadView({
     viewer.context.getScene().add(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
-    if (!isCamHashSet) {
+
+    // Check for saved project view state: first from pendingViewState (reload button),
+    // then from the active project's current model
+    let viewState = useStore.getState().pendingViewState
+    if (viewState) {
+      useStore.setState({pendingViewState: null})
+    } else {
+      // Check active project's models for a saved view
+      const modelRefs = useStore.getState().modelRefs || []
+      if (modelRefs.length > 0) {
+        const sorted = [...modelRefs].sort((a, b) =>
+          new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+        )
+        if (sorted[0].viewState) {
+          viewState = sorted[0].viewState
+        }
+      }
+    }
+
+    if (viewState) {
+      const cc = viewer.IFC.context.ifcCamera.cameraControls
+      const {position, target} = viewState.camera
+      cc.setLookAt(position[0], position[1], position[2], target[0], target[1], target[2], false)
+    } else if (!isCamHashSet) {
       viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
     }
 
