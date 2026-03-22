@@ -6,7 +6,7 @@ import {PanelLeft} from 'lucide-react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import CameraControl from '../Components/Camera/CameraControl'
 import CutPlaneMenu from '../Components/CutPlane/CutPlaneMenu'
-import FloorPlanControl from '../Components/FloorPlan/FloorPlanControl'
+// FloorPlanControl moved to TopBar
 import TerrainControl from '../Components/Terrain/TerrainControl'
 import ImagineControl from '../Components/Imagine/ImagineControl'
 import NavTreeControl from '../Components/NavTree/NavTreeControl'
@@ -94,7 +94,7 @@ export default function LeftToolbar() {
         {isNavTreeEnabled && <Item label='Nav Tree'><NavTreeControl/></Item>}
         {isVersionsEnabled && <Item label='Versions'><VersionsControl/></Item>}
         <Item label='Section'><CutPlaneMenu/></Item>
-        {isModelReady && <Item label='Floor Plans'><FloorPlanControl/></Item>}
+        {/* Floor Plans moved to TopBar */}
         {isModelReady && <Item label='Terrain'><TerrainControl/></Item>}
         {isNotesEnabled && <Item label='Notes'><NotesControl/></Item>}
         {isPropertiesEnabled && isAnElementSelected && <Item label='Properties'><PropertiesControl/></Item>}

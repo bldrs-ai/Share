@@ -28,6 +28,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
   const isFloorPlanMode = useStore((state) => state.isFloorPlanMode)
+  const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
 
   return (
     <Stack
@@ -67,13 +68,13 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
           <LoadingBackdrop/>
         </div>
       </Stack>
-      {isFloorPlanMode && !isMobile && (
+      {isSvgFloorPlanVisible && !isMobile && (
         <div style={{
           position: 'fixed',
-          top: 0,
+          top: 40,
           right: 0,
           width: '50vw',
-          height: '100vh',
+          height: 'calc(100vh - 40px)',
           borderLeft: '1px solid #e0e0e0',
           backgroundColor: '#ffffff',
           color: '#000000',

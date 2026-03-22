@@ -29,7 +29,7 @@ const DIM = {
 /**
  * Generate an SVG string from floor plan elements.
  */
-export function renderSVG(elements, measurements = [], annotations = [], options = {}) {
+export function renderSVG(elements, measurements = [], annotations = [], options = {}, rooms = []) {
   const {scale = 100, padding = 2, title = '', storey = ''} = options
 
   const bounds = computeBounds(elements, padding)
@@ -69,6 +69,29 @@ export function renderSVG(elements, measurements = [], annotations = [], options
         const c = centroid(el.polygon)
         lines.push(`    <text x="${c[0].toFixed(4)}" y="${c[1].toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="0.20" fill="#555" text-anchor="middle" dominant-baseline="middle" font-weight="300">${escXml(el.name)}</text>`)
       }
+    }
+    lines.push(`  </g>`)
+  }
+
+  // Detected rooms
+  if (rooms.length > 0) {
+    const roomPalette = [
+      '#4fc3f7', '#81c784', '#ffb74d', '#ce93d8',
+      '#f06292', '#4dd0e1', '#aed581', '#ff8a65',
+      '#ba68c8', '#4db6ac', '#dce775', '#e57373',
+      '#64b5f6', '#a1887f', '#90a4ae', '#fff176',
+    ]
+    lines.push(`  <g class="layer-rooms" data-layer="rooms">`)
+    for (let i = 0; i < rooms.length; i++) {
+      const room = rooms[i]
+      const color = roomPalette[i % roomPalette.length]
+      const pts = room.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+      const [cx, cz] = room.centroid
+      const areaLabel = room.area >= 1 ? `${room.area.toFixed(1)} m²` : `${(room.area * 10000).toFixed(0)} cm²`
+
+      lines.push(`    <polygon points="${pts}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="0.02" stroke-opacity="0.6"/>`)
+      lines.push(`    <text x="${cx.toFixed(4)}" y="${(cz - 0.15).toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="0.22" fill="${color}" text-anchor="middle" dominant-baseline="middle" font-weight="600">${escXml(room.name)}</text>`)
+      lines.push(`    <text x="${cx.toFixed(4)}" y="${(cz + 0.15).toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="0.16" fill="${color}" text-anchor="middle" dominant-baseline="middle">${areaLabel}</text>`)
     }
     lines.push(`  </g>`)
   }

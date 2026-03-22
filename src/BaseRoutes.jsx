@@ -80,6 +80,11 @@ export default function BaseRoutes({testElt = null}) {
     checkAvailability()
   }, [setIsOpfsAvailable])
 
+  // Restore company/project context from IndexedDB
+  useEffect(() => {
+    useStore.getState().restoreProjectContext()
+  }, [])
+
   useEffect(() => {
     if (location.pathname === installPrefix || location.pathname === basePath) {
       const fwdPath = `${appPrefix}`

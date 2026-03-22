@@ -15,5 +15,9 @@ export default function createFloorPlanSlice(set, get) {
     setFloors: (floors) => set(() => ({floors})),
     floorPlanCutHeight: 1.2,
     setFloorPlanCutHeight: (h) => set(() => ({floorPlanCutHeight: h})),
+    isSvgFloorPlanVisible: false,
+    setIsSvgFloorPlanVisible: (is) => set(() => ({isSvgFloorPlanVisible: is})),
+    floorPlanManager: null,
+    setFloorPlanManager: (mgr) => set(() => ({floorPlanManager: mgr})),
   }
 }

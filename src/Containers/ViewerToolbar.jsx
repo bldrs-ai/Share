@@ -82,7 +82,20 @@ export default function ViewerToolbar() {
     } catch { /* */ }
   }, [viewer, ortho])
 
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
+
   if (!viewer || !isModelReady) return null
+
+  let rightOffsetCSS = '0px'
+  if (isSvgFloorPlanVisible && isAppsVisible) {
+    rightOffsetCSS = `calc(50vw + ${appsDrawerWidth}px)`
+  } else if (isSvgFloorPlanVisible) {
+    rightOffsetCSS = '50vw'
+  } else if (isAppsVisible) {
+    rightOffsetCSS = `${appsDrawerWidth}px`
+  }
 
   const btnSx = (active) => ({
     width: 30,
@@ -101,8 +114,9 @@ export default function ViewerToolbar() {
       sx={{
         position: 'absolute',
         top: '48px',
-        left: '50%',
+        left: `calc((100vw - ${rightOffsetCSS}) / 2)`,
         transform: 'translateX(-50%)',
+        transition: 'left 50ms ease',
         zIndex: 5,
         pointerEvents: 'auto',
         backgroundColor: theme.palette.secondary.backgroundColor,

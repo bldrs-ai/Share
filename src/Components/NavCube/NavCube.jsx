@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, ReactElement} from 'react'
 import {Box} from '@mui/material'
+import {ChevronUp, ChevronDown, ChevronLeft, ChevronRight} from 'lucide-react'
 import {
   AmbientLight,
   CircleGeometry,
@@ -7,12 +8,8 @@ import {
   Mesh,
   MeshBasicMaterial,
   OrthographicCamera,
-  Raycaster,
-  RingGeometry,
   Scene,
   SphereGeometry,
-  Vector2,
-  Vector3,
   WebGLRenderer,
   WireframeGeometry,
   LineSegments,
@@ -23,15 +20,7 @@ import useStore from '../../store/useStore'
 
 
 const SIZE = 100
-
-const VIEWS = [
-  {name: 'Front', pos: [0, 0, 1], up: [0, 1, 0], color: 0x55cc88},
-  {name: 'Back', pos: [0, 0, -1], up: [0, 1, 0], color: 0x55cc88},
-  {name: 'Right', pos: [1, 0, 0], up: [0, 1, 0], color: 0xdd6666},
-  {name: 'Left', pos: [-1, 0, 0], up: [0, 1, 0], color: 0xdd6666},
-  {name: 'Top', pos: [0, 1, 0], up: [0, 0, -1], color: 0x6688dd},
-  {name: 'Bottom', pos: [0, -1, 0], up: [0, 0, 1], color: 0x6688dd},
-]
+const ROTATE_STEP = Math.PI / 6 // 30 degrees per click
 
 
 export default function NavCube() {
@@ -42,6 +31,7 @@ export default function NavCube() {
   const viewer = useStore((state) => state.viewer)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -62,53 +52,21 @@ export default function NavCube() {
     dirLight.position.set(2, 3, 2)
     scene.add(dirLight)
 
-    // Dark background disc so sphere is visible against any model
+    // Background disc — light grey to match nav
     const bgGeom = new CircleGeometry(1.45, 32)
-    const bgMat = new MeshBasicMaterial({color: 0x000000, transparent: true, opacity: 0.4, side: DoubleSide})
+    const bgMat = new MeshBasicMaterial({color: 0xd0d0d0, transparent: true, opacity: 0.35, side: DoubleSide})
     const bgDisc = new Mesh(bgGeom, bgMat)
     bgDisc.position.set(0, 0, -0.01)
-    // Don't rotate with camera — face the camera
     scene.add(bgDisc)
 
-    // Wireframe sphere — brighter
+    // Wireframe sphere — dark grey for visibility
     const sphereGeom = new SphereGeometry(1, 20, 14)
     const wireGeom = new WireframeGeometry(sphereGeom)
-    const wireMat = new LineBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.3})
+    const wireMat = new LineBasicMaterial({color: 0x555555, transparent: true, opacity: 0.5})
     const wireframe = new LineSegments(wireGeom, wireMat)
     scene.add(wireframe)
 
-    // Axis rings
-    const ringDefs = [
-      {color: 0xff6666, rot: [0, 0, Math.PI / 2]},
-      {color: 0x66ff66, rot: [0, 0, 0]},
-      {color: 0x6688ff, rot: [Math.PI / 2, 0, 0]},
-    ]
-    const rings = ringDefs.map(({color, rot}) => {
-      const geom = new RingGeometry(0.96, 1.04, 32)
-      const mat = new MeshBasicMaterial({color, side: DoubleSide, transparent: true, opacity: 0.4})
-      const ring = new Mesh(geom, mat)
-      ring.rotation.set(...rot)
-      scene.add(ring)
-      return ring
-    })
-
-    // Clickable dot markers
-    const dotMeshes = []
-    VIEWS.forEach((view) => {
-      const geom = new SphereGeometry(0.14, 8, 8)
-      const mat = new MeshBasicMaterial({color: view.color, transparent: true, opacity: 0.8})
-      const dot = new Mesh(geom, mat)
-      dot.position.set(...view.pos)
-      dot.userData.viewName = view.name
-      scene.add(dot)
-      dotMeshes.push(dot)
-    })
-
-    const raycaster = new Raycaster()
-    const mouse = new Vector2()
-    const rotatingGroup = [wireframe, ...rings, ...dotMeshes]
-
-    stateRef.current = {renderer, scene, cam, rotatingGroup, dotMeshes, raycaster, mouse, bgDisc}
+    stateRef.current = {renderer, scene, cam, wireframe, bgDisc}
 
     let animId
     const animate = () => {
@@ -117,7 +75,7 @@ export default function NavCube() {
         const mainCam = viewer.context.getCamera()
         if (mainCam) {
           const q = mainCam.quaternion.clone().invert()
-          rotatingGroup.forEach((obj) => obj.quaternion.copy(q))
+          wireframe.quaternion.copy(q)
         }
       }
       // Keep background disc facing camera
@@ -133,38 +91,15 @@ export default function NavCube() {
       wireMat.dispose()
       bgGeom.dispose()
       bgMat.dispose()
-      dotMeshes.forEach((d) => { d.geometry.dispose(); d.material.dispose() })
-      rings.forEach((r) => { r.geometry.dispose(); r.material.dispose() })
       renderer.dispose()
     }
   }, [viewer])
 
 
-  const handleClick = (event) => {
-    if (isDragging.current) return
-    if (!stateRef.current || !viewer?.context) return
-    const {raycaster, mouse, dotMeshes, cam} = stateRef.current
-    const canvas = canvasRef.current
-    const rect = canvas.getBoundingClientRect()
-
-    mouse.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
-    mouse.y = -(((event.clientY - rect.top) / rect.height) * 2) + 1
-
-    raycaster.setFromCamera(mouse, cam)
-    const hits = raycaster.intersectObjects(dotMeshes)
-    if (hits.length === 0) return
-
-    const viewName = hits[0].object.userData.viewName
-    const view = VIEWS.find((v) => v.name === viewName)
-    if (!view) return
-
-    const cameraControls = viewer.context.ifcCamera?.cameraControls
-    if (cameraControls) {
-      const dist = cameraControls.distance
-      const lookTarget = cameraControls.getTarget(new Vector3())
-      const eye = new Vector3(...view.pos).multiplyScalar(dist).add(lookTarget)
-      cameraControls.setLookAt(eye.x, eye.y, eye.z, lookTarget.x, lookTarget.y, lookTarget.z, true)
-    }
+  const rotateCamera = (azimuth, polar) => {
+    if (!viewer?.context?.ifcCamera?.cameraControls) return
+    const controls = viewer.context.ifcCamera.cameraControls
+    controls.rotate(azimuth * ROTATE_STEP, polar * ROTATE_STEP, true)
   }
 
   // Drag to orbit
@@ -194,32 +129,62 @@ export default function NavCube() {
     window.addEventListener('mouseup', onMouseUp)
   }
 
-  const rightOffset = isAppsVisible ? appsDrawerWidth : 0
+  let rightOffsetCSS = '0px'
+  if (isSvgFloorPlanVisible && isAppsVisible) {
+    rightOffsetCSS = `calc(50vw + ${appsDrawerWidth}px)`
+  } else if (isSvgFloorPlanVisible) {
+    rightOffsetCSS = '50vw'
+  } else if (isAppsVisible) {
+    rightOffsetCSS = `${appsDrawerWidth}px`
+  }
+
+  const arrowSx = {
+    position: 'absolute',
+    cursor: 'pointer',
+    color: 'rgba(255,255,255,0.5)',
+    pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    '&:hover': {color: 'rgba(255,255,255,0.9)'},
+  }
 
   return (
     <Box
       sx={{
         position: 'absolute',
         bottom: 16,
-        left: `calc((100vw - ${rightOffset}px) / 2)`,
+        left: `calc((100vw - ${rightOffsetCSS}) / 2)`,
         transform: 'translateX(-50%)',
         zIndex: 1000,
-        cursor: 'grab',
         opacity: 0.85,
-        transition: 'left 0.2s ease',
+        transition: 'left 50ms ease',
         '&:hover': {opacity: 1},
-        '&:active': {cursor: 'grabbing'},
       }}
       data-testid='NavSphere'
     >
-      <canvas
-        ref={canvasRef}
-        width={SIZE}
-        height={SIZE}
-        onClick={handleClick}
-        onMouseDown={handleMouseDown}
-        style={{display: 'block'}}
-      />
+      <Box sx={{position: 'relative', width: SIZE, height: SIZE}}>
+        <canvas
+          ref={canvasRef}
+          width={SIZE}
+          height={SIZE}
+          onMouseDown={handleMouseDown}
+          style={{display: 'block', cursor: 'grab'}}
+        />
+        {/* Arrow controls */}
+        <Box onClick={() => rotateCamera(0, -1)} sx={{...arrowSx, top: 0, left: '50%', transform: 'translateX(-50%)'}}>
+          <ChevronUp size={16} strokeWidth={2.5}/>
+        </Box>
+        <Box onClick={() => rotateCamera(0, 1)} sx={{...arrowSx, bottom: 0, left: '50%', transform: 'translateX(-50%)'}}>
+          <ChevronDown size={16} strokeWidth={2.5}/>
+        </Box>
+        <Box onClick={() => rotateCamera(1, 0)} sx={{...arrowSx, left: 0, top: '50%', transform: 'translateY(-50%)'}}>
+          <ChevronLeft size={16} strokeWidth={2.5}/>
+        </Box>
+        <Box onClick={() => rotateCamera(-1, 0)} sx={{...arrowSx, right: 0, top: '50%', transform: 'translateY(-50%)'}}>
+          <ChevronRight size={16} strokeWidth={2.5}/>
+        </Box>
+      </Box>
     </Box>
   )
 }

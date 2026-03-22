@@ -5,6 +5,49 @@
   background: #ffffff !important;
 }
 
+.svg-floorplan-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  height: 36px;
+  min-height: 36px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  font-family: 'Helvetica', 'Arial', sans-serif;
+}
+
+.titlebar-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+}
+
+.titlebar-floor-select {
+  padding: 2px 6px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  font-size: 11px;
+  font-family: inherit;
+  background: #fff;
+  cursor: pointer;
+}
+
+.titlebar-cut-height {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #777;
+  margin-left: auto;
+}
+
+.titlebar-cut-height input[type='range'] {
+  width: 60px;
+  height: 12px;
+  cursor: pointer;
+}
+
 .svg-floorplan-toolbar {
   display: flex;
   gap: 4px;
@@ -71,22 +114,6 @@
   pointer-events: none;
 }
 
-.svg-floorplan-toolbar .close-btn {
-  padding: 2px 8px;
-  border: 1px solid #ccc;
-  background: #fff;
-  color: #999;
-  font-size: 14px;
-  font-weight: 300;
-  cursor: pointer;
-  border-radius: 2px;
-  line-height: 1;
-}
-
-.svg-floorplan-toolbar .close-btn:hover {
-  border-color: #c00;
-  color: #c00;
-}
 
 /* Document bar */
 .svg-floorplan-docbar {

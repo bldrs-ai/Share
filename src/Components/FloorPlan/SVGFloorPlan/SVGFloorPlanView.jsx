@@ -9,9 +9,12 @@ import {
   svgEventToWorldCoords,
 } from './MeasurementTool'
 import {downloadSVG, generateFilename} from './ExportManager'
+import {detectRoomsFromElements, generateRoomColors} from '../RoomDetection/RoomDetector'
+import {createRoomOverlay, removeRoomOverlay} from '../RoomDetection/RoomOverlay3D'
 import {renderWithTemplate} from './templates/TemplateRenderer'
 import {createDocument, saveDocument, createNewVersion, getDocumentsForModel} from './storage/DocumentStore'
 import DocumentBar from './DocumentBar'
+import {CloseButton} from '../../Buttons'
 import './svgStyles.css'
 
 
@@ -37,6 +40,7 @@ export default function SVGFloorPlanView() {
   const [status, setStatus] = useState('')
   const [currentDoc, setCurrentDoc] = useState(null)
   const [saveStatus, setSaveStatus] = useState('')
+  const [detectedRooms, setDetectedRooms] = useState([])
   const autoSaveTimerRef = useRef(null)
 
   // Zoom & pan state: [x, y, width, height] of the viewBox
@@ -334,7 +338,7 @@ export default function SVGFloorPlanView() {
     const baseSvg = renderSVG(elements, measurements, annotations, {
       scale,
       storey: currentFloor?.name || 'Unknown',
-    })
+    }, detectedRooms)
     const svg = renderWithTemplate(baseSvg, templateId, {
       project: currentDoc?.name || 'Untitled',
       storey: currentFloor?.name || '',
@@ -382,7 +386,7 @@ export default function SVGFloorPlanView() {
   const svgContent = renderSVG(elements, measurements, annotations, {
     scale: 100,
     storey: currentFloor?.name,
-  })
+  }, detectedRooms)
 
   // Override viewBox if user has zoomed/panned
   let liveSvg = svgContent
@@ -459,23 +463,87 @@ export default function SVGFloorPlanView() {
     liveSvg = liveSvg.replace('</svg>', `${areaOverlay}\n</svg>`)
   }
 
+  // Draw detected rooms
+  if (detectedRooms.length > 0) {
+    const colors = generateRoomColors(detectedRooms.length)
+    const fontSize = viewBox ? viewBox.width * 0.015 : 0.2
+    const smallFontSize = fontSize * 0.7
+    let roomOverlay = '<g class="layer-rooms">'
+
+    for (let i = 0; i < detectedRooms.length; i++) {
+      const room = detectedRooms[i]
+      const color = colors[i]
+      const pts = room.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+      const [cx, cz] = room.centroid
+
+      roomOverlay += `<polygon points="${pts}" fill="${color}" fill-opacity="0.2" stroke="${color}" stroke-width="0.02"/>`
+      roomOverlay += `<text x="${cx.toFixed(4)}" y="${(cz - fontSize * 0.3).toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="${fontSize}" fill="${color}" text-anchor="middle" dominant-baseline="middle" font-weight="600">${room.name}</text>`
+      roomOverlay += `<text x="${cx.toFixed(4)}" y="${(cz + fontSize * 0.8).toFixed(4)}" font-family="Helvetica, Arial, sans-serif" font-size="${smallFontSize}" fill="${color}" text-anchor="middle" dominant-baseline="middle">${room.area.toFixed(1)} m²</text>`
+    }
+
+    roomOverlay += '</g>'
+    liveSvg = liveSvg.replace('</svg>', `${roomOverlay}\n</svg>`)
+  }
+
+  const floorPlanManager = useStore((state) => state.floorPlanManager)
+  const floorPlanCutHeight = useStore((state) => state.floorPlanCutHeight)
+  const setFloorPlanCutHeight = useStore((state) => state.setFloorPlanCutHeight)
+  const setCurrentFloorIndex = useStore((state) => state.setCurrentFloorIndex)
+
   const handleClose = useCallback(() => {
-    // Exit floor plan mode entirely
-    const setIsFloorPlanMode = useStore.getState().setIsFloorPlanMode
-    const setCurrentFloorIndex = useStore.getState().setCurrentFloorIndex
-    setIsFloorPlanMode(false)
-    setCurrentFloorIndex(null)
-    // Clear clipping — trigger the FloorPlanManager exit via Escape key event
-    window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))
-  }, [])
+    // Fully exit floor plan mode (same as clicking the toggle button)
+    if (floorPlanManager) floorPlanManager.exitFloorPlan()
+    useStore.getState().setIsFloorPlanMode(false)
+    useStore.getState().setCurrentFloorIndex(null)
+    useStore.getState().setIsSvgFloorPlanVisible(false)
+  }, [floorPlanManager])
+
+  const handleFloorChange = useCallback((e) => {
+    const index = Number(e.target.value)
+    if (!floorPlanManager || index < 0 || index >= floors.length) return
+    floorPlanManager.enterFloorPlan(floors[index], floorPlanCutHeight)
+    setCurrentFloorIndex(index)
+  }, [floorPlanManager, floors, floorPlanCutHeight, setCurrentFloorIndex])
+
+  const handleCutHeightChange = useCallback((e) => {
+    const value = Number(e.target.value)
+    setFloorPlanCutHeight(value)
+    if (floorPlanManager && currentFloorIndex !== null && floors[currentFloorIndex]) {
+      floorPlanManager.updateCutHeight(floors[currentFloorIndex], value)
+    }
+  }, [floorPlanManager, currentFloorIndex, floors, setFloorPlanCutHeight])
+
+  const maxCutHeight = currentFloor
+    ? Math.max(1, currentFloor.nextElevation - currentFloor.elevation)
+    : 3
 
   return (
     <div className='svg-floorplan-panel'>
+      <div className='svg-floorplan-titlebar'>
+        <span className='titlebar-title'>Floor Plans</span>
+        <select
+          className='titlebar-floor-select'
+          value={currentFloorIndex ?? ''}
+          onChange={handleFloorChange}
+        >
+          {floors.map((floor, i) => (
+            <option key={i} value={i}>{floor.name} ({floor.elevation.toFixed(1)}m)</option>
+          ))}
+        </select>
+        <label className='titlebar-cut-height'>
+          Cut {floorPlanCutHeight.toFixed(1)}m
+          <input
+            type='range'
+            min={0.1}
+            max={maxCutHeight}
+            step={0.1}
+            value={floorPlanCutHeight}
+            onChange={handleCutHeightChange}
+          />
+        </label>
+        <CloseButton onCloseClick={handleClose}/>
+      </div>
       <div className='svg-floorplan-toolbar'>
-        <button className='close-btn' onClick={handleClose} title='Close floor plan'>
-          ✕
-        </button>
-        <div className='separator'/>
         <button
           className={activeTool === 'select' ? 'active' : ''}
           onClick={() => { setActiveTool('select'); setPendingPoint(null) }}
@@ -507,6 +575,53 @@ export default function SVGFloorPlanView() {
         >
           Clear
         </button>
+        <div className='separator'/>
+        <button
+          onClick={() => {
+            console.log('RoomDetect: elements=', elements.length, 'walls=', elements.filter((e) => e.category === 'wall').length)
+            elements.filter((e) => e.category === 'wall').forEach((w) => {
+              console.log('  wall', w.expressId, w.polygon)
+            })
+            const rooms = detectRoomsFromElements(elements)
+            console.log('RoomDetect: found', rooms.length, 'rooms', rooms)
+            setDetectedRooms(rooms)
+            if (rooms.length > 0) {
+              const totalArea = rooms.reduce((s, r) => s + r.area, 0)
+              setStatus(`Detected ${rooms.length} rooms, total area: ${totalArea.toFixed(1)} m²`)
+            } else {
+              setStatus('No enclosed rooms detected — walls may not form closed boundaries')
+            }
+          }}
+          disabled={elements.length === 0}
+        >
+          Detect Rooms
+        </button>
+        {detectedRooms.length > 0 && (
+          <button onClick={() => {
+            setDetectedRooms([])
+            if (viewer) removeRoomOverlay(viewer.context.getScene())
+          }}>
+            Hide Rooms
+          </button>
+        )}
+        {detectedRooms.length > 0 && viewer && (
+          <button onClick={() => {
+            const scene = viewer.context.getScene()
+            // Toggle: remove if already showing, add if not
+            const existing = scene.getObjectByName('RoomOverlay')
+            if (existing) {
+              removeRoomOverlay(scene)
+              setStatus('3D room overlay removed')
+            } else {
+              const elevation = currentFloor?.elevation || 0
+              const overlay = createRoomOverlay(detectedRooms, elevation)
+              scene.add(overlay)
+              setStatus(`Showing ${detectedRooms.length} rooms in 3D`)
+            }
+          }}>
+            Show in 3D
+          </button>
+        )}
         <div className='separator'/>
         <button onClick={handleExport} disabled={elements.length === 0}>
           Export SVG

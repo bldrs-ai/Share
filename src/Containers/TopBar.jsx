@@ -1,9 +1,12 @@
 import React, {ReactElement} from 'react'
 import {Box, IconButton, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
-import {BarChart3, FileSearch, Ruler} from 'lucide-react'
+import {BarChart3, FileSearch, Ruler, Settings} from 'lucide-react'
 import HelpControl from '../Components/Help/HelpControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
+import FloorPlanControl from '../Components/FloorPlan/FloorPlanControl'
+import ProjectSelector from '../Components/ProjectAdmin/ProjectSelector'
+import ProjectAdminDialog from '../Components/ProjectAdmin/ProjectAdminDialog'
 import AppsRegistry from '../Components/Apps/AppsRegistry.json'
 import useStore from '../store/useStore'
 
@@ -21,12 +24,19 @@ export default function TopBar() {
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const viewer = useStore((state) => state.viewer)
   const isModelReady = useStore((state) => state.isModelReady)
+  const selectedApp = useStore((state) => state.selectedApp)
   const setSelectedApp = useStore((state) => state.setSelectedApp)
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
   const setIsAppsVisible = useStore((state) => state.setIsAppsVisible)
 
-  const openApp = (app) => {
-    setSelectedApp(app)
-    setIsAppsVisible(true)
+  const toggleApp = (app) => {
+    if (isAppsVisible && selectedApp?.appName === app.appName) {
+      setIsAppsVisible(false)
+    } else {
+      setSelectedApp(app)
+      setIsAppsVisible(true)
+      useStore.getState().setIsSvgFloorPlanVisible(false)
+    }
   }
 
   return (
@@ -49,32 +59,36 @@ export default function TopBar() {
       }}
       data-testid='TopBar'
     >
-      {/* Left: build version */}
-      <Typography sx={{
-        fontSize: '11px',
-        fontFamily: 'monospace',
-        opacity: 0.4,
-        pointerEvents: 'none',
-      }}>
-        build 059
-      </Typography>
+      {/* Left: build version + project selector */}
+      <Stack direction='row' alignItems='center' spacing={1} sx={{pointerEvents: 'auto'}}>
+        <Typography sx={{
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          opacity: 0.4,
+          pointerEvents: 'none',
+        }}>
+          build 060
+        </Typography>
+        <ProjectSelector/>
+      </Stack>
 
       {/* Center: app icons + light toggle */}
       {viewer && isModelReady && (
         <Stack direction='row' alignItems='center' sx={{pointerEvents: 'auto'}} spacing={0.5}>
           {isAppsEnabled && AppsRegistry.map((app) => {
             const LucideIcon = appIcons[app.appName]
+            const isSelected = isAppsVisible && selectedApp?.appName === app.appName
             return (
               <Tooltip key={app.appName} title={app.appName} placement='bottom'>
                 <IconButton
                   size='small'
-                  onClick={() => openApp(app)}
+                  onClick={() => toggleApp(app)}
                   sx={{
                     width: 32,
                     height: 32,
                     borderRadius: '6px',
-                    color: theme.palette.primary.contrastText,
-                    opacity: 0.7,
+                    color: isSelected ? '#00ff00' : theme.palette.primary.contrastText,
+                    opacity: isSelected ? 1 : 0.7,
                     '&:hover': {opacity: 1},
                   }}
                 >
@@ -86,18 +100,37 @@ export default function TopBar() {
               </Tooltip>
             )
           })}
+          <Box sx={{width: '1px', height: 20, bgcolor: theme.palette.secondary.dark, mx: 0.5}}/>
+          <FloorPlanControl/>
         </Stack>
       )}
 
-      {/* Right: profile + help */}
+      {/* Right: manage + profile + help */}
       <Stack
         direction='row'
         alignItems='center'
         sx={{pointerEvents: 'auto'}}
       >
+        <Tooltip title='Project Management' placement='bottom'>
+          <IconButton
+            size='small'
+            onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '6px',
+              color: theme.palette.primary.contrastText,
+              opacity: 0.7,
+              '&:hover': {opacity: 1},
+            }}
+          >
+            <Settings size={16} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
         {isLoginEnabled && <ProfileControl/>}
         <HelpControl/>
       </Stack>
+      <ProjectAdminDialog/>
     </Stack>
   )
 }

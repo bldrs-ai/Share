@@ -43,18 +43,75 @@ export class IFrameCommunicationChannel {
    * @param {*} event the data received from the iframe
    */
   messageHandler = async (event) => {
-    switch (event.data) {
+    // Support both string commands and structured messages
+    const action = typeof event.data === 'string' ? event.data : event.data?.action
+    const payload = typeof event.data === 'string' ? null : event.data
+
+    switch (action) {
       case 'getLoadedFile':
-        this.sendMessage(event.data, useStore.getState().loadedFileInfo)
+        this.sendMessage('getLoadedFile', useStore.getState().loadedFileInfo)
         break
       case 'getFileData':
         await this.handleGetFileData()
         break
       case 'getSelectedElements':
-        this.sendMessage(event.data, useStore.getState().selectedElements)
+        this.sendMessage('getSelectedElements', useStore.getState().selectedElements)
+        break
+      case 'getProjectContext':
+        this.sendMessage('getProjectContext', {
+          companyId: useStore.getState().activeCompanyId,
+          projectId: useStore.getState().activeProjectId,
+        })
+        break
+      case 'loadAppData':
+        await this.handleLoadAppData(payload)
+        break
+      case 'saveAppData':
+        await this.handleSaveAppData(payload)
         break
       default:
         break
+    }
+  }
+
+  async handleLoadAppData(request) {
+    const appId = request?.appId
+    const projectId = useStore.getState().activeProjectId
+    if (!projectId || !appId) {
+      this.sendMessage('loadAppData', {data: null})
+      return
+    }
+    try {
+      const repo = useStore.getState().projectRepository
+      const envelope = await repo.getAppData(projectId, appId)
+      this.sendMessage('loadAppData', {data: envelope?.data ?? null})
+    } catch (err) {
+      console.warn('[Apps] Failed to load app data:', err)
+      this.sendMessage('loadAppData', {data: null})
+    }
+  }
+
+  async handleSaveAppData(request) {
+    const {appId, data} = request || {}
+    const projectId = useStore.getState().activeProjectId
+    if (!projectId || !appId) {
+      this.sendMessage('saveAppData', {error: true})
+      return
+    }
+    try {
+      const repo = useStore.getState().projectRepository
+      const existing = await repo.getAppData(projectId, appId)
+      await repo.saveAppData({
+        projectId,
+        appId,
+        data,
+        updatedAt: new Date().toISOString(),
+        version: existing ? existing.version + 1 : 1,
+      })
+      this.sendMessage('saveAppData', {error: false})
+    } catch (err) {
+      console.warn('[Apps] Failed to save app data:', err)
+      this.sendMessage('saveAppData', {error: true})
     }
   }
 

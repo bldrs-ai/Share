@@ -18,7 +18,7 @@ Port 8080 (frontend) + 8079 (esbuild backend).
 
 Build number shown top-center of the viewport. Increment in `src/Containers/TopBar.jsx` on each deploy.
 
-Current build: **059**
+Current build: **060**
 
 | Build | Changes |
 |-------|---------|
@@ -54,6 +54,7 @@ Current build: **059**
 | 037-038 | PanelLeft toggle icon (Insight style), CSS width transition |
 | 039-058 | TopBar, ViewerToolbar, apps drawer, section plane grid, LightManager, NavCube |
 | 059 | NavSphere: brighter wireframe, background disc, drag-to-orbit, clickable axis dots |
+| 060 | NavSphere arrows (Lucide chevrons), ViewerToolbar/NavCube floor plan offset, floor plan toggle + title bar, app icon toggle + green highlight, Company/Project/Model data layer (IndexedDB + OPFS), ProjectAdmin dialog (Companies/Projects/Models tabs with version control), ProjectSelector breadcrumb + reload, MessageChannel extensions (getProjectContext/loadAppData/saveAppData) |
 
 ## UI Architecture (Overlay-based)
 
