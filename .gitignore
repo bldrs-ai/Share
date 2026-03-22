@@ -18,6 +18,9 @@ test-results
 # symlink for test-models repo
 public/test-models
 
+# internal docs (not for public deployment)
+/docs-internal
+
 # misc
 .DS_Store
 .vscode
