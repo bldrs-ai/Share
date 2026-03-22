@@ -1,17 +1,17 @@
 import React, {ReactElement} from 'react'
 import {Stack} from '@mui/material'
-import AboutControl from '../Components/About/AboutControl'
 import BotControl from '../Components/Bot/BotControl'
 import useExistInFeature from '../hooks/useExistInFeature'
 
 
 /**
- * Bottom bar — About logo and bot.
+ * Bottom bar — bot only (logo is in left nav).
  *
  * @return {ReactElement}
  */
 export default function BottomBar() {
   const isBotEnabled = useExistInFeature('bot')
+  if (!isBotEnabled) return null
   return (
     <Stack
       direction='row'
@@ -20,8 +20,7 @@ export default function BottomBar() {
       data-testid='BottomBar'
       sx={{position: 'relative'}}
     >
-      <AboutControl/>
-      {isBotEnabled && <BotControl/>}
+      <BotControl/>
     </Stack>
   )
 }

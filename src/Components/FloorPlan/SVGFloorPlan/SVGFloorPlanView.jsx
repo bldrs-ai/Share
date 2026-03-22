@@ -31,6 +31,11 @@ export default function SVGFloorPlanView() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState('')
 
+  // Zoom & pan state: [x, y, width, height] of the viewBox
+  const [viewBox, setViewBox] = useState(null)
+  const isPanningRef = useRef(false)
+  const panStartRef = useRef({x: 0, y: 0})
+
   const svgContainerRef = useRef(null)
 
   const currentFloor = currentFloorIndex !== null ? floors[currentFloorIndex] : null
@@ -63,6 +68,75 @@ export default function SVGFloorPlanView() {
 
     return () => { cancelled = true }
   }, [viewer, model, currentFloor, isFloorPlanMode])
+
+  // Reset viewBox when elements change
+  useEffect(() => {
+    if (elements.length > 0) {
+      setViewBox(null) // null = use default from SVG
+    }
+  }, [elements])
+
+  // Zoom with scroll wheel
+  const handleWheel = useCallback((event) => {
+    event.preventDefault()
+    const svgEl = svgContainerRef.current?.querySelector('svg')
+    if (!svgEl) return
+
+    const vb = svgEl.viewBox.baseVal
+    if (!vb || vb.width === 0) return
+
+    // Current viewBox
+    let {x, y, width, height} = viewBox || {x: vb.x, y: vb.y, width: vb.width, height: vb.height}
+
+    // Zoom factor
+    const zoomSpeed = 0.1
+    const delta = event.deltaY > 0 ? 1 + zoomSpeed : 1 - zoomSpeed
+
+    // Zoom towards mouse position
+    const rect = svgEl.getBoundingClientRect()
+    const mx = (event.clientX - rect.left) / rect.width  // 0..1
+    const my = (event.clientY - rect.top) / rect.height
+
+    const newWidth = width * delta
+    const newHeight = height * delta
+
+    // Adjust origin so zoom centers on mouse
+    const newX = x + (width - newWidth) * mx
+    const newY = y + (height - newHeight) * my
+
+    setViewBox({x: newX, y: newY, width: newWidth, height: newHeight})
+  }, [viewBox])
+
+  // Pan with middle mouse button or when select tool is active
+  const handlePanStart = useCallback((event) => {
+    // Pan on middle mouse, or left mouse in select mode
+    if (event.button === 1 || (event.button === 0 && activeTool === 'select')) {
+      isPanningRef.current = true
+      panStartRef.current = {x: event.clientX, y: event.clientY}
+    }
+  }, [activeTool])
+
+  const handlePanMove = useCallback((event) => {
+    if (!isPanningRef.current) return
+
+    const svgEl = svgContainerRef.current?.querySelector('svg')
+    if (!svgEl) return
+
+    const vb = svgEl.viewBox.baseVal
+    const rect = svgEl.getBoundingClientRect()
+    const {x, y, width, height} = viewBox || {x: vb.x, y: vb.y, width: vb.width, height: vb.height}
+
+    // Convert pixel delta to viewBox units
+    const dx = -(event.clientX - panStartRef.current.x) * (width / rect.width)
+    const dy = -(event.clientY - panStartRef.current.y) * (height / rect.height)
+
+    panStartRef.current = {x: event.clientX, y: event.clientY}
+    setViewBox({x: x + dx, y: y + dy, width, height})
+  }, [viewBox])
+
+  const handlePanEnd = useCallback(() => {
+    isPanningRef.current = false
+  }, [])
 
   // Handle SVG click for measurements
   const handleSVGClick = useCallback((event) => {
@@ -138,20 +212,44 @@ export default function SVGFloorPlanView() {
     storey: currentFloor?.name,
   })
 
-  // Add snap indicator to live SVG
+  // Override viewBox if user has zoomed/panned
   let liveSvg = svgContent
+  if (viewBox) {
+    liveSvg = liveSvg.replace(
+      /viewBox="[^"]*"/,
+      `viewBox="${viewBox.x.toFixed(4)} ${viewBox.y.toFixed(4)} ${viewBox.width.toFixed(4)} ${viewBox.height.toFixed(4)}"`,
+    )
+  }
+
+  // Add snap indicator
   if (snapIndicator) {
-    const snapCircle = `<circle cx="${snapIndicator.x}" cy="${snapIndicator.z}" r="0.15" fill="none" stroke="#FF6B35" stroke-width="0.05" class="snap-point"/>`
+    const r = viewBox ? viewBox.width * 0.008 : 0.15
+    const snapCircle = `<circle cx="${snapIndicator.x}" cy="${snapIndicator.z}" r="${r}" fill="none" stroke="#c00" stroke-width="${r * 0.3}" class="snap-point"/>`
     liveSvg = liveSvg.replace('</svg>', `${snapCircle}\n</svg>`)
   }
   if (pendingPoint) {
-    const pendingCircle = `<circle cx="${pendingPoint[0]}" cy="${pendingPoint[1]}" r="0.1" fill="#FF6B35" class="snap-point"/>`
+    const r = viewBox ? viewBox.width * 0.005 : 0.1
+    const pendingCircle = `<circle cx="${pendingPoint[0]}" cy="${pendingPoint[1]}" r="${r}" fill="#c00" class="snap-point"/>`
     liveSvg = liveSvg.replace('</svg>', `${pendingCircle}\n</svg>`)
   }
+
+  const handleClose = useCallback(() => {
+    // Exit floor plan mode entirely
+    const setIsFloorPlanMode = useStore.getState().setIsFloorPlanMode
+    const setCurrentFloorIndex = useStore.getState().setCurrentFloorIndex
+    setIsFloorPlanMode(false)
+    setCurrentFloorIndex(null)
+    // Clear clipping — trigger the FloorPlanManager exit via Escape key event
+    window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))
+  }, [])
 
   return (
     <div className='svg-floorplan-panel'>
       <div className='svg-floorplan-toolbar'>
+        <button className='close-btn' onClick={handleClose} title='Close floor plan'>
+          ✕
+        </button>
+        <div className='separator'/>
         <button
           className={activeTool === 'select' ? 'active' : ''}
           onClick={() => { setActiveTool('select'); setPendingPoint(null) }}
@@ -180,7 +278,11 @@ export default function SVGFloorPlanView() {
         className='svg-floorplan-viewport'
         ref={svgContainerRef}
         onClick={handleSVGClick}
-        onMouseMove={handleMouseMove}
+        onMouseMove={(e) => { handleMouseMove(e); handlePanMove(e) }}
+        onMouseDown={handlePanStart}
+        onMouseUp={handlePanEnd}
+        onMouseLeave={handlePanEnd}
+        onWheel={handleWheel}
         dangerouslySetInnerHTML={{__html: liveSvg}}
       />
       <div className='svg-floorplan-status'>

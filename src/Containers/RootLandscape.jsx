@@ -7,7 +7,7 @@ import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
 import LeftToolbar from './LeftToolbar'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
-import OperationsGroup from './OperationsGroup'
+import TopBar from './TopBar'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
 import NavCube from '../Components/NavCube/NavCube'
@@ -37,47 +37,20 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
-       <Box sx={{flex: '0 0 auto', flexShrink: 0}}>
+       <div style={{flex: '0 0 auto', flexShrink: 0, marginLeft: '40px', marginTop: '40px'}}>
          <NavTreeAndVersionsDrawer
            pathPrefix={pathPrefix}
            branch={branch}
            selectWithShiftClickEvents={selectWithShiftClickEvents}
          />
-       </Box>
+       </div>
       }
       <Stack
         justifyContent='space-between'
         sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
-        <Box sx={{opacity: 0.5}}>
-          <Paper
-            elevation={0}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              height: 58,
-              width: '100%',
-              backgroundColor: theme.palette.secondary.backgroundColor,
-              borderRadius: 0,
-            }}
-            data-testid='RootLandscape-ToolbarPaper'
-          />
-        </Box>
-        <Box sx={{
-          position: 'absolute',
-          top: 4,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 1,
-          opacity: 0.4,
-          fontSize: '11px',
-          fontFamily: 'monospace',
-          pointerEvents: 'none',
-          color: theme.palette.primary.contrastText,
-        }}>
-          build 020
-        </Box>
+        {!isMobile && <TopBar/>}
         <Stack
           direction='row'
           justifyContent='space-between'
@@ -87,21 +60,28 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         >
           {!isMobile && <LeftToolbar/>}
         </Stack>
-        <Box sx={{width: '100%'}} data-testid='RootLandscape-CenterPaneBottomBox'>
+        <div style={{width: '100%'}} data-testid='RootLandscape-CenterPaneBottomBox'>
           <BottomBar/>
           <AlertDialogAndSnackbar/>
           <LoadingBackdrop/>
-        </Box>
+        </div>
       </Stack>
       {isFloorPlanMode && !isMobile && (
-        <Box sx={{
-          width: '400px',
-          flexShrink: 0,
-          borderLeft: `1px solid ${theme.palette.secondary.dark}`,
-          overflow: 'hidden',
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          width: '50vw',
+          height: '100vh',
+          borderLeft: '1px solid #e0e0e0',
+          backgroundColor: '#ffffff',
+          color: '#000000',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 10,
         }}>
           <SVGFloorPlanView/>
-        </Box>
+        </div>
       )}
       {isMobile ?
         <TabbedPanels

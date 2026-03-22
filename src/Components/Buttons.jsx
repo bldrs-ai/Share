@@ -1,12 +1,10 @@
 import React, {ReactElement, useState} from 'react'
-import {IconButton, SvgIcon, ToggleButton, Tooltip} from '@mui/material'
+import {IconButton, ToggleButton, Tooltip} from '@mui/material'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 import useHashState from '../hooks/useHashState'
-import {Close as CloseIcon} from '@mui/icons-material'
-import ExpandIcon from '../assets/icons/Expand.svg'
-import BackIcon from '../assets/icons/Back.svg'
+import {X as CloseIcon, Maximize2 as ExpandIcon, ArrowLeft as BackIcon} from 'lucide-react'
 import {slugify} from '../utils/strings'
 
 
@@ -53,7 +51,7 @@ export function TooltipIconButton({
       title={title}
       describeChild
       placement={placement}
-      PopperProps={{style: {zIndex: 0}}}
+      PopperProps={{style: {zIndex: 1500}}}
       arrow={true}
       enterDelay={1000}
       slotProps={{
@@ -171,7 +169,7 @@ export function CloseButton({onCloseClick, ...props}) {
       disableRipple={true}
       {...props}
     >
-      <CloseIcon className='icon-share'/>
+      <CloseIcon size={16} strokeWidth={1.75}/>
     </IconButton>
   )
 }
@@ -186,7 +184,7 @@ export function FullScreenButton({onClick}) {
     <TooltipIconButton
       title='Full screen'
       onClick={onClick}
-      icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
+      icon={<ExpandIcon size={15} strokeWidth={1.75}/>}
       placement='left'
       size='medium'
     />
@@ -203,7 +201,7 @@ export function BackButton({onClick}) {
     <TooltipIconButton
       title='Back'
       onClick={onClick}
-      icon={<SvgIcon><BackIcon className='icon-share'/></SvgIcon>}
+      icon={<BackIcon size={18} strokeWidth={1.75}/>}
       placement='left'
       size='medium'
     />

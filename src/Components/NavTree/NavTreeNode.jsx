@@ -2,11 +2,8 @@ import PropTypes from 'prop-types'
 import React, {ReactElement} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import {useTheme} from '@mui/material/styles'
+import {ChevronDown, ChevronRight} from 'lucide-react'
 import HideToggleButton from '../HideToggleButton'
-import {
-  KeyboardArrowDown as NodeOpenIcon,
-  KeyboardArrowRight as NodeClosedIcon,
-} from '@mui/icons-material'
 
 
 /** @return {ReactElement} */
@@ -39,13 +36,15 @@ export default function NavTreeNode({
   const theme = useTheme()
   return (
     <div
+      className='nav-tree-node'
       style={{
         ...style,
         paddingLeft: depth * paddingLeft,
         display: 'flex',
-        alignItems: 'flex-start', // Align items at the top for multiline labels
+        alignItems: 'flex-start',
         backgroundColor: isSelected ? theme.palette.secondary.selected : 'transparent',
         cursor: 'pointer',
+        fontSize: '13px',
       }}
     >
       {/* Expand/Collapse Icon */}
@@ -65,9 +64,9 @@ export default function NavTreeNode({
           }}
         >
           {isExpanded ? (
-            <NodeOpenIcon className='icon-share icon-nav-caret'/>
+            <ChevronDown size={14} strokeWidth={1.5}/>
           ) : (
-            <NodeClosedIcon className='icon-share icon-nav-caret'/>
+            <ChevronRight size={14} strokeWidth={1.5}/>
           )}
         </div>
       ) : (
@@ -95,14 +94,17 @@ export default function NavTreeNode({
         {label}
       </div>
 
-      {/* Hide Icon */}
+      {/* Hide Icon — visible on row hover */}
       {hasHideIcon && (
         <div
+          className='nav-tree-hide-btn'
           style={{
             marginLeft: 'auto',
             paddingRight: '0.5rem',
             display: 'flex',
             alignItems: 'center',
+            opacity: 0,
+            transition: 'opacity 0.15s',
           }}
           onClick={handleHideClick}
           onKeyDown={(event) => {

@@ -3,20 +3,14 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Chip,
-  Grid,
+  Box,
+  ButtonBase,
   Typography,
 } from '@mui/material'
-import {
-  ExpandMore as ExpandMoreIcon,
-  InsertDriveFileOutlined as FileIcon,
-} from '@mui/icons-material'
+import {useTheme} from '@mui/material/styles'
+import {ChevronDown, FileText} from 'lucide-react'
 
 
-/**
- * Curated local IFC test models from testdata/models/ifc/.
- * Organized by source/category.
- */
 const MODEL_CATEGORIES = [
   {
     name: 'BIM Whale',
@@ -35,8 +29,6 @@ const MODEL_CATEGORIES = [
       {name: 'Wall + Window', path: 'buildingSMART/ifc4-referenceview/wall-with-opening-and-window.ifc'},
       {name: 'Basin', path: 'buildingSMART/ifc4-referenceview/basin-tessellation.ifc'},
       {name: 'Column', path: 'buildingSMART/ifc4-referenceview/column-straight-rectangle-tessellation.ifc'},
-      {name: 'Tessellated Item', path: 'buildingSMART/ifc4-referenceview/tessellated-item.ifc'},
-      {name: 'Colored Tessellation', path: 'buildingSMART/ifc4-referenceview/tessellation-with-individual-colors.ifc'},
       {name: 'Building Arch.', path: 'buildingSMART/ifc4-pcert/Building-Architecture.ifc'},
       {name: 'Building Struct.', path: 'buildingSMART/ifc4-pcert/Building-Structural.ifc'},
       {name: 'Bridge', path: 'buildingSMART/ifc4-pcert/Infra-Bridge.ifc'},
@@ -49,24 +41,8 @@ const MODEL_CATEGORIES = [
     models: [
       {name: 'Schependomlaan', path: 'buildingSMART-community/schependomlaan/Schependomlaan.ifc'},
       {name: 'Duplex Arch.', path: 'buildingSMART-community/duplex-apartment/Duplex_A_20110907.ifc'},
-      {name: 'Duplex Electrical', path: 'buildingSMART-community/duplex-apartment/Duplex_Electrical_20121207.ifc'},
-      {name: 'Duplex MEP', path: 'buildingSMART-community/duplex-apartment/Duplex_MEP_20110907.ifc'},
       {name: 'Clinic Arch.', path: 'buildingSMART-community/medical-dental-clinic/Clinic_Architectural.ifc'},
-      {name: 'Clinic Struct.', path: 'buildingSMART-community/medical-dental-clinic/Clinic_Structural.ifc'},
       {name: 'Esplanades', path: 'buildingSMART-community/esplanades/Esplanades_AR.ifc'},
-    ],
-  },
-  {
-    name: 'IFC Spec Archive',
-    models: [
-      {name: 'Wall Standard', path: 'buildingSMART-community/iso-spec-archive/wall-standard-case.ifc'},
-      {name: 'Beam Extruded', path: 'buildingSMART-community/iso-spec-archive/beam-extruded-solid.ifc'},
-      {name: 'Column Extruded', path: 'buildingSMART-community/iso-spec-archive/column-extruded-solid.ifc'},
-      {name: 'Slab Standard', path: 'buildingSMART-community/iso-spec-archive/slab-standard-case.ifc'},
-      {name: 'Slab Openings', path: 'buildingSMART-community/iso-spec-archive/slab-openings.ifc'},
-      {name: 'CSG Primitive', path: 'buildingSMART-community/iso-spec-archive/csg-primitive.ifc'},
-      {name: 'BREP Model', path: 'buildingSMART-community/iso-spec-archive/brep-model.ifc'},
-      {name: 'Basin Adv. BREP', path: 'buildingSMART-community/iso-spec-archive/basin-advanced-brep.ifc'},
     ],
   },
   {
@@ -74,9 +50,7 @@ const MODEL_CATEGORIES = [
     models: [
       {name: 'HHS Office Arch.', path: 'opensourceBIM/HHS-Office-architect.ifc'},
       {name: 'HHS Office MEP', path: 'opensourceBIM/HHS-Office-MEP.ifc'},
-      {name: 'HHS Office Constr.', path: 'opensourceBIM/HHS-Office-construction.ifc'},
       {name: 'Schultz Residence', path: 'opensourceBIM/Schultz_Residence.ifc'},
-      {name: 'Texture Test', path: 'opensourceBIM/IfcTextureTest.ifc'},
     ],
   },
 ]
@@ -89,6 +63,7 @@ const MODEL_CATEGORIES = [
  */
 export default function LocalModels({navigate, setIsDialogDisplayed}) {
   const {navigateToModel} = require('../../utils/navigate')
+  const theme = useTheme()
   const [expanded, setExpanded] = useState(MODEL_CATEGORIES[0].name)
 
   const handleSelect = (modelPath) => {
@@ -97,54 +72,57 @@ export default function LocalModels({navigate, setIsDialogDisplayed}) {
   }
 
   return (
-    <div style={{maxHeight: '400px', overflow: 'auto', width: '100%'}}>
+    <Box sx={{maxHeight: '400px', overflow: 'auto', width: '100%'}}>
       {MODEL_CATEGORIES.map((cat) => (
         <Accordion
           key={cat.name}
           expanded={expanded === cat.name}
-          onChange={(_, isExpanded) => setExpanded(isExpanded ? cat.name : '')}
+          onChange={(_, isExp) => setExpanded(isExp ? cat.name : '')}
           disableGutters
           elevation={0}
           sx={{
             '&:before': {display: 'none'},
             'backgroundColor': 'transparent',
+            'backgroundImage': 'none',
           }}
         >
-          <AccordionSummary expandIcon={<ExpandMoreIcon/>} sx={{minHeight: 36, px: 1}}>
-            <Typography variant='caption' sx={{fontWeight: 600, fontSize: '12px'}}>
+          <AccordionSummary
+            expandIcon={<ChevronDown size={14} strokeWidth={1.5}/>}
+            sx={{minHeight: 32, px: 1, py: 0}}
+          >
+            <Typography sx={{fontSize: '12px', fontWeight: 500}}>
               {cat.name}
-              <Typography component='span' variant='caption' sx={{ml: 1, opacity: 0.4, fontSize: '11px'}}>
+              <Typography component='span' sx={{ml: 1, opacity: 0.4, fontSize: '11px'}}>
                 ({cat.models.length})
               </Typography>
             </Typography>
           </AccordionSummary>
-          <AccordionDetails sx={{p: 0, px: 1, pb: 1}}>
-            <Grid container spacing={0.5}>
+          <AccordionDetails sx={{p: 0, px: 0, pb: 1}}>
+            <Box sx={{display: 'flex', flexDirection: 'column', gap: '1px'}}>
               {cat.models.map((model, i) => (
-                <Grid item xs={6} key={i}>
-                  <Chip
-                    icon={<FileIcon sx={{fontSize: 14}}/>}
-                    label={model.name}
-                    size='small'
-                    onClick={() => handleSelect(model.path)}
-                    sx={{
-                      'width': '100%',
-                      'justifyContent': 'flex-start',
-                      'fontSize': '11px',
-                      'height': '28px',
-                      '& .MuiChip-label': {
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      },
-                    }}
-                    variant='outlined'
-                  />
-                </Grid>
+                <ButtonBase
+                  key={i}
+                  onClick={() => handleSelect(model.path)}
+                  sx={{
+                    'display': 'flex',
+                    'alignItems': 'center',
+                    'gap': '0.5rem',
+                    'width': '100%',
+                    'padding': '4px 10px 4px 20px',
+                    'borderRadius': '4px',
+                    'textAlign': 'left',
+                    'justifyContent': 'flex-start',
+                    '&:hover': {background: theme.palette.action.hover},
+                  }}
+                >
+                  <FileText size={12} strokeWidth={1.5} style={{opacity: 0.4, flexShrink: 0}}/>
+                  <Typography sx={{fontSize: '12px'}}>{model.name}</Typography>
+                </ButtonBase>
               ))}
-            </Grid>
+            </Box>
           </AccordionDetails>
         </Accordion>
       ))}
-    </div>
+    </Box>
   )
 }

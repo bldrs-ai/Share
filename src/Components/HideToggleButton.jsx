@@ -1,13 +1,10 @@
 import React, {ReactElement} from 'react'
+import {Eye, EyeOff, Glasses} from 'lucide-react'
 import useStore from '../store/useStore'
-import IfcIsolator from '../Infrastructure/IfcIsolator'
-import {Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon} from '@mui/icons-material'
-import GlassesIcon from '../assets/icons/Glasses.svg'
 
 
 /**
- * @param {IfcIsolator} The IFC isoaltor
- * @param {number} IFC element id
+ * @param {number} elementId IFC element id
  * @return {ReactElement}
  */
 export default function HideToggleButton({elementId}) {
@@ -32,39 +29,35 @@ export default function HideToggleButton({elementId}) {
     }
   }
 
-  const iconStyle = {
+  const style = {
     float: 'right',
     marginTop: '2px',
-    height: '20px',
-    opacity: 0.3,
-  }
-  if (isTempIsolationModeOn) {
-    iconStyle.pointerEvents = 'none'
-    if (isIsolated) {
-      iconStyle.opacity = 1
-      iconStyle.width = '27px'
-    }
+    opacity: 0.2,
+    cursor: 'pointer',
+    ...(isTempIsolationModeOn ? {pointerEvents: 'none'} : {}),
+    ...(isIsolated ? {opacity: 0.8} : {}),
   }
 
   if (isIsolated) {
-    return <GlassesIcon style={iconStyle} className='icon-share icon-nav-glasses'/>
+    return <Glasses size={14} strokeWidth={1.5} style={style}/>
   } else if (!isHidden) {
     return (
-      <VisibilityIcon
+      <Eye
+        size={14}
+        strokeWidth={1.5}
         onClick={toggleHide}
-        className='icon-share icon-nav-eye'
-        style={iconStyle}
+        style={style}
         data-testid='hide-icon'
       />
     )
   } else {
     return (
-      <VisibilityOffIcon
+      <EyeOff
+        size={14}
+        strokeWidth={1.5}
         onClick={toggleHide}
-        className='icon-share icon-nav-eye'
+        style={{...style, opacity: 0.5}}
         data-testid='unhide-icon'
-        style={iconStyle}
-        fill={undefined}
       />
     )
   }

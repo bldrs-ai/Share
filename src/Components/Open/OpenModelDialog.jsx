@@ -17,8 +17,8 @@ import RecentModels from './RecentModels'
 import SampleModels from './SampleModels'
 import {LABEL_LOCAL, LABEL_RECENT, LABEL_GITHUB, LABEL_SAMPLES} from './component'
 
+import {FolderOpen as FolderOpenIcon} from 'lucide-react'
 const LABEL_TEST_MODELS = 'Test Models'
-import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
 /**
@@ -59,7 +59,7 @@ export default function OpenModelDialog({
 
   return (
     <Dialog
-      headerIcon={<FolderOpenIcon className='icon-share'/>}
+      headerIcon={<FolderOpenIcon size={18} strokeWidth={1.75}/>}
       headerText='Open'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -68,7 +68,7 @@ export default function OpenModelDialog({
         tabLabels={tabLabels}
         currentTab={currentTab}
         actionCb={(value) => setCurrentTab(value)}
-        isScrollable={false}
+        isScrollable={true}
       />
       <Stack
         spacing={1}
@@ -81,24 +81,18 @@ export default function OpenModelDialog({
         data-testid={`dialog-open-model-tabs-stack`}
       >
         { currentTab === 0 &&
-          <Stack data-testid='dialog-open-model-local' spacing={1}>
-            {!isMobile &&
-                <>
-                  <Typography
-                    variant='caption'
-                  >
-                    Drag and Drop files into viewport to open
-                  </Typography>
-                  <Typography
-                    variant='caption'
-                    sx={{textAlign: 'center', color: 'text.secondary'}}
-                  >
-                    — or —
-                  </Typography>
-                </>
-            }
-            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
-               Browse files...
+          <Stack data-testid='dialog-open-model-local' spacing={1} sx={{alignItems: 'center', py: 2}}>
+            <Typography variant='body2' sx={{fontSize: '12px', opacity: 0.5}}>
+              Drag and drop files into viewport, or
+            </Typography>
+            <Button
+              onClick={openFile}
+              variant='outlined'
+              size='small'
+              sx={{textTransform: 'none', fontSize: '13px'}}
+              data-testid='button_open_file'
+            >
+              Browse files...
             </Button>
           </Stack>
         }

@@ -80,6 +80,9 @@ export default function Styles({theme}) {
         '.no-select': {
           userSelect: 'none',
         },
+        '.nav-tree-node:hover .nav-tree-hide-btn': {
+          opacity: '1 !important',
+        },
       }}
     />
   )

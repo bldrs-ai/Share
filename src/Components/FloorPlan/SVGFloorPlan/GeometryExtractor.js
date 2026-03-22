@@ -121,12 +121,11 @@ function getPolygonFromScene(model, expressId) {
  */
 function categorizeType(typeName) {
   const upper = typeName.toUpperCase()
+  // Only extract the essential floor plan elements
   if (upper.includes('WALL')) return 'wall'
-  if (upper.includes('COLUMN')) return 'column'
-  if (upper.includes('SPACE')) return 'space'
   if (upper.includes('SLAB')) return 'slab'
-  if (upper.includes('DOOR')) return 'opening'
-  if (upper.includes('WINDOW')) return 'opening'
+  if (upper.includes('COLUMN')) return 'column'
+  // Skip doors, windows, spaces, fixtures, fittings — too noisy as bounding boxes
   return null
 }
 

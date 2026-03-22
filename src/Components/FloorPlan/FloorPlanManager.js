@@ -130,7 +130,7 @@ export default class FloorPlanManager {
     this.addGrid(floor.elevation)
 
     // Move camera above, looking down
-    this.setCameraTopDown(floor.elevation)
+    this.setCameraTopDown(floor.elevation, floor.nextElevation)
 
     this.active = true
     debug().log('FloorPlanManager: Entered floor plan at', floor.name, 'elevation', floor.elevation)
@@ -141,7 +141,7 @@ export default class FloorPlanManager {
     if (!this.active) return
     this.setClipping(floor.elevation, cutHeight)
     if (this.grid) this.grid.position.y = floor.elevation + 0.01
-    this.setCameraTopDown(floor.elevation)
+    this.setCameraTopDown(floor.elevation, floor.nextElevation)
   }
 
 
@@ -247,14 +247,60 @@ export default class FloorPlanManager {
 
   // --- Camera ---
 
-  setCameraTopDown(elevation) {
-    const box = new Box3().setFromObject(this.model)
+  setCameraTopDown(elevation, nextElevation) {
+    // Compute bounding box of only geometry visible at this floor
+    const floorBox = this.computeFloorBounds(elevation, nextElevation)
     const center = new Vector3()
-    box.getCenter(center)
+    floorBox.getCenter(center)
+
+    const size = new Vector3()
+    floorBox.getSize(size)
+    const camHeight = Math.max(size.x, size.z, CAMERA_HEIGHT_ABOVE)
 
     const cc = this.viewer.IFC.context.ifcCamera.cameraControls
-    cc.setPosition(center.x, elevation + CAMERA_HEIGHT_ABOVE, center.z, true)
+    cc.setPosition(center.x, elevation + camHeight, center.z, true)
     cc.setTarget(center.x, elevation, center.z, true)
+  }
+
+
+  /**
+   * Compute bounding box of vertices within the storey Y range.
+   * Falls back to full model bounds if none found.
+   */
+  computeFloorBounds(elevation, nextElevation) {
+    const fullBox = new Box3().setFromObject(this.model)
+    try {
+      if (!this.model || !this.model.geometry) return fullBox
+      const position = this.model.geometry.attributes.position
+      if (!position) return fullBox
+
+      let minX = Infinity, maxX = -Infinity
+      let minZ = Infinity, maxZ = -Infinity
+      let found = false
+      const yMin = elevation - 0.1
+      const yMax = nextElevation != null ? nextElevation + 0.1 : elevation + 4
+
+      for (let i = 0; i < position.count; i++) {
+        const y = position.getY(i)
+        if (y >= yMin && y <= yMax) {
+          const x = position.getX(i)
+          const z = position.getZ(i)
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (z < minZ) minZ = z
+          if (z > maxZ) maxZ = z
+          found = true
+        }
+      }
+
+      if (!found || minX >= maxX || minZ >= maxZ) return fullBox
+      return new Box3(
+        new Vector3(minX, elevation, minZ),
+        new Vector3(maxX, nextElevation || elevation + 3, maxZ),
+      )
+    } catch (_) {
+      return fullBox
+    }
   }
 
 

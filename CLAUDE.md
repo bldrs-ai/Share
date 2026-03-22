@@ -38,6 +38,16 @@ Build number shown top-center of the viewport. Increment in `src/Containers/Root
 | 018 | All toolbar icons replaced with Lucide React (thin strokes) |
 | 019 | Profile + FloorPlan icons switched to Lucide |
 | 020 | Fixed Bldrs logo (use img instead of SvgIcon) |
+| 021-024 | TopBar, left nav full-height, drawer offsets, resizer thin line |
+| 025 | Nav tree: Lucide eye/chevron icons, hover-to-show hide, 13px font |
+| 026-028 | z-index fixes, SideDrawer offsets, transparent panel backgrounds |
+| 029-030 | Build version in TopBar, nav drawer margin fixes |
+| 031 | NavTree spatial/types icons switched to Lucide |
+| 032-033 | Selected icon turns bldrs green, transparent background |
+| 034 | Open dialog: consistent compact list style across all tabs |
+| 035 | Light/shadow toggle, BLDRS skyline model |
+| 036 | Individual app icons replace app store, Divider separator |
+| 037-038 | PanelLeft toggle icon (Insight style), CSS width transition |
 
 ## Our Changes vs Upstream
 

@@ -109,6 +109,7 @@ export default function CadView({
 
   // Begin Hooks //
   const isMobile = useIsMobile()
+  const isFloorPlanMode = useStore((state) => state.isFloorPlanMode)
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
@@ -720,6 +721,14 @@ export default function CadView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+
+  // Trigger renderer resize when floor plan mode changes
+  useEffect(() => {
+    if (viewer) {
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
+    }
+  }, [isFloorPlanMode, viewer])
 
 
   const abs = {position: 'absolute'}

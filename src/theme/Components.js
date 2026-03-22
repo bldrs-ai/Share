@@ -250,7 +250,17 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiToggleButton: {
       styleOverrides: {
-        root: StandardButton, // Same as MuiIconButton
+        root: {
+          ...StandardButton,
+          '&.Mui-selected': {
+            backgroundColor: 'transparent',
+            color: '#00ff00',
+          },
+          '&.Mui-selected:hover': {
+            backgroundColor: 'transparent',
+            color: '#00ff00',
+          },
+        },
       },
       variants: [{
         props: {variant: 'control'},
@@ -261,7 +271,13 @@ export function getComponentOverrides(palette, typography) {
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          ...typography.caption,
+          fontSize: '12px',
+          fontWeight: 400,
+          padding: '4px 8px',
+          borderRadius: '4px',
+        },
+        arrow: {
+          fontSize: '8px',
         },
       },
     },
