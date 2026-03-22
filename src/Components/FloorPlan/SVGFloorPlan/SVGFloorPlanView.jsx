@@ -1,6 +1,7 @@
 import React, {useState, useEffect, useRef, useCallback} from 'react'
 import useStore from '../../../store/useStore'
 import {extractFloorPlanGeometry} from './GeometryExtractor'
+import {extractSectionCut, segmentsToFloorPlanElements} from './SectionCutExtractor'
 import {renderSVG} from './SVGRenderer'
 import {
   findSnapPoint,
@@ -52,7 +53,7 @@ export default function SVGFloorPlanView() {
 
   const currentFloor = currentFloorIndex !== null ? floors[currentFloorIndex] : null
 
-  // Extract geometry when floor changes
+  // Extract geometry when floor changes — using section cut
   useEffect(() => {
     if (!viewer || !model || !currentFloor || !isFloorPlanMode) {
       setElements([])
@@ -61,25 +62,95 @@ export default function SVGFloorPlanView() {
 
     let cancelled = false
     setLoading(true)
-    setStatus('Extracting geometry...')
+    setStatus('Section cutting geometry...')
 
-    extractFloorPlanGeometry(viewer, currentFloor.expressId, model)
-      .then((els) => {
-        if (!cancelled) {
-          setElements(els)
-          setLoading(false)
-          setStatus(`${els.length} elements extracted`)
+    // Use requestAnimationFrame to not block UI
+    requestAnimationFrame(() => {
+      try {
+        // Cut at storey elevation + offset (default 1.2m)
+        const userCutHeight = useStore.getState().floorPlanCutHeight || 1.2
+        let cutY = currentFloor.elevation + userCutHeight
+        console.log(`SectionCut: floor="${currentFloor.name}" elevation=${currentFloor.elevation.toFixed(2)} cutY=${cutY.toFixed(2)}`)
+
+        let segments = extractSectionCut(model, cutY)
+
+        // If no segments found, the cut plane might be outside the model geometry.
+        // Try scanning at different heights within the storey range.
+        if (segments.length === 0 && currentFloor.nextElevation) {
+          const tryHeights = [
+            currentFloor.elevation + 0.5,
+            currentFloor.elevation + 1.0,
+            (currentFloor.elevation + currentFloor.nextElevation) / 2, // midpoint
+            currentFloor.nextElevation - 0.5,
+          ]
+          for (const tryY of tryHeights) {
+            const trySegments = extractSectionCut(model, tryY)
+            if (trySegments.length > segments.length) {
+              segments = trySegments
+              cutY = tryY
+              console.log(`SectionCut: retry at Y=${tryY.toFixed(2)} found ${trySegments.length} segments`)
+              if (segments.length > 10) break // good enough
+            }
+          }
         }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setLoading(false)
-          setStatus(`Error: ${err.message}`)
+
+        if (cancelled) return
+
+        if (segments.length > 0) {
+          // Convert segments to floor plan elements (async — looks up IFC types)
+          segmentsToFloorPlanElements(segments, viewer).then((els) => {
+            if (cancelled) return
+            setElements(els)
+            setLoading(false)
+            const typeCounts = {}
+            els.forEach((el) => { typeCounts[el.category] = (typeCounts[el.category] || 0) + 1 })
+            setStatus(`Section cut: ${segments.length} segments — ${Object.entries(typeCounts).map(([k, v]) => `${v} ${k}`).join(', ')}`)
+          })
+        } else {
+          // Fall back to old bounding box approach
+          setStatus('Section cut empty, falling back...')
+          extractFloorPlanGeometry(viewer, currentFloor.expressId, model)
+            .then((els) => {
+              if (!cancelled) {
+                setElements(els)
+                setLoading(false)
+                setStatus(`${els.length} elements (bounding box fallback)`)
+              }
+            })
+            .catch((err) => {
+              if (!cancelled) {
+                setLoading(false)
+                setStatus(`Error: ${err.message}`)
+              }
+            })
         }
-      })
+      } catch (err) {
+        if (!cancelled) {
+          // Fall back to old approach on any error
+          setStatus(`Section cut error: ${err.message}, falling back...`)
+          extractFloorPlanGeometry(viewer, currentFloor.expressId, model)
+            .then((els) => {
+              if (!cancelled) {
+                setElements(els)
+                setLoading(false)
+                setStatus(`${els.length} elements (fallback)`)
+              }
+            })
+            .catch((fallbackErr) => {
+              if (!cancelled) {
+                setLoading(false)
+                setStatus(`Error: ${fallbackErr.message}`)
+              }
+            })
+        }
+      }
+    })
 
     return () => { cancelled = true }
   }, [viewer, model, currentFloor, isFloorPlanMode])
+
+  // Note: extractFloorPlanGeometry (old bounding box approach) is used as fallback
+  // in the catch blocks above when section cut fails.
 
   // Create or load document when floor changes
   useEffect(() => {

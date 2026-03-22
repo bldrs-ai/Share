@@ -22,7 +22,6 @@ const appIcons = {
 export default function TopBar() {
   const theme = useTheme()
   const isMobile = useIsMobile()
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const viewer = useStore((state) => state.viewer)
@@ -56,9 +55,9 @@ export default function TopBar() {
         zIndex: 10,
         pointerEvents: 'none',
         padding: isMobile ? '0 8px' : '0 8px 0 50px',
-        backgroundColor: theme.palette.secondary.backgroundColor,
-        backdropFilter: theme.palette.secondary.backdropFilter,
-        borderBottom: `1px solid ${theme.palette.secondary.dark}`,
+        backgroundColor: 'var(--color-toolbar-bg)',
+        backdropFilter: 'blur(8px)',
+        borderBottom: '1px solid var(--color-toolbar-border)',
       }}
       data-testid='TopBar'
     >
@@ -92,7 +91,7 @@ export default function TopBar() {
                     width: 32,
                     height: 32,
                     borderRadius: '6px',
-                    color: isSelected ? '#00ff00' : theme.palette.primary.contrastText,
+                    color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
                     opacity: isSelected ? 1 : 0.7,
                     '&:hover': {opacity: 1},
                   }}
@@ -105,39 +104,37 @@ export default function TopBar() {
               </Tooltip>
             )
           })}
-          <Box sx={{width: '1px', height: 20, bgcolor: theme.palette.secondary.dark, mx: 0.5}}/>
+          <Box sx={{width: '1px', height: 20, bgcolor: 'var(--color-border)', mx: 0.5}}/>
           <FloorPlanControl/>
         </Stack>
       )}
 
-      {/* Right: manage (localhost only) + profile + help */}
+      {/* Right: settings + profile + help */}
       <Stack
         direction='row'
         alignItems='center'
         sx={{pointerEvents: 'auto'}}
       >
-        {isLocalhost && (
-          <Tooltip title='Project Management' placement='bottom'>
-            <IconButton
-              size='small'
-              onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
-              sx={{
-                width: 32,
-                height: 32,
-                borderRadius: '6px',
-                color: theme.palette.primary.contrastText,
-                opacity: 0.7,
-                '&:hover': {opacity: 1},
-              }}
-            >
-              <Settings size={16} strokeWidth={1.75}/>
-            </IconButton>
-          </Tooltip>
-        )}
+        <Tooltip title='Settings' placement='bottom'>
+          <IconButton
+            size='small'
+            onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '6px',
+              color: 'var(--color-text)',
+              opacity: 0.7,
+              '&:hover': {opacity: 1},
+            }}
+          >
+            <Settings size={16} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
         {isLoginEnabled && <ProfileControl/>}
         <HelpControl/>
       </Stack>
-      {isLocalhost && <ProjectAdminDialog/>}
+      <ProjectAdminDialog/>
     </Stack>
   )
 }

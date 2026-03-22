@@ -126,14 +126,11 @@ export default function CadView({
   function onModelPath() {
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
-    const initViewerCb = (any, themeArg) => {
-      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
-      if (!sceneBackground) {
-        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
-        console.error(error.message)
-        captureException(error)
-      }
-      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+    const initViewerCb = () => {
+      // Read scene background from CSS custom property (set by theme system)
+      const sceneBackground = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-scene-bg').trim() || '#1a1a1a'
+      const initializedViewer = initViewer(pathPrefix, sceneBackground)
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks

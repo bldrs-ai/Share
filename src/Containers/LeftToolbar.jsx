@@ -5,7 +5,7 @@ import {useTheme} from '@mui/material/styles'
 import {PanelLeft} from 'lucide-react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import CameraControl from '../Components/Camera/CameraControl'
-import CutPlaneMenu from '../Components/CutPlane/CutPlaneMenu'
+
 // FloorPlanControl moved to TopBar
 import TerrainControl from '../Components/Terrain/TerrainControl'
 import ImagineControl from '../Components/Imagine/ImagineControl'
@@ -64,9 +64,10 @@ export default function LeftToolbar() {
         height: 'calc(100vh - 40px)',
         zIndex: 1,
         pointerEvents: 'auto',
-        backgroundColor: theme.palette.secondary.backgroundColor,
-        backdropFilter: theme.palette.secondary.backdropFilter,
-        borderRight: `1px solid ${theme.palette.secondary.dark}`,
+        backgroundColor: 'var(--color-toolbar-bg)',
+        backdropFilter: 'blur(8px)',
+        borderRight: '1px solid var(--color-toolbar-border)',
+        color: 'var(--color-text)',
         padding: '4px',
         justifyContent: 'space-between',
         transition: 'width 0.2s ease',
@@ -93,7 +94,6 @@ export default function LeftToolbar() {
         {isSearchEnabled && <Item label='Search'><SearchControl/></Item>}
         {isNavTreeEnabled && <Item label='Nav Tree'><NavTreeControl/></Item>}
         {isVersionsEnabled && <Item label='Versions'><VersionsControl/></Item>}
-        <Item label='Section'><CutPlaneMenu/></Item>
         {/* Floor Plans moved to TopBar */}
         {isModelReady && <Item label='Terrain'><TerrainControl/></Item>}
         {isNotesEnabled && <Item label='Notes'><NotesControl/></Item>}

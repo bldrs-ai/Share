@@ -1,6 +1,5 @@
 import React, {useState, useCallback} from 'react'
 import {IconButton, Slider, Stack, Tooltip} from '@mui/material'
-import {useTheme} from '@mui/material/styles'
 import {
   Sun,
   Maximize,
@@ -9,6 +8,8 @@ import {
   Box as BoxIcon,
   Grid3x3,
 } from 'lucide-react'
+import {Scissors} from 'lucide-react'
+import useCutPlaneControls from '../Components/CutPlane/CutPlaneMenu'
 import LightManager from '../Infrastructure/LightManager'
 import SunCompass from '../Components/Sun/SunCompass'
 import useStore from '../store/useStore'
@@ -19,14 +20,13 @@ import useStore from '../store/useStore'
  * Contains tools that directly affect the 3D view.
  */
 export default function ViewerToolbar() {
-  const theme = useTheme()
   const viewer = useStore((state) => state.viewer)
   const isModelReady = useStore((state) => state.isModelReady)
 
   const [lightOn, setLightOn] = useState(false)
   const [lightManager, setLightManager] = useState(null)
-  const [azimuth, setAzimuth] = useState(225)
-  const [elevation, setElevation] = useState(53)
+  const [azimuth, setAzimuth] = useState(315)
+  const [elevation, setElevation] = useState(25)
   const [isRotating, setIsRotating] = useState(false)
   const [wireframe, setWireframe] = useState(false)
   const [ortho, setOrtho] = useState(false)
@@ -119,6 +119,15 @@ export default function ViewerToolbar() {
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
   const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
 
+  const sectionBarSx = {
+    backgroundColor: 'var(--color-toolbar-bg)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: '10px',
+    padding: '3px 8px',
+    border: '1px solid var(--color-toolbar-border)',
+  }
+  const cutPlane = useCutPlaneControls(sectionBarSx)
+
   if (!viewer || !isModelReady) return null
 
   let rightOffsetCSS = '0px'
@@ -134,14 +143,22 @@ export default function ViewerToolbar() {
     width: 30,
     height: 30,
     borderRadius: '6px',
-    color: active ? '#00ff00' : theme.palette.primary.contrastText,
+    color: active ? 'var(--color-primary)' : 'var(--color-text)',
     opacity: active ? 1 : 0.6,
     '&:hover': {opacity: 1},
   })
 
+  const barSx = {
+    backgroundColor: 'var(--color-toolbar-bg)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: '10px',
+    padding: '3px 8px',
+    border: '1px solid var(--color-toolbar-border)',
+  }
+
   const sliderSx = {
     width: 60,
-    color: theme.palette.primary.contrastText,
+    color: 'var(--color-text)',
     opacity: 0.6,
     '& .MuiSlider-thumb': {
       width: 10,
@@ -154,9 +171,9 @@ export default function ViewerToolbar() {
 
   return (
     <Stack
-      direction='row'
+      direction='column'
       alignItems='center'
-      spacing={0.25}
+      spacing={0.5}
       sx={{
         position: 'absolute',
         top: '48px',
@@ -164,35 +181,61 @@ export default function ViewerToolbar() {
         transform: 'translateX(-50%)',
         transition: 'left 50ms ease',
         zIndex: 5,
-        pointerEvents: 'auto',
-        backgroundColor: theme.palette.secondary.backgroundColor,
-        backdropFilter: theme.palette.secondary.backdropFilter,
-        borderRadius: '10px',
-        padding: '3px 8px',
-        border: `1px solid ${theme.palette.secondary.dark}`,
+        pointerEvents: 'none',
       }}
       data-testid='ViewerToolbar'
     >
-      <Tooltip title='Fit to view' placement='bottom'>
-        <IconButton size='small' onClick={fitToView} sx={btnSx(false)}>
-          <Maximize size={15} strokeWidth={1.75}/>
-        </IconButton>
-      </Tooltip>
+      {/* Main toolbar row */}
+      <Stack
+        direction='row'
+        alignItems='center'
+        spacing={0.25}
+        sx={{...barSx, pointerEvents: 'auto'}}
+      >
+        <Tooltip title='Fit to view' placement='bottom'>
+          <IconButton size='small' onClick={fitToView} sx={btnSx(false)}>
+            <Maximize size={15} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
 
-      <Tooltip title='Reset camera' placement='bottom'>
-        <IconButton size='small' onClick={resetCamera} sx={btnSx(false)}>
-          <RotateCcw size={15} strokeWidth={1.75}/>
-        </IconButton>
-      </Tooltip>
+        <Tooltip title='Reset camera' placement='bottom'>
+          <IconButton size='small' onClick={resetCamera} sx={btnSx(false)}>
+            <RotateCcw size={15} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
 
-      <Tooltip title={lightOn ? 'Light off' : 'Light on'} placement='bottom'>
-        <IconButton size='small' onClick={toggleLight} sx={btnSx(lightOn)}>
-          <Sun size={15} strokeWidth={1.75}/>
-        </IconButton>
-      </Tooltip>
+        <Tooltip title={lightOn ? 'Light off' : 'Light on'} placement='bottom'>
+          <IconButton size='small' onClick={toggleLight} sx={btnSx(lightOn)}>
+            <Sun size={15} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
 
+        <Tooltip title={wireframe ? 'Solid' : 'Wireframe'} placement='bottom'>
+          <IconButton size='small' onClick={toggleWireframe} sx={btnSx(wireframe)}>
+            <Grid3x3 size={15} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title={ortho ? 'Perspective' : 'Orthographic'} placement='bottom'>
+          <IconButton size='small' onClick={toggleProjection} sx={btnSx(ortho)}>
+            <BoxIcon size={15} strokeWidth={1.75}/>
+          </IconButton>
+        </Tooltip>
+
+        {cutPlane.button}
+      </Stack>
+
+      {/* Section plane controls — appears below when scissors is clicked */}
+      {cutPlane.subBar}
+
+      {/* Sun controls sub-bar — appears below when light is on */}
       {lightOn && (
-        <>
+        <Stack
+          direction='row'
+          alignItems='center'
+          spacing={0.5}
+          sx={{...barSx, pointerEvents: 'auto'}}
+        >
           <Tooltip title={`Azimuth: ${azimuth}°`} placement='bottom'>
             <span style={{display: 'flex', alignItems: 'center'}}>
               <SunCompass azimuth={azimuth} onChange={onAzimuthChange} active={lightOn}/>
@@ -216,20 +259,8 @@ export default function ViewerToolbar() {
               <RotateCw size={15} strokeWidth={1.75}/>
             </IconButton>
           </Tooltip>
-        </>
+        </Stack>
       )}
-
-      <Tooltip title={wireframe ? 'Solid' : 'Wireframe'} placement='bottom'>
-        <IconButton size='small' onClick={toggleWireframe} sx={btnSx(wireframe)}>
-          <Grid3x3 size={15} strokeWidth={1.75}/>
-        </IconButton>
-      </Tooltip>
-
-      <Tooltip title={ortho ? 'Perspective' : 'Orthographic'} placement='bottom'>
-        <IconButton size='small' onClick={toggleProjection} sx={btnSx(ortho)}>
-          <BoxIcon size={15} strokeWidth={1.75}/>
-        </IconButton>
-      </Tooltip>
     </Stack>
   )
 }

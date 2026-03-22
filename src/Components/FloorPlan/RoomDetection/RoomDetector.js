@@ -6,6 +6,7 @@
 import {extractCenterlines} from './WallCenterlines'
 import {buildPlanarGraph} from './PlanarGraph'
 import {detectRooms} from './FaceDetection'
+import {detectRoomsFloodFill} from './FloodFillDetector'
 
 
 /**
@@ -23,35 +24,31 @@ export function detectRoomsFromElements(elements) {
     return slabRooms
   }
 
-  // Strategy 2: Fall back to wall centerline graph algorithm
-  // 1. Extract wall centerlines
-  // Extension bridges gaps between walls that don't perfectly meet.
-  // Use half the average wall thickness — just enough to close typical gaps
-  // without over-extending into adjacent rooms.
+  // Strategy 2: Flood fill — rasterize walls, find interior regions
+  // This is the most robust approach for arbitrary wall layouts
+  const floodFillRooms = detectRoomsFloodFill(elements)
+  if (floodFillRooms.length > 0) {
+    console.log(`RoomDetect: Found ${floodFillRooms.length} rooms via flood fill`)
+    return floodFillRooms
+  }
+
+  // Strategy 3: Fall back to wall centerline graph algorithm
   const wallElements = elements.filter((e) => e.category === 'wall')
   const avgWallThickness = estimateAvgThickness(wallElements)
   const extension = avgWallThickness * 0.5
-
   const centerlines = extractCenterlines(elements, extension)
 
   if (centerlines.length < 3) return []
 
-  // Compute average wall thickness for inset
   const thicknesses = centerlines.map((cl) => cl.thickness).filter((t) => t > 0.05)
   const avgThickness = thicknesses.length > 0
     ? thicknesses.reduce((s, t) => s + t, 0) / thicknesses.length
     : 0.2
 
-  // 2. Build planar graph with intersections and snapping
   const graph = buildPlanarGraph(centerlines)
-
-  // 3. Find enclosed faces (rooms) from centerline graph
   const rooms = detectRooms(graph)
 
-  // 4. Inset each room polygon inward by half wall thickness
-  //    to get the actual room area (inner face of walls)
   const insetAmount = avgThickness / 2
-
   for (const room of rooms) {
     const inset = insetPolygon(room.polygon, insetAmount)
     if (inset && inset.length >= 3) {
@@ -61,7 +58,7 @@ export function detectRoomsFromElements(elements) {
     }
   }
 
-  console.log(`RoomDetect: ${centerlines.length} walls → ${rooms.length} rooms (inset ${(insetAmount * 100).toFixed(0)}cm from centerline)`)
+  console.log(`RoomDetect: ${centerlines.length} walls → ${rooms.length} rooms (centerline graph)`)
 
   return rooms
 }

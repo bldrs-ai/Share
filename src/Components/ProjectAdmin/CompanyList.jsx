@@ -88,7 +88,7 @@ export default function CompanyList() {
             <Box sx={{flexGrow: 1, minWidth: 0}}>
               <Typography variant='body2' sx={{fontSize: '13px'}}>{company.name}</Typography>
               {company.description && (
-                <Typography variant='caption' sx={{fontSize: '10px', opacity: 0.5, display: 'block'}}>
+                <Typography variant='caption' sx={{fontSize: '11px', opacity: 0.5, display: 'block'}}>
                   {company.description}
                 </Typography>
               )}

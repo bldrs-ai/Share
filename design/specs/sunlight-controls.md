@@ -50,7 +50,7 @@ light.position.set(x, y, z)
 
 The light always points at the scene origin (default Three.js DirectionalLight target).
 
-**Defaults:** azimuth = 225° (southwest), elevation = 53° — matches the current hardcoded position `(-15, 20, -10)` approximately.
+**Defaults:** azimuth = 315° (northwest), elevation = 25° — low sun casting long dramatic shadows toward the camera. Optimized for the index.ifc "bldrs" building model where the shadow silhouettes reinforce the letter shapes.
 
 ### 3.2 UI Controls
 

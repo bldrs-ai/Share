@@ -26,6 +26,11 @@ setupEsbuildWatch()
 // Detect base path for GH Pages subpath deployment
 window.__ASSET_BASE__ = window.location.hostname.endsWith('.github.io') ? '/share' : ''
 
+// Apply saved theme (or default Green dark)
+import {applyTheme, getSavedTheme} from './theme/themes'
+const {themeIndex, mode} = getSavedTheme()
+applyTheme(themeIndex, mode)
+
 const root = createRoot(document.getElementById('root'))
 
 /** @return {ReactElement} The app with its context. */

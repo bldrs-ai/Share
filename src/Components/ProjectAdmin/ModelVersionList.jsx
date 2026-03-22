@@ -89,14 +89,14 @@ export default function ModelVersionList({modelId, currentVersionId}) {
           onClick={() => handleLoadVersion(version)}
         >
           <GitCommit size={12} strokeWidth={1.5} style={{opacity: 0.4, flexShrink: 0}}/>
-          <Chip label={`V${version.versionNumber}`} size='small' sx={{height: 18, fontSize: '10px', fontWeight: 600}}/>
+          <Chip label={`V${version.versionNumber}`} size='small' sx={{height: 18, fontSize: '11px', fontWeight: 600}}/>
           <Typography variant='caption' sx={{fontSize: '11px', flexGrow: 1, opacity: 0.7}}>
             {version.comment}
           </Typography>
-          <Typography variant='caption' sx={{fontSize: '10px', opacity: 0.4}}>
+          <Typography variant='caption' sx={{fontSize: '11px', opacity: 0.4}}>
             {formatDate(version.createdAt)}
           </Typography>
-          <Typography variant='caption' sx={{fontSize: '10px', opacity: 0.4}}>
+          <Typography variant='caption' sx={{fontSize: '11px', opacity: 0.4}}>
             {formatBytes(version.fileSizeBytes)}
           </Typography>
           <Tooltip title='Load in viewer'>

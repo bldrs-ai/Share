@@ -68,7 +68,7 @@ export default function ModelList() {
 
   return (
     <Stack spacing={0.5}>
-      <Typography variant='caption' sx={{opacity: 0.4, fontSize: '10px', textTransform: 'uppercase', px: '10px', pb: 0.5}}>
+      <Typography variant='caption' sx={{opacity: 0.4, fontSize: '11px', textTransform: 'uppercase', px: '10px', pb: 0.5}}>
         {activeCompany?.name} / {activeProject?.name}
       </Typography>
       {modelRefs.map((model) => (
@@ -96,7 +96,7 @@ export default function ModelList() {
               <FileText size={14} strokeWidth={1.5} style={{opacity: 0.5, flexShrink: 0}}/>
               <Typography variant='body2' sx={{fontSize: '13px', flexGrow: 1}}>{model.name}</Typography>
               {model.currentVersionId && (
-                <Chip label={`v${modelRefs.length > 0 ? '' : '1'}`} size='small' sx={{height: 18, fontSize: '10px'}}/>
+                <Chip label={`v${modelRefs.length > 0 ? '' : '1'}`} size='small' sx={{height: 18, fontSize: '11px'}}/>
               )}
               <IconButton size='small' sx={{opacity: 0.4}}>
                 {expandedModelId === model.id ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}

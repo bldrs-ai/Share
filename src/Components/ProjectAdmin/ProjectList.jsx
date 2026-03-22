@@ -101,13 +101,13 @@ export default function ProjectList() {
             <Box sx={{flexGrow: 1, minWidth: 0}}>
               <Typography variant='body2' sx={{fontSize: '13px'}}>{project.name}</Typography>
               {project.description && (
-                <Typography variant='caption' sx={{fontSize: '10px', opacity: 0.5, display: 'block'}}>
+                <Typography variant='caption' sx={{fontSize: '11px', opacity: 0.5, display: 'block'}}>
                   {project.description}
                 </Typography>
               )}
             </Box>
             {project.status === 'archived' && (
-              <Chip label='archived' size='small' sx={{height: 16, fontSize: '9px'}}/>
+              <Chip label='archived' size='small' sx={{height: 16, fontSize: '11px'}}/>
             )}
             <Tooltip title='Edit'>
               <IconButton

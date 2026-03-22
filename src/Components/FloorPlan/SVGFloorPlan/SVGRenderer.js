@@ -6,12 +6,18 @@
 
 
 // Architectural floor plan styling — clean thin lines on white
+// Architectural floor plan styling per element type
 const STYLES = {
-  wall: {fill: '#000', stroke: '#000', strokeWidth: 0.01, opacity: 1},
-  column: {fill: '#000', stroke: '#000', strokeWidth: 0.01, opacity: 0.8},
-  slab: {fill: 'none', stroke: '#999', strokeWidth: 0.01, opacity: 0.4},
+  wall: {fill: '#000', stroke: '#000', strokeWidth: 0.015, opacity: 1},
+  column: {fill: '#444', stroke: '#000', strokeWidth: 0.015, opacity: 0.9},
+  slab: {fill: 'none', stroke: '#bbb', strokeWidth: 0.008, opacity: 0.4},
+  door: {fill: 'none', stroke: '#666', strokeWidth: 0.01, opacity: 0.7},
+  window: {fill: 'none', stroke: '#4a9', strokeWidth: 0.012, opacity: 0.8},
+  stair: {fill: 'none', stroke: '#888', strokeWidth: 0.01, opacity: 0.6},
+  beam: {fill: 'none', stroke: '#a86', strokeWidth: 0.01, opacity: 0.6},
+  covering: {fill: 'none', stroke: '#ccc', strokeWidth: 0.006, opacity: 0.3},
   space: {fill: '#f0f4f8', stroke: '#ccc', strokeWidth: 0.005, opacity: 0.3},
-  opening: {fill: '#fff', stroke: '#999', strokeWidth: 0.01, opacity: 1},
+  other: {fill: 'none', stroke: '#999', strokeWidth: 0.008, opacity: 0.5},
 }
 
 // Dimension line styling
@@ -53,7 +59,7 @@ export function renderSVG(elements, measurements = [], annotations = [], options
   lines.push(`  <!-- Scale: 1:${scale} -->`)
 
   // Render layers
-  const layerOrder = ['slab', 'space', 'wall', 'column', 'opening']
+  const layerOrder = ['slab', 'covering', 'space', 'other', 'stair', 'beam', 'door', 'window', 'wall', 'column']
   for (const category of layerOrder) {
     const layerEls = elements.filter((e) => e.category === category)
     if (layerEls.length === 0) continue
@@ -61,9 +67,31 @@ export function renderSVG(elements, measurements = [], annotations = [], options
     lines.push(`  <g class="layer-${category}s" data-layer="${category}">`)
     for (const el of layerEls) {
       const style = STYLES[el.category] || STYLES.wall
-      const pts = el.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+
       const nameAttr = el.name ? ` data-name="${escXml(el.name)}"` : ''
-      lines.push(`    <polygon points="${pts}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}" opacity="${style.opacity}" data-express-id="${el.expressId}" data-type="${el.type}"${nameAttr}/>`)
+      const typeAttr = el.type ? ` data-type="${escXml(el.type)}"` : ''
+      const idAttr = el.expressId ? ` data-express-id="${el.expressId}"` : ''
+
+      // Render raw section cut segments as SVG path
+      if (el.rawSegments && el.rawSegments.length > 0) {
+        let d = ''
+        for (const seg of el.rawSegments) {
+          d += `M${seg.start[0].toFixed(4)},${seg.start[1].toFixed(4)} L${seg.end[0].toFixed(4)},${seg.end[1].toFixed(4)} `
+        }
+        lines.push(`    <path d="${d}" fill="none" stroke="${style.stroke}" stroke-width="${style.strokeWidth}" opacity="${style.opacity}"${idAttr}${typeAttr}${nameAttr}/>`)
+
+        // Also render as filled polygon if chaining succeeded
+        if (el.polygon && el.polygon.length >= 3) {
+          const pts = el.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+          lines.push(`    <polygon points="${pts}" fill="${style.fill}" stroke="none" opacity="${style.opacity * 0.4}"${idAttr}/>`)
+        }
+        continue
+      }
+
+      if (!el.polygon || el.polygon.length < 3) continue
+
+      const pts = el.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(' ')
+      lines.push(`    <polygon points="${pts}" fill="${style.fill}" stroke="${style.stroke}" stroke-width="${style.strokeWidth}" opacity="${style.opacity}"${idAttr}${typeAttr}${nameAttr}/>`)
 
       if (el.category === 'space' && el.name) {
         const c = centroid(el.polygon)
@@ -260,13 +288,26 @@ function computeBounds(elements, padding) {
   if (elements.length === 0) return null
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
   for (const el of elements) {
-    for (const [x, z] of el.polygon) {
-      if (x < minX) minX = x
-      if (x > maxX) maxX = x
-      if (z < minZ) minZ = z
-      if (z > maxZ) maxZ = z
+    if (el.polygon) {
+      for (const [x, z] of el.polygon) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (z < minZ) minZ = z
+        if (z > maxZ) maxZ = z
+      }
+    }
+    if (el.rawSegments) {
+      for (const seg of el.rawSegments) {
+        for (const [x, z] of [seg.start, seg.end]) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (z < minZ) minZ = z
+          if (z > maxZ) maxZ = z
+        }
+      }
     }
   }
+  if (minX === Infinity) return null
   return {minX: minX - padding, maxX: maxX + padding, minZ: minZ - padding, maxZ: maxZ + padding}
 }
 
@@ -286,3 +327,8 @@ function dist(a, b) {
 function escXml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
+
+
+// Rotation removed — the SVG renders in the model's native orientation.
+// If the building needs rotation, it should be done at the viewer level
+// (e.g., rotating the camera), not by mutating geometry data.

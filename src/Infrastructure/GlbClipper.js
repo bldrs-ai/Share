@@ -47,12 +47,6 @@ export default class GlbClipper {
     const plane = new Plane()
     plane.setFromNormalAndCoplanarPoint(normal, point)
 
-    // Register clipping with the engine
-    if (this.isIfcModel) {
-      this.viewer.clipper.context.addClippingPlane(plane)
-      this.viewer.clipper.updateMaterials()
-    }
-
     // Visual gizmo
     const gizmoSize = this.computeGizmoSize()
     const gizmo = new CutPlaneGizmo(normal, gizmoSize)
@@ -69,10 +63,9 @@ export default class GlbClipper {
     }
     this.planes.push(planeData)
 
-    if (!this.isIfcModel) {
-      this.updateRendererPlanes()
-      this.applyClippingToMaterials()
-    }
+    // Apply clipping via renderer + materials (works for all model types)
+    this.updateRendererPlanes()
+    this.applyClippingToMaterials()
 
     debug().log('GlbClipper: Created plane', direction)
     return planeData
@@ -83,21 +76,13 @@ export default class GlbClipper {
     this.planes.forEach((pd) => {
       this.viewer.context.getScene().remove(pd.gizmo)
       if (pd.gizmo.dispose) pd.gizmo.dispose()
-      if (this.isIfcModel) {
-        this.viewer.clipper.context.removeClippingPlane(pd.plane)
-      }
     })
-
-    if (this.isIfcModel) {
-      this.viewer.clipper.updateMaterials()
-    }
 
     this.planes = []
 
-    if (!this.isIfcModel) {
-      this.updateRendererPlanes()
-      this.clearMaterialClipping()
-    }
+    // Clear clipping on renderer + materials
+    this.updateRendererPlanes()
+    this.clearMaterialClipping()
 
     debug().log('GlbClipper: Deleted all planes')
   }
@@ -277,12 +262,8 @@ export default class GlbClipper {
       this.draggingPlane.gizmo.position.copy(newPoint)
       this.draggingPlane.offset += proj
 
-      if (this.isIfcModel) {
-        this.viewer.clipper.updateMaterials()
-      } else {
-        this.updateRendererPlanes()
-        this.applyClippingToMaterials()
-      }
+      this.updateRendererPlanes()
+      this.applyClippingToMaterials()
     }
   }
 

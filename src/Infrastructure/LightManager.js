@@ -1,9 +1,13 @@
-import {DirectionalLight, PlaneGeometry, Mesh, ShadowMaterial, Box3, Vector3} from 'three'
+import {
+  DirectionalLight, PlaneGeometry, Mesh, ShadowMaterial,
+  MeshBasicMaterial, CanvasTexture,
+  Box3, Vector3,
+} from 'three'
 
 
 const DEG2RAD = Math.PI / 180
-const DEFAULT_AZIMUTH = 225 // Southwest
-const DEFAULT_ELEVATION = 53
+const DEFAULT_AZIMUTH = 315 // Northwest — shadows fall toward camera
+const DEFAULT_ELEVATION = 25 // Low sun for long dramatic shadows
 const LIGHT_RADIUS = 25
 const ROTATION_SPEED = 30 // degrees per second
 
@@ -17,6 +21,7 @@ export default class LightManager {
     this.viewer = viewer
     this.light = null
     this.groundPlane = null
+    this.groundText = null
     this.enabled = false
     this.azimuth = DEFAULT_AZIMUTH
     this.elevation = DEFAULT_ELEVATION
@@ -43,10 +48,11 @@ export default class LightManager {
     this.light.shadow.camera.far = 100
     this.light.shadow.bias = -0.002
     scene.add(this.light)
+    scene.add(this.light.target)
 
-    // Ground plane to receive shadows
-    const groundGeom = new PlaneGeometry(100, 100)
-    const groundMat = new ShadowMaterial({opacity: 0.3})
+    // Ground plane to receive shadows — large enough for long shadows
+    const groundGeom = new PlaneGeometry(300, 300)
+    const groundMat = new ShadowMaterial({opacity: 0.4})
     this.groundPlane = new Mesh(groundGeom, groundMat)
     this.groundPlane.rotation.x = -Math.PI / 2
     this.groundPlane.position.y = -0.01
@@ -56,7 +62,7 @@ export default class LightManager {
 
     // Enable shadow casting on all model meshes
     scene.traverse((obj) => {
-      if (obj.isMesh && obj.name !== 'ShadowGroundPlane') {
+      if (obj.isMesh && obj.name !== 'ShadowGroundPlane' && obj.name !== 'GroundText') {
         obj.castShadow = true
         obj.receiveShadow = true
       }
@@ -66,6 +72,7 @@ export default class LightManager {
     this.azimuth = azimuth
     this.elevation = elevation
     this._updatePosition()
+    this._createGroundText()
   }
 
   /**
@@ -78,6 +85,7 @@ export default class LightManager {
     const renderer = this.viewer.context.getRenderer()
 
     if (this.light) {
+      scene.remove(this.light.target)
       scene.remove(this.light)
       this.light.dispose()
       this.light = null
@@ -89,6 +97,8 @@ export default class LightManager {
       this.groundPlane.material.dispose()
       this.groundPlane = null
     }
+
+    this._removeGroundText()
 
     renderer.shadowMap.enabled = false
 
@@ -178,7 +188,7 @@ export default class LightManager {
     const scene = this.viewer.context.getScene()
     const box = new Box3()
     scene.traverse((obj) => {
-      if (obj.isMesh && obj.name !== 'ShadowGroundPlane') {
+      if (obj.isMesh && obj.name !== 'ShadowGroundPlane' && obj.name !== 'GroundText') {
         box.expandByObject(obj)
       }
     })
@@ -200,5 +210,64 @@ export default class LightManager {
     cam.bottom = -halfSize
     cam.far = LIGHT_RADIUS * 2 + maxDim
     cam.updateProjectionMatrix()
+  }
+
+  /** Create "bldrs" text on the ground plane using canvas texture. */
+  _createGroundText() {
+    const scene = this.viewer.context.getScene()
+    const box = new Box3()
+    scene.traverse((obj) => {
+      if (obj.isMesh && obj.name !== 'ShadowGroundPlane' && obj.name !== 'GroundText') {
+        box.expandByObject(obj)
+      }
+    })
+    if (box.isEmpty()) return
+
+    const center = new Vector3()
+    box.getCenter(center)
+    const size = new Vector3()
+    box.getSize(size)
+
+    // Canvas with "bldrs" text
+    const canvas = document.createElement('canvas')
+    canvas.width = 2048
+    canvas.height = 512
+    const ctx = canvas.getContext('2d')
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // Draw text — bldrs green, subtle
+    ctx.font = 'bold 360px sans-serif'
+    ctx.fillStyle = 'rgba(0, 255, 0, 0.08)'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('bldrs', canvas.width / 2, canvas.height / 2)
+
+    const texture = new CanvasTexture(canvas)
+    const textWidth = size.x * 1.5
+    const textHeight = textWidth * (canvas.height / canvas.width)
+    const geom = new PlaneGeometry(textWidth, textHeight)
+    const mat = new MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    })
+
+    this.groundText = new Mesh(geom, mat)
+    this.groundText.rotation.x = -Math.PI / 2
+    // Place centered on model X, on the ground, slightly forward in Z (toward typical camera)
+    this.groundText.position.set(center.x, 0.02, center.z + size.z * 0.6)
+    this.groundText.name = 'GroundText'
+    scene.add(this.groundText)
+  }
+
+  /** Remove ground text mesh. */
+  _removeGroundText() {
+    if (!this.groundText) return
+    const scene = this.viewer.context.getScene()
+    scene.remove(this.groundText)
+    this.groundText.geometry.dispose()
+    this.groundText.material.map.dispose()
+    this.groundText.material.dispose()
+    this.groundText = null
   }
 }

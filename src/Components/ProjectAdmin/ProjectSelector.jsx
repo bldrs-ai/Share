@@ -129,7 +129,7 @@ export default function ProjectSelector() {
               width: 24,
               height: 24,
               opacity: 0.5,
-              '&:hover': {opacity: 1, color: '#00ff00'},
+              '&:hover': {opacity: 1, color: 'var(--color-primary)'},
             }}
           >
             <RefreshCw size={13} strokeWidth={1.75}/>
@@ -145,7 +145,7 @@ export default function ProjectSelector() {
               width: 24,
               height: 24,
               opacity: saved ? 1 : 0.5,
-              color: saved ? '#4caf50' : undefined,
+              color: saved ? 'var(--color-primary)' : undefined,
               '&:hover': {opacity: 1},
             }}
           >
@@ -162,7 +162,7 @@ export default function ProjectSelector() {
       >
         {/* Companies */}
         <Box sx={{px: 2, py: 0.5}}>
-          <Typography variant='caption' sx={{opacity: 0.5, textTransform: 'uppercase', fontSize: '10px'}}>
+          <Typography variant='caption' sx={{opacity: 0.5, textTransform: 'uppercase', fontSize: '11px'}}>
             Companies
           </Typography>
         </Box>
@@ -178,14 +178,14 @@ export default function ProjectSelector() {
           </MenuItem>
         ))}
         {companies.length === 0 && (
-          <MenuItem disabled sx={{fontSize: '12px', opacity: 0.4}}>No companies yet</MenuItem>
+          <MenuItem disabled sx={{fontSize: '13px', opacity: 0.4}}>No companies yet</MenuItem>
         )}
 
         {/* Projects for active company */}
         {activeCompanyId && projects.length > 0 && [
           <Divider key='projects-divider' sx={{my: 0.5}}/>,
           <Box key='projects-header' sx={{px: 2, py: 0.5}}>
-            <Typography variant='caption' sx={{opacity: 0.5, textTransform: 'uppercase', fontSize: '10px'}}>
+            <Typography variant='caption' sx={{opacity: 0.5, textTransform: 'uppercase', fontSize: '11px'}}>
               Projects
             </Typography>
           </Box>,

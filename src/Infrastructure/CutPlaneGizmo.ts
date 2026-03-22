@@ -11,8 +11,8 @@ import {
 
 
 /**
- * Visual gizmo for a clipping plane — transparent grid pattern.
- * This is purely visual — actual clipping is handled separately.
+ * Visual gizmo for a clipping plane — transparent grid pattern with border.
+ * Uses the theme's primary color.
  */
 export default class CutPlaneGizmo extends Group {
   gridMaterial: LineBasicMaterial
@@ -21,9 +21,13 @@ export default class CutPlaneGizmo extends Group {
   constructor(
     direction: Vector3,
     size: number,
-    color = 0x888888,
+    color?: number,
     gridDivisions = 20,
   ) {
+    if (color === undefined) {
+      const cssColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim()
+      color = cssColor ? parseInt(cssColor.replace('#', ''), 16) : 0x00ff00
+    }
     super()
     this.name = 'CutPlaneGizmo'
 
@@ -31,13 +35,11 @@ export default class CutPlaneGizmo extends Group {
     const half = size / 2
     const step = size / gridDivisions
 
-    // Build grid lines
+    // Grid lines
     const gridPoints: number[] = []
     for (let i = 0; i <= gridDivisions; i++) {
       const pos = -half + i * step
-      // Lines along X
       gridPoints.push(-half, pos, 0, half, pos, 0)
-      // Lines along Y
       gridPoints.push(pos, -half, 0, pos, half, 0)
     }
 
@@ -55,7 +57,7 @@ export default class CutPlaneGizmo extends Group {
     grid.renderOrder = 998
     this.add(grid)
 
-    // Border (outer rectangle, slightly brighter)
+    // Border
     const borderPoints = new Float32Array([
       -half, -half, 0, half, -half, 0,
       half, -half, 0, half, half, 0,
@@ -76,7 +78,7 @@ export default class CutPlaneGizmo extends Group {
     border.renderOrder = 999
     this.add(border)
 
-    // Align to direction (PlaneGeometry default normal is Z)
+    // Align to direction
     const defaultNormal = new Vector3(0, 0, 1)
     const quaternion = new Quaternion().setFromUnitVectors(defaultNormal, normalizedDirection)
     this.applyQuaternion(quaternion)
@@ -84,7 +86,7 @@ export default class CutPlaneGizmo extends Group {
 
   setHighlight(highlighted: boolean): void {
     this.gridMaterial.opacity = highlighted ? 0.3 : 0.15
-    this.borderMaterial.opacity = highlighted ? 0.8 : 0.5
+    this.borderMaterial.opacity = highlighted ? 1.0 : 0.5
   }
 
   dispose(): void {
