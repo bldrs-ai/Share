@@ -95,6 +95,21 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       }
       <ViewerToolbar/>
       {!isMobile && <NavCube/>}
+      {/* Build version — bottom left */}
+      {!isMobile && (
+        <Box sx={{
+          position: 'absolute',
+          bottom: 8,
+          left: 50,
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          opacity: 0.25,
+          pointerEvents: 'none',
+          color: 'var(--color-text)',
+        }}>
+          build 060
+        </Box>
+      )}
     </Stack>
   )
 }

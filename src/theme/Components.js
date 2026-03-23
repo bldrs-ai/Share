@@ -306,6 +306,10 @@ const StandardButton = {
   width: '2em',
   height: '2em',
   borderRadius: '6px',
+  transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s ease',
+  '&:hover': {
+    transform: 'scale(1.12)',
+  },
   margin: '2px',
   padding: '3px',
   border: 'none',

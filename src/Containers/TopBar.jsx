@@ -61,53 +61,60 @@ export default function TopBar() {
       }}
       data-testid='TopBar'
     >
-      {/* Left: build version + project selector */}
-      <Stack direction='row' alignItems='center' spacing={1} sx={{pointerEvents: 'auto'}}>
-        {!isMobile && (
-          <Typography sx={{
-            fontSize: '11px',
-            fontFamily: 'monospace',
-            opacity: 0.4,
+      {/* Bldrs logo — positioned over the left nav, centered with nav icons */}
+      {!isMobile && (
+        <Box
+          component='img'
+          src={`${window.__ASSET_BASE__ || ''}/icons/LogoB.svg`}
+          alt='bldrs'
+          sx={{
+            position: 'absolute',
+            left: 11,
+            width: 18,
+            height: 18,
+            opacity: 0.5,
             pointerEvents: 'none',
-          }}>
-            build 060
-          </Typography>
-        )}
-        <ProjectSelector/>
-      </Stack>
-
-      {/* Center: app icons + light toggle */}
-      {viewer && isModelReady && (
-        <Stack direction='row' alignItems='center' sx={{pointerEvents: 'auto'}} spacing={0.5}>
-          {isAppsEnabled && AppsRegistry.map((app) => {
-            const LucideIcon = appIcons[app.appName]
-            const isSelected = isAppsVisible && selectedApp?.appName === app.appName
-            return (
-              <Tooltip key={app.appName} title={app.appName} placement='bottom'>
-                <IconButton
-                  size='small'
-                  onClick={() => toggleApp(app)}
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '6px',
-                    color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
-                    opacity: isSelected ? 1 : 0.7,
-                    '&:hover': {opacity: 1},
-                  }}
-                >
-                  {LucideIcon ?
-                    <LucideIcon size={16} strokeWidth={1.75}/> :
-                    <Box component='img' src={`${window.__ASSET_BASE__ || ''}${app.icon}`} alt={app.appName} sx={{width: 16, height: 16}}/>
-                  }
-                </IconButton>
-              </Tooltip>
-            )
-          })}
-          <Box sx={{width: '1px', height: 20, bgcolor: 'var(--color-border)', mx: 0.5}}/>
-          <FloorPlanControl/>
-        </Stack>
+          }}
+        />
       )}
+
+      {/* Left: project selector + separator + app icons + floor plan */}
+      <Stack direction='row' alignItems='center' spacing={0.5} sx={{pointerEvents: 'auto'}}>
+        <ProjectSelector/>
+
+        {/* Separator + app icons */}
+        {viewer && isModelReady && (
+          <>
+            <Box sx={{width: '1px', height: 20, bgcolor: 'var(--color-border)', mx: 0.5}}/>
+            {isAppsEnabled && AppsRegistry.map((app) => {
+              const LucideIcon = appIcons[app.appName]
+              const isSelected = isAppsVisible && selectedApp?.appName === app.appName
+              return (
+                <Tooltip key={app.appName} title={app.appName} placement='bottom'>
+                  <IconButton
+                    size='small'
+                    onClick={() => toggleApp(app)}
+                    sx={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '6px',
+                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text)',
+                      opacity: isSelected ? 1 : 0.7,
+                      '&:hover': {opacity: 1},
+                    }}
+                  >
+                    {LucideIcon ?
+                      <LucideIcon size={16} strokeWidth={1.75}/> :
+                      <Box component='img' src={`${window.__ASSET_BASE__ || ''}${app.icon}`} alt={app.appName} sx={{width: 16, height: 16}}/>
+                    }
+                  </IconButton>
+                </Tooltip>
+              )
+            })}
+            <FloorPlanControl/>
+          </>
+        )}
+      </Stack>
 
       {/* Right: settings + profile + help */}
       <Stack

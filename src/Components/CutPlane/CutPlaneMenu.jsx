@@ -75,7 +75,9 @@ export default function useCutPlaneControls(barSx) {
   const togglePlane = ({direction, offset = 0}) => {
     if (setLevelInstance) setLevelInstance(null)
     const modelCenter = getModelCenter(model)
-    const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, direction, offset})
+    const box = new Box3().setFromObject(model)
+    console.log('[CutPlane] toggle:', direction, 'center:', modelCenter, 'box:', box.min.toArray(), box.max.toArray())
+    const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, box, direction, offset})
 
     if (cutPlanes.findIndex((cp) => cp.direction === direction) > -1) {
       // Remove
@@ -85,7 +87,7 @@ export default function useCutPlaneControls(barSx) {
         glbClipper.deleteAllPlanes()
         const rest = cutPlanes.filter((cp) => cp.direction !== direction)
         rest.forEach((cp) => {
-          const info = getPlaneSceneInfo({modelCenter, direction: cp.direction, offset: cp.offset})
+          const info = getPlaneSceneInfo({modelCenter, box, direction: cp.direction, offset: cp.offset})
           glbClipper.createPlane(info.normal, info.modelCenterOffset, cp.direction, cp.offset)
         })
         if (rest.length === 0) {
@@ -358,35 +360,36 @@ export function removePlanesFromHashState() {
   removeParams(HASH_PREFIX_CUT_PLANE)
 }
 
-export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
+export function getPlaneSceneInfo({modelCenter, box, direction, offset = 0}) {
   let normal
-  let planeOffsetX = 0
-  let planeOffsetY = 0
-  let planeOffsetZ = 0
   const finiteOffset = floatStrTrim(offset)
+  // Start position: use bounding box for smarter defaults
+  // Y (plan): 1/3 from bottom (ground floor area)
+  // X, Z: model center
+  const point = modelCenter.clone()
 
   switch (direction) {
     case 'x':
       normal = new Vector3(-1, 0, 0)
-      planeOffsetX = finiteOffset
+      point.x += finiteOffset
       break
     case 'y':
       normal = new Vector3(0, -1, 0)
-      planeOffsetY = finiteOffset
+      if (box && finiteOffset === 0) {
+        // Default to 1/3 from bottom — typically ground floor cut height
+        point.y = box.min.y + (box.max.y - box.min.y) * 0.33
+      } else {
+        point.y += finiteOffset
+      }
       break
     case 'z':
       normal = new Vector3(0, 0, -1)
-      planeOffsetZ = finiteOffset
+      point.z += finiteOffset
       break
     default:
       normal = new Vector3(0, 1, 0)
       break
   }
 
-  const modelCenterOffset = new Vector3(
-    modelCenter.x + planeOffsetX,
-    modelCenter.y + planeOffsetY,
-    modelCenter.z + planeOffsetZ,
-  )
-  return {normal, modelCenterOffset}
+  return {normal, modelCenterOffset: point}
 }

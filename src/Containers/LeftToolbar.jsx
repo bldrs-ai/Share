@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useRef, useState, useCallback} from 'react'
 import {Box, Stack, Typography} from '@mui/material'
 import {TooltipIconButton} from '../Components/Buttons'
 import {useTheme} from '@mui/material/styles'
@@ -24,7 +24,22 @@ import useStore from '../store/useStore'
 export default function LeftToolbar() {
   const theme = useTheme()
   const {isAuthenticated} = useAuth0()
-  const [expanded, setExpanded] = useState(false)
+  const toolbarRef = useRef(null)
+  const expandedRef = useRef(false)
+
+  const toggleExpanded = useCallback(() => {
+    // Toggle via DOM manipulation — avoids React re-render of all children
+    const el = toolbarRef.current
+    if (!el) return
+    expandedRef.current = !expandedRef.current
+    if (expandedRef.current) {
+      el.style.width = '160px'
+      el.querySelectorAll('.nav-label').forEach((lbl) => { lbl.style.opacity = '0.8' })
+    } else {
+      el.style.width = '40px'
+      el.querySelectorAll('.nav-label').forEach((lbl) => { lbl.style.opacity = '0' })
+    }
+  }, [])
 
   const isImagineEnabled = useStore((state) => state.isImagineEnabled)
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
@@ -41,12 +56,29 @@ export default function LeftToolbar() {
   const viewer = useStore((state) => state.viewer)
   const isModelReady = useStore((state) => state.isModelReady)
 
+  // Item wrapper — label visibility controlled via DOM class, not React state
   const Item = ({children, label}) => (
-    <Box sx={{display: 'flex', alignItems: 'center', whiteSpace: 'nowrap'}}>
-      {children}
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        whiteSpace: 'nowrap',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        '&:hover': {backgroundColor: 'var(--color-surface-hover)'},
+        '&:hover .nav-icon': {transform: 'scale(1.12)'},
+      }}
+    >
+      <Box className='nav-icon' sx={{
+        display: 'flex',
+        transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }}>
+        {children}
+      </Box>
       <Typography
+        className='nav-label'
         variant='caption'
-        sx={{ml: '-4px', mr: '8px', fontSize: '12px', opacity: expanded ? 0.8 : 0}}
+        sx={{ml: '4px', mr: '8px', fontSize: '13px', opacity: 0, transition: 'opacity 0.1s'}}
       >
         {label}
       </Typography>
@@ -55,22 +87,21 @@ export default function LeftToolbar() {
 
   return (
     <Stack
+      ref={toolbarRef}
       sx={{
         position: 'absolute',
         top: '40px',
         left: 0,
         bottom: 0,
-        width: expanded ? '160px' : '40px',
+        width: '40px',
         height: 'calc(100vh - 40px)',
         zIndex: 1,
         pointerEvents: 'auto',
         backgroundColor: 'var(--color-toolbar-bg)',
-        backdropFilter: 'blur(8px)',
         borderRight: '1px solid var(--color-toolbar-border)',
         color: 'var(--color-text)',
         padding: '4px',
         justifyContent: 'space-between',
-        transition: 'width 0.2s ease',
         overflow: 'hidden',
       }}
       data-testid='LeftToolbar'
@@ -79,8 +110,8 @@ export default function LeftToolbar() {
         {/* Expand/collapse */}
         <Item label='Menu'>
           <TooltipIconButton
-            title={expanded ? 'Collapse' : 'Expand'}
-            onClick={() => setExpanded(!expanded)}
+            title='Menu'
+            onClick={toggleExpanded}
             icon={<PanelLeft size={18} strokeWidth={1.75}/>}
             placement='right'
           />
@@ -94,7 +125,6 @@ export default function LeftToolbar() {
         {isSearchEnabled && <Item label='Search'><SearchControl/></Item>}
         {isNavTreeEnabled && <Item label='Nav Tree'><NavTreeControl/></Item>}
         {isVersionsEnabled && <Item label='Versions'><VersionsControl/></Item>}
-        {/* Floor Plans moved to TopBar */}
         {isModelReady && <Item label='Terrain'><TerrainControl/></Item>}
         {isNotesEnabled && <Item label='Notes'><NotesControl/></Item>}
         {isPropertiesEnabled && isAnElementSelected && <Item label='Properties'><PropertiesControl/></Item>}
@@ -108,21 +138,6 @@ export default function LeftToolbar() {
           <SearchBar onSuccess={() => setIsSearchBarVisible(false)}/>}
       </Stack>
 
-      {/* Bottom: Bldrs logo */}
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '6px 4px',
-        opacity: 0.3,
-      }}>
-        <Box
-          component='img'
-          src={`${window.__ASSET_BASE__ || ''}/icons/LogoB.svg`}
-          alt='bldrs'
-          sx={{width: 16, height: 16}}
-        />
-      </Box>
     </Stack>
   )
 }
