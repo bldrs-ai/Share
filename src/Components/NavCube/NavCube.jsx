@@ -141,12 +141,12 @@ export default function NavCube() {
   const arrowSx = {
     position: 'absolute',
     cursor: 'pointer',
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(85,85,85,0.6)',
     pointerEvents: 'auto',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    '&:hover': {color: 'rgba(255,255,255,0.9)'},
+    '&:hover': {color: 'rgba(85,85,85,1)'},
   }
 
   return (

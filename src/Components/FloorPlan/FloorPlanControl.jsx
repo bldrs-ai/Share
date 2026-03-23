@@ -84,9 +84,22 @@ export default function FloorPlanControl() {
       setIsFloorPlanMode(true)
       useStore.getState().setIsSvgFloorPlanVisible(true)
       useStore.getState().setIsAppsVisible(false)
+      useStore.getState().setIsProjectAdminVisible(false)
       addFloorToHash(0)
     }
   }, [isFloorPlanMode, floors, floorPlanCutHeight, setIsFloorPlanMode, setCurrentFloorIndex])
+
+  // Clean up when floor plan mode is turned off externally (e.g. Settings or app opened)
+  const prevFloorPlanMode = useRef(false)
+  useEffect(() => {
+    if (prevFloorPlanMode.current && !isFloorPlanMode) {
+      const mgr = managerRef.current
+      if (mgr && mgr.active) {
+        mgr.exitFloorPlan()
+      }
+    }
+    prevFloorPlanMode.current = isFloorPlanMode
+  }, [isFloorPlanMode])
 
   // Escape key
   useEffect(() => {

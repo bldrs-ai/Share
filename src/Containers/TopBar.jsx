@@ -38,6 +38,8 @@ export default function TopBar() {
       setSelectedApp(app)
       setIsAppsVisible(true)
       useStore.getState().setIsSvgFloorPlanVisible(false)
+      useStore.getState().setIsFloorPlanMode(false)
+      useStore.getState().setIsProjectAdminVisible(false)
     }
   }
 
@@ -125,7 +127,12 @@ export default function TopBar() {
         <Tooltip title='Settings' placement='bottom'>
           <IconButton
             size='small'
-            onClick={() => useStore.getState().setIsProjectAdminVisible(true)}
+            onClick={() => {
+              useStore.getState().setIsProjectAdminVisible(true)
+              useStore.getState().setIsSvgFloorPlanVisible(false)
+              useStore.getState().setIsFloorPlanMode(false)
+              useStore.getState().setIsAppsVisible(false)
+            }}
             sx={{
               width: 32,
               height: 32,

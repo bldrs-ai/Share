@@ -1,5 +1,5 @@
 import React, {useState, useCallback} from 'react'
-import {IconButton, Slider, Stack, Tooltip} from '@mui/material'
+import {IconButton, InputBase, Slider, Stack, Tooltip} from '@mui/material'
 import {
   Sun,
   Maximize,
@@ -7,9 +7,11 @@ import {
   RotateCw,
   Box as BoxIcon,
   Grid3x3,
+  Search,
 } from 'lucide-react'
 import {Scissors} from 'lucide-react'
 import useCutPlaneControls from '../Components/CutPlane/CutPlaneMenu'
+import useElementFilter from '../Components/Filter/useElementFilter.jsx'
 import LightManager from '../Infrastructure/LightManager'
 import SunCompass from '../Components/Sun/SunCompass'
 import useStore from '../store/useStore'
@@ -127,6 +129,82 @@ export default function ViewerToolbar() {
     border: '1px solid var(--color-toolbar-border)',
   }
   const cutPlane = useCutPlaneControls(sectionBarSx)
+  const elementFilter = useElementFilter(sectionBarSx)
+
+  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+  const rootElement = useStore((state) => state.rootElement)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+
+  const handleSearch = useCallback((text) => {
+    setSearchText(text)
+    if (!text.trim() || !rootElement) {
+      setSearchResults([])
+      return
+    }
+    const query = text.trim().toLowerCase()
+    const results = []
+    const searchTree = (node, parentPath) => {
+      if (results.length >= 20) return
+      const name = node.Name?.value || node.Name || ''
+      const longName = node.LongName?.value || node.LongName || ''
+      const type = node.type || ''
+      const description = node.Description?.value || node.Description || ''
+      const displayName = name || longName || `${type} #${node.expressID}`
+      const currentPath = parentPath ? `${parentPath} > ${displayName}` : displayName
+
+      const match = name.toLowerCase().includes(query) ||
+        longName.toLowerCase().includes(query) ||
+        type.toLowerCase().includes(query) ||
+        description.toLowerCase().includes(query)
+      if (match && node.expressID !== undefined) {
+        // Find parent storey
+        let storey = ''
+        let p = node.parent
+        while (p) {
+          if (p.type === 'IFCBUILDINGSTOREY') {
+            storey = p.Name?.value || p.Name || ''
+            break
+          }
+          p = p.parent
+        }
+        const childCount = node.children ? node.children.length : 0
+        const typeClean = type.replace(/^IFC/, '').replace(/([A-Z])/g, ' $1').trim()
+        results.push({
+          expressID: node.expressID,
+          name: displayName,
+          longName: longName && longName !== name ? longName : '',
+          type,
+          typeClean,
+          description,
+          storey,
+          childCount,
+          path: parentPath || '',
+        })
+      }
+      if (node.children) {
+        node.children.forEach((child) => searchTree(child, currentPath))
+      }
+    }
+    searchTree(rootElement, '')
+    setSearchResults(results)
+  }, [rootElement])
+
+  const selectSearchResult = useCallback((result) => {
+    if (!viewer) return
+    try {
+      // Select the element
+      viewer.setSelection([result.expressID])
+      // Zoom to it
+      viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
+    } catch (err) {
+      console.warn('[Search] Failed to select/zoom:', err)
+    }
+    setSearchOpen(false)
+    setSearchText('')
+    setSearchResults([])
+  }, [viewer])
 
   if (!viewer || !isModelReady) return null
 
@@ -192,6 +270,106 @@ export default function ViewerToolbar() {
         spacing={0.25}
         sx={{...barSx, pointerEvents: 'auto'}}
       >
+        {/* Search */}
+        {isSearchEnabled && (
+          <>
+            <Tooltip title='Search' placement='bottom'>
+              <IconButton size='small' onClick={() => setSearchOpen(!searchOpen)} sx={btnSx(false)}>
+                <Search size={15} strokeWidth={1.75}/>
+              </IconButton>
+            </Tooltip>
+            {searchOpen && (
+              <div style={{position: 'relative'}}>
+                <InputBase
+                  autoFocus
+                  placeholder='Search elements...'
+                  value={searchText}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') { setSearchOpen(false); setSearchText(''); setSearchResults([]) }
+                  }}
+                  sx={{
+                    fontSize: '13px',
+                    color: 'var(--color-text)',
+                    width: 180,
+                    height: 24,
+                    px: 1,
+                    borderRadius: '4px',
+                    backgroundColor: 'var(--color-surface)',
+                    '& input': {padding: 0},
+                    '& input::placeholder': {opacity: 0.4, fontSize: '11px'},
+                  }}
+                />
+                {searchResults.length > 0 && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 36,
+                    left: 0,
+                    width: 420,
+                    maxHeight: 360,
+                    overflowY: 'auto',
+                    backgroundColor: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 8,
+                    zIndex: 100,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                  }}>
+                    <div style={{padding: '6px 12px', fontSize: 11, opacity: 0.4, borderBottom: '1px solid var(--color-border)'}}>
+                      {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                    </div>
+                    {searchResults.map((r) => (
+                      <div
+                        key={r.expressID}
+                        onClick={() => selectSearchResult(r)}
+                        style={{
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          color: 'var(--color-text)',
+                          borderBottom: '1px solid var(--color-border)',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-surface-hover)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                      >
+                        {/* Title line — element name */}
+                        <div style={{fontSize: 13, fontWeight: 500, marginBottom: 2}}>
+                          {r.name}
+                          {r.longName && <span style={{fontWeight: 400, opacity: 0.6, marginLeft: 6}}>{r.longName}</span>}
+                        </div>
+                        {/* Type + location breadcrumb */}
+                        <div style={{fontSize: 11, opacity: 0.5, display: 'flex', gap: 8, flexWrap: 'wrap'}}>
+                          <span style={{
+                            backgroundColor: 'var(--color-selected)',
+                            color: 'var(--color-primary)',
+                            padding: '1px 6px',
+                            borderRadius: 3,
+                            fontWeight: 500,
+                          }}>
+                            {r.typeClean}
+                          </span>
+                          {r.storey && <span>Storey: {r.storey}</span>}
+                          {r.childCount > 0 && <span>{r.childCount} children</span>}
+                          <span>ID: {r.expressID}</span>
+                        </div>
+                        {/* Description */}
+                        {r.description && (
+                          <div style={{fontSize: 11, opacity: 0.4, marginTop: 3}}>{r.description}</div>
+                        )}
+                        {/* Path breadcrumb */}
+                        {r.path && (
+                          <div style={{fontSize: 11, opacity: 0.3, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                            {r.path}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <span style={{width: 1, height: 20, backgroundColor: 'var(--color-border)', margin: '0 4px', flexShrink: 0}}/>
+          </>
+        )}
+
         <Tooltip title='Fit to view' placement='bottom'>
           <IconButton size='small' onClick={fitToView} sx={btnSx(false)}>
             <Maximize size={15} strokeWidth={1.75}/>
@@ -223,10 +401,14 @@ export default function ViewerToolbar() {
         </Tooltip>
 
         {cutPlane.button}
+        {elementFilter.button}
       </Stack>
 
       {/* Section plane controls — appears below when scissors is clicked */}
       {cutPlane.subBar}
+
+      {/* Element filter — appears below when filter is clicked */}
+      {elementFilter.subBar}
 
       {/* Sun controls sub-bar — appears below when light is on */}
       {lightOn && (

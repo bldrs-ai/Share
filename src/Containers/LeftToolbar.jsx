@@ -14,8 +14,6 @@ import NotesControl from '../Components/Notes/NotesControl'
 import OpenModelControl from '../Components/Open/OpenModelControl'
 import PropertiesControl from '../Components/Properties/PropertiesControl'
 import SaveModelControl from '../Components/Open/SaveModelControl'
-import SearchControl from '../Components/Search/SearchControl'
-import SearchBar from '../Components/Search/SearchBar'
 import ShareControl from '../Components/Share/ShareControl'
 import VersionsControl from '../Components/Versions/VersionsControl'
 import useStore from '../store/useStore'
@@ -46,11 +44,8 @@ export default function LeftToolbar() {
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isOpenEnabled = useStore((state) => state.isOpenEnabled)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
-  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isShareEnabled = useStore((state) => state.isShareEnabled)
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
-  const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const selectedElement = useStore((state) => state.selectedElement)
   const isAnElementSelected = selectedElement !== null
   const viewer = useStore((state) => state.viewer)
@@ -122,7 +117,6 @@ export default function LeftToolbar() {
         {/* Model tools */}
         {isOpenEnabled && <Item label='Open'><OpenModelControl/></Item>}
         {isOpenEnabled && isAuthenticated && <Item label='Save'><SaveModelControl/></Item>}
-        {isSearchEnabled && <Item label='Search'><SearchControl/></Item>}
         {isNavTreeEnabled && <Item label='Nav Tree'><NavTreeControl/></Item>}
         {isVersionsEnabled && <Item label='Versions'><VersionsControl/></Item>}
         {isModelReady && <Item label='Terrain'><TerrainControl/></Item>}
@@ -134,8 +128,6 @@ export default function LeftToolbar() {
 
         <CameraControl/>
 
-        {isSearchEnabled && isSearchBarVisible &&
-          <SearchBar onSuccess={() => setIsSearchBarVisible(false)}/>}
       </Stack>
 
     </Stack>
