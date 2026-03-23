@@ -6,6 +6,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {loadFileById} from '../../connections/loadFromSource'
+import {addRecentFile, setPendingModelNameUpdate} from '../../connections/persistence'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -33,7 +34,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES]
+  const tabLabels = [LABEL_LOCAL, LABEL_SOURCES, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -50,6 +51,26 @@ export default function OpenModelDialog({
     setPickerConnection(connection)
   }
 
+  const handleOpenById = async (connection, fileId, fileName) => {
+    setIsDialogDisplayed(false)
+    try {
+      await loadFileById(connection, fileId, fileName, (filename) => {
+        disablePageReloadApprovalCheck()
+        navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
+      })
+      addRecentFile({
+        fileId,
+        name: fileName,
+        mimeType: '',
+        lastModifiedUtc: null,
+        connectionId: connection.id,
+      })
+      setPendingModelNameUpdate(fileId)
+    } catch (err) {
+      console.error('Failed to open file from Google Drive:', err)
+    }
+  }
+
   const handlePickerSelect = async (docs) => {
     if (!pickerConnection || !docs || docs.length === 0) {
       return
@@ -63,6 +84,14 @@ export default function OpenModelDialog({
         disablePageReloadApprovalCheck()
         navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
       })
+      addRecentFile({
+        fileId: doc.id,
+        name: doc.name,
+        mimeType: doc.mimeType || '',
+        lastModifiedUtc: doc.lastModifiedUtc || null,
+        connectionId: connection.id,
+      })
+      setPendingModelNameUpdate(doc.id)
     } catch (err) {
       console.error('Failed to open file from Google Drive:', err)
     }
@@ -134,6 +163,12 @@ export default function OpenModelDialog({
           </Stack>
           }
           { currentTab === 1 &&
+          <SourcesTab
+            onPickerReady={handlePickerReady}
+            onOpenById={handleOpenById}
+          />
+          }
+          { currentTab === 2 &&
           <Stack data-testid={`dialog-open-model-github`} spacing={1}>
             <TextField
               label='GitHub Model URL'
@@ -155,11 +190,6 @@ export default function OpenModelDialog({
              />}
             {!isAuthenticated && <PleaseLogin/>}
           </Stack>
-          }
-          { currentTab === 2 &&
-          <SourcesTab
-            onPickerReady={handlePickerReady}
-          />
           }
           { currentTab === 3 &&
           <SampleModels

@@ -53,7 +53,7 @@ describe('SourcesTab', () => {
 
     expect(screen.getByTestId('sources-tab')).toBeInTheDocument()
     expect(screen.getByTestId(`connection-card-${mockConnection.id}`)).toBeInTheDocument()
-    expect(screen.getByTestId(`button-open-file-${mockConnection.id}`)).toBeInTheDocument()
+    expect(screen.getByTestId(`button-browse-drive-${mockConnection.id}`)).toBeInTheDocument()
   })
 
   it('shows Connect another Google account button when a connection exists', async () => {
@@ -66,7 +66,7 @@ describe('SourcesTab', () => {
       {wrapper: StoreRouteThemeCtx},
     )
 
-    expect(screen.getByText('Connect another Google account')).toBeInTheDocument()
+    expect(screen.getByText('Add another Google account')).toBeInTheDocument()
   })
 
   it('shows error when getAccessToken fails', async () => {
@@ -81,7 +81,7 @@ describe('SourcesTab', () => {
       <SourcesTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
-    fireEvent.click(screen.getByTestId(`button-open-file-${mockConnection.id}`))
+    fireEvent.click(screen.getByTestId(`button-browse-drive-${mockConnection.id}`))
 
     await waitFor(() => {
       expect(screen.getByText('Token expired')).toBeInTheDocument()
@@ -100,7 +100,7 @@ describe('SourcesTab', () => {
       <SourcesTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
-    fireEvent.click(screen.getByTestId(`button-open-file-${mockConnection.id}`))
+    fireEvent.click(screen.getByTestId(`button-browse-drive-${mockConnection.id}`))
 
     await waitFor(() => {
       expect(onPickerReady).toHaveBeenCalledWith('test-token', mockConnection)

@@ -49,6 +49,10 @@ export function loadPickerScript(): Promise<void> {
 }
 
 
+/**
+ * @param src Script URL to load
+ * @return Promise that resolves when the script is loaded
+ */
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // Check if script tag already exists
@@ -78,7 +82,6 @@ function loadScript(src: string): Promise<void> {
 
 // Type declarations for GIS and gapi globals
 declare global {
-  // eslint-disable-next-line no-unused-vars
   const google: {
     accounts: {
       oauth2: {
@@ -121,7 +124,6 @@ declare global {
     }
   }
 
-  // eslint-disable-next-line no-unused-vars
   const gapi: {
     loaded: number
     load(api: string, config: {callback: () => void}): void

@@ -8,9 +8,16 @@
  */
 
 import type {Connection, ConnectionProvider, ConnectionStatus} from '../types'
+import debug from '../../utils/debug'
 import {loadGisScript} from './loadGisScript'
 import type {TokenResponse} from './loadGisScript'
 
+
+const CONNECT_TIMEOUT_MS = 120_000
+const DEFAULT_TOKEN_EXPIRES_S = 3600
+const MS_PER_S = 1000
+const EMAIL_FETCH_TIMEOUT_MS = 5000
+const POPUP_CLOSE_DEBOUNCE_MS = 2000
 
 const SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
@@ -27,6 +34,7 @@ const tokenCache = new Map<string, CachedToken>()
 
 let idCounter = 0
 
+/** @return A unique connection ID */
 function generateId(): string {
   idCounter += 1
   return `gdrive-${Date.now()}-${idCounter}`
@@ -46,7 +54,7 @@ export const googleDriveProvider: ConnectionProvider = {
       throw new Error('GOOGLE_OAUTH2_CLIENT_ID environment variable is not set')
     }
 
-    console.log('[GDrive] Starting connect, clientId:', clientId.substring(0, 8) + '...')
+    debug().log('[GDrive] Starting connect, clientId:', `${clientId.substring(0, 8)}...`)
 
     return new Promise<Connection>((resolve, reject) => {
       let settled = false
@@ -59,7 +67,7 @@ export const googleDriveProvider: ConnectionProvider = {
           console.error('[GDrive] Connect timed out after 120s. gotCallback:', gotCallback)
           reject(new Error('Google Drive connection timed out. Please check your GCP OAuth settings and try again.'))
         }
-      }, 120_000)
+      }, CONNECT_TIMEOUT_MS)
 
       const settle = (fn: () => void) => {
         if (!settled) {
@@ -85,7 +93,7 @@ export const googleDriveProvider: ConnectionProvider = {
         scope: SCOPES,
         callback: (response: TokenResponse) => {
           gotCallback = true
-          console.log('[GDrive] OAuth callback received, error:', response.error || 'none')
+          debug().log('[GDrive] OAuth callback received, error:', response.error || 'none')
 
           if (response.error) {
             settle(() => reject(new Error(
@@ -94,9 +102,9 @@ export const googleDriveProvider: ConnectionProvider = {
             return
           }
 
-          console.log('[GDrive] Token received, expires_in:', response.expires_in)
+          debug().log('[GDrive] Token received, expires_in:', response.expires_in)
           const connectionId = generateId()
-          const expiresInMs = (response.expires_in || 3600) * 1000
+          const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
 
           tokenCache.set(connectionId, {
             token: response.access_token,
@@ -106,12 +114,12 @@ export const googleDriveProvider: ConnectionProvider = {
           // Fetch user email with a 5s timeout — don't let it block connection
           const emailPromise = Promise.race([
             fetchUserEmail(response.access_token),
-            new Promise<null>((r) => setTimeout(() => r(null), 5000)),
+            new Promise<null>((r) => setTimeout(() => r(null), EMAIL_FETCH_TIMEOUT_MS)),
           ])
 
           emailPromise
             .then((email) => {
-              console.log('[GDrive] User email:', email || 'unknown')
+              debug().log('[GDrive] User email:', email || 'unknown')
               settle(() => resolve(makeConnection(connectionId, email)))
             })
             .catch((err) => {
@@ -120,7 +128,7 @@ export const googleDriveProvider: ConnectionProvider = {
             })
         },
         error_callback: (error) => {
-          console.log('[GDrive] error_callback:', error.type, error.message, 'gotCallback:', gotCallback)
+          debug().log('[GDrive] error_callback:', error.type, error.message, 'gotCallback:', gotCallback)
 
           // popup_closed fires when the popup window closes. If we already
           // got a successful callback, ignore it. If not, wait briefly to
@@ -130,14 +138,14 @@ export const googleDriveProvider: ConnectionProvider = {
               if (!settled && !gotCallback) {
                 settle(() => reject(new Error('Google sign-in was cancelled')))
               }
-            }, 2000)
+            }, POPUP_CLOSE_DEBOUNCE_MS)
             return
           }
           settle(() => reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`)))
         },
       })
 
-      console.log('[GDrive] Calling requestAccessToken...')
+      debug().log('[GDrive] Calling requestAccessToken...')
       client.requestAccessToken()
     })
   },
@@ -147,7 +155,7 @@ export const googleDriveProvider: ConnectionProvider = {
     if (cached) {
       try {
         await loadGisScript()
-        google.accounts.oauth2.revoke(cached.token, () => {})
+        google.accounts.oauth2.revoke(cached.token, () => undefined)
       } catch {
         // Revocation failure is non-critical
       }
@@ -155,15 +163,15 @@ export const googleDriveProvider: ConnectionProvider = {
     }
   },
 
-  async checkStatus(connection: Connection): Promise<ConnectionStatus> {
+  checkStatus(connection: Connection): Promise<ConnectionStatus> {
     const cached = tokenCache.get(connection.id)
     if (!cached) {
-      return 'disconnected'
+      return Promise.resolve('disconnected')
     }
     if (Date.now() >= cached.expiresAt) {
-      return 'expired'
+      return Promise.resolve('expired')
     }
-    return 'connected'
+    return Promise.resolve('connected')
   },
 
   async getAccessToken(connection: Connection): Promise<string> {
@@ -196,7 +204,7 @@ export const googleDriveProvider: ConnectionProvider = {
             return
           }
 
-          const expiresInMs = (response.expires_in || 3600) * 1000
+          const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
           tokenCache.set(connection.id, {
             token: response.access_token,
             expiresAt: Date.now() + expiresInMs,

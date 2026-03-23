@@ -1,5 +1,5 @@
 import React from 'react'
-import {Box, Chip, IconButton, Stack, Typography} from '@mui/material'
+import {Box, IconButton, Stack, Typography} from '@mui/material'
 import {LinkOff as DisconnectIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
@@ -16,13 +16,6 @@ export default function ConnectionCard({connection}) {
   const removeConnection = useStore((state) => state.removeConnection)
   const connections = useStore((state) => state.connections)
   const sources = useStore((state) => state.sources)
-
-  const statusColor = {
-    connected: 'success',
-    disconnected: 'default',
-    expired: 'warning',
-    error: 'error',
-  }
 
   const handleDisconnect = async () => {
     const provider = getProvider(connection.providerId)
@@ -46,20 +39,14 @@ export default function ConnectionCard({connection}) {
       direction='row'
       alignItems='center'
       spacing={1}
-      sx={{width: '100%', py: 0.5}}
+      sx={{width: '100%'}}
       data-testid={`connection-card-${connection.id}`}
     >
       <Box sx={{flex: 1, minWidth: 0}}>
-        <Typography variant='body2' noWrap>
+        <Typography variant='subtitle1' fontWeight={600} noWrap sx={{textAlign: 'left'}}>
           {connection.label}
         </Typography>
       </Box>
-      <Chip
-        label={connection.status}
-        color={statusColor[connection.status] || 'default'}
-        size='small'
-        variant='outlined'
-      />
       <IconButton
         size='small'
         onClick={handleDisconnect}
