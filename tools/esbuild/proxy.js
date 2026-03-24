@@ -41,8 +41,8 @@ export function createProxyServer(host, port, useHttps = false) {
         const ct = getContentType(req.url) || 'application/octet-stream'
         res.writeHead(200, {
           'Content-Type': ct,
-          'Cross-Origin-Opener-Policy': 'same-origin',
-          'Cross-Origin-Embedder-Policy': 'require-corp',
+          'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+          'Cross-Origin-Embedder-Policy': 'credentialless',
         })
         res.end(data)
       } catch {
@@ -92,8 +92,8 @@ export function createProxyServer(host, port, useHttps = false) {
       } else {
         headersToSend = {
           ...proxyResponse.headers,
-          'Cross-Origin-Opener-Policy': 'same-origin',
-          'Cross-Origin-Embedder-Policy': 'require-corp',
+          'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+          'Cross-Origin-Embedder-Policy': 'credentialless',
         }
       }
 
@@ -126,8 +126,8 @@ const HTTP_SERVER_ERROR = 500
 const serveNotFound = (res) => {
   res.writeHead(HTTP_FOUND, {
     'Content-Type': 'text/html',
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    'Cross-Origin-Embedder-Policy': 'credentialless',
   })
   res.end(`<!DOCTYPE html>
 <html>

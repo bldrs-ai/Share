@@ -148,16 +148,6 @@ export function getComponentOverrides(palette, typography) {
         root: {},
       },
     },
-    MuiTab: {
-      styleOverrides: {
-        root: {
-          fontSize: '13px',
-          textTransform: 'none',
-          minHeight: 36,
-          padding: '6px 12px',
-        },
-      },
-    },
     MuiIconButton: {
       styleOverrides: {
         root: StandardButton, // Same as MuiToggleButton
@@ -244,6 +234,10 @@ export function getComponentOverrides(palette, typography) {
     MuiTab: {
       styleOverrides: {
         root: {
+          fontSize: '13px',
+          textTransform: 'none',
+          minHeight: 36,
+          padding: '6px 12px',
           '&.Mui-selected, &.Mui-selected:hover': {
             color: palette.secondary.contrastText,
             fontWeight: 'bold',

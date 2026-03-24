@@ -93,10 +93,13 @@ const GLB_MAGIC_NUMBER = 0x46546C67
  */
 export async function guessType(path) {
   debug().log('Filetype#guessType, path:', path)
+  const headers = {Range: `bytes=0-${HEADER_LIMIT}`}
+  // Add Google Drive OAuth token for private files
+  if (typeof path === 'string' && path.includes('googleapis.com/drive/') && window.__GOOGLE_ACCESS_TOKEN__) {
+    headers['Authorization'] = `Bearer ${window.__GOOGLE_ACCESS_TOKEN__}`
+  }
   const response = await axios.get(path, {
-    headers: {
-      Range: `bytes=0-${HEADER_LIMIT}`,
-    },
+    headers,
     responseType: 'arraybuffer',
   })
   const headerBuffer = response.data

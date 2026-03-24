@@ -15,10 +15,12 @@ import PleaseLogin from './PleaseLogin'
 import LocalModels from './LocalModels'
 import RecentModels from './RecentModels'
 import SampleModels from './SampleModels'
+import GoogleDriveBrowser from './GoogleDriveBrowser'
 import {LABEL_LOCAL, LABEL_RECENT, LABEL_GITHUB, LABEL_SAMPLES} from './component'
 
 import {FolderOpen as FolderOpenIcon} from 'lucide-react'
 const LABEL_TEST_MODELS = 'Test Models'
+const LABEL_GOOGLE_DRIVE = 'Google Drive'
 
 
 /**
@@ -34,7 +36,7 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_RECENT, LABEL_TEST_MODELS, LABEL_GITHUB, LABEL_SAMPLES]
+  const tabLabels = [LABEL_LOCAL, LABEL_RECENT, LABEL_TEST_MODELS, LABEL_GITHUB, LABEL_GOOGLE_DRIVE, LABEL_SAMPLES]
   const {isAuthenticated, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -132,6 +134,12 @@ export default function OpenModelDialog({
           </Stack>
         }
         { currentTab === 4 &&
+          <GoogleDriveBrowser
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        }
+        { currentTab === 5 &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}

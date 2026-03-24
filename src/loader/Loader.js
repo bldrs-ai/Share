@@ -242,9 +242,18 @@ async function axiosDownload(path, isFormatText, onProgress) {
   // TODO(pablo): path feels a little underconstrained here.  axios works a
   // little magic here, as either a url string or /foo.pdb work fine
   try {
+    const headers = {}
+    // For Google Drive API URLs, use OAuth token if available
+    if (typeof path === 'string' && path.includes('googleapis.com/drive/')) {
+      const gToken = window.__GOOGLE_ACCESS_TOKEN__
+      if (gToken) {
+        headers['Authorization'] = `Bearer ${gToken}`
+      }
+    }
     return (await axios.get(
       path,
       {
+        headers,
         responseType:
         isFormatText ? 'text' : 'arraybuffer',
         onDownloadProgress: (event) => onDownloadProgressHandler(event, onProgress),

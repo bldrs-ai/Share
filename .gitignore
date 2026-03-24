@@ -21,6 +21,10 @@ public/test-models
 # internal docs (not for public deployment)
 /docs-internal
 
+# environment secrets
+.env
+.env.local
+
 # misc
 .DS_Store
 .vscode

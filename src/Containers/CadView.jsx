@@ -22,6 +22,7 @@ import {addProperties} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
+import GoogleSignInGate from '../Components/Open/GoogleSignInGate'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
@@ -89,6 +90,7 @@ export default function CadView({
 
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
+  const [needsGoogleSignIn, setNeedsGoogleSignIn] = useState(false)
 
   // UISlice
   const setAlert = useStore((state) => state.setAlert)
@@ -186,11 +188,14 @@ export default function CadView({
     try {
       tmpModelRef = await loadModel(modelPath)
     } catch (e) {
+      if (e.message === 'Google Drive sign-in required') {
+        setNeedsGoogleSignIn(true)
+        return
+      }
       if (isOutOfMemoryError(e)) {
         isOOM = true
       }
       if (isOOM) {
-        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
         setAlert({
           type: 'oom',
           message: 'We ran out of memory attempting to load this model. ' +
@@ -260,9 +265,48 @@ export default function CadView({
    * @return {object} loaded model
    */
   async function loadModel(routeResult) {
-    const filepath = routeResult.downloadUrl || routeResult.filepath
+    let filepath = routeResult.downloadUrl || routeResult.filepath
     const gitpath = routeResult.gitpath
-    const loadingMessageBase = `Loading ${filepath}`
+
+    // For Google Drive files: download with OAuth token, save to OPFS, navigate to /v/new/
+    if (routeResult.provider === 'google' && routeResult.fileId) {
+      const token = window.__GOOGLE_ACCESS_TOKEN__
+      if (!token) {
+        throw new Error('Google Drive sign-in required')
+      }
+      setSnackMessage('Downloading from Google Drive...')
+      setIsModelLoading(true)
+      const apiUrl = `https://www.googleapis.com/drive/v3/files/${routeResult.fileId}?alt=media`
+      const response = await fetch(apiUrl, {
+        headers: {Authorization: `Bearer ${token}`},
+      })
+      if (!response.ok) throw new Error(`Google Drive download failed: ${response.status}`)
+      const blob = await response.blob()
+      // Get file name from Drive API
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${routeResult.fileId}?fields=name`,
+        {headers: {Authorization: `Bearer ${token}`}},
+      )
+      const meta = await metaRes.json()
+      const fileName = meta.name || 'model.ifc'
+      const ext = fileName.split('.').pop() || 'ifc'
+      const file = new File([blob], fileName, {type: 'application/octet-stream'})
+
+      // Use DnD flow: write to OPFS, navigate to /v/new/
+      const {saveDnDFileToOpfs} = await import('../OPFS/utils')
+      const {navigateToModel} = await import('../utils/navigate')
+      return new Promise((resolve) => {
+        saveDnDFileToOpfs(file, ext, (opfsFileName) => {
+          setIsModelLoading(false)
+          setSnackMessage(null)
+          disablePageReloadApprovalCheck()
+          navigateToModel(`${appPrefix}/v/new/${opfsFileName}`, navigate)
+          resolve(null)
+        })
+      })
+    }
+
+    const loadingMessageBase = `Loading model`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
@@ -757,6 +801,14 @@ export default function CadView({
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
+      {needsGoogleSignIn && (
+        <GoogleSignInGate onToken={(token) => {
+          setNeedsGoogleSignIn(false)
+          // Token is now in window.__GOOGLE_ACCESS_TOKEN__ + sessionStorage
+          // Trigger a re-render which will retry the model load
+          window.location.reload()
+        }}/>
+      )}
       {<ViewerContainer/>}
       {viewer && (
         <RootLandscape

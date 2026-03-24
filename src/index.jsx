@@ -26,6 +26,10 @@ setupEsbuildWatch()
 // Detect base path for GH Pages subpath deployment
 window.__ASSET_BASE__ = window.location.hostname.endsWith('.github.io') ? '/share' : ''
 
+// Restore Google Drive token from session (survives page reload)
+const savedGToken = sessionStorage.getItem('google_access_token')
+if (savedGToken) window.__GOOGLE_ACCESS_TOKEN__ = savedGToken
+
 // Apply saved theme (or default Green dark)
 import {applyTheme, getSavedTheme} from './theme/themes'
 const {themeIndex, mode} = getSavedTheme()
