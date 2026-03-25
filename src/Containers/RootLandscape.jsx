@@ -5,11 +5,14 @@ import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import BottomBar from './BottomBar'
-import ControlsGroup from './ControlsGroup'
+import LeftToolbar from './LeftToolbar'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
-import OperationsGroup from './OperationsGroup'
+import TopBar from './TopBar'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
+import NavCube from '../Components/NavCube/NavCube'
+import ViewerToolbar from './ViewerToolbar'
+import SVGFloorPlanView from '../Components/FloorPlan/SVGFloorPlan/SVGFloorPlanView'
 import useStore from '../store/useStore'
 
 
@@ -24,6 +27,8 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const isMobile = useIsMobile()
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
+  const isFloorPlanMode = useStore((state) => state.isFloorPlanMode)
+  const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
 
   return (
     <Stack
@@ -34,70 +39,77 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       data-testid='RootLandscape-RootStack'
     >
       {!isMobile &&
-       <Box
-         sx={{
-           // Left drawer should take only its own width.
-           flex: '0 0 auto',
-           flexShrink: 0,
-         }}
-       >
+       <div style={{flex: '0 0 auto', flexShrink: 0, marginLeft: '40px', marginTop: '40px'}}>
          <NavTreeAndVersionsDrawer
            pathPrefix={pathPrefix}
            branch={branch}
            selectWithShiftClickEvents={selectWithShiftClickEvents}
          />
-       </Box>
+       </div>
       }
       <Stack
         justifyContent='space-between'
         sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
-        <Box sx={{opacity: 0.5}}>
-          <Paper
-            elevation={0}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              height: 58,
-              width: '100%',
-              backgroundColor: theme.palette.secondary.backgroundColor,
-              borderRadius: 0,
-            }}
-            data-testid='RootLandscape-ToolbarPaper'
-          />
-        </Box>
+        <TopBar/>
         <Stack
           direction='row'
           justifyContent='space-between'
-          // This pushes bottom bar down
           flexGrow={1}
           sx={{width: '100%', minWidth: 0}}
           data-testid='RootLandscape-CenterPaneTopStack'
         >
-          <ControlsGroup/>
-          <OperationsGroup/>
+          {!isMobile && <LeftToolbar/>}
         </Stack>
-        <Box
-          sx={{
-            width: '100%',
-          }}
-          data-testid='RootLandscape-CenterPaneBottomBox'
-        >
-          <BottomBar deselectItems={deselectItems}/>
+        <div style={{width: '100%'}} data-testid='RootLandscape-CenterPaneBottomBox'>
+          <BottomBar/>
           <AlertDialogAndSnackbar/>
           <LoadingBackdrop/>
-        </Box>
+        </div>
       </Stack>
+      {isSvgFloorPlanVisible && !isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: 40,
+          right: 0,
+          width: '50vw',
+          height: 'calc(100vh - 40px)',
+          borderLeft: '1px solid #e0e0e0',
+          backgroundColor: '#ffffff',
+          color: '#000000',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 10,
+        }}>
+          <SVGFloorPlanView/>
+        </div>
+      )}
       {isMobile ?
         <TabbedPanels
           pathPrefix={pathPrefix}
           branch={branch}
           selectWithShiftClickEvents={selectWithShiftClickEvents}
         /> :
-      // On non-mobile, use RightSideDrawers for the combined drawer logic
         <RightSideDrawers/>
       }
+      <ViewerToolbar/>
+      {!isMobile && <NavCube/>}
+      {/* Build version — bottom left */}
+      {!isMobile && (
+        <Box sx={{
+          position: 'absolute',
+          bottom: 8,
+          left: 50,
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          opacity: 0.25,
+          pointerEvents: 'none',
+          color: 'var(--color-text)',
+        }}>
+          build 060
+        </Box>
+      )}
     </Stack>
   )
 }

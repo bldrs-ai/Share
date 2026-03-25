@@ -22,14 +22,17 @@ import {addProperties} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../view/Picker'
+import GoogleSignInGate from '../Components/Open/GoogleSignInGate'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
-import {initViewer} from './viewer'
+import {addRecentModel} from '../Components/Open/RecentModels'
+import {disposeViewer, initViewer} from './viewer'
 
 
 let count = 0
+let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -88,6 +91,7 @@ export default function CadView({
 
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
+  const [needsGoogleSignIn, setNeedsGoogleSignIn] = useState(false)
 
   // UISlice
   const setAlert = useStore((state) => state.setAlert)
@@ -108,6 +112,7 @@ export default function CadView({
 
   // Begin Hooks //
   const isMobile = useIsMobile()
+  const isFloorPlanMode = useStore((state) => state.isFloorPlanMode)
   const location = useLocation()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
@@ -124,20 +129,22 @@ export default function CadView({
   function onModelPath() {
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
-    const initViewerCb = (any, themeArg) => {
-      const sceneBackground = themeArg?.palette?.primary?.sceneBackground
-      if (!sceneBackground) {
-        const error = new Error(`Theme sceneBackground is undefined. themeArg: ${JSON.stringify(themeArg)}`)
-        console.error(error.message)
-        captureException(error)
-      }
-      const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+    const initViewerCb = () => {
+      // Read scene background from CSS custom property (set by theme system)
+      const sceneBackground = getComputedStyle(document.documentElement)
+        .getPropertyValue('--color-scene-bg').trim() || '#1a1a1a'
+      const initializedViewer = initViewer(pathPrefix, sceneBackground)
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
     if (isModelReady) {
       resetState()
     }
+    // Remove previous theme change listener to prevent accumulation
+    if (previousThemeChangeCb) {
+      theme.removeThemeChangeListener(previousThemeChangeCb)
+    }
+    previousThemeChangeCb = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }
@@ -187,11 +194,14 @@ export default function CadView({
     try {
       tmpModelRef = await loadModel(modelPath)
     } catch (e) {
+      if (e.message === 'Google Drive sign-in required') {
+        setNeedsGoogleSignIn(true)
+        return
+      }
       if (isOutOfMemoryError(e)) {
         isOOM = true
       }
       if (isOOM) {
-        // Provide actionable OOM alert object; AlertDialog will render a Refresh button.
         setAlert({
           type: 'oom',
           message: 'We ran out of memory attempting to load this model. ' +
@@ -261,9 +271,48 @@ export default function CadView({
    * @return {object} loaded model
    */
   async function loadModel(routeResult) {
-    const filepath = routeResult.downloadUrl || routeResult.filepath
+    let filepath = routeResult.downloadUrl || routeResult.filepath
     const gitpath = routeResult.gitpath
-    const loadingMessageBase = `Loading ${filepath}`
+
+    // For Google Drive files: download with OAuth token, save to OPFS, navigate to /v/new/
+    if (routeResult.provider === 'google' && routeResult.fileId) {
+      const token = window.__GOOGLE_ACCESS_TOKEN__
+      if (!token) {
+        throw new Error('Google Drive sign-in required')
+      }
+      setSnackMessage('Downloading from Google Drive...')
+      setIsModelLoading(true)
+      const apiUrl = `https://www.googleapis.com/drive/v3/files/${routeResult.fileId}?alt=media`
+      const response = await fetch(apiUrl, {
+        headers: {Authorization: `Bearer ${token}`},
+      })
+      if (!response.ok) throw new Error(`Google Drive download failed: ${response.status}`)
+      const blob = await response.blob()
+      // Get file name from Drive API
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${routeResult.fileId}?fields=name`,
+        {headers: {Authorization: `Bearer ${token}`}},
+      )
+      const meta = await metaRes.json()
+      const fileName = meta.name || 'model.ifc'
+      const ext = fileName.split('.').pop() || 'ifc'
+      const file = new File([blob], fileName, {type: 'application/octet-stream'})
+
+      // Use DnD flow: write to OPFS, navigate to /v/new/
+      const {saveDnDFileToOpfs} = await import('../OPFS/utils')
+      const {navigateToModel} = await import('../utils/navigate')
+      return new Promise((resolve) => {
+        saveDnDFileToOpfs(file, ext, (opfsFileName) => {
+          setIsModelLoading(false)
+          setSnackMessage(null)
+          disablePageReloadApprovalCheck()
+          navigateToModel(`${appPrefix}/v/new/${opfsFileName}`, navigate)
+          resolve(null)
+        })
+      })
+    }
+
+    const loadingMessageBase = `Loading model`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
@@ -316,10 +365,37 @@ export default function CadView({
     // arg.. expected a url
     updateLoadedFileInfo(filepath)
 
+    // Track in recent models
+    const modelName = loadedModel.name || String(filepath).split('/').pop() || 'Model'
+    addRecentModel(modelName, window.location.pathname + window.location.hash)
+
     viewer.context.getScene().add(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
-    if (!isCamHashSet) {
+
+    // Check for saved project view state: first from pendingViewState (reload button),
+    // then from the active project's current model
+    let viewState = useStore.getState().pendingViewState
+    if (viewState) {
+      useStore.setState({pendingViewState: null})
+    } else {
+      // Check active project's models for a saved view
+      const modelRefs = useStore.getState().modelRefs || []
+      if (modelRefs.length > 0) {
+        const sorted = [...modelRefs].sort((a, b) =>
+          new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+        )
+        if (sorted[0].viewState) {
+          viewState = sorted[0].viewState
+        }
+      }
+    }
+
+    if (viewState) {
+      const cc = viewer.IFC.context.ifcCamera.cameraControls
+      const {position, target} = viewState.camera
+      cc.setLookAt(position[0], position[1], position[2], target[0], target[1], target[2], false)
+    } else if (!isCamHashSet) {
       viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
     }
 
@@ -575,25 +651,27 @@ export default function CadView({
 
   /**
    * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {string} fileUrl URL or path of the loaded model
    */
-  function updateLoadedFileInfo() {
-    setLoadedFileInfo({
-      source: 'share', info: {
-        url: 'Foo',
-      },
-    })
-    /*
+  function updateLoadedFileInfo(fileUrl) {
+    const urlStr = String(fileUrl)
     const githubRegex = /(raw.githubusercontent|github.com)/gi
-    if (modelUrlStr.indexOf('/') === 0) {
-      setLoadedFileInfo({
-        source: 'share', info: {
-          url: `${window.location.protocol}//${window.location.host}${modelUrlStr}`,
-        },
-      })
-    } else if (githubRegex.test(modelUrlStr)) {
-      setLoadedFileInfo({source: 'github', info: {url: modelUrlStr}})
+    if (githubRegex.test(urlStr)) {
+      setLoadedFileInfo({source: 'github', info: {url: urlStr}})
+    } else {
+      // Extract pathname so the iframe can resolve it against its own origin
+      try {
+        const pathname = new URL(urlStr, window.location.origin).pathname
+        setLoadedFileInfo({
+          source: 'share', info: {
+            url: `${window.location.origin}${pathname}`,
+          },
+        })
+      } catch {
+        setLoadedFileInfo({source: 'share', info: {url: urlStr}})
+      }
     }
-    */
   }
 
 
@@ -715,12 +793,28 @@ export default function CadView({
   }, [])
 
 
+  // Trigger renderer resize when floor plan mode changes
+  useEffect(() => {
+    if (viewer) {
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 100)
+    }
+  }, [isFloorPlanMode, viewer])
+
+
   const abs = {position: 'absolute'}
   const absTop = {top: 0, ...abs}
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
+      {needsGoogleSignIn && (
+        <GoogleSignInGate onToken={(token) => {
+          setNeedsGoogleSignIn(false)
+          // Token is now in window.__GOOGLE_ACCESS_TOKEN__ + sessionStorage
+          // Trigger a re-render which will retry the model load
+          window.location.reload()
+        }}/>
+      )}
       {<ViewerContainer/>}
       {viewer && (
         <RootLandscape

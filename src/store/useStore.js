@@ -3,6 +3,7 @@ import createAppsSlice from './AppsSlice'
 import createBotSlice from './BotSlice'
 import createBrowserSlice from './BrowserSlice'
 import createCutPlanesSlice from './CutPlanesSlice'
+import createFloorPlanSlice from './FloorPlanSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
@@ -14,6 +15,8 @@ import createRepositorySlice from './RepositorySlice'
 import createSearchSlice from './SearchSlice'
 import createShareSlice from './ShareSlice'
 import createSideDrawerSlice from './SideDrawerSlice'
+import createProjectSlice from './ProjectSlice'
+import createTerrainSlice from './TerrainSlice'
 import createUIEnabledSlice from './UIEnabledSlice'
 import createUISlice from './UISlice'
 import createVersionsSlice from './VersionsSlice'
@@ -24,6 +27,7 @@ const useStore = create((set, get) => ({
   ...createBotSlice(set, get),
   ...createBrowserSlice(set, get),
   ...createCutPlanesSlice(set, get),
+  ...createFloorPlanSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
@@ -35,6 +39,8 @@ const useStore = create((set, get) => ({
   ...createShareSlice(set, get),
   ...createSearchSlice(set, get),
   ...createSideDrawerSlice(set, get),
+  ...createProjectSlice(set, get),
+  ...createTerrainSlice(set, get),
   ...createUIEnabledSlice(set, get),
   ...createUISlice(set, get),
   ...createVersionsSlice(set, get),

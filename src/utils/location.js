@@ -20,12 +20,21 @@ window.onhashchange = () => {
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
 /**
- * @param {string} name Name of listener.  Can be used to later remove
- * listener. TODO: add remove method
+ * @param {string} name Name of listener.  Can be used to later remove listener.
  * @param {Function} onHashCb Called when window.location.hash changes
  */
 export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
+}
+
+
+/**
+ * Remove a previously registered hash listener by name.
+ *
+ * @param {string} name Name of listener to remove
+ */
+export function removeHashListener(name) {
+  delete hashListeners[name]
 }
 
 /**

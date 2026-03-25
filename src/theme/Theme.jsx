@@ -5,6 +5,7 @@ import useStore from '../store/useStore'
 import {getComponentOverrides} from './Components'
 import {getTypography} from './Typography'
 import {day, night} from './Palette'
+import {getSavedTheme} from './themes'
 
 
 /**
@@ -12,7 +13,10 @@ import {day, night} from './Palette'
  */
 export default function useShareTheme() {
   const isThemeEnabled = useStore((state) => state.isThemeEnabled)
-  const [mode, setMode] = useState(isThemeEnabled ? (Preferences.getTheme() || Themes.System) : Themes.System)
+  // Sync MUI mode with our CSS var theme system
+  const saved = getSavedTheme()
+  const initialMode = saved.mode === 'dark' ? Themes.Night : Themes.Day
+  const [mode, setMode] = useState(isThemeEnabled ? initialMode : Themes.Day)
   const [systemTheme, setSystemTheme] = useState(getSystemCurrentLightDark())
 
   const [themeChangeListeners] = useState({})
@@ -105,6 +109,9 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
     currentMode: originalMode || Themes.System,
     addThemeChangeListener: (onChangeCb) => {
       themeChangeListeners[onChangeCb] = onChangeCb
+    },
+    removeThemeChangeListener: (onChangeCb) => {
+      delete themeChangeListeners[onChangeCb]
     },
   }
   return createTheme(theme)

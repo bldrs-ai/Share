@@ -2,8 +2,8 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin"
-    Cross-Origin-Embedder-Policy = "require-corp"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Cross-Origin-Embedder-Policy = "credentialless"
 
 # Override headers for the /subscribe route so that no strict isolation is enforced.
 [[headers]]
@@ -18,3 +18,9 @@
   to = "/subscribe/"
   status = 301
   force = true
+
+# SPA fallback — serve index.html for all unknown routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

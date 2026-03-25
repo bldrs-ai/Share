@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_APPS} from './hashState'
-import {WidgetsOutlined as WidgetsIcon} from '@mui/icons-material'
+import {LayoutGrid as WidgetsIcon} from 'lucide-react'
 
 
 /**
@@ -17,7 +17,7 @@ export default function AppsControl() {
   return (
     <ControlButtonWithHashState
       title='Apps'
-      icon={<WidgetsIcon className='icon-apps'/>}
+      icon={<WidgetsIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isAppsVisible}
       setIsDialogDisplayed={setIsAppsVisible}
       hashPrefix={HASH_PREFIX_APPS}

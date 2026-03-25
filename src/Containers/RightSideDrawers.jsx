@@ -93,7 +93,7 @@ export default function RightSideDrawers() {
   const availableWidth = 1200
 
   return (
-    <Stack direction='row' sx={{flexShrink: 0, overflow: 'hidden'}}>
+    <Stack direction='row' sx={{flexShrink: 0, overflow: 'hidden', marginTop: '40px'}}>
       <NotesAndPropertiesDrawer
         setDrawerWidth={handleSetRightDrawerWidth}
       />

@@ -420,10 +420,10 @@ export function saveDnDFileToOpfs(file, type, callback) {
   let workerRef = null
   workerRef = initializeWorker()
 
-  const tmpUrl = URL.createObjectURL(file)
-  debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
+  const objectUrl = URL.createObjectURL(file)
+  debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', objectUrl)
   // Post message to the worker to handle the file
-  const parts = tmpUrl.split('/')
+  const parts = objectUrl.split('/')
   const fileNametmpUrl = parts[parts.length - 1]
 
   // Listener for messages from the worker
@@ -452,7 +452,8 @@ export function saveDnDFileToOpfs(file, type, callback) {
   const originalFilename = file.name
   const filename = `${fileNametmpUrl}.${type}`
   debug().log('OPFS/utils#saveDnDFileToOpfs: calling opfsWriteModel with typed filename:', filename)
-  opfsWriteModel(tmpUrl, originalFilename, filename)
+  opfsWriteModel(objectUrl, originalFilename, filename)
+  URL.revokeObjectURL(objectUrl)
 }
 
 /**

@@ -2,7 +2,7 @@ import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {HASH_PREFIX_SEARCH} from './hashState'
-import {Search as SearchIcon} from '@mui/icons-material'
+import {Search as SearchIcon} from 'lucide-react'
 
 
 /**
@@ -16,7 +16,7 @@ export default function SearchControl() {
   return (
     <ControlButtonWithHashState
       title='Search'
-      icon={<SearchIcon className='icon-share'/>}
+      icon={<SearchIcon size={18} strokeWidth={1.75}/>}
       hashPrefix={HASH_PREFIX_SEARCH}
       isDialogDisplayed={isSearchBarVisible}
       setIsDialogDisplayed={setIsSearchBarVisible}

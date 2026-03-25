@@ -1,4 +1,8 @@
 import {splitAroundExtensionRemoveFirstSlash} from '../Filetype'
+
+declare global {
+  interface Window { __ASSET_BASE__?: string }
+}
 import debug from '../utils/debug'
 import processGithubParams, {isGithubParams, GithubParams, GithubResult} from './github'
 import processGoogleUrl, {GoogleResult, processGoogleFileId} from './google'
@@ -82,12 +86,13 @@ export function processFile(originalUrl: URL, filepath: string): FileResult {
   debug().log('routes#processFile: is a local file:', filepath)
   const {parts, extension} = splitAroundExtensionRemoveFirstSlash(filepath)
   filepath = `${parts[0]}${extension}`
-  const downloadUrl = new URL(filepath, originalUrl.origin)
+  const assetBase = (typeof window !== 'undefined' && window.__ASSET_BASE__) || ''
+  const downloadUrl = new URL(`${assetBase}/${filepath}`, originalUrl.origin)
   return {
     originalUrl,
     downloadUrl,
     kind: 'file',
-    isUploadedFile: originalUrl.pathname.startsWith('/share/v/new'),
+    isUploadedFile: originalUrl.pathname.includes('/v/new'),
     filepath,
     ...(parts[1] ? {eltPath: `${parts[1]}`} : {}),
   }

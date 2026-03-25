@@ -36,7 +36,7 @@ export default function PanelTitle({title, onClose, actions}) {
       }}
       data-testid={`PanelTitle-${title}`}
     >
-      {!isMobile && <Typography variant='h2'>{title}</Typography>}
+      {!isMobile && <Typography variant='body2' sx={{fontWeight: 500, fontSize: '13px'}}>{title}</Typography>}
       <Box
         sx={{
           display: 'flex',
@@ -51,4 +51,4 @@ export default function PanelTitle({title, onClose, actions}) {
 }
 
 
-export const PANEL_TITLE_HEIGHT = '60px'
+export const PANEL_TITLE_HEIGHT = '36px'

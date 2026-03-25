@@ -31,12 +31,13 @@ export default function Panel({title, onClose, children, actions = null, ...prop
         actions={actions}
       />
       <Paper
-        elevation={1}
+        elevation={0}
         sx={{
           padding: '0.5em',
-          // This ensures the overflowY scroll for the content doesn't underflow this title.
           height: `calc(100% - ${PANEL_TITLE_HEIGHT})`,
           overflow: 'auto',
+          backgroundColor: 'transparent',
+          backgroundImage: 'none',
           ...(isMobile ? {
             borderRadius: 0,
           } : {}),

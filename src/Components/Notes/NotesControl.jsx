@@ -7,7 +7,7 @@ import {ControlButtonWithHashState} from '../Buttons'
 import {MARKER_COLOR_ACTIVE, MARKER_COLOR_INACTIVE} from '../Markers/component'
 import {parsePlacemarkFromIssue, getActivePlaceMarkHash, parsePlacemarkFromURL} from '../Markers/hashState'
 import {HASH_PREFIX_NOTES, HASH_PREFIX_COMMENT} from './hashState'
-import {ChatOutlined as ChatOutlinedIcon} from '@mui/icons-material'
+import {MessageSquare as ChatOutlinedIcon} from 'lucide-react'
 
 
 /**
@@ -297,7 +297,7 @@ export default function NotesControl() {
   return (
     <ControlButtonWithHashState
       title='Notes'
-      icon={<ChatOutlinedIcon className='icon-share'/>}
+      icon={<ChatOutlinedIcon size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isNotesVisible}
       setIsDialogDisplayed={setIsNotesVisible}
       hashPrefix={HASH_PREFIX_NOTES}

@@ -41,7 +41,8 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const isGHPages = window.location.hostname.endsWith('.github.io')
+  const installPrefix = isGHPages ? '/share' : ''
   const basePath = `${installPrefix}/`
   const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
@@ -79,6 +80,11 @@ export default function BaseRoutes({testElt = null}) {
 
     checkAvailability()
   }, [setIsOpfsAvailable])
+
+  // Restore company/project context from IndexedDB
+  useEffect(() => {
+    useStore.getState().restoreProjectContext()
+  }, [])
 
   useEffect(() => {
     if (location.pathname === installPrefix || location.pathname === basePath) {

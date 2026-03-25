@@ -79,6 +79,11 @@ export function processGoogleFileId(originalUrl: URL, fileId: string): GoogleRes
  */
 function getGoogleDownloadUrl(fileId: string): URL {
   assertDefined(fileId)
+  // Use OAuth token if available (for private files), fall back to API key (for public files)
+  const hasToken = typeof window !== 'undefined' && (window as any).__GOOGLE_ACCESS_TOKEN__
+  if (hasToken) {
+    return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`)
+  }
   const apiKey = process.env.GOOGLE_API_KEY
   return new URL(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${apiKey}`)
 }

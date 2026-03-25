@@ -234,6 +234,10 @@ export function getComponentOverrides(palette, typography) {
     MuiTab: {
       styleOverrides: {
         root: {
+          fontSize: '13px',
+          textTransform: 'none',
+          minHeight: 36,
+          padding: '6px 12px',
           '&.Mui-selected, &.Mui-selected:hover': {
             color: palette.secondary.contrastText,
             fontWeight: 'bold',
@@ -250,7 +254,17 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiToggleButton: {
       styleOverrides: {
-        root: StandardButton, // Same as MuiIconButton
+        root: {
+          ...StandardButton,
+          '&.Mui-selected': {
+            backgroundColor: 'transparent',
+            color: 'var(--color-primary)',
+          },
+          '&.Mui-selected:hover': {
+            backgroundColor: 'transparent',
+            color: 'var(--color-primary)',
+          },
+        },
       },
       variants: [{
         props: {variant: 'control'},
@@ -261,7 +275,13 @@ export function getComponentOverrides(palette, typography) {
     MuiTooltip: {
       styleOverrides: {
         tooltip: {
-          ...typography.caption,
+          fontSize: '12px',
+          fontWeight: 400,
+          padding: '4px 8px',
+          borderRadius: '4px',
+        },
+        arrow: {
+          fontSize: '8px',
         },
       },
     },
@@ -277,10 +297,15 @@ export function getComponentOverrides(palette, typography) {
 
 const StandardButton = {
   fontSize: '1rem',
-  width: '3em',
-  height: '3em',
-  borderRadius: '10px',
-  margin: '5px',
-  padding: '5px',
+  width: '2em',
+  height: '2em',
+  borderRadius: '6px',
+  transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.15s ease',
+  '&:hover': {
+    transform: 'scale(1.12)',
+  },
+  margin: '2px',
+  padding: '3px',
   border: 'none',
+  color: 'var(--color-text)',
 }

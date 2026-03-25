@@ -31,7 +31,20 @@ export default function createNotesSlice(set, get) {
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
 
     deletedNotes: null,
-    setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
+    setDeletedNotes: (deletedNotes) => set((state) => {
+      // Clean up edit state for deleted notes to prevent unbounded growth
+      if (deletedNotes && deletedNotes.id) {
+        const {editBodies, editModes, editOriginalBodies} = state
+        const newEditBodies = {...editBodies}
+        const newEditModes = {...editModes}
+        const newEditOriginalBodies = {...editOriginalBodies}
+        delete newEditBodies[deletedNotes.id]
+        delete newEditModes[deletedNotes.id]
+        delete newEditOriginalBodies[deletedNotes.id]
+        return {deletedNotes, editBodies: newEditBodies, editModes: newEditModes, editOriginalBodies: newEditOriginalBodies}
+      }
+      return {deletedNotes}
+    }),
 
     editBodies: {}, // Track editBody for each NoteCard by id
     setEditBody: (id, body) =>

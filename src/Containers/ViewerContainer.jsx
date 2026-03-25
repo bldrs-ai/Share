@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {Box} from '@mui/material'
 import {useIsMobile} from '../Components/Hooks'
@@ -16,6 +16,43 @@ export default function ViewerContainer() {
   const {onSceneSingleTap, onSceneDoubleTap} = placemarkHandlers()
   const vh = useStore((state) => state.vh)
   const isMobile = useIsMobile()
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  const isSvgFloorPlanVisible = useStore((state) => state.isSvgFloorPlanVisible)
+  const viewer = useStore((state) => state.viewer)
+
+  // Resize Three.js renderer when apps drawer or floor plan opens/closes
+  let viewerWidth = '100vw'
+  if (!isMobile) {
+    if (isSvgFloorPlanVisible && isAppsVisible) {
+      viewerWidth = `calc(50vw - ${appsDrawerWidth}px)`
+    } else if (isSvgFloorPlanVisible) {
+      viewerWidth = '50vw'
+    } else if (isAppsVisible) {
+      viewerWidth = `calc(100vw - ${appsDrawerWidth}px)`
+    }
+  }
+
+  useEffect(() => {
+    if (!viewer) return
+    const timer = setTimeout(() => { // Wait for CSS transition (50ms) to complete
+      const container = document.getElementById('viewer-container')
+      if (!container) return
+      const w = container.clientWidth
+      const h = container.clientHeight
+      if (w <= 0 || h <= 0) return
+      try {
+        const renderer = viewer.context.getRenderer()
+        renderer.setSize(w, h)
+        const camera = viewer.context.getCamera()
+        if (camera.isPerspectiveCamera) {
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
+      } catch { /* */ }
+    }, 60)
+    return () => clearTimeout(timer)
+  }, [isAppsVisible, appsDrawerWidth, isSvgFloorPlanVisible, viewer])
 
   const [, setIsDragActive] = useState(false)
 
@@ -39,8 +76,9 @@ export default function ViewerContainer() {
         position: 'absolute',
         top: 0,
         left: 0,
-        width: '100vw',
+        width: viewerWidth,
         height: isMobile ? `${vh}px` : '100vh',
+        transition: 'width 50ms ease',
         margin: 0,
         padding: 0,
         textAlign: 'center',
