@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="2" y="4" width="20" height="16" stroke="#999" fill="#999" opacity="0.1"/>
+  <rect x="2" y="4" width="20" height="16" stroke="#999" fill="none"/>
+  <line x1="10" y1="4" x2="10" y2="14" stroke="#666" stroke-width="1.5"/>
+  <line x1="10" y1="14" x2="22" y2="14" stroke="#666" stroke-width="1.5"/>
+  <line x1="3" y1="8" x2="9" y2="8" stroke="#00D4AA" stroke-width="1"/>
+  <line x1="3" y1="7" x2="3" y2="9" stroke="#00D4AA" stroke-width="1"/>
+  <line x1="9" y1="7" x2="9" y2="9" stroke="#00D4AA" stroke-width="1"/>
+  <line x1="6" y1="5" x2="6" y2="13" stroke="#5B8ED8" stroke-width="1"/>
+  <line x1="5" y1="5" x2="7" y2="5" stroke="#5B8ED8" stroke-width="1"/>
+  <line x1="5" y1="13" x2="7" y2="13" stroke="#5B8ED8" stroke-width="1"/>
+  <text x="14.5" y="11" text-anchor="middle" font-family="sans-serif" font-size="5" font-weight="600" fill="#FF6B35">m²</text>
+  <rect x="11" y="5" width="10" height="8" fill="#FF6B35" opacity="0.1"/>
+</svg>

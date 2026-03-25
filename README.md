@@ -1,3 +1,6 @@
+#TEST
+this is just an app test for Bldrs, find the real thing here: (https://bldrs.ai)
+
 # Bldrs Share
 Bldrs Share is a high-performance browser-based application for CAD & BIM model
 viewing, sharing and collaboration.  Share is built on open-source standards for

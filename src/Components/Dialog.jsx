@@ -53,25 +53,25 @@ export default function Dialog({
       open={isDialogDisplayed}
       onClose={onCloseClick}
       fullWidth
-      maxWidth='xs'
+      maxWidth='sm'
       // There's a warning without this due to a bug in MUI Dialog. When the dialog
       // is closed, the transition animation is not played.
       closeAfterTransition={false}
       // don't use data-testid, use getByRole('dialog') instead
     >
       <DialogTitle
-        variant='h1'
         sx={{
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
           alignItems: 'center',
-          gap: '1em',
+          gap: '0.5em',
+          padding: '12px 16px',
+          fontSize: '14px',
+          fontWeight: 500,
         }}
       >
         {headerIcon && headerIcon}
+        {headerText}
       </DialogTitle>
-      <Typography variant='h2' className='dialog-header-text' sx={{margin: isMobile ? '0 0 1em 0' : '1em 0'}}>{headerText}</Typography>
       <CloseButton onCloseClick={onCloseClick} data-testid={`button-close-dialog-${dataTestIdSuffix}`}/>
       <DialogContent sx={{pb: 2}}>{children}</DialogContent>
       {actionTitle === undefined ? null :

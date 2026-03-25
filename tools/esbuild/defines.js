@@ -1,7 +1,34 @@
+import {readFileSync, existsSync} from 'fs'
+import {resolve, dirname} from 'path'
+import {fileURLToPath} from 'url'
 import dev from './vars.dev.js'
 import cypress from './vars.cypress.js'
 import playwright from './vars.playwright.js'
 import prod from './vars.prod.js'
+
+// Auto-load .env file if present (so devs don't need to `source .env` manually)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const envPath = resolve(__dirname, '../../.env')
+if (existsSync(envPath)) {
+  const lines = readFileSync(envPath, 'utf-8').split('\n')
+  lines.forEach((line) => {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) return
+    const eq = trimmed.indexOf('=')
+    if (eq > 0) {
+      const key = trimmed.substring(0, eq).trim()
+      let val = trimmed.substring(eq + 1).trim()
+      // Strip surrounding quotes
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1)
+      }
+      process.env[key] = val
+    }
+  })
+  console.log('.env loaded:', envPath, `(${lines.length} lines)`)
+} else {
+  console.log('.env not found at:', envPath)
+}
 
 
 /**
@@ -54,7 +81,7 @@ export function parse(envStr) {
     return true
   } else if (isFinite(parseInt(envStr)) && envStr === Number(parseInt(envStr))) {
     return parseInt(envStr)
-  } else if (isFinite(parseFloat(envStr))) {
+  } else if (isFinite(parseFloat(envStr)) && String(parseFloat(envStr)) === envStr) {
     return parseFloat(envStr)
   }
   return envStr

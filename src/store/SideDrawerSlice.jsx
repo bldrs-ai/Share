@@ -1,4 +1,5 @@
 const drawerWidthInitial = 370
+const appsDrawerWidthDefault = typeof window !== 'undefined' ? Math.floor(window.innerWidth / 2) : 600
 const drawerHeightInitial = '50vh'
 
 
@@ -27,9 +28,9 @@ export default function createSideDrawerSlice(set, get) {
     setRightDrawerWidth: (width) => set(() => ({rightDrawerWidth: width})),
     rightDrawerWidthInitial: drawerWidthInitial,
 
-    appsDrawerWidth: drawerWidthInitial,
+    appsDrawerWidth: appsDrawerWidthDefault,
     setAppsDrawerWidth: (width) => set(() => ({appsDrawerWidth: width})),
-    appsDrawerWidthInitial: drawerWidthInitial,
+    appsDrawerWidthInitial: appsDrawerWidthDefault,
 
     drawerHeight: drawerHeightInitial,
     setDrawerHeight: (height) => set(() => ({drawerHeight: height})),

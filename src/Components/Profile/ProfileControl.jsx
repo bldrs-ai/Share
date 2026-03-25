@@ -15,8 +15,8 @@ import {assertDefinedBoolean} from '../../utils/assert'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
+import {User} from 'lucide-react'
 import {
-  AccountBoxOutlined as AccountBoxOutlinedIcon,
   AccountCircleOutlined,
   GitHub as GitHubIcon,
   InfoOutlined as InfoOutlinedIcon,
@@ -177,7 +177,7 @@ export default function ProfileControl() {
         icon={
           isAuthenticated ?
             <Avatar alt={user?.name} src={user?.picture} data-testid='control-button-profile-icon-authenticated'/> :
-            <AccountBoxOutlinedIcon/>
+            <User size={18} strokeWidth={1.75}/>
         }
         variant='control'
         placement='bottom'

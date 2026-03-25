@@ -1,0 +1,5 @@
+knowledge:
+  - path: docs-internal/architecture.md
+    category: framework
+  - path: docs-internal/xeokit-analysis.md
+    category: reference

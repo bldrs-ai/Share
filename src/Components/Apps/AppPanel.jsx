@@ -29,7 +29,7 @@ export default function AppPanel({itemJson}) {
         <BackButton onClick={() => setSelectedApp(null)}/>
       }
       onClose={onClose}
-      iconSrc={itemJson.icon}
+      iconSrc={`${window.__ASSET_BASE__ || ''}${itemJson.icon}`}
       data-testid='AppPanel'
     >
       <AppIFrame itemJson={itemJson}/>

@@ -180,13 +180,11 @@ export default function HorizonResizerButton({
     >
       <Box
         sx={{
-          padding: `${gripSize}px ${horizonPadding}px`,
+          padding: `0 ${horizonPadding}px`,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: `${gripSize}px`,
-          background: theme.palette.primary.background,
+          height: '100%',
           cursor: 'col-resize',
         }}
         ref={resizerRef}
@@ -194,18 +192,15 @@ export default function HorizonResizerButton({
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
-        {Array.from({length: 3}).map((v, i) =>
-          <Box
-            key={i}
-            sx={{
-              width: `${gripSize}px`,
-              height: `${gripSize}px`,
-              borderRadius: '3px',
-              background: theme.palette.primary.contrastText,
-              opacity: '0.3',
-            }}
-          />,
-        )}
+        <Box
+          sx={{
+            width: '1px',
+            height: '40px',
+            background: theme.palette.primary.contrastText,
+            opacity: '0.2',
+            borderRadius: '1px',
+          }}
+        />
       </Box>
     </Box>
   )

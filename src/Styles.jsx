@@ -56,8 +56,8 @@ export default function Styles({theme}) {
           marginRight: 'auto',
         },
         '.icon-share': {
-          width: '40px',
-          height: '40px',
+          width: '18px',
+          height: '18px',
           fill: theme.palette.primary.contrastText,
         },
         '.icon-small': {
@@ -79,6 +79,9 @@ export default function Styles({theme}) {
         },
         '.no-select': {
           userSelect: 'none',
+        },
+        '.nav-tree-node:hover .nav-tree-hide-btn': {
+          opacity: '1 !important',
         },
       }}
     />

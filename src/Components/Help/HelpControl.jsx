@@ -11,7 +11,6 @@ import {
   FileUpload as ShiftIcon,
   FilterCenterFocus as FilterCenterFocusIcon,
   FormatListBulleted as FormatListBulletedIcon,
-  HelpOutline as HelpOutlineIcon,
   HideSourceOutlined as HideSourceOutlinedIcon,
   History as HistoryIcon,
   Portrait as PortraitIcon,
@@ -20,6 +19,7 @@ import {
   TouchAppOutlined as TouchAppOutlinedIcon,
   VisibilityOutlined as VisibilityOutlinedIcon,
 } from '@mui/icons-material'
+import {HelpCircle as HelpOutlineIcon} from 'lucide-react'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import Dialog from '../Dialog'
@@ -75,7 +75,7 @@ export default function HelpControl() {
       <TooltipIconButton
         title={'Help'}
         onClick={handleHelpClick}
-        icon={<HelpOutlineIcon className='icon-share'/>}
+        icon={<HelpOutlineIcon size={18} strokeWidth={1.75}/>}
         selected={isHelpVisible}
         variant='control'
         color='success'

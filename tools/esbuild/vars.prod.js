@@ -40,8 +40,9 @@ export default {
   THEME_IS_ENABLED: true,
   USE_WEBIFC_SHIM: true,
 
-  // API_KEYS
+  // Google
   GOOGLE_API_KEY: null,
+  GOOGLE_CLIENT_ID: null,
 
   // OpenRouter
   OPENROUTER_BASE_URL: 'https://openrouter.ai',

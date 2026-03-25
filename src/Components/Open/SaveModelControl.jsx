@@ -1,7 +1,7 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {IconButton, Stack, TextField, Typography} from '@mui/material'
-import {Clear as ClearIcon, SaveOutlined as SaveOutlinedIcon} from '@mui/icons-material'
+import {Save, X} from 'lucide-react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
@@ -54,7 +54,7 @@ export default function SaveModelControl() {
       title={MSG_SAVE}
       isDialogDisplayed={isSaveModelVisible}
       setIsDialogDisplayed={setIsSaveModelVisible}
-      icon={<SaveOutlinedIcon className='icon-share'/>}
+      icon={<Save size={18} strokeWidth={1.75}/>}
       placement='bottom'
     >
       <SaveModelDialog
@@ -251,7 +251,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
   return (
     <Dialog
-      headerIcon={<SaveOutlinedIcon className='icon-share'/>}
+      headerIcon={<Save size={18} strokeWidth={1.75}/>}
       headerText={MSG_SAVE}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -308,7 +308,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                     onClick={() => setRequestCreateBranch(false)}
                     size='small'
                   >
-                    <ClearIcon className='icon-share'/>
+                    <X size={18} strokeWidth={1.75}/>
                   </IconButton>
                 </div>
               )}
@@ -336,7 +336,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                     onClick={() => setRequestCreateFolder(false)}
                     size='small'
                   >
-                    <ClearIcon className='icon-share'/>
+                    <X size={18} strokeWidth={1.75}/>
                   </IconButton>
                 </div>
               )}

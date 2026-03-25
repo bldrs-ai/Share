@@ -3,4 +3,6 @@
 body {
   font-family: "Roboto", sans-serif !important;
   font-synthesis: none;
+  background-color: var(--color-bg, #ffffff);
+  color: var(--color-text, #101010);
 }

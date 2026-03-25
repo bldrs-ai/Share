@@ -5,5 +5,19 @@
     "image": "/icons/LogoBWithDomain.svg",
     "action": "widgets/dashboard-app/index.html",
     "icon": "/icons/LogoB.svg"
+  },
+  {
+    "appName": "IFC Inspector",
+    "description": "Analyse IFC file structure, detect version, and validate",
+    "image": "/widgets/ifc-inspector/icons/ifc-inspector.svg",
+    "action": "widgets/ifc-inspector/index.html",
+    "icon": "/widgets/ifc-inspector/icons/ifc-inspector.svg"
+  },
+  {
+    "appName": "IFC Quantities",
+    "description": "Area calculations by measurement standard (DIN 277, IPMS, Energy)",
+    "image": "/widgets/ifc-quantities/icons/ifc-quantities.svg",
+    "action": "widgets/ifc-quantities/index.html",
+    "icon": "/widgets/ifc-quantities/icons/ifc-quantities.svg"
   }
 ]

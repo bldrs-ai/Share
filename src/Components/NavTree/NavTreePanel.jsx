@@ -2,7 +2,7 @@ import PropTypes from 'prop-types'
 import React, {ReactElement, useEffect, useState, useRef, useCallback} from 'react'
 import {VariableSizeList} from 'react-window'
 import {reifyName} from '@bldrs-ai/ifclib'
-import {AccountTree as AccountTreeIcon, List as ListIcon} from '@mui/icons-material'
+import {GitBranch as AccountTreeIcon, List as ListIcon} from 'lucide-react'
 import {ToggleButton, ToggleButtonGroup, Tooltip} from '@mui/material'
 import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
@@ -361,12 +361,12 @@ function Actions({navigationMode, setNavigationMode}) {
     >
       <ToggleButton value="spatial-tree" aria-label="spatial-tree" size="small">
         <Tooltip title="Spatial Structure" placement="top" describeChild>
-          <AccountTreeIcon className="icon-share"/>
+          <AccountTreeIcon size={16} strokeWidth={1.75}/>
         </Tooltip>
       </ToggleButton>
       <ToggleButton value="element-types" aria-label="element-types" size="small">
         <Tooltip title="Element Types" placement="top" describeChild>
-          <ListIcon className="icon-share"/>
+          <ListIcon size={16} strokeWidth={1.75}/>
         </Tooltip>
       </ToggleButton>
     </StyledToggleButtonGroup>

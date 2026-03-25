@@ -6,7 +6,7 @@ import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import OpenModelDialog from './OpenModelDialog'
 import {HASH_PREFIX_OPEN_MODEL} from './hashState'
-import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
+import {FolderOpen} from 'lucide-react'
 
 
 /**
@@ -44,7 +44,7 @@ export default function OpenModelControl() {
   return (
     <ControlButtonWithHashState
       title='Open Models and Samples'
-      icon={<FolderOpenIcon className='icon-share'/>}
+      icon={<FolderOpen size={18} strokeWidth={1.75}/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={HASH_PREFIX_OPEN_MODEL}

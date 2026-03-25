@@ -51,10 +51,11 @@ export default function SideDrawer({
         width: '100%',
         height: drawerHeight,
       } : {
-        top: 0,
+        top: '40px',
         width: drawerWidth,
-        height: '100vh',
+        height: 'calc(100vh - 40px)',
         minWidth: '8px',
+        zIndex: 2,
       })}
       data-testid={dataTestId}
     >
@@ -67,6 +68,7 @@ export default function SideDrawer({
           borderRadius: 0,
           backgroundColor: theme.palette.secondary.backgroundColor,
           backdropFilter: theme.palette.secondary.backdropFilter,
+          backgroundImage: 'none',
         }}
         ref={drawerRef}
         data-testid='SideDrawer-Paper'
