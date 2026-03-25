@@ -198,4 +198,6 @@ export interface FileDownloadResult {
   filename: string
   /** MIME type */
   mimeType?: string
+  /** ISO timestamp of last modification */
+  modifiedAt?: string
 }

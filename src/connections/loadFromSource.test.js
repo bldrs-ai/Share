@@ -37,6 +37,7 @@ const mockBrowser = {
     blob: mockBlob,
     filename: 'model.ifc',
     mimeType: 'application/x-step',
+    modifiedAt: '2025-01-15T10:30:00Z',
   }),
 }
 
@@ -72,6 +73,12 @@ describe('loadFromSource', () => {
       expect(onLoad).toHaveBeenCalledWith(FAKE_BLOB_ID)
     })
 
+    it('returns modifiedAt from the download result', async () => {
+      const result = await loadFileFromSource(mockConnection, mockSource, mockFile, jest.fn())
+
+      expect(result).toEqual({modifiedAt: '2025-01-15T10:30:00Z'})
+    })
+
     it('throws when no provider is registered', async () => {
       getProvider.mockReturnValue(null)
 
@@ -97,6 +104,12 @@ describe('loadFromSource', () => {
       await loadFileById(mockConnection, 'file-abc', 'model.ifc', onLoad)
 
       expect(onLoad).toHaveBeenCalledWith(FAKE_BLOB_ID)
+    })
+
+    it('returns modifiedAt from the download result', async () => {
+      const result = await loadFileById(mockConnection, 'file-abc', 'model.ifc', jest.fn())
+
+      expect(result).toEqual({modifiedAt: '2025-01-15T10:30:00Z'})
     })
 
     it('fetches blob using auth token when download only returns a url', async () => {

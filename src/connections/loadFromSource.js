@@ -31,7 +31,8 @@ export async function loadFileFromSource(connection, source, file, onLoad) {
   debug().log('loadFromSource: downloading', file.name, 'from', connection.providerId)
 
   const download = await browser.getFileDownload(connection, source, file.id)
-  return writeAndOpen(download, file.name, provider, connection, onLoad)
+  await writeAndOpen(download, file.name, provider, connection, onLoad)
+  return {modifiedAt: download.modifiedAt}
 }
 
 
@@ -56,7 +57,8 @@ export async function loadFileById(connection, fileId, fileName, onLoad) {
   debug().log('loadFromSource: downloading by id', fileId, 'from', connection.providerId)
 
   const download = await browser.getFileDownload(connection, null, fileId)
-  return writeAndOpen(download, fileName, provider, connection, onLoad)
+  await writeAndOpen(download, fileName, provider, connection, onLoad)
+  return {modifiedAt: download.modifiedAt}
 }
 
 

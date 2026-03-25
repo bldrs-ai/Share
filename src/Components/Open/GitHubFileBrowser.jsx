@@ -9,6 +9,7 @@ import {getFilesAndFolders} from '../../net/github/Files'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
+import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
@@ -123,7 +124,15 @@ export default function GitHubFileBrowser({
   const navigateToFile = () => {
     if (pathSuffixSupported(fileName)) {
       const branch = branchName || 'main'
-      navigateToModel({pathname: navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)}, navigate)
+      const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
+      navigateToModel({pathname: sharePath}, navigate)
+      addRecentFileEntry({
+        id: sharePath,
+        source: 'github',
+        name: fileName,
+        sharePath,
+      })
+      setPendingModelNameUpdate(sharePath)
       setIsDialogDisplayed(false)
     }
   }

@@ -20,12 +20,14 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
     'change',
     (event) => {
       debug().log('loader#loadLocalFile#event:', event)
-      let tmpUrl = URL.createObjectURL(event.target.files[0])
+      const file = event.target.files[0]
+      const lastModifiedUtc = file.lastModified
+      let tmpUrl = URL.createObjectURL(file)
       debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
       const parts = tmpUrl.split('/')
       tmpUrl = parts[parts.length - 1]
       if (onLoad) {
-        onLoad(tmpUrl)
+        onLoad(tmpUrl, lastModifiedUtc)
       }
     },
     false,
@@ -59,7 +61,9 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
     'change',
     (event) => {
       debug().log('loader#loadLocalFile#event:', event)
-      const tmpUrl = URL.createObjectURL(event.target.files[0])
+      const file = event.target.files[0]
+      const lastModifiedUtc = file.lastModified
+      const tmpUrl = URL.createObjectURL(file)
       debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
       // Post message to the worker to handle the file
       const parts = tmpUrl.split('/')
@@ -74,15 +78,15 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
             if (workerEvent.data.event === 'write') {
               debug().log('Worker finished writing file')
               // Perform the navigation logic after the worker is done
-              onLoad(workerEvent.data.fileName)
+              onLoad(workerEvent.data.fileName, lastModifiedUtc)
             } else if (workerEvent.data.event === 'read') {
               debug().log('Worker finished reading file')
-              onLoad(workerEvent.data.file.name)
+              onLoad(workerEvent.data.file.name, lastModifiedUtc)
             }
           }
         }
         workerRef.addEventListener('message', listener)
-        const filename = event.target.files[0].name
+        const filename = file.name
         const dotParts = filename.split('.')
         if (dotParts.length <= 1) {
           throw new Error('Cannot extract filetype from filename')
@@ -90,7 +94,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
         const ext = dotParts[dotParts.length - 1]
         opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
       } else {
-        onLoad(fileNametmpUrl)
+        onLoad(fileNametmpUrl, lastModifiedUtc)
       }
     },
     false,

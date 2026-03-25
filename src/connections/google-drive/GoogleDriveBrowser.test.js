@@ -7,6 +7,7 @@ import {
   TEST_FILE_ID,
   TEST_FILE_NAME,
   TEST_FOLDER_ID,
+  TEST_MODIFIED_TIME,
 } from './GoogleDrive.handlers'
 
 
@@ -47,6 +48,7 @@ describe('GoogleDriveBrowser', () => {
 
       expect(result.filename).toBe(TEST_FILE_NAME)
       expect(result.mimeType).toBe('application/x-step')
+      expect(result.modifiedAt).toBe(TEST_MODIFIED_TIME)
       expect(result.blob).toBeInstanceOf(Blob)
       expect(await result.blob.text()).toBe(TEST_FILE_CONTENT)
     })

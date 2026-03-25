@@ -116,9 +116,9 @@ export const googleDriveBrowser: SourceBrowser = {
   ): Promise<FileDownloadResult> {
     const token = await googleDriveProvider.getAccessToken(connection)
 
-    // Fetch file metadata for filename and MIME type
+    // Fetch file metadata for filename, MIME type, and modification time
     const metaParams = new URLSearchParams({
-      fields: 'name,mimeType',
+      fields: 'name,mimeType,modifiedTime',
       supportsAllDrives: 'true',
     })
 
@@ -149,6 +149,7 @@ export const googleDriveBrowser: SourceBrowser = {
       blob,
       filename: meta.name,
       mimeType: meta.mimeType,
+      modifiedAt: meta.modifiedTime,
     }
   },
 }

@@ -80,7 +80,7 @@ export const googleDriveProvider: ConnectionProvider = {
       const makeConnection = (connectionId: string, email?: string | null): Connection => ({
         id: connectionId,
         providerId: 'google-drive',
-        label: email ? `Google Drive (${email})` : 'Google Drive',
+        label: email ? `${email} - GDrive` : 'GDrive',
         status: 'connected',
         auth0Connection: 'google-oauth2',
         createdAt: new Date().toISOString(),

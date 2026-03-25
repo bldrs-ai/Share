@@ -6,6 +6,7 @@ export const TEST_FILE_NAME = 'structure.ifc'
 export const TEST_FILE_CONTENT = 'ISO-10303-21; FILE_DESCRIPTION'
 export const TEST_FOLDER_ID = 'test-folder-id-xyz'
 export const TEST_USER_EMAIL = 'testuser@example.com'
+export const TEST_MODIFIED_TIME = '2024-06-15T09:30:00Z'
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 const USERINFO_API = 'https://www.googleapis.com/oauth2/v2/userinfo'
@@ -30,6 +31,7 @@ export function googleDriveHandlers() {
       return HttpResponse.json({
         name: TEST_FILE_NAME,
         mimeType: 'application/x-step',
+        modifiedTime: TEST_MODIFIED_TIME,
       })
     }),
 

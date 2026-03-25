@@ -1,12 +1,16 @@
-import React, {ReactElement, useState} from 'react'
-import {Button, Stack, Typography, TextField} from '@mui/material'
+import React, {ReactElement, useEffect, useState} from 'react'
+import {Divider, Stack, Typography, TextField} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {loadFileById} from '../../connections/loadFromSource'
-import {addRecentFile, setPendingModelNameUpdate} from '../../connections/persistence'
+import {
+  addRecentFileEntry,
+  loadRecentFilesBySource,
+  setPendingModelNameUpdate,
+} from '../../connections/persistence'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -17,6 +21,8 @@ import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
 import SourcesTab from '../Connections/SourcesTab'
 import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
+import RecentFilesList from '../Connections/RecentFilesList'
+import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
@@ -44,6 +50,15 @@ export default function OpenModelDialog({
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
+  const [localRecents, setLocalRecents] = useState([])
+  const [githubRecents, setGithubRecents] = useState([])
+
+  useEffect(() => {
+    if (isDialogDisplayed) {
+      setLocalRecents(loadRecentFilesBySource('local'))
+      setGithubRecents(loadRecentFilesBySource('github'))
+    }
+  }, [isDialogDisplayed])
 
   const handlePickerReady = (token, connection) => {
     setIsDialogDisplayed(false)
@@ -54,16 +69,18 @@ export default function OpenModelDialog({
   const handleOpenById = async (connection, fileId, fileName) => {
     setIsDialogDisplayed(false)
     try {
-      await loadFileById(connection, fileId, fileName, (filename) => {
+      const result = await loadFileById(connection, fileId, fileName, (filename) => {
         disablePageReloadApprovalCheck()
         navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
       })
-      addRecentFile({
-        fileId,
+      addRecentFileEntry({
+        id: fileId,
+        source: 'google-drive',
         name: fileName,
         mimeType: '',
-        lastModifiedUtc: null,
+        lastModifiedUtc: result?.modifiedAt ? new Date(result.modifiedAt).getTime() : null,
         connectionId: connection.id,
+        fileId,
       })
       setPendingModelNameUpdate(fileId)
     } catch (err) {
@@ -84,12 +101,14 @@ export default function OpenModelDialog({
         disablePageReloadApprovalCheck()
         navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
       })
-      addRecentFile({
-        fileId: doc.id,
+      addRecentFileEntry({
+        id: doc.id,
+        source: 'google-drive',
         name: doc.name,
         mimeType: doc.mimeType || '',
         lastModifiedUtc: doc.lastModifiedUtc || null,
         connectionId: connection.id,
+        fileId: doc.id,
       })
       setPendingModelNameUpdate(doc.id)
     } catch (err) {
@@ -103,16 +122,33 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    const onLoad = (filename) => {
-      // Use full reload when opening a new local file
+    const onLoad = (filename, lastModifiedUtc) => {
       disablePageReloadApprovalCheck()
       navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
+      addRecentFileEntry({
+        id: filename,
+        source: 'local',
+        name: filename,
+        lastModifiedUtc: lastModifiedUtc || null,
+      })
+      setPendingModelNameUpdate(filename)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
     } else {
       loadLocalFileFallback(onLoad, false)
     }
+    setIsDialogDisplayed(false)
+  }
+
+  const handleOpenLocalRecent = (entry) => {
+    disablePageReloadApprovalCheck()
+    navigateToModel(`${appPrefix}/v/new/${entry.name}`, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  const handleOpenGithubRecent = (entry) => {
+    navigateToModel(entry.sharePath, navigate)
     setIsDialogDisplayed(false)
   }
 
@@ -141,25 +177,22 @@ export default function OpenModelDialog({
           data-testid={`dialog-open-model-tabs-stack`}
         >
           { currentTab === 0 &&
-          <Stack data-testid='dialog-open-model-local' spacing={1}>
+          <Stack data-testid='dialog-open-model-local' spacing={1} sx={{width: '100%', maxWidth: '400px'}}>
+            <RecentFilesBrowseSection
+              files={localRecents}
+              onOpen={handleOpenLocalRecent}
+              onBrowse={openFile}
+              browseButtonLabel='Browse files...'
+              browseButtonTestId='button_open_file'
+            />
             {!isMobile &&
-                <>
-                  <Typography
-                    variant='caption'
-                  >
-                    Drag and Drop files into viewport to open
+                <Stack spacing={1} sx={{mt: 4}}>
+                  <Divider/>
+                  <Typography variant='caption' color='text.secondary'>
+                    You may also drag-and-drop models into the viewport
                   </Typography>
-                  <Typography
-                    variant='caption'
-                    sx={{textAlign: 'center', color: 'text.secondary'}}
-                  >
-                    — or —
-                  </Typography>
-                </>
+                </Stack>
             }
-            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
-               Browse files...
-            </Button>
           </Stack>
           }
           { currentTab === 1 &&
@@ -169,7 +202,11 @@ export default function OpenModelDialog({
           />
           }
           { currentTab === 2 &&
-          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
+          <Stack data-testid={`dialog-open-model-github`} spacing={1} sx={{width: '100%', maxWidth: '400px'}}>
+            <RecentFilesList
+              files={githubRecents}
+              onOpen={handleOpenGithubRecent}
+            />
             <TextField
               label='GitHub Model URL'
               value={name}

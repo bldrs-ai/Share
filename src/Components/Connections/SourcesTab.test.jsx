@@ -15,7 +15,7 @@ const onPickerReady = jest.fn()
 const mockConnection = {
   id: 'gdrive-test-1',
   providerId: 'google-drive',
-  label: 'Google Drive (test@example.com)',
+  label: 'test@example.com - GDrive',
   status: 'connected',
   auth0Connection: 'google-oauth2',
   createdAt: new Date().toISOString(),

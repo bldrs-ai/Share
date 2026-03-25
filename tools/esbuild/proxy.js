@@ -59,7 +59,10 @@ export function createProxyServer(host, port, useHttps = false) {
         }
 
         if (isCacheable(req.url)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000')
+          const cacheHeader = process.env.ESBUILD_WATCH === 'true' ?
+            'no-store' :
+            'public, max-age=31536000'
+          res.setHeader('Cache-Control', cacheHeader)
         }
       }
 

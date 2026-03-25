@@ -3,6 +3,7 @@ import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
 import useConnectionsInit from './connections/useConnectionsInit'
+import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './connections/persistence'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
@@ -103,6 +104,20 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
     setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
     setModelPath, setRepository, routeParams])
+
+  useEffect(() => {
+    if (!model?.name) {
+      return
+    }
+    if (modelPath?.kind === 'provider' && modelPath?.provider === 'google') {
+      updateRecentFileModelTitle(modelPath.fileId, model.name)
+    } else {
+      const fileId = consumePendingModelNameUpdate()
+      if (fileId) {
+        updateRecentFileModelTitle(fileId, model.name)
+      }
+    }
+  }, [model?.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (
