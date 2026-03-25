@@ -369,10 +369,12 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
  * @param {string} pathWithFileName - The path including the file name on GitHub.
  * @param {Function} setSnackMessage - Function to set a snack message displayed to the user.
  */
+let snackTimeout = null
 function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
   setSnackMessage(MSG_SAVE_SUCCESS)
   const pauseTimeMs = 5000
-  setTimeout(() => setSnackMessage(null), pauseTimeMs)
+  clearTimeout(snackTimeout)
+  snackTimeout = setTimeout(() => setSnackMessage(null), pauseTimeMs)
 
   const pathLeadingSlash = `/${ pathWithFileName}`
 
@@ -432,7 +434,8 @@ async function fileSave(
           } else {
             setSnackMessage(MSG_ERROR_OPFS)
             const pauseTimeMs = 5000
-            setTimeout(() => setSnackMessage(null), pauseTimeMs)
+            clearTimeout(snackTimeout)
+            snackTimeout = setTimeout(() => setSnackMessage(null), pauseTimeMs)
           }
         } else {
           redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
@@ -440,7 +443,8 @@ async function fileSave(
       } else {
         setSnackMessage(MSG_ERROR_GITHUB)
         const pauseTimeMs = 5000
-        setTimeout(() => setSnackMessage(null), pauseTimeMs)
+        clearTimeout(snackTimeout)
+        snackTimeout = setTimeout(() => setSnackMessage(null), pauseTimeMs)
       }
     } catch (error) {
       setSnackMessage(error.message || MSG_ERROR_GITHUB)

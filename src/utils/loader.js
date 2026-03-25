@@ -20,10 +20,11 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
     'change',
     (event) => {
       debug().log('loader#loadLocalFile#event:', event)
-      let tmpUrl = URL.createObjectURL(event.target.files[0])
-      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-      const parts = tmpUrl.split('/')
-      tmpUrl = parts[parts.length - 1]
+      const objectUrl = URL.createObjectURL(event.target.files[0])
+      debug().log('loader#loadLocalFile#event: url: ', objectUrl)
+      const parts = objectUrl.split('/')
+      const tmpUrl = parts[parts.length - 1]
+      URL.revokeObjectURL(objectUrl)
       if (onLoad) {
         onLoad(tmpUrl)
       }
@@ -59,10 +60,10 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
     'change',
     (event) => {
       debug().log('loader#loadLocalFile#event:', event)
-      const tmpUrl = URL.createObjectURL(event.target.files[0])
-      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+      const objectUrl = URL.createObjectURL(event.target.files[0])
+      debug().log('loader#loadLocalFile#event: url: ', objectUrl)
       // Post message to the worker to handle the file
-      const parts = tmpUrl.split('/')
+      const parts = objectUrl.split('/')
       const fileNametmpUrl = parts[parts.length - 1]
       if (!testingDisableWebWorker) {
         // Listener for messages from the worker
@@ -88,10 +89,11 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
           throw new Error('Cannot extract filetype from filename')
         }
         const ext = dotParts[dotParts.length - 1]
-        opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
+        opfsWriteModel(objectUrl, filename, `${fileNametmpUrl}.${ext}`)
       } else {
         onLoad(fileNametmpUrl)
       }
+      URL.revokeObjectURL(objectUrl)
     },
     false,
   )
@@ -112,9 +114,10 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
  */
 export function saveDnDFileToOpfsFallback(file, callback) {
   assertDefined(file, callback)
-  let tmpUrl = URL.createObjectURL(file)
-  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', tmpUrl)
-  const parts = tmpUrl.split('/')
-  tmpUrl = parts[parts.length - 1]
+  const objectUrl = URL.createObjectURL(file)
+  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', objectUrl)
+  const parts = objectUrl.split('/')
+  const tmpUrl = parts[parts.length - 1]
+  URL.revokeObjectURL(objectUrl)
   callback(tmpUrl)
 }

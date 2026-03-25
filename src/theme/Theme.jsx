@@ -110,6 +110,9 @@ function loadTheme(mode, setMode, themeChangeListeners, originalMode) {
     addThemeChangeListener: (onChangeCb) => {
       themeChangeListeners[onChangeCb] = onChangeCb
     },
+    removeThemeChangeListener: (onChangeCb) => {
+      delete themeChangeListeners[onChangeCb]
+    },
   }
   return createTheme(theme)
 }

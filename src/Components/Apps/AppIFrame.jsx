@@ -23,12 +23,13 @@ export default function AppIFrame({itemJson}) {
       channelRef.current.dispose()
       channelRef.current = null
     }
-    if (elt) {
-      elt.addEventListener('load', () => {
-        if (channelRef.current) channelRef.current.dispose()
-        channelRef.current = new IFrameCommunicationChannel(elt)
-      })
+    if (!elt) {
+      return
     }
+    elt.addEventListener('load', () => {
+      if (channelRef.current) channelRef.current.dispose()
+      channelRef.current = new IFrameCommunicationChannel(elt)
+    })
   }, [])
 
   return (
