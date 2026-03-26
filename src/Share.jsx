@@ -3,6 +3,7 @@ import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
 import useConnectionsInit from './connections/useConnectionsInit'
+import useGithubLastModified from './connections/useGithubLastModified'
 import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './connections/persistence'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
@@ -35,6 +36,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   // Hydrate persisted Connections & Sources from localStorage
   useConnectionsInit()
+  useGithubLastModified(modelPath, routeParams['branch'])
 
   useEffect(() => {
     if (isAppsEnabled && !widgetApiRef.current) {

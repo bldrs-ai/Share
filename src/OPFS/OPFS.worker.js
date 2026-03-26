@@ -232,10 +232,11 @@ export async function fetchLatestCommitHash(baseURL, owner, repo, filePath, acce
     throw new Error('No commits found for the specified file.')
   }
 
-  const latestCommitHash = data[0].sha
+  const latestCommit = data[0]
+  const latestCommitHash = latestCommit.sha
   // eslint-disable-next-line no-console
   console.log(`The latest commit hash for the file is: ${latestCommitHash}`)
-  return latestCommitHash
+  return {hash: latestCommitHash, date: new Date(latestCommit.commit.author.date).getTime()}
 }
 
 
@@ -735,6 +736,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
 export async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
   let _etag = null
   let commitHash = null
+  let lastModifiedGithub = null
   let cleanEtag = null
   let modelDirectoryHandle = null
   let modelBlobFileHandle = null
@@ -757,6 +759,9 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
     if (clonedCached.headers.get('commithash')) {
       commitHash = clonedCached.headers.get('commithash')
+    }
+    if (clonedCached.headers.get('lastmodifiedgithub')) {
+      lastModifiedGithub = parseInt(clonedCached.headers.get('lastmodifiedgithub'), 10)
     }
   }
 
@@ -784,13 +789,14 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         // Display model
         const blobFile = await modelBlobFileHandle.getFile()
 
-        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
+        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile, lastModifiedGithub})
 
         if (commitHash !== null) {
           return
         }
         // get commit hash
-        const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+        const {hash: _commitHash, date: _commitDate} =
+          await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
           const pathSegments = safePathSplit(originalFilePath)
@@ -801,10 +807,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
           if (newResult !== null) {
             const mockResponse = generateMockResponse(shaHash)
             // Update cache with new data
-            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
+            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash, _commitDate)
             const updatedBlobFile = await newResult.getFile()
 
-            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
           }
         }
       } else {
@@ -819,7 +825,8 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
           await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
           // get commit hash
-          const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+          const {hash: _commitHash, date: _commitDate} =
+          await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
           if (_commitHash !== null) {
             const pathSegments = safePathSplit(originalFilePath)
@@ -830,10 +837,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
             if (newResult !== null) {
               // Update cache with new data
               const clonedResponse = generateMockResponse(shaHash)
-              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
+              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash, _commitDate)
               const updatedBlobFile = await newResult.getFile()
 
-              self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+              self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
               return
             }
           }
@@ -859,13 +866,14 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         // Display model
         const blobFile = await modelBlobFileHandle.getFile()
 
-        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
+        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile, lastModifiedGithub})
 
         if (commitHash !== null) {
           return
         }
         // TODO: get commit hash
-        const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+        const {hash: _commitHash, date: _commitDate} =
+          await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
           const pathSegments = safePathSplit(originalFilePath)
@@ -875,10 +883,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
           if (newResult !== null) {
             // Update cache with new data
-            await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+            await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
             const updatedBlobFile = await newResult.getFile()
 
-            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
           }
         }
       } else {
@@ -896,7 +904,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
               self.postMessage({completed: true, event: 'download', file: blobFile})
 
               // TODO: get commit hash here
-              const _commitHash = await fetchLatestCommitHash(
+              const {hash: _commitHash, date: _commitDate} = await fetchLatestCommitHash(
                 GITHUB_BASE_URL_UNAUTHENTICATED,
                 owner,
                 repo,
@@ -912,10 +920,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
                 if (newResult !== null) {
                   // Update cache with new data
-                  await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+                  await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
                   const updatedBlobFile = await newResult.getFile()
 
-                  self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+                  self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
                 }
               }
             }
@@ -975,7 +983,8 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
   await CacheModule.updateCacheRaw(cacheKey, clonedResponse, null)
 
   // TODO: get commit hash
-  const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+  const {hash: _commitHash, date: _commitDate} =
+    await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
 
   if (_commitHash !== null) {
     const pathSegments = safePathSplit(originalFilePath)
@@ -985,10 +994,10 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
     if (newResult !== null) {
       // Update cache with new data
-      await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash)
+      await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
       const updatedBlobFile = await newResult.getFile()
 
-      self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
+      self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
     }
   }
 }

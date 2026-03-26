@@ -257,6 +257,20 @@ export function updateRecentFileModelTitle(id: string, modelTitle: string): void
 
 
 /**
+ * Update the lastModifiedUtc of a recent entry by id.
+ * No-op if no matching entry exists.
+ *
+ * @param id The entry id to update.
+ * @param lastModifiedUtc Milliseconds since epoch.
+ */
+export function updateRecentFileLastModified(id: string, lastModifiedUtc: number): void {
+  const store = loadStore()
+  store.files = store.files.map((f) => f.id === id ? {...f, lastModifiedUtc} : f)
+  saveStore(store)
+}
+
+
+/**
  * Store the id of the file currently being opened so its model name can be
  * back-filled after the IFC loads.
  *

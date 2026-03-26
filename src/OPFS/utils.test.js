@@ -233,6 +233,72 @@ describe('OPFS Test Suite', () => {
         receivedLength: 50,
       })
     })
+
+    it('calls onLastModifiedGithub when exists event carries the date', async () => {
+      const EPOCH_MS = 1663842627000
+      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {completed: true, event: 'exists', file: mockFile, lastModifiedGithub: EPOCH_MS}})
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const onLastModifiedGithub = jest.fn()
+      await downloadModel(
+        'objectUrl', 'shaHash', 'originalFilePath', 'accessToken',
+        'owner', 'repo', 'branch', jest.fn(), jest.fn(), onLastModifiedGithub,
+      )
+
+      expect(onLastModifiedGithub).toHaveBeenCalledWith(EPOCH_MS)
+    })
+
+    it('calls onLastModifiedGithub from deferred renamed event', async () => {
+      const EPOCH_MS = 1663842627000
+      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {completed: true, event: 'download', file: mockFile}})
+            handler({data: {completed: true, event: 'renamed', file: mockFile, lastModifiedGithub: EPOCH_MS}})
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const onLastModifiedGithub = jest.fn()
+      await downloadModel(
+        'objectUrl', 'shaHash', 'originalFilePath', 'accessToken',
+        'owner', 'repo', 'branch', jest.fn(), jest.fn(), onLastModifiedGithub,
+      )
+
+      expect(onLastModifiedGithub).toHaveBeenCalledWith(EPOCH_MS)
+    })
+
+    it('does not call onLastModifiedGithub when no date in message', async () => {
+      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {completed: true, event: 'exists', file: mockFile}})
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const onLastModifiedGithub = jest.fn()
+      await downloadModel(
+        'objectUrl', 'shaHash', 'originalFilePath', 'accessToken',
+        'owner', 'repo', 'branch', jest.fn(), jest.fn(), onLastModifiedGithub,
+      )
+
+      expect(onLastModifiedGithub).not.toHaveBeenCalled()
+    })
   })
 
   describe('doesFileExistInOPFS', () => {

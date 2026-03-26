@@ -488,3 +488,46 @@ test('renameFileInOPFS falls back to copy+delete when native move throws', async
   await expect(rootDir.getFileHandle('boom.txt', {create: false})).rejects.toThrow('not found')
   /* eslint-enable require-await */
 })
+
+// ------------------------------------------------------------
+// fetchLatestCommitHash tests
+// ------------------------------------------------------------
+
+test('fetchLatestCommitHash returns hash and date on success', async () => {
+  const ISO_DATE = '2022-09-22T10:30:27Z'
+  const commits = [{sha: 'abc123', commit: {author: {date: ISO_DATE}}}]
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: jest.fn().mockResolvedValue(commits),
+  })
+
+  const result = await worker.fetchLatestCommitHash(
+    'https://api.github.com', 'owner', 'repo', 'model.ifc', '', 'main',
+  )
+
+  expect(result.hash).toBe('abc123')
+  expect(result.date).toBe(new Date(ISO_DATE).getTime())
+})
+
+test('fetchLatestCommitHash throws when response is not ok', async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: false,
+    statusText: 'Not Found',
+    json: jest.fn().mockResolvedValue([]),
+  })
+
+  await expect(
+    worker.fetchLatestCommitHash('https://api.github.com', 'owner', 'repo', 'model.ifc', '', 'main'),
+  ).rejects.toThrow('Failed to fetch commits')
+})
+
+test('fetchLatestCommitHash throws when no commits returned', async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: jest.fn().mockResolvedValue([]),
+  })
+
+  await expect(
+    worker.fetchLatestCommitHash('https://api.github.com', 'owner', 'repo', 'model.ifc', '', 'main'),
+  ).rejects.toThrow('No commits found')
+})
