@@ -13,7 +13,7 @@ import Tabs from '../Tabs'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
+import {GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT, LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
 
@@ -74,7 +74,7 @@ export default function OpenModelDialog({
           justifyContent: 'center',
           alignItems: 'center',
         }}
-        data-testid={`dialog-open-model-tabs-stack`}
+        data-testid='dialog-open-model-tabs-stack'
       >
         { currentTab === 0 &&
           <Stack data-testid='dialog-open-model-local' spacing={1}>
@@ -99,9 +99,9 @@ export default function OpenModelDialog({
           </Stack>
         }
         { currentTab === 1 &&
-          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
+          <Stack data-testid='dialog-open-model-github' spacing={1}>
             <TextField
-              label='GitHub Model URL'
+              label={GITHUB_SEARCH_BAR_PLACEHOLDER_TEXT}
               value={name}
               onChange={(event) => {
                 const ghPath = event.target.value

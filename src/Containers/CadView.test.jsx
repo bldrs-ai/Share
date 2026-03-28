@@ -3,15 +3,16 @@ import React from 'react'
 import * as reactRouting from 'react-router-dom'
 import * as Ifc from '@bldrs-ai/ifclib'
 import {render, renderHook, act, fireEvent, screen, waitFor, within} from '@testing-library/react'
-import * as Filetype from '../Filetype'
-import ShareMock from '../ShareMock'
+import {OutOfMemoryError} from '../Alerts'
 import {testId as aboutControlTestId} from '../Components/About/AboutControl'
-import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
+import * as Filetype from '../Filetype'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import ShareMock from '../ShareMock'
+import * as Loader from '../loader/Loader'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
-import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import {actAsyncFlush} from '../utils/tests'
 import CadView from './CadView'
@@ -355,8 +356,7 @@ describe('CadView', () => {
 
   it('sets OOM alert object when loader throws out-of-memory error', async () => {
     // Spy on load (indirectly invoked through loadModel -> load) to throw OOM
-    const oomErr = new Error('Out of memory: wasm memory allocate failed')
-    oomErr.isOutOfMemory = true
+    const oomErr = new OutOfMemoryError()
     jest.spyOn(Loader, 'load').mockImplementation(() => {
       throw oomErr
     })
@@ -372,8 +372,7 @@ describe('CadView', () => {
     await waitFor(() => {
       const alert = result.current.alert
       expect(alert).toBeTruthy()
-      expect(alert.type).toBe('oom')
-      expect(alert.message.toLowerCase()).toContain('out of memory')
+      expect(alert).toBeInstanceOf(OutOfMemoryError)
     })
     expect(consoleErrorSpy).toHaveBeenCalledWith(oomErr)
     expect(captureExceptionSpy).toHaveBeenCalledWith(oomErr)

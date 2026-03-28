@@ -128,7 +128,7 @@ export default function GitHubFileBrowser({
     }
   }
   return (
-    <Stack data-testid={'stack_gitHub_access_controls'}>
+    <Stack data-testid='stack_gitHub_access_controls'>
       <Stack>
         <Typography sx={{marginBottom: '10px'}}>Browse files on Github</Typography>
         <Selector
