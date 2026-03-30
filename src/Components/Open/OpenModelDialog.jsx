@@ -120,6 +120,7 @@ export default function OpenModelDialog({
   const handlePickerCancel = () => {
     setPickerToken(null)
     setPickerConnection(null)
+    setIsDialogDisplayed(true)
   }
 
   const openFile = () => {

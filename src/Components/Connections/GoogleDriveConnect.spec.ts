@@ -55,9 +55,9 @@ describe('Google Drive connection', () => {
 
     // Tab transitions from empty state to connected state
     await expect(page.getByTestId('sources-tab')).toBeVisible()
-    // A connection card and the Open File action should appear
+    // A connection card and the Browse button should appear
     await expect(page.locator('[data-testid^="connection-card-"]')).toBeVisible()
-    await expect(page.getByText('Open File')).toBeVisible()
+    await expect(page.locator('[data-testid^="button-browse-drive-"]')).toBeVisible()
   })
 
   describe('with a connected Google Drive account', () => {
@@ -66,15 +66,15 @@ describe('Google Drive connection', () => {
       await expect(page.getByTestId('sources-tab')).toBeVisible()
     })
 
-    test('clicking Open File opens the Google Picker', async ({page}) => {
-      await page.getByText('Open File').click()
+    test('clicking Browse opens the Google Picker', async ({page}) => {
+      await page.locator('[data-testid^="button-browse-drive-"]').click()
 
       // The fake picker should be built and stored at window.__lastPicker
       await page.waitForFunction(() => !!window.__lastPicker)
     })
 
     test('selecting a file in the picker navigates to the model viewer', async ({page}) => {
-      await page.getByText('Open File').click()
+      await page.locator('[data-testid^="button-browse-drive-"]').click()
       await page.waitForFunction(() => !!window.__lastPicker)
 
       // Simulate a file selection via the fake picker callback
@@ -99,7 +99,7 @@ describe('Google Drive connection', () => {
     })
 
     test('cancelling the picker keeps the dialog open', async ({page}) => {
-      await page.getByText('Open File').click()
+      await page.locator('[data-testid^="button-browse-drive-"]').click()
       await page.waitForFunction(() => !!window.__lastPicker)
 
       // Simulate picker cancellation
