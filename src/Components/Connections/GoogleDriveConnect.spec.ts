@@ -24,7 +24,7 @@ const {beforeEach, describe} = test
  */
 async function openSourcesTab(page: Page) {
   await page.getByTestId('control-button-open').click()
-  await page.getByRole('tab', {name: 'Sources'}).click()
+  await page.getByRole('tab', {name: 'Google'}).click()
 }
 
 
