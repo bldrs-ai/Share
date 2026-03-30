@@ -1,39 +1,23 @@
-import React, {useState} from 'react'
-import {Box, IconButton, Menu, MenuItem, Stack, Typography} from '@mui/material'
-import {Settings as SettingsIcon} from '@mui/icons-material'
+import React from 'react'
+import {Box, Divider} from '@mui/material'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
 import {saveConnections, saveSources} from '../../connections/persistence'
-
-
-const FONT_WEIGHT_NORMAL = 400
-const FONT_WEIGHT_BOLD = 600
+import AccountFooter from './AccountFooter'
 
 
 /**
- * Displays a single Connection with a settings menu (remove action).
+ * Displays a connection's account footer with a Remove action.
  *
  * @property {object} connection The Connection object
- * @property {boolean} [subtle] When true, renders with subdued grey caption styling
  * @return {React.ReactElement}
  */
-export default function ConnectionCard({connection, subtle = false}) {
+export default function ConnectionCard({connection}) {
   const removeConnection = useStore((state) => state.removeConnection)
   const connections = useStore((state) => state.connections)
   const sources = useStore((state) => state.sources)
 
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null)
-
-  const handleOpenMenu = (event) => {
-    setMenuAnchorEl(event.currentTarget)
-  }
-
-  const handleCloseMenu = () => {
-    setMenuAnchorEl(null)
-  }
-
   const handleRemove = async () => {
-    handleCloseMenu()
     const provider = getProvider(connection.providerId)
     if (provider) {
       try {
@@ -50,44 +34,14 @@ export default function ConnectionCard({connection, subtle = false}) {
   }
 
   return (
-    <Stack
-      direction='row'
-      alignItems='center'
-      spacing={1}
-      sx={{width: '100%'}}
-      data-testid={`connection-card-${connection.id}`}
-    >
-      <Box sx={{flex: 1, minWidth: 0}}>
-        <Typography
-          variant={subtle ? 'caption' : 'subtitle1'}
-          fontWeight={subtle ? FONT_WEIGHT_NORMAL : FONT_WEIGHT_BOLD}
-          color={subtle ? 'text.secondary' : 'text.primary'}
-          noWrap
-          sx={{textAlign: 'left'}}
-        >
-          {connection.label}
-        </Typography>
-      </Box>
-      <IconButton
-        size='small'
-        onClick={handleOpenMenu}
-        title='Settings'
-        data-testid={`button-settings-${connection.id}`}
-      >
-        <SettingsIcon fontSize='small'/>
-      </IconButton>
-      <Menu
-        anchorEl={menuAnchorEl}
-        open={Boolean(menuAnchorEl)}
-        onClose={handleCloseMenu}
-      >
-        <MenuItem
-          onClick={handleRemove}
-          data-testid={`menu-item-remove-${connection.id}`}
-        >
-          Remove
-        </MenuItem>
-      </Menu>
-    </Stack>
+    <Box sx={{mt: 4, opacity: 0.7}}>
+      <Divider/>
+      <AccountFooter
+        label={connection.label}
+        testId={`connection-card-${connection.id}`}
+        settingsButtonTestId={`button-settings-${connection.id}`}
+        menuItems={[{label: 'Remove', onClick: handleRemove, testId: `menu-item-remove-${connection.id}`}]}
+      />
+    </Box>
   )
 }

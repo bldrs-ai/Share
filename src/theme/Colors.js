@@ -21,7 +21,7 @@ export function getColors() {
     blue: {
       lightest: '#ccccff',
       light: '#ccccff',
-      medium: '#aaaaff',
+      medium: '#a0a0ff',
       dark: '#8888ff',
       darkest: '#4444ff',
     },

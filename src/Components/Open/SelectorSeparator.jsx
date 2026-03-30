@@ -4,11 +4,11 @@ import {disablePageReloadApprovalCheck} from '../../utils/event'
 
 
 /**
- * @property {Function} setIsDialogDisplayed callback
  * @property {string} label component title
- * @property {boolean} selected selected componet control the selected value of the component
+ * @property {boolean} selected selected component control the selected value of the component
  * @property {Function} setSelected callback to select the element
- * @property {Array} list list of eleemnt to populate select options
+ * @property {Array} list list of elements to populate select options
+ * @property {string} [displayValue] When provided, always shown as the selected display value (e.g. current path)
  * @property {any} props For prop drilling to the TextField
  * @return {ReactElement}
  */
@@ -17,6 +17,7 @@ export default function SelectorSeparator({
   selected,
   setSelected,
   list,
+  displayValue,
   ...props
 }) {
   const handleSelect = (e) => {
@@ -25,13 +26,19 @@ export default function SelectorSeparator({
   }
   return (
     <TextField
-      sx={{width: '260px', marginBottom: '.5em'}}
+      sx={{
+        'width': '100%',
+        'marginBottom': '.5em',
+        '& .MuiSelect-select': {textAlign: 'left'},
+      }}
       value={selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
       label={label}
       select
       size='small'
+      SelectProps={displayValue ? {displayEmpty: true, renderValue: () => displayValue} : undefined}
+      InputLabelProps={displayValue ? {shrink: true} : undefined}
       {...props}
     >
       {list.map((listMember, i) => {

@@ -14,7 +14,6 @@ export const day = {
 
   // The 3d canvas and ControlButtons on it.
   primary: {
-    // TODO(pablo): main controls both primary action buttons and link text in NoteContent.
     main: colors.grey.medium,
     light: colors.grey.lightest,
     dark: colors.grey.mediumlight,
@@ -22,6 +21,14 @@ export const day = {
     sceneBackground: '#ffffff',
     sceneHighlight: '#00F0FF',
     link: colors.blue.dark,
+  },
+
+  // Primary action buttons (Connect, Browse, Open)
+  accent: {
+    main: colors.blue.darkest,
+    light: colors.blue.dark,
+    dark: '#2222cc',
+    contrastText: '#ffffff',
   },
 
   // Side drawer, dialogs
@@ -76,6 +83,14 @@ export const night = {
     sceneBackground: '#000000',
     sceneHighlight: '#00F0FF',
     link: colors.blue.light,
+  },
+
+  // Primary action buttons (Connect, Browse, Open)
+  accent: {
+    main: colors.blue.medium,
+    light: colors.blue.light,
+    dark: colors.blue.dark,
+    contrastText: '#000000',
   },
 
   // Side drawer, dialogs

@@ -15,15 +15,29 @@ import SelectorSeparator from './SelectorSeparator'
 
 
 /**
+ * Resolve a value that may be a list index (number) or a direct string (from Other... mode).
+ *
+ * @param {number|string} value
+ * @param {Array<string>} list
+ * @return {string}
+ */
+function resolveValue(value, list) {
+  return typeof value === 'string' ? value : list[value]
+}
+
+
+/**
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Array<string>} orgNamesArr List of org names for the current user.
  * @property {Function} setIsDialogDisplayed callback
+ * @property {Function} onCancel Called when user clicks Cancel to go back
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
   navigate,
   orgNamesArr,
   setIsDialogDisplayed,
+  onCancel,
 }) {
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
@@ -37,19 +51,20 @@ export default function GitHubFileBrowser({
   const [branchesArr, setBranchesArr] = useState([''])
   const [selectedBranchName, setSelectedBranchName] = useState('')
   const accessToken = useStore((state) => state.accessToken)
-  const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
-  const orgName = orgNamesArr[selectedOrgName]
-  const repoName = repoNamesArr[selectedRepoName]
+  const orgNamesArrWithAt = orgNamesArr.map((name) => `@${name}`)
+  const orgName = resolveValue(selectedOrgName, orgNamesArr)
+  const repoName = resolveValue(selectedRepoName, repoNamesArr)
   const fileName = filesArr[selectedFileIndex]
-  const branchName = branchesArr[selectedBranchName]
+  const branchName = resolveValue(selectedBranchName, branchesArr)
 
-  const selectOrg = async (org) => {
-    setSelectedOrgName(org)
+  const selectOrg = async (orgOrIndex) => {
+    setSelectedOrgName(orgOrIndex)
+    const resolvedOrgName = resolveValue(orgOrIndex, orgNamesArr)
     let repos
-    if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(accessToken, orgNamesArr[org])
+    if (resolvedOrgName === user.nickname) {
+      repos = await getUserRepositories(accessToken, resolvedOrgName)
     } else {
-      repos = await getRepositories(orgNamesArr[org], accessToken)
+      repos = await getRepositories(resolvedOrgName, accessToken)
     }
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
@@ -60,11 +75,11 @@ export default function GitHubFileBrowser({
     setSelectedRepoName('')
   }
 
-  const selectRepo = async (repo) => {
-    setSelectedRepoName(repo)
-    const owner = orgNamesArr[selectedOrgName]
-    const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
-    const repository = {orgName: owner, name: repoNamesArr[repo]}
+  const selectRepo = async (repoOrIndex) => {
+    setSelectedRepoName(repoOrIndex)
+    const resolvedRepoName = resolveValue(repoOrIndex, repoNamesArr)
+    const {files, directories} = await getFilesAndFolders(resolvedRepoName, orgName, '/', accessToken)
+    const repository = {orgName, name: resolvedRepoName}
     const branches = await getBranches(repository, accessToken)
     const branchNames = branches.map((branch) => branch.name)
     setBranchesArr(branchNames)
@@ -74,51 +89,79 @@ export default function GitHubFileBrowser({
     const directoryNames = directories.map((directory) => directory.name)
 
     setFilesArr(fileNames)
-    const foldersArrWithSeparator = [
-      ...directoryNames,
-    ]
-    setFoldersArr([...foldersArrWithSeparator])
+    setFoldersArr([...directoryNames])
     setCurrentPath('')
     setSelectedFolderName('')
     setSelectedFileIndex('')
   }
 
   const selectFolder = async (folderIndex) => {
-    const owner = orgNamesArr[selectedOrgName]
-
-    // Get the selected folder name using the index
     const selectedFolderName_ = foldersArr[folderIndex]
 
     let newPath
     if (selectedFolderName_ === '[Parent Directory]') {
-      // Move one directory up
       const pathSegments = currentPath.split('/').filter(Boolean)
       pathSegments.pop()
       newPath = pathSegments.join('/')
     } else {
-      // Navigate into a subfolder or stay at the root
       newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/')
     }
 
-    setSelectedFolderName('none')
+    setSelectedFolderName('')
     setCurrentPath(newPath)
 
-    const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
+    const {files, directories} = await getFilesAndFolders(repoName, orgName, newPath, accessToken)
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
 
-    // Adjust navigation options based on the current level
     const navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
 
     setFilesArr(fileNames)
-    const foldersArrWithSeparator = [
-      ...navigationOptions, // All the folders
-    ]
-    setFoldersArr(foldersArrWithSeparator)
+    setFoldersArr(navigationOptions)
   }
 
-  const selectBranch = (branchIdx) => {
-    setSelectedBranchName(branchIdx)
+  const selectBranch = (branchOrIndex) => {
+    setSelectedBranchName(branchOrIndex)
+  }
+
+  const validateOrg = async (name) => {
+    if (!name.trim()) {
+      return false
+    }
+    try {
+      if (name === user?.nickname) {
+        await getUserRepositories(accessToken, name)
+      } else {
+        await getRepositories(name, accessToken)
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const validateRepo = async (name) => {
+    if (!name.trim() || !orgName) {
+      return false
+    }
+    try {
+      await getFilesAndFolders(name, orgName, '/', accessToken)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const validateBranch = async (name) => {
+    if (!name.trim() || !orgName || !repoName) {
+      return false
+    }
+    try {
+      const branches = await getBranches({orgName, name: repoName}, accessToken)
+      return branches.some((b) => b.name === name)
+    } catch {
+      return false
+    }
   }
 
   const navigateToFile = () => {
@@ -131,20 +174,23 @@ export default function GitHubFileBrowser({
         source: 'github',
         name: fileName,
         sharePath,
+        lastModifiedUtc: null,
       })
       setPendingModelNameUpdate(sharePath)
       setIsDialogDisplayed(false)
     }
   }
+
   return (
-    <Stack data-testid={'stack_gitHub_access_controls'}>
-      <Stack>
+    <Stack alignItems='center' data-testid='stack_gitHub_access_controls'>
+      <Stack alignItems='center' sx={{width: '100%'}}>
         <Typography sx={{marginBottom: '10px'}}>Browse files on Github</Typography>
         <Selector
           label='Organization'
           list={orgNamesArrWithAt}
           selected={selectedOrgName}
           setSelected={selectOrg}
+          validate={validateOrg}
           data-testid='openOrganization'
         />
         <Selector
@@ -152,6 +198,7 @@ export default function GitHubFileBrowser({
           list={repoNamesArr}
           selected={selectedRepoName}
           setSelected={selectRepo}
+          validate={validateRepo}
           data-testid='openRepository'
         />
         <Selector
@@ -159,14 +206,15 @@ export default function GitHubFileBrowser({
           list={branchesArr}
           selected={selectedBranchName}
           setSelected={selectBranch}
+          validate={validateBranch}
           data-testid='openBranch'
         />
         <SelectorSeparator
-          label={(currentPath === '') ? 'Folder' :
-            `Folder: ${currentPath}`}
+          label='Folder'
           list={foldersArr}
           selected={selectedFolderName}
           setSelected={selectFolder}
+          displayValue={currentPath || undefined}
           data-testid='saveFolder'
         />
         <Selector
@@ -177,14 +225,33 @@ export default function GitHubFileBrowser({
           data-testid='openFile'
         />
       </Stack>
-      <Button
-        onClick={navigateToFile}
-        disabled={selectedFileIndex === ''}
-        variant='contained'
-        data-testid='button-openfromgithub'
-      >
-        Open from Github
-      </Button>
+      <Stack direction='row' spacing={1} sx={{mt: 1}}>
+        <Button
+          onClick={navigateToFile}
+          disabled={selectedFileIndex === ''}
+          variant='contained'
+          color='accent'
+          sx={{
+            'textTransform': 'none',
+            '&.Mui-disabled': {
+              backgroundColor: 'accent.main',
+              color: 'accent.contrastText',
+              opacity: 0.5,
+            },
+          }}
+          data-testid='button-openfromgithub'
+        >
+          Open
+        </Button>
+        <Button
+          onClick={onCancel}
+          variant='outlined'
+          sx={{textTransform: 'none'}}
+          data-testid='button-cancel-github'
+        >
+          Cancel
+        </Button>
+      </Stack>
     </Stack>
   )
 }

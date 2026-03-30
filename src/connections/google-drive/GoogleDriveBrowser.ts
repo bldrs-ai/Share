@@ -31,6 +31,7 @@ const FILE_FIELDS = 'nextPageToken,files(id,name,mimeType,size,modifiedTime,thum
 export const googleDriveBrowser: SourceBrowser = {
   providerId: 'google-drive',
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   pickLocation(_connection: Connection): Promise<SourceLocation | null> {
     // Location picking is handled by the GoogleDrivePickerDialog React component.
     // This method exists to satisfy the interface; UI-driven picking is preferred.

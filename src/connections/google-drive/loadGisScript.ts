@@ -11,7 +11,11 @@ let gisLoadPromise: Promise<void> | null = null
 let pickerLoadPromise: Promise<void> | null = null
 
 
-/** Load the Google Identity Services script (for OAuth token acquisition). */
+/**
+ * Load the Google Identity Services script (for OAuth token acquisition).
+ *
+ * @return A promise that resolves when the script is loaded.
+ */
 export function loadGisScript(): Promise<void> {
   if (gisLoadPromise) {
     return gisLoadPromise
@@ -28,7 +32,11 @@ export function loadGisScript(): Promise<void> {
 }
 
 
-/** Load the Google Picker API script. */
+/**
+ * Load the Google Picker API script.
+ *
+ * @return A promise that resolves when the script is loaded.
+ */
 export function loadPickerScript(): Promise<void> {
   if (pickerLoadPromise) {
     return pickerLoadPromise

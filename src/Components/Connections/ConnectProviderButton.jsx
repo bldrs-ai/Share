@@ -12,9 +12,10 @@ import {saveConnections} from '../../connections/persistence'
  *
  * @property {string} providerId Provider identifier (e.g. 'google-drive')
  * @property {string} label Button label (e.g. 'Connect Google Drive')
+ * @property {React.ReactElement} [icon] Icon to show; defaults to CloudIcon
  * @return {React.ReactElement}
  */
-export default function ConnectProviderButton({providerId, label}) {
+export default function ConnectProviderButton({providerId, label, icon, color = 'accent'}) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState(null)
   const addConnection = useStore((state) => state.addConnection)
@@ -47,8 +48,9 @@ export default function ConnectProviderButton({providerId, label}) {
       <Button
         onClick={handleConnect}
         disabled={isConnecting}
-        variant='outlined'
-        startIcon={isConnecting ? <CircularProgress size={16}/> : <CloudIcon/>}
+        variant='contained'
+        color={color}
+        startIcon={isConnecting ? <CircularProgress size={16}/> : (icon || <CloudIcon/>)}
         data-testid={`button-connect-${providerId}`}
         sx={{textTransform: 'none'}}
       >
