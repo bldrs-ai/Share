@@ -234,6 +234,7 @@ export function getComponentOverrides(palette, typography) {
     MuiTab: {
       styleOverrides: {
         root: {
+          'textTransform': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             color: palette.secondary.contrastText,
             fontWeight: 'bold',

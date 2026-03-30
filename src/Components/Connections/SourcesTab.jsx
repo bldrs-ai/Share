@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
-import {Box, Divider, Stack, Typography} from '@mui/material'
+import {Divider, Stack, Typography} from '@mui/material'
+import {Google as GoogleIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
 import {loadAllRecentFiles} from '../../connections/persistence'
@@ -50,6 +51,7 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
         <ConnectProviderButton
           providerId='google-drive'
           label='Connect Google Drive'
+          icon={<GoogleIcon/>}
         />
       </Stack>
     )
@@ -84,10 +86,7 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
               </Typography>
             )}
 
-            <Box sx={{mt: 4, opacity: 0.7}}>
-              <Divider/>
-              <ConnectionCard connection={connection} subtle/>
-            </Box>
+            <ConnectionCard connection={connection}/>
           </Stack>
         )
       })}
@@ -96,6 +95,7 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
       <ConnectProviderButton
         providerId='google-drive'
         label='Add another Google account'
+        color='primary'
       />
     </Stack>
   )

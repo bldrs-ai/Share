@@ -3,6 +3,13 @@ import {expect, Page, test} from '@playwright/test'
 import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../../tests/e2e/utils'
 
 
+declare global {
+  interface Window {
+    __lastPicker: {_callback?: (data: {action: string, docs: object[]}) => void} | undefined
+  }
+}
+
+
 const GOOGLE_APIS_FAKE_PATH = path.resolve(process.cwd(), 'src/Components/Connections/googleApisFake.js')
 const TEST_FILE_ID = 'fake-drive-file-id-123'
 const TEST_FILE_NAME = 'test-model.ifc'
@@ -63,16 +70,16 @@ describe('Google Drive connection', () => {
       await page.getByText('Open File').click()
 
       // The fake picker should be built and stored at window.__lastPicker
-      await page.waitForFunction(() => !!(window as any).__lastPicker)
+      await page.waitForFunction(() => !!window.__lastPicker)
     })
 
     test('selecting a file in the picker navigates to the model viewer', async ({page}) => {
       await page.getByText('Open File').click()
-      await page.waitForFunction(() => !!(window as any).__lastPicker)
+      await page.waitForFunction(() => !!window.__lastPicker)
 
       // Simulate a file selection via the fake picker callback
       await page.evaluate(({fileId, fileName}) => {
-        const picker = (window as any).__lastPicker
+        const picker = window.__lastPicker
         if (picker?._callback) {
           picker._callback({
             action: 'PICKED',
@@ -93,11 +100,11 @@ describe('Google Drive connection', () => {
 
     test('cancelling the picker keeps the dialog open', async ({page}) => {
       await page.getByText('Open File').click()
-      await page.waitForFunction(() => !!(window as any).__lastPicker)
+      await page.waitForFunction(() => !!window.__lastPicker)
 
       // Simulate picker cancellation
       await page.evaluate(() => {
-        const picker = (window as any).__lastPicker
+        const picker = window.__lastPicker
         if (picker?._callback) {
           picker._callback({action: 'CANCEL', docs: []})
         }

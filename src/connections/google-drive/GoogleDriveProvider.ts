@@ -233,7 +233,11 @@ export const googleDriveProvider: ConnectionProvider = {
 }
 
 
-/** Fetch the authenticated user's email from Google's userinfo endpoint. */
+/**
+ * Fetch the authenticated user's email from Google's userinfo endpoint.
+ *
+ * @return The user's email or null on failure.
+ */
 async function fetchUserEmail(accessToken: string): Promise<string | null> {
   try {
     const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {

@@ -14,6 +14,7 @@ import RecentFilesList from './RecentFilesList'
  * @param {string} [props.browseButtonLabel]
  * @param {React.ReactElement} [props.browseButtonIcon]
  * @param {string} [props.browseButtonTestId]
+ * @param {boolean} [props.disabled]
  * @return {React.ReactElement}
  */
 export default function RecentFilesBrowseSection({
@@ -23,6 +24,7 @@ export default function RecentFilesBrowseSection({
   browseButtonLabel = 'Browse',
   browseButtonIcon = <SearchIcon/>,
   browseButtonTestId,
+  disabled = false,
 }) {
   return (
     <>
@@ -33,10 +35,12 @@ export default function RecentFilesBrowseSection({
       <Box sx={{display: 'flex', justifyContent: 'center'}}>
         <Button
           variant='contained'
+          color='accent'
           startIcon={browseButtonIcon}
           onClick={onBrowse}
           sx={{textTransform: 'none', m: '1em'}}
           data-testid={browseButtonTestId}
+          disabled={disabled}
         >
           {browseButtonLabel}
         </Button>
