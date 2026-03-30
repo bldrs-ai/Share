@@ -14,6 +14,7 @@ import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import Tabs from '../Tabs'
 import {useMock} from '../Profile/ProfileControl'
 import GitHubFileBrowser from './GitHubFileBrowser'
@@ -39,7 +40,10 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_SOURCES, LABEL_GITHUB, LABEL_SAMPLES]
+  const isGoogleDriveEnabled = useExistInFeature('googleDrive')
+  const tabLabels = isGoogleDriveEnabled ?
+    [LABEL_LOCAL, LABEL_SOURCES, LABEL_GITHUB, LABEL_SAMPLES] :
+    [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, loginWithRedirect, logout, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
@@ -192,7 +196,7 @@ export default function OpenModelDialog({
           }}
           data-testid={`dialog-open-model-tabs-stack`}
         >
-          { currentTab === 0 &&
+          { tabLabels[currentTab] === LABEL_LOCAL &&
           <Stack data-testid='dialog-open-model-local' spacing={1} sx={{width: '100%', maxWidth: '400px'}}>
             <RecentFilesBrowseSection
               files={localRecents}
@@ -211,13 +215,13 @@ export default function OpenModelDialog({
             }
           </Stack>
           }
-          { currentTab === 1 &&
+          { tabLabels[currentTab] === LABEL_SOURCES &&
           <SourcesTab
             onPickerReady={handlePickerReady}
             onOpenById={handleOpenById}
           />
           }
-          { currentTab === 2 && (
+          { tabLabels[currentTab] === LABEL_GITHUB && (
             showGithubBrowser ? (
               <Slide direction='left' in={showGithubBrowser} mountOnEnter>
                 <Stack
@@ -274,7 +278,7 @@ export default function OpenModelDialog({
               </Stack>
             )
           )}
-          { currentTab === 3 &&
+          { tabLabels[currentTab] === LABEL_SAMPLES &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}

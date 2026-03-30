@@ -53,7 +53,7 @@ function renderGithubTab(isAuthenticated = false, githubFiles = [], userOverride
   })
   loadRecentFilesBySource.mockImplementation((source) => source === 'github' ? githubFiles : [])
   act(() => {
-    useStore.getState().setCurrentTab(2)
+    useStore.getState().setCurrentTab(1)
   })
   render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
 }
