@@ -264,7 +264,7 @@ export default function CadView({
    */
   async function loadModel(routeResult) {
     const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
-    const filepath = isGoogleResult ? null : (routeResult.downloadUrl || routeResult.filepath)
+    const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
     const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     setIsModelLoading(true)
@@ -293,13 +293,16 @@ export default function CadView({
     try {
       if (isGoogleResult) {
         const connection = connections.find((c) => c.providerId === 'google-drive')
-        if (!connection) {
-          throw new Error('No Google Drive connection found. Please connect your Google Drive account.')
+        if (connection) {
+          // OAuth path: authenticated download for private files
+          const browser = getBrowser('google-drive')
+          const download = await browser.getFileDownload(connection, null, routeResult.fileId)
+          const blobUrl = URL.createObjectURL(download.blob)
+          loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+        } else {
+          // API key fallback: works for public files and route tests without a connection
+          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
-        const browser = getBrowser('google-drive')
-        const download = await browser.getFileDownload(connection, null, routeResult.fileId)
-        const blobUrl = URL.createObjectURL(download.blob)
-        loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
       } else {
         loadedModel = await load(filepath, viewer, onProgress,
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
