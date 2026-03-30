@@ -3,6 +3,7 @@ import {act, fireEvent, render, screen} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {loadRecentFilesBySource} from '../../connections/persistence'
+import {navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
 
@@ -10,10 +11,29 @@ import OpenModelDialog from './OpenModelDialog'
 jest.mock('../../Auth0/Auth0Proxy')
 jest.mock('../../connections/persistence')
 jest.mock('../../connections/google-drive/index', () => {})
+jest.mock('../../hooks/useExistInFeature', () => jest.fn().mockReturnValue(false))
 jest.mock('./GitHubFileBrowser', () => function MockGitHubFileBrowser({onCancel}) {
   return (
     <div data-testid='mock-github-browser'>
       <button data-testid='button-cancel-github' onClick={onCancel}>Cancel</button>
+    </div>
+  )
+})
+jest.mock('../Connections/SourcesTab', () => function MockSourcesTab({onOpenById, onPickerReady}) {
+  return (
+    <div data-testid='mock-sources-tab'>
+      <button
+        data-testid='button-open-by-id'
+        onClick={() => onOpenById({id: 'conn-1', providerId: 'google-drive'}, 'file-id-abc', 'model.ifc')}
+      >
+        Open By Id
+      </button>
+      <button
+        data-testid='button-picker-ready'
+        onClick={() => onPickerReady('fake-token', {id: 'conn-1', providerId: 'google-drive'})}
+      >
+        Picker Ready
+      </button>
     </div>
   )
 })
@@ -170,5 +190,51 @@ describe('OpenModelDialog — GitHub tab', () => {
       fireEvent.click(screen.getByTestId('menu-item-github-remove'))
       expect(mockLogout).toHaveBeenCalledWith({openUrl: false})
     })
+  })
+})
+
+
+describe('OpenModelDialog — Google Drive tab', () => {
+  const useExistInFeature = require('../../hooks/useExistInFeature')
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useAuth0.mockReturnValue({
+      isAuthenticated: false,
+      loginWithRedirect: jest.fn(),
+      logout: jest.fn(),
+      user: null,
+    })
+    loadRecentFilesBySource.mockReturnValue([])
+    useExistInFeature.mockReturnValue(true)
+    act(() => {
+      useStore.getState().setCurrentTab(1) // Sources tab is index 1 when Google Drive enabled
+    })
+  })
+
+  afterEach(() => {
+    const useExistInFeatureModule = require('../../hooks/useExistInFeature')
+    useExistInFeatureModule.mockReturnValue(false)
+    act(() => {
+      useStore.getState().setCurrentTab(0)
+    })
+  })
+
+  it('navigates to /v/g/<fileId> when onOpenById is called', () => {
+    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId('button-open-by-id'))
+    expect(navigateToModel).toHaveBeenCalledWith(
+      expect.stringMatching(/\/v\/g\/file-id-abc$/),
+      mockNavigate,
+    )
+  })
+
+  it('does not navigate to /v/new/ when onOpenById is called', () => {
+    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+    fireEvent.click(screen.getByTestId('button-open-by-id'))
+    expect(navigateToModel).not.toHaveBeenCalledWith(
+      expect.stringMatching(/\/v\/new\//),
+      mockNavigate,
+    )
   })
 })

@@ -37,6 +37,32 @@ function openDropdown() {
 }
 
 
+describe('Selector — empty list', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('shows default <None> placeholder when list is empty', () => {
+    renderSelector({list: []})
+    expect(screen.getByText('<None>')).toBeInTheDocument()
+  })
+
+  it('shows custom emptyText when provided', () => {
+    renderSelector({list: [], emptyText: '<No subfolders>'})
+    expect(screen.getByText('<No subfolders>')).toBeInTheDocument()
+  })
+
+  it('does not call setSelected when empty placeholder is clicked', async () => {
+    renderSelector({list: []})
+    fireEvent.mouseDown(screen.getByRole('combobox'))
+    await waitFor(() => screen.getByRole('listbox'))
+    const item = screen.getAllByText('<None>')[0]
+    fireEvent.click(item)
+    expect(mockSetSelected).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('Selector — dropdown mode', () => {
   beforeEach(() => {
     jest.clearAllMocks()

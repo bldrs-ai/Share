@@ -14,6 +14,7 @@ const OTHER_VALUE = '__other__'
  * @property {Function} setSelected callback to select the element; receives index (number) from dropdown or string from Other... mode
  * @property {Array} list list of elements to populate select options
  * @property {Function} [validate] Optional async fn (value: string) => boolean. When provided, adds "Other..." option.
+ * @property {string} [emptyText] Placeholder shown when list is empty. Default: '<None>'
  * @property {string} [data-testid] id for testing
  * @return {ReactElement}
  */
@@ -23,6 +24,7 @@ export default function Selector({
   setSelected,
   list,
   validate,
+  emptyText = '<None>',
   ...props
 }) {
   const [isTextMode, setIsTextMode] = useState(false)
@@ -158,9 +160,11 @@ export default function Selector({
     )
   }
 
+  const isEmpty = list.length === 0
+
   return (
     <TextField
-      value={selected}
+      value={isEmpty ? '' : selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
       label={label}
@@ -171,17 +175,28 @@ export default function Selector({
         'marginBottom': '.5em',
         '& .MuiSelect-select': {textAlign: 'left'},
       }}
+      SelectProps={isEmpty ? {
+        displayEmpty: true,
+        renderValue: () => <span style={{opacity: 1}}>{emptyText}</span>,
+      } : undefined}
+      InputLabelProps={isEmpty ? {shrink: true} : undefined}
       {...props}
     >
-      {validate && [
-        <MenuItem key='other' value={OTHER_VALUE}>
-          <Typography variant='p'>Enter name...</Typography>
-        </MenuItem>,
-        <Divider key='divider'/>,
+      {isEmpty ? (
+        <MenuItem value='' disabled>
+          <Typography variant='p'>{emptyText}</Typography>
+        </MenuItem>
+      ) : [
+        ...(validate ? [
+          <MenuItem key='other' value={OTHER_VALUE}>
+            <Typography variant='p'>Enter name...</Typography>
+          </MenuItem>,
+          <Divider key='divider'/>,
+        ] : []),
+        ...list.map((listMember, i) => (
+          <MenuItem key={i} value={i}><Typography variant='p'>{listMember}</Typography></MenuItem>
+        )),
       ]}
-      {list.map((listMember, i) => (
-        <MenuItem key={i} value={i}><Typography variant='p'>{listMember}</Typography></MenuItem>
-      ))}
     </TextField>
   )
 }

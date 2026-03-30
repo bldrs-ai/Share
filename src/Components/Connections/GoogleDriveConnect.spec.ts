@@ -96,8 +96,8 @@ describe('Google Drive connection', () => {
         }
       }, {fileId: TEST_FILE_ID, fileName: TEST_FILE_NAME})
 
-      // URL should change to /v/new/<blobId> once the file is loaded
-      await expect(page).toHaveURL(/\/v\/new\//, {timeout: 10_000})
+      // URL should change to /v/g/<fileId> preserving Google Drive source info
+      await expect(page).toHaveURL(/\/v\/g\//, {timeout: 10_000})
     })
 
     test('cancelling the picker keeps the dialog open', async ({page}) => {

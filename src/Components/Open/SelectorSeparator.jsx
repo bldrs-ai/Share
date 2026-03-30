@@ -9,6 +9,7 @@ import {disablePageReloadApprovalCheck} from '../../utils/event'
  * @property {Function} setSelected callback to select the element
  * @property {Array} list list of elements to populate select options
  * @property {string} [displayValue] When provided, always shown as the selected display value (e.g. current path)
+ * @property {string} [emptyText] Placeholder shown when list is empty. Default: '<None>'
  * @property {any} props For prop drilling to the TextField
  * @return {ReactElement}
  */
@@ -18,12 +19,18 @@ export default function SelectorSeparator({
   setSelected,
   list,
   displayValue,
+  emptyText = '<None>',
   ...props
 }) {
   const handleSelect = (e) => {
     disablePageReloadApprovalCheck()
     setSelected(e.target.value)
   }
+
+  const isEmpty = list.length === 0
+  const resolvedDisplayValue = displayValue || (isEmpty ? emptyText : undefined)
+  const shrinkLabel = !!(displayValue || isEmpty)
+
   return (
     <TextField
       sx={{
@@ -31,17 +38,24 @@ export default function SelectorSeparator({
         'marginBottom': '.5em',
         '& .MuiSelect-select': {textAlign: 'left'},
       }}
-      value={selected}
+      value={isEmpty ? '' : selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
       label={label}
       select
       size='small'
-      SelectProps={displayValue ? {displayEmpty: true, renderValue: () => displayValue} : undefined}
-      InputLabelProps={displayValue ? {shrink: true} : undefined}
+      SelectProps={resolvedDisplayValue ? {
+        displayEmpty: true,
+        renderValue: () => <span style={{opacity: 1}}>{resolvedDisplayValue}</span>,
+      } : undefined}
+      InputLabelProps={shrinkLabel ? {shrink: true} : undefined}
       {...props}
     >
-      {list.map((listMember, i) => {
+      {isEmpty ? (
+        <MenuItem value='' disabled>
+          <Typography variant='p'>{emptyText}</Typography>
+        </MenuItem>
+      ) : list.map((listMember, i) => {
         if (listMember.isSeparator) {
           return <div style={{borderTop: '0.5px solid #cccccc', margin: '4px 0'}}/>
         }

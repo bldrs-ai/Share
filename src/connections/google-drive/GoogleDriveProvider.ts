@@ -29,8 +29,53 @@ interface CachedToken {
   expiresAt: number
 }
 
-/** In-memory token store keyed by connection ID. Never persisted. */
+/** In-memory token store keyed by connection ID. */
 const tokenCache = new Map<string, CachedToken>()
+
+const SESSION_TOKEN_PREFIX = 'gdrive_token_'
+
+
+/** Persist token to sessionStorage so it survives same-tab page reloads. */
+function saveTokenToSession(connectionId: string, cached: CachedToken): void {
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_PREFIX + connectionId, JSON.stringify(cached))
+  } catch {
+    // sessionStorage unavailable — in-memory cache only
+  }
+}
+
+
+/**
+ * Load a previously persisted token from sessionStorage (if not expired).
+ *
+ * @return The cached token, or null if absent or expired.
+ */
+function loadTokenFromSession(connectionId: string): CachedToken | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_TOKEN_PREFIX + connectionId)
+    if (!raw) {
+      return null
+    }
+    const cached = JSON.parse(raw) as CachedToken
+    if (Date.now() >= cached.expiresAt) {
+      sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+      return null
+    }
+    return cached
+  } catch {
+    return null
+  }
+}
+
+
+/** Remove token from sessionStorage on disconnect. */
+function clearTokenFromSession(connectionId: string): void {
+  try {
+    sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+  } catch {
+    // ignore
+  }
+}
 
 let idCounter = 0
 
@@ -106,10 +151,9 @@ export const googleDriveProvider: ConnectionProvider = {
           const connectionId = generateId()
           const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
 
-          tokenCache.set(connectionId, {
-            token: response.access_token,
-            expiresAt: Date.now() + expiresInMs,
-          })
+          const cached: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
+          tokenCache.set(connectionId, cached)
+          saveTokenToSession(connectionId, cached)
 
           // Fetch user email with a 5s timeout — don't let it block connection
           const emailPromise = Promise.race([
@@ -161,23 +205,37 @@ export const googleDriveProvider: ConnectionProvider = {
       }
       tokenCache.delete(connectionId)
     }
+    clearTokenFromSession(connectionId)
   },
 
   checkStatus(connection: Connection): Promise<ConnectionStatus> {
-    const cached = tokenCache.get(connection.id)
-    if (!cached) {
-      return Promise.resolve('disconnected')
+    const inMemory = tokenCache.get(connection.id)
+    if (inMemory) {
+      if (Date.now() >= inMemory.expiresAt) {
+        return Promise.resolve('expired')
+      }
+      return Promise.resolve('connected')
     }
-    if (Date.now() >= cached.expiresAt) {
-      return Promise.resolve('expired')
+    // Fall back to sessionStorage (e.g. after page reload)
+    const fromSession = loadTokenFromSession(connection.id)
+    if (fromSession) {
+      tokenCache.set(connection.id, fromSession)
+      return Promise.resolve('connected')
     }
-    return Promise.resolve('connected')
+    return Promise.resolve('disconnected')
   },
 
   async getAccessToken(connection: Connection): Promise<string> {
     const cached = tokenCache.get(connection.id)
     if (cached && Date.now() < cached.expiresAt) {
       return cached.token
+    }
+
+    // Try sessionStorage before triggering a new OAuth popup (survives same-tab reloads)
+    const fromSession = loadTokenFromSession(connection.id)
+    if (fromSession) {
+      tokenCache.set(connection.id, fromSession)
+      return fromSession.token
     }
 
     // Token expired or missing — re-trigger OAuth flow
@@ -205,10 +263,9 @@ export const googleDriveProvider: ConnectionProvider = {
           }
 
           const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
-          tokenCache.set(connection.id, {
-            token: response.access_token,
-            expiresAt: Date.now() + expiresInMs,
-          })
+          const refreshed: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
+          tokenCache.set(connection.id, refreshed)
+          saveTokenToSession(connection.id, refreshed)
 
           if (!settled) {
             settled = true

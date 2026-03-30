@@ -4,7 +4,6 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
-import {loadFileById} from '../../connections/loadFromSource'
 import {
   addRecentFileEntry,
   loadRecentFilesBySource,
@@ -71,29 +70,23 @@ export default function OpenModelDialog({
     setPickerConnection(connection)
   }
 
-  const handleOpenById = async (connection, fileId, fileName) => {
+  const handleOpenById = (connection, fileId, fileName) => {
+    disablePageReloadApprovalCheck()
+    addRecentFileEntry({
+      id: fileId,
+      source: 'google-drive',
+      name: fileName,
+      mimeType: '',
+      lastModifiedUtc: null,
+      connectionId: connection.id,
+      fileId,
+      sharePath: `${appPrefix}/v/g/${fileId}`,
+    })
+    navigateToModel(`${appPrefix}/v/g/${fileId}`, navigate)
     setIsDialogDisplayed(false)
-    try {
-      const result = await loadFileById(connection, fileId, fileName, (filename) => {
-        disablePageReloadApprovalCheck()
-        navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
-      })
-      addRecentFileEntry({
-        id: fileId,
-        source: 'google-drive',
-        name: fileName,
-        mimeType: '',
-        lastModifiedUtc: result?.modifiedAt ? new Date(result.modifiedAt).getTime() : null,
-        connectionId: connection.id,
-        fileId,
-      })
-      setPendingModelNameUpdate(fileId)
-    } catch (err) {
-      console.error('Failed to open file from Google Drive:', err)
-    }
   }
 
-  const handlePickerSelect = async (docs) => {
+  const handlePickerSelect = (docs) => {
     if (!pickerConnection || !docs || docs.length === 0) {
       return
     }
@@ -101,24 +94,19 @@ export default function OpenModelDialog({
     const connection = pickerConnection
     setPickerToken(null)
     setPickerConnection(null)
-    try {
-      await loadFileById(connection, doc.id, doc.name, (filename) => {
-        disablePageReloadApprovalCheck()
-        navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
-      })
-      addRecentFileEntry({
-        id: doc.id,
-        source: 'google-drive',
-        name: doc.name,
-        mimeType: doc.mimeType || '',
-        lastModifiedUtc: doc.lastModifiedUtc || null,
-        connectionId: connection.id,
-        fileId: doc.id,
-      })
-      setPendingModelNameUpdate(doc.id)
-    } catch (err) {
-      console.error('Failed to open file from Google Drive:', err)
-    }
+    disablePageReloadApprovalCheck()
+    addRecentFileEntry({
+      id: doc.id,
+      source: 'google-drive',
+      name: doc.name,
+      mimeType: doc.mimeType || '',
+      lastModifiedUtc: doc.lastModifiedUtc || null,
+      connectionId: connection.id,
+      fileId: doc.id,
+      sharePath: `${appPrefix}/v/g/${doc.id}`,
+    })
+    navigateToModel(`${appPrefix}/v/g/${doc.id}`, navigate)
+    setIsDialogDisplayed(false)
   }
 
   const handlePickerCancel = () => {

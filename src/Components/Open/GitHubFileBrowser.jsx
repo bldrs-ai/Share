@@ -215,6 +215,7 @@ export default function GitHubFileBrowser({
           selected={selectedFolderName}
           setSelected={selectFolder}
           displayValue={currentPath || undefined}
+          emptyText='<No subfolders>'
           data-testid='saveFolder'
         />
         <Selector
