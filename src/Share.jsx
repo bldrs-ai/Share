@@ -2,6 +2,9 @@ import React, {ReactElement, useEffect, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CadView from './Containers/CadView'
+import useConnectionsInit from './connections/useConnectionsInit'
+import useGithubLastModified from './connections/useGithubLastModified'
+import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './connections/persistence'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
@@ -30,6 +33,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setIsNotesEnabled = useStore((state) => state.setIsNotesEnabled)
   const setRepository = useStore((state) => state.setRepository)
   const widgetApiRef = useRef(null)
+
+  // Hydrate persisted Connections & Sources from localStorage
+  useConnectionsInit()
+  useGithubLastModified(modelPath, routeParams['branch'])
 
   useEffect(() => {
     if (isAppsEnabled && !widgetApiRef.current) {
@@ -99,6 +106,20 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, model, navigate, pathPrefix,
     setIsVersionsEnabled, setIsShareEnabled, setIsNotesEnabled,
     setModelPath, setRepository, routeParams])
+
+  useEffect(() => {
+    if (!model?.name) {
+      return
+    }
+    if (modelPath?.kind === 'provider' && modelPath?.provider === 'google') {
+      updateRecentFileModelTitle(modelPath.fileId, model.name)
+    } else {
+      const fileId = consumePendingModelNameUpdate()
+      if (fileId) {
+        updateRecentFileModelTitle(fileId, model.name)
+      }
+    }
+  }, [model?.name]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const modelName = model?.name || (model?.mimeType ? `(${model.mimeType})` : undefined) || undefined
   return (

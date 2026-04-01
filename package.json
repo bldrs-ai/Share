@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1894",
+  "version": "1.0.1906",
   "main": "src/index.jsx",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -29,7 +29,7 @@
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
     "lint": "yarn eslint src netlify tools && yarn typecheck",
-    "precommit": "yarn lint && yarn test",
+    "precommit": "yarn eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test",
     "serve-https": "run-script-os",
     "serve-https:win32": "set SHARE_CONFIG=dev && set serveHttps=true && yarn serve-share-conway",
     "serve-https:linux:darwin": "SHARE_CONFIG=dev serveHttps=true yarn serve-share-conway",

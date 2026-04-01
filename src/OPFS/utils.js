@@ -229,6 +229,7 @@ export function writeBase64Model(
  * @param {string} branch The branch name.
  * @param {Function} setOpfsFile Function to set the OPFS file in the state.
  * @param {Function} onProgress Optional function to handle progress events.
+ * @param {Function} [onLastModifiedGithub] Called with epoch ms when the latest commit date is available.
  * @return {Promise<File>} - A promise that resolves to the downloaded file.
  */
 export function downloadModel(
@@ -240,7 +241,8 @@ export function downloadModel(
   repo,
   branch,
   setOpfsFile,
-  onProgress) {
+  onProgress,
+  onLastModifiedGithub = null) {
   assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
@@ -264,6 +266,9 @@ export function downloadModel(
             debug().warn('Worker finished downloading file')
           } else if (event.data.event === 'exists') {
             debug().warn('Commit exists in OPFS.')
+          }
+          if (event.data.lastModifiedGithub && onLastModifiedGithub) {
+            onLastModifiedGithub(event.data.lastModifiedGithub)
           }
           const file = event.data.file
           if (event.data.event === 'renamed' || event.data.event === 'exists') {

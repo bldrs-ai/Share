@@ -25,7 +25,7 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(event)
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(file)
-    expect(onLoad).toHaveBeenCalled()
+    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number))
   })
 
   it('throws an error if viewer-container is missing', () => {

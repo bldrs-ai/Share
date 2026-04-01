@@ -37,7 +37,7 @@ describe('Open 100: Open model dialog', () => {
 
     test('Open button is visible', async ({page}) => {
       await page.getByTestId('tab-local').click()
-      await expect(page.getByTestId('button_open_file')).toContainText('Browse files...')
+      await expect(page.getByTestId('button_open_file')).toContainText('Browse')
       await expectScreen(page, 'OpenModelDialog-local-tab.png')
     })
     // TODO(pablo): tried a bunch of approaches for testing the open file
@@ -64,7 +64,7 @@ describe('Open 100: Open model dialog', () => {
 
     test.skip('Choose the path to the model on GitHub -> model is loaded into the scene', async ({page}) => {
       await page.getByTestId('tab-github').click()
-      await page.getByText('Browse files on Github').click()
+      await page.getByTestId('button-browse-github').click()
       await page.getByRole('textbox', {name: 'Organization'}).click()
       await page.getByText('@cypresstester').click()
       await page.getByRole('textbox', {name: 'Repository'}).first().click()

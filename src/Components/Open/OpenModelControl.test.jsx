@@ -24,29 +24,18 @@ describe('OpenModelControl', () => {
     fireEvent.click(openControlButton)
     const GithubTab = getByText(LABEL_GITHUB)
     fireEvent.click(GithubTab)
-    const loginTextMatcher = (content, node) => {
-      const hasText = (_node) => _node.textContent.includes('Host your model on GitHub and log in to Share')
-      const nodeHasText = hasText(node)
-      const childrenDontHaveText = Array.from(node.children).every(
-        (child) => !hasText(child),
-      )
-      return nodeHasText && childrenDontHaveText
-    }
-    const loginText = getByText(loginTextMatcher)
-    expect(loginText).toBeInTheDocument()
+    expect(getByText(/Connect your GitHub to browse and open models/i)).toBeInTheDocument()
   })
 
-  it('Renders file selector if the user is logged in', async () => {
+  it('Renders browse button when the user is logged in', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
     const openControlButton = getByTestId('control-button-open')
     fireEvent.click(openControlButton)
     const GithubTab = getByText(LABEL_GITHUB)
     fireEvent.click(GithubTab)
-    const File = getByTestId('openFile')
-    const Repository = await getByTestId('openRepository')
-    expect(File).toBeInTheDocument()
-    expect(Repository).toBeInTheDocument()
+    expect(getByTestId('button-browse-github')).toBeInTheDocument()
+    expect(getByTestId('github-account-footer')).toBeInTheDocument()
   })
 
   it('Does not fetch repo info on initial render when isOpenModelVisible=false in zustand', async () => {

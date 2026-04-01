@@ -1,20 +1,29 @@
-import React, {ReactElement} from 'react'
-import {Button, Stack, Typography, TextField} from '@mui/material'
+import React, {ReactElement, useEffect, useState} from 'react'
+import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
-import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {
+  addRecentFileEntry,
+  loadRecentFilesBySource,
+  setPendingModelNameUpdate,
+} from '../../connections/persistence'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
 import {useIsMobile} from '../Hooks'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import Tabs from '../Tabs'
+import {useMock} from '../Profile/ProfileControl'
 import GitHubFileBrowser from './GitHubFileBrowser'
-import PleaseLogin from './PleaseLogin'
 import SampleModels from './SampleModels'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES} from './component'
-import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
+import AccountFooter from '../Connections/AccountFooter'
+import SourcesTab from '../Connections/SourcesTab'
+import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
+import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
+import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES} from './component'
+import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
 
 /**
@@ -30,20 +39,93 @@ export default function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const tabLabels = [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
-  const {isAuthenticated, user} = useAuth0()
+  const isGoogleDriveEnabled = useExistInFeature('googleDrive')
+  const tabLabels = isGoogleDriveEnabled ?
+    [LABEL_LOCAL, LABEL_SOURCES, LABEL_GITHUB, LABEL_SAMPLES] :
+    [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
+  const {isAuthenticated, loginWithRedirect, logout, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
   const currentTab = useStore((state) => state.currentTab)
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
 
+  const [pickerToken, setPickerToken] = useState(null)
+  const [pickerConnection, setPickerConnection] = useState(null)
+  const [localRecents, setLocalRecents] = useState([])
+  const [githubRecents, setGithubRecents] = useState([])
+  const [showGithubBrowser, setShowGithubBrowser] = useState(false)
+
+  useEffect(() => {
+    if (isDialogDisplayed) {
+      setLocalRecents(loadRecentFilesBySource('local'))
+      setGithubRecents(loadRecentFilesBySource('github'))
+      setShowGithubBrowser(false)
+    }
+  }, [isDialogDisplayed])
+
+  const handlePickerReady = (token, connection) => {
+    setIsDialogDisplayed(false)
+    setPickerToken(token)
+    setPickerConnection(connection)
+  }
+
+  const handleOpenById = (connection, fileId, fileName) => {
+    disablePageReloadApprovalCheck()
+    addRecentFileEntry({
+      id: fileId,
+      source: 'google-drive',
+      name: fileName,
+      mimeType: '',
+      lastModifiedUtc: null,
+      connectionId: connection.id,
+      fileId,
+      sharePath: `${appPrefix}/v/g/${fileId}`,
+    })
+    navigateToModel(`${appPrefix}/v/g/${fileId}`, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  const handlePickerSelect = (docs) => {
+    if (!pickerConnection || !docs || docs.length === 0) {
+      return
+    }
+    const doc = docs[0]
+    const connection = pickerConnection
+    setPickerToken(null)
+    setPickerConnection(null)
+    disablePageReloadApprovalCheck()
+    addRecentFileEntry({
+      id: doc.id,
+      source: 'google-drive',
+      name: doc.name,
+      mimeType: doc.mimeType || '',
+      lastModifiedUtc: doc.lastModifiedUtc || null,
+      connectionId: connection.id,
+      fileId: doc.id,
+      sharePath: `${appPrefix}/v/g/${doc.id}`,
+    })
+    navigateToModel(`${appPrefix}/v/g/${doc.id}`, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  const handlePickerCancel = () => {
+    setPickerToken(null)
+    setPickerConnection(null)
+    setIsDialogDisplayed(true)
+  }
 
   const openFile = () => {
-    const onLoad = (filename) => {
-      // Use full reload when opening a new local file
+    const onLoad = (filename, lastModifiedUtc) => {
       disablePageReloadApprovalCheck()
       navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
+      addRecentFileEntry({
+        id: filename,
+        source: 'local',
+        name: filename,
+        lastModifiedUtc: lastModifiedUtc || null,
+      })
+      setPendingModelNameUpdate(filename)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
@@ -53,81 +135,153 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
+  const handleOpenLocalRecent = (entry) => {
+    disablePageReloadApprovalCheck()
+    navigateToModel(`${appPrefix}/v/new/${entry.name}`, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  const handleOpenGithubRecent = (entry) => {
+    navigateToModel(entry.sharePath, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  const BLDRS_IDENTITIES_CLAIM = 'https://bldrs.ai/identities'
+  const githubIdentity = user?.[BLDRS_IDENTITIES_CLAIM]?.find((id) => id.connection === 'github')
+  const githubUsername = githubIdentity?.profileData?.nickname || user?.nickname
+
+  const handleGithubRemove = () => logout({openUrl: false})
+
+  const handleLoginGithub = () => {
+    if (useMock) {
+      loginWithRedirect('github')
+    } else {
+      window.open('/popup-auth?connection=github', 'authPopup', 'width=600,height=600')
+    }
+  }
+
   return (
-    <Dialog
-      headerIcon={<FolderOpenIcon className='icon-share'/>}
-      headerText='Open'
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-    >
-      <Tabs
-        tabLabels={tabLabels}
-        currentTab={currentTab}
-        actionCb={(value) => setCurrentTab(value)}
-        isScrollable={false}
-      />
-      <Stack
-        spacing={1}
-        direction='column'
-        sx={{
-          mt: 2,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-        data-testid={`dialog-open-model-tabs-stack`}
+    <>
+      <Dialog
+        headerIcon={<FolderOpenIcon className='icon-share'/>}
+        headerText='Open'
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
       >
-        { currentTab === 0 &&
-          <Stack data-testid='dialog-open-model-local' spacing={1}>
-            {!isMobile &&
-                <>
-                  <Typography
-                    variant='caption'
-                  >
-                    Drag and Drop files into viewport to open
-                  </Typography>
-                  <Typography
-                    variant='caption'
-                    sx={{textAlign: 'center', color: 'text.secondary'}}
-                  >
-                    — or —
-                  </Typography>
-                </>
-            }
-            <Button onClick={openFile} variant='contained' data-testid='button_open_file'>
-               Browse files...
-            </Button>
-          </Stack>
-        }
-        { currentTab === 1 &&
-          <Stack data-testid={`dialog-open-model-github`} spacing={1}>
-            <TextField
-              label='GitHub Model URL'
-              value={name}
-              onChange={(event) => {
-                const ghPath = event.target.value
-                if (looksLikeLink(ghPath)) {
-                  setIsDialogDisplayed(false)
-                  navigateToModel(githubUrlOrPathToSharePath(ghPath), navigate)
-                }
-              }}
+        <Tabs
+          tabLabels={tabLabels}
+          currentTab={currentTab}
+          actionCb={(value) => setCurrentTab(value)}
+          isScrollable={false}
+        />
+        <Stack
+          spacing={1}
+          direction='column'
+          sx={{
+            mt: 2,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          data-testid={`dialog-open-model-tabs-stack`}
+        >
+          { tabLabels[currentTab] === LABEL_LOCAL &&
+          <Stack data-testid='dialog-open-model-local' spacing={1} sx={{width: '100%', maxWidth: '400px'}}>
+            <RecentFilesBrowseSection
+              files={localRecents}
+              onOpen={handleOpenLocalRecent}
+              onBrowse={openFile}
+              browseButtonLabel='Browse'
+              browseButtonTestId='button_open_file'
             />
-            {isAuthenticated &&
-             <GitHubFileBrowser
-               navigate={navigate}
-               orgNamesArr={orgNamesArr}
-               user={user}
-               setIsDialogDisplayed={setIsDialogDisplayed}
-             />}
-            {!isAuthenticated && <PleaseLogin/>}
+            {!isMobile &&
+                <Stack spacing={1} sx={{mt: 4}}>
+                  <Divider/>
+                  <Typography variant='caption' color='text.secondary'>
+                    You may also drag-and-drop models into the viewport
+                  </Typography>
+                </Stack>
+            }
           </Stack>
-        }
-        { currentTab === 2 &&
+          }
+          { tabLabels[currentTab] === LABEL_SOURCES &&
+          <SourcesTab
+            onPickerReady={handlePickerReady}
+            onOpenById={handleOpenById}
+          />
+          }
+          { tabLabels[currentTab] === LABEL_GITHUB && (
+            showGithubBrowser ? (
+              <Slide direction='left' in={showGithubBrowser} mountOnEnter>
+                <Stack
+                  data-testid='dialog-open-model-github-browser'
+                  spacing={1}
+                  sx={{width: '100%', maxWidth: '400px'}}
+                >
+                  <GitHubFileBrowser
+                    navigate={navigate}
+                    orgNamesArr={orgNamesArr}
+                    setIsDialogDisplayed={setIsDialogDisplayed}
+                    onCancel={() => setShowGithubBrowser(false)}
+                  />
+                </Stack>
+              </Slide>
+            ) : (
+              <Stack data-testid='dialog-open-model-github' spacing={1} sx={{width: '100%', maxWidth: '400px'}}>
+                {!isAuthenticated ? (
+                  <Stack spacing={2} sx={{width: '100%', alignItems: 'center', py: 2}}>
+                    <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
+                      Connect your GitHub to browse and open models
+                    </Typography>
+                    <Button
+                      variant='contained'
+                      color='accent'
+                      startIcon={<GitHubIcon/>}
+                      onClick={handleLoginGithub}
+                      sx={{textTransform: 'none'}}
+                      data-testid='button-login-github'
+                    >
+                      Connect GitHub
+                    </Button>
+                  </Stack>
+                ) : (
+                  <>
+                    <RecentFilesBrowseSection
+                      files={githubRecents}
+                      onOpen={handleOpenGithubRecent}
+                      onBrowse={() => setShowGithubBrowser(true)}
+                      browseButtonLabel='Browse'
+                      browseButtonTestId='button-browse-github'
+                    />
+                    <Box sx={{mt: 4, opacity: 0.7}}>
+                      <Divider/>
+                      <AccountFooter
+                        label={`${githubUsername} - GitHub`}
+                        testId='github-account-footer'
+                        settingsButtonTestId='button-github-account-settings'
+                        menuItems={[{label: 'Remove', onClick: handleGithubRemove, testId: 'menu-item-github-remove'}]}
+                      />
+                    </Box>
+                  </>
+                )}
+              </Stack>
+            )
+          )}
+          { tabLabels[currentTab] === LABEL_SAMPLES &&
           <SampleModels
             navigate={navigate}
             setIsDialogDisplayed={setIsDialogDisplayed}
           />
-        }
-      </Stack>
-    </Dialog>
+          }
+        </Stack>
+      </Dialog>
+
+      <GoogleDrivePickerDialog
+        accessToken={pickerToken}
+        isOpen={pickerConnection !== null}
+        mode='file'
+        onSelect={handlePickerSelect}
+        onCancel={handlePickerCancel}
+      />
+    </>
   )
 }

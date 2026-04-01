@@ -1,3 +1,4 @@
+import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import copyStaticFiles from 'esbuild-copy-static-files'
 import progress from 'esbuild-plugin-progress'
@@ -25,9 +26,27 @@ export default function makePlugins(root, buildDir) {
     },
   }
 
+  const fontDisplayPlugin = {
+    name: 'fontDisplay',
+    setup(build) {
+      build.onLoad({filter: /\.css$/, namespace: 'file'}, async (args) => {
+        if (!args.path.includes('@fontsource')) {
+          return
+        }
+        const contents = await fs.readFile(args.path, 'utf8')
+        return {
+          contents: contents.replace(/font-display:\s*swap/g, 'font-display: optional'),
+          loader: 'css',
+          resolveDir: path.dirname(args.path),
+        }
+      })
+    },
+  }
+
   // Initialize plugins array
   const plugins = [
     progress(),
+    fontDisplayPlugin,
     svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
     copyStaticFiles({
       src: assetsDir,

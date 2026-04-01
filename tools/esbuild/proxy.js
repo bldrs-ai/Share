@@ -59,7 +59,10 @@ export function createProxyServer(host, port, useHttps = false) {
         }
 
         if (isCacheable(req.url)) {
-          res.setHeader('Cache-Control', 'public, max-age=31536000')
+          const cacheHeader = process.env.ESBUILD_WATCH === 'true' ?
+            'no-store' :
+            'public, max-age=31536000'
+          res.setHeader('Cache-Control', cacheHeader)
         }
       }
 
@@ -73,8 +76,14 @@ export function createProxyServer(host, port, useHttps = false) {
       } else {
         headersToSend = {
           ...proxyResponse.headers,
-          'Cross-Origin-Opener-Policy': 'same-origin',
-          'Cross-Origin-Embedder-Policy': 'require-corp',
+          // same-origin-allow-popups lets GIS deliver OAuth tokens via postMessage
+          // without nulling window.opener in the cross-origin popup.
+          'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+          // COEP intentionally omitted: docs.google.com/picker sends CORP: same-site,
+          // which Chrome enforces under any COEP value (require-corp or credentialless),
+          // blocking the Picker iframe. Without COOP: same-origin, crossOriginIsolated
+          // is already false here regardless, so omitting COEP costs nothing on this
+          // dev server. Production fix: load Picker in a popup window (TODO).
         }
       }
 
@@ -107,8 +116,7 @@ const HTTP_SERVER_ERROR = 500
 const serveNotFound = (res) => {
   res.writeHead(HTTP_FOUND, {
     'Content-Type': 'text/html',
-    'Cross-Origin-Opener-Policy': 'same-origin',
-    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   })
   res.end(`<!DOCTYPE html>
 <html>

@@ -11,6 +11,7 @@ import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
@@ -47,6 +48,7 @@ export default function CadView({
   // Begin useStore //
 
   const accessToken = useStore((state) => state.accessToken)
+  const connections = useStore((state) => state.connections)
   const hasGitHubIdentity = useStore((state) => state.hasGithubIdentity)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
@@ -261,9 +263,10 @@ export default function CadView({
    * @return {object} loaded model
    */
   async function loadModel(routeResult) {
-    const filepath = routeResult.downloadUrl || routeResult.filepath
+    const isGoogleResult = routeResult.kind === 'provider' && routeResult.provider === 'google'
+    const filepath = isGoogleResult ? routeResult.downloadUrl : (routeResult.downloadUrl || routeResult.filepath)
     const gitpath = routeResult.gitpath
-    const loadingMessageBase = `Loading ${filepath}`
+    const loadingMessageBase = `Loading ${isGoogleResult ? routeResult.fileId : filepath}`
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
@@ -288,8 +291,22 @@ export default function CadView({
     }
     let loadedModel
     try {
-      loadedModel = await load(filepath, viewer, onProgress,
-        (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
+      if (isGoogleResult) {
+        const connection = connections.find((c) => c.providerId === 'google-drive')
+        if (connection) {
+          // OAuth path: authenticated download for private files
+          const browser = getBrowser('google-drive')
+          const download = await browser.getFileDownload(connection, null, routeResult.fileId)
+          const blobUrl = URL.createObjectURL(download.blob)
+          loadedModel = await load(blobUrl, viewer, onProgress, false, setOpfsFile, '')
+        } else {
+          // API key fallback: works for public files and route tests without a connection
+          loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
+        }
+      } else {
+        loadedModel = await load(filepath, viewer, onProgress,
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
+      }
     } catch (error) {
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true

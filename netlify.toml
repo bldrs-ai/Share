@@ -1,9 +1,14 @@
-# Apply strict cross-origin isolation for all routes by default
+# COOP same-origin prevents cross-origin windows from retaining a reference to
+# this window (required for cross-origin isolation / SharedArrayBuffer).
+# COEP intentionally omitted: docs.google.com/picker sends CORP: same-site, which
+# Chrome enforces under any COEP value, blocking the Google Picker iframe. Removing
+# COEP loses crossOriginIsolated (WASM multithreading) in production. The correct
+# long-term fix is to load the Picker in a popup window that isn't subject to the
+# parent page's COEP policy (TODO).
 [[headers]]
   for = "/*"
   [headers.values]
     Cross-Origin-Opener-Policy = "same-origin"
-    Cross-Origin-Embedder-Policy = "require-corp"
 
 # Override headers for the /subscribe route so that no strict isolation is enforced.
 [[headers]]

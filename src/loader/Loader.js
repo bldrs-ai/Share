@@ -13,7 +13,8 @@ import {HTTP_NOT_FOUND} from '../net/http'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
-import {parseGitHubPath} from '../utils/location'
+import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
+import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
@@ -142,7 +143,11 @@ export async function load(
             repo,
             branch,
             setOpfsFile,
-            onProgress)
+            onProgress,
+            (lastModifiedGithub) => {
+              const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
+              updateRecentFileLastModified(sharePath, lastModifiedGithub)
+            })
         }
       } else {
         const opfsFilename = pathUrl.pathname

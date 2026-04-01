@@ -54,7 +54,7 @@ export function parse(envStr) {
     return true
   } else if (isFinite(parseInt(envStr)) && envStr === Number(parseInt(envStr))) {
     return parseInt(envStr)
-  } else if (isFinite(parseFloat(envStr))) {
+  } else if (isFinite(parseFloat(envStr)) && String(parseFloat(envStr)) === envStr) {
     return parseFloat(envStr)
   }
   return envStr

@@ -161,14 +161,18 @@ async function deleteCache(key) {
  * @param {string} key The cache key associated with the request.
  * @param {object} response The HTTP raw response object which includes headers and data.
  * @param {string} commitHash The commit hash
+ * @param {number|null} [lastModifiedGithub] Epoch ms of the latest commit date
  */
-async function updateCacheRaw(key, response, commitHash) {
+async function updateCacheRaw(key, response, commitHash, lastModifiedGithub = null) {
   const _httpCache = await getCache()
   if (httpCacheApiAvailable) {
     // Create a new Response with the body and headers from the original response
     const headers = new Headers(response.headers) // Clone existing headers
     if (commitHash !== null) {
       headers.set('CommitHash', commitHash) // Set the new header
+    }
+    if (lastModifiedGithub !== null) {
+      headers.set('LastModifiedGithub', String(lastModifiedGithub))
     }
     const wrappedResponse = new Response(response.body, {
       status: response.status,
@@ -181,6 +185,9 @@ async function updateCacheRaw(key, response, commitHash) {
     const headers = new Headers(response.headers) // Clone existing headers
     if (commitHash !== null) {
       headers.set('CommitHash', commitHash) // Set the new header
+    }
+    if (lastModifiedGithub !== null) {
+      headers.set('LastModifiedGithub', String(lastModifiedGithub))
     }
     const wrappedResponse = new Response(response.body, {
       status: response.status,
