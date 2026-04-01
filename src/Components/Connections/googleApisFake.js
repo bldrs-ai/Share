@@ -23,15 +23,17 @@ window.google = {
       initTokenClient(config) {
         return {
           /**
+           * @param {object} [tokenConfig] Optional config including state for CSRF verification
            * @return {void}
            */
-          requestAccessToken() {
+          requestAccessToken(tokenConfig) {
             setTimeout(() => {
               config.callback({
                 access_token: 'fake-gis-access-token',
                 expires_in: FAKE_EXPIRES_IN,
                 scope: 'https://www.googleapis.com/auth/drive.readonly',
                 token_type: 'Bearer',
+                state: tokenConfig?.state,
               })
             }, 50)
           },
