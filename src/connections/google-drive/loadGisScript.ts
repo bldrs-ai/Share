@@ -145,10 +145,11 @@ export interface TokenClientConfig {
   error_callback?: (error: {type: string; message: string}) => void
   hint?: string
   prompt?: string
+  state?: string
 }
 
 export interface TokenClient {
-  requestAccessToken(config?: {prompt?: string; hint?: string}): void
+  requestAccessToken(config?: {prompt?: string; hint?: string; state?: string}): void
 }
 
 export interface TokenResponse {
@@ -158,6 +159,7 @@ export interface TokenResponse {
   token_type: string
   error?: string
   error_description?: string
+  state?: string
 }
 
 export interface PickerBuilder {

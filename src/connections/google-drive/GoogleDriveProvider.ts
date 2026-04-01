@@ -77,6 +77,45 @@ function clearTokenFromSession(connectionId: string): void {
   }
 }
 
+const SESSION_STATE_KEY = 'gdrive_oauth_state'
+
+
+/**
+ * Generate a cryptographically random state value for CSRF protection.
+ *
+ * @return A UUID string.
+ */
+function generateState(): string {
+  return crypto.randomUUID()
+}
+
+
+/** Store the expected state in sessionStorage before launching the OAuth popup. */
+function saveStateToSession(state: string): void {
+  try {
+    sessionStorage.setItem(SESSION_STATE_KEY, state)
+  } catch {
+    // sessionStorage unavailable — state validation will be skipped
+  }
+}
+
+
+/**
+ * Read and remove the expected state from sessionStorage.
+ * Returns null if absent (e.g. sessionStorage unavailable).
+ *
+ * @return The stored state string, or null.
+ */
+function consumeStateFromSession(): string | null {
+  try {
+    const state = sessionStorage.getItem(SESSION_STATE_KEY)
+    sessionStorage.removeItem(SESSION_STATE_KEY)
+    return state
+  } catch {
+    return null
+  }
+}
+
 let idCounter = 0
 
 /** @return A unique connection ID */
@@ -133,6 +172,9 @@ export const googleDriveProvider: ConnectionProvider = {
         meta: email ? {email} : {},
       })
 
+      const oauthState = generateState()
+      saveStateToSession(oauthState)
+
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
@@ -141,9 +183,17 @@ export const googleDriveProvider: ConnectionProvider = {
           debug().log('[GDrive] OAuth callback received, error:', response.error || 'none')
 
           if (response.error) {
+            consumeStateFromSession()
             settle(() => reject(new Error(
               `Google OAuth error: ${response.error} - ${response.error_description || ''}`,
             )))
+            return
+          }
+
+          // Verify state to prevent CSRF
+          const expectedState = consumeStateFromSession()
+          if (expectedState !== null && response.state !== expectedState) {
+            settle(() => reject(new Error('OAuth state mismatch — possible CSRF attack')))
             return
           }
 
@@ -190,7 +240,7 @@ export const googleDriveProvider: ConnectionProvider = {
       })
 
       debug().log('[GDrive] Calling requestAccessToken...')
-      client.requestAccessToken()
+      client.requestAccessToken({state: oauthState})
     })
   },
 
@@ -246,6 +296,9 @@ export const googleDriveProvider: ConnectionProvider = {
       throw new Error('GOOGLE_OAUTH2_CLIENT_ID environment variable is not set')
     }
 
+    const oauthState = generateState()
+    saveStateToSession(oauthState)
+
     return new Promise<string>((resolve, reject) => {
       let settled = false
 
@@ -255,9 +308,20 @@ export const googleDriveProvider: ConnectionProvider = {
         hint: (connection.meta.email as string) || undefined,
         callback: (response: TokenResponse) => {
           if (response.error) {
+            consumeStateFromSession()
             if (!settled) {
               settled = true
               reject(new Error(`Google OAuth refresh error: ${response.error}`))
+            }
+            return
+          }
+
+          // Verify state to prevent CSRF
+          const expectedState = consumeStateFromSession()
+          if (expectedState !== null && response.state !== expectedState) {
+            if (!settled) {
+              settled = true
+              reject(new Error('OAuth state mismatch — possible CSRF attack'))
             }
             return
           }
@@ -284,7 +348,7 @@ export const googleDriveProvider: ConnectionProvider = {
       })
 
       // Use empty string prompt to try silent refresh; will show popup if consent needed
-      client.requestAccessToken({prompt: ''})
+      client.requestAccessToken({prompt: '', state: oauthState})
     })
   },
 }
