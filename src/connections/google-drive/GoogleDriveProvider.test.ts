@@ -15,6 +15,8 @@ jest.useFakeTimers()
 let capturedCallback: ((response: Record<string, unknown>) => void) | null = null
 const mockRequestAccessToken = jest.fn()
 
+let originalFetch: typeof global.fetch
+
 beforeAll(() => {
   Object.defineProperty(global, 'google', {
     value: {
@@ -29,19 +31,29 @@ beforeAll(() => {
       },
     },
     writable: true,
+    configurable: true,
   })
 
   if (!global.crypto?.randomUUID) {
     Object.defineProperty(global, 'crypto', {
       value: {randomUUID: () => 'test-uuid-1234'},
       writable: true,
+      configurable: true,
     })
   }
 
   // Resolve email fetch immediately with null (not found)
+  originalFetch = global.fetch
   global.fetch = jest.fn().mockResolvedValue({ok: false})
 
   process.env.GOOGLE_OAUTH2_CLIENT_ID = 'test-client-id'
+})
+
+afterAll(() => {
+  global.fetch = originalFetch
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  delete global.google
 })
 
 beforeEach(() => {

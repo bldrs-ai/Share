@@ -235,6 +235,10 @@ export const googleDriveProvider: ConnectionProvider = {
             }, POPUP_CLOSE_DEBOUNCE_MS)
             return
           }
+          if (error.type === 'popup_failed_to_open') {
+            settle(() => reject(new Error('Please allow pop-ups to sign in with Google.')))
+            return
+          }
           settle(() => reject(new Error(`Google OAuth error: ${error.type} - ${error.message}`)))
         },
       })
