@@ -7,6 +7,7 @@ import {
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
+import {waitForModel} from '../../tests/e2e/utils'
 import {expectScreen} from '../../tests/screens'
 
 
@@ -49,6 +50,10 @@ describe('Open 100: Open model dialog', () => {
 
   describe('DnD file appears in recently used', () => {
     test('dropped file is shown in Local tab recent list', async ({page}) => {
+      // Full page reload after DnD + model load from OPFS needs more time on CI
+      const DND_TEST_TIMEOUT_MS = 90_000
+      test.setTimeout(DND_TEST_TIMEOUT_MS)
+
       await returningUserVisitsHomepageWaitForModel(page)
 
       // Simulate a file drop onto the viewer dropzone
@@ -64,9 +69,10 @@ describe('Open 100: Open model dialog', () => {
         {content: Array.from(fileContent), name: 'box.ifc'},
       )
 
-      // Wait for the DnD navigation to /v/new/ and model to finish loading
+      // DnD triggers a full page reload via window.location.assign; wait for
+      // the new URL and for React + the viewer to fully mount before interacting
       await page.waitForURL(/\/v\/new\//)
-      await waitForModelReady(page)
+      await waitForModel(page)
 
       // Open dialog and verify the original filename appears in recent list
       await page.getByTestId('control-button-open').click()
