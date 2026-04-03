@@ -17,8 +17,11 @@ import debug from './debug'
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
+ * @param {{hasCapacity: boolean, record: Function, onExceeded: Function}} [quotaOptions]
+ *   Optional quota integration. When provided, blocks the drop if hasCapacity is false
+ *   and records the load key via record() on success.
  */
-export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError) {
+export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
   event.preventDefault()
   const files = event.dataTransfer.files
 
@@ -40,6 +43,12 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
     return
   }
+
+  if (quotaOptions && !quotaOptions.hasCapacity) {
+    quotaOptions.onExceeded()
+    return
+  }
+
   const uploadedFile = files[0]
 
   debug().log('handleFileDrop: uploadedFile', uploadedFile)
@@ -56,9 +65,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
 
   /** @param {string} fileName The filename the upload was given */
   function onWritten(fileName) {
+    const key = `${appPrefix}/v/new/${fileName}`
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
-    navigateToModel(`${appPrefix}/v/new/${fileName}`, navigate)
+    navigateToModel(key, navigate)
+    if (quotaOptions) {
+      quotaOptions.record(key)
+    }
     if (onSuccess) {
       onSuccess(fileName)
     }
