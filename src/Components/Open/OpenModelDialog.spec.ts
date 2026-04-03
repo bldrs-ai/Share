@@ -64,8 +64,9 @@ describe('Open 100: Open model dialog', () => {
         {content: Array.from(fileContent), name: 'box.ifc'},
       )
 
-      // Wait for the DnD navigation to /v/new/
+      // Wait for the DnD navigation to /v/new/ and model to finish loading
       await page.waitForURL(/\/v\/new\//)
+      await waitForModelReady(page)
 
       // Open dialog and verify the original filename appears in recent list
       await page.getByTestId('control-button-open').click()
