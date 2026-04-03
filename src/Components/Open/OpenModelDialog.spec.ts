@@ -1,4 +1,6 @@
 import {expect, test} from '@playwright/test'
+import {readFile} from 'fs/promises'
+import {join} from 'path'
 import {
   auth0Login,
   homepageSetup,
@@ -43,6 +45,33 @@ describe('Open 100: Open model dialog', () => {
     // TODO(pablo): tried a bunch of approaches for testing the open file
     // w/system dialog but can't get it working in cypress.  Need to get the fix
     // checked in (#1361), so punting for now.
+  })
+
+  describe('DnD file appears in recently used', () => {
+    test('dropped file is shown in Local tab recent list', async ({page}) => {
+      await returningUserVisitsHomepageWaitForModel(page)
+
+      // Simulate a file drop onto the viewer dropzone
+      const fileContent = await readFile(join('src/tests/fixtures', 'box.ifc'))
+      await page.evaluate(
+        ({content, name}: {content: number[], name: string}) => {
+          const dataTransfer = new DataTransfer()
+          const file = new File([new Uint8Array(content)], name, {type: 'application/octet-stream'})
+          dataTransfer.items.add(file)
+          const dropzone = document.querySelector('[data-testid="cadview-dropzone"]')
+          dropzone?.dispatchEvent(new DragEvent('drop', {dataTransfer, bubbles: true, cancelable: true}))
+        },
+        {content: Array.from(fileContent), name: 'box.ifc'},
+      )
+
+      // Wait for the DnD navigation to /v/new/
+      await page.waitForURL(/\/v\/new\//)
+
+      // Open dialog and verify the original filename appears in recent list
+      await page.getByTestId('control-button-open').click()
+      await page.getByTestId('tab-local').click()
+      await expect(page.getByText('box.ifc')).toBeVisible()
+    })
   })
 
   describe('Returning user visits homepage logged in', () => {

@@ -1,6 +1,7 @@
 import {handleFileDrop, handleDragOverOrEnter, handleDragLeave} from './dragAndDrop'
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {disablePageReloadApprovalCheck} from './event'
 import {saveDnDFileToOpfsFallback} from './loader'
 import {trackAlert} from './alertTracking'
@@ -10,6 +11,7 @@ import debug from './debug'
 // Mock all dependencies
 jest.mock('../Filetype')
 jest.mock('../OPFS/utils')
+jest.mock('../connections/persistence')
 jest.mock('./event')
 jest.mock('./loader')
 jest.mock('./alertTracking')
@@ -177,6 +179,52 @@ describe('dragAndDrop utility', () => {
       expect(disablePageReloadApprovalCheck).toHaveBeenCalled()
       expect(mockNavigate).toHaveBeenCalledWith('/prefix/v/new/generated-filename.ifc')
       expect(mockOnSuccess).toHaveBeenCalledWith(mockFileName)
+    })
+
+    it('records the file in recent history after successful drop', async () => {
+      const lastModified = new Date('2023-11-14T22:13:20.000Z').getTime()
+      const mockFile = {name: 'mymodel.ifc', type: 'application/octet-stream', size: 1024, lastModified}
+      const mockFileName = 'generated-uuid.ifc'
+      mockEvent.dataTransfer.files = [mockFile]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => {
+        onWritten(mockFileName)
+      })
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert)
+
+      expect(addRecentFileEntry).toHaveBeenCalledWith({
+        id: mockFileName,
+        source: 'local',
+        name: 'mymodel.ifc',
+        lastModifiedUtc: new Date(lastModified).toISOString(),
+      })
+      expect(setPendingModelNameUpdate).toHaveBeenCalledWith(mockFileName)
+    })
+
+    it('records recent entry with null lastModifiedUtc when lastModified is absent', async () => {
+      const mockFile = {name: 'model.ifc', type: 'application/octet-stream', size: 512}
+      mockEvent.dataTransfer.files = [mockFile]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => {
+        onWritten('stored.ifc')
+      })
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert)
+
+      expect(addRecentFileEntry).toHaveBeenCalledWith(
+        expect.objectContaining({lastModifiedUtc: null}),
+      )
+    })
+
+    it('does not record recent entry when file type is unknown', async () => {
+      mockEvent.dataTransfer.files = [{name: 'file.xyz', type: '', size: 100}]
+      guessTypeFromFile.mockResolvedValue(null)
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert)
+
+      expect(addRecentFileEntry).not.toHaveBeenCalled()
+      expect(setPendingModelNameUpdate).not.toHaveBeenCalled()
     })
 
     it('should work without optional callbacks', async () => {
