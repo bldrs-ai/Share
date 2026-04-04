@@ -45,6 +45,29 @@ describe('Open 100: Open model dialog', () => {
     // checked in (#1361), so punting for now.
   })
 
+  describe('DnD file appears in recently used', () => {
+    test('dropped file is shown in Local tab recent list', async ({page}) => {
+      await returningUserVisitsHomepageWaitForModel(page)
+
+      // Simulate a completed file drop by writing a recent file entry to localStorage,
+      // mirroring what handleFileDrop does via addRecentFileEntry after saving to OPFS.
+      await page.evaluate(() => {
+        const entry = {
+          id: 'box.ifc',
+          source: 'local',
+          name: 'box.ifc',
+          lastModifiedUtc: null,
+        }
+        localStorage.setItem('bldrs:recent-files', JSON.stringify({version: 1, files: [entry]}))
+      })
+
+      // Open dialog and verify the filename appears in the Local tab recent list
+      await page.getByTestId('control-button-open').click()
+      await page.getByTestId('tab-local').click()
+      await expect(page.getByText('box.ifc')).toBeVisible()
+    })
+  })
+
   describe('Returning user visits homepage logged in', () => {
     beforeEach(async ({page}) => {
       await returningUserVisitsHomepageWaitForModel(page)

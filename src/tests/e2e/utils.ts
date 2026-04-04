@@ -1,6 +1,6 @@
 import {BrowserContext, Page, Request, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
-import path from 'path'
+import {resolve} from 'path'
 
 
 /**
@@ -196,7 +196,7 @@ export async function registerIntercept({
   return response
 }
 
-const FIXTURES_DIR = path.resolve(process.cwd(), 'src/tests/fixtures')
+const FIXTURES_DIR = resolve(process.cwd(), 'src/tests/fixtures')
 
 
 // Auth0 helpers
