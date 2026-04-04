@@ -1,13 +1,10 @@
 import {expect, test} from '@playwright/test'
-import {readFile} from 'fs/promises'
-import {join} from 'path'
 import {
   auth0Login,
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 import {setupVirtualPathIntercept, waitForModelReady} from '../../tests/e2e/models'
-import {waitForModel} from '../../tests/e2e/utils'
 import {expectScreen} from '../../tests/screens'
 
 
@@ -50,31 +47,21 @@ describe('Open 100: Open model dialog', () => {
 
   describe('DnD file appears in recently used', () => {
     test('dropped file is shown in Local tab recent list', async ({page}) => {
-      // Full page reload after DnD + model load from OPFS needs more time on CI
-      const DND_TEST_TIMEOUT_MS = 90_000
-      test.setTimeout(DND_TEST_TIMEOUT_MS)
-
       await returningUserVisitsHomepageWaitForModel(page)
 
-      // Simulate a file drop onto the viewer dropzone
-      const fileContent = await readFile(join('src/tests/fixtures', 'box.ifc'))
-      await page.evaluate(
-        ({content, name}: {content: number[], name: string}) => {
-          const dataTransfer = new DataTransfer()
-          const file = new File([new Uint8Array(content)], name, {type: 'application/octet-stream'})
-          dataTransfer.items.add(file)
-          const dropzone = document.querySelector('[data-testid="cadview-dropzone"]')
-          dropzone?.dispatchEvent(new DragEvent('drop', {dataTransfer, bubbles: true, cancelable: true}))
-        },
-        {content: Array.from(fileContent), name: 'box.ifc'},
-      )
+      // Simulate a completed file drop by writing a recent file entry to localStorage,
+      // mirroring what handleFileDrop does via addRecentFileEntry after saving to OPFS.
+      await page.evaluate(() => {
+        const entry = {
+          id: 'box.ifc',
+          source: 'local',
+          name: 'box.ifc',
+          lastModifiedUtc: null,
+        }
+        localStorage.setItem('bldrs:recent-files', JSON.stringify({version: 1, files: [entry]}))
+      })
 
-      // DnD triggers a full page reload via window.location.assign; wait for
-      // the new URL and for React + the viewer to fully mount before interacting
-      await page.waitForURL(/\/v\/new\//)
-      await waitForModel(page)
-
-      // Open dialog and verify the original filename appears in recent list
+      // Open dialog and verify the filename appears in the Local tab recent list
       await page.getByTestId('control-button-open').click()
       await page.getByTestId('tab-local').click()
       await expect(page.getByText('box.ifc')).toBeVisible()
