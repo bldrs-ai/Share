@@ -25,13 +25,42 @@ This doc describes how to work in the project as a developer and in our team.
 - `yarn typecheck` - Run TypeScript type checking only
 - `yarn precommit` - Run lint and test (pre-commit hook)
 
-### Cypress E2E Testing
-- `yarn cy` - Run Cypress tests headlessly in Chrome
-- `yarn cy-headed` - Run Cypress tests with UI
-- `yarn cy-spec` - Run specific test spec
-- `yarn cy-build` - Build for Cypress testing with MSW enabled
-- `yarn cy-parallel` - Run tests in parallel for faster execution
-- `yarn cy-percy` - Run visual regression tests with Percy
+
+### Playwright E2E Testing
+- `yarn test-flows [spec]` - Run Playwright tests (builds first, starts its own server — no separate setup needed)
+- `yarn test-flows [spec] --update-snapshots` - Run and update screenshot snapshots
+- `yarn test-flows [spec] -g "test name"` - Run a single test by name grep
+
+**Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
+Key differences from production: `OPFS_IS_ENABLED=false`, `MSW_IS_ENABLED=true`, `NODE_ENV=development`.
+
+**SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
+a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/index.html` then uses
+`history.replaceState` to restore the real URL before React mounts.
+
+**Simulating local file opens**: `window.location.assign` is unforgeable in Chrome — overriding it
+silently fails and navigation still occurs. To test the "recently opened local file" flow without a
+full DnD pipeline:
+```ts
+await page.evaluate(() => {
+  localStorage.setItem('bldrs:recent-files', JSON.stringify({
+    version: 1,
+    files: [{id: 'model.ifc', source: 'local', name: 'model.ifc', lastModifiedUtc: null}],
+  }))
+})
+```
+The `OpenModelDialog` reads `loadRecentFilesBySource('local')` from localStorage whenever the dialog
+opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload.
+
+**OPFS in tests**: With `OPFS_IS_ENABLED=false`, `saveDnDFileToOpfs` is never called; the fallback
+(`saveDnDFileToOpfsFallback`) runs instead and produces a UUID without an extension. This makes
+post-DnD navigation unreliable in tests — prefer testing the persistence→UI layer directly (see above).
+
+**Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
+from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.
+
+
+# Specific Guides
 
 ## Testing OPFS Worker Code
 
@@ -56,6 +85,7 @@ const mockWorker = {
   removeEventListener: jest.fn(),
 }
 ```
+
 
 ## Debugging Silent No-ops in Persistence
 
