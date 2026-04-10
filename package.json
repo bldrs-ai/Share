@@ -51,6 +51,7 @@
     "serve-share-webifc:linux:darwin": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node tools/esbuild/serve.js",
     "test": "yarn test-tools && yarn test-src",
     "test-src": "jest --config tools/jest/jest.config.js",
+    "test-coverage": "jest --config tools/jest/jest.config.js --coverage",
     "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
     "test-flows": "playwright test --config=tools/playwright.config.js",
     "test-flows-build": "yarn clean && SHARE_CONFIG=playwright yarn build-share-conway",
