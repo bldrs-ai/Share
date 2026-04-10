@@ -36,6 +36,17 @@ export default {
   ],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text-summary', 'lcov', 'html'],
+  // Ratchet: floors set just below the current measured coverage so normal
+  // noise doesn't break the build, but any meaningful regression fails CI.
+  // Bump these whenever coverage improves — never lower them.
+  coverageThreshold: {
+    global: {
+      statements: 54,
+      branches: 47,
+      functions: 62,
+      lines: 53,
+    },
+  },
   setupFilesAfterEnv: [
     '<rootDir>/tools/jest/setupTests.js',
     '<rootDir>/tools/jest/setupNodeFetch.cjs',
