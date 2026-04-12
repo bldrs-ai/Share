@@ -41,10 +41,10 @@ export default {
   // Bump these whenever coverage improves — never lower them.
   coverageThreshold: {
     global: {
-      statements: 56,
-      branches: 48,
+      statements: 57,
+      branches: 49,
       functions: 66,
-      lines: 54,
+      lines: 55,
     },
   },
   setupFilesAfterEnv: [
