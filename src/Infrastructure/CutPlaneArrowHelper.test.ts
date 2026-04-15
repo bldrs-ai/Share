@@ -47,11 +47,14 @@ describe('Infrastructure/CutPlaneArrowHelper', () => {
       // headLength=0.6, so 2*0.6=1.2 > length=1 → shaftHeight computed
       // would be -0.2, clamped to MIN_SHAFT_HEIGHT=0.001
       const arrow = new CutPlaneArrowHelper(new Vector3(0, 1, 0), 0xffffff, 1, 0.6)
-      const shaftGeometry = arrow.children[0].geometry
+      const shaftGeometry = (arrow.children[0] as Mesh).geometry
       // CylinderGeometry height is the second positional arg; we verify
       // via the geometry's bounding box height being close to 0.001.
       shaftGeometry.computeBoundingBox()
       const bb = shaftGeometry.boundingBox
+      if (bb === null) {
+        throw new Error('boundingBox not set after computeBoundingBox()')
+      }
       const shaftHeightActual = bb.max.y - bb.min.y
       expect(shaftHeightActual).toBeCloseTo(0.001, 3)
     })
