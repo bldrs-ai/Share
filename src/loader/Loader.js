@@ -257,7 +257,6 @@ async function axiosDownload(path, isFormatText, onProgress) {
     )).data
   } catch (error) {
     if (error.response) {
-      console.warn('error.response.status:', error.response.status)
       if (error.response.status === HTTP_NOT_FOUND) {
         throw new NotFoundError('File not found')
       } else {
