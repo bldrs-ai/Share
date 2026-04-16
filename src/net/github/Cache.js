@@ -142,15 +142,7 @@ async function updateCache(key, response) {
 async function deleteCache(key) {
   const _httpCache = await getCache()
 
-  const success = await _httpCache.delete(key)
-
-  if (success) {
-    // eslint-disable-next-line no-console
-    console.log(`Deleted ${key} from cache`)
-  } else {
-    // eslint-disable-next-line no-console
-    console.log(`Failed to delete ${key} from cache`)
-  }
+  await _httpCache.delete(key)
 }
 
 

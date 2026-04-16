@@ -234,8 +234,6 @@ export async function fetchLatestCommitHash(baseURL, owner, repo, filePath, acce
 
   const latestCommit = data[0]
   const latestCommitHash = latestCommit.sha
-  // eslint-disable-next-line no-console
-  console.log(`The latest commit hash for the file is: ${latestCommitHash}`)
   return {hash: latestCommitHash, date: new Date(latestCommit.commit.author.date).getTime()}
 }
 
