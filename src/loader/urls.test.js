@@ -1,8 +1,19 @@
+/* eslint-disable no-magic-numbers */
+import {getPathContents} from '../net/github/Files'
 import {
   SOURCE_TYPE,
   dereferenceAndProxyDownloadContents,
+  parseCoords,
   parseUrl,
 } from './urls'
+
+
+// Mock the GitHub contents fetch so the authenticated proxy branch of
+// `dereferenceAndProxyDownloadContents` can be exercised without a real
+// network round-trip.
+jest.mock('../net/github/Files', () => ({
+  getPathContents: jest.fn(),
+}))
 
 
 // TODO(https://github.com/oven-sh/bun/issues/6492): switch back to toStrictEquals when fixed.
@@ -115,5 +126,84 @@ describe('With environment variables', () => {
     isOpfsAvailable = true
     expect(await dereferenceAndProxyDownloadContents(
       'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, '', false, false])
+  })
+
+
+  it('copies the proxy URL port onto the rewritten URL when present', async () => {
+    process.env.RAW_GIT_PROXY_URL_NEW = 'https://proxy.example:8443/prefix'
+
+    const [url] = await dereferenceAndProxyDownloadContents(
+      'https://github.com/bldrs-ai/Share/blob/main/README.md',
+      '',
+      true,
+    )
+
+    const parsed = new URL(url)
+    expect(parsed.host).toBe('proxy.example:8443')
+    expect(parsed.port).toBe('8443')
+    expect(parsed.pathname).toBe('/prefix/bldrs-ai/Share/blob/main/README.md')
+  })
+
+
+  it('passes a non-github host through verbatim', async () => {
+    expect(
+      await dereferenceAndProxyDownloadContents('https://example.com/model.ifc', '', false),
+    ).toStrictEqual(['https://example.com/model.ifc', '', false, false])
+  })
+
+
+  it('uses getPathContents when an access token is provided (authenticated path)', async () => {
+    getPathContents.mockResolvedValueOnce({
+      content: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md',
+      sha: 'deadbeef',
+      isCacheHit: true,
+      isBase64: false,
+    })
+
+    const result = await dereferenceAndProxyDownloadContents(
+      'https://github.com/bldrs-ai/Share/blob/main/README.md',
+      'gho_token',
+      true,
+    )
+
+    expect(result).toStrictEqual([
+      'https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md',
+      'deadbeef',
+      true,
+      false,
+    ])
+    expect(getPathContents).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('parseUrl error path', () => {
+  it('throws when called with undefined', () => {
+    expect(() => parseUrl(undefined)).toThrow('No URL provided')
+  })
+
+  it('throws when called with null', () => {
+    expect(() => parseUrl(null)).toThrow('No URL provided')
+  })
+})
+
+
+describe('parseCoords', () => {
+  it('returns the six-zero default when the url has no hash', () => {
+    expect(parseCoords(new URL('https://example.com/'))).toEqual([0, 0, 0, 0, 0, 0])
+  })
+
+  it('parses a comma-separated camera hash into six floats', () => {
+    const url = new URL('https://example.com/#c:-1.5,2.25,3,0,0,0')
+    expect(parseCoords(url)).toEqual([-1.5, 2.25, 3, 0, 0, 0])
+  })
+
+  // TODO: parseCoords returns the zero-default when the hash exists but
+  // has no `c:` param. That's slightly different from the other parsers
+  // in this file, which return `undefined` fields. Captured for the
+  // refactor so behavior stays explicit.
+  it('returns the six-zero default when the hash exists but has no c: param', () => {
+    const url = new URL('https://example.com/#foo:bar')
+    expect(parseCoords(url)).toEqual([0, 0, 0, 0, 0, 0])
   })
 })

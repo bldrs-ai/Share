@@ -61,4 +61,14 @@ describe('matcher', () => {
     expect(cb).toHaveBeenCalledTimes(1)
     expect(fail).not.toHaveBeenCalled()
   })
+
+
+  // TODO: the thrown message in matcher.js:74 has a typo ('Mathcer'
+  // instead of 'Matcher'). Low-stakes but jarring when it actually fires.
+  it('or() throws on a non-regex non-function argument', () => {
+    expect(() => {
+      matcher('anything', /x/)
+        .or('not a regex or function')
+    }).toThrow(/Mathcer\.or expected regex or fn/)
+  })
 })
