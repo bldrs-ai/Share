@@ -1,5 +1,6 @@
 import {guessTypeFromFile} from '../Filetype'
 import {saveDnDFileToOpfs} from '../OPFS/utils'
+import {addRecentFileEntry, setPendingModelNameUpdate} from '../connections/persistence'
 import {disablePageReloadApprovalCheck} from './event'
 import {trackAlert} from './alertTracking'
 import {navigateToModel} from './navigate'
@@ -69,6 +70,13 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
     navigateToModel(key, navigate)
+    addRecentFileEntry({
+      id: fileName,
+      source: 'local',
+      name: uploadedFile.name,
+      lastModifiedUtc: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
+    })
+    setPendingModelNameUpdate(fileName)
     if (quotaOptions) {
       quotaOptions.record(key)
     }
