@@ -99,8 +99,13 @@ export interface ConnectionProvider {
   /** Icon identifier or path */
   icon: string
 
-  /** Initiate the connection flow (OAuth popup, etc.). Returns the new Connection. */
-  connect(): Promise<Connection>
+  /**
+   * Initiate the connection flow (OAuth popup, etc.). Returns the new Connection.
+   *
+   * @param hint - Optional login hint (typically email) to pre-select an account
+   *   and skip the provider's account chooser when the user is already signed in.
+   */
+  connect(hint?: string): Promise<Connection>
 
   /** Disconnect and revoke credentials for a connection. */
   disconnect(connectionId: string): Promise<void>

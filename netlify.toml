@@ -1,14 +1,15 @@
-# COOP same-origin prevents cross-origin windows from retaining a reference to
-# this window (required for cross-origin isolation / SharedArrayBuffer).
-# COEP intentionally omitted: docs.google.com/picker sends CORP: same-site, which
-# Chrome enforces under any COEP value, blocking the Google Picker iframe. Removing
-# COEP loses crossOriginIsolated (WASM multithreading) in production. The correct
-# long-term fix is to load the Picker in a popup window that isn't subject to the
-# parent page's COEP policy (TODO).
+# COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
+# tokens via postMessage without nulling window.opener in the cross-origin
+# popup. COEP is intentionally omitted (docs.google.com/picker sends
+# CORP: same-site, which Chrome enforces under any COEP value and blocks the
+# Picker iframe), so crossOriginIsolated is already false here — stricter
+# COOP: same-origin would block GIS OAuth without gaining any isolation. The
+# long-term fix is to load the Picker in a popup window that isn't subject
+# to the parent page's COEP policy (TODO).
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
 
 # Override headers for the /subscribe route so that no strict isolation is enforced.
 [[headers]]
