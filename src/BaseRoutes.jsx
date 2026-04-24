@@ -46,6 +46,7 @@ export default function BaseRoutes({testElt = null}) {
   const {isLoading, isAuthenticated, getAccessTokenSilently, logout} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
   const setHasGithubIdentity = useStore((state) => state.setHasGithubIdentity)
+  const setIsAuthResolved = useStore((state) => state.setIsAuthResolved)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
@@ -89,6 +90,9 @@ export default function BaseRoutes({testElt = null}) {
 
     if (process.env.NODE_ENV === 'development' && process.env.GITHUB_API_TOKEN) {
       setAccessToken(process.env.GITHUB_API_TOKEN)
+      setIsAuthResolved(true)
+    } else if (!isLoading && !isAuthenticated) {
+      setIsAuthResolved(true)
     } else if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
         authorizationParams: {
@@ -150,6 +154,9 @@ export default function BaseRoutes({testElt = null}) {
             throw err
           }
         })
+        .finally(() => {
+          setIsAuthResolved(true)
+        })
     }
   }, [
     appPrefix,
@@ -164,6 +171,7 @@ export default function BaseRoutes({testElt = null}) {
     setAccessToken,
     setAppMetadata,
     setHasGithubIdentity,
+    setIsAuthResolved,
     logout,
   ])
 
