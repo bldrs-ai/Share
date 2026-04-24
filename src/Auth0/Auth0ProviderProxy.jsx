@@ -31,13 +31,10 @@ function base64url(obj) {
  */
 function buildFakeJwt(user) {
   const header = {alg: 'RS256', typ: 'JWT', kid: 'test-kid'}
-  const payload = {
-    ...user,
-    // BaseRoutes reads https://bldrs.ai/app_metadata — empty keeps it out of
-    // the reauth-modal branches while still hitting the identity check.
-    'https://bldrs.ai/app_metadata': {subscriptionStatus: null},
-  }
-  return `${base64url(header)}.${base64url(payload)}.signature`
+  // BaseRoutes decodes https://bldrs.ai/identities from here. Don't emit
+  // https://bldrs.ai/app_metadata — tests that inject their own appMetadata
+  // via setAppMetadata should win, and identity parsing is now independent.
+  return `${base64url(header)}.${base64url(user)}.signature`
 }
 
 
