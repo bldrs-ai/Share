@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import {Button, CircularProgress} from '@mui/material'
 import {CloudQueue as CloudIcon} from '@mui/icons-material'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
 import {saveConnections} from '../../connections/persistence'
@@ -20,6 +21,7 @@ export default function ConnectProviderButton({providerId, label, icon, color = 
   const [error, setError] = useState(null)
   const addConnection = useStore((state) => state.addConnection)
   const connections = useStore((state) => state.connections)
+  const {user} = useAuth0()
 
   const handleConnect = async () => {
     const provider = getProvider(providerId)
@@ -32,7 +34,7 @@ export default function ConnectProviderButton({providerId, label, icon, color = 
     setError(null)
 
     try {
-      const connection = await provider.connect()
+      const connection = await provider.connect(user?.email)
       addConnection(connection)
       // Persist updated connections list
       saveConnections([...connections, connection])

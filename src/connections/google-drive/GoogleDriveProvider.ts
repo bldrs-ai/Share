@@ -130,7 +130,7 @@ export const googleDriveProvider: ConnectionProvider = {
   name: 'Google Drive',
   icon: 'google-drive',
 
-  async connect(): Promise<Connection> {
+  async connect(hint?: string): Promise<Connection> {
     await loadGisScript()
 
     const clientId = process.env.GOOGLE_OAUTH2_CLIENT_ID
@@ -178,6 +178,7 @@ export const googleDriveProvider: ConnectionProvider = {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
+        hint: hint || undefined,
         callback: (response: TokenResponse) => {
           gotCallback = true
           debug().log('[GDrive] OAuth callback received, error:', response.error || 'none')
