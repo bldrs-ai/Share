@@ -214,9 +214,19 @@ export async function homepageSetupWithAuth(page: Page) {
  * Sets up Playwright route intercepts for handling authentication.
  * Playwright equivalent of setupAuthenticationIntercepts from Cypress.
  *
+ * The connection param controls the identity claim emitted on the JWT. Keep
+ * this aligned with the `connection` passed to auth0Login — the intercept
+ * also reads it from the /authorize query string so silent refresh after
+ * reload works without needing the caller to repeat it.
+ *
  * @param page Playwright page object
+ * @param options Options
+ * @param options.connection Auth0 connection — determines the identities claim
  */
-export async function setupAuthenticationIntercepts(page: Page) {
+export async function setupAuthenticationIntercepts(
+  page: Page,
+  {connection = 'github'}: {connection?: 'github' | 'google'} = {},
+) {
   const context = page.context()
 
   // Route patterns: catch both HTTP(s) and any host
@@ -227,6 +237,13 @@ export async function setupAuthenticationIntercepts(page: Page) {
   await context.unroute(AUTHORIZE)
   await context.unroute(TOKEN)
 
+  // Seed contextState with the caller-declared connection. The /authorize
+  // handler below may override it with whatever Auth0 actually sends on the
+  // query string (e.g. a google-oauth2 silent refresh after login).
+  const initial = contextState.get(context) ?? {port: DEFAULT_PORT, nonce: '', connection}
+  initial.connection = connection
+  contextState.set(context, initial)
+
   // Intercept the /authorize request
   await context.route(AUTHORIZE, async (route: Route) => {
     const url = new URL(route.request().url())
@@ -235,9 +252,13 @@ export async function setupAuthenticationIntercepts(page: Page) {
     // Extract the 'state' and 'nonce' parameters
     const state = query.get('state') || ''
     const nonce = query.get('nonce') || ''
+    const queryConnection = query.get('connection')
 
-    const cs = contextState.get(context) ?? {port: DEFAULT_PORT, nonce: ''}
+    const cs = contextState.get(context) ?? {port: DEFAULT_PORT, nonce: '', connection}
     cs.nonce = nonce
+    if (queryConnection === 'github' || queryConnection === 'google-oauth2') {
+      cs.connection = queryConnection === 'google-oauth2' ? 'google' : 'github'
+    }
     contextState.set(context, cs)
 
     const targetOrigin = getOrigin(getPort(context))
@@ -281,30 +302,42 @@ export async function setupAuthenticationIntercepts(page: Page) {
     const now = Math.floor(Date.now() / MILLIS_PER_SECOND)
     const exp = now + SECONDS_PER_DAY // Add 24 hours
 
-    const {nonce = ''} = contextState.get(context) ?? {}
+    const {nonce = '', connection: cxn = connection} = contextState.get(context) ?? {}
+
+    const providerKey = cxn === 'google' ? 'google-oauth2' : 'github'
+    const sub = `${providerKey}|11111111`
+    const identities = [{connection: providerKey, provider: providerKey, user_id: '11111111', isSocial: true}]
 
     const payload = {
-      nickname: 'cypresstester',
-      name: 'cypresstest@bldrs.ai',
-      picture: 'https://avatars.githubusercontent.com/u/17447690?v=4',
-      updated_at: new Date().toISOString(),
-      email: 'cypresstest@bldrs.ai',
-      email_verified: true,
-      iss: 'https://bldrs.us.auth0.com.msw/',
-      aud: 'cypresstestaudience',
-      iat: now,
+      'nickname': 'cypresstester',
+      'name': 'cypresstest@bldrs.ai',
+      'picture': 'https://avatars.githubusercontent.com/u/17447690?v=4',
+      'updated_at': new Date().toISOString(),
+      'email': 'cypresstest@bldrs.ai',
+      'email_verified': true,
+      'iss': 'https://bldrs.us.auth0.com.msw/',
+      'aud': 'cypresstestaudience',
+      'iat': now,
       exp,
-      sub: 'github|11111111',
-      sid: 'cypresssession-abcdef',
+      sub,
+      'sid': 'cypresssession-abcdef',
       nonce, // must match nonce from /authorize request
+      // Custom claims BaseRoutes decodes to decide GitHub vs non-GitHub auth.
+      // Empty app_metadata skips the reauth modal branches.
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: null},
+      'https://bldrs.ai/identities': identities,
+      identities,
     }
 
     // Fake JWT: header.payload.signature (header + signature can be anything)
     const header = {alg: 'RS256', typ: 'JWT', kid: 'test-kid'}
     const idToken = `${base64url(header)}.${base64url(payload)}.signature`
 
+    // BaseRoutes decodes the access_token as a JWT, so emit a JWT there too.
+    const accessToken = `${base64url(header)}.${base64url(payload)}.signature`
+
     const response = {
-      access_token: 'fakeaccesstoken',
+      access_token: accessToken,
       id_token: idToken,
       scope: 'openid profile email offline_access',
       expires_in: SECONDS_PER_DAY,
@@ -326,7 +359,7 @@ export async function setupAuthenticationIntercepts(page: Page) {
 }
 
 // Context-specific state to avoid concurrency issues
-const contextState = new WeakMap<BrowserContext, {port: number, nonce: string}>()
+const contextState = new WeakMap<BrowserContext, {port: number, nonce: string, connection: 'github' | 'google'}>()
 
 
 /**
