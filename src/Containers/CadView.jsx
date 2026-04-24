@@ -48,8 +48,8 @@ export default function CadView({
   // Begin useStore //
 
   const accessToken = useStore((state) => state.accessToken)
+  const isAuthResolved = useStore((state) => state.isAuthResolved)
   const connections = useStore((state) => state.connections)
-  const hasGitHubIdentity = useStore((state) => state.hasGithubIdentity)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
@@ -157,9 +157,11 @@ export default function CadView({
       return
     }
 
-    if (isAuthLoading || (!isAuthLoading &&
-      (isAuthenticated && ( accessToken === '' && !hasGitHubIdentity )))) {
-      debug().warn('Do not have auth token yet, waiting.')
+    // Wait only while auth is still being resolved. Once resolved, proceed
+    // regardless of whether a GitHub token landed — Google-only users
+    // legitimately have accessToken='' and hasGithubIdentity=false.
+    if (isAuthLoading || (isAuthenticated && !isAuthResolved)) {
+      debug().warn('Auth not yet resolved, waiting.')
       return
     }
 
@@ -623,19 +625,15 @@ export default function CadView({
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
-      // This function gets called whenever there's a change in authentication state
-      debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
-      /* eslint-disable no-mixed-operators */
-      if (!isAuthLoading &&
-          (isAuthenticated && ( accessToken !== '' || !hasGitHubIdentity )) ||
-          (!isAuthLoading && !isAuthenticated) && isOpfsAvailable !== null) {
+      debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
+        'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
+      if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
         (async () => {
           await onViewer()
         })()
       }
-      /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken, isOpfsAvailable])
+  }, [isAuthLoading, isAuthenticated, isAuthResolved, accessToken, isOpfsAvailable])
 
 
   // ModelPath changes in parent (ShareRoutes) from user and
