@@ -105,13 +105,6 @@ export default function BaseRoutes({testElt = null}) {
       })
         .then((token) => {
           if (token !== '') {
-            // Cypress check
-            if (token.access_token && token.access_token === 'mock_access_token') {
-              initializeOctoKitAuthenticated()
-              setAccessToken(token)
-              setHasGithubIdentity(true)
-              return
-            }
             const decodedToken = jwtDecode(token)
             const appData = decodedToken['https://bldrs.ai/app_metadata']
             if (appData) {
