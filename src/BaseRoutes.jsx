@@ -104,47 +104,47 @@ export default function BaseRoutes({testElt = null}) {
         useRefreshTokens: true,
       })
         .then((token) => {
-          if (token !== '') {
-            // Cypress check
-            if (token.access_token && token.access_token === 'mock_access_token') {
+          if (token === '') {
+            initializeOctoKitUnauthenticated()
+            setAccessToken(token)
+            return
+          }
+
+          const decodedToken = jwtDecode(token)
+          const appData = decodedToken['https://bldrs.ai/app_metadata']
+
+          // Reauth-modal short circuits: show the modal and stop — leave
+          // identity/token state as it was.
+          if (appData?.subscriptionStatus === 'shareProPendingReauth') {
+            setReauthScope('repo')
+            setReauthModalOpen(true)
+            return
+          }
+          if (appData?.subscriptionStatus === 'freePendingReauth') {
+            setReauthScope('public_repo')
+            setReauthModalOpen(true)
+            return
+          }
+
+          // Only overwrite store appMetadata when the JWT actually carries
+          // one — tests (e.g. Subscription.spec) inject appMetadata directly
+          // before login and expect it to stick.
+          if (appData) {
+            setAppMetadata(appData)
+          }
+
+          const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
+          if (identities.length > 0) {
+            const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
+            if (hasGitHubIdentity) {
               initializeOctoKitAuthenticated()
               setAccessToken(token)
               setHasGithubIdentity(true)
-              return
+            } else {
+              initializeOctoKitUnauthenticated()
+              setAccessToken('')
+              setHasGithubIdentity(false)
             }
-            const decodedToken = jwtDecode(token)
-            const appData = decodedToken['https://bldrs.ai/app_metadata']
-            if (appData) {
-              if (appData.subscriptionStatus === 'shareProPendingReauth') {
-                // Instead of immediately calling window.open we show a modal dialog.
-                setReauthScope('repo')
-                setReauthModalOpen(true)
-              } else if (appData.subscriptionStatus === 'freePendingReauth') {
-                setReauthScope('public_repo')
-                setReauthModalOpen(true)
-              } else {
-                setAppMetadata(appData)
-
-                const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
-
-                if (identities.length > 0) {
-                  const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
-
-                  if (hasGitHubIdentity) {
-                    initializeOctoKitAuthenticated()
-                    setAccessToken(token)
-                    setHasGithubIdentity(true)
-                  } else {
-                    initializeOctoKitUnauthenticated()
-                    setAccessToken('')
-                    setHasGithubIdentity(false)
-                  }
-                }
-              }
-            }
-          } else {
-            initializeOctoKitUnauthenticated()
-            setAccessToken(token)
           }
         })
         .catch((err) => {

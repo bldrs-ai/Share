@@ -1,5 +1,11 @@
 import {Locator, expect, test} from '@playwright/test'
-import {auth0Login, homepageSetup, returningUserVisitsHomepageWaitForModel, setupAuthenticationIntercepts} from './tests/e2e/utils'
+import {
+  auth0Login,
+  homepageSetup,
+  returningUserVisitsHomepageWaitForModel,
+  setupAuthenticationIntercepts,
+  waitForModel,
+} from './tests/e2e/utils'
 import {SEARCH_BAR_PLACEHOLDER_TEXT} from './Components/Search/component'
 
 
@@ -62,16 +68,26 @@ describe('Share', () => {
     await expect(page.getByTestId('control-button-share')).toBeVisible()
   })
 
-  // TODO(pablo): fix auth0 login in Playwright and re-enable
-  describe.skip('Logged in user', () => {
-    let controlButtonSave: Locator
-    beforeEach('Login', async ({page}) => {
-      await setupAuthenticationIntercepts(page)
-      await auth0Login(page)
-      controlButtonSave = page.getByTestId('control-button-save')
+  for (const connection of ['github', 'google'] as const) {
+    describe(`Logged in user (${connection})`, () => {
+      beforeEach('Login', async ({page}) => {
+        await setupAuthenticationIntercepts(page, {connection})
+        await auth0Login(page, connection)
+      })
+
+      test('Authenticated UI is present', async ({page}) => {
+        await expect(page.getByTestId('control-button-profile-icon-authenticated')).toBeVisible()
+      })
+
+      // Regression guard for goog-login-bug: after a non-GitHub login, the
+      // CadView onViewer guard used to silently block model loads for
+      // authenticated users without a GitHub identity. A page reload in the
+      // authenticated state is the exact shape of that bug — no model, no
+      // console error, no network request for index.ifc.
+      test('Model still loads on reload while authenticated', async ({page}) => {
+        await page.reload({waitUntil: 'domcontentloaded'})
+        await waitForModel(page)
+      })
     })
-    test('Save control button is visible', async () => {
-      await expect(controlButtonSave).toBeVisible()
-    })
-  })
+  }
 })

@@ -60,8 +60,8 @@ export const mockGitHubUser = {
   'sid': 'cypresssession-abcdef',
   'nonce': 'testnonce',
   /* NEW — default identity + custom claim so ManageProfile boots */
-  'identities': [{provider: 'github', user_id: '11111111'}],
-  'https://bldrs.ai/identities': [{provider: 'github', user_id: '11111111'}],
+  'identities': [{connection: 'github', provider: 'github', user_id: '11111111'}],
+  'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '11111111'}],
 }
 
 export const mockGoogleUser = {
@@ -81,8 +81,8 @@ export const mockGoogleUser = {
   'sub': 'google-oauth2|11111111',
   'sid': 'cypresssession-abcdef',
   'nonce': 'testnonce',
-  'identities': [{provider: 'google-oauth2', user_id: '11111111'}],
-  'https://bldrs.ai/identities': [{provider: 'google-oauth2', user_id: '11111111'}],
+  'identities': [{connection: 'google-oauth2', provider: 'google-oauth2', user_id: '11111111'}],
+  'https://bldrs.ai/identities': [{connection: 'google-oauth2', provider: 'google-oauth2', user_id: '11111111'}],
 }
 
 export const mockLinkedUser = {
