@@ -31,6 +31,7 @@ function resolveValue(value, list) {
  * @property {Array<string>} orgNamesArr List of org names for the current user.
  * @property {Function} setIsDialogDisplayed callback
  * @property {Function} onCancel Called when user clicks Cancel to go back
+ * @property {Function} [checkQuota] Optional async gate; receives sharePath, returns boolean (true = proceed)
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
@@ -38,6 +39,7 @@ export default function GitHubFileBrowser({
   orgNamesArr,
   setIsDialogDisplayed,
   onCancel,
+  checkQuota,
 }) {
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
@@ -164,21 +166,28 @@ export default function GitHubFileBrowser({
     }
   }
 
-  const navigateToFile = () => {
-    if (pathSuffixSupported(fileName)) {
-      const branch = branchName || 'main'
-      const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
-      navigateToModel({pathname: sharePath}, navigate)
-      addRecentFileEntry({
-        id: sharePath,
-        source: 'github',
-        name: fileName,
-        sharePath,
-        lastModifiedUtc: null,
-      })
-      setPendingModelNameUpdate(sharePath)
-      setIsDialogDisplayed(false)
+  const navigateToFile = async () => {
+    if (!pathSuffixSupported(fileName)) {
+      return
     }
+    const branch = branchName || 'main'
+    const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
+    if (checkQuota) {
+      const allowed = await checkQuota(sharePath)
+      if (!allowed) {
+        return
+      }
+    }
+    navigateToModel({pathname: sharePath}, navigate)
+    addRecentFileEntry({
+      id: sharePath,
+      source: 'github',
+      name: fileName,
+      sharePath,
+      lastModifiedUtc: null,
+    })
+    setPendingModelNameUpdate(sharePath)
+    setIsDialogDisplayed(false)
   }
 
   return (
