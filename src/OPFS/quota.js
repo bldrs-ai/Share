@@ -5,15 +5,26 @@ export const TIERS = {
   PAID: 'paid',
 }
 
-/** Private-model load limits per tier */
+/** Quotable load limits per tier within the rolling window */
 export const LIMITS = {
-  [TIERS.ANONYMOUS]: 2,
-  [TIERS.FREE]: 4,
+  [TIERS.ANONYMOUS]: 2, // lifetime cap; never resets without sign-in
+  [TIERS.FREE]: 4, // counted within ROLLING_WINDOW_DAYS
   [TIERS.PAID]: Infinity,
 }
 
-/** Listeners notified on every quota write */
+/** Length of the rolling window for non-anonymous tiers, in days */
+export const ROLLING_WINDOW_DAYS = 30
+
+const HOURS_PER_DAY = 24
+const MINUTES_PER_HOUR = 60
+const SECONDS_PER_MINUTE = 60
+const MILLIS_PER_SECOND = 1000
+const ROLLING_WINDOW_MS =
+  ROLLING_WINDOW_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLIS_PER_SECOND
+
+/** Subscribers notified after every saveQuota write */
 const listeners = new Set()
+
 
 /**
  * Subscribe to quota changes. Returns an unsubscribe function.
@@ -28,37 +39,93 @@ export function subscribeToQuota(cb) {
 
 
 /**
- * Returns true if the model key should count toward the usage quota.
- * Local (/v/new/) and Google Drive (/v/g/) are always private.
- * GitHub private-repo detection is deferred to a later iteration.
+ * Map auth state + Auth0 app_metadata to a quota tier.
+ * Pure — used both server-side (record-load) and client-side (useQuota).
  *
- * @param {string} key Share path, e.g. '/share/v/g/<fileId>'
+ * @param {object} appMetadata Auth0 app_metadata, may be null
+ * @param {boolean} isAuthenticated
+ * @return {string} one of TIERS.*
+ */
+export function getTier(appMetadata, isAuthenticated) {
+  if (!isAuthenticated) {
+    return TIERS.ANONYMOUS
+  }
+  if (appMetadata && appMetadata.subscriptionStatus === 'sharePro') {
+    return TIERS.PAID
+  }
+  return TIERS.FREE
+}
+
+
+/**
+ * Paths whose privacy is unambiguously known client-side without a
+ * server round-trip. Local files (/v/new/) and Drive files (/v/g/)
+ * are always private.
+ *
+ * @param {string} key Share path
  * @return {boolean}
  */
-export function isPrivateKey(key) {
+export function isLocallyQuotable(key) {
   return key.includes('/v/new/') || key.includes('/v/g/')
 }
 
 
-/** @return {string} ISO date string for the first day of next month */
-function nextMonthStart() {
-  const d = new Date()
-  return new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().slice(0, 10)
+/**
+ * GitHub paths are ambiguous client-side (the same /v/gh/ prefix covers
+ * both public and private repos), so the record-load Netlify function
+ * resolves their actual privacy via api.github.com.
+ *
+ * @param {string} key
+ * @return {boolean}
+ */
+export function isServerResolvedPath(key) {
+  return key.includes('/v/gh/')
+}
+
+
+/**
+ * True if the path is potentially quotable. The server makes the
+ * authoritative call for /v/gh/. Use this to decide whether to call
+ * record-load at all; use isLocallyQuotable for OPFS-only fallback.
+ *
+ * @param {string} key
+ * @return {boolean}
+ */
+export function isQuotablePath(key) {
+  return isLocallyQuotable(key) || isServerResolvedPath(key)
+}
+
+
+/**
+ * Drop loads older than the rolling window. Anonymous tier has a
+ * lifetime cap (no reset), so anonymous quotas are never pruned.
+ *
+ * @param {Array<{key:string,loadedAt:string}>} loads
+ * @param {string} tier
+ * @param {number} [now] millis since epoch — injectable for tests
+ * @return {Array<{key:string,loadedAt:string}>}
+ */
+export function pruneLoads(loads, tier, now = Date.now()) {
+  if (tier === TIERS.ANONYMOUS) {
+    return loads
+  }
+  const cutoff = now - ROLLING_WINDOW_MS
+  return loads.filter((l) => Date.parse(l.loadedAt) >= cutoff)
 }
 
 
 /**
  * @param {string} [tier]
- * @return {{tier: string, resetDate: string, loads: Array}}
+ * @return {{tier: string, loads: Array}}
  */
 function defaultQuota(tier = TIERS.ANONYMOUS) {
-  return {tier, resetDate: nextMonthStart(), loads: []}
+  return {tier, loads: []}
 }
 
 
 /**
- * @param {boolean} create Whether to create the file if it doesn't exist
- * @return {Promise<object>}
+ * @param {boolean} create
+ * @return {Promise<object>} OPFS file handle
  */
 async function getHandle(create) {
   const root = await navigator.storage.getDirectory()
@@ -67,15 +134,20 @@ async function getHandle(create) {
 
 
 /**
- * Reads quota state from OPFS. Returns default quota on any error.
+ * Read quota state from OPFS. Returns default on any error. Silently
+ * drops the legacy `resetDate` field that earlier versions persisted.
  *
- * @return {Promise<{tier: string, resetDate: string, loads: Array}>}
+ * @return {Promise<{tier: string, loads: Array}>}
  */
 export async function loadQuota() {
   try {
     const handle = await getHandle(false)
     const file = await handle.getFile()
-    return JSON.parse(await file.text())
+    const parsed = JSON.parse(await file.text())
+    return {
+      tier: parsed.tier || TIERS.ANONYMOUS,
+      loads: Array.isArray(parsed.loads) ? parsed.loads : [],
+    }
   } catch {
     return defaultQuota()
   }
@@ -83,11 +155,11 @@ export async function loadQuota() {
 
 
 /**
- * Writes quota state to OPFS and notifies subscribers.
- * Swallows OPFS errors (e.g. private-browsing mode) so quota tracking
- * degrades gracefully to in-memory-only.
+ * Persist quota state to OPFS and notify subscribers. OPFS errors are
+ * swallowed so that quota tracking degrades to in-memory only when
+ * OPFS is unavailable (private browsing, etc).
  *
- * @param {{tier: string, resetDate: string, loads: Array}} quota
+ * @param {{tier: string, loads: Array}} quota
  * @return {Promise<void>}
  */
 export async function saveQuota(quota) {
@@ -106,40 +178,20 @@ export async function saveQuota(quota) {
 
 
 /**
- * If the tier is 'free' and today is on or after resetDate, clears
- * the loads list and advances resetDate by one month. No-ops for
- * anonymous (lifetime cap) and paid (no cap). Pure — does not write.
- *
- * @param {{tier: string, resetDate: string, loads: Array}} quota
- * @return {{tier: string, resetDate: string, loads: Array}}
- */
-export function maybeReset(quota) {
-  if (quota.tier !== TIERS.FREE) {
-    return quota
-  }
-  const today = new Date().toISOString().slice(0, 10)
-  if (today >= quota.resetDate) {
-    return {...quota, loads: [], resetDate: nextMonthStart()}
-  }
-  return quota
-}
-
-
-/**
  * Pure quota check given a loaded quota object and a model key.
- * Returns whether the load is allowed plus usage counters.
  *
  * @param {{tier: string, loads: Array}} quota
  * @param {string} key
  * @return {{allowed: boolean, used: number, limit: number, alreadyCounted: boolean}}
  */
 export function checkQuota(quota, key) {
-  const limit = LIMITS[quota.tier] ?? LIMITS[TIERS.FREE]
+  const limit = LIMITS[quota.tier] !== undefined ? LIMITS[quota.tier] : LIMITS[TIERS.FREE]
   if (quota.tier === TIERS.PAID) {
     return {allowed: true, used: quota.loads.length, limit, alreadyCounted: false}
   }
-  const alreadyCounted = quota.loads.some((l) => l.key === key)
-  const used = quota.loads.length
+  const pruned = pruneLoads(quota.loads, quota.tier)
+  const alreadyCounted = pruned.some((l) => l.key === key)
+  const used = pruned.length
   return {
     allowed: alreadyCounted || used < limit,
     used,
@@ -150,22 +202,26 @@ export function checkQuota(quota, key) {
 
 
 /**
- * Records a private model load in OPFS. Idempotent — the same key is
- * never double-counted. Returns the updated quota, or null if the key
- * is not private.
+ * Record a locally-quotable model load in OPFS. Used for the anonymous
+ * (no-server) path; authenticated callers should call the record-load
+ * Netlify function and mirror its response into OPFS via saveQuota.
+ *
+ * Idempotent on key. Returns null when the key is not locally quotable
+ * (GitHub paths require server resolution).
  *
  * @param {string} key
- * @return {Promise<{tier: string, resetDate: string, loads: Array}|null>}
+ * @return {Promise<{tier: string, loads: Array}|null>}
  */
 export async function recordLoad(key) {
-  if (!isPrivateKey(key)) {
+  if (!isLocallyQuotable(key)) {
     return null
   }
-  let quota = maybeReset(await loadQuota())
-  if (quota.loads.some((l) => l.key === key)) {
-    return quota
+  const raw = await loadQuota()
+  const loads = pruneLoads(raw.loads, raw.tier)
+  if (loads.some((l) => l.key === key)) {
+    return {...raw, loads}
   }
-  quota = {...quota, loads: [...quota.loads, {key, loadedAt: new Date().toISOString()}]}
-  await saveQuota(quota)
-  return quota
+  const updated = {...raw, loads: [...loads, {key, loadedAt: new Date().toISOString()}]}
+  await saveQuota(updated)
+  return updated
 }

@@ -51,7 +51,7 @@ export default function OpenModelDialog({
   const currentTab = useStore((state) => state.currentTab)
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
-  const {tier, check, record, hasCapacity} = useQuota()
+  const {tier, record, hasCapacity} = useQuota()
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
@@ -74,9 +74,9 @@ export default function OpenModelDialog({
     setPickerConnection(connection)
   }
 
-  const handleOpenById = (connection, fileId, fileName) => {
+  const handleOpenById = async (connection, fileId, fileName) => {
     const key = `${appPrefix}/v/g/${fileId}`
-    const {allowed} = check(key)
+    const {allowed} = await record(key)
     if (!allowed) {
       setShowQuotaDialog(true)
       return
@@ -93,17 +93,16 @@ export default function OpenModelDialog({
       sharePath: key,
     })
     navigateToModel(key, navigate)
-    record(key)
     setIsDialogDisplayed(false)
   }
 
-  const handlePickerSelect = (docs) => {
+  const handlePickerSelect = async (docs) => {
     if (!pickerConnection || !docs || docs.length === 0) {
       return
     }
     const doc = docs[0]
     const key = `${appPrefix}/v/g/${doc.id}`
-    const {allowed} = check(key)
+    const {allowed} = await record(key)
     if (!allowed) {
       setPickerToken(null)
       setPickerConnection(null)
@@ -125,7 +124,6 @@ export default function OpenModelDialog({
       sharePath: key,
     })
     navigateToModel(key, navigate)
-    record(key)
     setIsDialogDisplayed(false)
   }
 
@@ -140,8 +138,13 @@ export default function OpenModelDialog({
       setShowQuotaDialog(true)
       return
     }
-    const onLoad = (filename, lastModifiedUtc) => {
+    const onLoad = async (filename, lastModifiedUtc) => {
       const key = `${appPrefix}/v/new/${filename}`
+      const {allowed} = await record(key)
+      if (!allowed) {
+        setShowQuotaDialog(true)
+        return
+      }
       disablePageReloadApprovalCheck()
       navigateToModel(key, navigate)
       addRecentFileEntry({
@@ -151,7 +154,6 @@ export default function OpenModelDialog({
         lastModifiedUtc: lastModifiedUtc || null,
       })
       setPendingModelNameUpdate(filename)
-      record(key)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
@@ -161,15 +163,35 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
-  const handleOpenLocalRecent = (entry) => {
+  const handleOpenLocalRecent = async (entry) => {
+    const key = `${appPrefix}/v/new/${entry.name}`
+    const {allowed} = await record(key)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     disablePageReloadApprovalCheck()
-    navigateToModel(`${appPrefix}/v/new/${entry.name}`, navigate)
+    navigateToModel(key, navigate)
     setIsDialogDisplayed(false)
   }
 
-  const handleOpenGithubRecent = (entry) => {
+  const handleOpenGithubRecent = async (entry) => {
+    const {allowed} = await record(entry.sharePath)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     navigateToModel(entry.sharePath, navigate)
     setIsDialogDisplayed(false)
+  }
+
+  const handleGithubBrowserOpen = async (sharePath) => {
+    const {allowed} = await record(sharePath)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return false
+    }
+    return true
   }
 
   const BLDRS_IDENTITIES_CLAIM = 'https://bldrs.ai/identities'
@@ -248,6 +270,7 @@ export default function OpenModelDialog({
                     orgNamesArr={orgNamesArr}
                     setIsDialogDisplayed={setIsDialogDisplayed}
                     onCancel={() => setShowGithubBrowser(false)}
+                    checkQuota={handleGithubBrowserOpen}
                   />
                 </Stack>
               </Slide>

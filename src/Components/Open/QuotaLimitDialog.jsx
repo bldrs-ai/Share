@@ -1,7 +1,7 @@
 import React, {ReactElement} from 'react'
-import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Stack, Typography} from '@mui/material'
+import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {TIERS} from '../../OPFS/quota'
+import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../OPFS/quota'
 
 
 /**
@@ -29,6 +29,9 @@ export default function QuotaLimitDialog({tier, isOpen, onClose}) {
   }
 
   const isAnonymous = !tier || tier === TIERS.ANONYMOUS
+  const limitText = isAnonymous ?
+    `${LIMITS[TIERS.ANONYMOUS]} private models (lifetime)` :
+    `${LIMITS[TIERS.FREE]} private models in any rolling ${ROLLING_WINDOW_DAYS}-day window`
 
   return (
     <Dialog
@@ -40,6 +43,10 @@ export default function QuotaLimitDialog({tier, isOpen, onClose}) {
     >
       <DialogTitle sx={{pb: 1}}>Open more models</DialogTitle>
       <DialogContent>
+        <Typography variant='body2' sx={{mb: 2}}>
+          You&apos;ve reached your limit of {limitText}.
+          {' '}<Link href='/share/quotas'>What counts as a load?</Link>
+        </Typography>
         <Stack divider={<Divider/>} spacing={2}>
           <Stack direction='row' alignItems='center' spacing={2}>
             <Typography variant='body2' sx={{flex: 1}}>
@@ -58,7 +65,8 @@ export default function QuotaLimitDialog({tier, isOpen, onClose}) {
           {isAnonymous && (
             <Stack direction='row' alignItems='center' spacing={2}>
               <Typography variant='body2' sx={{flex: 1}}>
-                Sign up free to open 4 models per month and sync your files across devices.
+                Sign up free to open {LIMITS[TIERS.FREE]} private models per
+                rolling {ROLLING_WINDOW_DAYS} days and sync across devices.
               </Typography>
               <Button
                 onClick={handleSignUp}

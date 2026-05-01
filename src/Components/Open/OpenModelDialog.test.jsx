@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, fireEvent, render, screen} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {loadRecentFilesBySource} from '../../connections/persistence'
@@ -220,13 +220,16 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
   })
 
-  it('navigates to /v/g/<fileId> when onOpenById is called', () => {
+  it('navigates to /v/g/<fileId> when onOpenById is called', async () => {
     render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('button-open-by-id'))
-    expect(navigateToModel).toHaveBeenCalledWith(
-      expect.stringMatching(/\/v\/g\/file-id-abc$/),
-      mockNavigate,
-    )
+    // record() is async — wait for the resulting navigateToModel
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith(
+        expect.stringMatching(/\/v\/g\/file-id-abc$/),
+        mockNavigate,
+      )
+    })
   })
 
   it('does not navigate to /v/new/ when onOpenById is called', () => {

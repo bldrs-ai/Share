@@ -65,8 +65,15 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
   }
 
   /** @param {string} fileName The filename the upload was given */
-  function onWritten(fileName) {
+  async function onWritten(fileName) {
     const key = `${appPrefix}/v/new/${fileName}`
+    if (quotaOptions) {
+      const result = await quotaOptions.record(key)
+      if (result && result.allowed === false) {
+        quotaOptions.onExceeded()
+        return
+      }
+    }
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
     navigateToModel(key, navigate)
@@ -77,9 +84,6 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
       lastModifiedUtc: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
     })
     setPendingModelNameUpdate(fileName)
-    if (quotaOptions) {
-      quotaOptions.record(key)
-    }
     if (onSuccess) {
       onSuccess(fileName)
     }

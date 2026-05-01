@@ -1,6 +1,9 @@
 import {http, passthrough} from 'msw'
 import {
+  HTTP_AUTHORIZATION_REQUIRED,
   HTTP_BAD_REQUEST,
+  HTTP_FORBIDDEN,
+  HTTP_INTERNAL_SERVER_ERROR,
   HTTP_OK,
 } from '../net/http'
 import apiHandlersGithub from './api-handlers-github'
@@ -98,6 +101,8 @@ function workersAndWasmPassthrough() {
 }
 
 
+const FREE_LIMIT_MOCK = 4
+
 /**
  * Handlers for Netlify functions
  *
@@ -126,6 +131,100 @@ function netlifyHandlers() {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},
         },
+      )
+    }),
+
+    http.post('/.netlify/functions/record-load', async ({request}) => {
+      // Tests can flip window.__mockQuotaForce5xx to exercise the
+      // fallback-to-OPFS path. Reset between tests.
+      if (typeof window !== 'undefined' && window.__mockQuotaForce5xx) {
+        return new Response('', {status: HTTP_INTERNAL_SERVER_ERROR})
+      }
+
+      const auth = request.headers.get('authorization') || ''
+      if (!/^Bearer\s+.+/i.test(auth)) {
+        return new Response(
+          JSON.stringify({error: 'Missing Authorization'}),
+          {status: HTTP_AUTHORIZATION_REQUIRED, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const body = await request.json().catch(() => ({}))
+      const key = body && typeof body.key === 'string' ? body.key : null
+      if (!key) {
+        return new Response(
+          JSON.stringify({error: 'Missing key'}),
+          {status: HTTP_BAD_REQUEST, headers: {'Content-Type': 'application/json'},
+          })
+      }
+
+      // Tier from the Zustand store (mirrors what the real function reads
+      // from Auth0 app_metadata; tests inject metadata via setAppMetadata).
+      let tier = 'free'
+      try {
+        const subscriptionStatus =
+          window?.store?.getState?.()?.appMetadata?.subscriptionStatus
+        if (subscriptionStatus === 'sharePro') {
+          tier = 'paid'
+        }
+      } catch {
+        // store not exposed in this test build — default to free
+      }
+
+      // Quotability — same path classification as the real handler.
+      const isLocallyQuotable = key.includes('/v/new/') || key.includes('/v/g/')
+      const ghMatch = key.match(/\/v\/gh\/([^/]+)\/([^/]+)\//)
+      let quotable = isLocallyQuotable
+      if (ghMatch) {
+        // Heuristic: repo names containing "Public" (matching our sample
+        // models like Momentum-Public) are treated as public; everything
+        // else under /v/gh/ is private.
+        const repoName = ghMatch[2]
+        const isPublic = /Public/i.test(repoName)
+        quotable = !isPublic
+      }
+
+      if (typeof window !== 'undefined') {
+        window.__mockQuotaLoads = window.__mockQuotaLoads || []
+      }
+      const loads = (typeof window !== 'undefined' && window.__mockQuotaLoads) || []
+      const limit = tier === 'paid' ? null : FREE_LIMIT_MOCK
+
+      if (tier === 'paid') {
+        return new Response(
+          JSON.stringify({allowed: true, used: loads.length, limit, tier, alreadyCounted: false}),
+          {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      if (!quotable) {
+        return new Response(
+          JSON.stringify({allowed: true, used: loads.length, limit, tier, alreadyCounted: false}),
+          {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      if (loads.some((l) => l.key === key)) {
+        return new Response(
+          JSON.stringify({allowed: true, used: loads.length, limit, tier, alreadyCounted: true, loads}),
+          {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      if (loads.length >= FREE_LIMIT_MOCK) {
+        return new Response(
+          JSON.stringify({allowed: false, used: loads.length, limit, tier, alreadyCounted: false, loads}),
+          {status: HTTP_FORBIDDEN, headers: {'Content-Type': 'application/json'}},
+        )
+      }
+
+      const newLoads = [...loads, {key, loadedAt: new Date().toISOString()}]
+      if (typeof window !== 'undefined') {
+        window.__mockQuotaLoads = newLoads
+      }
+      return new Response(
+        JSON.stringify({allowed: true, used: newLoads.length, limit, tier, alreadyCounted: false, loads: newLoads}),
+        {status: HTTP_OK, headers: {'Content-Type': 'application/json'}},
       )
     }),
   ]

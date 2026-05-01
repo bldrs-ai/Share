@@ -1,5 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {MenuItem, TextField} from '@mui/material'
+import useQuota from '../../hooks/useQuota'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 
@@ -10,8 +11,9 @@ import {navigateToModel} from '../../utils/navigate'
  */
 export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
   const [selected, setSelected] = useState('')
+  const {record} = useQuota()
 
-  const handleSelect = (e, closeDialog) => {
+  const handleSelect = async (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
       0: '/share/v/gh/bldrs-ai/test-models/main/ifc/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
@@ -22,8 +24,12 @@ export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}
       5: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
       6: '/share/v/gh/bldrs-ai/test-models/main/fbx/samba-dancing.fbx#c:-1.016,129.356,253.729,0,90.107,2.409',
     }
+    const path = modelPath[e.target.value]
+    if (path) {
+      await record(path.split('#')[0])
+    }
     disablePageReloadApprovalCheck()
-    navigateToModel({pathname: modelPath[e.target.value]}, navigate)
+    navigateToModel({pathname: path}, navigate)
     closeDialog()
   }
 
