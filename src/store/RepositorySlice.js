@@ -14,6 +14,14 @@ export default function createRepositorySlice(set, get) {
     hasGithubIdentity: false,
     setHasGithubIdentity: (hasIdentity) => set(() => ({hasGithubIdentity: hasIdentity})),
 
+    // Distinguishes "not yet checked" from "checked, no GitHub identity".
+    // Google-only users legitimately end up with accessToken='' and
+    // hasGithubIdentity=false — the same as the initial pre-auth state —
+    // so consumers that gate on auth (e.g. CadView model load) need this
+    // flag to know whether they should wait or proceed.
+    isAuthResolved: false,
+    setIsAuthResolved: (resolved) => set(() => ({isAuthResolved: resolved})),
+
     appMetadata: {},
     setAppMetadata: (metadata) => set({appMetadata: metadata}),
 

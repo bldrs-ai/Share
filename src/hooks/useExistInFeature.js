@@ -1,10 +1,11 @@
 import {useEffect, useState} from 'react'
 import {useSearchParams} from 'react-router-dom'
 import debug from '../utils/debug'
+import {flags} from '../FeatureFlags'
 
 
 /**
- * This hook checks for the existence of a named feature in the URL SearchParams (via react-router), e.g. feature=app,placemark.
+ * This hook checks for a named feature in static FeatureFlags or URL SearchParams, e.g. feature=app,placemark.
  *
  * @param {string} name Feature flag name
  * @return {Function}
@@ -20,6 +21,13 @@ export default function useExistInFeature(name) {
       return
     }
     const lowerName = name.toLowerCase()
+
+    const staticFlag = flags.find((f) => f.name.toLowerCase() === lowerName)
+    if (staticFlag?.isActive) {
+      setExistInFeature(true)
+      return
+    }
+
     const enabledFeatures = searchParams.get('feature')
     if (!enabledFeatures) {
       return

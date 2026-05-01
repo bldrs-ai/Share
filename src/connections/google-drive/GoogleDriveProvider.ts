@@ -19,8 +19,10 @@ const MS_PER_S = 1000
 const EMAIL_FETCH_TIMEOUT_MS = 5000
 const POPUP_CLOSE_DEBOUNCE_MS = 2000
 
+// drive.file: per-file access granted via Picker only. Non-sensitive scope —
+// no Google verification review and no unverified-app consent warning.
 const SCOPES = [
-  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ')
 
@@ -130,7 +132,7 @@ export const googleDriveProvider: ConnectionProvider = {
   name: 'Google Drive',
   icon: 'google-drive',
 
-  async connect(): Promise<Connection> {
+  async connect(hint?: string): Promise<Connection> {
     await loadGisScript()
 
     const clientId = process.env.GOOGLE_OAUTH2_CLIENT_ID
@@ -178,6 +180,7 @@ export const googleDriveProvider: ConnectionProvider = {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: SCOPES,
+        hint: hint || undefined,
         callback: (response: TokenResponse) => {
           gotCallback = true
           debug().log('[GDrive] OAuth callback received, error:', response.error || 'none')

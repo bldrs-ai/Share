@@ -6,6 +6,12 @@ export default {
   testEnvironment: 'jest-fixed-jsdom',
   rootDir: '../../',
   roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
+  // Default jest timeout is 5s. Under default parallel worker load (~N-1 cores),
+  // heavy React Testing Library mount tests (CadView, OpenModelControl, Notes,
+  // TabbedPanels, useVersions) intermittently blow past 5s and produce flakes
+  // that pass in isolation. Individual tests needing more should override via
+  // their own arg to it()/test().
+  testTimeout: 20000,
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',

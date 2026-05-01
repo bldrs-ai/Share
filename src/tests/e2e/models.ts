@@ -23,12 +23,16 @@ export async function setupVirtualPathIntercept(
   }
 
   const fixturesDir = 'src/tests/fixtures'
-  const proxyBase = 'https://rawgit.bldrs.dev.msw/model'
-  // --- Proxy intercept (serve the IFC bytes) -------------------------------
+  // The app routes GitHub fetches through one of two proxies — RAW_GIT_PROXY_URL
+  // (`/r/...`) or RAW_GIT_PROXY_URL_NEW (`/model/...`) — depending on whether
+  // OPFS is enabled. Match both so the intercept survives OPFS toggles and any
+  // future redirect between them. MSW lets these passthrough so page.route
+  // can fulfill from the local fixture instead of the real CDN.
   const ghPath = path.substring(sharePrefix.length) // keep Cypress logic
-  const interceptUrl = `${proxyBase}${ghPath}`
+  const interceptUrl = `https://rawgit.bldrs.dev/model${ghPath}`
+  const interceptPattern = new RegExp(`^https://rawgit\\.bldrs\\.dev/(?:model|r)${ghPath.replace(/\./g, '\\.')}(?:\\?.*)?$`)
 
-  await page.route(`${interceptUrl}*`, async (route) => {
+  await page.route(interceptPattern, async (route) => {
     const body = await readFile(join(fixturesDir, fixturePath))
     await route.fulfill({
       status: 200,

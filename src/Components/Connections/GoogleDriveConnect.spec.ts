@@ -42,8 +42,7 @@ describe('Google Drive connection', () => {
     await page.addInitScript({path: GOOGLE_APIS_FAKE_PATH})
     await homepageSetup(page)
     await returningUserVisitsHomepageWaitForModel(page)
-    // Re-navigate with googleDrive feature flag so the Google tab is visible
-    await page.goto('/share/v/p/index.ifc?feature=googleDrive', {waitUntil: 'domcontentloaded'})
+    await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
     await openSourcesTab(page)
   })
 
