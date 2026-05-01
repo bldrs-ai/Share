@@ -125,10 +125,18 @@ export default function ProfileControl() {
 
     if (stripeCustomerId) {
       try {
+        const token = await getAccessTokenSilently({
+          authorizationParams: {
+            audience: 'https://api.github.com/',
+            scope: 'openid profile email offline_access',
+          },
+        })
         const response = await fetch('/.netlify/functions/create-portal-session', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({stripeCustomerId}),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
         })
         const data = await response.json()
         if (data.url) {
