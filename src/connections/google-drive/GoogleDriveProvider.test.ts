@@ -90,7 +90,7 @@ describe('GoogleDriveProvider — OAuth state (CSRF protection)', () => {
     capturedCallback?.({
       access_token: 'tok',
       expires_in: 3600,
-      scope: 'drive.readonly',
+      scope: 'drive.file',
       token_type: 'Bearer',
       state: 'wrong-state',
     })
@@ -105,7 +105,7 @@ describe('GoogleDriveProvider — OAuth state (CSRF protection)', () => {
     capturedCallback?.({
       access_token: 'tok',
       expires_in: 3600,
-      scope: 'drive.readonly',
+      scope: 'drive.file',
       token_type: 'Bearer',
       state: 'test-uuid-1234',
     })
@@ -131,7 +131,7 @@ describe('GoogleDriveProvider — OAuth state (CSRF protection)', () => {
     capturedCallback?.({
       access_token: 'tok',
       expires_in: 3600,
-      scope: 'drive.readonly',
+      scope: 'drive.file',
       token_type: 'Bearer',
       // no state in response — expectedState is null, validation skipped
     })
