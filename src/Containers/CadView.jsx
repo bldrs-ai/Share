@@ -31,6 +31,11 @@ import {initViewer} from './viewer'
 
 
 let count = 0
+// Tracks the theme-change listener registered by onModelPath() so we
+// can remove it before registering a new one on the next model load.
+// Otherwise each prior listener stays in the registry, capturing its
+// (now-disposed) viewer via closure and pinning it from GC.
+let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -140,6 +145,10 @@ export default function CadView({
     if (isModelReady) {
       resetState()
     }
+    if (previousThemeChangeCb) {
+      theme.removeThemeChangeListener(previousThemeChangeCb)
+    }
+    previousThemeChangeCb = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }

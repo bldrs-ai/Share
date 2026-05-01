@@ -1,4 +1,4 @@
-import React, {ReactElement, useCallback} from 'react'
+import React, {ReactElement, useCallback, useEffect, useRef} from 'react'
 import {Box} from '@mui/material'
 import {IFrameCommunicationChannel} from './AppsMessagesHandler'
 
@@ -8,11 +8,32 @@ import {IFrameCommunicationChannel} from './AppsMessagesHandler'
  * @return {ReactElement}
  */
 export default function AppIFrame({itemJson}) {
+  const channelRef = useRef(null)
+
   const appFrameRef = useCallback((elt) => {
-    if (elt) {
-      elt.addEventListener('load', () => {
-        new IFrameCommunicationChannel(elt)
-      })
+    // Dispose any prior channel before creating a new one or before
+    // the iframe element detaches.
+    if (channelRef.current) {
+      channelRef.current.dispose()
+      channelRef.current = null
+    }
+    if (!elt) {
+      return
+    }
+    elt.addEventListener('load', () => {
+      if (channelRef.current) {
+        channelRef.current.dispose()
+      }
+      channelRef.current = new IFrameCommunicationChannel(elt)
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (channelRef.current) {
+        channelRef.current.dispose()
+        channelRef.current = null
+      }
     }
   }, [])
 

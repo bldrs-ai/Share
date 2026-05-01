@@ -22,10 +22,11 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
       debug().log('loader#loadLocalFile#event:', event)
       const file = event.target.files[0]
       const lastModifiedUtc = file.lastModified
-      let tmpUrl = URL.createObjectURL(file)
-      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-      const parts = tmpUrl.split('/')
-      tmpUrl = parts[parts.length - 1]
+      const objectUrl = URL.createObjectURL(file)
+      debug().log('loader#loadLocalFile#event: url: ', objectUrl)
+      const parts = objectUrl.split('/')
+      const tmpUrl = parts[parts.length - 1]
+      URL.revokeObjectURL(objectUrl)
       if (onLoad) {
         onLoad(tmpUrl, lastModifiedUtc)
       }
@@ -69,18 +70,24 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
       const parts = tmpUrl.split('/')
       const fileNametmpUrl = parts[parts.length - 1]
       if (!testingDisableWebWorker) {
-        // Listener for messages from the worker
+        // Listener for messages from the worker.  We can't revoke
+        // tmpUrl until the worker is done with it, so revoke when the
+        // listener detaches (success or error path).
         const listener = (workerEvent) => {
           if (workerEvent.data.error) {
             debug().error('Error from worker:', workerEvent.data.error)
-            workerRef.removeEventListener('message', listener) // Remove the event listener
+            workerRef.removeEventListener('message', listener)
+            URL.revokeObjectURL(tmpUrl)
           } else if (workerEvent.data.completed) {
             if (workerEvent.data.event === 'write') {
               debug().log('Worker finished writing file')
-              // Perform the navigation logic after the worker is done
+              workerRef.removeEventListener('message', listener)
+              URL.revokeObjectURL(tmpUrl)
               onLoad(workerEvent.data.fileName, lastModifiedUtc)
             } else if (workerEvent.data.event === 'read') {
               debug().log('Worker finished reading file')
+              workerRef.removeEventListener('message', listener)
+              URL.revokeObjectURL(tmpUrl)
               onLoad(workerEvent.data.file.name, lastModifiedUtc)
             }
           }
@@ -94,6 +101,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
         const ext = dotParts[dotParts.length - 1]
         opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
       } else {
+        URL.revokeObjectURL(tmpUrl)
         onLoad(fileNametmpUrl, lastModifiedUtc)
       }
     },
@@ -116,9 +124,10 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
  */
 export function saveDnDFileToOpfsFallback(file, callback) {
   assertDefined(file, callback)
-  let tmpUrl = URL.createObjectURL(file)
-  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', tmpUrl)
-  const parts = tmpUrl.split('/')
-  tmpUrl = parts[parts.length - 1]
+  const objectUrl = URL.createObjectURL(file)
+  debug().log('utils/loader#saveDnDFileToOpfsAndNavFallback: url: ', objectUrl)
+  const parts = objectUrl.split('/')
+  const tmpUrl = parts[parts.length - 1]
+  URL.revokeObjectURL(objectUrl)
   callback(tmpUrl)
 }

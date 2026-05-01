@@ -110,21 +110,22 @@ const FREE_LIMIT_MOCK = 4
  */
 function netlifyHandlers() {
   return [
-    http.post('/.netlify/functions/create-portal-session', async ({request}) => {
-      const {stripeCustomerId} = await request.json()
-
-      if (!stripeCustomerId) {
+    http.post('/.netlify/functions/create-portal-session', ({request}) => {
+      // Real handler derives the Stripe customer server-side from the bearer
+      // token; mock asserts the contract by requiring the Authorization
+      // header rather than trusting a body field.
+      const auth = request.headers.get('authorization') || ''
+      if (!/^Bearer\s+.+/i.test(auth)) {
         return new Response(
-          JSON.stringify({error: 'Missing stripeCustomerId'}),
+          JSON.stringify({error: 'Missing Authorization'}),
           {
-            status: HTTP_BAD_REQUEST,
+            status: HTTP_AUTHORIZATION_REQUIRED,
             headers: {'Content-Type': 'application/json'},
           },
         )
       }
 
-      // return a mocked Stripe billing-portal URL
-      const fakeUrl = `https://stripe.portal.msw/mockportal/session/${stripeCustomerId}`
+      const fakeUrl = 'https://stripe.portal.msw/mockportal/session/cus_test_mock'
       return new Response(
         JSON.stringify({url: fakeUrl}),
         {

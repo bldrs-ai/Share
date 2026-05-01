@@ -6,6 +6,7 @@ import {
   addHashListener,
   addHashParams,
   getHashParams,
+  removeHashListener,
 } from '../../utils/location'
 import {roundCoord} from '../../utils/math'
 import {floatStrTrim} from '../../utils/strings'
@@ -34,7 +35,8 @@ export default function CameraControl() {
   useEffect(() => {
     setCameraControls(cameraControls)
     onHash(location, cameraControls)
-    onLoad(location, cameraControls, viewer)
+    const cleanup = onLoad(location, cameraControls, viewer)
+    return cleanup
   }, [location, cameraControls, setCameraControls, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
@@ -48,6 +50,9 @@ export default function CameraControl() {
  * @param {object} location Either window.location or react-router location
  * @param {object} cameraControls obtained from the viewer
  * @param {object} viewer the viewer, for null testing
+ * @return {Function} cleanup function that removes the listeners this
+ *     call added.  Always returns a function so React useEffect can
+ *     call it unconditionally.
  */
 function onLoad(location, cameraControls, viewer) {
   addHashListener('camera', () => onHash(location, cameraControls))
@@ -63,9 +68,6 @@ function onLoad(location, cameraControls, viewer) {
       }
       isMouseMoved = false
     }
-    canvas.removeEventListener('mousemove', onMouseMove)
-    canvas.addEventListener('mousemove', onMouseMove)
-
     // https://stackoverflow.com/questions/3515446/jquery-mousewheel-detecting-when-the-wheel-stops/28371047#28371047
     const onWheel = () => {
       clearTimeout(document.wheeling)
@@ -74,11 +76,21 @@ function onLoad(location, cameraControls, viewer) {
         removeCameraUrlParams()
       }, WHEEL_DEBOUNCE_WAIT_MS)
     }
+    canvas.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('wheel', onWheel)
-
-    canvas.removeEventListener('mouseup', onMouseUp)
-    canvas.removeEventListener('touchend', onMouseUp)
     canvas.addEventListener('mouseup', onMouseUp)
+    canvas.addEventListener('touchend', onMouseUp)
+
+    return () => {
+      removeHashListener('camera')
+      canvas.removeEventListener('mousemove', onMouseMove)
+      canvas.removeEventListener('wheel', onWheel)
+      canvas.removeEventListener('mouseup', onMouseUp)
+      canvas.removeEventListener('touchend', onMouseUp)
+    }
+  }
+  return () => {
+    removeHashListener('camera')
   }
 }
 
