@@ -19,7 +19,6 @@ import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositorie
 interface Defines {
   GITHUB_BASE_URL: string
   GITHUB_BASE_URL_UNAUTHENTICATED: string
-  RAW_GIT_PROXY_URL?: string
 }
 
 let commentDeleted = false
@@ -91,7 +90,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
           const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
-            `${defines.RAW_GIT_PROXY_URL || process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
+            `https://raw.githubusercontent.com/${org}/${repo}/${ref}/${path}`
 
           return new Response(
             JSON.stringify({
