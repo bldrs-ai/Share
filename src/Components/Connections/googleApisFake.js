@@ -31,7 +31,7 @@ window.google = {
               config.callback({
                 access_token: 'fake-gis-access-token',
                 expires_in: FAKE_EXPIRES_IN,
-                scope: 'https://www.googleapis.com/auth/drive.readonly',
+                scope: 'https://www.googleapis.com/auth/drive.file',
                 token_type: 'Bearer',
                 state: tokenConfig?.state,
               })
