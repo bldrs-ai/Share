@@ -53,5 +53,24 @@ export class IFrameCommunicationChannel {
   sendMessage = (action, response) => {
     this.port1.postMessage({action, response})
   }
+
+  /**
+   * Release the MessageChannel and drop references so this instance
+   * and the iframe it captured can be garbage-collected.  Safe to call
+   * multiple times.
+   */
+  dispose() {
+    if (this.port1) {
+      this.port1.onmessage = null
+      try {
+        this.port1.close()
+      } catch (e) {
+        console.warn('IFrameCommunicationChannel: port1.close failed:', e)
+      }
+      this.port1 = null
+    }
+    this.channel = null
+    this.iframe = null
+  }
 }
 

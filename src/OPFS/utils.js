@@ -431,22 +431,26 @@ export function saveDnDFileToOpfs(file, type, callback) {
   const parts = tmpUrl.split('/')
   const fileNametmpUrl = parts[parts.length - 1]
 
-  // Listener for messages from the worker
+  // Listener for messages from the worker.  We can't revoke tmpUrl
+  // until the worker is done with it, so revoke when the listener
+  // detaches (success or error path).
   const listener = (workerEvent) => {
     if (workerEvent.data.error) {
       debug().error('Error from worker:', workerEvent.data.error)
-      workerRef.removeEventListener('message', listener) // Remove the event listener
+      workerRef.removeEventListener('message', listener)
+      URL.revokeObjectURL(tmpUrl)
     } else if (workerEvent.data.completed) {
       if (workerEvent.data.event === 'write') {
         debug().log('Worker finished writing file')
-        // Perform the navigation logic after the worker is done
         const fileName = workerEvent.data.fileName
         workerRef.removeEventListener('message', listener)
+        URL.revokeObjectURL(tmpUrl)
         callback(fileName)
       } else if (workerEvent.data.event === 'read') {
         debug().log('Worker finished reading file')
         const fileName = workerEvent.data.file.name
-        workerRef.removeEventListener('message', listener) // Remove the event listener
+        workerRef.removeEventListener('message', listener)
+        URL.revokeObjectURL(tmpUrl)
         callback(fileName)
       }
     }

@@ -31,7 +31,22 @@ export default function createNotesSlice(set, get) {
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
 
     deletedNotes: null,
-    setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
+    // Prune per-note edit state when a note is deleted so editBodies,
+    // editModes, and editOriginalBodies don't grow unbounded across a
+    // session.
+    setDeletedNotes: (deletedNotes) => set((state) => {
+      if (!deletedNotes || deletedNotes.id === undefined) {
+        return {deletedNotes}
+      }
+      const id = deletedNotes.id
+      const editBodies = {...state.editBodies}
+      const editModes = {...state.editModes}
+      const editOriginalBodies = {...state.editOriginalBodies}
+      delete editBodies[id]
+      delete editModes[id]
+      delete editOriginalBodies[id]
+      return {deletedNotes, editBodies, editModes, editOriginalBodies}
+    }),
 
     editBodies: {}, // Track editBody for each NoteCard by id
     setEditBody: (id, body) =>

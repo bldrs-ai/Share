@@ -357,6 +357,29 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   )
 }
 
+// Tracks the active snack-clear timeout so successive saves don't
+// pile up callbacks that could fire on an unmounted component.
+let snackTimeoutId = null
+
+
+/**
+ * Schedule clearing of the snack message after a delay, replacing any
+ * pending clear so only one is ever active.
+ *
+ * @param {Function} setSnackMessage
+ * @param {number} pauseTimeMs
+ */
+function scheduleSnackClear(setSnackMessage, pauseTimeMs) {
+  if (snackTimeoutId !== null) {
+    clearTimeout(snackTimeoutId)
+  }
+  snackTimeoutId = setTimeout(() => {
+    snackTimeoutId = null
+    setSnackMessage(null)
+  }, pauseTimeMs)
+}
+
+
 /**
  * Redirects to a new model after displaying a success message.
  * The function constructs a GitHub path for the committed file
@@ -372,7 +395,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
   setSnackMessage(MSG_SAVE_SUCCESS)
   const pauseTimeMs = 5000
-  setTimeout(() => setSnackMessage(null), pauseTimeMs)
+  scheduleSnackClear(setSnackMessage, pauseTimeMs)
 
   const pathLeadingSlash = `/${ pathWithFileName}`
 
@@ -432,7 +455,7 @@ async function fileSave(
           } else {
             setSnackMessage(MSG_ERROR_OPFS)
             const pauseTimeMs = 5000
-            setTimeout(() => setSnackMessage(null), pauseTimeMs)
+            scheduleSnackClear(setSnackMessage, pauseTimeMs)
           }
         } else {
           redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
@@ -440,7 +463,7 @@ async function fileSave(
       } else {
         setSnackMessage(MSG_ERROR_GITHUB)
         const pauseTimeMs = 5000
-        setTimeout(() => setSnackMessage(null), pauseTimeMs)
+        scheduleSnackClear(setSnackMessage, pauseTimeMs)
       }
     } catch (error) {
       setSnackMessage(error.message || MSG_ERROR_GITHUB)
