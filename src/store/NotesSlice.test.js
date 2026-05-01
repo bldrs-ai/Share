@@ -141,6 +141,56 @@ describe('store/NotesSlice', () => {
   })
 
 
+  describe('setDeletedNotes pruning of edit state', () => {
+    it('removes the deleted note\'s entries from editBodies, editModes, and editOriginalBodies', () => {
+      const store = makeStore()
+      // Seed edit state for two notes
+      store.getState().setEditBody('n1', 'first')
+      store.getState().setEditBody('n2', 'second')
+      store.getState().setEditMode('n1', true)
+      store.getState().setEditMode('n2', false)
+      store.getState().setEditOriginalBody('n1', 'first-orig')
+      store.getState().setEditOriginalBody('n2', 'second-orig')
+
+      // Delete n1
+      store.getState().setDeletedNotes({id: 'n1'})
+
+      const state = store.getState()
+      expect(state.deletedNotes).toEqual({id: 'n1'})
+      expect(state.editBodies).toEqual({n2: 'second'})
+      expect(state.editModes).toEqual({n2: false})
+      expect(state.editOriginalBodies).toEqual({n2: 'second-orig'})
+    })
+
+    it('leaves edit state untouched when deletedNotes is null (e.g. clearing the field)', () => {
+      const store = makeStore()
+      store.getState().setEditBody('n1', 'first')
+      store.getState().setDeletedNotes(null)
+      expect(store.getState().deletedNotes).toBeNull()
+      expect(store.getState().editBodies).toEqual({n1: 'first'})
+    })
+
+    it('leaves edit state untouched when deletedNotes has no id (legacy/array shape)', () => {
+      const store = makeStore()
+      store.getState().setEditBody('n1', 'first')
+      // The pre-existing parameterized test already passes an array
+      // here; preserve that behavior — pruning only kicks in when
+      // we get a concrete {id} payload.
+      store.getState().setDeletedNotes([{id: 2}])
+      expect(store.getState().editBodies).toEqual({n1: 'first'})
+    })
+
+    it('does nothing when the deleted id has no associated edit state', () => {
+      const store = makeStore()
+      store.getState().setEditBody('n1', 'first')
+      store.getState().setDeletedNotes({id: 'unknown-note'})
+      expect(store.getState().editBodies).toEqual({n1: 'first'})
+      expect(store.getState().editModes).toEqual({})
+      expect(store.getState().editOriginalBodies).toEqual({})
+    })
+  })
+
+
   describe('selected place mark in note', () => {
     it('setSelectedPlaceMarkInNoteIdData updates three fields at once', () => {
       const store = makeStore()

@@ -69,6 +69,38 @@ describe('CameraControl', () => {
       jest.useRealTimers()
     })
 
+    it('removes every canvas listener it added when the component unmounts', () => {
+      // Locking in the useEffect-cleanup contract: anonymous handlers
+      // were leaking before because removeEventListener was called
+      // with fresh fn refs that didn't match the ones added.
+      const removeEventListenerSpy = jest.spyOn(
+        HTMLCanvasElement.prototype, 'removeEventListener',
+      )
+
+      const {unmount} = render(<ShareMock><CameraControl/></ShareMock>)
+
+      // Capture the handler refs that were added per event name; we'll
+      // then assert removeEventListener was called with the same refs.
+      const tracked = ['mousemove', 'wheel', 'mouseup', 'touchend']
+      const addedByName = {}
+      tracked.forEach((name) => {
+        const call = addEventListenerSpy.mock.calls.find(([n]) => n === name)
+        expect(call).toBeDefined()
+        addedByName[name] = call[1]
+      })
+
+      unmount()
+
+      tracked.forEach((name) => {
+        const removeCall = removeEventListenerSpy.mock.calls.find(
+          ([n, fn]) => n === name && fn === addedByName[name],
+        )
+        expect(removeCall).toBeDefined()
+      })
+
+      removeEventListenerSpy.mockRestore()
+    })
+
     it('calls removeCameraUrlParams only once after multiple wheel events', () => {
       // 1) Render the component
       render(<ShareMock><CameraControl/></ShareMock>)
