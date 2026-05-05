@@ -16,11 +16,14 @@ test.describe('Routes', () => {
     await setIsReturningUser(context)
   })
 
-  // TODO(pablo): these are failing on GHA due to the raw calls to bldrs.dev.. env needs some work.
+  // TODO(pablo): kept skipped — registerIntercept does not yet stub the
+  // Contents API call the SPA makes before fetching from
+  // raw.githubusercontent.com. Use setupVirtualPathIntercept (see
+  // src/tests/e2e/models.ts) when re-enabling.
   // GitHub route (/gh)
   test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
-    const ghInterceptPattern = new RegExp('https://rawgit\\.bldrs\\.dev/model/bldrs-ai/Share/main/public/index\\.ifc')
-    const ghResponseUrlStr = 'https://rawgit.bldrs.dev/model/bldrs-ai/Share/main/public/index.ifc'
+    const ghInterceptPattern = new RegExp('https://raw\\.githubusercontent\\.com/bldrs-ai/Share/main/public/index\\.ifc')
+    const ghResponseUrlStr = 'https://raw.githubusercontent.com/bldrs-ai/Share/main/public/index.ifc'
     const response = await registerIntercept({
       page,
       intereceptPattern: ghInterceptPattern,

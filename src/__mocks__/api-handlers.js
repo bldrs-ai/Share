@@ -30,8 +30,12 @@ export function initHandlers(defines) {
   // Pass through paths that are served by static assets or playwright fixtures
   handlers.push(http.get('/share/v/p/*', () => passthrough()))
   handlers.push(http.get('/share/v/gh/*', () => passthrough()))
-  handlers.push(http.get('https://rawgit.bldrs.dev/model/*', () => passthrough()))
-  handlers.push(http.get('https://rawgit.bldrs.dev/r/*', () => passthrough()))
+  // The SPA dereferences GitHub-hosted files via the Contents API and then
+  // fetches the resulting download_url directly. Let those reach playwright's
+  // page.route layer (or the real CDN in dev) instead of being warned about
+  // as unhandled.
+  handlers.push(http.get('https://raw.githubusercontent.com/*', () => passthrough()))
+  handlers.push(http.get('https://media.githubusercontent.com/*', () => passthrough()))
   handlers.push(...installEsbuildHotReloadHandler())
   return handlers
 }

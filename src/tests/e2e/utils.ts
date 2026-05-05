@@ -47,11 +47,72 @@ export async function clearState(context: BrowserContext) {
 
 
 /**
+ * Hosts whose traffic carries data the SPA reads or writes (model files,
+ * GitHub API responses, auth tokens, AI completions). Reaching these from
+ * a test is the leak we *must* fail on — it can paper over a broken mock
+ * and produce non-hermetic results. Analytics / tracking script hosts
+ * (googletagmanager, google-analytics) are deliberately NOT in this list:
+ * MSW handles them, but on the first page navigation a `<script>` tag for
+ * gtag may fire before MSW's service worker takes control, and a hard
+ * abort there only breaks page init without protecting any data.
+ */
+const REAL_NETWORK_HOST_DENYLIST = [
+  // Real GitHub
+  'api.github.com',
+  'raw.githubusercontent.com',
+  'media.githubusercontent.com',
+  'github.com',
+  // The proxy this PR removed
+  'rawgit.bldrs.dev',
+  // Real auth + bldrs hosts that test setups suffix with .msw / .pw
+  'bldrs.us.auth0.com',
+  'git.bldrs.dev',
+  // Real OpenRouter (AI completions)
+  'openrouter.ai',
+]
+
+
+/**
+ * Block real-internet network calls during tests.
+ *
+ * Tests must serve all traffic locally — fixtures, MSW handlers, page.route
+ * fulfillments. A request that escapes to a real host (e.g. the real
+ * raw.githubusercontent.com) is a bug, not a known limitation: it makes
+ * tests non-hermetic and can paper over broken intercepts. This handler
+ * aborts any request whose hostname matches a known real-internet host so
+ * the leak fails loudly instead of silently succeeding.
+ *
+ * Allowlisted (handled by MSW or page.route, not blocked here): localhost,
+ * 127.0.0.1, and any host whose hostname ends with one of the test-fake
+ * suffixes (.msw, .pw, .jest, .cypress).
+ *
+ * @param context - Playwright browser context
+ */
+export async function blockExternalNetwork(context: BrowserContext) {
+  await context.route('**/*', async (route) => {
+    const url = new URL(route.request().url())
+    const hostname = url.hostname.toLowerCase()
+    if (REAL_NETWORK_HOST_DENYLIST.includes(hostname)) {
+      console.error(`Blocked real-network request from test: ${route.request().method()} ${url}`)
+      await route.abort('blockedbyclient')
+      return
+    }
+    await route.fallback()
+  })
+}
+
+
+/**
  * Setup homepage intercepts and navigate to root path
  *
  * @param page - Playwright page object
  */
 export async function homepageSetup(page: Page) {
+  // Register the real-network guard FIRST so it sits at the bottom of the
+  // route stack: fixture-specific routes registered later will match first
+  // and short-circuit; only requests no test handler claimed reach this
+  // guard.
+  await blockExternalNetwork(page.context())
   // The next two steps are necessary to avoid font synthesis issues in GitHub Actions.
   // Wait for fonts to load
   /*
@@ -134,6 +195,28 @@ export async function visitHomepageWaitForModel(page: Page) {
     }),
     page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
   ])
+  // MSW registers and activates its service worker during the first
+  // navigation. Wait for it to be the page's active controller before
+  // any subsequent test navigation makes a fetch — otherwise requests
+  // to the fake-suffix test hosts (api.github.com.pw etc.) miss MSW
+  // and fail real DNS resolution.
+  await waitForServiceWorker(page)
+}
+
+
+/**
+ * Waits until a service worker is registered AND controlling the current
+ * page. Required before tests can rely on MSW's interception.
+ *
+ * @param page - Playwright page object
+ */
+export async function waitForServiceWorker(page: Page) {
+  const SW_READY_TIMEOUT = 10000
+  await page.waitForFunction(
+    () => navigator.serviceWorker.controller !== null,
+    null,
+    {timeout: SW_READY_TIMEOUT},
+  )
 }
 
 

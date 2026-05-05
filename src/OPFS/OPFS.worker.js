@@ -13,6 +13,18 @@ let GITHUB_BASE_URL_AUTHENTICATED = null
 let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
 
+/**
+ * Pick the GitHub API base URL: use the OAuth-injecting bldrs proxy when a
+ * user token is present, otherwise hit GitHub directly.
+ *
+ * @param {string} accessToken
+ * @return {string}
+ */
+function ghApiBase(accessToken) {
+  return accessToken ? GITHUB_BASE_URL_AUTHENTICATED : GITHUB_BASE_URL_UNAUTHENTICATED
+}
+
+
 self.addEventListener('message', async (event) => {
   try {
     if (event.data.command === 'initializeWorker') {
@@ -257,50 +269,6 @@ export async function fetchRGHUC(modelUrl) {
   } catch (error) {
     console.error('Error:', error)
     return null
-  }
-}
-
-
-/**
- * Fetch the final URL and make a HEAD request
- *
- * @param {string} jsonUrl - The URL to fetch the JSON from.
- * @param {string} etag_ - The ETag to use for the request.
- * @return {Promise<Response>} The response from the request.
- */
-export async function fetchAndHeadRequest(jsonUrl, etag_ = null) {
-  try {
-    const STATUS_NOT_MODIFIED = 304
-    // Step 1: Fetch the JSON response with ETag header if provided
-    const fetchOptions = etag_ ? {headers: {ETag: etag_}} : {}
-    const proxyResponse = await fetch(jsonUrl, fetchOptions)
-
-    if (proxyResponse.status === STATUS_NOT_MODIFIED) {
-      console.warn('OPFS.worker#fetchAndHeadRequest: proxy responded HTTP_NOT_MODIFIED, using cached')
-      return null
-    }
-
-    if (!proxyResponse.ok) {
-      throw new Error('Failed to fetch JSON response')
-    }
-
-    // clone response
-    const clonedResponse = proxyResponse.clone()
-
-    const json = await clonedResponse.json()
-
-    const {etag, finalURL} = json
-
-    // Step 3: fetch model
-    const modelResponse = await fetch(finalURL)
-
-    if (!modelResponse.ok) {
-      throw new Error('Failed to make model request')
-    }
-
-    return {proxyResponse, modelResponse, etag}
-  } catch (error) {
-    console.error('Error:', error)
   }
 }
 
@@ -662,7 +630,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           return
         }
         // get commit hash
-        const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+        const _commitHash = await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
           const pathSegments = safePathSplit(originalFilePath)
@@ -691,7 +659,7 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
           await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
           // get commit hash
-          const _commitHash = await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+          const _commitHash = await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
           if (_commitHash !== null) {
             const pathSegments = safePathSplit(originalFilePath)
@@ -732,7 +700,6 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
  * @return {Promise<void>}
  */
 export async function downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress) {
-  let _etag = null
   let commitHash = null
   let lastModifiedGithub = null
   let cleanEtag = null
@@ -750,10 +717,9 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
     const clonedCached = cached.clone()
     // eslint-disable-next-line no-unused-vars
     const {_, etag, finalURL} = await clonedCached.json()
-    _etag = etag
 
     // Remove any enclosing quotes from the ETag value
-    cleanEtag = _etag.replace(/"/g, '')
+    cleanEtag = etag.replace(/"/g, '')
 
     if (clonedCached.headers.get('commithash')) {
       commitHash = clonedCached.headers.get('commithash')
@@ -764,12 +730,9 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
   }
 
   if (shaHash) {
-    // This will be the authed case - in this case we don't use the proxy at all.
-    // For this we just see if the either GIT SHA or the commit hash exists in a file name in OPFS.
-    // If the file exists in cache it should have a commit hash already.
-    // TODO: There is a race condition where someone can load a file unauthed and log in and refresh
-    // the page before the file is renamed with the commit hash. This would cause a duplicate file
-    // to be stored in OPFS
+    // Look up by SHA (or fall back to commit hash / etag) in OPFS. The Contents
+    // API returns a SHA for both authed and unauth callers, so this branch
+    // serves all GitHub-hosted loads after the proxy was retired.
 
     try {
       [modelDirectoryHandle, modelBlobFileHandle] = await
@@ -794,7 +757,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         }
         // get commit hash
         const {hash: _commitHash, date: _commitDate} =
-          await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+          await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
         if (_commitHash !== null) {
           const pathSegments = safePathSplit(originalFilePath)
@@ -824,7 +787,7 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
 
           // get commit hash
           const {hash: _commitHash, date: _commitDate} =
-          await fetchLatestCommitHash(GITHUB_BASE_URL_AUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
+          await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
           if (_commitHash !== null) {
             const pathSegments = safePathSplit(originalFilePath)
@@ -851,153 +814,11 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
     return
   }
 
-  // const etag = "\"d3796370c5691ef25bbc6e829194623e4a2521a78092fa3abec23c0e8fe34e1a\""
-  const result = await fetchAndHeadRequest(objectUrl, _etag)
-
-  if (result === null) {
-    // result SHOULD be cached, let's see.
-    try {
-      [modelDirectoryHandle, modelBlobFileHandle] = await
-      retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, commitHash === null ? 'temporary' : commitHash, false)
-
-      if (modelBlobFileHandle !== null ) {
-        // Display model
-        const blobFile = await modelBlobFileHandle.getFile()
-
-        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile, lastModifiedGithub})
-
-        if (commitHash !== null) {
-          return
-        }
-        // TODO: get commit hash
-        const {hash: _commitHash, date: _commitDate} =
-          await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
-
-        if (_commitHash !== null) {
-          const pathSegments = safePathSplit(originalFilePath)
-          const lastSegment = pathSegments[pathSegments.length - 1]
-          const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
-          const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-          if (newResult !== null) {
-            // Update cache with new data
-            await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
-            const updatedBlobFile = await newResult.getFile()
-
-            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
-          }
-        }
-      } else {
-        // expected if file not found - lets see if we have a temporary file
-
-        if (commitHash !== null) {
-          try {
-            [modelDirectoryHandle, modelBlobFileHandle] = await
-            retrieveFileWithPathNew(opfsRoot, cacheKey, cleanEtag, 'temporary', false)
-
-            if (modelBlobFileHandle !== null ) {
-              // Display model and get commitHash
-              const blobFile = await modelBlobFileHandle.getFile()
-
-              self.postMessage({completed: true, event: 'download', file: blobFile})
-
-              // TODO: get commit hash here
-              const {hash: _commitHash, date: _commitDate} = await fetchLatestCommitHash(
-                GITHUB_BASE_URL_UNAUTHENTICATED,
-                owner,
-                repo,
-                originalFilePath,
-                accessToken,
-                branch)
-
-              if (_commitHash !== null) {
-                const pathSegments = safePathSplit(originalFilePath)
-                const lastSegment = pathSegments[pathSegments.length - 1]
-                const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
-                const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-                if (newResult !== null) {
-                  // Update cache with new data
-                  await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
-                  const updatedBlobFile = await newResult.getFile()
-
-                  self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
-                }
-              }
-            }
-          } catch (error_) {
-            // expected if file not found - invalidate cache and try again
-            console.warn('File not found in cache, invalidating cache and request again with no etag')
-            await CacheModule.deleteCache(cacheKey)
-            downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
-            return
-          }
-        }
-
-        console.warn('File not found in cache, invalidating cache and request again with no etag')
-        await CacheModule.deleteCache(cacheKey)
-        downloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, onProgress)
-        return
-      }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.trace(error)
-    }
-  }
-
-  // not cached, download model
-  const {proxyResponse, modelResponse, etag} = result
-
-  // Remove any enclosing quotes from the ETag value
-  cleanEtag = etag.replace(/"/g, '');
-
-  [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(modelResponse, cacheKey, cleanEtag, onProgress)
-
-  // Compute file git sha1 hash
-  const computedShaHash = await computeGitBlobSha1FromHandle(modelBlobFileHandle)
-  // eslint-disable-next-line no-console
-  console.log('SHA-1 Hash:', computedShaHash)
-
-  try {
-    const [, modelBlobFileHandle_] = await
-    retrieveFileWithPathNew(opfsRoot, cacheKey, computedShaHash, null, false)
-
-    if (modelBlobFileHandle_ !== null) {
-      // eslint-disable-next-line no-console
-      console.log('SHA match found in OPFS')
-      // we already have this file, just delete the one we downloaded and update the cached response.
-      const newResponse = proxyResponse.clone()
-      await CacheModule.updateCacheRaw(cacheKey, newResponse, commitHash)
-      modelDirectoryHandle.removeEntry(modelBlobFileHandle.name)
-      return
-    }
-  } catch (error_) {
-    return
-  }
-
-
-  // Update cache with new data
-  const clonedResponse = proxyResponse.clone()
-  await CacheModule.updateCacheRaw(cacheKey, clonedResponse, null)
-
-  // TODO: get commit hash
-  const {hash: _commitHash, date: _commitDate} =
-    await fetchLatestCommitHash(GITHUB_BASE_URL_UNAUTHENTICATED, owner, repo, originalFilePath, accessToken, branch)
-
-  if (_commitHash !== null) {
-    const pathSegments = safePathSplit(originalFilePath)
-    const lastSegment = pathSegments[pathSegments.length - 1]
-    const newFileName = `${lastSegment }.${cleanEtag}.${ _commitHash === null ? 'temporary' : _commitHash}`
-    const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-    if (newResult !== null) {
-      // Update cache with new data
-      await CacheModule.updateCacheRaw(cacheKey, proxyResponse, _commitHash, _commitDate)
-      const updatedBlobFile = await newResult.getFile()
-
-      self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
-    }
-  }
+  // After the proxy was retired, every GitHub-hosted load is dereferenced
+  // server-side via the Contents API and arrives here with a populated
+  // shaHash. If we somehow get here without one, surface that explicitly
+  // rather than silently no-op.
+  throw new Error('downloadModel called without shaHash; Contents API dereference likely failed')
 }
 
 

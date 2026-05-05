@@ -96,52 +96,9 @@ describe('parseUrl', () => {
 })
 
 
-describe('With environment variables', () => {
-  const OLD_ENV = process.env
-
-
+describe('dereferenceAndProxyDownloadContents', () => {
   beforeEach(() => {
-    jest.resetModules()
-    process.env = {...OLD_ENV}
-  })
-
-
-  afterAll(() => {
-    process.env = OLD_ENV
-  })
-
-
-  it('constructDownloadUrl', async () => {
-    const testProxy = 'https://a.b.com/'
-
-    // Used when isOpfsAvailable = false
-    process.env.RAW_GIT_PROXY_URL = `${testProxy}/foo`
-    // Used when isOpfsAvailable = true
-    process.env.RAW_GIT_PROXY_URL_NEW = `${testProxy}/bar`
-
-    let isOpfsAvailable = false
-    expect(await dereferenceAndProxyDownloadContents(
-      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/foo/`, '', false, false])
-
-    isOpfsAvailable = true
-    expect(await dereferenceAndProxyDownloadContents(
-      'https://github.com/', '', isOpfsAvailable)).toStrictEqual([`${testProxy}/bar/`, '', false, false])
-  })
-
-
-  it('copies the proxy URL port onto the rewritten URL when present', async () => {
-    process.env.RAW_GIT_PROXY_URL_NEW = 'https://proxy.example:8443/prefix'
-
-    const [url] = await dereferenceAndProxyDownloadContents(
-      'https://github.com/bldrs-ai/Share/blob/main/README.md',
-      '',
-      true,
-    )
-
-    const parsed = new URL(url)
-    expect(parsed.host).toBe('proxy.example:8443')
-    expect(parsed.port).toBe('8443')
-    expect(parsed.pathname).toBe('/prefix/bldrs-ai/Share/blob/main/README.md')
+    getPathContents.mockReset()
   })
 
 
@@ -149,10 +106,11 @@ describe('With environment variables', () => {
     expect(
       await dereferenceAndProxyDownloadContents('https://example.com/model.ifc', '', false),
     ).toStrictEqual(['https://example.com/model.ifc', '', false, false])
+    expect(getPathContents).not.toHaveBeenCalled()
   })
 
 
-  it('uses getPathContents when an access token is provided (authenticated path)', async () => {
+  it('uses getPathContents for github.com URLs when an access token is provided', async () => {
     getPathContents.mockResolvedValueOnce({
       content: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md',
       sha: 'deadbeef',
@@ -173,6 +131,48 @@ describe('With environment variables', () => {
       false,
     ])
     expect(getPathContents).toHaveBeenCalledTimes(1)
+  })
+
+
+  it('uses getPathContents for github.com URLs even without an access token (proxy retired)', async () => {
+    getPathContents.mockResolvedValueOnce({
+      content: 'https://media.githubusercontent.com/media/bldrs-ai/test-models/main/big.ifc',
+      sha: 'cafef00d',
+      isCacheHit: false,
+      isBase64: false,
+    })
+
+    const result = await dereferenceAndProxyDownloadContents(
+      'https://github.com/bldrs-ai/test-models/blob/main/big.ifc',
+      '',
+      true,
+    )
+
+    expect(result).toStrictEqual([
+      'https://media.githubusercontent.com/media/bldrs-ai/test-models/main/big.ifc',
+      'cafef00d',
+      false,
+      false,
+    ])
+    expect(getPathContents).toHaveBeenCalledTimes(1)
+  })
+
+
+  it('returns inline base64 content when the Contents API returns it for a small file', async () => {
+    getPathContents.mockResolvedValueOnce({
+      content: 'aGVsbG8=',
+      sha: 'abc123',
+      isCacheHit: false,
+      isBase64: true,
+    })
+
+    const result = await dereferenceAndProxyDownloadContents(
+      'https://github.com/bldrs-ai/Share/blob/main/README.md',
+      '',
+      true,
+    )
+
+    expect(result).toStrictEqual(['aGVsbG8=', 'abc123', false, true])
   })
 })
 

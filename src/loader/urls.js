@@ -104,43 +104,27 @@ export function parseCoords(url) {
 
 
 /**
- * Dereferences and inserts proxying as needed (e.g. to follow LFS pointers) for
- * given urlStr, to determine what download URL to use.
+ * Resolves the given urlStr to a downloadable form using GitHub's Contents API.
+ *
+ * For GitHub URLs (authed or not), returns either a direct download URL on
+ * raw.githubusercontent.com / media.githubusercontent.com (the latter for
+ * Git LFS), or inline base64 content for small files. For other hosts the URL
+ * is returned unchanged.
+ *
+ * The third positional parameter is unused; kept for call-site compatibility
+ * pending a follow-up rename + signature cleanup.
  *
  * @param {string} urlStr
  * @param {string} accessToken
- * @param {boolean} isOpfsAvailable
+ * @param {boolean} _isOpfsAvailable Unused. Kept for call-site compatibility.
  * @param {boolean} useCache
- * @return {Array<object>} A quadruple of urlStr (changed to our proxy if
- * github.com), a sha if available, a boolean indicating if http
- * cache was hit, and a boolean indicating if the content is base64 encoded
- * and available.
+ * @return {Array<object>} [content, sha, isCacheHit, isBase64] where content is
+ * either a download URL or base64-encoded inline content.
  */
-export async function dereferenceAndProxyDownloadContents(urlStr, accessToken, isOpfsAvailable, useCache = true) {
+export async function dereferenceAndProxyDownloadContents(urlStr, accessToken, _isOpfsAvailable, useCache = true) {
   const u = new URL(urlStr)
   switch (u.host.toLowerCase()) {
     case 'github.com':
-      if (!accessToken) {
-        const proxyUrl = new URL(isOpfsAvailable ? process.env.RAW_GIT_PROXY_URL_NEW : process.env.RAW_GIT_PROXY_URL)
-
-        // Replace the protocol, host, and hostname in the target
-        u.protocol = proxyUrl.protocol
-        u.host = proxyUrl.host
-        u.hostname = proxyUrl.hostname
-
-        // If the port is specified, replace it in the target URL
-        if (proxyUrl.port) {
-          u.port = proxyUrl.port
-        }
-
-        // If there's a path, *and* it's not just the root, then prepend it to the target URL
-        if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
-          u.pathname = proxyUrl.pathname + u.pathname
-        }
-
-        return [u.toString(), '', false, false]
-      }
-
       return await getGitHubPathContents(urlStr, accessToken, useCache)
 
     default:

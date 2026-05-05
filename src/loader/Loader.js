@@ -172,6 +172,11 @@ export async function load(
       modelData = decoder.decode(modelData)
       debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
     }
+  } else if (isBase64) {
+    // Contents API returned the file inline; no download fetch needed.
+    onProgress('Decoding model data...')
+    modelData = decodeBase64ModelData(derefPath, isFormatText)
+    debug().log('Loader#load: modelData from inline base64 (decoded):', modelData)
   } else {
     onProgress('Downloading model data...')
     modelData = await axiosDownload(derefPath, isFormatText, onProgress)
@@ -233,6 +238,29 @@ export function constructUploadedBlobPath(filepath) {
   filepath = parts[parts.length - 1]
   filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
   return filepath
+}
+
+
+/**
+ * Decode base64-encoded model bytes (as returned inline by the GitHub
+ * Contents API for files under ~1MB) into the shape `readModel` expects.
+ * Used by the non-OPFS path when the dereference returned inline content
+ * instead of a download URL.
+ *
+ * @param {string} base64 Base64-encoded file bytes
+ * @param {boolean} isFormatText True if the loader expects a text body
+ * @return {ArrayBuffer|string}
+ */
+function decodeBase64ModelData(base64, isFormatText) {
+  const binary = atob(base64.replace(/\s+/g, ''))
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  if (isFormatText) {
+    return new TextDecoder('utf-8').decode(bytes)
+  }
+  return bytes.buffer
 }
 
 
