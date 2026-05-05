@@ -118,6 +118,33 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
           )
         }
 
+        if (org === 'bldrs-ai' && repo === 'test-models') {
+          // E2e fixtures live under src/tests/fixtures/github/, copied
+          // into docs/__test_fixtures__/ by `yarn test-flows-build` and
+          // served by the playwright dev server. Returning a localhost
+          // download_url here keeps the whole flow on one host with no
+          // service-worker / page.route ordering games.
+          const decodedPath = decodeURIComponent(path)
+          return new Response(
+            JSON.stringify({
+              name: decodedPath.split('/').pop(),
+              path: decodedPath,
+              sha: 'e2etestsha000000000000000000000000000000',
+              size: 0,
+              url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/${org}/${repo}/contents/${decodedPath}?ref=${ref}`,
+              html_url: `https://github.com/${org}/${repo}/blob/${ref}/${decodedPath}`,
+              git_url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}` +
+                `/repos/${org}/${repo}/git/blobs/e2etestsha000000000000000000000000000000`,
+              download_url: `/__test_fixtures__/${org}/${repo}/${ref}/${decodedPath}`,
+              type: 'file',
+            }),
+            {
+              status: HTTP_OK,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        }
+
         if (org !== 'bldrs-ai' || repo !== 'Share' || path !== 'README.md') {
           return new Response(
             JSON.stringify({
