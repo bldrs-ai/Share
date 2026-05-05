@@ -4,13 +4,17 @@ import {RouteThemeCtx} from '../../Share.fixture'
 import GitHubFileBrowser from './GitHubFileBrowser'
 
 
+jest.mock('../../net/github/Organizations', () => ({
+  getOrganizations: jest.fn().mockResolvedValue({}),
+}))
+
+
 describe('GitHubFileBrowser', () => {
-  const orgNamesArr = ['org1', 'org2']
   const navigate = jest.fn()
 
   it('renders all the UI elements', () => {
     render(
-      <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr}/>,
+      <GitHubFileBrowser navigate={navigate}/>,
       {wrapper: RouteThemeCtx},
     )
     expect(screen.getByText(/Browse files on Github/i)).toBeInTheDocument()

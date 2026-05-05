@@ -1,11 +1,12 @@
 
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {Button, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {pathSuffixSupported} from '../../Filetype'
 import {getFilesAndFolders} from '../../net/github/Files'
+import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
@@ -28,17 +29,17 @@ function resolveValue(value, list) {
 
 /**
  * @property {Function} navigate Callback from CadView to change page url
- * @property {Array<string>} orgNamesArr List of org names for the current user.
  * @property {Function} setIsDialogDisplayed callback
  * @property {Function} onCancel Called when user clicks Cancel to go back
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
   navigate,
-  orgNamesArr,
   setIsDialogDisplayed,
   onCancel,
 }) {
+  const accessToken = useStore((state) => state.accessToken)
+  const [orgNamesArr, setOrgNamesArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
   const {user} = useAuth0()
@@ -50,12 +51,35 @@ export default function GitHubFileBrowser({
   const [filesArr, setFilesArr] = useState([''])
   const [branchesArr, setBranchesArr] = useState([''])
   const [selectedBranchName, setSelectedBranchName] = useState('')
-  const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((name) => `@${name}`)
   const orgName = resolveValue(selectedOrgName, orgNamesArr)
   const repoName = resolveValue(selectedRepoName, repoNamesArr)
   const fileName = filesArr[selectedFileIndex]
   const branchName = resolveValue(selectedBranchName, branchesArr)
+
+  // Lazy-fetch the user's GitHub organizations only when this browser is mounted
+  // (i.e. user clicked Browse on the GitHub tab). Avoids spurious /user/orgs
+  // calls when the Open dialog is opened on a non-GitHub tab.
+  useEffect(() => {
+    if (!accessToken) {
+      return
+    }
+    let cancelled = false
+    /** Asynchronously fetch organizations */
+    async function fetchOrganizations() {
+      const orgs = await getOrganizations(accessToken)
+      if (cancelled) {
+        return
+      }
+      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      const orgNames = [...orgNamesFetched, user && user.nickname].filter(Boolean)
+      setOrgNamesArr(orgNames.length > 0 ? orgNames : [''])
+    }
+    fetchOrganizations()
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken, user])
 
   const selectOrg = async (orgOrIndex) => {
     setSelectedOrgName(orgOrIndex)
