@@ -30,14 +30,12 @@ import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-mat
  * @property {boolean} isDialogDisplayed Passed to dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to dialog to be controlled
  * @property {Function} navigate Callback from CadView to change page url
- * @property {Array<string>} orgNamesArr List of org names for the current user.
  * @return {ReactElement}
  */
 export default function OpenModelDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
   navigate,
-  orgNamesArr,
 }) {
   const isGoogleDriveEnabled = useExistInFeature('googleDrive')
   const tabLabels = isGoogleDriveEnabled ?
@@ -219,7 +217,6 @@ export default function OpenModelDialog({
                 >
                   <GitHubFileBrowser
                     navigate={navigate}
-                    orgNamesArr={orgNamesArr}
                     setIsDialogDisplayed={setIsDialogDisplayed}
                     onCancel={() => setShowGithubBrowser(false)}
                   />

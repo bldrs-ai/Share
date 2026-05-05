@@ -48,7 +48,6 @@ const defaultProps = {
   isDialogDisplayed: true,
   setIsDialogDisplayed: mockSetIsDialogDisplayed,
   navigate: mockNavigate,
-  orgNamesArr: ['testorg'],
 }
 
 
