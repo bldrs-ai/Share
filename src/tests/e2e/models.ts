@@ -46,11 +46,44 @@ export async function setupVirtualPathIntercept(
   }
   const [owner, repo, ref] = ghParts
 
-  // bldrs-ai/test-models is served by the dev server via __test_fixtures__.
-  // No page.route needed — return helpers that wait on the localhost
-  // download URL instead of the GitHub API call.
+  // bldrs-ai/test-models is normally handled by MSW + the dev server
+  // (MSW returns the localhost download_url, dev server serves the file).
+  // But MSW's service worker can be in transition immediately after a
+  // full-page navigation, in which case the Contents API request misses
+  // MSW and hits real DNS for the fake-suffix test host (.pw). Register a
+  // defensive context-level page.route as a fallback: if MSW intercepts
+  // first this never fires; if MSW misses, page.route fulfills with the
+  // same mock shape MSW would have produced.
   if (owner === 'bldrs-ai' && repo === 'test-models') {
+    const filePathParts = ghParts.slice(3)
+    const filePath = filePathParts.join('/')
     const fixtureUrl = `/__test_fixtures__${ghPath}`
+    const HTTP_OK = 200
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const filePathInRegex = escapeRegex(filePath).replace(/\//g, '(?:/|%2F)')
+    const contentsApiPattern = new RegExp(
+      `^https://api\\.github\\.com(?:\\.[\\w-]+)?` +
+      `/repos/${owner}/${repo}/contents/${filePathInRegex}` +
+      `\\?.*ref=${escapeRegex(ref)}.*$`,
+    )
+    await page.context().route(contentsApiPattern, async (route) => {
+      await route.fulfill({
+        status: HTTP_OK,
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({
+          name: filePathParts[filePathParts.length - 1],
+          path: filePath,
+          sha: 'e2etestsha000000000000000000000000000000',
+          size: 0,
+          url: `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${ref}`,
+          html_url: `https://github.com/${owner}/${repo}/blob/${ref}/${filePath}`,
+          git_url: `https://api.github.com/repos/${owner}/${repo}/git/blobs/e2etestsha000000000000000000000000000000`,
+          download_url: fixtureUrl,
+          type: 'file',
+        }),
+      })
+    })
+
     const navigateAndWaitForModel = async () => {
       const [response] = await Promise.all([
         page.waitForResponse((r) => r.url().endsWith(fixtureUrl)),
