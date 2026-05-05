@@ -195,6 +195,28 @@ export async function visitHomepageWaitForModel(page: Page) {
     }),
     page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
   ])
+  // MSW registers and activates its service worker during the first
+  // navigation. Wait for it to be the page's active controller before
+  // any subsequent test navigation makes a fetch — otherwise requests
+  // to the fake-suffix test hosts (api.github.com.pw etc.) miss MSW
+  // and fail real DNS resolution.
+  await waitForServiceWorker(page)
+}
+
+
+/**
+ * Waits until a service worker is registered AND controlling the current
+ * page. Required before tests can rely on MSW's interception.
+ *
+ * @param page - Playwright page object
+ */
+export async function waitForServiceWorker(page: Page) {
+  const SW_READY_TIMEOUT = 10000
+  await page.waitForFunction(
+    () => navigator.serviceWorker.controller !== null,
+    null,
+    {timeout: SW_READY_TIMEOUT},
+  )
 }
 
 
