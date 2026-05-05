@@ -1,6 +1,6 @@
-import React, {useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {Divider, Stack, Typography} from '@mui/material'
-import {Google as GoogleIcon} from '@mui/icons-material'
+import {Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
 import {loadAllRecentFiles} from '../../connections/persistence'
@@ -23,6 +23,50 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
 
   const [browseError, setBrowseError] = useState(null)
   const [recentFiles] = useState(() => loadAllRecentFiles())
+  // Per-connection liveness, keyed by connection.id. 'expired' flips the
+  // Browse button to "Reconnect" so the user gets a clear cue before hitting
+  // the picker with a doomed token.
+  const [statuses, setStatuses] = useState({})
+
+  // Validate each persisted connection in parallel when the tab mounts (and
+  // whenever the connections list changes). This is a pure HTTP ping —
+  // no GIS popup, no user interaction. Refresh of an expired token still
+  // happens lazily on Browse via getAccessToken().
+  useEffect(() => {
+    if (connections.length === 0) {
+      return undefined
+    }
+    let cancelled = false
+    /** Fire checkStatus for every connection and merge results into state. */
+    async function validateAll() {
+      const results = await Promise.all(connections.map(async (c) => {
+        const provider = getProvider(c.providerId)
+        if (!provider) {
+          return [c.id, 'error']
+        }
+        try {
+          const status = await provider.checkStatus(c)
+          return [c.id, status]
+        } catch {
+          return [c.id, 'error']
+        }
+      }))
+      if (cancelled) {
+        return
+      }
+      setStatuses((prev) => {
+        const next = {...prev}
+        for (const [id, status] of results) {
+          next[id] = status
+        }
+        return next
+      })
+    }
+    validateAll()
+    return () => {
+      cancelled = true
+    }
+  }, [connections])
 
   const handleBrowse = async (connection) => {
     const provider = getProvider(connection.providerId)
@@ -32,6 +76,9 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
     setBrowseError(null)
     try {
       const token = await provider.getAccessToken(connection)
+      // Successful token acquisition implies the connection is healthy now,
+      // even if it was 'expired' before — clear the stale marker.
+      setStatuses((prev) => ({...prev, [connection.id]: 'connected'}))
       onPickerReady(token, connection)
     } catch (err) {
       setBrowseError(err.message || 'Failed to open file picker')
@@ -65,11 +112,22 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
     >
       {connections.map((connection) => {
         const connectionRecents = recentFiles.filter((f) => f.connectionId === connection.id)
+        const isStale = statuses[connection.id] === 'expired'
         return (
           <Stack key={connection.id} spacing={1} sx={{width: '100%'}}>
-            {connectionRecents.length === 0 && (
+            {connectionRecents.length === 0 && !isStale && (
               <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
                 Browse your Google Drive for models.
+              </Typography>
+            )}
+            {isStale && (
+              <Typography
+                variant='body2'
+                color='text.secondary'
+                sx={{textAlign: 'center'}}
+                data-testid={`stale-hint-${connection.id}`}
+              >
+                Your session expired. Reconnect to continue.
               </Typography>
             )}
 
@@ -77,6 +135,8 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
               files={connectionRecents}
               onOpen={(file) => onOpenById(connection, file.id, file.name)}
               onBrowse={() => handleBrowse(connection)}
+              browseButtonLabel={isStale ? 'Reconnect' : 'Browse'}
+              browseButtonIcon={isStale ? <RefreshIcon/> : undefined}
               browseButtonTestId={`button-browse-drive-${connection.id}`}
             />
 
