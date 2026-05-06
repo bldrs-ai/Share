@@ -64,6 +64,7 @@ beforeEach(() => {
   capturedCallback = null
   capturedErrorCallback = null
   sessionStorage.clear()
+  localStorage.clear()
 })
 
 
@@ -295,5 +296,91 @@ describe('GoogleDriveProvider — getAccessToken refresh failure modes', () => {
     capturedErrorCallback?.({type: 'invalid_request', message: 'bad params'})
     await expect(tokenPromise).rejects.toThrow(/Google OAuth refresh error/)
     await expect(tokenPromise).rejects.not.toBeInstanceOf(NeedsReconnectError)
+  })
+})
+
+
+describe('GoogleDriveProvider — token persistence in localStorage', () => {
+  /**
+   * Build a Connection shell pointing at a known cached token in storage.
+   *
+   * @return A connection with the given id and stable test metadata.
+   */
+  function connectionFor(id: string): Parameters<typeof googleDriveProvider.checkStatus>[0] {
+    return {
+      id,
+      providerId: 'google-drive',
+      label: 'a@x.com - GDrive',
+      status: 'connected',
+      createdAt: new Date().toISOString(),
+      meta: {email: 'a@x.com'},
+    }
+  }
+
+  it('persists tokens under the bldrs:gdrive-token: prefix in localStorage', async () => {
+    const conn = await mintConnection()
+    const raw = localStorage.getItem(`bldrs:gdrive-token:${conn.id}`)
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw as string)).toMatchObject({
+      token: 'live-token',
+      expiresAt: expect.any(Number),
+    })
+  })
+
+  it('reads the persisted token even when the in-memory cache is empty (cross-tab simulation)', async () => {
+    // Prime localStorage as if a sibling tab signed in. Importantly, we do NOT
+    // call connect() here — the in-memory tokenCache for this "tab" stays empty.
+    const id = 'sibling-tab-conn'
+    // eslint-disable-next-line no-magic-numbers
+    const future = Date.now() + 60_000
+    localStorage.setItem(
+      `bldrs:gdrive-token:${id}`,
+      JSON.stringify({token: 'sibling-token', expiresAt: future}),
+    )
+
+    // tokeninfo should be hit and 200 — token is still valid.
+    const fetchMock = jest.fn().mockResolvedValue({ok: true, status: 200})
+    global.fetch = fetchMock as unknown as typeof global.fetch
+
+    const status = await googleDriveProvider.checkStatus(connectionFor(id))
+    expect(status).toBe('connected')
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('access_token=sibling-token'))
+  })
+
+  it('migrates a legacy sessionStorage token onto localStorage and removes it from session', async () => {
+    const id = 'legacy-conn'
+    // eslint-disable-next-line no-magic-numbers
+    const future = Date.now() + 60_000
+    sessionStorage.setItem(
+      `gdrive_token_${id}`,
+      JSON.stringify({token: 'legacy-token', expiresAt: future}),
+    )
+
+    const fetchMock = jest.fn().mockResolvedValue({ok: true, status: 200})
+    global.fetch = fetchMock as unknown as typeof global.fetch
+
+    const status = await googleDriveProvider.checkStatus(connectionFor(id))
+    expect(status).toBe('connected')
+
+    // Legacy entry has been migrated and removed.
+    expect(sessionStorage.getItem(`gdrive_token_${id}`)).toBeNull()
+    const migrated = localStorage.getItem(`bldrs:gdrive-token:${id}`)
+    expect(migrated).not.toBeNull()
+    expect(JSON.parse(migrated as string)).toMatchObject({token: 'legacy-token'})
+  })
+
+  it('disconnect() clears both localStorage and any leftover legacy sessionStorage entries', async () => {
+    const conn = await mintConnection()
+    // Plant a legacy entry under the same id, simulating a partially-migrated user.
+    sessionStorage.setItem(
+      `gdrive_token_${conn.id}`,
+      // eslint-disable-next-line no-magic-numbers
+      JSON.stringify({token: 'legacy', expiresAt: Date.now() + 60_000}),
+    )
+
+    await googleDriveProvider.disconnect(conn.id)
+
+    expect(localStorage.getItem(`bldrs:gdrive-token:${conn.id}`)).toBeNull()
+    expect(sessionStorage.getItem(`gdrive_token_${conn.id}`)).toBeNull()
   })
 })

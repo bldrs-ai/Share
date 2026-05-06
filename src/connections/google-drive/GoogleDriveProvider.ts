@@ -37,33 +37,72 @@ interface CachedToken {
 /** In-memory token store keyed by connection ID. */
 const tokenCache = new Map<string, CachedToken>()
 
-const SESSION_TOKEN_PREFIX = 'gdrive_token_'
+// Tokens live in localStorage (not sessionStorage) so a permalink opened in a
+// new tab inherits the existing token instead of forcing a popup-blocked
+// silent refresh on every cold tab. Connection metadata is already in
+// localStorage under 'bldrs:connections', so the trust scope is unchanged.
+// Tokens self-expire via their cached `expiresAt` and are cleared on
+// disconnect; lifetime is bounded by Google's 1h access-token TTL.
+const STORAGE_TOKEN_PREFIX = 'bldrs:gdrive-token:'
+
+// Legacy sessionStorage prefix from before the localStorage move. Still read
+// once on cold start as a fallback so existing tabs don't force a one-time
+// reconnect; the entry is migrated to localStorage and removed from session.
+const LEGACY_SESSION_TOKEN_PREFIX = 'gdrive_token_'
 
 
-/** Persist token to sessionStorage so it survives same-tab page reloads. */
-function saveTokenToSession(connectionId: string, cached: CachedToken): void {
+/** Persist token to localStorage so it survives reloads and is shared across tabs. */
+function saveTokenToStorage(connectionId: string, cached: CachedToken): void {
   try {
-    sessionStorage.setItem(SESSION_TOKEN_PREFIX + connectionId, JSON.stringify(cached))
+    localStorage.setItem(STORAGE_TOKEN_PREFIX + connectionId, JSON.stringify(cached))
   } catch {
-    // sessionStorage unavailable — in-memory cache only
+    // localStorage unavailable — in-memory cache only
   }
 }
 
 
 /**
- * Load a previously persisted token from sessionStorage (if not expired).
+ * Load a previously persisted token, preferring localStorage with a one-time
+ * sessionStorage fallback for users mid-migration. Tokens past their cached
+ * expiry are removed and reported as missing.
  *
  * @return The cached token, or null if absent or expired.
  */
-function loadTokenFromSession(connectionId: string): CachedToken | null {
+function loadTokenFromStorage(connectionId: string): CachedToken | null {
+  const cached = readTokenAtKey(localStorage, STORAGE_TOKEN_PREFIX + connectionId)
+  if (cached) {
+    return cached
+  }
+  // Migrate any legacy sessionStorage token onto localStorage exactly once.
+  const legacy = readTokenAtKey(sessionStorage, LEGACY_SESSION_TOKEN_PREFIX + connectionId)
+  if (legacy) {
+    saveTokenToStorage(connectionId, legacy)
+    try {
+      sessionStorage.removeItem(LEGACY_SESSION_TOKEN_PREFIX + connectionId)
+    } catch {
+      // ignore
+    }
+    return legacy
+  }
+  return null
+}
+
+
+/**
+ * Read a CachedToken from a Storage at a given key, returning null when
+ * absent, malformed, or past its expiry. Expired entries are removed.
+ *
+ * @return The cached token, or null.
+ */
+function readTokenAtKey(store: Storage, key: string): CachedToken | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_TOKEN_PREFIX + connectionId)
+    const raw = store.getItem(key)
     if (!raw) {
       return null
     }
     const cached = JSON.parse(raw) as CachedToken
     if (Date.now() >= cached.expiresAt) {
-      sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+      store.removeItem(key)
       return null
     }
     return cached
@@ -73,10 +112,15 @@ function loadTokenFromSession(connectionId: string): CachedToken | null {
 }
 
 
-/** Remove token from sessionStorage on disconnect. */
-function clearTokenFromSession(connectionId: string): void {
+/** Remove token from both stores on disconnect. */
+function clearTokenFromStorage(connectionId: string): void {
   try {
-    sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+    localStorage.removeItem(STORAGE_TOKEN_PREFIX + connectionId)
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem(LEGACY_SESSION_TOKEN_PREFIX + connectionId)
   } catch {
     // ignore
   }
@@ -209,7 +253,7 @@ export const googleDriveProvider: ConnectionProvider = {
 
           const cached: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
           tokenCache.set(connectionId, cached)
-          saveTokenToSession(connectionId, cached)
+          saveTokenToStorage(connectionId, cached)
 
           // Fetch user email with a 5s timeout — don't let it block connection
           const emailPromise = Promise.race([
@@ -265,13 +309,13 @@ export const googleDriveProvider: ConnectionProvider = {
       }
       tokenCache.delete(connectionId)
     }
-    clearTokenFromSession(connectionId)
+    clearTokenFromStorage(connectionId)
   },
 
   async checkStatus(connection: Connection): Promise<ConnectionStatus> {
     let cached = tokenCache.get(connection.id) ?? null
     if (!cached) {
-      const fromSession = loadTokenFromSession(connection.id)
+      const fromSession = loadTokenFromStorage(connection.id)
       if (fromSession) {
         tokenCache.set(connection.id, fromSession)
         cached = fromSession
@@ -313,7 +357,7 @@ export const googleDriveProvider: ConnectionProvider = {
     }
 
     // Try sessionStorage before triggering a new OAuth popup (survives same-tab reloads)
-    const fromSession = loadTokenFromSession(connection.id)
+    const fromSession = loadTokenFromStorage(connection.id)
     if (fromSession) {
       tokenCache.set(connection.id, fromSession)
       return fromSession.token
@@ -360,7 +404,7 @@ export const googleDriveProvider: ConnectionProvider = {
           const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
           const refreshed: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
           tokenCache.set(connection.id, refreshed)
-          saveTokenToSession(connection.id, refreshed)
+          saveTokenToStorage(connection.id, refreshed)
 
           if (!settled) {
             settled = true
