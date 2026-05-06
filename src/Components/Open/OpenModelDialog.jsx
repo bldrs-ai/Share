@@ -4,11 +4,13 @@ import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {NeedsReconnectError} from '../../connections/errors'
 import {
   addRecentFileEntry,
   loadRecentFilesBySource,
   setPendingModelNameUpdate,
 } from '../../connections/persistence'
+import {getProvider} from '../../connections/registry'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import Dialog from '../Dialog'
@@ -68,7 +70,31 @@ export default function OpenModelDialog({
     setPickerConnection(connection)
   }
 
-  const handleOpenById = (connection, fileId, fileName) => {
+  const setAlert = useStore((state) => state.setAlert)
+
+  const handleOpenById = async (connection, fileId, fileName) => {
+    // Pre-flight token acquisition INSIDE this user-gesture click handler so
+    // that if GIS needs to pop a consent window, the popup inherits the click
+    // activation and the browser allows it. If we navigate first, the gesture
+    // is gone by the time CadView's load chain calls getAccessToken — and a
+    // stale token there hits popup_failed_to_open and bricks the load.
+    const provider = getProvider(connection.providerId)
+    if (provider) {
+      try {
+        await provider.getAccessToken(connection)
+      } catch (err) {
+        if (err instanceof NeedsReconnectError) {
+          setAlert({
+            type: 'needsReconnect',
+            connection: err.connection,
+            message: 'Your Google Drive session needs to be reconnected to open this file.',
+          })
+          return
+        }
+        setAlert(err)
+        return
+      }
+    }
     disablePageReloadApprovalCheck()
     addRecentFileEntry({
       id: fileId,

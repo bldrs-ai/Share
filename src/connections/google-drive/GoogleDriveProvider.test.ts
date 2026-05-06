@@ -2,6 +2,7 @@
  * Tests for GoogleDriveProvider, focused on OAuth state (CSRF) verification.
  */
 
+import {NeedsReconnectError} from '../errors'
 import {googleDriveProvider} from './GoogleDriveProvider'
 
 
@@ -13,6 +14,7 @@ jest.useFakeTimers()
 
 
 let capturedCallback: ((response: Record<string, unknown>) => void) | null = null
+let capturedErrorCallback: ((error: {type: string; message?: string}) => void) | null = null
 const mockRequestAccessToken = jest.fn()
 
 let originalFetch: typeof global.fetch
@@ -24,6 +26,7 @@ beforeAll(() => {
         oauth2: {
           initTokenClient: jest.fn((config) => {
             capturedCallback = config.callback
+            capturedErrorCallback = config.error_callback
             return {requestAccessToken: mockRequestAccessToken}
           }),
           revoke: jest.fn(),
@@ -59,6 +62,7 @@ afterAll(() => {
 beforeEach(() => {
   jest.clearAllMocks()
   capturedCallback = null
+  capturedErrorCallback = null
   sessionStorage.clear()
 })
 
@@ -238,5 +242,58 @@ describe('GoogleDriveProvider — checkStatus tokeninfo validation', () => {
     } as Parameters<typeof googleDriveProvider.checkStatus>[0])
 
     expect(status).toBe('connected')
+  })
+})
+
+
+describe('GoogleDriveProvider — getAccessToken refresh failure modes', () => {
+  /**
+   * Build a connection without seeding any cached token — forces refresh path.
+   *
+   * @return A bare connection with no cached token in any store.
+   */
+  function bareConnection(): Parameters<typeof googleDriveProvider.getAccessToken>[0] {
+    return {
+      id: `bare-${Date.now()}`,
+      providerId: 'google-drive',
+      label: 'bare@example.com - GDrive',
+      status: 'expired',
+      createdAt: new Date().toISOString(),
+      meta: {email: 'bare@example.com'},
+    }
+  }
+
+  it('rejects with NeedsReconnectError on popup_failed_to_open', async () => {
+    const tokenPromise = googleDriveProvider.getAccessToken(bareConnection())
+    await flushMicrotasks()
+    capturedErrorCallback?.({type: 'popup_failed_to_open', message: 'Failed to open popup window'})
+    await expect(tokenPromise).rejects.toBeInstanceOf(NeedsReconnectError)
+  })
+
+  it('rejects with NeedsReconnectError on popup_closed (was previously hanging silently)', async () => {
+    const tokenPromise = googleDriveProvider.getAccessToken(bareConnection())
+    await flushMicrotasks()
+    capturedErrorCallback?.({type: 'popup_closed', message: 'User closed the popup'})
+    await expect(tokenPromise).rejects.toBeInstanceOf(NeedsReconnectError)
+  })
+
+  it('attaches the originating connection to NeedsReconnectError', async () => {
+    const conn = bareConnection()
+    const tokenPromise = googleDriveProvider.getAccessToken(conn)
+    await flushMicrotasks()
+    capturedErrorCallback?.({type: 'popup_failed_to_open', message: 'blocked'})
+    await expect(tokenPromise).rejects.toMatchObject({
+      name: 'NeedsReconnectError',
+      connection: expect.objectContaining({id: conn.id}),
+      cause: 'popup_failed_to_open',
+    })
+  })
+
+  it('still raises a generic Error for unknown GIS error types', async () => {
+    const tokenPromise = googleDriveProvider.getAccessToken(bareConnection())
+    await flushMicrotasks()
+    capturedErrorCallback?.({type: 'invalid_request', message: 'bad params'})
+    await expect(tokenPromise).rejects.toThrow(/Google OAuth refresh error/)
+    await expect(tokenPromise).rejects.not.toBeInstanceOf(NeedsReconnectError)
   })
 })

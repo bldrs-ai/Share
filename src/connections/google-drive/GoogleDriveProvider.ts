@@ -9,6 +9,7 @@
 
 import type {Connection, ConnectionProvider, ConnectionStatus} from '../types'
 import debug from '../../utils/debug'
+import {NeedsReconnectError} from '../errors'
 import {loadGisScript} from './loadGisScript'
 import type {TokenResponse} from './loadGisScript'
 
@@ -367,13 +368,21 @@ export const googleDriveProvider: ConnectionProvider = {
           }
         },
         error_callback: (error) => {
-          if (error.type === 'popup_closed') {
+          if (settled) {
             return
           }
-          if (!settled) {
-            settled = true
-            reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
+          settled = true
+          // popup_closed and popup_failed_to_open both leave the user in a
+          // recoverable state: the connection metadata is still valid, but
+          // we couldn't prompt for fresh consent. Surface a typed error so
+          // callers can route to a Reconnect affordance bound to a real user
+          // gesture instead of throwing a generic "OAuth refresh error" that
+          // would render as a useless "Failed to parse model" overlay.
+          if (error.type === 'popup_closed' || error.type === 'popup_failed_to_open') {
+            reject(new NeedsReconnectError(connection, error.type, error.message))
+            return
           }
+          reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
         },
       })
 
