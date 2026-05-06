@@ -334,6 +334,13 @@ export default function CadView({
         error.isOutOfMemory = true
         throw error
       }
+      // Bubble NeedsReconnect up to onViewer's catch so it can render the
+      // typed Reconnect overlay. Without this re-throw the inner catch
+      // swallowed it, set the alert as a generic Error, and the outer
+      // !tmpModelRef branch then overwrote it with "Failed to parse model".
+      if (error instanceof NeedsReconnectError) {
+        throw error
+      }
 
       setAlert(error)
       return
