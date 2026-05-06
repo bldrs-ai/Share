@@ -143,3 +143,100 @@ describe('GoogleDriveProvider — OAuth state (CSRF protection)', () => {
     await expect(connectPromise).resolves.toMatchObject({providerId: 'google-drive'})
   })
 })
+
+
+/**
+ * Mint a connection (and seed the in-memory token cache) by driving connect()
+ * to completion via the captured GIS callback.
+ *
+ * @return The completed Connection with a known access_token.
+ */
+async function mintConnection(): Promise<{id: string; providerId: string}> {
+  const connectPromise = googleDriveProvider.connect()
+  await flushMicrotasks()
+  capturedCallback?.({
+    access_token: 'live-token',
+
+    expires_in: 3600,
+    scope: 'drive.file',
+    token_type: 'Bearer',
+    state: 'test-uuid-1234',
+  })
+  // eslint-disable-next-line no-magic-numbers
+  jest.advanceTimersByTime(6_000)
+  await flushMicrotasks()
+  return await connectPromise as {id: string; providerId: string}
+}
+
+
+describe('GoogleDriveProvider — checkStatus tokeninfo validation', () => {
+  let fetchMock: jest.Mock
+
+  beforeEach(() => {
+    fetchMock = jest.fn()
+    global.fetch = fetchMock as unknown as typeof global.fetch
+  })
+
+  it('returns \'disconnected\' when no token is cached', async () => {
+    const status = await googleDriveProvider.checkStatus({
+      id: 'never-connected',
+      providerId: 'google-drive',
+      label: 'x',
+      status: 'disconnected',
+      createdAt: new Date().toISOString(),
+      meta: {},
+    })
+    expect(status).toBe('disconnected')
+    // tokeninfo must not be called when there's no token to validate
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns \'connected\' when tokeninfo replies 200', async () => {
+    fetchMock.mockResolvedValueOnce({ok: false}) // userinfo fetch during connect
+    const conn = await mintConnection()
+
+    fetchMock.mockResolvedValueOnce({ok: true, status: 200})
+    const status = await googleDriveProvider.checkStatus({
+      ...conn,
+      label: 'x',
+      status: 'connected',
+      createdAt: new Date().toISOString(),
+      meta: {},
+    } as Parameters<typeof googleDriveProvider.checkStatus>[0])
+
+    expect(status).toBe('connected')
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('oauth2.googleapis.com/tokeninfo'))
+  })
+
+  it('returns \'expired\' when tokeninfo replies 400 (server-revoked token)', async () => {
+    fetchMock.mockResolvedValueOnce({ok: false}) // userinfo
+    const conn = await mintConnection()
+
+    fetchMock.mockResolvedValueOnce({ok: false, status: 400})
+    const status = await googleDriveProvider.checkStatus({
+      ...conn,
+      label: 'x',
+      status: 'connected',
+      createdAt: new Date().toISOString(),
+      meta: {},
+    } as Parameters<typeof googleDriveProvider.checkStatus>[0])
+
+    expect(status).toBe('expired')
+  })
+
+  it('treats network errors as healthy (\'connected\') so offline doesn\'t poison the cache', async () => {
+    fetchMock.mockResolvedValueOnce({ok: false}) // userinfo
+    const conn = await mintConnection()
+
+    fetchMock.mockRejectedValueOnce(new Error('offline'))
+    const status = await googleDriveProvider.checkStatus({
+      ...conn,
+      label: 'x',
+      status: 'connected',
+      createdAt: new Date().toISOString(),
+      meta: {},
+    } as Parameters<typeof googleDriveProvider.checkStatus>[0])
+
+    expect(status).toBe('connected')
+  })
+})

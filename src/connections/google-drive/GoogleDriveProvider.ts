@@ -18,6 +18,8 @@ const DEFAULT_TOKEN_EXPIRES_S = 3600
 const MS_PER_S = 1000
 const EMAIL_FETCH_TIMEOUT_MS = 5000
 const POPUP_CLOSE_DEBOUNCE_MS = 2000
+const HTTP_BAD_REQUEST = 400
+const HTTP_UNAUTHORIZED = 401
 
 // drive.file: per-file access granted via Picker only. Non-sensitive scope —
 // no Google verification review and no unverified-app consent warning.
@@ -265,21 +267,42 @@ export const googleDriveProvider: ConnectionProvider = {
     clearTokenFromSession(connectionId)
   },
 
-  checkStatus(connection: Connection): Promise<ConnectionStatus> {
-    const inMemory = tokenCache.get(connection.id)
-    if (inMemory) {
-      if (Date.now() >= inMemory.expiresAt) {
-        return Promise.resolve('expired')
+  async checkStatus(connection: Connection): Promise<ConnectionStatus> {
+    let cached = tokenCache.get(connection.id) ?? null
+    if (!cached) {
+      const fromSession = loadTokenFromSession(connection.id)
+      if (fromSession) {
+        tokenCache.set(connection.id, fromSession)
+        cached = fromSession
       }
-      return Promise.resolve('connected')
     }
-    // Fall back to sessionStorage (e.g. after page reload)
-    const fromSession = loadTokenFromSession(connection.id)
-    if (fromSession) {
-      tokenCache.set(connection.id, fromSession)
-      return Promise.resolve('connected')
+    if (!cached) {
+      return 'disconnected'
     }
-    return Promise.resolve('disconnected')
+    if (Date.now() >= cached.expiresAt) {
+      return 'expired'
+    }
+
+    // Local cache says the token is still valid — verify with Google. A token
+    // can be revoked server-side (consent removed, app un-authorized, password
+    // reset) before our cached `expiresAt`. Without this check we hand a doomed
+    // token to the picker and watch it 401 with no client-side signal.
+    try {
+      const url = `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cached.token)}`
+      const res = await fetch(url)
+      if (res.ok) {
+        return 'connected'
+      }
+      // 400 = invalid_token (revoked, malformed, expired server-side)
+      if (res.status === HTTP_BAD_REQUEST || res.status === HTTP_UNAUTHORIZED) {
+        return 'expired'
+      }
+      // Other statuses are likely transient (5xx) — don't poison the connection
+      return 'connected'
+    } catch {
+      // Network error / offline — fall back to local cache verdict
+      return 'connected'
+    }
   },
 
   async getAccessToken(connection: Connection): Promise<string> {
