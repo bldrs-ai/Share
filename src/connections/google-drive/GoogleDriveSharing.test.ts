@@ -118,6 +118,34 @@ describe('driveListGrants', () => {
     ])
   })
 
+  it('downcasts Shared Drive organizer/fileOrganizer roles to writer', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(HTTP_OK, {
+      permissions: [
+        {id: 'p1', type: 'user', role: 'organizer', emailAddress: 'a@x.com'},
+        {id: 'p2', type: 'user', role: 'fileOrganizer', emailAddress: 'b@x.com'},
+      ],
+    }))
+
+    const grants = await driveListGrants(mkConnection(), FOLDER_RESOURCE, TOKEN)
+
+    expect(grants.map((g) => g.role)).toEqual(['writer', 'writer'])
+  })
+
+  it('lowercases domain principalIds for case-robust comparisons', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(HTTP_OK, {
+      permissions: [{id: 'p', type: 'domain', role: 'reader', domain: 'BLDRS.AI'}],
+    }))
+
+    const grants = await driveListGrants(mkConnection(), FILE_RESOURCE, TOKEN)
+    expect(grants[0].principalId).toBe('bldrs.ai')
+  })
+
+  it('returns [] when the response omits the permissions field', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(HTTP_OK, {}))
+    const grants = await driveListGrants(mkConnection(), FILE_RESOURCE, TOKEN)
+    expect(grants).toEqual([])
+  })
+
   it('targets /files/{id}/permissions with supportsAllDrives', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse(HTTP_OK, {permissions: []}))
     await driveListGrants(mkConnection(), FILE_RESOURCE, TOKEN)
@@ -186,6 +214,21 @@ describe('driveShareWith', () => {
     expect((init as RequestInit).method).toBe('POST')
     const body = JSON.parse((init as RequestInit).body as string)
     expect(body).toEqual({type: 'user', role: 'reader', emailAddress: 'b@x.com'})
+  })
+
+  it('forwards sendNotificationEmail=false when notify is explicitly false', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse(HTTP_OK, {
+      id: 'p9b', type: 'user', role: 'reader', emailAddress: 'c@x.com',
+    }))
+    await driveShareWith(
+      mkConnection(),
+      FILE_RESOURCE,
+      {principalType: 'user', principalId: 'c@x.com', role: 'reader', notify: false, message: 'should be dropped'},
+      TOKEN,
+    )
+    const [url] = mockFetch.mock.calls[0]
+    expect(url).toMatch('sendNotificationEmail=false')
+    expect(url).not.toMatch('emailMessage') // message dropped when notify off
   })
 
   it('omits sendNotificationEmail for domain and anyone grants', async () => {
@@ -280,6 +323,23 @@ describe('driveGetVisibility', () => {
     expect(await driveGetVisibility(conn, FILE_RESOURCE, TOKEN)).toBeNull()
   })
 
+  it('returns null when domain perm exists but connection is a personal Google (gmail) account', async () => {
+    // Free-email domain → workspaceDomain returns null → "unknowable" branch.
+    // Without this guard, a personal-Google user calling setVisibility('org')
+    // would attempt to grant `domain: 'gmail.com'` (i.e. share with every
+    // Gmail user worldwide). Tested here on the read side; the write-side
+    // guard is exercised in the driveSetVisibility suite below.
+    withGrants([{id: 'p', type: 'domain', role: 'reader', domain: 'bldrs.ai'}])
+    const conn = mkConnection({meta: {email: 'someone@gmail.com'}})
+    expect(await driveGetVisibility(conn, FILE_RESOURCE, TOKEN)).toBeNull()
+  })
+
+  it('matches domain case-insensitively against connection email', async () => {
+    withGrants([{id: 'p', type: 'domain', role: 'reader', domain: 'bldrs.ai'}])
+    const conn = mkConnection({meta: {email: 'PABLO@BLDRS.AI'}})
+    expect(await driveGetVisibility(conn, FILE_RESOURCE, TOKEN)).toBe('org')
+  })
+
   it('returns private when domain perm is for a different workspace', async () => {
     withGrants([{id: 'p', type: 'domain', role: 'reader', domain: 'other.com'}])
     expect(await driveGetVisibility(mkConnection(), FILE_RESOURCE, TOKEN)).toBe('private')
@@ -325,6 +385,24 @@ describe('driveSetVisibility', () => {
     })
   })
 
+  it('org throws GrantFailedError(domain_unknown) for personal Google (free-email) accounts', async () => {
+    // Security guard: prevents `domain: 'gmail.com'` from being granted,
+    // which would otherwise expose the file to every Gmail user worldwide.
+    withSequence(jsonResponse(HTTP_OK, {permissions: []}))
+    const conn = mkConnection({meta: {email: 'someone@gmail.com'}})
+    await expect(driveSetVisibility(conn, FILE_RESOURCE, 'org', TOKEN)).rejects.toMatchObject({
+      name: 'GrantFailedError', cause: 'domain_unknown',
+    })
+  })
+
+  it('org is a no-op when a matching-domain permission already exists', async () => {
+    withSequence(jsonResponse(HTTP_OK, {permissions: [
+      {id: 'p1', type: 'domain', role: 'reader', domain: 'bldrs.ai'},
+    ]}))
+    await driveSetVisibility(mkConnection(), FILE_RESOURCE, 'org', TOKEN)
+    expect(mockFetch).toHaveBeenCalledTimes(1) // list only, no POST
+  })
+
   it('org adds a domain permission for the connection workspace', async () => {
     withSequence(
       jsonResponse(HTTP_OK, {permissions: []}),
@@ -363,5 +441,38 @@ describe('driveSetVisibility', () => {
     const conn = mkConnection({meta: {}})
     await driveSetVisibility(conn, FILE_RESOURCE, 'private', TOKEN)
     expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('private aggregates a partial revoke failure as GrantFailedError(partial_revoke)', async () => {
+    // Two grants to revoke; the second DELETE fails with a 5xx. The first
+    // already succeeded — caller needs a typed signal that state is
+    // half-applied, not silent success and not a bare HTTP error.
+    withSequence(
+      jsonResponse(HTTP_OK, {permissions: [
+        {id: 'p1', type: 'anyone', role: 'reader'},
+        {id: 'p2', type: 'domain', role: 'reader', domain: 'bldrs.ai'},
+      ]}),
+      emptyResponse(HTTP_NO_CONTENT), // p1 revoke succeeds
+      jsonResponse(HTTP_INTERNAL, 'boom'), // p2 revoke fails
+    )
+    const err = await driveSetVisibility(mkConnection(), FILE_RESOURCE, 'private', TOKEN)
+      .catch((e) => e)
+    expect(err).toMatchObject({name: 'GrantFailedError', cause: 'partial_revoke'})
+    expect((err as Error).message).toMatch('p2')
+  })
+
+  it('private propagates NeedsReconnectError when every revoke fails with 401', async () => {
+    // All-failures-of-the-same-class is a coherent signal — surface it as
+    // the typed error directly so UI routes to Reconnect, not partial_revoke.
+    withSequence(
+      jsonResponse(HTTP_OK, {permissions: [
+        {id: 'p1', type: 'anyone', role: 'reader'},
+        {id: 'p2', type: 'domain', role: 'reader', domain: 'bldrs.ai'},
+      ]}),
+      jsonResponse(HTTP_UNAUTHORIZED, {error: 'invalid_token'}),
+      jsonResponse(HTTP_UNAUTHORIZED, {error: 'invalid_token'}),
+    )
+    await expect(driveSetVisibility(mkConnection(), FILE_RESOURCE, 'private', TOKEN))
+      .rejects.toMatchObject({name: 'NeedsReconnectError'})
   })
 })

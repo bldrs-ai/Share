@@ -56,11 +56,53 @@ function resourceToFileId(connection: Connection, resource: ResourceRef): string
 
 
 /**
- * Extract a Workspace-style domain from the connection's email metadata.
- * Returns null when the email is missing or shaped wrong, in which case
- * callers should refuse domain-scoped operations rather than guess.
+ * Free-email providers that are NOT a Workspace domain a single user
+ * controls. Granting `domain: 'gmail.com'` on a Drive file would expose it
+ * to every Gmail user worldwide — a footgun rather than an "org share."
  *
- * @return The domain (e.g. `'bldrs.ai'`), or null when unknowable.
+ * Drive itself rejects most of these as domain grants (the domain isn't
+ * verified to the user's account), but we don't want to depend on that
+ * server-side check as our only line of defense. When the connection's
+ * email belongs to one of these, `workspaceDomain` returns null and
+ * `setVisibility('org')` throws `domain_unknown` — the caller (PR2 UI)
+ * should explain that the account isn't part of a Workspace.
+ */
+const FREE_EMAIL_DOMAINS = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'outlook.com',
+  'hotmail.com',
+  'live.com',
+  'msn.com',
+  'yahoo.com',
+  'yahoo.co.uk',
+  'ymail.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'aol.com',
+  'protonmail.com',
+  'proton.me',
+  'pm.me',
+  'gmx.com',
+  'gmx.net',
+  'fastmail.com',
+  'mail.com',
+  'zoho.com',
+])
+
+
+/**
+ * Extract a Workspace-style domain from the connection's email metadata.
+ * Returns null when the email is missing, shaped wrong, or belongs to a
+ * free-email provider (see `FREE_EMAIL_DOMAINS`); callers should refuse
+ * domain-scoped operations rather than guess.
+ *
+ * The returned domain is lower-cased so equality comparisons against
+ * Drive-returned domains (which Drive normalizes to lowercase) are robust
+ * to user-typed casing in the connection metadata.
+ *
+ * @return The lowercased domain (e.g. `'bldrs.ai'`), or null when unknowable.
  */
 function workspaceDomain(connection: Connection): string | null {
   const email = connection.meta?.email
@@ -71,7 +113,11 @@ function workspaceDomain(connection: Connection): string | null {
   if (at < 0 || at === email.length - 1) {
     return null
   }
-  return email.slice(at + 1)
+  const domain = email.slice(at + 1).toLowerCase()
+  if (FREE_EMAIL_DOMAINS.has(domain)) {
+    return null
+  }
+  return domain
 }
 
 
@@ -129,23 +175,43 @@ async function driveFetch(
 
 
 /**
+ * Drive's role enum is wider than our provider-neutral one: Shared Drive
+ * resources can have `'organizer'` and `'fileOrganizer'` roles. Both grant
+ * write access (organizer also grants membership-management on the Shared
+ * Drive itself), so we downcast both to `'writer'` for cross-provider
+ * neutrality. UI that needs the precise Drive-side role can read it from
+ * a future provider-specific extension; PR1 keeps the union narrow.
+ *
+ * @return Our cross-provider role.
+ */
+function normalizeRole(role: DrivePermission['role']): GrantRequest['role'] {
+  if (role === 'organizer' || role === 'fileOrganizer') {
+    return 'writer'
+  }
+  return role
+}
+
+
+/**
  * Map a Drive `Permission` resource onto our provider-neutral `Grant`.
  *
  * Drive's `type` enum (`user|group|domain|anyone`) lines up with our
- * `principalType` 1:1, and Drive's `role` enum (`reader|commenter|writer|owner`)
- * matches our `role` enum directly. The `principalId` is the email for
- * user/group, the domain for domain, and undefined for anyone.
+ * `principalType` 1:1. The `principalId` is the email for user/group, the
+ * (lower-cased) domain for domain, and undefined for anyone. Roles are
+ * narrowed via `normalizeRole`.
  *
  * @return The grant in provider-neutral shape.
  */
 function permissionToGrant(p: DrivePermission): Grant {
   const principalType = p.type as GrantRequest['principalType']
-  const role = p.role as GrantRequest['role']
+  const role = normalizeRole(p.role)
   let principalId: string | undefined
   if (principalType === 'user' || principalType === 'group') {
     principalId = p.emailAddress
   } else if (principalType === 'domain') {
-    principalId = p.domain
+    // Lowercase to keep equality robust against any case drift between
+    // what Drive returns here and what `workspaceDomain` produces.
+    principalId = p.domain?.toLowerCase()
   }
   return {
     id: p.id,
@@ -378,17 +444,61 @@ export async function driveSetVisibility(
     return
   }
 
-  // 'private': drop link-share and matching-domain grants.
+  // 'private': drop link-share and matching-domain grants. Run in parallel
+  // and aggregate failures so a single bad revoke doesn't leave the caller
+  // blind to the rest of the state.
   const ownDomain = workspaceDomain(connection)
+  const toRevoke: string[] = []
   for (const g of current) {
-    if (g.principalType === 'anyone') {
-      await driveRevokeGrant(connection, resource, g.id, token)
-    } else if (g.principalType === 'domain' && (!ownDomain || g.principalId === ownDomain)) {
-      // Without an own-domain we can't tell which domain grant is "ours";
-      // remove all domain grants on this resource so visibility actually
-      // collapses. This matches Drive's UI behavior on "restrict to specific
-      // people" with no domain anchor.
-      await driveRevokeGrant(connection, resource, g.id, token)
+    const matchesAnyone = g.principalType === 'anyone'
+    // Without an own-domain we can't tell which domain grant is "ours";
+    // remove all domain grants on this resource so visibility actually
+    // collapses. This matches Drive's UI behavior on "restrict to specific
+    // people" with no domain anchor.
+    const matchesDomain = g.principalType === 'domain' &&
+      (!ownDomain || (g.principalId?.toLowerCase() === ownDomain))
+    if (matchesAnyone || matchesDomain) {
+      toRevoke.push(g.id)
     }
   }
+
+  if (toRevoke.length === 0) {
+    return
+  }
+
+  const results = await Promise.allSettled(
+    toRevoke.map((id) => driveRevokeGrant(connection, resource, id, token)),
+  )
+  const failures: Array<{id: string; reason: unknown}> = []
+  for (let i = 0; i < results.length; i += 1) {
+    const r = results[i]
+    if (r.status === 'rejected') {
+      failures.push({id: toRevoke[i], reason: r.reason})
+    }
+  }
+  if (failures.length === 0) {
+    return
+  }
+
+  // If every failure is the same auth-class error, propagate that typed
+  // error directly so callers can route to Reconnect / "you don't have
+  // permission" cleanly. Otherwise wrap as a partial-revoke failure
+  // carrying the surviving ids.
+  const firstReason = failures[0].reason
+  const sameClass = failures.every((f) =>
+    f.reason instanceof Error &&
+    firstReason instanceof Error &&
+    f.reason.constructor === firstReason.constructor)
+  if (sameClass && (
+    firstReason instanceof NeedsReconnectError ||
+    firstReason instanceof InsufficientPermissionError
+  )) {
+    throw firstReason
+  }
+  throw new GrantFailedError(
+    connection,
+    'partial_revoke',
+    `Failed to remove ${failures.length} of ${results.length} grants ` +
+    `(ids: ${failures.map((f) => f.id).join(', ')})`,
+  )
 }
