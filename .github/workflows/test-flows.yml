@@ -5,9 +5,14 @@ on:
     branches: [ main ]
     paths-ignore:
       - '**/*.md'
-      - 'README.md'
+      - 'design/**'
+      - 'notes/**'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - 'design/**'
+      - 'notes/**'
   workflow_dispatch:
 
 jobs:

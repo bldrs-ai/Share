@@ -1,3 +1,8 @@
+# Skip the deploy preview when the only changes are documentation. The script
+# exits 0 to skip and 1 to build; logic and edge cases are documented inline.
+[build]
+  ignore = "bash tools/netlify/ignore-build.sh"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends
