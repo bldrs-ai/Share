@@ -179,6 +179,7 @@ Estimated effort: **3–5 days**.
 - Auto-create GitHub connection from existing Auth0 federated identity on first load (per parent doc's *Migration* section). Token absent until first Browse triggers a code exchange.
 - Reconnect overlay pattern (existing from Drive) extended to GitHub connections.
 - Save dialog gains "Saving as @username" footer + multi-account picker + "no GH connection" disabled state.
+- **Gate connection actions behind Auth0 primary auth.** A logged-out user can currently click Connect Google Drive / Connect GitHub and persist a token to localStorage — fine for the flag-gated dev surface but indefensible for prod. Before flipping `googleDrive`/`githubAsSource` defaults on, require any Auth0 primary login (Google, GitHub-as-federated, OR Auth0 Database email/password — Database is the "I don't want OAuth" escape hatch) before the connect buttons are enabled. The `isAuthenticated` check from `useAuth0` is the seam; render the buttons disabled with a "Sign in to connect" tooltip otherwise. The Auth0 user `sub` then becomes the legitimate quota key (no anonymous connect/refresh hammering of the Netlify Functions).
 
 Behind the same flag. Legacy `/p/gh/*` reverse-proxy still serves users on the federated path.
 
@@ -206,7 +207,7 @@ Estimated effort: **3–5 days** for the Bldrs-side switch; retiring SOAP revers
 - **Multi-tab refresh-token race.** v1: refresh-on-401 only. Web Locks API mitigation deferred until telemetry justifies.
 - **Email privacy for commit author.** v1: rely on GitHub's account-level setting. Future: explicit noreply email in `commit.author.email` if telemetry shows mismatched-email confusion.
 - **GitHub Enterprise.** Out of scope for v1. The Netlify Functions can be parameterized on a custom GitHub host later if needed.
-- **Quota tracking.** Auth0 user (`sub`) remains the natural quota key — even with multiple GH connections per user. No change to the quotas plan; coordinates with `quotas` work flagged in parent doc's *Open questions*.
+- **Quota tracking.** Auth0 user (`sub`) remains the natural quota key — even with multiple GH connections per user. No change to the quotas plan; coordinates with `quotas` work flagged in parent doc's *Open questions*. Note: this presumes the PR2 "gate connections behind Auth0 primary auth" step has landed, otherwise an anonymous user can mint connections without ever passing through Auth0.
 - **GitHub App migration.** Out of scope. Reasonable future move once SPA support for GitHub Apps lands and we want fine-grained per-repo permissions.
 
 
