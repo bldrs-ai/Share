@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!--
+  GitHub OAuth popup callback. The popup lands here with ?code=…&state=…
+  (or ?error=…), forwards those values to the opener via postMessage, and
+  closes itself. The opener (GitHubProvider.connect) verifies state, posts
+  the code to /.netlify/functions/gh-oauth-exchange, and persists the token.
+
+  This page must be same-origin with the opener so postMessage can target
+  window.location.origin. It deliberately ships no app code — it should
+  load instantly even if the main bundle is broken.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Connecting to GitHub…</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <p>Finishing GitHub sign-in… you can close this window.</p>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search)
+      var payload = {
+        type: 'bldrs:gh-oauth-callback',
+        code: params.get('code'),
+        state: params.get('state'),
+        error: params.get('error'),
+        error_description: params.get('error_description'),
+      }
+
+      // Target our own origin only. The opener is same-origin (it served
+      // this page) so this also rejects any cross-origin opener attached by
+      // a malicious frame. window.opener may be null if popup-blocker or
+      // user closed the tab oddly — in that case there's nothing to do.
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(payload, window.location.origin)
+        }
+      } catch (e) {
+        // No-op: the opener will time out and surface a typed error.
+      }
+      window.close()
+    })()
+  </script>
+</body>
+</html>
