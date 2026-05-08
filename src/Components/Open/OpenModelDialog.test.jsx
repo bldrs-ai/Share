@@ -23,9 +23,9 @@ jest.mock('./GitHubFileBrowser', () => function MockGitHubFileBrowser({onCancel}
     </div>
   )
 })
-jest.mock('../Connections/SourcesTab', () => function MockSourcesTab({onOpenById, onPickerReady}) {
+jest.mock('../Connections/GoogleDriveTab', () => function MockGoogleDriveTab({onOpenById, onPickerReady}) {
   return (
-    <div data-testid='mock-sources-tab'>
+    <div data-testid='mock-google-drive-tab'>
       <button
         data-testid='button-open-by-id'
         onClick={() => onOpenById({id: 'conn-1', providerId: 'google-drive'}, 'file-id-abc', 'model.ifc')}
@@ -40,6 +40,9 @@ jest.mock('../Connections/SourcesTab', () => function MockSourcesTab({onOpenById
       </button>
     </div>
   )
+})
+jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
+  return <div data-testid='mock-github-tab'/>
 })
 jest.mock('../../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))

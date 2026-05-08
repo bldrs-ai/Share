@@ -1,8 +1,7 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useMemo, useState} from 'react'
 import {Divider, Stack, Typography} from '@mui/material'
-import {GitHub as GitHubIcon, Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
+import {Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
-import useExistInFeature from '../../hooks/useExistInFeature'
 import {getProvider} from '../../connections/registry'
 import {loadAllRecentFiles} from '../../connections/persistence'
 import ConnectProviderButton from './ConnectProviderButton'
@@ -10,27 +9,30 @@ import ConnectionCard from './ConnectionCard'
 import RecentFilesBrowseSection from './RecentFilesBrowseSection'
 // Side-effect: registers google-drive provider in the registry
 import '../../connections/google-drive/index'
-// Side-effect: registers github provider in the registry. The "Connect
-// GitHub" surface lands behind the githubAsSource feature flag in PR2;
-// the registration ships unconditionally so consumers can detect
-// availability through the registry.
-import '../../connections/github/index'
+
+
+const GOOGLE_DRIVE_PROVIDER_ID = 'google-drive'
 
 
 /**
- * Google Drive tab content for the Open Model dialog.
+ * Google Drive tab content for the Open Model dialog. Lists Google Drive
+ * connections only; GitHub-as-Sources lives in GitHubTab.jsx so the two
+ * provider stories don't visually overlap.
  *
  * @property {Function} onPickerReady Called with (token, connection) when ready to show picker
  * @property {Function} onOpenById Called with (connection, fileId, fileName) to open a file directly
  * @return {React.ReactElement}
  */
-export default function SourcesTab({onPickerReady, onOpenById}) {
-  const connections = useStore((state) => state.connections)
-  // Gate the GitHub-as-Sources surface on the feature flag so the rest of
-  // PR2 (multi-account picker, browse-via-connection) can land
-  // incrementally. Toggle via ?feature=githubAsSource for smoke testing
-  // until the flag flips on by default.
-  const isGithubAsSourceOn = useExistInFeature('githubAsSource')
+export default function GoogleDriveTab({onPickerReady, onOpenById}) {
+  const allConnections = useStore((state) => state.connections)
+  // useMemo so the filtered array's reference is stable across renders that
+  // don't change the store; without this, the validateAll effect's
+  // dependency array sees a fresh reference every render and triggers an
+  // infinite checkStatus loop.
+  const connections = useMemo(
+    () => allConnections.filter((c) => c.providerId === GOOGLE_DRIVE_PROVIDER_ID),
+    [allConnections],
+  )
 
   const [browseError, setBrowseError] = useState(null)
   const [recentFiles] = useState(() => loadAllRecentFiles())
@@ -111,13 +113,6 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
           label='Connect Google Drive'
           icon={<GoogleIcon/>}
         />
-        {isGithubAsSourceOn && (
-          <ConnectProviderButton
-            providerId='github'
-            label='Connect GitHub'
-            icon={<GitHubIcon/>}
-          />
-        )}
       </Stack>
     )
   }
@@ -175,14 +170,6 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
         label='Add another Google account'
         color='primary'
       />
-      {isGithubAsSourceOn && (
-        <ConnectProviderButton
-          providerId='github'
-          label='Add a GitHub account'
-          icon={<GitHubIcon/>}
-          color='primary'
-        />
-      )}
     </Stack>
   )
 }

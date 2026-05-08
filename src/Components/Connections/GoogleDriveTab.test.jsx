@@ -3,7 +3,7 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {StoreRouteThemeCtx} from '../../Share.fixture'
 import useStore from '../../store/useStore'
 import {getProvider} from '../../connections/registry'
-import SourcesTab from './SourcesTab'
+import GoogleDriveTab from './GoogleDriveTab'
 
 
 jest.mock('../../connections/registry')
@@ -39,7 +39,7 @@ async function flushValidateEffect() {
 }
 
 
-describe('SourcesTab', () => {
+describe('GoogleDriveTab', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     // Reset connections in the store
@@ -55,7 +55,7 @@ describe('SourcesTab', () => {
 
   it('shows empty state with connect button when there are no connections', () => {
     render(
-      <SourcesTab onPickerReady={onPickerReady}/>,
+      <GoogleDriveTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
 
@@ -69,7 +69,7 @@ describe('SourcesTab', () => {
     })
 
     render(
-      <SourcesTab onPickerReady={onPickerReady}/>,
+      <GoogleDriveTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
     await flushValidateEffect()
@@ -85,7 +85,7 @@ describe('SourcesTab', () => {
     })
 
     render(
-      <SourcesTab onPickerReady={onPickerReady}/>,
+      <GoogleDriveTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
     await flushValidateEffect()
@@ -103,7 +103,7 @@ describe('SourcesTab', () => {
     })
 
     render(
-      <SourcesTab onPickerReady={onPickerReady}/>,
+      <GoogleDriveTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
     await flushValidateEffect()
@@ -124,7 +124,7 @@ describe('SourcesTab', () => {
     })
 
     render(
-      <SourcesTab onPickerReady={onPickerReady}/>,
+      <GoogleDriveTab onPickerReady={onPickerReady}/>,
       {wrapper: StoreRouteThemeCtx},
     )
     await flushValidateEffect()
@@ -144,7 +144,7 @@ describe('SourcesTab', () => {
       getProvider.mockReturnValue({checkStatus, getAccessToken: jest.fn()})
 
       render(
-        <SourcesTab onPickerReady={onPickerReady}/>,
+        <GoogleDriveTab onPickerReady={onPickerReady}/>,
         {wrapper: StoreRouteThemeCtx},
       )
 
@@ -163,7 +163,7 @@ describe('SourcesTab', () => {
       })
 
       render(
-        <SourcesTab onPickerReady={onPickerReady}/>,
+        <GoogleDriveTab onPickerReady={onPickerReady}/>,
         {wrapper: StoreRouteThemeCtx},
       )
 
@@ -184,7 +184,7 @@ describe('SourcesTab', () => {
       })
 
       render(
-        <SourcesTab onPickerReady={onPickerReady}/>,
+        <GoogleDriveTab onPickerReady={onPickerReady}/>,
         {wrapper: StoreRouteThemeCtx},
       )
 
@@ -205,7 +205,7 @@ describe('SourcesTab', () => {
       })
 
       render(
-        <SourcesTab onPickerReady={onPickerReady}/>,
+        <GoogleDriveTab onPickerReady={onPickerReady}/>,
         {wrapper: StoreRouteThemeCtx},
       )
 
