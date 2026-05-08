@@ -1,6 +1,6 @@
 # Identity decoupling: GitHub as a per-account Sources connection
 
-**Status:** Proposed
+**Status:** Decided — see [`identity-decoupling-decisions.md`](./identity-decoupling-decisions.md) for resolved open questions and the architectural correction on broker placement (Netlify Functions, not SOAP).
 **Date:** 2026-05-07
 **Owner:** Pablo
 **Related code:** `src/connections/`, `src/Components/Open/OpenModelDialog.jsx`, `src/Components/Connections/SourcesTab.jsx`, `src/Auth0/`
