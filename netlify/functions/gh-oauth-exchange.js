@@ -17,15 +17,16 @@
  *     scope, token_type }
  *
  * Modeled on netlify/functions/unlink-identity.js for Sentry/axios/body
- * conventions. ~70 lines.
+ * conventions but emitted as ESM since netlify/package.json sets
+ * "type": "module".
  *
  * Env required:
  *   GH_OAUTH_CLIENT_ID     — public OAuth App client id
  *   GH_OAUTH_CLIENT_SECRET — server-only OAuth App client secret
  */
 
-const axios = require('axios')
-const Sentry = require('@sentry/serverless')
+import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 
 
 Sentry.AWSLambda.init({
@@ -38,7 +39,7 @@ Sentry.AWSLambda.init({
 const GH_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 
 
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: 405, body: 'Method Not Allowed'}
   }
