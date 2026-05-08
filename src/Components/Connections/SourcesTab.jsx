@@ -1,7 +1,8 @@
 import React, {useEffect, useState} from 'react'
 import {Divider, Stack, Typography} from '@mui/material'
-import {Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
+import {GitHub as GitHubIcon, Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import {getProvider} from '../../connections/registry'
 import {loadAllRecentFiles} from '../../connections/persistence'
 import ConnectProviderButton from './ConnectProviderButton'
@@ -25,6 +26,11 @@ import '../../connections/github/index'
  */
 export default function SourcesTab({onPickerReady, onOpenById}) {
   const connections = useStore((state) => state.connections)
+  // Gate the GitHub-as-Sources surface on the feature flag so the rest of
+  // PR2 (multi-account picker, browse-via-connection) can land
+  // incrementally. Toggle via ?feature=githubAsSource for smoke testing
+  // until the flag flips on by default.
+  const isGithubAsSourceOn = useExistInFeature('githubAsSource')
 
   const [browseError, setBrowseError] = useState(null)
   const [recentFiles] = useState(() => loadAllRecentFiles())
@@ -105,6 +111,13 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
           label='Connect Google Drive'
           icon={<GoogleIcon/>}
         />
+        {isGithubAsSourceOn && (
+          <ConnectProviderButton
+            providerId='github'
+            label='Connect GitHub'
+            icon={<GitHubIcon/>}
+          />
+        )}
       </Stack>
     )
   }
@@ -162,6 +175,14 @@ export default function SourcesTab({onPickerReady, onOpenById}) {
         label='Add another Google account'
         color='primary'
       />
+      {isGithubAsSourceOn && (
+        <ConnectProviderButton
+          providerId='github'
+          label='Add a GitHub account'
+          icon={<GitHubIcon/>}
+          color='primary'
+        />
+      )}
     </Stack>
   )
 }
