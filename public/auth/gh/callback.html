@@ -38,16 +38,29 @@
         error_description: params.get('error_description'),
       }
 
-      // Target our own origin only. The opener is same-origin (it served
-      // this page) so this also rejects any cross-origin opener attached by
-      // a malicious frame. window.opener may be null if popup-blocker or
-      // user closed the tab oddly — in that case there's nothing to do.
+      // BroadcastChannel is the primary delivery path. github.com's strict
+      // Cross-Origin-Opener-Policy severs window.opener when the popup
+      // first navigates there; even though we return to a same-origin
+      // page, the browsing-context-group switch is permanent and
+      // window.opener stays null. BroadcastChannel works same-origin
+      // without any opener relationship.
+      try {
+        var ch = new BroadcastChannel('bldrs:gh-oauth')
+        ch.postMessage(payload)
+        ch.close()
+      } catch (e) {
+        // BroadcastChannel unsupported — fall through to postMessage.
+      }
+
+      // Fallback: postMessage via window.opener. Almost always a no-op in
+      // practice (see COOP note above) but kept for older browsers and
+      // for environments where the OAuth provider doesn't set strict COOP.
       try {
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage(payload, window.location.origin)
         }
       } catch (e) {
-        // No-op: the opener will time out and surface a typed error.
+        // No-op.
       }
       window.close()
     })()

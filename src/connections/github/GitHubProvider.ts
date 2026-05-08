@@ -41,6 +41,11 @@ const CALLBACK_PATH = '/auth/gh/callback.html'
 // callers can offer a Reconnect button rather than hang.
 const CONNECT_TIMEOUT_MS = 120_000
 const POPUP_POLL_INTERVAL_MS = 500
+// Grace period after popup.closed before we reject as "cancelled". The
+// callback page calls postMessage just before window.close(), so we
+// briefly wait for the message to arrive instead of racing the close
+// detection. Mirrors GoogleDriveProvider's POPUP_CLOSE_DEBOUNCE_MS.
+const POPUP_CLOSE_DEBOUNCE_MS = 2000
 // Default GitHub OAuth-App access-token TTL when the app is configured for
 // expiring tokens (decisions §Q2). Used only as a fallback when the
 // response omits expires_in (defensive — current GitHub always returns it).
@@ -61,6 +66,7 @@ const SESSION_STATE_KEY = 'github_oauth_state'
 const POPUP_FEATURES = 'popup=yes,width=600,height=700'
 
 const POSTMESSAGE_TYPE = 'bldrs:gh-oauth-callback'
+const BROADCAST_CHANNEL_NAME = 'bldrs:gh-oauth'
 
 
 /** Persisted token record. Mirrors GitHub's response shape, with absolute expiries. */
@@ -417,7 +423,14 @@ export const githubProvider: ConnectionProvider = {
 
 
 /**
- * Block until the popup posts the OAuth callback or closes/times out.
+ * Block until the popup delivers the OAuth callback or closes/times out.
+ * Listens on three signals:
+ *   - BroadcastChannel `bldrs:gh-oauth` — primary, COOP-immune.
+ *   - postMessage on window — fallback for browsers without
+ *     BroadcastChannel and for OAuth providers that don't set strict COOP.
+ *   - popup.closed polling — only after a debounce, since the callback
+ *     page closes itself immediately after dispatching the message.
+ *
  * Resolves with the payload (which may carry `error`); rejects only on
  * structural failures (popup closed without delivering a message, timeout).
  *
@@ -427,6 +440,11 @@ export const githubProvider: ConnectionProvider = {
 function waitForCallback(popup: Window): Promise<CallbackPayload> {
   return new Promise<CallbackPayload>((resolve, reject) => {
     let settled = false
+    let receivedCallback = false
+    // BroadcastChannel may be undefined in old jsdom; tests mock it.
+    const channel = typeof BroadcastChannel !== 'undefined' ?
+      new BroadcastChannel(BROADCAST_CHANNEL_NAME) :
+      null
 
     const settle = (fn: () => void): void => {
       if (settled) {
@@ -434,6 +452,10 @@ function waitForCallback(popup: Window): Promise<CallbackPayload> {
       }
       settled = true
       window.removeEventListener('message', onMessage)
+      if (channel) {
+        channel.removeEventListener('message', onChannelMessage)
+        channel.close()
+      }
       clearInterval(pollInterval)
       clearTimeout(overallTimeout)
       try {
@@ -446,26 +468,42 @@ function waitForCallback(popup: Window): Promise<CallbackPayload> {
       fn()
     }
 
+    const acceptPayload = (data: CallbackPayload | undefined): boolean => {
+      if (!data || data.type !== POSTMESSAGE_TYPE) {
+        return false
+      }
+      receivedCallback = true
+      settle(() => resolve(data))
+      return true
+    }
+
     const onMessage = (event: MessageEvent): void => {
       // Reject any opener message not from our own origin. The callback
       // page postMessages with window.location.origin (same-origin only).
       if (event.origin !== window.location.origin) {
         return
       }
-      const data = event.data as CallbackPayload | undefined
-      if (!data || data.type !== POSTMESSAGE_TYPE) {
-        return
-      }
-      settle(() => resolve(data))
+      acceptPayload(event.data as CallbackPayload | undefined)
     }
 
-    // Popup-close detection. If the user closes the popup before our
-    // callback page runs (denied consent, manual close), surface a typed
-    // error rather than hanging on the message listener.
+    const onChannelMessage = (event: MessageEvent): void => {
+      // BroadcastChannel only delivers same-origin messages, so no origin
+      // check is needed.
+      acceptPayload(event.data as CallbackPayload | undefined)
+    }
+
+    // Popup-close detection. The callback page closes itself right after
+    // dispatching, so a clean run looks like "message arrives, then
+    // popup.closed flips a few ms later". Debounce briefly so the
+    // close-after-success doesn't race the message handler.
     const pollInterval = setInterval(() => {
       try {
         if (popup.closed) {
-          settle(() => reject(new Error('GitHub sign-in was cancelled')))
+          setTimeout(() => {
+            if (!settled && !receivedCallback) {
+              settle(() => reject(new Error('GitHub sign-in was cancelled')))
+            }
+          }, POPUP_CLOSE_DEBOUNCE_MS)
         }
       } catch {
         // Cross-origin during the github.com hop will throw — that's fine.
@@ -477,6 +515,9 @@ function waitForCallback(popup: Window): Promise<CallbackPayload> {
     }, CONNECT_TIMEOUT_MS)
 
     window.addEventListener('message', onMessage)
+    if (channel) {
+      channel.addEventListener('message', onChannelMessage)
+    }
   })
 }
 

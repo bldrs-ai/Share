@@ -93,12 +93,14 @@ describe('GitHubProvider — connect (CSRF + happy path)', () => {
     expect(url).toContain('state=test-uuid-1234')
     expect(url).toContain('scope=repo+read%3Auser+read%3Aorg')
     expect(url).toContain(`redirect_uri=${encodeURIComponent(`${window.location.origin}/auth/gh/callback.html`)}`)
-    // Settle the dangling connect() so its message listener doesn't leak
-    // into the next test (where a postCallback could resolve it with a
-    // mismatching state).
+    // Settle the dangling connect() so its message + BroadcastChannel
+    // listeners don't leak into the next test (where a postCallback could
+    // resolve them with a mismatching state). Need to clear the 500ms
+    // poll *and* the 2000ms POPUP_CLOSE_DEBOUNCE_MS before settle fires.
     popup.closed = true
     // eslint-disable-next-line no-magic-numbers
-    jest.advanceTimersByTime(600)
+    jest.advanceTimersByTime(3000)
+    await flush()
     await promise
   })
 
@@ -117,8 +119,9 @@ describe('GitHubProvider — connect (CSRF + happy path)', () => {
     const promise = githubProvider.connect()
     await flush()
     popup.closed = true
+    // 500ms poll detects closed, then 2000ms debounce fires reject.
     // eslint-disable-next-line no-magic-numbers
-    jest.advanceTimersByTime(600)
+    jest.advanceTimersByTime(3000)
     await expect(promise).rejects.toThrow('cancelled')
   })
 
