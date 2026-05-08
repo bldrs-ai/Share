@@ -7,9 +7,24 @@
  * Tokens are held in memory only and re-obtained via GIS on page reload.
  */
 
-import type {Connection, ConnectionProvider, ConnectionStatus} from '../types'
+import type {
+  Connection,
+  ConnectionProvider,
+  ConnectionStatus,
+  Grant,
+  GrantRequest,
+  ResourceRef,
+  Visibility,
+} from '../types'
 import debug from '../../utils/debug'
 import {NeedsReconnectError} from '../errors'
+import {
+  driveGetVisibility,
+  driveListGrants,
+  driveRevokeGrant,
+  driveSetVisibility,
+  driveShareWith,
+} from './GoogleDriveSharing'
 import {loadGisScript} from './loadGisScript'
 import type {TokenResponse} from './loadGisScript'
 
@@ -433,6 +448,52 @@ export const googleDriveProvider: ConnectionProvider = {
       // Use empty string prompt to try silent refresh; will show popup if consent needed
       client.requestAccessToken({prompt: '', state: oauthState})
     })
+  },
+
+  // -- Sharing capability --
+  // These delegate to GoogleDriveSharing.ts so the transport is testable
+  // without exercising OAuth. getAccessToken() is the only auth seam; if a
+  // token is stale and silent-refresh fails it surfaces NeedsReconnectError
+  // here, just as in the existing browse path.
+
+  async listGrants(connection: Connection, resource: ResourceRef): Promise<Grant[]> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveListGrants(connection, resource, token)
+  },
+
+  async shareWith(
+    connection: Connection,
+    resource: ResourceRef,
+    grant: GrantRequest,
+  ): Promise<Grant> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveShareWith(connection, resource, grant, token)
+  },
+
+  async revokeGrant(
+    connection: Connection,
+    resource: ResourceRef,
+    grantId: string,
+  ): Promise<void> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveRevokeGrant(connection, resource, grantId, token)
+  },
+
+  async getVisibility(
+    connection: Connection,
+    resource: ResourceRef,
+  ): Promise<Visibility | null> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveGetVisibility(connection, resource, token)
+  },
+
+  async setVisibility(
+    connection: Connection,
+    resource: ResourceRef,
+    visibility: Visibility,
+  ): Promise<void> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveSetVisibility(connection, resource, visibility, token)
   },
 }
 
