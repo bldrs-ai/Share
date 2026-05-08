@@ -209,6 +209,12 @@ Estimated effort: **3–5 days** for the Bldrs-side switch; retiring SOAP revers
 - **GitHub Enterprise.** Out of scope for v1. The Netlify Functions can be parameterized on a custom GitHub host later if needed.
 - **Quota tracking.** Auth0 user (`sub`) remains the natural quota key — even with multiple GH connections per user. No change to the quotas plan; coordinates with `quotas` work flagged in parent doc's *Open questions*. Note: this presumes the PR2 "gate connections behind Auth0 primary auth" step has landed, otherwise an anonymous user can mint connections without ever passing through Auth0.
 - **GitHub App migration.** Out of scope. Reasonable future move once SPA support for GitHub Apps lands and we want fine-grained per-repo permissions.
+- **Server-side Auth0 enforcement on the Netlify Functions.** *Open question, needs a decision before PR2 ships the UI guard.* Should `gh-oauth-exchange` and `gh-oauth-refresh` require an Auth0 access token in the `Authorization` header (mirroring `netlify/functions/unlink-identity.js`'s pattern: extract Bearer, verify against `${AUTH0_DOMAIN}/userinfo`, derive `sub` for rate-limiting/quota tagging)? A UI-only guard is bypassable — the functions are reachable from any logged-out browser, curl, or compromised dependency once the URL is known. Tradeoffs:
+  - **Pro (defense in depth):** anonymous abuse impossible; Auth0 `sub` becomes a real quota key; aligns the security shape with the existing `unlink-identity` / `create-portal-session` functions which already authenticate.
+  - **Con (latency):** adds a `/userinfo` round trip per call (~50-150ms). Mitigable by JWT signature verification against Auth0's JWKS instead of `/userinfo` — same outcome, no extra hop, but more code.
+  - **Con (migration friction):** users mid-flow when the function-side check lands will see exchange/refresh fail until they re-auth. Probably acceptable since refresh failure already routes through `NeedsReconnectError`.
+  - **Open question:** Auth0 access tokens issued for the Bldrs SPA — what's their audience/scopes? Need to confirm we can validate them server-side without changing the Auth0 application configuration.
+  - **Sequencing:** if we decide *yes*, this lands as a follow-up PR (or rolled into PR2's UI guard) so the function-side and UI-side guards ship together. If *no*, document the decision and rely on Auth0 user `sub` (read from the optional Bearer when present) as a soft quota key only.
 
 
 ## Decisions matrix (one-line summary)
