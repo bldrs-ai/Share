@@ -9,6 +9,7 @@ import SourcesTab from './SourcesTab'
 jest.mock('../../connections/registry')
 // Prevent the side-effect import from registering the real GIS-backed provider
 jest.mock('../../connections/google-drive/index', () => {})
+jest.mock('../../connections/github/index', () => {})
 
 const onPickerReady = jest.fn()
 

@@ -33,6 +33,9 @@ public/test-models
 # Local Netlify folder
 .netlify
 
+# netlify-cli writes deno.lock for its edge-functions toolchain
+deno.lock
+
 # Claude Code local settings
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

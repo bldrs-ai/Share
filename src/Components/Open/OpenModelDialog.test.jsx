@@ -13,6 +13,7 @@ import OpenModelDialog from './OpenModelDialog'
 jest.mock('../../Auth0/Auth0Proxy')
 jest.mock('../../connections/persistence')
 jest.mock('../../connections/google-drive/index', () => {})
+jest.mock('../../connections/github/index', () => {})
 jest.mock('../../connections/registry')
 jest.mock('../../hooks/useExistInFeature', () => jest.fn().mockReturnValue(false))
 jest.mock('./GitHubFileBrowser', () => function MockGitHubFileBrowser({onCancel}) {

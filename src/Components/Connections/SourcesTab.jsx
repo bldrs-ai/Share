@@ -9,6 +9,11 @@ import ConnectionCard from './ConnectionCard'
 import RecentFilesBrowseSection from './RecentFilesBrowseSection'
 // Side-effect: registers google-drive provider in the registry
 import '../../connections/google-drive/index'
+// Side-effect: registers github provider in the registry. The "Connect
+// GitHub" surface lands behind the githubAsSource feature flag in PR2;
+// the registration ships unconditionally so consumers can detect
+// availability through the registry.
+import '../../connections/github/index'
 
 
 /**
