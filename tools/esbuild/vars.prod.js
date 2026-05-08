@@ -34,6 +34,11 @@ export default {
   GOOGLE_OAUTH2_CLIENT_ID: null,
   GOOGLE_APP_ID: null,
 
+  // GitHub OAuth App (browser-side public client id; secret stays in
+  // the Netlify Functions). See netlify/functions/gh-oauth-{exchange,
+  // refresh}.js and src/connections/github/GitHubProvider.ts.
+  GH_OAUTH_CLIENT_ID: null,
+
   // OpenRouter
   OPENROUTER_BASE_URL: 'https://openrouter.ai',
 
