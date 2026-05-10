@@ -8,6 +8,9 @@
  * opener calls this function to complete the swap.
  *
  *   POST /.netlify/functions/gh-oauth-exchange
+ *   Headers: Authorization: Bearer <Auth0-access-token>
+ *     Required when AUTH0_DOMAIN is set (i.e. always in prod). Anchors
+ *     per-sub quota and gates the code-for-token swap behind primary auth.
  *   Body: { "code": "<authcode>", "redirect_uri": "<...>" }
  *     redirect_uri is required by GitHub and must match the value used in
  *     the authorize step exactly.
@@ -23,10 +26,14 @@
  * Env required:
  *   GH_OAUTH_CLIENT_ID     — public OAuth App client id
  *   GH_OAUTH_CLIENT_SECRET — server-only OAuth App client secret
+ *   AUTH0_DOMAIN           — primary-auth tenant; when set, Auth0 token is
+ *                            required on every call. When unset (truly
+ *                            unconfigured local dev) enforcement is skipped.
  */
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
+import {verifyAuth0Bearer} from './_lib/auth0.js'
 
 
 Sentry.AWSLambda.init({
@@ -42,6 +49,13 @@ const GH_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: 405, body: 'Method Not Allowed'}
+  }
+
+  // Primary-auth gate. Validate before reaching GitHub so an unauthenticated
+  // caller can't probe for valid OAuth codes.
+  const auth = await verifyAuth0Bearer(event)
+  if (!auth.ok) {
+    return auth.response
   }
 
   const clientId = process.env.GH_OAUTH_CLIENT_ID

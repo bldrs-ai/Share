@@ -9,6 +9,7 @@
  *   - BroadcastChannel delivery (the production COOP-immune path)
  */
 
+import {registerAuth0AccessTokenFetcher} from '../auth0Bridge'
 import {NeedsReconnectError} from '../errors'
 import {githubProvider} from './GitHubProvider'
 
@@ -523,5 +524,129 @@ describe('GitHubProvider — disconnect', () => {
     }))
     await githubProvider.disconnect(id)
     expect(localStorage.getItem(`bldrs:github-token:${id}`)).toBeNull()
+  })
+})
+
+
+// Auth0 primary-auth bridge: postFn must attach the registered Auth0 access
+// token as Authorization: Bearer when one exists, and omit the header when
+// none is registered. Server-side enforcement lives in
+// netlify/functions/_lib/auth0.js.
+describe('GitHubProvider — Auth0 bridge integration', () => {
+  // Drain the test's effects between cases — the bridge is module-scoped
+  // singleton state.
+  afterEach(() => {
+    registerAuth0AccessTokenFetcher(null)
+  })
+
+  it('attaches Authorization: Bearer to the exchange call when a fetcher is registered', async () => {
+    registerAuth0AccessTokenFetcher(() => Promise.resolve('auth0-jwt-abc'))
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/.netlify/functions/gh-oauth-exchange') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'gh-access',
+            refresh_token: 'gh-refresh',
+            expires_in: 28800,
+            refresh_token_expires_in: 15552000,
+            scope: 'repo,read:user,read:org',
+          }),
+        })
+      }
+      if (url === 'https://api.github.com/user') {
+        return Promise.resolve({ok: true, json: () => Promise.resolve({login: 'octo'})})
+      }
+      return Promise.resolve({ok: false, status: 404, text: () => Promise.resolve('')})
+    })
+
+    const promise = githubProvider.connect()
+    await flush()
+    postCallback({
+      type: 'bldrs:gh-oauth-callback',
+      code: 'auth-code',
+      state: 'test-uuid-1234',
+    })
+    await promise
+
+    const exchangeCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/.netlify/functions/gh-oauth-exchange',
+    )
+    expect(exchangeCall?.[1]?.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer auth0-jwt-abc',
+    })
+  })
+
+  it('omits Authorization header when no fetcher is registered', async () => {
+    // No registerAuth0AccessTokenFetcher() call — bridge returns null.
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/.netlify/functions/gh-oauth-exchange') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'gh-access',
+            refresh_token: 'gh-refresh',
+            expires_in: 28800,
+            refresh_token_expires_in: 15552000,
+            scope: 'repo,read:user,read:org',
+          }),
+        })
+      }
+      if (url === 'https://api.github.com/user') {
+        return Promise.resolve({ok: true, json: () => Promise.resolve({login: 'octo'})})
+      }
+      return Promise.resolve({ok: false, status: 404, text: () => Promise.resolve('')})
+    })
+
+    const promise = githubProvider.connect()
+    await flush()
+    postCallback({
+      type: 'bldrs:gh-oauth-callback',
+      code: 'auth-code',
+      state: 'test-uuid-1234',
+    })
+    await promise
+
+    const exchangeCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/.netlify/functions/gh-oauth-exchange',
+    )
+    expect(exchangeCall?.[1]?.headers).not.toHaveProperty('Authorization')
+  })
+
+  it('treats a fetcher that throws as "no token" rather than failing the request', async () => {
+    registerAuth0AccessTokenFetcher(() => Promise.reject(new Error('login_required')))
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/.netlify/functions/gh-oauth-exchange') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'gh-access',
+            refresh_token: 'gh-refresh',
+            expires_in: 28800,
+            refresh_token_expires_in: 15552000,
+            scope: 'repo,read:user,read:org',
+          }),
+        })
+      }
+      if (url === 'https://api.github.com/user') {
+        return Promise.resolve({ok: true, json: () => Promise.resolve({login: 'octo'})})
+      }
+      return Promise.resolve({ok: false, status: 404, text: () => Promise.resolve('')})
+    })
+
+    const promise = githubProvider.connect()
+    await flush()
+    postCallback({
+      type: 'bldrs:gh-oauth-callback',
+      code: 'auth-code',
+      state: 'test-uuid-1234',
+    })
+    await promise
+
+    const exchangeCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/.netlify/functions/gh-oauth-exchange',
+    )
+    expect(exchangeCall?.[1]?.headers).not.toHaveProperty('Authorization')
   })
 })
