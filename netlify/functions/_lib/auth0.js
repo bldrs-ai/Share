@@ -37,6 +37,11 @@ import * as Sentry from '@sentry/serverless'
 
 const AUTHORIZATION_HEADER_PATTERN = /^Bearer\s+(.+)$/i
 
+// Fire the bypass-warning at most once per function-instance lifetime.
+// Netlify reuses warm instances across many requests, so a per-request
+// captureMessage would flood Sentry on a misconfigured deploy.
+let bypassWarningSent = false
+
 
 /**
  * Verify the Authorization: Bearer header on a Netlify Function request and
@@ -57,7 +62,20 @@ export async function verifyAuth0Bearer(event) {
     // No primary-auth configured at all — treat as dev/local and skip
     // enforcement. In prod this branch is impossible because Auth0 is the
     // app's primary identity layer; if this trips in prod, the bigger
-    // problem is that the deploy is misconfigured.
+    // problem is that the deploy is misconfigured. Fire a one-shot
+    // Sentry warning so the bypassed-gate state is visible without
+    // spamming on every request.
+    if (!bypassWarningSent) {
+      bypassWarningSent = true
+      try {
+        Sentry.captureMessage(
+          'AUTH0_DOMAIN missing — primary-auth gate is bypassed',
+          'warning',
+        )
+      } catch {
+        // Sentry not initialised in some local dev paths — ignore.
+      }
+    }
     return {ok: true, sub: null}
   }
 

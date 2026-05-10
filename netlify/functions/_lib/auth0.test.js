@@ -4,11 +4,17 @@
  */
 
 import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 import {verifyAuth0Bearer} from './auth0.js'
 
 
 /* eslint-disable no-magic-numbers */
 jest.mock('axios')
+jest.mock('@sentry/serverless', () => ({
+  captureMessage: jest.fn(),
+  captureException: jest.fn(),
+  setUser: jest.fn(),
+}))
 
 
 describe('verifyAuth0Bearer', () => {
@@ -30,6 +36,41 @@ describe('verifyAuth0Bearer', () => {
 
     expect(result).toEqual({ok: true, sub: null})
     expect(axios.get).not.toHaveBeenCalled()
+  })
+
+  it('logs a one-shot Sentry warning when AUTH0_DOMAIN is unset', async () => {
+    // Use isolated modules so the per-process `bypassWarningSent` flag in
+    // auth0.js is freshly false for this case (other tests in this suite
+    // may have already triggered the bypass branch).
+    delete process.env.AUTH0_DOMAIN
+    jest.resetModules()
+    // Re-mock for the isolated module graph.
+    jest.doMock('@sentry/serverless', () => ({
+      captureMessage: jest.fn(),
+      captureException: jest.fn(),
+      setUser: jest.fn(),
+    }))
+    const SentryFresh = require('@sentry/serverless')
+    const {verifyAuth0Bearer: freshVerify} = require('./auth0.js')
+
+    await freshVerify({headers: {}})
+    await freshVerify({headers: {}})
+    await freshVerify({headers: {}})
+
+    expect(SentryFresh.captureMessage).toHaveBeenCalledTimes(1)
+    expect(SentryFresh.captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining('AUTH0_DOMAIN missing'),
+      'warning',
+    )
+  })
+
+  it('does not fire the bypass warning when AUTH0_DOMAIN is set', async () => {
+    Sentry.captureMessage.mockClear()
+    axios.get.mockResolvedValueOnce({data: {sub: 'github|1'}})
+
+    await verifyAuth0Bearer({headers: {authorization: 'Bearer ok'}})
+
+    expect(Sentry.captureMessage).not.toHaveBeenCalled()
   })
 
   it('returns 401 when Authorization header is missing', async () => {
