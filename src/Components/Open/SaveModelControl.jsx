@@ -146,6 +146,12 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const repoName = repoNamesArr[selectedRepoName]
   const file = useStore((state) => state.opfsFile)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  // The Save Model action button must mirror the body's branching: if we're
+  // showing PleaseLogin, the zero-conn CTA, or have no in-memory file, the
+  // button is non-functional and should disable to match. Without this, the
+  // body shows "Connect GitHub in Sources to save." but the button still
+  // fires saveFile() and produces a misleading error snackbar.
+  const cannotSave = !isAuthenticated || isSaveDisabled || !(file instanceof File)
 
   const saveFile = () => {
     if (file instanceof File) {
@@ -302,6 +308,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={MSG_SAVE_MODEL}
       actionCb={saveFile}
+      actionDisabled={cannotSave}
     >
       <Stack
         spacing={1}

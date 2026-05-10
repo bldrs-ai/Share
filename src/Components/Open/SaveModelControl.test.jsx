@@ -161,6 +161,17 @@ describe('SaveModelControl', () => {
       expect(cta.textContent).toMatch(/Connect GitHub in Sources/)
     })
 
+    it('disables the Save Model action button in zero-conn state', async () => {
+      // Without this, the body shows the zero-conn CTA but the action button
+      // still fires saveFile() and surfaces a misleading error snackbar.
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+      const {findByTestId} = renderWithFlag([])
+
+      const actionBtn = await findByTestId('button-dialog-main-action')
+      expect(actionBtn).toBeDisabled()
+    })
+
     it('shows "Saving as @login" footer when one github connection exists', async () => {
       mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
