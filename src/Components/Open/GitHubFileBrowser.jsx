@@ -31,14 +31,27 @@ function resolveValue(value, list) {
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Function} setIsDialogDisplayed callback
  * @property {Function} onCancel Called when user clicks Cancel to go back
+ * @property {string}   [accessTokenOverride] When set, drives all GitHub
+ *   API calls from this token instead of the legacy Auth0-federated
+ *   token in zustand. Wired by OpenModelDialog when the new connection-
+ *   based GitHub flow (githubAsSource feature flag) provides a token.
+ * @property {object}   [activeConnection] The Connection driving the
+ *   override token, used to tag recents with a connectionId so they
+ *   land in the right card on the Sources tab.
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
   navigate,
   setIsDialogDisplayed,
   onCancel,
+  accessTokenOverride,
+  activeConnection,
 }) {
-  const accessToken = useStore((state) => state.accessToken)
+  // Prefer the override (connection-derived token) over the legacy
+  // Auth0-federated `useStore.accessToken`. Once the legacy path retires
+  // (PR3+), the store-backed branch can go away.
+  const storeToken = useStore((state) => state.accessToken)
+  const accessToken = accessTokenOverride ?? storeToken
   const [orgNamesArr, setOrgNamesArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
   const [foldersArr, setFoldersArr] = useState([''])
@@ -193,12 +206,16 @@ export default function GitHubFileBrowser({
       const branch = branchName || 'main'
       const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
       navigateToModel({pathname: sharePath}, navigate)
+      // Tag with connectionId when the connection-based path drove this
+      // browse. Without it, GitHubTab can't filter recents to the card
+      // they belong to (parity with how Drive recents are scoped).
       addRecentFileEntry({
         id: sharePath,
         source: 'github',
         name: fileName,
         sharePath,
         lastModifiedUtc: null,
+        ...(activeConnection ? {connectionId: activeConnection.id} : {}),
       })
       setPendingModelNameUpdate(sharePath)
       setIsDialogDisplayed(false)
