@@ -213,8 +213,8 @@ describe('githubBrowser.getFileDownload', () => {
 
 
 describe('githubBrowser.pickLocation', () => {
-  it('throws — the React picker dialog drives interactive selection', () => {
+  it('throws — OpenModelDialog\'s GitHub flow drives interactive selection', () => {
     expect(() => githubBrowser.pickLocation(connection))
-      .toThrow(/GitHubPickerDialog/)
+      .toThrow(/GitHubFileBrowser/)
   })
 })

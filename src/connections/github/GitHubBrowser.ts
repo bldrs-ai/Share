@@ -6,8 +6,8 @@
  *   getFileDown  →  same endpoint with `Accept: application/vnd.github.raw`
  *
  * pickLocation is intentionally a thrower: GitHub repo+branch+folder
- * selection is a multi-step flow with org/repo lookups, so the UI side
- * (Save / Open dialogs in B2) drives picking and stores the resulting
+ * selection is a multi-step flow with org/repo lookups, so the OpenModelDialog
+ * GitHub flow drives picking via GitHubFileBrowser and stores the resulting
  * GitHubLocation back on the Source.
  *
  * Auth comes from the connection's GitHubProvider, not from the legacy
@@ -16,7 +16,9 @@
  * retire.
  *
  * Errors are mapped to typed connection errors so the UI can route
- * recoverable cases (401 → re-auth) distinctly from fatal ones.
+ * recoverable cases (401 → re-auth) distinctly from fatal ones. 403
+ * (rate-limit / scope / repo permission) and other non-2xx surface as
+ * generic Errors with `status` preserved for callers to interpret.
  */
 
 import type {
@@ -40,7 +42,6 @@ const GITHUB_JSON_ACCEPT = 'application/vnd.github+json'
 const GITHUB_API_VERSION = '2022-11-28'
 
 const HTTP_UNAUTHORIZED = 401
-const HTTP_FORBIDDEN = 403
 
 
 /**
@@ -118,12 +119,12 @@ export const githubBrowser: SourceBrowser = {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   pickLocation(_connection: Connection): Promise<SourceLocation | null> {
     // Repo/branch/folder selection is a multi-step UI flow (org list →
-    // repos → branches → tree). Lives in the GitHubPickerDialog
-    // component (B2) so the user's gestures drive picking. This method
-    // exists to satisfy the SourceBrowser interface; calling it is a
-    // wiring bug, not a runtime path.
+    // repos → branches → tree) so the user's gestures drive picking via
+    // GitHubFileBrowser inside OpenModelDialog. This method exists to
+    // satisfy the SourceBrowser interface; calling it is a wiring bug,
+    // not a runtime path.
     throw new Error(
-      'Use the GitHubPickerDialog component for interactive repo/branch selection.',
+      'Use OpenModelDialog\'s GitHub flow (GitHubFileBrowser) for interactive repo/branch selection.',
     )
   },
 
@@ -239,9 +240,3 @@ export const githubBrowser: SourceBrowser = {
     }
   },
 }
-
-
-// Suppress unused-warning for HTTP_FORBIDDEN — kept as a documented
-// constant for future readers; throwGhError currently lumps 403 under
-// the generic non-401 path.
-void HTTP_FORBIDDEN
