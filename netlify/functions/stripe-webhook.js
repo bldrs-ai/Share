@@ -1,7 +1,10 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
-const axios = require('axios')
+import Stripe from 'stripe'
+import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 
-const Sentry = require('@sentry/serverless')
+
+// eslint-disable-next-line new-cap -- `stripe` SDK ships as a factory function
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
 
 
 Sentry.AWSLambda.init({
@@ -37,7 +40,7 @@ async function getManagementApiToken() {
   }
 }
 
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   // 1. Verify the Stripe webhook signature
   const sig = event.headers['stripe-signature']
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET

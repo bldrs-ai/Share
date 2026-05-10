@@ -21,6 +21,7 @@ export default {
   GOOGLE_API_KEY: 'test-key-12345',
   GOOGLE_OAUTH2_CLIENT_ID: 'test-oauth-client-id',
   GOOGLE_APP_ID: 'test-app-id',
+  GH_OAUTH_CLIENT_ID: 'test-gh-client-id',
 
   // OpenRouter
   OPENROUTER_BASE_URL: 'https://localhost/openrouter',

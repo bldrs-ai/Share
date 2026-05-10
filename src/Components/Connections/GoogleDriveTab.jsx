@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useMemo, useState} from 'react'
 import {Divider, Stack, Typography} from '@mui/material'
 import {Google as GoogleIcon, Refresh as RefreshIcon} from '@mui/icons-material'
 import useStore from '../../store/useStore'
@@ -11,15 +11,28 @@ import RecentFilesBrowseSection from './RecentFilesBrowseSection'
 import '../../connections/google-drive/index'
 
 
+const GOOGLE_DRIVE_PROVIDER_ID = 'google-drive'
+
+
 /**
- * Google Drive tab content for the Open Model dialog.
+ * Google Drive tab content for the Open Model dialog. Lists Google Drive
+ * connections only; GitHub-as-Sources lives in GitHubTab.jsx so the two
+ * provider stories don't visually overlap.
  *
  * @property {Function} onPickerReady Called with (token, connection) when ready to show picker
  * @property {Function} onOpenById Called with (connection, fileId, fileName) to open a file directly
  * @return {React.ReactElement}
  */
-export default function SourcesTab({onPickerReady, onOpenById}) {
-  const connections = useStore((state) => state.connections)
+export default function GoogleDriveTab({onPickerReady, onOpenById}) {
+  const allConnections = useStore((state) => state.connections)
+  // useMemo so the filtered array's reference is stable across renders that
+  // don't change the store; without this, the validateAll effect's
+  // dependency array sees a fresh reference every render and triggers an
+  // infinite checkStatus loop.
+  const connections = useMemo(
+    () => allConnections.filter((c) => c.providerId === GOOGLE_DRIVE_PROVIDER_ID),
+    [allConnections],
+  )
 
   const [browseError, setBrowseError] = useState(null)
   const [recentFiles] = useState(() => loadAllRecentFiles())

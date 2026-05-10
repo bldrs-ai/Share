@@ -14,8 +14,9 @@
  * https://github.com/bldrs-ai/Share/pull/1489 for the report.
  */
 
-const axios = require('axios')
-const Sentry = require('@sentry/serverless')
+import Stripe from 'stripe'
+import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 
 
 Sentry.AWSLambda.init({
@@ -99,7 +100,7 @@ async function getStripeCustomerId(mgmtToken, auth0UserId) {
 /**
  * Netlify handler.
  */
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: HTTP_METHOD_NOT_ALLOWED, body: 'Method Not Allowed'}
   }
@@ -139,7 +140,8 @@ exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   }
 
   try {
-    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
+    // eslint-disable-next-line new-cap -- `stripe` SDK ships as a factory function
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
       return_url: 'https://bldrs.ai/',

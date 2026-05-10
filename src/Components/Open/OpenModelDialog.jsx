@@ -21,10 +21,11 @@ import {useMock} from '../Profile/ProfileControl'
 import GitHubFileBrowser from './GitHubFileBrowser'
 import SampleModels from './SampleModels'
 import AccountFooter from '../Connections/AccountFooter'
-import SourcesTab from '../Connections/SourcesTab'
+import GoogleDriveTab from '../Connections/GoogleDriveTab'
+import GitHubTab from '../Connections/GitHubTab'
 import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
 import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
-import {LABEL_LOCAL, LABEL_GITHUB, LABEL_SOURCES, LABEL_SAMPLES} from './component'
+import {LABEL_LOCAL, LABEL_GITHUB, LABEL_GOOGLE, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
 
@@ -40,8 +41,9 @@ export default function OpenModelDialog({
   navigate,
 }) {
   const isGoogleDriveEnabled = useExistInFeature('googleDrive')
+  const isGithubAsSourceOn = useExistInFeature('githubAsSource')
   const tabLabels = isGoogleDriveEnabled ?
-    [LABEL_LOCAL, LABEL_SOURCES, LABEL_GITHUB, LABEL_SAMPLES] :
+    [LABEL_LOCAL, LABEL_GOOGLE, LABEL_GITHUB, LABEL_SAMPLES] :
     [LABEL_LOCAL, LABEL_GITHUB, LABEL_SAMPLES]
   const {isAuthenticated, loginWithRedirect, logout, user} = useAuth0()
   const appPrefix = useStore((state) => state.appPrefix)
@@ -227,13 +229,16 @@ export default function OpenModelDialog({
             }
           </Stack>
           }
-          { tabLabels[currentTab] === LABEL_SOURCES &&
-          <SourcesTab
+          { tabLabels[currentTab] === LABEL_GOOGLE &&
+          <GoogleDriveTab
             onPickerReady={handlePickerReady}
             onOpenById={handleOpenById}
           />
           }
-          { tabLabels[currentTab] === LABEL_GITHUB && (
+          { tabLabels[currentTab] === LABEL_GITHUB && isGithubAsSourceOn && (
+            <GitHubTab/>
+          )}
+          { tabLabels[currentTab] === LABEL_GITHUB && !isGithubAsSourceOn && (
             showGithubBrowser ? (
               <Slide direction='left' in={showGithubBrowser} mountOnEnter>
                 <Stack
