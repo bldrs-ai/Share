@@ -1,15 +1,16 @@
 /**
  * GitHub provider registration.
  *
- * Side-effect import that registers the GitHub ConnectionProvider with the
- * framework registry. No SourceBrowser yet — that lands in identity-
- * decoupling PR2 alongside the SourcesTab integration.
+ * Side-effect import that registers the GitHub ConnectionProvider and
+ * SourceBrowser with the framework registry. Mirrors google-drive/index.ts.
  */
 
-import {registerProvider} from '../registry'
+import {registerProvider, registerBrowser} from '../registry'
 import {githubProvider} from './GitHubProvider'
+import {githubBrowser} from './GitHubBrowser'
 
 
 registerProvider(githubProvider)
+registerBrowser(githubBrowser)
 
-export {githubProvider}
+export {githubProvider, githubBrowser}

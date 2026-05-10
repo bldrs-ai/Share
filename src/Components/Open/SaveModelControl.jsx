@@ -1,6 +1,14 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect, useMemo} from 'react'
 import {useNavigate} from 'react-router-dom'
-import {IconButton, Stack, TextField, Typography} from '@mui/material'
+import {
+  Box,
+  IconButton,
+  MenuItem,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 import {Clear as ClearIcon, SaveOutlined as SaveOutlinedIcon} from '@mui/icons-material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
@@ -13,6 +21,7 @@ import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
@@ -98,9 +107,51 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
+
+  // Identity-decoupling PR2: surface the GitHub connection that will own
+  // the commit. The actual save plumbing still uses the legacy Auth0-
+  // federated `useStore.accessToken` (SOAP reverse-proxy rewrites the
+  // bearer header anyway, so there's no point routing through a
+  // connection-derived token until that path retires). For PR2 we
+  // expose attribution + multi-account choice in UI; the plumbing swap
+  // is PR3.
+  const isGithubAsSourceOn = useExistInFeature('githubAsSource')
+  const allConnections = useStore((state) => state.connections)
+  const githubConnections = useMemo(
+    () => allConnections.filter((c) => c.providerId === 'github'),
+    [allConnections],
+  )
+  const [selectedGithubConnectionId, setSelectedGithubConnectionId] = useState('')
+  // Default-select the first github connection when the dialog opens; if
+  // the previously-selected connection got disconnected, fall back too.
+  useEffect(() => {
+    if (!isGithubAsSourceOn) {
+      return
+    }
+    const stillExists = githubConnections.some((c) => c.id === selectedGithubConnectionId)
+    if (!stillExists && githubConnections.length > 0) {
+      setSelectedGithubConnectionId(githubConnections[0].id)
+    } else if (githubConnections.length === 0 && selectedGithubConnectionId) {
+      setSelectedGithubConnectionId('')
+    }
+  }, [isGithubAsSourceOn, githubConnections, selectedGithubConnectionId])
+  const selectedGithubConnection = githubConnections.find(
+    (c) => c.id === selectedGithubConnectionId,
+  )
+  const githubLogin = selectedGithubConnection?.meta?.login
+  // Disable Save when the new flow is on AND the user has no github
+  // connection — they can't possibly save anywhere. The legacy flow
+  // (flag off) keeps its Auth0-federated path and stays clickable.
+  const isSaveDisabled = isGithubAsSourceOn && githubConnections.length === 0
   const repoName = repoNamesArr[selectedRepoName]
   const file = useStore((state) => state.opfsFile)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  // The Save Model action button must mirror the body's branching: if we're
+  // showing PleaseLogin, the zero-conn CTA, or have no in-memory file, the
+  // button is non-functional and should disable to match. Without this, the
+  // body shows "Connect GitHub in Sources to save." but the button still
+  // fires saveFile() and produces a misleading error snackbar.
+  const cannotSave = !isAuthenticated || isSaveDisabled || !(file instanceof File)
 
   const saveFile = () => {
     if (file instanceof File) {
@@ -257,6 +308,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={MSG_SAVE_MODEL}
       actionCb={saveFile}
+      actionDisabled={cannotSave}
     >
       <Stack
         spacing={1}
@@ -266,6 +318,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       >
         {!isAuthenticated ? (
           <PleaseLogin/>
+        ) : isSaveDisabled ? (
+          <Stack
+            spacing={2}
+            sx={{width: '100%', alignItems: 'center', py: 2}}
+            data-testid='save-needs-github-connection'
+          >
+            <Typography variant='body2' color='text.secondary' sx={{textAlign: 'center'}}>
+              Connect GitHub in Sources to save.
+            </Typography>
+          </Stack>
         ) : (
           file instanceof File && (
             <Stack>
@@ -349,6 +411,46 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                 sx={{marginBottom: '.5em'}}
                 data-testid='CreateFileId'
               />
+              {/*
+                Multi-account picker — only shown when 2+ github connections
+                exist on the new flow. With one connection there's nothing
+                to pick; the footer below still surfaces the username.
+              */}
+              {isGithubAsSourceOn && githubConnections.length > 1 && (
+                <Tooltip title={MSG_PICK_GITHUB_ACCOUNT_HELP} placement='top'>
+                  <TextField
+                    select
+                    label={MSG_GITHUB_ACCOUNT}
+                    variant='outlined'
+                    size='small'
+                    value={selectedGithubConnectionId}
+                    onChange={(e) => setSelectedGithubConnectionId(e.target.value)}
+                    sx={{marginBottom: '.5em'}}
+                    data-testid='SaveGithubAccount'
+                  >
+                    {githubConnections.map((c) => (
+                      <MenuItem key={c.id} value={c.id}>
+                        {c.meta?.login ? `@${c.meta.login}` : c.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Tooltip>
+              )}
+              {/*
+                "Saving as @{login}" footer — anchors commit attribution in
+                the user's mental model. Hidden until the new flow is on
+                AND a connection is selected so legacy users see no change.
+              */}
+              {isGithubAsSourceOn && githubLogin && (
+                <Box
+                  sx={{mt: 1, opacity: 0.7}}
+                  data-testid='save-saving-as-footer'
+                >
+                  <Typography variant='caption' color='text.secondary'>
+                    Saving as @{githubLogin}
+                  </Typography>
+                </Box>
+              )}
             </Stack>
           )
         )}
@@ -482,7 +584,9 @@ const MSG_ENTER_FILE_NAME = 'Enter file name'
 const MSG_ERROR_GITHUB = 'Error: Could not commit to GitHub.'
 const MSG_ERROR_OPFS = 'Error: Could not write file to OPFS.'
 const MSG_FOLDER = 'Folder'
+const MSG_GITHUB_ACCOUNT = 'GitHub account'
 const MSG_ORGANIZATION = 'Organization'
+const MSG_PICK_GITHUB_ACCOUNT_HELP = 'Pick which connected GitHub account this commit is attributed to'
 const MSG_PROJECTS = 'Projects'
 const MSG_SAVE = 'Save'
 const MSG_SAVE_MODEL = 'Save model'

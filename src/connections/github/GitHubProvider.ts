@@ -24,6 +24,7 @@ import type {
 } from '../types'
 import debug from '../../utils/debug'
 import {NeedsReconnectError} from '../errors'
+import {getAuth0AccessToken} from '../auth0Bridge'
 
 
 // Decisions per design/new/identity-decoupling-decisions.md §Q3:
@@ -267,6 +268,12 @@ function buildAuthorizeUrl(clientId: string, state: string, hint?: string): stri
  * POST a body to a same-origin Netlify Function and return the parsed JSON.
  * Throws on non-2xx so callers can map to typed errors.
  *
+ * Attaches the current Auth0 access token as Authorization: Bearer when one
+ * is registered (see ../auth0Bridge). The gh-oauth functions enforce this
+ * server-side; sending it client-side keeps the round trip honest. When no
+ * token is available we still send the request — the server returns 401
+ * and the caller surfaces a re-auth prompt, matching the UI gate.
+ *
  * @param path The function path under /.netlify/functions/.
  * @param body The JSON body to send.
  * @return The decoded JSON response.
@@ -281,9 +288,14 @@ async function postFn(path: string, body: unknown): Promise<{
   refresh_token_expires_in?: number
   scope?: string
 }> {
+  const headers: Record<string, string> = {'Content-Type': 'application/json'}
+  const auth0Token = await getAuth0AccessToken()
+  if (auth0Token) {
+    headers.Authorization = `Bearer ${auth0Token}`
+  }
   const res = await fetch(path, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers,
     body: JSON.stringify(body),
   })
   if (!res.ok) {

@@ -7,6 +7,7 @@ import {ErrorBoundary} from '@sentry/react'
 import Auth0ProviderWithHistory from './Auth0/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
+import Auth0BridgeRegistrar from './connections/Auth0BridgeRegistrar'
 import {flags} from './FeatureFlags'
 import './compat'
 import setupEsbuildWatch from './index/esbuild'
@@ -35,6 +36,7 @@ function AppWithContext() {
         </Helmet>
         <BrowserRouter>
           <Auth0ProviderWithHistory>
+            <Auth0BridgeRegistrar/>
             <BaseRoutes/>
           </Auth0ProviderWithHistory>
         </BrowserRouter>

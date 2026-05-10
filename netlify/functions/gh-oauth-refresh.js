@@ -6,17 +6,20 @@
  * browser); used by GitHubProvider's refresh-on-401 path.
  *
  *   POST /.netlify/functions/gh-oauth-refresh
+ *   Headers: Authorization: Bearer <Auth0-access-token>
+ *     Same primary-auth gate as gh-oauth-exchange. See _lib/auth0.js.
  *   Body: { "refresh_token": "<rt>" }
  *
  * On success returns GitHub's response verbatim. With token-rotation enabled
  * on the OAuth App, every successful call invalidates the supplied refresh
  * token and returns a new one — the browser MUST persist the new value.
  *
- * Env required: GH_OAUTH_CLIENT_ID, GH_OAUTH_CLIENT_SECRET.
+ * Env required: GH_OAUTH_CLIENT_ID, GH_OAUTH_CLIENT_SECRET, AUTH0_DOMAIN.
  */
 
 import axios from 'axios'
 import * as Sentry from '@sentry/serverless'
+import {verifyAuth0Bearer} from './_lib/auth0.js'
 
 
 Sentry.AWSLambda.init({
@@ -32,6 +35,11 @@ const GH_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: 405, body: 'Method Not Allowed'}
+  }
+
+  const auth = await verifyAuth0Bearer(event)
+  if (!auth.ok) {
+    return auth.response
   }
 
   const clientId = process.env.GH_OAUTH_CLIENT_ID

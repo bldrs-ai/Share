@@ -2,6 +2,7 @@ import React from 'react'
 import {act, fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getBranches} from '../../net/github/Branches'
+import useExistInFeature from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {
   mockedUseAuth0,
@@ -18,6 +19,9 @@ jest.mock('../../net/github/Organizations', () => ({
 jest.mock('../../net/github/Branches', () => ({
   getBranches: jest.fn(),
 }))
+// Default the feature flag to off so existing tests see no behavioural
+// change. The B4 sub-suite below opts in per-case.
+jest.mock('../../hooks/useExistInFeature', () => jest.fn().mockReturnValue(false))
 
 
 describe('SaveModelControl', () => {
@@ -110,5 +114,109 @@ describe('SaveModelControl', () => {
       render(<SaveModelControlFixture/>)
     })
     expect(getOrganizations).toHaveBeenCalled()
+  })
+
+  // PR2 / B4: githubAsSource feature surface — saving-as footer, multi-
+  // account picker, disabled-state CTA. All gated on the feature flag so
+  // legacy behaviour is unchanged when off.
+  describe('githubAsSource feature surface', () => {
+    beforeEach(() => {
+      // Flag the new flow on for the cases below; the outer beforeEach
+      // already resets to false-default via jest.clearAllMocks.
+      useExistInFeature.mockReturnValue(true)
+    })
+
+    afterEach(() => {
+      useExistInFeature.mockReturnValue(false)
+      act(() => {
+        useStore.setState({connections: []})
+      })
+    })
+
+    /**
+     * Seed store + open the dialog. Dialog content depends on
+     * isAuthenticated (mocked separately) and a File on opfsFile.
+     *
+     * @param {Array<object>} githubConnections Connections to seed.
+     * @return {object} Render result from @testing-library/react.
+     */
+    function renderWithFlag(githubConnections = []) {
+      const {result} = renderHook(() => useStore((state) => state))
+      act(() => {
+        result.current.setIsSaveModelVisible(true)
+        result.current.setAccessToken('foo')
+        result.current.setOpfsFile(new File(['x'], 'm.ifc', {type: 'application/octet-stream'}))
+        useStore.setState({connections: githubConnections})
+      })
+      return render(<SaveModelControlFixture/>)
+    }
+
+    it('shows the disabled-state CTA when the flag is on and zero github connections', async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+      const {findByTestId} = renderWithFlag([])
+
+      const cta = await findByTestId('save-needs-github-connection')
+      expect(cta).toBeInTheDocument()
+      expect(cta.textContent).toMatch(/Connect GitHub in Sources/)
+    })
+
+    it('disables the Save Model action button in zero-conn state', async () => {
+      // Without this, the body shows the zero-conn CTA but the action button
+      // still fires saveFile() and surfaces a misleading error snackbar.
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+      const {findByTestId} = renderWithFlag([])
+
+      const actionBtn = await findByTestId('button-dialog-main-action')
+      expect(actionBtn).toBeDisabled()
+    })
+
+    it('shows "Saving as @login" footer when one github connection exists', async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+      const {findByTestId, queryByTestId} = renderWithFlag([{
+        id: 'gh-1',
+        providerId: 'github',
+        label: 'octo - GitHub',
+        status: 'connected',
+        createdAt: new Date().toISOString(),
+        meta: {login: 'octo'},
+      }])
+
+      const footer = await findByTestId('save-saving-as-footer')
+      expect(footer.textContent).toMatch(/Saving as @octo/)
+      // Single connection → no picker.
+      expect(queryByTestId('SaveGithubAccount')).not.toBeInTheDocument()
+    })
+
+    it('renders the multi-account picker when 2+ github connections exist', async () => {
+      mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+      const {findByTestId} = renderWithFlag([
+        {
+          id: 'gh-a',
+          providerId: 'github',
+          label: 'alice - GitHub',
+          status: 'connected',
+          createdAt: new Date().toISOString(),
+          meta: {login: 'alice'},
+        },
+        {
+          id: 'gh-b',
+          providerId: 'github',
+          label: 'bob - GitHub',
+          status: 'connected',
+          createdAt: new Date().toISOString(),
+          meta: {login: 'bob'},
+        },
+      ])
+
+      const picker = await findByTestId('SaveGithubAccount')
+      expect(picker).toBeInTheDocument()
+      // Default-selected = first connection → footer reflects @alice.
+      const footer = await findByTestId('save-saving-as-footer')
+      expect(footer.textContent).toMatch(/Saving as @alice/)
+    })
   })
 })

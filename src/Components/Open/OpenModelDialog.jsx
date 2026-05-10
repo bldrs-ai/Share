@@ -57,12 +57,20 @@ export default function OpenModelDialog({
   const [localRecents, setLocalRecents] = useState([])
   const [githubRecents, setGithubRecents] = useState([])
   const [showGithubBrowser, setShowGithubBrowser] = useState(false)
+  // When the user clicks Browse on a connection in GitHubTab, we feed the
+  // connection-derived token through to GitHubFileBrowser instead of the
+  // legacy Auth0-federated useStore.accessToken. Both stay null on the
+  // legacy path so behaviour is unchanged when githubAsSource is off.
+  const [githubBrowserToken, setGithubBrowserToken] = useState(null)
+  const [githubBrowserConnection, setGithubBrowserConnection] = useState(null)
 
   useEffect(() => {
     if (isDialogDisplayed) {
       setLocalRecents(loadRecentFilesBySource('local'))
       setGithubRecents(loadRecentFilesBySource('github'))
       setShowGithubBrowser(false)
+      setGithubBrowserToken(null)
+      setGithubBrowserConnection(null)
     }
   }, [isDialogDisplayed])
 
@@ -73,6 +81,21 @@ export default function OpenModelDialog({
   }
 
   const setAlert = useStore((state) => state.setAlert)
+
+  /**
+   * GitHubTab's Browse-on-connection handler: stash the connection token
+   * and reveal the GitHubFileBrowser inline (slide-over). The browser
+   * uses the override token + connection to drive its API calls and to
+   * tag any saved recents with connectionId.
+   *
+   * @param {string} token Fresh GitHub access token.
+   * @param {object} connection The Connection that produced the token.
+   */
+  const handleGithubPickerReady = (token, connection) => {
+    setGithubBrowserToken(token)
+    setGithubBrowserConnection(connection)
+    setShowGithubBrowser(true)
+  }
 
   const handleOpenById = async (connection, fileId, fileName) => {
     // Pre-flight token acquisition INSIDE this user-gesture click handler so
@@ -109,6 +132,47 @@ export default function OpenModelDialog({
       sharePath: `${appPrefix}/v/g/${fileId}`,
     })
     navigateToModel(`${appPrefix}/v/g/${fileId}`, navigate)
+    setIsDialogDisplayed(false)
+  }
+
+  /**
+   * GitHubTab's recents click handler — resolves a saved github recent
+   * back to its share path. Pre-flights getAccessToken to mirror Drive's
+   * gesture-preserving behaviour, so a stale token surfaces a Reconnect
+   * alert before navigation rather than mid-load.
+   *
+   * @param {object} connection The Connection the recent is attached to.
+   * @param {string} fileId Recent's `id` — the GitHub share path.
+   * @param {string} fileName Recent's display name.
+   */
+  const handleGithubOpenById = async (connection, fileId, fileName) => {
+    const provider = getProvider(connection.providerId)
+    if (provider) {
+      try {
+        await provider.getAccessToken(connection)
+      } catch (err) {
+        if (err instanceof NeedsReconnectError) {
+          setAlert({
+            type: 'needsReconnect',
+            connection: err.connection,
+            message: 'Your GitHub session needs to be reconnected to open this file.',
+          })
+          return
+        }
+        setAlert(err)
+        return
+      }
+    }
+    disablePageReloadApprovalCheck()
+    addRecentFileEntry({
+      id: fileId,
+      source: 'github',
+      name: fileName,
+      sharePath: fileId,
+      lastModifiedUtc: null,
+      connectionId: connection.id,
+    })
+    navigateToModel(fileId, navigate)
     setIsDialogDisplayed(false)
   }
 
@@ -236,7 +300,32 @@ export default function OpenModelDialog({
           />
           }
           { tabLabels[currentTab] === LABEL_GITHUB && isGithubAsSourceOn && (
-            <GitHubTab/>
+            showGithubBrowser ? (
+              <Slide direction='left' in={showGithubBrowser} mountOnEnter>
+                <Stack
+                  data-testid='dialog-open-model-github-browser'
+                  spacing={1}
+                  sx={{width: '100%', maxWidth: '400px'}}
+                >
+                  <GitHubFileBrowser
+                    navigate={navigate}
+                    setIsDialogDisplayed={setIsDialogDisplayed}
+                    onCancel={() => {
+                      setShowGithubBrowser(false)
+                      setGithubBrowserToken(null)
+                      setGithubBrowserConnection(null)
+                    }}
+                    accessTokenOverride={githubBrowserToken}
+                    activeConnection={githubBrowserConnection}
+                  />
+                </Stack>
+              </Slide>
+            ) : (
+              <GitHubTab
+                onPickerReady={handleGithubPickerReady}
+                onOpenById={handleGithubOpenById}
+              />
+            )
           )}
           { tabLabels[currentTab] === LABEL_GITHUB && !isGithubAsSourceOn && (
             showGithubBrowser ? (
