@@ -170,7 +170,7 @@ function clearToken(connectionId: string): void {
  */
 function toStoredToken(resp: {
   access_token: string
-  refresh_token: string
+  refresh_token?: string
   expires_in?: number
   refresh_token_expires_in?: number
   scope?: string
@@ -180,7 +180,7 @@ function toStoredToken(resp: {
   const refreshTtlS = resp.refresh_token_expires_in ?? REFRESH_TTL_FALLBACK_S
   return {
     accessToken: resp.access_token,
-    refreshToken: resp.refresh_token,
+    refreshToken: resp.refresh_token ?? '',
     accessExpiresAt: now + (accessTtlS * MS_PER_S),
     refreshExpiresAt: now + (refreshTtlS * MS_PER_S),
     scope: resp.scope ?? '',
@@ -244,13 +244,16 @@ function generateId(): string {
  */
 function buildAuthorizeUrl(clientId: string, state: string, hint?: string): string {
   const redirectUri = `${window.location.origin}${CALLBACK_PATH}`
+  // allow_signup=true (the GitHub default) lets unauthenticated visitors
+  // sign up for GitHub during the OAuth flow rather than dead-ending. It
+  // does NOT control multi-account selection — GitHub OAuth has no
+  // prompt=consent equivalent, so a user adding a second account has to
+  // log out of github.com or use a private window.
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     scope: SCOPES,
     state,
-    // Force a re-prompt on each connect so users connecting a *second*
-    // account aren't silently re-issued the first account's token.
     allow_signup: 'true',
   })
   if (hint) {
@@ -270,7 +273,10 @@ function buildAuthorizeUrl(clientId: string, state: string, hint?: string): stri
  */
 async function postFn(path: string, body: unknown): Promise<{
   access_token: string
-  refresh_token: string
+  // GitHub OAuth Apps not enrolled in the (since-discontinued) expiring-
+  // tokens beta omit refresh_token entirely. getAccessToken() falls
+  // back to NeedsReconnectError when the next refresh attempt fails.
+  refresh_token?: string
   expires_in?: number
   refresh_token_expires_in?: number
   scope?: string
@@ -401,8 +407,20 @@ export const githubProvider: ConnectionProvider = {
     if (Date.now() < stored.accessExpiresAt - EXPIRY_SKEW_MS) {
       return stored.accessToken
     }
-    // Access token at/near expiry — try the refresh path. On any failure
-    // surface NeedsReconnectError so the UI can offer a real consent popup.
+    // Access token at/near expiry. If we never got a refresh token (GitHub
+    // no longer issues them for new OAuth Apps — see the toStoredToken
+    // empty-string fallback), the only recovery is a fresh popup; skip the
+    // doomed POST and surface NeedsReconnectError directly.
+    if (!stored.refreshToken) {
+      clearToken(connection.id)
+      throw new NeedsReconnectError(
+        connection,
+        'no_refresh_token',
+        'GitHub access token expired and no refresh token is available',
+      )
+    }
+    // Try the refresh path. On any failure surface NeedsReconnectError so
+    // the UI can offer a real consent popup.
     try {
       const refreshed = await postFn(REFRESH_FN, {refresh_token: stored.refreshToken})
       const next = toStoredToken(refreshed)
@@ -457,6 +475,9 @@ function waitForCallback(popup: Window): Promise<CallbackPayload> {
         channel.close()
       }
       clearInterval(pollInterval)
+      if (closeDebounce !== null) {
+        clearTimeout(closeDebounce)
+      }
       clearTimeout(overallTimeout)
       try {
         if (!popup.closed) {
@@ -496,10 +517,16 @@ function waitForCallback(popup: Window): Promise<CallbackPayload> {
     // dispatching, so a clean run looks like "message arrives, then
     // popup.closed flips a few ms later". Debounce briefly so the
     // close-after-success doesn't race the message handler.
+    //
+    // closeDebounce captures the transition from open → closed exactly
+    // once; without it, every 500ms tick after a close would schedule
+    // another 2s setTimeout, leaking O(connectTimeout / pollInterval)
+    // dangling timers in the worst case.
+    let closeDebounce: ReturnType<typeof setTimeout> | null = null
     const pollInterval = setInterval(() => {
       try {
-        if (popup.closed) {
-          setTimeout(() => {
+        if (popup.closed && closeDebounce === null) {
+          closeDebounce = setTimeout(() => {
             if (!settled && !receivedCallback) {
               settle(() => reject(new Error('GitHub sign-in was cancelled')))
             }

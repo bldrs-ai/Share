@@ -6,6 +6,7 @@
  *   - access-token refresh path (success, NeedsReconnectError on failure)
  *   - persisted-token rehydration (cold tab inherits token from localStorage)
  *   - checkStatus mapping for GET /user (200 → connected, 401 → expired)
+ *   - BroadcastChannel delivery (the production COOP-immune path)
  */
 
 import {NeedsReconnectError} from '../errors'
@@ -13,6 +14,74 @@ import {githubProvider} from './GitHubProvider'
 
 
 jest.useFakeTimers()
+
+
+/**
+ * Minimal in-memory BroadcastChannel polyfill so the BC delivery path is
+ * exercised in jsdom (which historically has spotty support). Same-origin
+ * pub/sub keyed by channel name; instances broadcast to peers, not to
+ * themselves. Installed unconditionally so the BC test runs even when
+ * jsdom's native impl is missing or partial.
+ */
+class MockBroadcastChannel {
+  static byName: Map<string, Set<MockBroadcastChannel>> = new Map()
+  name: string
+  private listeners: Set<(e: {data: unknown}) => void> = new Set()
+  closed = false
+
+  /** @param name Channel name shared across peers. */
+  constructor(name: string) {
+    this.name = name
+    if (!MockBroadcastChannel.byName.has(name)) {
+      MockBroadcastChannel.byName.set(name, new Set())
+    }
+    const peers = MockBroadcastChannel.byName.get(name)
+    if (peers) {
+      peers.add(this)
+    }
+  }
+
+  /** @param data Payload to broadcast. */
+  postMessage(data: unknown): void {
+    const peers = MockBroadcastChannel.byName.get(this.name)
+    if (!peers) {
+      return
+    }
+    peers.forEach((peer) => {
+      if (peer === this || peer.closed) {
+        return
+      }
+      peer.listeners.forEach((l) => l({data}))
+    })
+  }
+
+  /**
+   * @param type Event type — only 'message' supported.
+   * @param listener Handler.
+   */
+  addEventListener(type: string, listener: (e: {data: unknown}) => void): void {
+    if (type === 'message') {
+      this.listeners.add(listener)
+    }
+  }
+
+  /**
+   * @param type Event type — only 'message' supported.
+   * @param listener Handler.
+   */
+  removeEventListener(type: string, listener: (e: {data: unknown}) => void): void {
+    if (type === 'message') {
+      this.listeners.delete(listener)
+    }
+  }
+
+  /** Close and de-register from the peer set. */
+  close(): void {
+    this.closed = true
+    MockBroadcastChannel.byName.get(this.name)?.delete(this)
+  }
+}
+(globalThis as unknown as {BroadcastChannel: typeof MockBroadcastChannel}).BroadcastChannel = MockBroadcastChannel
 
 
 // Whatever fetch sees, we intercept here. Tests redefine its behavior per case.
@@ -46,6 +115,8 @@ beforeEach(() => {
   jest.clearAllMocks()
   sessionStorage.clear()
   localStorage.clear()
+  // Reset BC peer registry so a previous test's listeners don't leak.
+  MockBroadcastChannel.byName.clear()
   fetchMock = jest.fn()
   global.fetch = fetchMock as unknown as typeof global.fetch
   popup = {closed: false, close: jest.fn(() => {
@@ -123,6 +194,46 @@ describe('GitHubProvider — connect (CSRF + happy path)', () => {
     // eslint-disable-next-line no-magic-numbers
     jest.advanceTimersByTime(3000)
     await expect(promise).rejects.toThrow('cancelled')
+  })
+
+  it('delivers callback via BroadcastChannel (production COOP-immune path)', async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/.netlify/functions/gh-oauth-exchange') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            access_token: 'gh-bc',
+            refresh_token: 'rt-bc',
+            expires_in: 28800,
+            refresh_token_expires_in: 15552000,
+            scope: 'repo,read:user,read:org',
+          }),
+        })
+      }
+      if (url === 'https://api.github.com/user') {
+        return Promise.resolve({ok: true, json: () => Promise.resolve({login: 'octobc'})})
+      }
+      return Promise.resolve({ok: false, status: 404, text: () => Promise.resolve('')})
+    })
+
+    const promise = githubProvider.connect()
+    await flush()
+
+    // Deliver via BroadcastChannel — the path that actually fires in prod
+    // when github.com's strict COOP severs window.opener. Posts from a
+    // separate channel instance because BC doesn't echo to the sender.
+    const ch = new BroadcastChannel('bldrs:gh-oauth')
+    ch.postMessage({
+      type: 'bldrs:gh-oauth-callback',
+      code: 'auth-code',
+      state: 'test-uuid-1234',
+    })
+    ch.close()
+
+    const conn = await promise
+    expect(conn.providerId).toBe('github')
+    expect(conn.label).toContain('octobc')
+    expect(localStorage.getItem(`bldrs:github-token:${conn.id}`)).toBeTruthy()
   })
 
   it('exchanges code for token and resolves a Connection on the happy path', async () => {
