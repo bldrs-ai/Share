@@ -25,6 +25,20 @@ This doc describes how to work in the project as a developer and in our team.
 - `yarn typecheck` - Run TypeScript type checking only
 - `yarn precommit` - Run lint and test (pre-commit hook)
 
+**Don't `git commit --no-verify` unless you have an active reason.** The
+husky pre-commit hook runs `yarn precommit` = eslint + typecheck + jest.
+It catches things ad-hoc `yarn jest <file>` won't — cross-file lint
+rules, unused imports, `prefer-const` after a refactor, etc. Typical
+cost on a quiet machine is lint ~20 s + jest ~90 s.
+
+Legitimate bypass reasons exist (system under memory pressure with
+parallel jest workers fighting a dev server; intermediate rebase
+commits you'll squash). When you do bypass, run
+`yarn lint && yarn jest <changed paths>` as the manual substitute —
+**not** just `yarn jest <file>`. AI assistants should make this
+substitution explicit (and visible to the user) rather than letting
+`--no-verify` quietly calcify into a default.
+
 
 ### Playwright E2E Testing
 - `yarn test-flows [spec]` - Run Playwright tests (builds first, starts its own server — no separate setup needed)
