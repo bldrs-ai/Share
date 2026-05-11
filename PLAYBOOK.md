@@ -119,3 +119,83 @@ When writing test fixtures for route-derived data (e.g. `modelPath`), use the ex
 production code produces — not a "nicer" variant. The routes layer strips leading slashes from
 `filepath` via `splitAroundExtensionRemoveFirstSlash`. A fixture with `filepath: '/model.ifc'`
 accidentally passes tests that would fail with the real `filepath: 'model.ifc'`, masking bugs.
+
+
+## Playwright locally needs `--workers=1`
+
+`tools/playwright.config.js` computes the dev-server port at import time:
+
+```js
+const port = isCI ? ciPort : runGetPortPlease(ciPort)
+```
+
+Each Playwright worker re-imports the config, so each calls
+`runGetPortPlease` independently and lands on a different random port.
+The webServer started on the FIRST port; workers 2-N point at non-listening
+ports → `net::ERR_CONNECTION_REFUSED`. Tests look "broken" when they're not.
+
+- **Local:** `yarn test-flows --workers=1 [spec]`.
+- **CI:** works fine with parallelism — `isCI` short-circuits to fixed
+  port `9081`, all workers point there.
+
+Pre-existing quirk; flag as a separate cleanup if it bothers you.
+
+
+## Drive Picker fails on Brave with Shields up
+
+When testing the Drive Picker on Brave at `bldrs.ai`:
+
+- **Symptom:** clicking Select on a picked file → OS spinny, picker stays
+  open, console shows two 401s from `docs.google.com/pick…` with empty
+  response body.
+- **Root cause:** Brave Shields (default-on) blocks third-party cookies on
+  `docs.google.com` even when the OAuth `access_token` URL parameter is
+  correct. The picker's confirm-pick endpoint needs the docs.google.com
+  session cookie alongside the OAuth token.
+- **Fix to test:** click the 🦁 icon in URL bar on bldrs.ai → Shields
+  **down** → retry. Chrome works without changes because its 3p-cookie
+  default is currently looser than Brave's.
+
+Not to be confused with Brave's popup blocker (separate feature, default-on
+in all major browsers) — that one trips on `requestAccessToken({prompt:''})`
+outside a user gesture and is handled by the GDrive auth pre-flight
+pattern. See [`src/connections/README.md`](src/connections/README.md).
+
+
+## `gh pr edit` silently drops title/body updates
+
+`gh pr edit <num> --title ... --body ...` warns about Projects (classic)
+deprecation and **silently fails the entire mutation** without a non-zero
+exit. The PR title/body don't actually update — verifying with
+`gh pr view` is the only way to catch it.
+
+Root cause: the underlying GraphQL `updatePullRequest` mutation pulls
+`repository.pullRequest.projectCards`, a field GitHub is sunsetting. The
+whole call rejects.
+
+Use the REST API directly:
+
+```bash
+# Title only
+gh api -X PATCH /repos/<owner>/<repo>/pulls/<num> -f title='...'
+
+# Body — large bodies via --input
+jq -Rs '{body: .}' < /tmp/body.md > /tmp/body.json
+gh api -X PATCH /repos/<owner>/<repo>/pulls/<num> --input /tmp/body.json
+```
+
+Verify with `gh pr view <num> --json title,bodyText`. Once GitHub removes
+the classic Projects GraphQL field, regular `gh pr edit` will work again.
+
+
+## Git network operations need generous timeouts
+
+Use `timeout: 120000` (120 s) or higher for any `git push`, `git pull`,
+`git fetch`, or `git clone` invocation. A 30 s timeout can kill the
+process mid-run and return partial/garbage output that **looks like
+success** — e.g. an aborted push has been observed to produce a bogus
+remote URL string that downstream parsers misread as the destination
+remote.
+
+After a push, verify with `git log origin/<branch>` or `git status` rather
+than trusting the push command's output alone.
