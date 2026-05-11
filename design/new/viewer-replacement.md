@@ -194,11 +194,14 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 - All "raw three.js" call-sites in `src/` keep working unchanged.
 - **Exit criterion:** scene/camera/controls and dispose are sourced from us, not the fork.
 
-### Phase 3 — `IfcModelService` next to the fork
+### Phase 3 — `IfcModelService` next to the fork (Conway in a worker)
 - New module `src/viewer/ifc/IfcModelService.js` driving Conway directly. Mirrors the methods listed in §3b.
+- **Conway runs in a Worker from day one** (per §8.4 Move A). The service owns the worker; `loadFromBuffer` ships the buffer as a transferable; flat-mesh vertex/index arrays come back as transferables. The hot lookup tables (`expressIdToTriangleIndices`, `triangleIndexToExpressId`) live on the main thread because per-frame raycast needs them sync.
+- Land the `ShareModel` interface (§8.2) and the deprecation shim on the fake `ifcManager` (§8.3) in this phase. Coordinate with the GLB-scene PR before starting (see §8.3 step 4).
 - **Run it in parallel** with `IFC.loader.ifcManager` — load the model both ways, assert spatial-structure / property parity in a Jest test against a small fixture IFC. This is our correctness gate.
 - Implement subsets last; gate behind a feature flag `useNewIfcService` so we can flip per-environment.
-- **Exit criterion:** under the flag, all of `IfcIsolator`, `IfcViewerAPIExtended`, `Loader.js#newIfcLoader` work without touching `viewer.IFC.loader.ifcManager`.
+- Drop `IfcViewsManager` and the `view=ch.sia380-1.heatmap` branch (§8.1).
+- **Exit criterion:** under the flag, all of `IfcIsolator`, `IfcViewerAPIExtended`, `Loader.js#newIfcLoader` work without touching `viewer.IFC.loader.ifcManager`, with main-thread parse time near zero.
 
 ### Phase 4 — cut over `IfcViewerAPIExtended` → `ShareViewer`
 - New module `src/viewer/ShareViewer.js` exporting the facade in §3d.
@@ -216,8 +219,12 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.
 - Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.
+- Delete the §8.3 deprecation shim once the GLB-scene PR has cut over.
 - Update `DESIGN.md` and `CLAUDE.md` to point at `src/viewer/`.
 - Drop `web-ifc` from build scripts (`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, etc. in `package.json`). The `useWebifcShim` branch can go entirely.
+
+### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
+- Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.
 
 ---
 
@@ -277,15 +284,87 @@ Audit of `src/` shows we don't touch any of the worst-affected APIs (`Geometry`,
 | Hidden coupling between `web-ifc-viewer.IfcContext` and `IfcManager` we missed | Medium | Phase 4 cutover stalls | Phase 3's parallel-run flag means we discover this before deletion |
 | Build/Playwright still reach for `node_modules/web-ifc/*.wasm` | Low | CI breakage | Audit `tools/esbuild/build.js`, `package.json` scripts before Phase 5 |
 | `camera-controls` API drift (1.x → 3.x) | Low | Camera UX regressions | Keep on 1.x for the first cut; bump as a follow-up |
+| Conway worker bridge (transferables, error propagation, progress events) | Medium | Phase 3 slips | Land Move A behind the same `useNewIfcService` flag; fall back to in-thread mode if the worker fails to boot |
+| Collision with in-flight GLB-optimized-scene PR | Medium | Rework or merge conflicts in `Loader.js` and the NavTree | §8.3 deprecation shim covers both merge orderings; sync on `ShareModel` shape before Phase 3 |
+| Property-read async signature drift breaks a sync call-site we missed | Low | Runtime error | Static check: `properties` reads in `src/` are all already `await`-ed; grep at start of Phase 3 to confirm |
 
 ---
 
-## 8. Open questions
+## 8. Resolved decisions
 
-1. **Drop `IfcViewsManager` (`src/Infrastructure/IfcElementsStyleManager`)?** It hooks into `IFC.loader.ifcManager.parser` to re-color geometry by IFC type rule. We need an equivalent hook in `IfcModelService` (post-flat-mesh, pre-Mesh-build). Confirm whether the SIA380-1 heatmap path is still in scope.
-2. **Keep `IFC.type === 'glb' | 'gltf'` discriminant** or make it a property on the model? Today `CutPlaneMenu.jsx` and `Loader.js` both branch on `viewer.IFC.type`. Cleaner is a `model.kind` field on the loaded `Object3D`.
-3. **Keep `model.ifcManager` decoration in `Loader.js#convertToShareModel`** for non-IFC formats? Right now we synthesise a fake `ifcManager` so NavTree-style code doesn't crash on a glb. With the new layer we can give every model a `ShareModel` interface and drop the fake.
-4. **Worker?** `web-ifc-three`'s `IFCWorker` ran parsing off-main-thread. Conway also has a worker mode (`@bldrs-ai/conway` exposes a worker entry); decide whether to wire it up in `IfcModelService` from day one or punt.
+### 8.1 Drop `IfcViewsManager` — yes
+`src/Infrastructure/IfcElementsStyleManager` and the `view=ch.sia380-1.heatmap` URL branch in `IfcViewerAPIExtended.js` are unused. Delete in Phase 2/3; revisit when type-rule recoloring comes back. `IfcModelService` will still expose a generic post-build hook (`onModelBuilt(model)`) so a future recolor pass has somewhere clean to attach.
+
+### 8.2 `IFC.type === 'glb' | 'gltf'` — replace with capability flags on the model
+Audit of what that discriminant actually gates:
+- `CutPlaneMenu.jsx` (5 sites) — picks between `viewer.glbClipper` (3-axis arrow-handle clipper) and `viewer.clipper` (web-ifc clipper that integrates with `pickIfc` / `pickableIfcModels`).
+- `IfcViewerAPIExtended#setSelection` — early-returns for non-IFC: "setSelection is not supported for this type of model."
+- `IfcViewerAPIExtended#highlightIfcItem` — only runs `IFC.selector.preselection.pick(found)` when IFC.
+- `Loader.js` — sets `viewer.IFC.type = 'glb'` and decorates the model with a fake `ifcManager` (see 8.3).
+
+The leak: it conflates **source format** with **runtime capabilities**. After the new viewer, all loaded models share a `ShareModel` shape; whether selection / express-id picking works is a property of *that model*, not the file extension.
+
+**Resolution:** put format/capability info on the model, not the viewer:
+```ts
+interface ShareModel extends Object3D {
+  format: 'ifc' | 'glb' | 'gltf' | 'obj' | 'stl' | 'pdb' | 'xyz' | 'fbx' | 'bld'
+  capabilities: {
+    expressIdPicking: boolean    // true for IFC; false until GLB-scene PR lands
+    spatialStructure: boolean    // true for IFC and the upcoming GLB-scene format
+    typedProperties: boolean
+    ifcSubsets: boolean          // true when backed by IfcModelService
+  }
+}
+```
+Call-sites become `if (model.capabilities.expressIdPicking)` and `if (model.capabilities.ifcSubsets)` — no `viewer.IFC.type` left anywhere. After the unified `Clipper` lands (§3c), the cut-plane branch collapses entirely. This shape is forward-compatible with the in-flight GLB-optimized-scene PR (8.3): that PR can set `capabilities.spatialStructure = true` on its loaded model and re-light the NavTree without any other viewer-side work.
+
+### 8.3 Fake `ifcManager` on non-IFC models — deprecate gracefully
+There's a parallel PR moving non-IFC content toward a GLB-based optimized scene format. We will collide with it. The careful path:
+
+1. In Phase 2 (`ThreeContext` extract), **keep** `Loader.js#convertToShareModel` decoration verbatim. No semantic change.
+2. In Phase 3, introduce the `ShareModel` interface in 8.2. Loaders return real `ShareModel` instances. Every method on the old fake `ifcManager` (`getSpatialStructure`, `getExpressId`, `getIfcType`) gets a **deprecation shim**:
+   ```js
+   function deprecated(name, fn) {
+     let warned = false
+     return (...args) => {
+       if (!warned) {
+         warned = true
+         console.warn(
+           `[deprecated] model.ifcManager.${name}() on non-IFC model — ` +
+           `read from model.spatialStructure / model.capabilities instead.`,
+         )
+       }
+       return fn(...args)
+     }
+   }
+   ```
+   Each shim has a JSDoc `@deprecated` tag pointing at the replacement. Lint rule `no-restricted-properties` warns on any new usage.
+3. The GLB-scene PR (whichever lands second) updates its callers to the `ShareModel` API. Once green, the shim is deleted.
+4. **Coordination touchpoint:** before starting Phase 3, sync with whoever owns the GLB-scene PR — agree on the `ShareModel` shape together so both PRs aim at the same target. Land Phase 3 *after* GLB-scene if it's close to merging, *before* if not (the deprecation shim covers both orderings).
+
+### 8.4 Parsing in worker + OffscreenCanvas — scope this in alongside
+The UI freezes on big models because Conway parse, geometry conversion, and BVH build all run on the main thread. Two independent moves; sequenced.
+
+**Move A: Conway parsing off-main-thread (small, high ROI).**
+- `@bldrs-ai/conway` already exposes a worker entry. `IfcModelService` owns the worker; `loadFromBuffer` `postMessage`s the file buffer (transferable), receives the flat-mesh stream back.
+- Geometry conversion (FlatMesh → `Float32Array`/`Uint32Array` for vertices/indices) also runs in the worker. Buffers come back as transferables — zero-copy.
+- Main thread does only `new BufferGeometry()` + `new BufferAttribute(transferredArray, n)` + `new Mesh()`. That's microseconds.
+- **Property reads** (`getProperties`, `getSpatialStructure`, `idsByType`) become async over the worker port. Most call-sites already `await` these, so signature drift is small. The few sync uses (`getExpressId(geometry, faceIndex)`) stay sync because the lookup is a typed-array index into data already on the main thread.
+- Cost: ~1 week. Risk: medium — Conway's worker entry is known-good; the integration work is plumbing.
+
+**Move B: OffscreenCanvas (medium, big UX win, real risk).**
+- `WebGLRenderer` constructed in a worker against an `OffscreenCanvas` transferred from the main thread (`canvas.transferControlToOffscreen()`).
+- Render loop, raycasting, picking, BVH build all run in the render worker. Main thread stays at 60Hz for React / UI even during a heavy frame.
+- DOM events on the canvas (`mousemove`, `wheel`, etc.) forwarded to the worker via `postMessage`. Camera-controls runs in the worker.
+- **What we lose / what's hard:**
+  - `CSS2DRenderer` doesn't work in workers (needs DOM). Today we render `PlaceMark` icons via it. Either keep one DOM overlay on the main thread reading camera state via worker messages, or move markers to in-WebGL sprites.
+  - `postprocessing` lib's `OutlineEffect` does work in workers in current versions, but verify against the post-bump version.
+  - DevTools experience degrades (no breakpoints inside the renderer from main-thread devtools view; needs separate worker inspector).
+  - HMR for the render worker is more brittle; need a dedicated esbuild entry.
+  - Firefox `OffscreenCanvas` for WebGL2 needs flag in older versions; Safari ≥17 only. Fall back to main-thread renderer behind a runtime check.
+- Cost: ~2 weeks. Risk: high if we want full feature parity.
+
+**Recommendation: do Move A inside Phase 3** (it falls naturally out of the `IfcModelService` worker boundary). **Spec Move B as a Phase 7** (post-three-bump, separate doc). Move A delivers most of the "UI doesn't freeze" win because Conway parse is the dominant blocker today.
 
 ---
 
@@ -302,4 +381,4 @@ Audit of `src/` shows we don't touch any of the worst-affected APIs (`Geometry`,
 
 ## 10. Estimated cost
 
-Phases 0–2 small (≤ 2 days each). Phase 3 is the big one (1–2 weeks: parity + subsets + worker decision). Phases 4–6 small once Phase 3 is green. Total: ~3 weeks of focused work, dominated by Conway-vs-`web-ifc-three` parity.
+Phases 0–2 small (≤ 2 days each). Phase 3 is the big one (2–3 weeks: parity + subsets + Conway worker integration + GLB-scene-PR coordination). Phases 4–6 small once Phase 3 is green. Total: ~3–4 weeks of focused work, dominated by Conway-vs-`web-ifc-three` parity and worker plumbing. Phase 7 (OffscreenCanvas) is a separate ~2-week effort with its own design doc.
