@@ -7,6 +7,7 @@ import GlbClipper from '../../Infrastructure/GlbClipper'
 import debug from '../../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
 import {floatStrTrim, isNumeric} from '../../utils/strings'
+import {modelHasUnstructuredMeshClipper} from '../../viewer/ShareModel'
 import {TooltipIconButton} from '../Buttons'
 import {HASH_PREFIX_CUT_PLANE} from './hashState'
 import {Close as CloseIcon, CropOutlined as CropOutlinedIcon} from '@mui/icons-material'
@@ -73,7 +74,7 @@ export default function CutPlaneMenu() {
   // Initialize GlbClipper when model changes
   useEffect(() => {
     if (model && viewer) {
-      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
+      const isGlbModel = modelHasUnstructuredMeshClipper(model)
       if (isGlbModel) {
         const clipper = new GlbClipper(viewer, model)
         setGlbClipper(clipper)
@@ -93,7 +94,7 @@ export default function CutPlaneMenu() {
     const planeHash = getHashParams(location, HASH_PREFIX_CUT_PLANE)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
     if (planeHash && model && viewer) {
-      const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
+      const isGlbModel = modelHasUnstructuredMeshClipper(model)
 
       // For GLB models, wait for glbClipper to be initialized
       if (isGlbModel && !glbClipper) {
@@ -123,7 +124,7 @@ export default function CutPlaneMenu() {
     debug().log('CutPlaneMenu#togglePlane: normal: ', normal)
     debug().log('CutPlaneMenu#togglePlane: modelCenterOffset: ', modelCenterOffset)
 
-    const isGlbModel = viewer.IFC.type === 'glb' || viewer.IFC.type === 'gltf'
+    const isGlbModel = modelHasUnstructuredMeshClipper(model)
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
       debug().log('CutPlaneMenu#togglePlane: found: ', true)
@@ -268,7 +269,11 @@ export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
  * @param {object} viewer bounding box
  */
 export function removePlanes(viewer) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+  // `viewer.context.items.ifcModels[0]` is the currently-loaded model — set
+  // by Loader.js's `addIfcModel`. Read its `format` (set by the ShareModel
+  // decorator) instead of the legacy `viewer.IFC.type`.
+  const model = viewer?.context?.items?.ifcModels?.[0]
+  const isGlbModel = modelHasUnstructuredMeshClipper(model)
 
   if (isGlbModel && viewer.glbClipper) {
     // For GLB: use GlbClipper
@@ -292,7 +297,7 @@ export function removePlanes(viewer) {
  * @return {object} {x: 0, y: 0, ...}
  */
 export function getPlanesOffset(viewer, ifcModel) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+  const isGlbModel = modelHasUnstructuredMeshClipper(ifcModel)
   const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
 
   if (planes && planes.length > 0) {
@@ -331,7 +336,7 @@ export function getPlanesOffset(viewer, ifcModel) {
  * @param {object} ifcModel
  */
 export function addPlanesToHashState(viewer, ifcModel) {
-  const isGlbModel = viewer?.IFC?.type === 'glb' || viewer?.IFC?.type === 'gltf'
+  const isGlbModel = modelHasUnstructuredMeshClipper(ifcModel)
   const planes = isGlbModel && viewer.glbClipper ? viewer.glbClipper.planes : viewer?.clipper?.planes
 
   if (planes && planes.length > 0) {

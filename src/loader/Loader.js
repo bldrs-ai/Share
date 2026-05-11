@@ -16,6 +16,7 @@ import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
+import {decorateShareModel} from '../viewer/ShareModel'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import glbToThree from './glb'
@@ -220,6 +221,11 @@ export async function load(
 
   // Used for GA stats
   model.type = loader.type
+
+  // ShareModel decoration (see src/viewer/ShareModel.js): adds
+  // `format` + `capabilities` so call-sites can branch on intrinsic
+  // model capability instead of guessing from `viewer.IFC.type`.
+  decorateShareModel(model, loader.type)
 
   return model
 }
