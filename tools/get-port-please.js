@@ -25,7 +25,7 @@ import {findAncestorByName} from './find-ancestor-by-name.js'
 // parallel workers but is no worse than before.
 const minPort = 20000
 const maxPort = 29999
-let desiredPort = process.argv.length > 2 ? Number(process.argv[2]) : 0
+const desiredPort = process.argv.length > 2 ? Number(process.argv[2]) : 0
 const ancestor = await findAncestorByName({matcher: /.bin\/playwright/i})
 let port
 if (ancestor) {
