@@ -1,10 +1,10 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import IfcHighlighter from './IfcHighlighter'
-import IfcIsolator from './IfcIsolator'
-import IfcViewsManager from './IfcElementsStyleManager'
-import IfcCustomViewSettings from './IfcCustomViewSettings'
-import CustomPostProcessor from './CustomPostProcessor'
-import ThreeContext from '../viewer/three/ThreeContext'
+import IfcHighlighter from '../Infrastructure/IfcHighlighter'
+import IfcIsolator from '../Infrastructure/IfcIsolator'
+import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
+import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
+import CustomPostProcessor from '../Infrastructure/CustomPostProcessor'
+import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {areDefinedAndNotNull} from '../utils/assert'
 
@@ -18,9 +18,13 @@ const viewRules = {
 }
 /* eslint-disable jsdoc/no-undefined-types */
 /**
- * Extending the original IFCViewerFunctionality
+ * ShareViewer — the top-level viewer facade for Bldrs Share. Today still
+ * extends `IfcViewerAPI` from the `web-ifc-viewer` fork; per
+ * design/new/viewer-replacement.md §3, downstream code should depend on
+ * this class rather than on the fork directly. When the fork is removed
+ * (Phase 5), ShareViewer's surface stays — only its internals swap.
  */
-export class IfcViewerAPIExtended extends IfcViewerAPI {
+export class ShareViewer extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -224,15 +228,15 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     }
     if (toBeSelected.length !== 0) {
       try {
-        debug().log('IfcViewerAPIExtended#setSelection, with Array<toBeSelected>: ', toBeSelected)
+        debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
         const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
         const removePrevious = true
         await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
-        debug().log('IfcViewerAPIExtended#setSelection, meshes: ', this.IFC.selector.selection.meshes)
+        debug().log('ShareViewer#setSelection, meshes: ', this.IFC.selector.selection.meshes)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
         console.warn('selection failure', e)
-        debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
+        debug().error('ShareViewer#setSelection$onError: ', e)
       }
     } else {
       this.highlighter.setHighlighted(null)
@@ -267,7 +271,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   async preselectElementsByIds(modelId, expressIds) {
     const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
-    debug().log('IfcViewerAPIExtended#preselectElementsByIds, filteredIds:', filteredIds)
+    debug().log('ShareViewer#preselectElementsByIds, filteredIds:', filteredIds)
     if (filteredIds.length) {
       await this.IFC.selector.preselection.pickByID(modelId, filteredIds, false, true)
       this.highlightPreselection()
@@ -314,7 +318,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
 
   /**
-   * Uses the internal renderer to take screenshot of current scene.
+   * Uses the internal renderer to take a screenshot of the current scene.
    *
    * The image may be fetched to bytes with:
    *
@@ -324,8 +328,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @return {string}
    */
   takeScreenshot() {
-    const renderer = this.context.renderer
-    const dataURI = renderer.newScreenshot()
-    return dataURI
+    // newScreenshot() lives on the fork's IfcRenderer wrapper (it spins up
+    // an offscreen WebGLRenderer). It is not on the underlying WebGLRenderer
+    // that getRenderer() returns. Will be inlined into ShareViewer when
+    // the fork's IfcRenderer is dropped (§3a, Phase 5).
+    return this.context.getLegacyRendererWrapper().newScreenshot()
   }
 }

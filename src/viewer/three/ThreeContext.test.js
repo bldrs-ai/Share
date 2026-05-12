@@ -38,6 +38,8 @@ function makeFakeLegacyContext() {
     ifcCamera: {cameraControls, currentNavMode: navMode},
     items,
     renderer,
+    castRayIfc: jest.fn(() => ({sentinel: 'ifc'})),
+    castRay: jest.fn(() => [{sentinel: 'any'}]),
     dispose: jest.fn(),
   }
 }
@@ -110,5 +112,22 @@ describe('viewer/three/ThreeContext', () => {
     const ctx = new ThreeContext(makeFakeLegacyContext())
     ctx.dispose()
     expect(() => ctx.dispose()).not.toThrow()
+  })
+
+  it('proxies castRayIfc() to the legacy raycaster', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    const hit = ctx.castRayIfc()
+    expect(legacy.castRayIfc).toHaveBeenCalled()
+    expect(hit).toEqual({sentinel: 'ifc'})
+  })
+
+  it('proxies castRay(items) to the legacy raycaster', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    const items = [{}, {}]
+    const out = ctx.castRay(items)
+    expect(legacy.castRay).toHaveBeenCalledWith(items)
+    expect(out).toEqual([{sentinel: 'any'}])
   })
 })

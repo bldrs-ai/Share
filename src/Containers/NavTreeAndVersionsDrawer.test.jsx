@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import {useIsMobile} from '../Components/Hooks'
 import {TITLE as TITLE_NAV_TREE} from '../Components/NavTree/NavTreePanel'
@@ -16,7 +16,7 @@ import {
 describe('NavTreeAndVersionsDrawer', () => {
   beforeAll(async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = __getShareViewerMockSingleton()
     viewer.isolator = {
       toggleIsolationMode: jest.fn(),
       hideSelectedElements: jest.fn(),

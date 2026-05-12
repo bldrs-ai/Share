@@ -23,7 +23,7 @@ import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
-import Picker from '../view/Picker'
+import Picker from '../viewer/three/Picker'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
@@ -475,7 +475,7 @@ export default function CadView({
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
    *
-   * @param {object} m The IfcViewerAPIExtended instance.
+   * @param {object} m The ShareViewer instance.
    * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {

@@ -138,6 +138,34 @@ export default class ThreeContext {
   }
 
 
+  // -- Raycasting ------------------------------------------------------------
+
+
+  /**
+   * Raycast the loaded IFC-like models using the current pointer.
+   * Returns the closest intersection or `null`. Passthrough to the fork's
+   * internal raycaster today; will be replaced with the in-repo Picker
+   * service when ThreeContext takes over input ownership (§3a, Phase 5).
+   *
+   * @return {object|null}
+   */
+  castRayIfc() {
+    return this._legacy.castRayIfc()
+  }
+
+
+  /**
+   * Raycast against an arbitrary list of objects with the current pointer.
+   * Same passthrough caveat as `castRayIfc()`.
+   *
+   * @param {Array<Object3D>} items
+   * @return {Array<object>}
+   */
+  castRay(items) {
+    return this._legacy.castRay(items)
+  }
+
+
   // -- Render loop -----------------------------------------------------------
 
 

@@ -1,4 +1,4 @@
-import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
+import {ShareViewer} from '../viewer/ShareViewer'
 import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
 import useStore from '../store/useStore'
@@ -31,7 +31,7 @@ export default class IfcIsolator {
    * Instantiates a new instance of IfcIsolator
    *
    * @param {ThreeContext} context of the viewer
-   * @param {IfcViewerAPIExtended} viewer
+   * @param {ShareViewer} viewer
    */
   constructor(context, viewer) {
     this.context = context

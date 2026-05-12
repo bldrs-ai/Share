@@ -13,7 +13,7 @@ import IfcIsolator from './IfcIsolator'
 
 // Mock the heavy dependencies so the constructor doesn't crash.
 jest.mock('web-ifc-viewer/dist/components', () => ({}))
-jest.mock('./IfcViewerAPIExtended', () => ({}))
+jest.mock('../viewer/ShareViewer', () => ({}))
 jest.mock('postprocessing', () => ({
   BlendFunction: {SCREEN: 1},
 }))

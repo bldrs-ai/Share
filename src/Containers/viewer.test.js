@@ -1,4 +1,4 @@
-import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
 import {disposeViewer, initViewer} from './viewer'
 
 
@@ -83,7 +83,7 @@ describe('Containers/viewer', () => {
     // renderer is undefined, which makes disposeViewer log a warn
     // during afterEach.  Give it a no-op shape; tests that need to
     // assert on the dispose chain override via attachDisposeSpies.
-    const baseViewer = __getIfcViewerAPIExtendedMockSingleton()
+    const baseViewer = __getShareViewerMockSingleton()
     baseViewer.context.getScene = jest.fn(() => ({add: jest.fn(), traverse: jest.fn()}))
     baseViewer.context.getRenderer = jest.fn(() => ({dispose: jest.fn(), forceContextLoss: jest.fn()}))
     baseViewer.context.getDomElement = jest.fn(() => ({
@@ -233,7 +233,7 @@ describe('Containers/viewer', () => {
   describe('singleton fixture sanity', () => {
     it('initViewer returns the same singleton object the test mock exposes', () => {
       const viewer = initViewer('/share/v/p')
-      expect(viewer).toBe(__getIfcViewerAPIExtendedMockSingleton())
+      expect(viewer).toBe(__getShareViewerMockSingleton())
     })
   })
 })

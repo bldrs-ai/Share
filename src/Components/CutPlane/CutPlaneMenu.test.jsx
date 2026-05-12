@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
@@ -41,7 +41,7 @@ describe('CutPlaneMenu', () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = __getShareViewerMockSingleton()
     await act(() => {
       result.current.setViewer(viewer)
     })
@@ -64,7 +64,7 @@ describe('CutPlaneMenu', () => {
         <CutPlaneMenu/>
       </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = __getShareViewerMockSingleton()
     await act(() => {
       result.current.setViewer(viewer)
     })
@@ -81,7 +81,7 @@ describe('CutPlaneMenu', () => {
       </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
     // mock contains one plane
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = __getShareViewerMockSingleton()
     await act(() => {
       result.current.setViewer(viewer)
     })
@@ -111,7 +111,7 @@ describe('CutPlaneMenu', () => {
       hash: hash,
       href: `http://localhost:123${pathname}`,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = __getShareViewerMockSingleton()
     await act(() => {
       result.current.cutPlanes = []
       result.current.setViewer(viewer)

@@ -7,7 +7,7 @@ const ThreeContext = require('../src/viewer/three/ThreeContext').default
 
 
 // Not sure why this is required, but otherwise these internal fields
-// are not present in the instantiated IfcViewerAPIExtended.
+// are not present in the instantiated ShareViewer.
 const loadedModel = {
   ifcManager: {
     getSpatialStructure: jest.fn(),
@@ -83,7 +83,7 @@ const legacyContextMock = {
 }
 // Production wraps `viewer.context` in a ThreeContext (see
 // src/viewer/three/ThreeContext.js). Mirror that here so the singleton
-// from `__getIfcViewerAPIExtendedMockSingleton()` exposes the same
+// from `__getShareViewerMockSingleton()` exposes the same
 // surface as production.
 const contextMock = new ThreeContext(legacyContextMock)
 
@@ -171,9 +171,9 @@ constructorMock.mockImplementation(() => impl)
 
 
 /**
- * @return {object} The single mock instance of IfcViewerAPI.
+ * @return {object} The single mock instance of ShareViewer.
  */
-function __getIfcViewerAPIExtendedMockSingleton() {
+function __getShareViewerMockSingleton() {
   return impl
 }
 
@@ -181,5 +181,5 @@ function __getIfcViewerAPIExtendedMockSingleton() {
 export {
   ifcjsMock as default,
   constructorMock as IfcViewerAPI,
-  __getIfcViewerAPIExtendedMockSingleton as __getIfcViewerAPIExtendedMockSingleton,
+  __getShareViewerMockSingleton as __getShareViewerMockSingleton,
 }

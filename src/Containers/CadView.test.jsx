@@ -8,7 +8,7 @@ import ShareMock from '../ShareMock'
 import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
-import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import {ShareViewer} from '../viewer/ShareViewer'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
@@ -131,7 +131,7 @@ describe('CadView', () => {
 
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
   beforeEach(() => {
-    viewer = new IfcViewerAPIExtended()
+    viewer = new ShareViewer()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
@@ -145,7 +145,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended', async () => {
+  it('renders with mock ShareViewer', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -180,7 +180,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it('renders with mock ShareViewer and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
