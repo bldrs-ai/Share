@@ -1,7 +1,7 @@
 jest.mock('three')
-jest.mock('../src/Infrastructure/IfcHighlighter')
-jest.mock('../src/Infrastructure/IfcIsolator')
-jest.mock('../src/Infrastructure/CustomPostProcessor')
+jest.mock('../src/viewer/three/IfcHighlighter')
+jest.mock('../src/viewer/three/IfcIsolator')
+jest.mock('../src/viewer/three/CustomPostProcessor')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 const ThreeContext = require('../src/viewer/three/ThreeContext').default
 

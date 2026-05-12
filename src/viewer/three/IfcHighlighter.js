@@ -1,7 +1,7 @@
 import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
 import CustomPostProcessor from './CustomPostProcessor'
-import ThreeContext from '../viewer/three/ThreeContext'
+import ThreeContext from './ThreeContext'
 
 
 /**

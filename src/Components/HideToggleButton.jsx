@@ -1,6 +1,6 @@
 import React, {ReactElement} from 'react'
 import useStore from '../store/useStore'
-import IfcIsolator from '../Infrastructure/IfcIsolator'
+import IfcIsolator from '../viewer/three/IfcIsolator'
 import {Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon} from '@mui/icons-material'
 import GlassesIcon from '../assets/icons/Glasses.svg'
 

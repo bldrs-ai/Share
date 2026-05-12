@@ -1,10 +1,10 @@
-import {ShareViewer} from '../viewer/ShareViewer'
-import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
+import {ShareViewer} from '../ShareViewer'
+import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
-import useStore from '../store/useStore'
+import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
-import {isDefinedAndNotNull} from '../utils/assert'
-import ThreeContext from '../viewer/three/ThreeContext'
+import {isDefinedAndNotNull} from '../../utils/assert'
+import ThreeContext from './ThreeContext'
 
 
 /** Provides hiding, unhiding, isolation, and unisolation functionalities */
