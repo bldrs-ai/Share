@@ -1,7 +1,7 @@
 import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
-import {IfcContext} from 'web-ifc-viewer/dist/components'
 import CustomPostProcessor from './CustomPostProcessor'
+import ThreeContext from '../viewer/three/ThreeContext'
 
 
 /**
@@ -15,7 +15,7 @@ export default class IfcHighlighter {
   /**
    * constructs new class
    *
-   * @param {IfcContext} context of the viewer
+   * @param {ThreeContext} context of the viewer
    * @param {CustomPostProcessor} postProcessor The post-processor
    */
   constructor(context, postProcessor) {
@@ -31,7 +31,7 @@ export default class IfcHighlighter {
       xRay: true,
       opacity: 1,
     })
-    context.renderer.update = newUpdateFunction(context, postProcessor.getComposer)
+    context.setRenderUpdate(newUpdateFunction(context, postProcessor.getComposer))
   }
 
 
@@ -63,7 +63,7 @@ export default class IfcHighlighter {
  * Returns a new update function that uses
  * the effectComposer rendering pipeline
  *
- * @param {IfcContext} context
+ * @param {ThreeContext} context
  * @param {EffectComposer} composer
  * @return {Function} the new render function
  */
@@ -80,5 +80,7 @@ function newUpdateFunction(context, composer) {
     }
     composer.render()
   }
-  return newUpdateFn.bind(context.renderer)
+  // Bind to the underlying fork IfcRenderer so the `this.blocked` check
+  // continues to consult the renderer's flag.
+  return newUpdateFn.bind(context.getLegacyRendererWrapper())
 }

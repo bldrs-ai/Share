@@ -1,11 +1,12 @@
 // Adapted from web-ifc-viewer/components/context/raycaster.js
 import {Object3D, Raycaster} from 'three'
 import {assertDefined} from '../utils/assert'
+import ThreeContext from '../viewer/three/ThreeContext'
 
 
 /** Uses the THREE raycaster to pick items in the scene. */
 export default class Picker {
-  /** @param {object} ctx web-ifc-viewer context */
+  /** @param {ThreeContext} ctx layered three context */
   constructor(ctx) {
     assertDefined(ctx)
     this.context = ctx
@@ -29,7 +30,7 @@ export default class Picker {
    */
   castRay(items) {
     const camera = this.context.getCamera()
-    this.raycaster.setFromCamera(this.context.mouse.position, camera)
+    this.raycaster.setFromCamera(this.context.getNormalizedMousePosition(), camera)
     return this.raycaster.intersectObjects(items)
   }
 
@@ -38,7 +39,7 @@ export default class Picker {
    * @return {Array<Object3D>}
    */
   castRayIfc() {
-    const items = this.castRay(this.context.items.pickableIfcModels)
+    const items = this.castRay(this.context.getPickableModels())
     const filtered = this.filterClippingPlanes(items)
     return filtered.length > 0 ? filtered[0] : null
   }

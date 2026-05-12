@@ -4,6 +4,7 @@ import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
+import ThreeContext from '../viewer/three/ThreeContext'
 import debug from '../utils/debug'
 import {areDefinedAndNotNull} from '../utils/assert'
 
@@ -28,6 +29,16 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   constructor(options) {
     super(options)
+    // Replace the fork's `IfcContext` reference on this.context with our
+    // layered wrapper. The fork's IfcManager / clipper / etc. were
+    // constructed in `super()` with the original IfcContext and keep
+    // their own private reference to it, so the fork side is unaffected.
+    // Our code reads `viewer.context.X` through the wrapper. Guarded so
+    // mocks that pre-wrap (see __mocks__/web-ifc-viewer.js) don't get
+    // double-wrapped.
+    if (!(this.context instanceof ThreeContext)) {
+      this.context = new ThreeContext(this.context)
+    }
     const renderer = this.context.getRenderer()
     const scene = this.context.getScene()
     const camera = this.context.getCamera()

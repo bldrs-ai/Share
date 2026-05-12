@@ -267,10 +267,10 @@ export default function CadView({
       }
     }
 
-    const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
+    const cameraControls = viewer.context.getCameraControls()
     // Our visual testing waits until animations are finished to take screenshot
     // Would like to use zero but doesn't work
-    // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
+    // viewer.context.getCameraControls().restThreshold = 0.1
     cameraControls.addEventListener('rest', () => {
       trackModelInteraction()
     })
@@ -364,9 +364,9 @@ export default function CadView({
 
     viewer.context.getScene().add(loadedModel)
 
-    const isCamHashSet = onHash(location, viewer.IFC.context.ifcCamera.cameraControls)
+    const isCamHashSet = onHash(location, viewer.context.getCameraControls())
     if (!isCamHashSet) {
-      viewer.IFC.context.ifcCamera.currentNavMode.fitModelToFrame()
+      viewer.context.fitModelToFrame()
     }
 
     // TODO(pablo): centralize capability check somewhere
@@ -443,7 +443,7 @@ export default function CadView({
       }
 
       const picker = new Picker(viewer.context)
-      const pickedAll = picker.castRay(viewer.context.scene.scene.children)
+      const pickedAll = picker.castRay(viewer.context.getScene().children)
       if (pickedAll.length === 0) {
         return
       }

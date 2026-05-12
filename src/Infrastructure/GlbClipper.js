@@ -173,7 +173,11 @@ export default class GlbClipper {
    * Updates the renderer's clipping planes array
    */
   updateRendererPlanes() {
-    const renderer = this.viewer.context.renderer
+    // NB: this writes to the fork's `IfcRenderer` wrapper object, not the
+    // underlying WebGLRenderer (clipping for GLB is driven by per-material
+    // `clippingPlanes`; see applyClippingToMaterials). Goes away with the
+    // unified Clipper in design §3c.
+    const renderer = this.viewer.context.getLegacyRendererWrapper()
     renderer.clippingPlanes = this.planes.map((pd) => pd.plane)
     renderer.localClippingEnabled = this.planes.length > 0
   }
@@ -306,8 +310,9 @@ export default class GlbClipper {
           this.setArrowColor(planeData.arrow, planeData.arrow.userData.highlightColor)
 
           // Disable orbit controls while dragging
-          if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
-            this.viewer.context.ifcCamera.cameraControls.enabled = false
+          const dragControls = this.viewer.context.getCameraControls()
+          if (dragControls) {
+            dragControls.enabled = false
           }
 
           debug().log('GlbClipper: Started dragging arrow for direction', planeData.direction)
@@ -409,8 +414,9 @@ export default class GlbClipper {
       this.draggingArrow = null
 
       // Re-enable orbit controls
-      if (this.viewer.context.ifcCamera && this.viewer.context.ifcCamera.cameraControls) {
-        this.viewer.context.ifcCamera.cameraControls.enabled = true
+      const releaseControls = this.viewer.context.getCameraControls()
+      if (releaseControls) {
+        releaseControls.enabled = true
       }
     }
   }
