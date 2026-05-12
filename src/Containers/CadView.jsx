@@ -11,6 +11,7 @@ import {gtagEvent} from '../privacy/analytics'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
 import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -211,6 +212,16 @@ export default function CadView({
             'Try opening it on a desktop browser with more memory or ' +
             'refresh the page.',
         })
+      } else if (e instanceof NeedsReconnectError) {
+        // Deep-link / reload landed on a Drive route with a stale token, and
+        // GIS couldn't escalate to a popup outside a user gesture. Surface a
+        // Reconnect button (a future user gesture) instead of "Failed to
+        // parse model".
+        setAlert({
+          type: 'needsReconnect',
+          connection: e.connection,
+          message: 'Your Google Drive session expired. Reconnect to load this file.',
+        })
       } else {
         setAlert(e)
       }
@@ -321,6 +332,13 @@ export default function CadView({
     } catch (error) {
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
+        throw error
+      }
+      // Bubble NeedsReconnect up to onViewer's catch so it can render the
+      // typed Reconnect overlay. Without this re-throw the inner catch
+      // swallowed it, set the alert as a generic Error, and the outer
+      // !tmpModelRef branch then overwrote it with "Failed to parse model".
+      if (error instanceof NeedsReconnectError) {
         throw error
       }
 

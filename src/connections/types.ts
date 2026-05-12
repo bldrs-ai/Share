@@ -115,6 +115,133 @@ export interface ConnectionProvider {
 
   /** Get a valid access token for API calls. May silently refresh if expired. */
   getAccessToken(connection: Connection): Promise<string>
+
+  // -- Sharing capability (optional) --
+  // Implementations should declare any subset they can support and leave the
+  // rest undefined. Callers must check for presence; see
+  // `design/new/multi-user-sharing.md` for the rationale and error vocabulary.
+
+  /**
+   * List existing grants on a resource. Order is provider-defined.
+   *
+   * Throws `InsufficientPermissionError` when the connection lacks the right
+   * to enumerate grants on the resource, `NeedsReconnectError` on stale
+   * tokens, and `GrantFailedError` for any other transport/server failure.
+   */
+  listGrants?(connection: Connection, resource: ResourceRef): Promise<Grant[]>
+
+  /**
+   * Add a grant. The principal shape is provider-specific (email/domain for
+   * Drive, login/team-slug for GitHub); see `GrantRequest` for details.
+   *
+   * @return The created grant, including its provider-assigned id.
+   */
+  shareWith?(
+    connection: Connection,
+    resource: ResourceRef,
+    grant: GrantRequest,
+  ): Promise<Grant>
+
+  /** Remove a grant by its provider-assigned id. */
+  revokeGrant?(
+    connection: Connection,
+    resource: ResourceRef,
+    grantId: string,
+  ): Promise<void>
+
+  /**
+   * Read the resource's effective visibility.
+   *
+   * Returns `null` when the underlying API doesn't expose a single
+   * deterministic answer (e.g. a Drive resource with no public/domain
+   * permissions and no clear "private" indicator). Treat `null` as
+   * "unknown — show no chip" rather than as `'private'`.
+   */
+  getVisibility?(
+    connection: Connection,
+    resource: ResourceRef,
+  ): Promise<Visibility | null>
+
+  /**
+   * Owner-only: change the resource's visibility. Idempotent — calling with
+   * the current visibility is a no-op. Implementations may surface a
+   * confirmation requirement at the UI layer; this method does not prompt.
+   */
+  setVisibility?(
+    connection: Connection,
+    resource: ResourceRef,
+    visibility: Visibility,
+  ): Promise<void>
+}
+
+
+// -- Sharing types --
+
+/**
+ * Effective visibility of a resource. The mapping is provider-specific:
+ *   - Drive: `'public'` = "anyone with the link" permission present;
+ *            `'org'`    = a `domain` permission matches the user's Workspace;
+ *            `'private'` = neither.
+ *   - GitHub: `'public'` = repo not private; `'private'` = repo private;
+ *             `'org'`    = GitHub Enterprise `internal` (only when the
+ *             owner is an org with `internal` available).
+ */
+export type Visibility = 'private' | 'org' | 'public'
+
+
+/**
+ * A resource a grant or visibility operation applies to. Discriminated by
+ * `kind` so each provider can refuse shapes it doesn't own.
+ *
+ * `drive-folder.driveId` is set for items inside a Shared Drive (corpus).
+ * `github-tree.path` is the optional sub-path inside a branch.
+ */
+export type ResourceRef =
+  | {kind: 'drive-file'; fileId: string}
+  | {kind: 'drive-folder'; folderId: string; driveId?: string}
+  | {kind: 'github-repo'; org: string; repo: string}
+  | {kind: 'github-tree'; org: string; repo: string; branch: string; path?: string}
+
+
+/**
+ * Who a grant applies to. The id shape depends on `principalType`:
+ *
+ *   - `'user'`   → email (Drive) or login (GitHub)
+ *   - `'group'`  → group email (Drive) — GitHub uses `'user'` for teams below
+ *   - `'domain'` → workspace domain, e.g. `'bldrs.ai'` (Drive only)
+ *   - `'anyone'` → undefined; toggles link-share (Drive only)
+ *
+ * For GitHub, the team-vs-user distinction is encoded by the role/principal
+ * pair the adapter chooses, not by an extra principal kind.
+ */
+export interface GrantRequest {
+  principalType: 'user' | 'group' | 'domain' | 'anyone'
+  principalId?: string
+  role: 'reader' | 'commenter' | 'writer' | 'owner'
+  /**
+   * Send an email notification when the grant is created. Drive: default
+   * true at the API; GitHub: always true and ignores the flag.
+   */
+  notify?: boolean
+  /**
+   * Custom message included in the notification. Drive only; ignored
+   * elsewhere.
+   */
+  message?: string
+}
+
+
+/**
+ * A grant as returned from the provider. `origin` records which system the
+ * grant lives in: `'bldrs'` is reserved for the future sidecar-grant model
+ * and is unused in PR1.
+ */
+export interface Grant {
+  id: string
+  principalType: GrantRequest['principalType']
+  principalId?: string
+  role: GrantRequest['role']
+  origin: 'drive' | 'github' | 'bldrs'
 }
 
 

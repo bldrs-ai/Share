@@ -20,8 +20,6 @@ export default function setupMSW() {
       MSW_IS_ENABLED: process.env.MSW_IS_ENABLED,
       OAUTH2_CLIENT_ID: process.env.OAUTH2_CLIENT_ID,
       OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL,
-      RAW_GIT_PROXY_URL: process.env.RAW_GIT_PROXY_URL,
-      RAW_GIT_PROXY_URL_NEW: process.env.RAW_GIT_PROXY_URL_NEW,
       ESBUILD_WATCH: process.env.ESBUILD_WATCH,
     })
     worker.start({

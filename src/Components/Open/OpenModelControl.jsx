@@ -1,7 +1,5 @@
-import React, {ReactElement, useState, useEffect} from 'react'
+import React, {ReactElement} from 'react'
 import {useNavigate} from 'react-router-dom'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {getOrganizations} from '../../net/github/Organizations'
 import useStore from '../../store/useStore'
 import useQuota from '../../hooks/useQuota'
 import {ControlButtonWithHashState} from '../Buttons'
@@ -17,33 +15,12 @@ import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
  * @return {ReactElement}
  */
 export default function OpenModelControl() {
-  const accessToken = useStore((state) => state.accessToken)
-
   const isOpenModelVisible = useStore((state) => state.isOpenModelVisible)
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const {used, limit, tier} = useQuota()
 
-  const [orgNamesArr, setOrgNamesArray] = useState([''])
-
-  const {user} = useAuth0()
   const navigate = useNavigate()
-
-
-  useEffect(() => {
-    /** Asynchronously fetch organizations */
-    async function fetchOrganizations() {
-      const orgs = await getOrganizations(accessToken)
-      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
-      const orgNames = [...orgNamesFetched, user && user.nickname]
-      setOrgNamesArray(orgNames)
-    }
-
-    if (isOpenModelVisible && accessToken) {
-      fetchOrganizations()
-    }
-  }, [isOpenModelVisible, accessToken, user])
-
 
   return (
     <ControlButtonWithHashState
@@ -63,7 +40,6 @@ export default function OpenModelControl() {
         isDialogDisplayed={isOpenModelVisible}
         setIsDialogDisplayed={setIsOpenModelVisible}
         navigate={navigate}
-        orgNamesArr={orgNamesArr}
       />
     </ControlButtonWithHashState>
   )

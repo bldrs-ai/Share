@@ -17,6 +17,7 @@ import {useIsMobile} from './Hooks'
  * @property {ReactElement} children Content of the dialog
  * @property {string|ReactElement} [actionTitle] Title for the action button, or Component
  * @property {Function} [actionCb] Callback for action button
+ * @property {boolean} [actionDisabled] If true, the action button is disabled and won't fire actionCb
  * @return {ReactElement}
  */
 export default function Dialog({
@@ -27,6 +28,7 @@ export default function Dialog({
   headerIcon,
   actionTitle,
   actionCb,
+  actionDisabled = false,
   ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
@@ -77,7 +79,13 @@ export default function Dialog({
       {actionTitle === undefined ? null :
         <DialogActions>
           {typeof actionTitle === 'string' ?
-            <Button variant='contained' onClick={wrappedCb} aria-label='action-button' data-testid='button-dialog-main-action'>
+            <Button
+              variant='contained'
+              onClick={wrappedCb}
+              disabled={actionDisabled}
+              aria-label='action-button'
+              data-testid='button-dialog-main-action'
+            >
               {actionTitle}
             </Button> :
             <>{actionTitle}</>

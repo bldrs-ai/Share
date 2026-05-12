@@ -7,8 +7,24 @@
  * Tokens are held in memory only and re-obtained via GIS on page reload.
  */
 
-import type {Connection, ConnectionProvider, ConnectionStatus} from '../types'
+import type {
+  Connection,
+  ConnectionProvider,
+  ConnectionStatus,
+  Grant,
+  GrantRequest,
+  ResourceRef,
+  Visibility,
+} from '../types'
 import debug from '../../utils/debug'
+import {NeedsReconnectError} from '../errors'
+import {
+  driveGetVisibility,
+  driveListGrants,
+  driveRevokeGrant,
+  driveSetVisibility,
+  driveShareWith,
+} from './GoogleDriveSharing'
 import {loadGisScript} from './loadGisScript'
 import type {TokenResponse} from './loadGisScript'
 
@@ -18,6 +34,8 @@ const DEFAULT_TOKEN_EXPIRES_S = 3600
 const MS_PER_S = 1000
 const EMAIL_FETCH_TIMEOUT_MS = 5000
 const POPUP_CLOSE_DEBOUNCE_MS = 2000
+const HTTP_BAD_REQUEST = 400
+const HTTP_UNAUTHORIZED = 401
 
 // drive.file: per-file access granted via Picker only. Non-sensitive scope —
 // no Google verification review and no unverified-app consent warning.
@@ -34,33 +52,72 @@ interface CachedToken {
 /** In-memory token store keyed by connection ID. */
 const tokenCache = new Map<string, CachedToken>()
 
-const SESSION_TOKEN_PREFIX = 'gdrive_token_'
+// Tokens live in localStorage (not sessionStorage) so a permalink opened in a
+// new tab inherits the existing token instead of forcing a popup-blocked
+// silent refresh on every cold tab. Connection metadata is already in
+// localStorage under 'bldrs:connections', so the trust scope is unchanged.
+// Tokens self-expire via their cached `expiresAt` and are cleared on
+// disconnect; lifetime is bounded by Google's 1h access-token TTL.
+const STORAGE_TOKEN_PREFIX = 'bldrs:gdrive-token:'
+
+// Legacy sessionStorage prefix from before the localStorage move. Still read
+// once on cold start as a fallback so existing tabs don't force a one-time
+// reconnect; the entry is migrated to localStorage and removed from session.
+const LEGACY_SESSION_TOKEN_PREFIX = 'gdrive_token_'
 
 
-/** Persist token to sessionStorage so it survives same-tab page reloads. */
-function saveTokenToSession(connectionId: string, cached: CachedToken): void {
+/** Persist token to localStorage so it survives reloads and is shared across tabs. */
+function saveTokenToStorage(connectionId: string, cached: CachedToken): void {
   try {
-    sessionStorage.setItem(SESSION_TOKEN_PREFIX + connectionId, JSON.stringify(cached))
+    localStorage.setItem(STORAGE_TOKEN_PREFIX + connectionId, JSON.stringify(cached))
   } catch {
-    // sessionStorage unavailable — in-memory cache only
+    // localStorage unavailable — in-memory cache only
   }
 }
 
 
 /**
- * Load a previously persisted token from sessionStorage (if not expired).
+ * Load a previously persisted token, preferring localStorage with a one-time
+ * sessionStorage fallback for users mid-migration. Tokens past their cached
+ * expiry are removed and reported as missing.
  *
  * @return The cached token, or null if absent or expired.
  */
-function loadTokenFromSession(connectionId: string): CachedToken | null {
+function loadTokenFromStorage(connectionId: string): CachedToken | null {
+  const cached = readTokenAtKey(localStorage, STORAGE_TOKEN_PREFIX + connectionId)
+  if (cached) {
+    return cached
+  }
+  // Migrate any legacy sessionStorage token onto localStorage exactly once.
+  const legacy = readTokenAtKey(sessionStorage, LEGACY_SESSION_TOKEN_PREFIX + connectionId)
+  if (legacy) {
+    saveTokenToStorage(connectionId, legacy)
+    try {
+      sessionStorage.removeItem(LEGACY_SESSION_TOKEN_PREFIX + connectionId)
+    } catch {
+      // ignore
+    }
+    return legacy
+  }
+  return null
+}
+
+
+/**
+ * Read a CachedToken from a Storage at a given key, returning null when
+ * absent, malformed, or past its expiry. Expired entries are removed.
+ *
+ * @return The cached token, or null.
+ */
+function readTokenAtKey(store: Storage, key: string): CachedToken | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_TOKEN_PREFIX + connectionId)
+    const raw = store.getItem(key)
     if (!raw) {
       return null
     }
     const cached = JSON.parse(raw) as CachedToken
     if (Date.now() >= cached.expiresAt) {
-      sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+      store.removeItem(key)
       return null
     }
     return cached
@@ -70,10 +127,15 @@ function loadTokenFromSession(connectionId: string): CachedToken | null {
 }
 
 
-/** Remove token from sessionStorage on disconnect. */
-function clearTokenFromSession(connectionId: string): void {
+/** Remove token from both stores on disconnect. */
+function clearTokenFromStorage(connectionId: string): void {
   try {
-    sessionStorage.removeItem(SESSION_TOKEN_PREFIX + connectionId)
+    localStorage.removeItem(STORAGE_TOKEN_PREFIX + connectionId)
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem(LEGACY_SESSION_TOKEN_PREFIX + connectionId)
   } catch {
     // ignore
   }
@@ -206,7 +268,7 @@ export const googleDriveProvider: ConnectionProvider = {
 
           const cached: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
           tokenCache.set(connectionId, cached)
-          saveTokenToSession(connectionId, cached)
+          saveTokenToStorage(connectionId, cached)
 
           // Fetch user email with a 5s timeout — don't let it block connection
           const emailPromise = Promise.race([
@@ -262,24 +324,45 @@ export const googleDriveProvider: ConnectionProvider = {
       }
       tokenCache.delete(connectionId)
     }
-    clearTokenFromSession(connectionId)
+    clearTokenFromStorage(connectionId)
   },
 
-  checkStatus(connection: Connection): Promise<ConnectionStatus> {
-    const inMemory = tokenCache.get(connection.id)
-    if (inMemory) {
-      if (Date.now() >= inMemory.expiresAt) {
-        return Promise.resolve('expired')
+  async checkStatus(connection: Connection): Promise<ConnectionStatus> {
+    let cached = tokenCache.get(connection.id) ?? null
+    if (!cached) {
+      const fromSession = loadTokenFromStorage(connection.id)
+      if (fromSession) {
+        tokenCache.set(connection.id, fromSession)
+        cached = fromSession
       }
-      return Promise.resolve('connected')
     }
-    // Fall back to sessionStorage (e.g. after page reload)
-    const fromSession = loadTokenFromSession(connection.id)
-    if (fromSession) {
-      tokenCache.set(connection.id, fromSession)
-      return Promise.resolve('connected')
+    if (!cached) {
+      return 'disconnected'
     }
-    return Promise.resolve('disconnected')
+    if (Date.now() >= cached.expiresAt) {
+      return 'expired'
+    }
+
+    // Local cache says the token is still valid — verify with Google. A token
+    // can be revoked server-side (consent removed, app un-authorized, password
+    // reset) before our cached `expiresAt`. Without this check we hand a doomed
+    // token to the picker and watch it 401 with no client-side signal.
+    try {
+      const url = `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cached.token)}`
+      const res = await fetch(url)
+      if (res.ok) {
+        return 'connected'
+      }
+      // 400 = invalid_token (revoked, malformed, expired server-side)
+      if (res.status === HTTP_BAD_REQUEST || res.status === HTTP_UNAUTHORIZED) {
+        return 'expired'
+      }
+      // Other statuses are likely transient (5xx) — don't poison the connection
+      return 'connected'
+    } catch {
+      // Network error / offline — fall back to local cache verdict
+      return 'connected'
+    }
   },
 
   async getAccessToken(connection: Connection): Promise<string> {
@@ -289,7 +372,7 @@ export const googleDriveProvider: ConnectionProvider = {
     }
 
     // Try sessionStorage before triggering a new OAuth popup (survives same-tab reloads)
-    const fromSession = loadTokenFromSession(connection.id)
+    const fromSession = loadTokenFromStorage(connection.id)
     if (fromSession) {
       tokenCache.set(connection.id, fromSession)
       return fromSession.token
@@ -336,7 +419,7 @@ export const googleDriveProvider: ConnectionProvider = {
           const expiresInMs = (response.expires_in || DEFAULT_TOKEN_EXPIRES_S) * MS_PER_S
           const refreshed: CachedToken = {token: response.access_token, expiresAt: Date.now() + expiresInMs}
           tokenCache.set(connection.id, refreshed)
-          saveTokenToSession(connection.id, refreshed)
+          saveTokenToStorage(connection.id, refreshed)
 
           if (!settled) {
             settled = true
@@ -344,19 +427,73 @@ export const googleDriveProvider: ConnectionProvider = {
           }
         },
         error_callback: (error) => {
-          if (error.type === 'popup_closed') {
+          if (settled) {
             return
           }
-          if (!settled) {
-            settled = true
-            reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
+          settled = true
+          // popup_closed and popup_failed_to_open both leave the user in a
+          // recoverable state: the connection metadata is still valid, but
+          // we couldn't prompt for fresh consent. Surface a typed error so
+          // callers can route to a Reconnect affordance bound to a real user
+          // gesture instead of throwing a generic "OAuth refresh error" that
+          // would render as a useless "Failed to parse model" overlay.
+          if (error.type === 'popup_closed' || error.type === 'popup_failed_to_open') {
+            reject(new NeedsReconnectError(connection, error.type, error.message))
+            return
           }
+          reject(new Error(`Google OAuth refresh error: ${error.type} - ${error.message}`))
         },
       })
 
       // Use empty string prompt to try silent refresh; will show popup if consent needed
       client.requestAccessToken({prompt: '', state: oauthState})
     })
+  },
+
+  // -- Sharing capability --
+  // These delegate to GoogleDriveSharing.ts so the transport is testable
+  // without exercising OAuth. getAccessToken() is the only auth seam; if a
+  // token is stale and silent-refresh fails it surfaces NeedsReconnectError
+  // here, just as in the existing browse path.
+
+  async listGrants(connection: Connection, resource: ResourceRef): Promise<Grant[]> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveListGrants(connection, resource, token)
+  },
+
+  async shareWith(
+    connection: Connection,
+    resource: ResourceRef,
+    grant: GrantRequest,
+  ): Promise<Grant> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveShareWith(connection, resource, grant, token)
+  },
+
+  async revokeGrant(
+    connection: Connection,
+    resource: ResourceRef,
+    grantId: string,
+  ): Promise<void> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveRevokeGrant(connection, resource, grantId, token)
+  },
+
+  async getVisibility(
+    connection: Connection,
+    resource: ResourceRef,
+  ): Promise<Visibility | null> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveGetVisibility(connection, resource, token)
+  },
+
+  async setVisibility(
+    connection: Connection,
+    resource: ResourceRef,
+    visibility: Visibility,
+  ): Promise<void> {
+    const token = await googleDriveProvider.getAccessToken(connection)
+    return driveSetVisibility(connection, resource, visibility, token)
   },
 }
 

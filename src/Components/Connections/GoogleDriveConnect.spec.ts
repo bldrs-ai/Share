@@ -1,6 +1,11 @@
 import path from 'path'
 import {expect, Page, test} from '@playwright/test'
-import {homepageSetup, returningUserVisitsHomepageWaitForModel} from '../../tests/e2e/utils'
+import {
+  auth0Login,
+  homepageSetup,
+  returningUserVisitsHomepageWaitForModel,
+  setupAuthenticationIntercepts,
+} from '../../tests/e2e/utils'
 
 
 declare global {
@@ -35,14 +40,25 @@ async function openSourcesTab(page: Page) {
  * loaded via addInitScript so no real popups or network calls to Google occur.
  * Google Drive REST API calls are handled by the MSW default googleapis handler
  * (returns empty JSON), which is sufficient for testing navigation behaviour.
+ *
+ * Identity-decoupling PR2 added an Auth0 primary-auth gate to
+ * ConnectProviderButton: it stays disabled until the user signs in. We
+ * satisfy the gate at the top-level beforeEach via auth0Login so every
+ * test starts from an authenticated MockAuth0Context state, mirroring
+ * the runtime expectation that connecting a Source presupposes a primary
+ * identity. The "shows empty state" smoke test below still verifies the
+ * button is visible (the gate doesn't hide it, just disables it).
  */
 describe('Google Drive connection', () => {
   beforeEach(async ({page}) => {
     // Inject fake Google APIs before any page script runs
     await page.addInitScript({path: GOOGLE_APIS_FAKE_PATH})
     await homepageSetup(page)
+    await setupAuthenticationIntercepts(page, {connection: 'google'})
     await returningUserVisitsHomepageWaitForModel(page)
     await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
+    // Satisfy the Auth0 primary-auth gate on ConnectProviderButton.
+    await auth0Login(page, 'google')
     await openSourcesTab(page)
   })
 

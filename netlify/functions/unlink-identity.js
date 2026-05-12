@@ -16,8 +16,8 @@
  * 4. We DELETE /api/v2/users/{primaryUserId}/identities/{secondaryProvider}/{secondaryUserId}
  */
 
-const axios = require('axios')
-const Sentry = require('@sentry/serverless')
+import axios from 'axios'
+import * as Sentry from '@sentry/serverless'
 
 
 Sentry.AWSLambda.init({
@@ -73,7 +73,7 @@ async function getUserIdFromToken(userToken) {
 /**
  * Netlify handler
  */
-exports.handler = Sentry.AWSLambda.wrapHandler(async (event) => {
+export const handler = Sentry.AWSLambda.wrapHandler(async (event) => {
   if (event.httpMethod !== 'POST') {
     return {statusCode: 405, body: 'Method Not Allowed'}
   }

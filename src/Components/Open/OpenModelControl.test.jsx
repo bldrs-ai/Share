@@ -48,7 +48,7 @@ describe('OpenModelControl', () => {
     expect(getOrganizations).not.toHaveBeenCalled()
   })
 
-  it('Fetches repo info on initial render when isOpenModelVisible in zustand', async () => {
+  it('Does not fetch repo info just because Open dialog is visible (Google tab is default)', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     getOrganizations.mockResolvedValue({})
     const {result} = renderHook(() => useStore((state) => state))
@@ -60,6 +60,26 @@ describe('OpenModelControl', () => {
     // eslint-disable-next-line require-await
     await act(async () => {
       render(<OpenModelControlFixture/>)
+    })
+    // GitHub orgs are only fetched once GitHubFileBrowser mounts (user clicks
+    // Browse on the GitHub tab), not on dialog open.
+    expect(getOrganizations).not.toHaveBeenCalled()
+  })
+
+  it('Fetches repo info when GitHubFileBrowser is opened from the GitHub tab', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    getOrganizations.mockResolvedValue({})
+    const {result} = renderHook(() => useStore((state) => state))
+    // eslint-disable-next-line require-await
+    await act(async () => {
+      result.current.setAccessToken('foo')
+      result.current.setIsOpenModelVisible(true)
+    })
+    const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
+    fireEvent.click(getByText(LABEL_GITHUB))
+    // eslint-disable-next-line require-await
+    await act(async () => {
+      fireEvent.click(getByTestId('button-browse-github'))
     })
     expect(getOrganizations).toHaveBeenCalled()
   })

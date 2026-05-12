@@ -1,3 +1,22 @@
+# Skip the deploy preview when the only changes are documentation. The script
+# exits 0 to skip and 1 to build; logic and edge cases are documented inline.
+[build]
+  ignore = "bash tools/netlify/ignore-build.sh"
+
+# Local development. `npx netlify dev` launches `yarn serve-prod` (the
+# esbuild static-file server on :8080) and serves netlify/functions/* on
+# the same origin at :8888 so /.netlify/functions/* reaches them. Without
+# this block, functions only run on deploy previews — the esbuild server
+# 404s on the function path. Used by the GitHub OAuth broker (PR1 of
+# identity-decoupling) and any future function-backed feature.
+[dev]
+  command = "yarn serve-prod"
+  targetPort = 8080
+  port = 8888
+  publish = "docs"
+  functions = "netlify/functions"
+  framework = "#custom"
+
 # COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
 # tokens via postMessage without nulling window.opener in the cross-origin
 # popup. COEP is intentionally omitted (docs.google.com/picker sends

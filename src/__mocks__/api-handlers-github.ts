@@ -19,7 +19,6 @@ import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositorie
 interface Defines {
   GITHUB_BASE_URL: string
   GITHUB_BASE_URL_UNAUTHENTICATED: string
-  RAW_GIT_PROXY_URL?: string
 }
 
 let commentDeleted = false
@@ -91,7 +90,7 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
           const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
-            `${defines.RAW_GIT_PROXY_URL || process.env.RAW_GIT_PROXY_URL}/${org}/${repo}/${ref}/${path}`
+            `https://raw.githubusercontent.com/${org}/${repo}/${ref}/${path}`
 
           return new Response(
             JSON.stringify({
@@ -111,6 +110,33 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
                 git: 'https://api.github.com/repos/cypresstester/test-repo/git/blobs/1fc13089c8851fd9c5d39cda54788823a8606564',
                 html: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
               },
+            }),
+            {
+              status: HTTP_OK,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        }
+
+        if (org === 'bldrs-ai' && repo === 'test-models') {
+          // E2e fixtures live under src/tests/fixtures/github/, copied
+          // into docs/__test_fixtures__/ by `yarn test-flows-build` and
+          // served by the playwright dev server. Returning a localhost
+          // download_url here keeps the whole flow on one host with no
+          // service-worker / page.route ordering games.
+          const decodedPath = decodeURIComponent(path)
+          return new Response(
+            JSON.stringify({
+              name: decodedPath.split('/').pop(),
+              path: decodedPath,
+              sha: 'e2etestsha000000000000000000000000000000',
+              size: 0,
+              url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/repos/${org}/${repo}/contents/${decodedPath}?ref=${ref}`,
+              html_url: `https://github.com/${org}/${repo}/blob/${ref}/${decodedPath}`,
+              git_url: `${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}` +
+                `/repos/${org}/${repo}/git/blobs/e2etestsha000000000000000000000000000000`,
+              download_url: `/__test_fixtures__/${org}/${repo}/${ref}/${decodedPath}`,
+              type: 'file',
             }),
             {
               status: HTTP_OK,

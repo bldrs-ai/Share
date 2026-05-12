@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef} from 'react'
+import {useEffect, useRef} from 'react'
 import {loadPickerScript} from '../../connections/google-drive/loadGisScript'
 
 
@@ -34,6 +34,14 @@ export default function GoogleDrivePickerDialog({
   onCancel,
 }) {
   const pickerRef = useRef(null)
+  // The picker is constructed once per (isOpen, accessToken, mode) toggle and
+  // reads `onSelect`/`onCancel` through this ref. Without this indirection,
+  // every parent re-render that gives us a new callback identity would force
+  // the build effect to dispose and rebuild the picker — and a click on the
+  // picker's Select button mid-rebuild lands on a disposed iframe whose
+  // postMessage channel is gone, leaving the user stuck with no callback.
+  const callbacksRef = useRef({onSelect, onCancel})
+  callbacksRef.current = {onSelect, onCancel}
 
   // Inject CSS to lift Google Picker's overlay above the MUI Dialog.
   useEffect(() => {
@@ -54,32 +62,32 @@ export default function GoogleDrivePickerDialog({
     return () => style.remove()
   }, [isOpen])
 
-  const handlePickerCallback = useCallback((data) => {
-    const action = data[google.picker.Response.ACTION]
-
-    if (action === google.picker.Action.PICKED) {
-      const docs = data[google.picker.Response.DOCUMENTS]
-      if (docs && docs.length > 0) {
-        onSelect(docs.map((doc) => ({
-          id: doc[google.picker.Document.ID],
-          name: doc[google.picker.Document.NAME],
-          url: doc[google.picker.Document.URL],
-          mimeType: doc[google.picker.Document.MIME_TYPE],
-          parentId: doc[google.picker.Document.PARENT_ID],
-          lastModifiedUtc: doc[google.picker.Document.LAST_EDITED_UTC] || null,
-        })))
-      }
-    } else if (action === google.picker.Action.CANCEL) {
-      onCancel()
-    }
-  }, [onSelect, onCancel])
-
   useEffect(() => {
     if (!isOpen || !accessToken) {
       return
     }
 
     let disposed = false
+
+    const handlePickerCallback = (data) => {
+      const action = data[google.picker.Response.ACTION]
+
+      if (action === google.picker.Action.PICKED) {
+        const docs = data[google.picker.Response.DOCUMENTS]
+        if (docs && docs.length > 0) {
+          callbacksRef.current.onSelect(docs.map((doc) => ({
+            id: doc[google.picker.Document.ID],
+            name: doc[google.picker.Document.NAME],
+            url: doc[google.picker.Document.URL],
+            mimeType: doc[google.picker.Document.MIME_TYPE],
+            parentId: doc[google.picker.Document.PARENT_ID],
+            lastModifiedUtc: doc[google.picker.Document.LAST_EDITED_UTC] || null,
+          })))
+        }
+      } else if (action === google.picker.Action.CANCEL) {
+        callbacksRef.current.onCancel()
+      }
+    }
 
     const buildPicker = async () => {
       await loadPickerScript()
@@ -133,7 +141,7 @@ export default function GoogleDrivePickerDialog({
         pickerRef.current = null
       }
     }
-  }, [isOpen, accessToken, mode, handlePickerCallback])
+  }, [isOpen, accessToken, mode])
 
   // This component only triggers the Google Picker overlay; it renders nothing
   return null

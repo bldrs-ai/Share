@@ -5,7 +5,7 @@ export default {
   verbose: false,
   testEnvironment: 'jest-fixed-jsdom',
   rootDir: '../../',
-  roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
+  roots: ['<rootDir>/src', '<rootDir>/__mocks__', '<rootDir>/netlify'],
   // Default jest timeout is 5s. Under default parallel worker load (~N-1 cores),
   // heavy React Testing Library mount tests (CadView, OpenModelControl, Notes,
   // TabbedPanels, useVersions) intermittently blow past 5s and produce flakes

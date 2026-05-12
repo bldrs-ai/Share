@@ -20,17 +20,6 @@ export default {
 
   NODE_ENV: 'production',
 
-  /**
-   * RAW_GIT_PROXY_URL_NEW uses the /model endpoint for gitredir. This
-   * endpoint is passed a cached etag, and returns either a 304 (cached),
-   * or the GHUC download URL with the etag returned from GHUC server. If
-   * there is a new etag it is cached.
-   */
-  RAW_GIT_PROXY_URL_NEW: 'https://rawgit.bldrs.dev/model',
-  // This is the fallback if OPFS is not available, original gitredir
-  // functionality.
-  RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
-
   // Monitoring
   SENTRY_DSN: null,
   SENTRY_ENVIRONMENT: null,
@@ -44,6 +33,11 @@ export default {
   GOOGLE_API_KEY: null,
   GOOGLE_OAUTH2_CLIENT_ID: null,
   GOOGLE_APP_ID: null,
+
+  // GitHub OAuth App (browser-side public client id; secret stays in
+  // the Netlify Functions). See netlify/functions/gh-oauth-{exchange,
+  // refresh}.js and src/connections/github/GitHubProvider.ts.
+  GH_OAUTH_CLIENT_ID: null,
 
   // OpenRouter
   OPENROUTER_BASE_URL: 'https://openrouter.ai',
