@@ -73,15 +73,20 @@ export function capabilitiesForFormat(format) {
     }
   }
   if (UNSTRUCTURED_MESH.has(format)) {
-    return {
-      expressIdPicking: false,
-      spatialStructure: false,
-      typedProperties: false,
-      ifcSubsets: false,
-      useIfcClipper: false,
-    }
+    // Known mesh format with no IFC-specific features today. When GLB
+    // grows `spatialStructure: true` via Conway-in-browser (§8.2), this
+    // branch is where the additional capabilities get flipped.
+    return allOffCaps()
   }
-  // Unknown format: conservative defaults — every IFC-specific feature off.
+  // Unknown format — same shape as UNSTRUCTURED_MESH but kept as a
+  // separate branch so the intent is greppable: "we don't know enough
+  // about this format yet" vs "this format is intentionally mesh-only."
+  return allOffCaps()
+}
+
+
+/** @return {ShareModelCapabilities} fresh object every call (no shared refs). */
+function allOffCaps() {
   return {
     expressIdPicking: false,
     spatialStructure: false,
@@ -121,8 +126,14 @@ export function decorateShareModel(model, format) {
  *
  * This helper preserves that exact format-narrow semantic (GLB/GLTF only,
  * not STL/OBJ/etc.) so the migration off `viewer.IFC.type` is a literal
- * rewrite. Once the unified Clipper from §3c of the design lands, this
- * helper goes away.
+ * rewrite.
+ *
+ * Asymmetry note: a model decorated with `useIfcClipper: false` will not
+ * necessarily route to GlbClipper here — STL/OBJ/PDB/XYZ/FBX/BLD all sit
+ * in the unhandled middle today. That mirrors pre-PR behavior (those
+ * formats fall through both branches in `removePlanes`). The unified
+ * Clipper from §3c of the design erases both this helper and the
+ * asymmetry.
  *
  * @param {object|null|undefined} model
  * @return {boolean}

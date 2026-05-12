@@ -69,6 +69,13 @@ describe('viewer/three/ThreeContext', () => {
     expect(ctx.getCameraControls()).toBe(legacy.ifcCamera.cameraControls)
   })
 
+  it('returns null when the camera subsystem has been torn down', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    legacy.ifcCamera = undefined
+    expect(ctx.getCameraControls()).toBeNull()
+  })
+
   it('delegates fitModelToFrame to the current nav mode', () => {
     const legacy = makeFakeLegacyContext()
     const ctx = new ThreeContext(legacy)
@@ -93,19 +100,17 @@ describe('viewer/three/ThreeContext', () => {
     expect(legacy.renderer.update).toBe(fn)
   })
 
-  it('exposes the legacy escape hatches', () => {
+  it('exposes the legacy renderer wrapper as a narrow escape hatch', () => {
     const legacy = makeFakeLegacyContext()
     const ctx = new ThreeContext(legacy)
-    expect(ctx.getLegacyContext()).toBe(legacy)
     expect(ctx.getLegacyRendererWrapper()).toBe(legacy.renderer)
   })
 
-  it('dispose() forwards to the legacy context and drops its reference', () => {
+  it('dispose() forwards to the legacy context', () => {
     const legacy = makeFakeLegacyContext()
     const ctx = new ThreeContext(legacy)
     ctx.dispose()
     expect(legacy.dispose).toHaveBeenCalled()
-    expect(ctx.getLegacyContext()).toBeNull()
   })
 
   it('dispose() is safe to call twice', () => {

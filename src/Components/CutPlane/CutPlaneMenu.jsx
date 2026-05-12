@@ -269,10 +269,11 @@ export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
  * @param {object} viewer bounding box
  */
 export function removePlanes(viewer) {
-  // `viewer.context.items.ifcModels[0]` is the currently-loaded model — set
-  // by Loader.js's `addIfcModel`. Read its `format` (set by the ShareModel
-  // decorator) instead of the legacy `viewer.IFC.type`.
-  const model = viewer?.context?.items?.ifcModels?.[0]
+  // The currently-loaded model is the first entry in the ThreeContext's
+  // loaded-model registry (set by Loader.js's `addIfcModel`). Read its
+  // `format` (set by the ShareModel decorator) instead of the legacy
+  // `viewer.IFC.type`.
+  const model = viewer?.context?.getLoadedModels?.()?.[0]
   const isGlbModel = modelHasUnstructuredMeshClipper(model)
 
   if (isGlbModel && viewer.glbClipper) {

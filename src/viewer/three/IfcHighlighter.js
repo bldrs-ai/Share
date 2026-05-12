@@ -60,27 +60,25 @@ export default class IfcHighlighter {
 
 
 /**
- * Returns a new update function that uses
- * the effectComposer rendering pipeline
+ * Returns the per-frame render function used to drive the effect-composer
+ * pipeline in place of the fork's default render path.
+ *
+ * Closes over the legacy renderer wrapper so the `blocked` flag (set by the
+ * fork while taking an offscreen screenshot, see
+ * `IfcRenderer.newScreenshot`) is consulted on every frame without relying
+ * on the function's `this`. Keeping the closure private here means
+ * `ThreeContext.setRenderUpdate` has no implicit binding contract.
  *
  * @param {ThreeContext} context
  * @param {EffectComposer} composer
  * @return {Function} the new render function
  */
 function newUpdateFunction(context, composer) {
-  /**
-   * Overrides the default update function in the context renderer
-   *
-   * @param {number} _delta
-   */
-  function newUpdateFn() {
-    // eslint-disable-next-line no-invalid-this
-    if (this.blocked || !context) {
+  const rendererWrapper = context.getLegacyRendererWrapper()
+  return function newUpdateFn() {
+    if (rendererWrapper.blocked || !context) {
       return
     }
     composer.render()
   }
-  // Bind to the underlying fork IfcRenderer so the `this.blocked` check
-  // continues to consult the renderer's flag.
-  return newUpdateFn.bind(context.getLegacyRendererWrapper())
 }

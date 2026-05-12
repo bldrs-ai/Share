@@ -79,6 +79,11 @@ export default class ThreeContext {
    * Pointer position in normalized device coordinates ([-1, 1] in both
    * axes), kept up to date by the legacy context's mousemove listener.
    *
+   * Returns the same `Vector2` instance every call — do not mutate it,
+   * and do not retain a reference across frames (its values change in
+   * place on every pointer event). Read-only consumers like
+   * `Raycaster.setFromCamera` are the intended use.
+   *
    * @return {Vector2}
    */
   getNormalizedMousePosition() {
@@ -93,10 +98,15 @@ export default class ThreeContext {
    * The npm `camera-controls` instance driving orbit / pan / zoom for the
    * scene. Use this rather than `viewer.IFC.context.ifcCamera.cameraControls`.
    *
-   * @return {object}
+   * Returns `null` if the camera subsystem is missing — primarily during
+   * viewer teardown, where pointer events can still fire after the fork's
+   * `ifcCamera` field has been cleared. Callers should treat `null` as
+   * "controls not currently available" rather than guarding on it.
+   *
+   * @return {object|null}
    */
   getCameraControls() {
-    return this._legacy.ifcCamera.cameraControls
+    return this._legacy?.ifcCamera?.cameraControls ?? null
   }
 
 
@@ -143,9 +153,11 @@ export default class ThreeContext {
 
   /**
    * Raycast the loaded IFC-like models using the current pointer.
-   * Returns the closest intersection or `null`. Passthrough to the fork's
-   * internal raycaster today; will be replaced with the in-repo Picker
-   * service when ThreeContext takes over input ownership (§3a, Phase 5).
+   * Returns the closest three.js `Intersection`
+   * (`{object, distance, point, face, faceIndex, ...}`), or `null`.
+   * Passthrough to the fork's internal raycaster today; will be replaced
+   * with the in-repo Picker service when ThreeContext takes over input
+   * ownership (§3a, Phase 5).
    *
    * @return {object|null}
    */
@@ -156,7 +168,9 @@ export default class ThreeContext {
 
   /**
    * Raycast against an arbitrary list of objects with the current pointer.
-   * Same passthrough caveat as `castRayIfc()`.
+   * Returns the array of three.js `Intersection` records (sorted
+   * nearest-first), or an empty array if nothing was hit. Same passthrough
+   * caveat as `castRayIfc()`.
    *
    * @param {Array<Object3D>} items
    * @return {Array<object>}
@@ -173,6 +187,10 @@ export default class ThreeContext {
    * Replace the per-frame update function used by the renderer. Used by
    * `Highlighter` to substitute an `EffectComposer.render()` path that
    * runs the outline-effect pipeline.
+   *
+   * The function is invoked once per frame with `(delta)` and is not
+   * bound to any particular `this` — callers should close over whatever
+   * state they need rather than reading off the invocation receiver.
    *
    * @param {Function} fn invoked once per frame with `(delta)`.
    */
@@ -194,20 +212,6 @@ export default class ThreeContext {
    */
   getLegacyRendererWrapper() {
     return this._legacy.renderer
-  }
-
-
-  /**
-   * The underlying IfcContext. Provided only so that the in-repo viewer
-   * modules (Picker, Isolator, etc.) can keep their existing
-   * `constructor(context)` signatures while the fork is still in place;
-   * they read documented methods through `this.context.X`, which resolve
-   * through ThreeContext.
-   *
-   * @return {object}
-   */
-  getLegacyContext() {
-    return this._legacy
   }
 
 
