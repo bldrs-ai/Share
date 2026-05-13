@@ -1,12 +1,12 @@
 import axios from 'axios'
 import {Box3, BufferAttribute, Group, Matrix4, Mesh, Object3D, Vector3} from 'three'
-import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
-import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader'
-import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
-import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader'
-import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader'
-import {STLLoader} from 'three/examples/jsm/loaders/STLLoader'
-import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader'
+import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
+import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
+import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
+import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
+import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import * as Filetype from '../Filetype'
 import {
   doesFileExistInOPFS,
@@ -716,9 +716,11 @@ async function findLoader(pathname, viewer) {
  * on `gltf.scene.userData.bldrsPayload`.
  *
  * DRACO decoder wiring is gated on the `glbDraco` feature flag (URL
- * `?feature=glbDraco` or set via FeatureFlags.js) because Three.js 0.135 has
- * a known DRACO regression; once the three.js upgrade lands, this can become
- * unconditional.
+ * `?feature=glbDraco` or set via FeatureFlags.js). The original Three 0.135
+ * regression is resolved by the r184 upgrade (PR #1514); the flag is kept
+ * for now because our cache writer emits uncompressed GLBs, so wiring up
+ * the decoder unconditionally would only pay off when an externally
+ * DRACO-encoded asset arrives.
  *
  * @return {GLTFLoader}
  */

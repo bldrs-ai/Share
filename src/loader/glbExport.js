@@ -24,7 +24,7 @@
 // tradeoff: GLBs are bigger than what conway's aggregator could produce
 // (no de-instancing, no Draco). Acceptable for the cache MVP; revisit
 // once the BLDRS_* extension story makes a custom writer worthwhile.
-import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter'
+import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {glbCacheKey} from './glbCacheKey'
 import {packGlbChunks} from './glbContainer'

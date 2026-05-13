@@ -260,17 +260,150 @@ Tests live next to source as today.
 
 ---
 
-## 6. Three.js API drifts we'll hit (0.135 → current)
+## 6. Three.js API drifts (0.135 → 0.184) — empirical
 
-Audit of `src/` shows we don't touch any of the worst-affected APIs (`Geometry`, `sRGBEncoding`, `outputEncoding`, `physicallyCorrectLights`, `gammaFactor`). What does need attention:
+> Updated from the original "what to expect" list with the actual findings
+> of the r184 upgrade probe (branch `claude/three-r184-probe`, see also
+> `notes/three-r184-probe.md`).
 
-- **Color management defaults** changed in r152. Set `renderer.outputColorSpace = SRGBColorSpace` explicitly; verify `MeshLambertMaterial` colors look the same on Schependomlaan.
-- **Lights**: `useLegacyLights` removed in r157. Default is the new "physically correct" intensities. Our scene uses simple ambient + directional; re-tune intensities once after the bump.
-- **`BufferGeometryUtils.mergeVertices`** import path changed from `'three/examples/jsm/utils/BufferGeometryUtils'` to `'three/addons/utils/BufferGeometryUtils.js'`. Already imported in `loader/obj.js` and `loader/stl.js`.
-- **All `three/examples/jsm/loaders/*`** → `three/addons/loaders/*` (codemoddable; one find/replace).
-- **`Raycaster.intersectObjects`** signature unchanged. Fine.
-- **`@types/three`** must move to a version matching the chosen three release (e.g. `0.171.x` for three `0.171.x`).
-- **`postprocessing@7`** drops some legacy passes. `OutlineEffect`, `EffectComposer`, `EffectPass`, `RenderPass`, `BlendFunction.SCREEN` all still exist, so our usage is safe.
+The audit of `src/` was right: we don't touch any of the truly removed
+APIs (`Geometry`, `sRGBEncoding`, `outputEncoding`,
+`physicallyCorrectLights`, `gammaFactor`). What did need attention split
+into three groups.
+
+### 6a. Module-resolution drift (build-time)
+
+- **`three/examples/jsm/*` imports without `.js` extension stop resolving.**
+  Modern three's `package.json#exports` maps `./examples/jsm/*` literally
+  — no automatic `.js` extension fallback. Affected:
+  - Our `src/`: one-off codemod, append `.js` to 11 imports
+    (`Loader.js`, `obj.js`, `stl.js`, `svg.js`, `Loader.test.js`).
+  - The fork (`web-ifc-viewer`, `web-ifc-three` vendored in
+    `node_modules`): can't be patched in place; handled by an esbuild
+    `onResolve` plugin in `tools/esbuild/plugins.js` that appends `.js`
+    on any `^three/examples/jsm/[^.]+$` import.
+- **`BufferGeometryUtils.mergeBufferGeometries`** was renamed to
+  `mergeGeometries` in r155+. The fork still imports the old name.
+  Handled by an esbuild `onLoad` plugin that appends a re-export alias
+  to `BufferGeometryUtils.js`:
+  `export { mergeGeometries as mergeBufferGeometries } from './BufferGeometryUtils.js'`.
+- **`TransformControls`** no longer extends `Object3D` in r155+; the
+  gizmo is exposed via `controls.getHelper()`. The fork's
+  `IfcPlane#initializeControls` (clipping planes) does
+  `controls.children[0].children[0].add(...)` — which fails silently
+  until click-time and throws `Cannot read properties of undefined`. An
+  esbuild `onLoad` rewrite of the fork's `planes.js` patches the five
+  affected call-sites (`scene.add(controls)`, `excludedItems.add(controls)`,
+  the `.children[0].children[0]` chain, `controls.visible = state`,
+  `controls.removeFromParent()`) to call `getHelper()` when present.
+
+### 6b. Color management (visual)
+
+This is where the probe got iterative. Three independent r152+ changes
+all push appearance away from the r135 baseline, and they compound. We
+take all three off until Phase 5 — the upgrade ships a **legacy
+visual-compat path**, not the new physically-correct path. Concretely:
+
+| Change | r135 behavior | r184 default | Our compat setting |
+|---|---|---|---|
+| Auto sRGB↔linear conversion on materials / textures (r152) | off | on (`ColorManagement.enabled = true`) | **`ColorManagement.enabled = false`** at module load in `src/viewer/ShareViewer.js`, before any three object is constructed (including the fork's renderer/scene/materials inside `new IfcViewerAPI()`). |
+| Output framebuffer gamma encoding (r152) | `LinearEncoding` (no encoding) | `outputColorSpace = SRGBColorSpace` (sRGB encoding) | **`renderer.outputColorSpace = LinearSRGBColorSpace`** in `ShareViewer.constructor`, set after `super()` and before `new CustomPostProcessor()`. Postprocessing's `EffectComposer.initialize` keys off this property to tag its render target — so this setting must be in place before the composer is built. |
+| `useLegacyLights` / light-intensity units (r155 default flip, r157 removal) | legacy units (where `intensity=0.8` looked the way it did) | physically correct (1 unit = 1 lumen; same numeric value ~π× dimmer) | **Multiply the fork's hardcoded light intensities by `Math.PI`** via an esbuild `onLoad` rewrite of `web-ifc-viewer/.../scene.js` — `DirectionalLight(_, 0.8) → 0.8 * Math.PI`, `AmbientLight(_, 0.25) → 0.25 * Math.PI`. |
+
+The three settings are **mutually dependent** — having any two without
+the third over- or under-corrects:
+- `CM=true` + `outputColorSpace=SRGB` + default lights → washed-out
+  brown (the original r184 baseline). Materials get sRGB→linear→sRGB
+  round-trip, lights are π× too dim.
+- `CM=true` + `outputColorSpace=SRGB` + lights×π → overbright peach.
+  Round-trip still washes the colors, but lights are now boosted to
+  physically-correct, compounding with the output encoding.
+- `CM=false` + `outputColorSpace=Linear` + default lights → way too
+  dark. Output not gamma-encoded, lights still under-powered.
+- `CM=false` + `outputColorSpace=Linear` + lights×π → **matches r135
+  prod pixel-for-pixel.**
+
+### 6c. Deprecations (console noise)
+
+- **`THREE.Clock`** was deprecated in r183 with a one-time
+  `console.warn` on construction. The fork instantiates `new
+  Clock(true)` once. `THREE.Timer` (the recommended replacement) is not
+  a drop-in — it requires explicit per-frame `update()` and lacks
+  Clock's auto-start. Rather than rewire the fork's render loop, an
+  esbuild `onLoad` rewrite of the fork's `context.js` strips `Clock`
+  from the `three` import and inlines a tiny API-compatible class using
+  `performance.now()` for `getDelta()`. (Required for the upgrade PR
+  because production runs with zero console noise as a gate.)
+
+### 6d. Build / tooling
+
+- **`typescript`** bump from `4.9.4` → `^5.7.2`. Forced by
+  `@types/three@0.184`, which uses TS5 const-type-parameter syntax
+  (`<const TNodeType>`). Independent good-hygiene upgrade.
+- **`tsconfig.json` `skipLibCheck: true`** — the `@types/three` node
+  graph types use TS features TS<5 can't parse. Standard for modern TS
+  projects.
+- **`@types/three`** locked to the runtime version (`^0.184.1`) —
+  formerly `0.146.0`, which was already drifted ahead of runtime
+  (`0.135.0`).
+- **`postprocessing`** bump from `6.29.3` → `^6.39.1`. Required because
+  postprocessing's peer range tightened past 0.135 starting at
+  `6.30.0`; we needed to bump three to bump postprocessing in any case.
+- **`three-mesh-bvh`** via a `resolutions` field in `package.json`,
+  pinned to `^0.9.10`. Same reason: the nested `0.5.x` version inside
+  the fork is incompatible with modern three; the root override forces
+  one version across all consumers.
+
+### 6e. Where this is going — the migration to PBR / tone-mapping
+
+The compat path in §6b is a **deliberate hold**, not the destination.
+The fork's IFC pipeline and our material setup were tuned in 2022
+against three's pre-r152 conventions. To migrate forward we need:
+
+1. **Tag IFC material colors as sRGB** at parse / decoration time —
+   today the colors come out of Conway / `web-ifc-three` as plain RGB
+   triples treated as linear-space data. The new world wants
+   `material.color.colorSpace = SRGBColorSpace` (or its texture
+   equivalent for any GLB-baked materials). This is a one-pass change
+   in the decorator path that becomes possible once `IfcModelService`
+   (Phase 3) owns model construction.
+2. **Re-enable `ColorManagement.enabled = true`** (the r184 default) —
+   automatic sRGB ↔ linear conversion gives correct lighting math on
+   the now-tagged materials.
+3. **Re-enable `outputColorSpace = SRGBColorSpace`** (also the r184
+   default) — final framebuffer is correctly gamma-encoded.
+4. **Drop the lights × π rewrite** — the legacy light values were
+   tuned visually against the broken legacy path. Pick new values
+   tuned against physically-correct lighting. Likely also introduce a
+   single `MeshPhysicalMaterial`-based PBR material at this point and
+   add a single environment map for sane reflection/grounding.
+5. **Pick a tone mapper.** `renderer.toneMapping = ACESFilmicToneMapping`
+   (or `AgXToneMapping`) plus a calibrated `toneMappingExposure` will
+   give the standard "filmic" look the rest of the industry expects.
+   Pair with the env map from step 4.
+
+Steps 1–3 are mechanical once Phase 3 lands (we own the model and
+renderer). Step 4 needs an artistic pass — pick lighting values that
+make Schependomlaan & GLB models look how we want them to look in the
+new visual regime, not how they looked in r135. Step 5 is the easiest
+and most impactful: a one-line `toneMapping` setter unlocks the entire
+post-r152 visual quality. We should do this **before** PBR materials
+land, so we have a stable reference point for material tuning.
+
+A reasonable target sequence:
+
+- Phase 5 (today's Phase 5 from §4): drop fork; on the same PR, take
+  steps 2–3 (re-enable Managed mode + sRGB output) and step 5 (set
+  `toneMapping = ACESFilmicToneMapping`). Tune one set of `ambient` +
+  `directional` light values to look right against the new pipeline.
+  Snapshot the new baseline in Cosmos.
+- Phase 6+: step 1 (material colorSpace tagging) + step 4 (PBR + env
+  map). Standalone visual-quality PR; ships against the post-Phase-5
+  pipeline.
+
+The compat-path code is a single docblock in `ShareViewer.js` + the
+esbuild plugin's lights rewrite — both already commented "goes away
+with Phase 5". Removing them is a four-line diff at that point.
 
 ---
 

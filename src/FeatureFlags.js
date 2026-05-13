@@ -18,9 +18,13 @@ export const flags = [
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
   {name: 'glb', isActive: false},
-  // DRACOLoader wiring on the GLTFLoader. Off until the three.js upgrade
-  // lands (Three 0.135 has a known DRACO regression). Independent of `glb`
-  // so we can flip it on without enabling the broader serving pipeline.
+  // DRACOLoader wiring on the GLTFLoader. The original Three 0.135 DRACO
+  // regression that motivated this flag was resolved by the r184 upgrade
+  // (PR #1514). Kept off-by-default for now because our cache writer
+  // (GLTFExporter) emits uncompressed GLBs, so the decoder is dead weight
+  // unless a DRACO-compressed asset arrives from elsewhere. Flip on via
+  // `?feature=glbDraco` to verify the unblock against an externally
+  // DRACO-encoded model. Independent of `glb`.
   {name: 'glbDraco', isActive: false},
   // Verbose GLB writer/reader diagnostics (cache-key descriptor dump,
   // modelID, geometry size, chunk count). Top-level `[glb] writer/reader:`

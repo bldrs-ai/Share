@@ -13,7 +13,7 @@ import {
   ImageLoader,
   Color,
 } from 'three'
-import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
+import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader.js'
 import {assertDefined} from './assert'
 
 
