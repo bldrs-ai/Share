@@ -12,9 +12,40 @@
 | `yarn install` | ✅ pass | Peer warnings only: web-ifc-viewer wants `three@^0.135.0`, web-ifc-three wants `three@0.135`. Yarn 1.22.22 (classic) warns but installs; `resolutions` in `package.json` forces every consumer to the same `three@0.184.0`. |
 | `yarn lint` (eslint + tsc) | ✅ pass | Required `typescript@4.9.4 → ^5.7.2` because `@types/three@0.184` uses TS5 const-type-parameter syntax (`<const TNodeType>`). Added `skipLibCheck: true` to `tsconfig.json`. Two latent TS5-strictness issues in our code surfaced and fixed (`src/utils/debug.js:18`, `src/Components/Apps/IframeIntegration.spec.ts:41`). |
 | `yarn test` (jest) | ✅ 1150 pass / 5 skipped | All 6 toJSON-shape snapshots regenerated (lowercase UUIDs, new `blendColor` / `envMapIntensity` / `envMapRotation` fields, pruned default stencil/depth fields, version `4.5 → 4.7`). One test-infra fix: `setupMockBlobWithContent` was returning a Node `Buffer.buffer`-slice that fails three's r184 `instanceof ArrayBuffer` strict check under jsdom; now copies into a realm-native `ArrayBuffer`. |
-| `yarn build-prod` (esbuild) | ✅ pass | Two compatibility fixes added to `tools/esbuild/plugins.js` as `threeJsmCompat` plugin: (a) modern three's `package.json#exports` requires literal `.js` extensions on `examples/jsm/*`; the fork omits them — plugin appends `.js`. (b) `mergeBufferGeometries` was renamed to `mergeGeometries` in r155+; plugin shims the alias into the loaded module. |
+| `yarn build-prod` (esbuild) | ✅ pass | Three compatibility fixes added to `tools/esbuild/plugins.js` as `threeJsmCompat` plugin: (a) modern three's `package.json#exports` requires literal `.js` extensions on `examples/jsm/*`; the fork omits them — plugin appends `.js`. (b) `mergeBufferGeometries` was renamed to `mergeGeometries` in r155+; plugin shims the alias into the loaded module. (c) **`TransformControls` no longer extends `Object3D` in r155+ (now extends `Controls`, gizmo via `controls.getHelper()`)** — plugin rewrites four lines in `web-ifc-viewer/.../planes.js` to call `getHelper()`. Without (c), cut-planes throw at click-time (caught in browser smoke, see Issue 1 below). |
 | `yarn test-flows` (Playwright) | ⚠️ not runnable in sandbox | `Executable doesn't exist at /opt/pw-browsers/chromium_headless_shell-1181/...` — chromium binary missing from this environment. Will run in CI. |
-| Browser smoke | ⏳ deferred to user | Build artifacts are in `docs/`; serve with `yarn test-flows-serve` or `yarn serve` and exercise the headline flows (orbit, click-select, cut-plane, screenshot, DRACO GLB). |
+| Browser smoke (manual) | ✅ pass after fixes (see below) | Confirmed locally: model loads, orbit / select / cut-plane / screenshot work. Three issues surfaced and addressed below. |
+
+## Browser-smoke findings (post-build manual gate)
+
+### Issue 1 — Cut-planes throw on click
+**Symptom:** `Uncaught TypeError: Cannot read properties of undefined (reading '0')` at
+`IfcPlane#initializeControls` (`web-ifc-viewer/dist/components/display/clipping-planes/planes.js:107`).
+**Cause:** The fork was written for pre-r155 three, where `TransformControls` extended `Object3D` and exposed
+its gizmo via `controls.children`. In r155+ it extends `Controls`; the gizmo Object3D is returned by
+`controls.getHelper()`. The fork's four touch-points (`scene.add(controls)`, `excludedItems.add(controls)`,
+`controls.children[0].children[0].add(...)`, `this.controls.visible = state`, `this.controls.removeFromParent()`)
+all silently break.
+**Fix:** Extended the `threeJsmCompat` esbuild plugin with an `onLoad` hook on `planes.js` that rewrites
+those five lines to call `getHelper()` (with a feature-detect fallback). No build, install, or test gate
+catches this — only click-time runtime.
+
+### Issue 2 — Colors desaturated
+**Symptom:** Schependomlaan-style models render with washed-out brown roof / dim green grass instead of
+saturated orange-red / vibrant green (compared before/after).
+**Cause:** three r152 changed the default `WebGLRenderer.outputColorSpace` from `SRGBColorSpace` to
+`LinearSRGBColorSpace`. Materials baked with sRGB-space colors (IFC default) now render in linear space and
+look darker / less saturated.
+**Fix:** `ShareViewer.constructor` now sets `renderer.outputColorSpace = SRGBColorSpace` explicitly (guarded
+for the test mock's undefined `getRenderer()`). Restores the r135 baseline visual.
+
+### Issue 3 — `THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.`
+**Cause:** The fork's `IfcContext` constructs `new Clock(true)` at line 51 of
+`web-ifc-viewer/dist/components/context/context.js`. r183 added a one-time `console.warn` on `Clock`
+construction.
+**Status:** **Not fixed.** Cosmetic console noise, no functional impact. A swap to `Timer` is non-trivial:
+`Timer` requires explicit `update()` calls per frame and lacks `Clock`'s auto-start semantics. The warning
+disappears when the fork goes (Phase 3+5).
 
 ## What broke and what fixed it
 

@@ -82,6 +82,32 @@ export default function makePlugins(root, buildDir) {
         const shim = '\nexport { mergeGeometries as mergeBufferGeometries } from \'./BufferGeometryUtils.js\'\n'
         return {contents: original + shim, loader: 'js', resolveDir: path.dirname(args.path)}
       })
+
+      // The fork's `IfcPlane` (display/clipping-planes/planes.js) treats
+      // the `TransformControls` instance itself as an Object3D — it does
+      // `scene.add(controls)` and reaches into `controls.children[0]...`.
+      // In three r155+ TransformControls extends `Controls` (not
+      // Object3D); the gizmo is exposed via `controls.getHelper()`. The
+      // fork was written for the pre-r155 shape, so we rewrite the four
+      // affected lines on load. Without this, clicking any section plane
+      // throws `Cannot read properties of undefined (reading '0')` at
+      // planes.js#initializeControls. Goes away with §3c unified Clipper.
+      build.onLoad({filter: /web-ifc-viewer[/\\]dist[/\\]components[/\\]display[/\\]clipping-planes[/\\]planes\.js$/}, async (args) => {
+        let src = await fs.readFile(args.path, 'utf8')
+        const helperExpr = '(controls.getHelper ? controls.getHelper() : controls)'
+        const thisHelperExpr = '(this.controls.getHelper ? this.controls.getHelper() : this.controls)'
+        src = src
+          .replace(/scene\.add\(controls\);/, `scene.add(${helperExpr});`)
+          .replace(
+            /this\.context\.renderer\.postProduction\.excludedItems\.add\(controls\);/,
+            `this.context.renderer.postProduction.excludedItems.add(${helperExpr});`)
+          .replace(
+            /controls\.children\[0\]\.children\[0\]\.add\(this\.arrowBoundingBox\);/,
+            `${helperExpr}.children[0].children[0].add(this.arrowBoundingBox);`)
+          .replace(/this\.controls\.visible = state;/, `${thisHelperExpr}.visible = state;`)
+          .replace(/this\.controls\.removeFromParent\(\);/, `${thisHelperExpr}.removeFromParent();`)
+        return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
+      })
     },
   }
 

@@ -1,4 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import {SRGBColorSpace} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import IfcHighlighter from './three/IfcHighlighter'
@@ -44,6 +45,15 @@ export class ShareViewer extends IfcViewerAPI {
       this.context = new ThreeContext(this.context)
     }
     const renderer = this.context.getRenderer()
+    // Three r152+ changed the default `outputColorSpace` from
+    // SRGBColorSpace to LinearSRGBColorSpace, which makes materials
+    // baked at sRGB (the typical IFC export) render darker / less
+    // saturated. Restore the legacy default so the Schependomlaan
+    // / .ifc baseline looks identical on the upgrade. Design doc §6.
+    // Guard for tests where the mock's getRenderer() returns undefined.
+    if (renderer) {
+      renderer.outputColorSpace = SRGBColorSpace
+    }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
