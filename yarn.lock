@@ -6051,7 +6051,7 @@
   dependencies:
     "@types/jest" "*"
 
-"@types/three@^0.184.1":
+"@types/three@0.184.1":
   version "0.184.1"
   resolved "https://registry.yarnpkg.com/@types/three/-/three-0.184.1.tgz#f30e83548c6a653908f4abdc4ce7d3834cd21234"
   integrity sha512-6q4VdiqVsrTRqmk62/BnlcAvIrnDM0zf2ZDVKI5kZiniWrSaOHaQzmbp+BNzoggc/8tgW412pL//wZIxu2PPTA==
@@ -15278,7 +15278,7 @@ postgres-interval@^1.1.0:
   dependencies:
     xtend "^4.0.0"
 
-postprocessing@^6.39.1:
+postprocessing@6.39.1:
   version "6.39.1"
   resolved "https://registry.yarnpkg.com/postprocessing/-/postprocessing-6.39.1.tgz#e8a7b961cae4ca20dfa3833f316a98e3cb5d2cb3"
   integrity sha512-R2dG2zy+BAx3USl5EHw+PvnrlbT5PKnZVp3se0HCR0pWH8WQdh742yNG4YWOsq6c0bFpffk0Gd2RqPeoP/wKng==
@@ -17445,12 +17445,12 @@ thread-stream@^4.0.0:
   dependencies:
     real-require "^0.2.0"
 
-three-mesh-bvh@^0.5.11, three-mesh-bvh@^0.9.10:
+three-mesh-bvh@0.9.10, three-mesh-bvh@^0.5.11:
   version "0.9.10"
   resolved "https://registry.yarnpkg.com/three-mesh-bvh/-/three-mesh-bvh-0.9.10.tgz#6310327967f3e4b3671366ea940bef1f1758a6ad"
   integrity sha512-UOlTgPIeqUURcwaG8knxvBaruwZlC4X3/WSHEFO7rYvMVv/YNUrkfFEszvfj36pXV88dCHoHNnIp0PifkirnTQ==
 
-three@^0.173.0, three@^0.184.0:
+three@0.184.0, three@^0.173.0:
   version "0.184.0"
   resolved "https://registry.yarnpkg.com/three/-/three-0.184.0.tgz#5bca0a3851eea5345e4c205567b40dfa49b791b5"
   integrity sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==
@@ -17775,7 +17775,12 @@ typescript@5.6.2:
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.6.2.tgz#d1de67b6bef77c41823f822df8f0b3bcff60a5a0"
   integrity sha512-NW8ByodCSNCwZeghjN3o+JX5OFH0Ojg6sadjEKY4huZ52TqbJTJnDo5+Tw98lSy63NZvi4n+ez5m2u5d4PkZyw==
 
-typescript@^5.0.0, typescript@^5.7.2, typescript@^5.9.3:
+typescript@5.7.2:
+  version "5.7.2"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.7.2.tgz#3169cf8c4c8a828cde53ba9ecb3d2b1d5dd67be6"
+  integrity sha512-i5t66RHxDvVN40HfDd1PsEThGNnlMCMT3jMUuoh9/0TaqWevNontacunWyN02LA9/fIbEWlcHZcgTKb9QoaLfg==
+
+typescript@^5.0.0, typescript@^5.9.3:
   version "5.9.3"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.3.tgz#5b4f59e15310ab17a216f5d6cf53ee476ede670f"
   integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
