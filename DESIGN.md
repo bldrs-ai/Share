@@ -132,9 +132,20 @@ context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
   render closure has no perf code; `window.perf` is not defined; no DOM
   or sampling state is created. Zero per-frame cost.
 - **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
-  `monitor.begin()` / `monitor.end()`. A fixed-position panel mounts at
-  the top-left of `document.body` and `window.perf` is installed for
+  `monitor.begin()` / `monitor.end()`. The Monitor singleton is built
+  at module load but **not** attached to the DOM yet; sampling runs on
+  the offscreen canvases regardless. `window.perf` is installed for
   show/hide/toggle from devtools.
+
+The panel is docked in the AppBar toolbar (left of the profile icon)
+by `src/Components/PerfToolbarSlot.jsx`. That component is the only
+React bridge: it gates on `useExistInFeature('perf')` + `useIsMobile`,
+renders a `<Box ref>`, and bridges mount/unmount via
+`mountPerfPanel(slotEl)` / `unmountPerfPanel()` from `PerfMonitor.js`.
+On mobile (≤ `MOBILE_WIDTH`) the slot returns `null` — `SearchBar`'s
+`calc(100vw - 120px)` width assumes exactly two sibling buttons and
+adding a third would overflow. Perf data is still reachable via
+`window.perf` and a desktop window.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The

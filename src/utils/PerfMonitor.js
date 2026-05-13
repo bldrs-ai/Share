@@ -10,11 +10,14 @@
  *   - `withPerf(fn)` returns `fn` unchanged, so the render loop pays
  *     no per-frame branch or closure cost.
  *
- * When the flag is present, the panel mounts on page load and the render
- * closure (whichever module passes its update fn through `withPerf`) is
- * wrapped.  Toggle visibility from devtools:
+ * When the flag is on the panel is docked inside the AppBar toolbar
+ * (left of the profile icon) by `src/Components/PerfToolbarSlot.jsx`,
+ * which calls `mountPerfPanel(slotEl)` on React mount.  Sampling starts
+ * at module load regardless of whether the panel is attached to the DOM
+ * — the canvases just aren't visible until mounted.
  *
- *   perf.on()       show panel (sampling continues)
+ * Devtools controls (only defined when the flag is on):
+ *   perf.on()       show panel
  *   perf.off()      hide panel (sampling continues)
  *   perf.toggle()
  *
@@ -196,11 +199,11 @@ class Monitor {
 
     const dom = document.createElement('div')
     dom.id = 'perf-monitor'
+    // Flow-positioned so it docks cleanly inside its host (toolbar slot).
+    // `line-height:0` strips the inline-baseline gap under the canvas;
+    // `cursor:pointer` because clicking cycles the active panel.
     dom.style.cssText = [
-      'position:fixed',
-      'top:0',
-      'left:0',
-      'z-index:10000',
+      'line-height:0',
       'opacity:0.9',
       'cursor:pointer',
     ].join(';')
@@ -257,13 +260,14 @@ class Monitor {
 
 // Singleton — only constructed when the feature flag is on, so
 // `withPerf`'s wrapped path can dereference it directly without a null
-// check.
+// check.  Sampling is decoupled from DOM attachment: canvas draws
+// happen on `monitor.end()` whether or not the panel is mounted, which
+// keeps `withPerf`'s wrapper branch-free.
 let monitor = null
 
 
 if (isPerfEnabled) {
   monitor = new Monitor()
-  document.body.appendChild(monitor.dom)
 
   // Devtools control surface.  Only installed when the flag is on, so
   // typing `perf` in the console of a normal session is `undefined`.
@@ -283,4 +287,35 @@ if (isPerfEnabled) {
       return hidden
     },
   }
+}
+
+
+/**
+ * Dock the panel inside `parent`.  Called by `PerfToolbarSlot` once the
+ * AppBar has rendered its slot.  No-op when the feature flag is off.
+ *
+ * Safe to call multiple times — `appendChild` of an already-parented
+ * node detaches it from its previous parent first.
+ *
+ * @param {HTMLElement} parent
+ */
+export function mountPerfPanel(parent) {
+  if (!monitor || !parent) {
+    return
+  }
+  parent.appendChild(monitor.dom)
+}
+
+
+/**
+ * Detach the panel from its current host.  Called by `PerfToolbarSlot`
+ * on unmount so React doesn't blow up trying to reconcile a slot whose
+ * DOM child it doesn't own.  No-op when the feature flag is off or the
+ * panel is already detached.
+ */
+export function unmountPerfPanel() {
+  if (!monitor) {
+    return
+  }
+  monitor.dom.remove()
 }

@@ -3,6 +3,7 @@ import {AppBar as MuiAppBar, Stack, Toolbar} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import ControlsGroup from './ControlsGroup'
 import LoginMenu from './LoginMenu'
+import PerfToolbarSlot from './PerfToolbarSlot'
 import SearchBar from './Search/SearchBar'
 
 
@@ -36,6 +37,7 @@ export default function AppBar({isRepoActive}) {
         >
           <ControlsGroup isRepoActive={isRepoActive}/>
           <SearchBar/>
+          <PerfToolbarSlot/>
           <LoginMenu/>
         </Stack>
       </Toolbar>
