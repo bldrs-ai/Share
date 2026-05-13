@@ -30,6 +30,7 @@
     "husky-init": "husky install",
     "lint": "yarn eslint src netlify tools && yarn typecheck",
     "precommit": "yarn eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test",
+    "prepare": "husky install",
     "serve-https": "run-script-os",
     "serve-https:win32": "set SHARE_CONFIG=dev && set serveHttps=true && yarn serve-share-conway",
     "serve-https:linux:darwin": "SHARE_CONFIG=dev serveHttps=true yarn serve-share-conway",
