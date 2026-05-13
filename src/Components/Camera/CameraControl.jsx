@@ -30,7 +30,7 @@ export default function CameraControl() {
 
   const location = useLocation()
 
-  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
+  const cameraControls = viewer.context.getCameraControls()
 
   useEffect(() => {
     setCameraControls(cameraControls)

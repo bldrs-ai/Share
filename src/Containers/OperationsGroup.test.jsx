@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
 import {act, render, fireEvent, renderHook} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
@@ -18,7 +18,7 @@ describe('OperationsGroup', () => {
 
   beforeAll(async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    viewer = __getIfcViewerAPIExtendedMockSingleton()
+    viewer = __getShareViewerMockSingleton()
     viewer.isolator = {
       toggleIsolationMode: jest.fn(),
       hideSelectedElements: jest.fn(),

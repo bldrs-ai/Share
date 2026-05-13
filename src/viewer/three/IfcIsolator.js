@@ -1,10 +1,10 @@
-import {IfcContext} from 'web-ifc-viewer/dist/components'
-import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
-import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
+import {ShareViewer} from '../ShareViewer'
+import {unsortedArraysAreEqual, arrayRemove} from '../../utils/arrays'
 import {MeshLambertMaterial, DoubleSide, Mesh} from 'three'
-import useStore from '../store/useStore'
+import useStore from '../../store/useStore'
 import {BlendFunction} from 'postprocessing'
-import {isDefinedAndNotNull} from '../utils/assert'
+import {isDefinedAndNotNull} from '../../utils/assert'
+import ThreeContext from './ThreeContext'
 
 
 /** Provides hiding, unhiding, isolation, and unisolation functionalities */
@@ -30,8 +30,8 @@ export default class IfcIsolator {
   /**
    * Instantiates a new instance of IfcIsolator
    *
-   * @param {IfcContext} context of the viewer
-   * @param {IfcViewerAPIExtended} viewer
+   * @param {ThreeContext} context of the viewer
+   * @param {ShareViewer} viewer
    */
   constructor(context, viewer) {
     this.context = context
@@ -125,7 +125,7 @@ export default class IfcIsolator {
   initHideOperationsSubset(includedIds, removeModel = true) {
     if (removeModel) {
       this.context.getScene().remove(this.ifcModel)
-      this.context.items.pickableIfcModels.pop()
+      this.context.getPickableModels().pop()
       this.viewer.IFC.selector.selection.unpick()
       this.viewer.IFC.selector.preselection.unpick()
     }
@@ -137,7 +137,7 @@ export default class IfcIsolator {
       removePrevious: true,
       customID: this.subsetCustomId,
     })
-    this.context.items.pickableIfcModels.push(this.unhiddenSubset)
+    this.context.getPickableModels().push(this.unhiddenSubset)
   }
 
   /**
@@ -147,7 +147,7 @@ export default class IfcIsolator {
    */
   initTemporaryIsolationSubset(includedIds) {
     this.context.getScene().remove(this.ifcModel)
-    this.context.items.pickableIfcModels.pop()
+    this.context.getPickableModels().pop()
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
@@ -156,7 +156,7 @@ export default class IfcIsolator {
       removePrevious: true,
       customID: this.subsetCustomId,
     })
-    this.context.items.pickableIfcModels.push(this.isolationSubset)
+    this.context.getPickableModels().push(this.isolationSubset)
     this.isolationOutlineEffect.setSelection([this.isolationSubset])
   }
 
@@ -273,10 +273,10 @@ export default class IfcIsolator {
       return
     }
     this.context.getScene().remove(this.unhiddenSubset)
-    this.context.items.pickableIfcModels.pop()
+    this.context.getPickableModels().pop()
     delete this.unhiddenSubset
     this.context.getScene().add(this.ifcModel)
-    this.context.items.pickableIfcModels.push(this.ifcModel)
+    this.context.getPickableModels().push(this.ifcModel)
     this.hiddenIds = []
     useStore.setState({hiddenElements: {}})
     if (this.revealHiddenElementsMode) {
@@ -386,14 +386,14 @@ export default class IfcIsolator {
     this.isolatedIds = []
     useStore.setState({isolatedElements: {}})
     this.context.getScene().remove(this.isolationSubset)
-    this.context.items.pickableIfcModels.pop()
+    this.context.getPickableModels().pop()
     delete this.isolationSubset
     if (this.hiddenIds.length > 0) {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes( el ))
       this.initHideOperationsSubset(toBeShown, false)
     } else {
       this.context.getScene().add(this.ifcModel)
-      this.context.items.pickableIfcModels.push(this.ifcModel)
+      this.context.getPickableModels().push(this.ifcModel)
     }
     this.isolationOutlineEffect.setSelection([])
   }

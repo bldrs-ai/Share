@@ -2336,7 +2336,15 @@ exports[`Loader loads a PDB model 1`] = `
 
 exports[`Loader loads a STEP model 1`] = `
 {
+  "capabilities": {
+    "expressIdPicking": true,
+    "ifcSubsets": true,
+    "spatialStructure": true,
+    "typedProperties": true,
+    "useIfcClipper": true,
+  },
   "children": [],
+  "format": "step",
   "geometry": undefined,
   "isObject3D": true,
   "isUploadedFile": false,
@@ -2360,7 +2368,15 @@ exports[`Loader loads a STEP model 1`] = `
 
 exports[`Loader loads an IFC model 1`] = `
 {
+  "capabilities": {
+    "expressIdPicking": true,
+    "ifcSubsets": true,
+    "spatialStructure": true,
+    "typedProperties": true,
+    "useIfcClipper": true,
+  },
   "children": [],
+  "format": "ifc",
   "geometry": undefined,
   "isObject3D": true,
   "isUploadedFile": false,

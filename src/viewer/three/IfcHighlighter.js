@@ -1,7 +1,7 @@
 import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
-import {IfcContext} from 'web-ifc-viewer/dist/components'
 import CustomPostProcessor from './CustomPostProcessor'
+import ThreeContext from './ThreeContext'
 
 
 /**
@@ -15,7 +15,7 @@ export default class IfcHighlighter {
   /**
    * constructs new class
    *
-   * @param {IfcContext} context of the viewer
+   * @param {ThreeContext} context of the viewer
    * @param {CustomPostProcessor} postProcessor The post-processor
    */
   constructor(context, postProcessor) {
@@ -31,7 +31,7 @@ export default class IfcHighlighter {
       xRay: true,
       opacity: 1,
     })
-    context.renderer.update = newUpdateFunction(context, postProcessor.getComposer)
+    context.setRenderUpdate(newUpdateFunction(context, postProcessor.getComposer))
   }
 
 
@@ -60,25 +60,25 @@ export default class IfcHighlighter {
 
 
 /**
- * Returns a new update function that uses
- * the effectComposer rendering pipeline
+ * Returns the per-frame render function used to drive the effect-composer
+ * pipeline in place of the fork's default render path.
  *
- * @param {IfcContext} context
+ * Closes over the legacy renderer wrapper so the `blocked` flag (set by the
+ * fork while taking an offscreen screenshot, see
+ * `IfcRenderer.newScreenshot`) is consulted on every frame without relying
+ * on the function's `this`. Keeping the closure private here means
+ * `ThreeContext.setRenderUpdate` has no implicit binding contract.
+ *
+ * @param {ThreeContext} context
  * @param {EffectComposer} composer
  * @return {Function} the new render function
  */
 function newUpdateFunction(context, composer) {
-  /**
-   * Overrides the default update function in the context renderer
-   *
-   * @param {number} _delta
-   */
-  function newUpdateFn() {
-    // eslint-disable-next-line no-invalid-this
-    if (this.blocked || !context) {
+  const rendererWrapper = context.getLegacyRendererWrapper()
+  return function newUpdateFn() {
+    if (rendererWrapper.blocked || !context) {
       return
     }
     composer.render()
   }
-  return newUpdateFn.bind(context.renderer)
 }

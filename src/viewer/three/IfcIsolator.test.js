@@ -13,14 +13,14 @@ import IfcIsolator from './IfcIsolator'
 
 // Mock the heavy dependencies so the constructor doesn't crash.
 jest.mock('web-ifc-viewer/dist/components', () => ({}))
-jest.mock('./IfcViewerAPIExtended', () => ({}))
+jest.mock('../ShareViewer', () => ({}))
 jest.mock('postprocessing', () => ({
   BlendFunction: {SCREEN: 1},
 }))
 
 // Mock useStore (used by flattenChildren's string branch and other
 // methods). We only need it to not crash during construction.
-jest.mock('../store/useStore', () => ({
+jest.mock('../../store/useStore', () => ({
   __esModule: true,
   default: {
     getState: jest.fn(() => ({elementTypesMap: []})),
@@ -55,7 +55,7 @@ function makeIsolator() {
 }
 
 
-describe('Infrastructure/IfcIsolator', () => {
+describe('viewer/three/IfcIsolator', () => {
   describe('canBePickedInScene', () => {
     it('returns true for an element that is not hidden', () => {
       const iso = makeIsolator()

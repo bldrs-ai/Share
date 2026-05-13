@@ -5,7 +5,7 @@ import useStore from '../../store/useStore'
 import MarkerControl from './MarkerControl'
 import CadView from '../../Containers/CadView'
 import {MOCK_MARKERS} from './Marker.fixture'
-import {IfcViewerAPIExtended} from '../../Infrastructure/IfcViewerAPIExtended'
+import {ShareViewer} from '../../viewer/ShareViewer'
 import {makeTestTree} from '../../utils/TreeUtils.test'
 import {actAsyncFlush} from '../../utils/tests'
 import {Mesh, BoxGeometry, MeshBasicMaterial} from 'three'
@@ -110,7 +110,7 @@ describe('MarkerControl', () => {
   // TODO: `document.createElement` can't be used in testing-library directly,
   // need to move this after fixing that issue
   beforeEach(() => {
-    viewer = new IfcViewerAPIExtended()
+    viewer = new ShareViewer()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')

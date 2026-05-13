@@ -1,12 +1,13 @@
 jest.mock('three')
-jest.mock('../src/Infrastructure/IfcHighlighter')
-jest.mock('../src/Infrastructure/IfcIsolator')
-jest.mock('../src/Infrastructure/CustomPostProcessor')
+jest.mock('../src/viewer/three/IfcHighlighter')
+jest.mock('../src/viewer/three/IfcIsolator')
+jest.mock('../src/viewer/three/CustomPostProcessor')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
+const ThreeContext = require('../src/viewer/three/ThreeContext').default
 
 
 // Not sure why this is required, but otherwise these internal fields
-// are not present in the instantiated IfcViewerAPIExtended.
+// are not present in the instantiated ShareViewer.
 const loadedModel = {
   ifcManager: {
     getSpatialStructure: jest.fn(),
@@ -23,7 +24,7 @@ const loadedModel = {
   },
 }
 
-const contextMock = {
+const legacyContextMock = {
   fitToFrame: jest.fn(),
   getCamera: jest.fn(() => {
     return {
@@ -70,19 +71,30 @@ const contextMock = {
   },
   items: {
     ifcModels: [],
+    pickableIfcModels: [],
   },
+  mouse: {position: {x: 0, y: 0}},
   renderer: {
     newScreenshot: jest.fn(),
+    update: jest.fn(),
   },
   resize: jest.fn(),
+  dispose: jest.fn(),
 }
+// Production wraps `viewer.context` in a ThreeContext (see
+// src/viewer/three/ThreeContext.js). Mirror that here so the singleton
+// from `__getShareViewerMockSingleton()` exposes the same
+// surface as production.
+const contextMock = new ThreeContext(legacyContextMock)
 
 const impl = {
   _isMock: true,
   _loadedModel: loadedModel,
   IFC: {
     addIfcModel: jest.fn(),
-    context: contextMock,
+    // Mirrors production: the fork's IfcManager holds the raw legacy
+    // IfcContext; only `viewer.context` is the ThreeContext wrapper.
+    context: legacyContextMock,
     setWasmPath: jest.fn(),
     selector: {
       unpickIfcItems: jest.fn(),
@@ -159,9 +171,9 @@ constructorMock.mockImplementation(() => impl)
 
 
 /**
- * @return {object} The single mock instance of IfcViewerAPI.
+ * @return {object} The single mock instance of ShareViewer.
  */
-function __getIfcViewerAPIExtendedMockSingleton() {
+function __getShareViewerMockSingleton() {
   return impl
 }
 
@@ -169,5 +181,5 @@ function __getIfcViewerAPIExtendedMockSingleton() {
 export {
   ifcjsMock as default,
   constructorMock as IfcViewerAPI,
-  __getIfcViewerAPIExtendedMockSingleton as __getIfcViewerAPIExtendedMockSingleton,
+  __getShareViewerMockSingleton as __getShareViewerMockSingleton,
 }

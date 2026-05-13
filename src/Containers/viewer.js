@@ -1,5 +1,5 @@
 import {Color} from 'three'
-import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import {ShareViewer} from '../viewer/ShareViewer'
 
 
 // Track the current viewer for cleanup so a subsequent call to
@@ -110,7 +110,7 @@ export function disposeViewer() {
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {object} IfcViewerAPIExtended viewer, with a .container property
+ * @return {object} ShareViewer instance, with a .container property
  *     referencing its container.
  */
 export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
@@ -122,7 +122,7 @@ export function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const viewer = new IfcViewerAPIExtended({
+  const viewer = new ShareViewer({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })

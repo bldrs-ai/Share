@@ -55,7 +55,7 @@ export class MockModel {
 
   /**
    * @param {object} elt IFC element
-   * @param {object} viewer IfcViewerAPIExtended instance
+   * @param {object} viewer ShareViewer instance
    * @return {string}
    */
   getIfcType(elt, viewer) {
