@@ -1,20 +1,19 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import Box from '@mui/material/Box'
-import useExistInFeature from '../hooks/useExistInFeature'
-import {mountPerfPanel, unmountPerfPanel} from '../utils/PerfMonitor'
+import {isPerfEnabled, mountPerfPanel, unmountPerfPanel} from '../utils/PerfMonitor'
 import {useIsMobile} from './Hooks'
 
 
 /**
  * Toolbar slot that docks the PerfMonitor panel left of the profile
- * icon when the `?feature=perf` flag is on.
+ * icon when the `?feature=perf` flag is on.  Mounted by
+ * `src/Containers/OperationsGroup.jsx`.
  *
  * Returns `null` when:
  *   - the flag is off (no slot reserved, layout identical to before), or
- *   - the viewport is mobile (the SearchBar's `calc(100vw - 120px)` width
- *     assumes exactly two sibling buttons, so adding a third would
- *     overflow — perf data is still reachable via `window.perf` and a
- *     desktop window).
+ *   - the viewport is mobile (the top-row controls in OperationsGroup
+ *     get tight on small screens; perf data is still reachable via
+ *     `window.perf` on a desktop window).
  *
  * The panel itself (canvases + sampling) is owned by
  * `src/utils/PerfMonitor.js`; this component just provides a React-owned
@@ -24,7 +23,6 @@ import {useIsMobile} from './Hooks'
  * @return {ReactElement|null}
  */
 export default function PerfToolbarSlot() {
-  const isPerfEnabled = useExistInFeature('perf')
   const isMobile = useIsMobile()
   const hostRef = useRef(null)
 
@@ -34,11 +32,11 @@ export default function PerfToolbarSlot() {
     }
     mountPerfPanel(hostRef.current)
     return () => {
-      // Detach the canvas before React tears down our host div, so React
-      // doesn't reconcile a child it doesn't own.
+      // Detach the canvas before React tears down our host div, so
+      // React doesn't reconcile a child it doesn't own.
       unmountPerfPanel()
     }
-  }, [isPerfEnabled, isMobile])
+  }, [isMobile])
 
   if (!isPerfEnabled || isMobile) {
     return null
@@ -54,6 +52,9 @@ export default function PerfToolbarSlot() {
         // Don't squeeze sibling toolbar items; the panel is intrinsic
         // 80x48px and small enough to flow without breaking the layout.
         flex: '0 0 auto',
+        // Center the panel vertically against the icon-button row without
+        // forcing `alignItems` on the parent Stack.
+        alignSelf: 'center',
       }}
     />
   )

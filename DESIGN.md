@@ -137,15 +137,20 @@ context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
   the offscreen canvases regardless. `window.perf` is installed for
   show/hide/toggle from devtools.
 
-The panel is docked in the AppBar toolbar (left of the profile icon)
-by `src/Components/PerfToolbarSlot.jsx`. That component is the only
-React bridge: it gates on `useExistInFeature('perf')` + `useIsMobile`,
+The panel is docked in the top-right control cluster — the inner
+`Stack direction='row'` inside `src/Containers/OperationsGroup.jsx`,
+immediately before `<ProfileControl/>`. `src/Components/AppBar.jsx`
+is *not* used by the running app (the real toolbar is the
+`ControlsGroup` / `OperationsGroup` pair laid out by `RootLandscape`).
+
+`src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
+reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
+(same source of truth as `window.perf` — synchronous, never lags a
+render the way `useExistInFeature` would), checks `useIsMobile`,
 renders a `<Box ref>`, and bridges mount/unmount via
 `mountPerfPanel(slotEl)` / `unmountPerfPanel()` from `PerfMonitor.js`.
-On mobile (≤ `MOBILE_WIDTH`) the slot returns `null` — `SearchBar`'s
-`calc(100vw - 120px)` width assumes exactly two sibling buttons and
-adding a third would overflow. Perf data is still reachable via
-`window.perf` and a desktop window.
+On mobile (≤ `MOBILE_WIDTH`) the slot returns `null` — perf data is
+still reachable via `window.perf` on a desktop window.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The

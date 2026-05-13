@@ -47,7 +47,14 @@ function readPerfFlag() {
 }
 
 
-const isPerfEnabled = readPerfFlag()
+/**
+ * Frozen at module load — true iff `?feature=perf` was in the URL.
+ * Exported so the React side (`PerfToolbarSlot`) reads from the exact
+ * same source of truth as `window.perf` / `withPerf`, instead of
+ * re-resolving the flag through `useExistInFeature` (which is async
+ * via `useEffect` and can lag a render).
+ */
+export const isPerfEnabled = readPerfFlag()
 
 
 /**
