@@ -1,5 +1,6 @@
 import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
+import {perfBegin, perfEnd} from '../../utils/PerfMonitor'
 import CustomPostProcessor from './CustomPostProcessor'
 import ThreeContext from './ThreeContext'
 
@@ -79,6 +80,8 @@ function newUpdateFunction(context, composer) {
     if (rendererWrapper.blocked || !context) {
       return
     }
+    perfBegin()
     composer.render()
+    perfEnd()
   }
 }
