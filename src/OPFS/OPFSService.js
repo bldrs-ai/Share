@@ -341,6 +341,63 @@ export function opfsReadModel(modelKey) {
   })
 }
 
+
+/**
+ * Write raw bytes to OPFS at a path tuple. Mirrors {@link opfsReadModelByPath}.
+ * Used by the GLB artifact writer.
+ *
+ * @param {Uint8Array|ArrayBuffer} bytes
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ */
+export function opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'writeBytesByPath',
+    bytes: bytes,
+    originalFilePath: originalFilePath,
+    commitHash: commitHash,
+    owner: owner,
+    repo: repo,
+    branch: branch,
+  })
+}
+
+
+/**
+ * Reads a model from OPFS by its full path tuple. Mirrors the signature
+ * of {@link opfsDoesFileExist}; the file is identified by
+ * `(owner/repo/branch/originalFilePath, commitHash)`. Used by the GLB
+ * artifact read path where the file has no upstream URL fallback.
+ *
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ */
+export function opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch) {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'readModelByPath',
+    originalFilePath: originalFilePath,
+    commitHash: commitHash,
+    owner: owner,
+    repo: repo,
+    branch: branch,
+  })
+}
+
+
 /**
  * Clears the OPFS cache
  */

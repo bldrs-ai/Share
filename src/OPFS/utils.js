@@ -3,6 +3,8 @@ import {
   opfsDownloadToOPFS,
   opfsDownloadModel,
   opfsReadModel,
+  opfsReadModelByPath,
+  opfsWriteBytesByPath,
   opfsWriteModel,
   opfsWriteModelFileHandle,
   opfsDoesFileExist,
@@ -366,6 +368,90 @@ export function doesFileExistInOPFS(
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
+}
+
+
+/**
+ * Write raw bytes to OPFS at the same `(owner/repo/branch/originalFilePath,
+ * commitHash)` tuple used by {@link doesFileExistInOPFS} /
+ * {@link readModelByPathFromOPFS}. Used by the GLB artifact writer to cache
+ * a freshly-generated GLB next to its source.
+ *
+ * @param {Uint8Array|ArrayBuffer} bytes
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ * @return {Promise<boolean>} resolves to true on success
+ */
+export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, repo, branch) {
+  assertDefined(bytes, originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef === null) {
+      reject(new Error('Worker initialization failed'))
+      return
+    }
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.completed && event.data.event === 'wrote') {
+        workerRef.removeEventListener('message', listener)
+        resolve(true)
+      }
+    }
+    workerRef.addEventListener('message', listener)
+    opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch)
+  })
+}
+
+
+/**
+ * Read a cached file from OPFS by its `(owner/repo/branch/originalFilePath,
+ * commitHash)` tuple. Resolves to the File on success, or null if absent.
+ *
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ * @return {Promise<File|null>}
+ */
+export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, repo, branch) {
+  assertDefined(originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef === null) {
+      reject(new Error('Worker initialization failed'))
+      return
+    }
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.completed) {
+        if (event.data.event === 'notexist') {
+          workerRef.removeEventListener('message', listener)
+          resolve(null)
+        } else if (event.data.event === 'read') {
+          workerRef.removeEventListener('message', listener)
+          resolve(event.data.file)
+        }
+      }
+    }
+    workerRef.addEventListener('message', listener)
+    opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch)
+  })
 }
 
 /**

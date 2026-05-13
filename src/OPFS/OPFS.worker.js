@@ -54,6 +54,16 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'readModelFromStorage') {
       const {modelKey} = assertValues(event.data, ['modelKey'])
       await readModelFromOPFS(modelKey)
+    } else if (event.data.command === 'readModelByPath') {
+      const {commitHash, originalFilePath, owner, repo, branch} =
+          assertValues(event.data,
+            ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+      await readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch)
+    } else if (event.data.command === 'writeBytesByPath') {
+      const {bytes, commitHash, originalFilePath, owner, repo, branch} =
+          assertValues(event.data,
+            ['bytes', 'commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+      await writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'downloadToOPFS') {
       const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
           assertValues(event.data,
@@ -1341,6 +1351,93 @@ export async function doesFileExistInOPFS(commitHash, originalFilePath, owner, r
     self.postMessage({completed: true, event: 'exist', commitHash: commitHash})
   } else {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+  }
+}
+
+
+/**
+ * Write raw bytes (Uint8Array or ArrayBuffer) into OPFS at the same
+ * `(owner/repo/branch/originalFilePath, commitHash)` tuple used by
+ * {@link doesFileExistInOPFS}. Used by the GLB artifact writer (see
+ * design/new/glb-model-sharing.md §"Pipelines/A. Originator").
+ *
+ * Posts `{completed: true, event: 'wrote'}` on success or `{error}` on failure.
+ *
+ * @param {Uint8Array|ArrayBuffer} bytes
+ * @param {string} commitHash
+ * @param {string} originalFilePath
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ */
+export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath, owner, repo, branch) {
+  try {
+    const opfsRoot = await navigator.storage.getDirectory()
+    const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
+
+    const handles = await writeFileToPath(opfsRoot, cacheKey, null, commitHash)
+    if (handles === null) {
+      // writeFileToPath already posted an error message
+      return
+    }
+    const fileHandle = handles[1]
+    const writable = await fileHandle.createWritable()
+    try {
+      const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+      await writable.write(payload)
+    } finally {
+      await writable.close()
+    }
+    self.postMessage({completed: true, event: 'wrote', commitHash: commitHash})
+  } catch (error) {
+    self.postMessage({error: `writeBytesByPath: ${error.message || error}`})
+  }
+}
+
+
+/**
+ * Read a cached file from OPFS by the same `(owner/repo/branch/originalFilePath, commitHash)`
+ * tuple used by {@link doesFileExistInOPFS}. Used by the GLB artifact path
+ * (see design/new/glb-model-sharing.md) where the file is known to be present
+ * locally and has no upstream URL to fall back to.
+ *
+ * Posts `{completed: true, event: 'read', file}` on success; `{event:
+ * 'notexist'}` if absent; `{error}` on failure.
+ *
+ * @param {string} commitHash
+ * @param {string} originalFilePath
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ */
+export async function readModelByPathFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
+  const opfsRoot = await navigator.storage.getDirectory()
+  const cacheKey = `${owner}/${repo}/${branch}/${originalFilePath}`
+  let modelBlobFileHandle = null
+
+  try {
+    [, modelBlobFileHandle] = await retrieveFileWithPathNew(
+      opfsRoot, cacheKey, null, commitHash, false,
+    )
+  } catch (error) {
+    self.postMessage({error: `readModelByPath: ${error.message || error}`})
+    return
+  }
+
+  if (modelBlobFileHandle === null) {
+    self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+    return
+  }
+
+  try {
+    const file = await modelBlobFileHandle.getFile()
+    if (file.size === 0) {
+      self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
+      return
+    }
+    self.postMessage({completed: true, event: 'read', file: file})
+  } catch (error) {
+    self.postMessage({error: `readModelByPath: ${error.message || error}`})
   }
 }
 
