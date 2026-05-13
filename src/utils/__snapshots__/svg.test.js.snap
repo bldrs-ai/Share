@@ -2,24 +2,19 @@
 
 exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
 {
+  "images": [
+    {
+      "url": null,
+      "uuid": undefined,
+    },
+  ],
   "materials": [
     {
+      "blendColor": 0,
       "color": 16777215,
-      "colorWrite": true,
-      "depthFunc": 3,
-      "depthTest": true,
-      "depthWrite": true,
       "map": undefined,
       "side": 2,
       "sizeAttenuation": true,
-      "stencilFail": 7680,
-      "stencilFunc": 519,
-      "stencilFuncMask": 255,
-      "stencilRef": 0,
-      "stencilWrite": false,
-      "stencilWriteMask": 255,
-      "stencilZFail": 7680,
-      "stencilZPass": 7680,
       "transparent": true,
       "type": "SpriteMaterial",
       "uuid": undefined,
@@ -30,7 +25,7 @@ exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
   "metadata": {
     "generator": "Object3D.toJSON",
     "type": "Object",
-    "version": 4.5,
+    "version": 4.7,
   },
   "object": {
     "layers": 1,
@@ -54,6 +49,11 @@ exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
       1,
     ],
     "type": "Sprite",
+    "up": [
+      0,
+      1,
+      0,
+    ],
     "uuid": undefined,
   },
   "textures": [
@@ -63,13 +63,18 @@ exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
         0,
         0,
       ],
-      "encoding": 3000,
+      "channel": 0,
+      "colorSpace": "",
       "flipY": true,
       "format": 1023,
+      "generateMipmaps": true,
+      "image": undefined,
+      "internalFormat": null,
       "magFilter": 1006,
       "mapping": 300,
       "minFilter": 1006,
       "name": "",
+      "normalized": false,
       "offset": [
         0,
         0,
@@ -106,22 +111,17 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
   ],
   "materials": [
     {
+      "blendColor": 0,
       "color": 16777215,
-      "colorWrite": true,
-      "depthFunc": 3,
-      "depthTest": true,
-      "depthWrite": true,
+      "envMapRotation": [
+        0,
+        0,
+        0,
+        "XYZ",
+      ],
       "reflectivity": 1,
       "refractionRatio": 0.98,
       "side": 2,
-      "stencilFail": 7680,
-      "stencilFunc": 519,
-      "stencilFuncMask": 255,
-      "stencilRef": 0,
-      "stencilWrite": false,
-      "stencilWriteMask": 255,
-      "stencilZFail": 7680,
-      "stencilZPass": 7680,
       "transparent": true,
       "type": "MeshBasicMaterial",
       "uuid": undefined,
@@ -130,7 +130,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
   "metadata": {
     "generator": "Object3D.toJSON",
     "type": "Object",
-    "version": 4.5,
+    "version": 4.7,
   },
   "object": {
     "children": [
@@ -159,6 +159,11 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               1,
             ],
             "type": "Mesh",
+            "up": [
+              0,
+              1,
+              0,
+            ],
             "uuid": undefined,
           },
         ],
@@ -182,6 +187,11 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           1,
         ],
         "type": "Group",
+        "up": [
+          0,
+          1,
+          0,
+        ],
         "uuid": undefined,
       },
     ],
@@ -205,6 +215,11 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
       1,
     ],
     "type": "Group",
+    "up": [
+      0,
+      1,
+      0,
+    ],
     "uuid": undefined,
   },
   "shapes": [
@@ -221,7 +236,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           "metadata": {
             "generator": "Curve.toJSON",
             "type": "Curve",
-            "version": 4.5,
+            "version": 4.7,
           },
           "type": "CubicBezierCurve",
           "v0": [
@@ -246,7 +261,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           "metadata": {
             "generator": "Curve.toJSON",
             "type": "Curve",
-            "version": 4.5,
+            "version": 4.7,
           },
           "type": "CubicBezierCurve",
           "v0": [
@@ -271,7 +286,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           "metadata": {
             "generator": "Curve.toJSON",
             "type": "Curve",
-            "version": 4.5,
+            "version": 4.7,
           },
           "type": "CubicBezierCurve",
           "v0": [
@@ -296,7 +311,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           "metadata": {
             "generator": "Curve.toJSON",
             "type": "Curve",
-            "version": 4.5,
+            "version": 4.7,
           },
           "type": "CubicBezierCurve",
           "v0": [
@@ -331,7 +346,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               "metadata": {
                 "generator": "Curve.toJSON",
                 "type": "Curve",
-                "version": 4.5,
+                "version": 4.7,
               },
               "type": "CubicBezierCurve",
               "v0": [
@@ -356,7 +371,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               "metadata": {
                 "generator": "Curve.toJSON",
                 "type": "Curve",
-                "version": 4.5,
+                "version": 4.7,
               },
               "type": "CubicBezierCurve",
               "v0": [
@@ -381,7 +396,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               "metadata": {
                 "generator": "Curve.toJSON",
                 "type": "Curve",
-                "version": 4.5,
+                "version": 4.7,
               },
               "type": "CubicBezierCurve",
               "v0": [
@@ -406,7 +421,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
               "metadata": {
                 "generator": "Curve.toJSON",
                 "type": "Curve",
-                "version": 4.5,
+                "version": 4.7,
               },
               "type": "CubicBezierCurve",
               "v0": [
@@ -430,7 +445,7 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
           "metadata": {
             "generator": "Curve.toJSON",
             "type": "Curve",
-            "version": 4.5,
+            "version": 4.7,
           },
           "type": "Path",
         },

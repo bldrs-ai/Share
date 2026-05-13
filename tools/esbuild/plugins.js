@@ -43,9 +43,52 @@ export default function makePlugins(root, buildDir) {
     },
   }
 
+
+  // Compatibility shim for legacy three.js consumers (web-ifc-viewer,
+  // web-ifc-three vendored in node_modules) running against modern
+  // three. Two adjustments:
+  //
+  // 1. Modern three's package.json `exports` field maps
+  //    `./examples/jsm/*` literally — no automatic `.js` extension
+  //    fallback. The fork imports these without the extension; we
+  //    re-resolve with `.js` appended.
+  //
+  // 2. `mergeBufferGeometries` was renamed to `mergeGeometries` in
+  //    three r155+. The fork still imports the old name. We intercept
+  //    loads of `BufferGeometryUtils.js` and append the alias.
+  //
+  // Both go away when the fork is removed (Phase 5 of
+  // design/new/viewer-replacement.md).
+  const threeJsmExtPlugin = {
+    name: 'threeJsmCompat',
+    setup(build) {
+      build.onResolve({filter: /^three\/examples\/jsm\/[^.]+$/}, async (args) => {
+        if (args.path.endsWith('.js')) {
+          return null
+        }
+        const patched = await build.resolve(`${args.path}.js`, {
+          kind: args.kind,
+          resolveDir: args.resolveDir,
+        })
+        if (patched.errors.length > 0) {
+          return null // let esbuild surface the original failure
+        }
+        return patched
+      })
+
+      build.onLoad({filter: /three[/\\]examples[/\\]jsm[/\\]utils[/\\]BufferGeometryUtils\.js$/}, async (args) => {
+        const original = await fs.readFile(args.path, 'utf8')
+        // `mergeGeometries` is the new name; alias the old.
+        const shim = '\nexport { mergeGeometries as mergeBufferGeometries } from \'./BufferGeometryUtils.js\'\n'
+        return {contents: original + shim, loader: 'js', resolveDir: path.dirname(args.path)}
+      })
+    },
+  }
+
   // Initialize plugins array
   const plugins = [
     progress(),
+    threeJsmExtPlugin,
     fontDisplayPlugin,
     svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
     copyStaticFiles({

@@ -38,7 +38,10 @@ describe.skip('bldrs inside iframe', () => {
       try {
         const content = await readFile(`src/tests/fixtures/${fixture}`)
         const outPath = path.join(targetDirectory, fixture)
-        await writeFile(outPath, content)
+        // TS5 tightened Buffer<->ArrayBuffer compat; reify as Uint8Array
+        // so writeFile's stricter overload is satisfied. `content` is a
+        // Buffer (Uint8Array subclass) at runtime; behavior is unchanged.
+        await writeFile(outPath, new Uint8Array(content))
       } catch (error) {
         console.warn(`Could not copy fixture ${fixture}:`, error)
       }

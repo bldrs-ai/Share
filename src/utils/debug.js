@@ -15,7 +15,7 @@ let DEBUG_LEVEL = WARN
  * @return {console|MockLog} returned function is console.log or a no-op if debugging is turned off
  */
 export default function debug(level = INFO) {
-  return (level === true || level >= DEBUG_LEVEL) ? console : mockLog
+  return (level === true || (typeof level === 'number' && level >= DEBUG_LEVEL)) ? console : mockLog
 }
 
 
