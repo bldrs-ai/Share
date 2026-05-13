@@ -103,6 +103,49 @@ GitHub API integration for model versioning and collaboration:
 4. 3D scene setup and rendering (`Infrastructure/`)
 5. UI state synchronization and user interactions
 
+## Render loop & perf monitor
+
+The `requestAnimationFrame` loop is driven by the `web-ifc-viewer` fork.
+Each frame the fork calls `renderer.update`, which we replace at startup
+with our own closure via `ThreeContext.setRenderUpdate(fn)`
+(`src/viewer/three/ThreeContext.js`). That closure is the **only**
+per-frame render path we control — there is no second `composer.render()`
+or `renderer.render()` callsite in our code.
+
+Today the closure is built in `src/viewer/three/IfcHighlighter.js`
+(it needs the `EffectComposer` to drive the outline effect). If/when a
+future refactor pulls render-driving out of the highlighter — e.g. into
+a dedicated `RenderLoop` module — `setRenderUpdate` is the seam that
+moves with it.
+
+Perf instrumentation attaches at that seam, not inside the closure:
+
+```js
+// IfcHighlighter constructor:
+context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
+```
+
+`withPerf` (in `src/utils/PerfMonitor.js`) is gated on the
+`?feature=perf` URL flag, evaluated once at module load:
+
+- **Flag off (default):** `withPerf(fn)` returns `fn` unchanged. The
+  render closure has no perf code; `window.perf` is not defined; no DOM
+  or sampling state is created. Zero per-frame cost.
+- **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
+  `monitor.begin()` / `monitor.end()`. A fixed-position panel mounts at
+  the top-left of `document.body` and `window.perf` is installed for
+  show/hide/toggle from devtools.
+
+Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
+last only where Chromium's `performance.memory` is available). The
+module is a minimal port of mrdoob's stats.js — the panel the three.js
+examples use.
+
+Offscreen renders (screenshots taken via
+`ShareViewer.takeScreenshot()` -> `IfcRenderer.newScreenshot`) are
+**not** instrumented; they take a different render path and would
+distort steady-state FPS samples.
+
 ## Authentication & Collaboration
 - Auth0 integration for user authentication
 - GitHub integration for model versioning and storage

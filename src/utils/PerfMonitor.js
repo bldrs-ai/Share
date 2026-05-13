@@ -2,20 +2,80 @@
 /**
  * Lightweight render-loop perf panel — FPS, frame time (ms), and JS heap
  * memory (MB, where `performance.memory` exists).  A minimal port of
- * mrdoob's stats.js (MIT) — the panel that the three.js examples use.
+ * mrdoob's stats.js (MIT) — the panel the three.js examples use.
  *
- * Off by default so production builds pay nothing.  Toggle from devtools:
+ * Gated on the `?feature=perf` URL flag.  When the flag is absent:
+ *   - the Panel / Monitor classes are never instantiated,
+ *   - `window.perf` is not defined,
+ *   - `withPerf(fn)` returns `fn` unchanged, so the render loop pays
+ *     no per-frame branch or closure cost.
  *
- *   perf.on()       show panel + start sampling
- *   perf.off()      remove panel + stop sampling
+ * When the flag is present, the panel mounts on page load and the render
+ * closure (whichever module passes its update fn through `withPerf`) is
+ * wrapped.  Toggle visibility from devtools:
+ *
+ *   perf.on()       show panel (sampling continues)
+ *   perf.off()      hide panel (sampling continues)
  *   perf.toggle()
  *
- * The render loop calls `perfBegin()` / `perfEnd()` unconditionally; both
- * are cheap no-ops when the panel isn't active, so we don't have to
- * conditionalise the hot path.
- *
  * Click the panel to cycle FPS -> MS -> MB.
+ *
+ * Today the only render closure that uses `withPerf` is the one installed
+ * by `src/viewer/three/IfcHighlighter.js` via `ThreeContext.setRenderUpdate`;
+ * see DESIGN.md "Render loop & perf monitor" for the architectural seam.
  */
+
+const PERF_FEATURE_FLAG = 'perf'
+
+
+/**
+ * Read the `?feature=perf` URL flag once, at module load.  Toggling at
+ * runtime requires a page reload — matches how `useExistInFeature`
+ * treats URL flags.
+ *
+ * @return {boolean}
+ */
+function readPerfFlag() {
+  if (typeof window === 'undefined' || !window.location) {
+    return false
+  }
+  const featureParam = new URLSearchParams(window.location.search).get('feature') || ''
+  return featureParam.split(',').map((s) => s.trim().toLowerCase()).includes(PERF_FEATURE_FLAG)
+}
+
+
+const isPerfEnabled = readPerfFlag()
+
+
+/**
+ * Wrap a per-frame update function with sampling.  Returns `fn`
+ * unchanged when the perf flag is off — that's the "zero runtime cost"
+ * path: callers can apply this unconditionally without branching at
+ * call sites.
+ *
+ * @param {Function} fn per-frame closure (typically the one passed to
+ *   `ThreeContext.setRenderUpdate`).
+ * @return {Function}
+ */
+export function withPerf(fn) {
+  if (!isPerfEnabled) {
+    return fn
+  }
+  return function perfWrappedUpdate() {
+    monitor.begin()
+    fn()
+    monitor.end()
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// Everything below is only reached when `isPerfEnabled` is true.  The
+// classes are still defined unconditionally (so the module remains
+// tree-shake-friendly across both paths), but no instance is constructed
+// and no DOM is touched unless the flag was set.
+// ---------------------------------------------------------------------------
+
 
 const PANEL_WIDTH = 80
 const PANEL_HEIGHT = 48
@@ -25,7 +85,7 @@ const GRAPH_WIDTH = 74
 const GRAPH_HEIGHT = 30
 const TEXT_X = 3
 const TEXT_Y = 2
-const PIXEL_RATIO = Math.round(window.devicePixelRatio || 1)
+const PIXEL_RATIO = isPerfEnabled ? Math.round(window.devicePixelRatio || 1) : 1
 const PW = PANEL_WIDTH * PIXEL_RATIO
 const PH = PANEL_HEIGHT * PIXEL_RATIO
 const GX = GRAPH_X * PIXEL_RATIO
@@ -95,8 +155,9 @@ class Panel {
   }
 
   /**
-   * Push a new sample. `max` is the value used to label the panel's
-   * historical ceiling (so we display `min/max`).
+   * Push a new sample.  `maxValue` is the upper bound used to scale the
+   * bar height for this frame; the running min/max are tracked
+   * separately and shown in the label.
    *
    * @param {number} value
    * @param {number} maxValue
@@ -121,13 +182,13 @@ class Panel {
 
     ctx.fillStyle = spec.bg
     ctx.globalAlpha = 0.9
-    const h = (1 - value / maxValue) * GH
+    const h = (1 - (value / maxValue)) * GH
     ctx.fillRect(GX + GW - PIXEL_RATIO, GY, PIXEL_RATIO, h)
   }
 }
 
 
-/** Holds the panels and stitched DOM container; created lazily on `on()`. */
+/** Holds the panels and stitched DOM container; created lazily on init. */
 class Monitor {
   constructor() {
     this.activeIndex = 0
@@ -142,7 +203,6 @@ class Monitor {
       'z-index:10000',
       'opacity:0.9',
       'cursor:pointer',
-      // Stack panels — only the active one is `display:block` (set below).
     ].join(';')
     this.panels.forEach((p, i) => {
       p.canvas.style.display = i === this.activeIndex ? 'block' : 'none'
@@ -181,7 +241,7 @@ class Monitor {
       this.panels[I_FPS].update(fps, FPS_MAX)
 
       // Chromium-only — `performance.memory` is non-standard.  Skip when
-      // unavailable so Firefox / Safari just stay at 0.
+      // unavailable so Firefox / Safari just don't update the MB panel.
       const mem = performance.memory
       if (mem) {
         this.panels[I_MB].update(mem.usedJSHeapSize / BYTES_PER_MB, mem.jsHeapSizeLimit / BYTES_PER_MB)
@@ -195,59 +255,32 @@ class Monitor {
 }
 
 
+// Singleton — only constructed when the feature flag is on, so
+// `withPerf`'s wrapped path can dereference it directly without a null
+// check.
 let monitor = null
 
 
-/** Hot-path begin marker.  No-op when the monitor isn't installed. */
-export function perfBegin() {
-  if (monitor) {
-    monitor.begin()
-  }
-}
-
-
-/** Hot-path end marker.  No-op when the monitor isn't installed. */
-export function perfEnd() {
-  if (monitor) {
-    monitor.end()
-  }
-}
-
-
-/** Mount the panel and start sampling.  Idempotent. */
-export function perfOn() {
-  if (monitor) {
-    return
-  }
+if (isPerfEnabled) {
   monitor = new Monitor()
   document.body.appendChild(monitor.dom)
-}
 
-
-/** Remove the panel and stop sampling.  Idempotent. */
-export function perfOff() {
-  if (!monitor) {
-    return
+  // Devtools control surface.  Only installed when the flag is on, so
+  // typing `perf` in the console of a normal session is `undefined`.
+  window.perf = {
+    /** Show the panel.  Sampling continues regardless of visibility. */
+    on() {
+      monitor.dom.style.display = ''
+    },
+    /** Hide the panel.  Sampling continues regardless of visibility. */
+    off() {
+      monitor.dom.style.display = 'none'
+    },
+    /** @return {boolean} new visible-state */
+    toggle() {
+      const hidden = monitor.dom.style.display === 'none'
+      monitor.dom.style.display = hidden ? '' : 'none'
+      return hidden
+    },
   }
-  monitor.dom.remove()
-  monitor = null
-}
-
-
-/** Toggle the panel.  @return {boolean} new on-state. */
-export function perfToggle() {
-  if (monitor) {
-    perfOff()
-    return false
-  }
-  perfOn()
-  return true
-}
-
-
-// Install devtools control surface.  Safe to assign unconditionally —
-// SSR doesn't apply here (browser-only app) and overwriting a prior
-// install is fine (HMR re-runs this file).
-if (typeof window !== 'undefined') {
-  window.perf = {on: perfOn, off: perfOff, toggle: perfToggle}
 }

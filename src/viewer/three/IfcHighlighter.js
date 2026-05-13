@@ -1,6 +1,6 @@
 import {BlendFunction, EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
-import {perfBegin, perfEnd} from '../../utils/PerfMonitor'
+import {withPerf} from '../../utils/PerfMonitor'
 import CustomPostProcessor from './CustomPostProcessor'
 import ThreeContext from './ThreeContext'
 
@@ -32,7 +32,11 @@ export default class IfcHighlighter {
       xRay: true,
       opacity: 1,
     })
-    context.setRenderUpdate(newUpdateFunction(context, postProcessor.getComposer))
+    // Wrap with the perf monitor.  When the `?feature=perf` flag is off
+    // `withPerf` returns the function unchanged — the render closure has
+    // no perf code, no branch, no closure overhead.  See DESIGN.md
+    // "Render loop & perf monitor".
+    context.setRenderUpdate(withPerf(newUpdateFunction(context, postProcessor.getComposer)))
   }
 
 
@@ -80,8 +84,6 @@ function newUpdateFunction(context, composer) {
     if (rendererWrapper.blocked || !context) {
       return
     }
-    perfBegin()
     composer.render()
-    perfEnd()
   }
 }

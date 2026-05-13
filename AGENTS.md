@@ -17,6 +17,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | If you're working on… | Read |
 |---|---|
 | Module boundaries, top-level architecture | [DESIGN.md](DESIGN.md) |
+| Render loop, `setRenderUpdate` seam, `?feature=perf` panel | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
