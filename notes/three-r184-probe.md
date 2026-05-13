@@ -33,22 +33,25 @@ catches this — only click-time runtime.
 ### Issue 2 — Colors desaturated
 **Symptom:** Schependomlaan-style models render with washed-out brown roof / dim green grass instead of
 saturated orange-red / vibrant green (compared before/after).
-**Root cause (NOT colorspace):** Initially attributed to the r152 `outputColorSpace` default change
-(`SRGBColorSpace` → `LinearSRGBColorSpace`). Set `renderer.outputColorSpace = SRGBColorSpace` in
-`ShareViewer.constructor` — **had no measurable effect** (digital color-meter on the rendered pixels
-confirmed identical values before/after the change). For this scene the materials are lit-only with
-no sRGB textures, so the renderer-side color space is a no-op.
 
-**Actual cause:** r157 removed `WebGLRenderer.useLegacyLights`. Default lights are now
-physically-correct (1 unit = 1 lumen), where the same numeric intensity produces ~π× less light than
-r135's legacy regime. The fork's `IfcScene.setupLights()` hard-codes
-`DirectionalLight(_, 0.8) ×2` and `AmbientLight(_, 0.25)` — values tuned for r135.
+**Two false starts:**
+1. *outputColorSpace = SRGBColorSpace*: digital color-meter confirmed identical pixel values before/after.
+   For this scene (lit-only materials, no sRGB textures), the renderer-side color space is a no-op.
+2. *Lights × Math.PI*: technically the correct r157+ migration math, but produced an overly bright /
+   washed-out result. The combination of the new managed color path + π scaling was over-correcting.
 
-**Fix:** Extended the esbuild plugin with an `onLoad` hook on
-`web-ifc-viewer/.../context/scene.js` that multiplies each of the three light intensities by `Math.PI`.
-Restores the r135 visual baseline. The `outputColorSpace = SRGBColorSpace` setter in
-`ShareViewer.constructor` is kept as a documented best-practice no-op (forward-compat for when the
-scene grows sRGB textures).
+**Actual fix — disable r152+ Managed color mode entirely:**
+`ColorManagement.enabled = false` at module load (before any three object is constructed). This restores
+r135 "legacy" color semantics: material colors are used as-is, the framebuffer flows straight through
+the monitor's sRGB curve, and the hard-coded light intensities (`0.8` / `0.25`) work without scaling.
+
+Set as a top-level side-effect in `src/viewer/ShareViewer.js` — must run before the fork's `new
+IfcViewerAPI()` constructs any materials or the renderer. The earlier `outputColorSpace =
+SRGBColorSpace` setter and the esbuild `scene.js` rewrite were both **reverted** as unnecessary under
+the disabled-Managed regime.
+
+Goes away with Phase 5: when ShareViewer owns its own scene, we re-enable Managed mode as the new
+baseline and re-tune the lights accordingly.
 
 ### Issue 3 — `THREE.Clock: This module has been deprecated.`
 **Symptom:** One-time `console.warn` at app startup. Cosmetic only; `Clock` still functions.

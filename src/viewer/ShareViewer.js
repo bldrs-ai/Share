@@ -1,5 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {SRGBColorSpace} from 'three'
+import {ColorManagement} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import IfcHighlighter from './three/IfcHighlighter'
@@ -8,6 +8,29 @@ import CustomPostProcessor from './three/CustomPostProcessor'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {areDefinedAndNotNull} from '../utils/assert'
+
+
+// Disable three.js r152+ automatic linear-sRGB color management
+// (a.k.a. "Managed" color mode). With it enabled, three converts sRGB
+// values to linear before lighting and back to sRGB on output — the
+// physically-correct path. The fork (web-ifc-viewer) and our material
+// setup were tuned in the r135 era against the *legacy* regime where
+// material colors are used as-is and the rendered framebuffer flows
+// straight through the monitor's sRGB curve. Under managed mode the
+// Schependomlaan baseline renders washed out / overly bright.
+//
+// Setting this to `false` at module load (before any three object is
+// constructed, including the fork's renderer/scene/materials inside
+// `new IfcViewerAPI(...)`) restores r135-identical visual output. It
+// also reverts the r157 `useLegacyLights = false` default's effect for
+// most practical purposes — light intensities tuned for r135 (e.g.,
+// the fork's hardcoded `0.8` / `0.25` in scene.js) match the r135
+// visual without per-light π scaling.
+//
+// Goes away with Phase 5 of design/new/viewer-replacement.md, when
+// ShareViewer owns its scene and we re-enable Managed mode as the new
+// baseline.
+ColorManagement.enabled = false
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -45,15 +68,6 @@ export class ShareViewer extends IfcViewerAPI {
       this.context = new ThreeContext(this.context)
     }
     const renderer = this.context.getRenderer()
-    // Three r152+ changed the default `outputColorSpace` from
-    // SRGBColorSpace to LinearSRGBColorSpace, which makes materials
-    // baked at sRGB (the typical IFC export) render darker / less
-    // saturated. Restore the legacy default so the Schependomlaan
-    // / .ifc baseline looks identical on the upgrade. Design doc §6.
-    // Guard for tests where the mock's getRenderer() returns undefined.
-    if (renderer) {
-      renderer.outputColorSpace = SRGBColorSpace
-    }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)

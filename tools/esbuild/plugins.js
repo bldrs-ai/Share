@@ -109,25 +109,6 @@ export default function makePlugins(root, buildDir) {
         return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
       })
 
-      // The fork's `IfcScene` (context/scene.js) hard-codes light
-      // intensities that were tuned for three r135's legacy
-      // `useLegacyLights = true` regime. In r157+ that flag was
-      // removed; defaults are physically-correct intensities, where the
-      // same numeric value produces ~π× less light. The migration
-      // guidance: multiply legacy intensities by π. Scenes go from
-      // washed-out brown to the saturated orange-red of the r135
-      // baseline. Goes away when ShareViewer owns its own scene
-      // (Phase 5 of design/new/viewer-replacement.md).
-      build.onLoad({filter: /web-ifc-viewer[/\\]dist[/\\]components[/\\]context[/\\]scene\.js$/}, async (args) => {
-        let src = await fs.readFile(args.path, 'utf8')
-        // Scale all three hard-coded light intensities by Math.PI.
-        src = src
-          .replace(/new DirectionalLight\(0xffeeff, 0\.8\)/, 'new DirectionalLight(0xffeeff, 0.8 * Math.PI)')
-          .replace(/new DirectionalLight\(0xffffff, 0\.8\)/, 'new DirectionalLight(0xffffff, 0.8 * Math.PI)')
-          .replace(/new AmbientLight\(0xffffee, 0\.25\)/, 'new AmbientLight(0xffffee, 0.25 * Math.PI)')
-        return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
-      })
-
       // The fork's `IfcContext` does `new Clock(true)` once at
       // construction. r183 deprecated `THREE.Clock` and emits a
       // `console.warn` on every instantiation. Three's replacement
