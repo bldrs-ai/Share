@@ -33,19 +33,46 @@ catches this — only click-time runtime.
 ### Issue 2 — Colors desaturated
 **Symptom:** Schependomlaan-style models render with washed-out brown roof / dim green grass instead of
 saturated orange-red / vibrant green (compared before/after).
-**Cause:** three r152 changed the default `WebGLRenderer.outputColorSpace` from `SRGBColorSpace` to
-`LinearSRGBColorSpace`. Materials baked with sRGB-space colors (IFC default) now render in linear space and
-look darker / less saturated.
-**Fix:** `ShareViewer.constructor` now sets `renderer.outputColorSpace = SRGBColorSpace` explicitly (guarded
-for the test mock's undefined `getRenderer()`). Restores the r135 baseline visual.
+**Root cause (NOT colorspace):** Initially attributed to the r152 `outputColorSpace` default change
+(`SRGBColorSpace` → `LinearSRGBColorSpace`). Set `renderer.outputColorSpace = SRGBColorSpace` in
+`ShareViewer.constructor` — **had no measurable effect** (digital color-meter on the rendered pixels
+confirmed identical values before/after the change). For this scene the materials are lit-only with
+no sRGB textures, so the renderer-side color space is a no-op.
 
-### Issue 3 — `THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.`
-**Cause:** The fork's `IfcContext` constructs `new Clock(true)` at line 51 of
-`web-ifc-viewer/dist/components/context/context.js`. r183 added a one-time `console.warn` on `Clock`
-construction.
-**Status:** **Not fixed.** Cosmetic console noise, no functional impact. A swap to `Timer` is non-trivial:
-`Timer` requires explicit `update()` calls per frame and lacks `Clock`'s auto-start semantics. The warning
-disappears when the fork goes (Phase 3+5).
+**Actual cause:** r157 removed `WebGLRenderer.useLegacyLights`. Default lights are now
+physically-correct (1 unit = 1 lumen), where the same numeric intensity produces ~π× less light than
+r135's legacy regime. The fork's `IfcScene.setupLights()` hard-codes
+`DirectionalLight(_, 0.8) ×2` and `AmbientLight(_, 0.25)` — values tuned for r135.
+
+**Fix:** Extended the esbuild plugin with an `onLoad` hook on
+`web-ifc-viewer/.../context/scene.js` that multiplies each of the three light intensities by `Math.PI`.
+Restores the r135 visual baseline. The `outputColorSpace = SRGBColorSpace` setter in
+`ShareViewer.constructor` is kept as a documented best-practice no-op (forward-compat for when the
+scene grows sRGB textures).
+
+### Issue 3 — `THREE.Clock: This module has been deprecated.`
+**Symptom:** One-time `console.warn` at app startup. Cosmetic only; `Clock` still functions.
+**Cause:** The fork's `IfcContext` calls `new Clock(true)` once at construction. r183 deprecated
+`THREE.Clock` and added a one-shot warn. Three's recommended replacement (`Timer`) has different
+semantics — it requires explicit per-frame `update()` calls and lacks Clock's auto-start, so it
+can't be a drop-in.
+
+**Fix:** Extended the esbuild plugin with an `onLoad` hook on
+`web-ifc-viewer/.../context/context.js` that strips `Clock` from the `three` import and inlines a
+tiny API-compatible replacement (constructor + `getDelta()` only — the only methods the fork uses):
+```js
+class Clock {
+  constructor() { this._last = performance.now() }
+  getDelta() {
+    const now = performance.now()
+    const d = (now - this._last) / 1000
+    this._last = now
+    return d
+  }
+}
+```
+Eliminates the warning without rewiring the fork's render loop. Required because prod runs with zero
+console noise as a gate.
 
 ## What broke and what fixed it
 

@@ -108,6 +108,49 @@ export default function makePlugins(root, buildDir) {
           .replace(/this\.controls\.removeFromParent\(\);/, `${thisHelperExpr}.removeFromParent();`)
         return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
       })
+
+      // The fork's `IfcScene` (context/scene.js) hard-codes light
+      // intensities that were tuned for three r135's legacy
+      // `useLegacyLights = true` regime. In r157+ that flag was
+      // removed; defaults are physically-correct intensities, where the
+      // same numeric value produces ~π× less light. The migration
+      // guidance: multiply legacy intensities by π. Scenes go from
+      // washed-out brown to the saturated orange-red of the r135
+      // baseline. Goes away when ShareViewer owns its own scene
+      // (Phase 5 of design/new/viewer-replacement.md).
+      build.onLoad({filter: /web-ifc-viewer[/\\]dist[/\\]components[/\\]context[/\\]scene\.js$/}, async (args) => {
+        let src = await fs.readFile(args.path, 'utf8')
+        // Scale all three hard-coded light intensities by Math.PI.
+        src = src
+          .replace(/new DirectionalLight\(0xffeeff, 0\.8\)/, 'new DirectionalLight(0xffeeff, 0.8 * Math.PI)')
+          .replace(/new DirectionalLight\(0xffffff, 0\.8\)/, 'new DirectionalLight(0xffffff, 0.8 * Math.PI)')
+          .replace(/new AmbientLight\(0xffffee, 0\.25\)/, 'new AmbientLight(0xffffee, 0.25 * Math.PI)')
+        return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
+      })
+
+      // The fork's `IfcContext` does `new Clock(true)` once at
+      // construction. r183 deprecated `THREE.Clock` and emits a
+      // `console.warn` on every instantiation. Three's replacement
+      // (`Timer`) has different semantics — it requires explicit
+      // per-frame `update()` calls and lacks Clock's auto-start
+      // behavior. Rather than rewire the fork's render loop, we
+      // replace the Clock import with a tiny API-compatible inline
+      // class (constructor + getDelta only — the only methods the
+      // fork uses). Goes away with Phase 5.
+      build.onLoad({filter: /web-ifc-viewer[/\\]dist[/\\]components[/\\]context[/\\]context\.js$/}, async (args) => {
+        let src = await fs.readFile(args.path, 'utf8')
+        // Strip Clock from the three import (other names preserved).
+        src = src
+          .replace(/import \{([^}]*)\bClock\b,?\s*([^}]*)\} from 'three';/, (m, before, after) => {
+            const names = `${before}${after}`.split(',').map((s) => s.trim()).filter(Boolean).join(', ')
+            return `import { ${names} } from 'three';\n` +
+              '/* Clock shim: drop-in for the fork\'s `new Clock(true)` / `getDelta()` usage. ' +
+              'r183 deprecated THREE.Clock; this avoids the console.warn without rewiring the render loop. */\n' +
+              'class Clock { constructor() { this._last = performance.now(); } ' +
+              'getDelta() { const now = performance.now(); const d = (now - this._last) / 1000; this._last = now; return d; } }\n'
+          })
+        return {contents: src, loader: 'js', resolveDir: path.dirname(args.path)}
+      })
     },
   }
 
