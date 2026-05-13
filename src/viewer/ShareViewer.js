@@ -1,5 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {ColorManagement} from 'three'
+import {ColorManagement, LinearSRGBColorSpace} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import IfcHighlighter from './three/IfcHighlighter'
@@ -68,6 +68,20 @@ export class ShareViewer extends IfcViewerAPI {
       this.context = new ThreeContext(this.context)
     }
     const renderer = this.context.getRenderer()
+    // Partner to the top-level `ColorManagement.enabled = false`: that
+    // disables the *input* side (auto sRGB→linear conversions on
+    // materials / textures); this disables the *output* side. r184's
+    // `WebGLRenderer.outputColorSpace` default is `SRGBColorSpace`,
+    // which gamma-encodes the rendered framebuffer. r135's default was
+    // `LinearEncoding` (no gamma encoding) — the modern equivalent is
+    // `LinearSRGBColorSpace`. Postprocessing's `EffectComposer.initialize`
+    // also keys off this property: when it sees SRGB it tags its render
+    // target as sRGB and applies its own encoding. We need both off to
+    // match r135 pixel-for-pixel. Guard for tests where the mock's
+    // getRenderer() returns undefined.
+    if (renderer) {
+      renderer.outputColorSpace = LinearSRGBColorSpace
+    }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
