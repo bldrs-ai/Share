@@ -5,7 +5,6 @@ import CameraControl from '../Components/Camera/CameraControl'
 import MarkerControl from '../Components/Markers/MarkerControl'
 import ImagineControl from '../Components/Imagine/ImagineControl'
 import NotesControl from '../Components/Notes/NotesControl'
-import PerfToolbarSlot from '../Components/PerfToolbarSlot'
 import ProfileControl from '../Components/Profile/ProfileControl'
 import PropertiesControl from '../Components/Properties/PropertiesControl'
 import ShareControl from '../Components/Share/ShareControl'
@@ -41,7 +40,6 @@ export default function OperationsGroup() {
       }}
     >
       <Stack direction='row' sx={{pointerEvents: 'auto'}}>
-        <PerfToolbarSlot/>
         {isLoginEnabled && <ProfileControl/>}
         {isAppsEnabled && <AppsControl/>}
         {isShareEnabled && <ShareControl/>}

@@ -137,20 +137,29 @@ context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
   the offscreen canvases regardless. `window.perf` is installed for
   show/hide/toggle from devtools.
 
-The panel is docked in the top-right control cluster — the inner
-`Stack direction='row'` inside `src/Containers/OperationsGroup.jsx`,
-immediately before `<ProfileControl/>`. `src/Components/AppBar.jsx`
-is *not* used by the running app (the real toolbar is the
-`ControlsGroup` / `OperationsGroup` pair laid out by `RootLandscape`).
+The panel is docked in the bottom bar, immediately left of the
+Help/Bot control — wrapped with that control in a small sub-stack
+inside `src/Containers/BottomBar.jsx` so the outer
+`justifyContent='space-between'` doesn't float perf into the middle
+of the bar. `src/Components/AppBar.jsx` is *not* used by the running
+app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
+`BottomBar` trio laid out by `RootLandscape`).
 
 `src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
 reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
 (same source of truth as `window.perf` — synchronous, never lags a
-render the way `useExistInFeature` would), checks `useIsMobile`,
-renders a `<Box ref>`, and bridges mount/unmount via
-`mountPerfPanel(slotEl)` / `unmountPerfPanel()` from `PerfMonitor.js`.
-On mobile (≤ `MOBILE_WIDTH`) the slot returns `null` — perf data is
-still reachable via `window.perf` on a desktop window.
+render the way `useExistInFeature` would), renders a `<Box ref>`, and
+bridges mount/unmount via `mountPerfPanel(slotEl)` /
+`unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
+panel needs to be visible on mobile (where users can't reach a
+devtools console) and the bottom bar has enough lateral room across
+form factors.
+
+The panel is **on by default** when `?feature=perf` is set — the
+canvas wrapper is created without `display:none` and `mountPerfPanel`
+just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
+remain available for developers who want to hide/show it without
+reloading.
 
 Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
 last only where Chromium's `performance.memory` is available). The
