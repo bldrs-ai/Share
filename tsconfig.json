@@ -26,6 +26,7 @@
     "noImplicitAny": true,
     "noImplicitThis": true,
     "pretty": false,
+    "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
     "types": ["jest", "@testing-library/jest-dom"]

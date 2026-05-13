@@ -1,5 +1,5 @@
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
-import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {load, readModel} from './Loader'
 
 
@@ -620,8 +620,15 @@ function setupMockBlobWithContent(fileContent) {
     await Promise.resolve() // Satisfy async requirement
 
     if (Buffer.isBuffer(fileContent)) {
-      // Handle binary data
-      return fileContent.buffer.slice(fileContent.byteOffset, fileContent.byteOffset + fileContent.byteLength)
+      // Reify as a fresh ArrayBuffer using the global ArrayBuffer
+      // constructor. Node's Buffer.buffer is technically an ArrayBuffer,
+      // but in jsdom (with its own global ArrayBuffer) the cross-realm
+      // `instanceof ArrayBuffer` check that three's GLTFLoader.parse
+      // does (r184+) returns false. Copying through Uint8Array forces
+      // the result into the realm's ArrayBuffer.
+      const ab = new ArrayBuffer(fileContent.byteLength)
+      new Uint8Array(ab).set(fileContent)
+      return ab
     } else {
       // Handle text data
       const encoder = new TextEncoder()
