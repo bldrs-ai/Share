@@ -10,6 +10,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 - **Style:** match the surrounding code. Details in [STYLE.md](STYLE.md).
 - **Commands:** never invoke `tsc` directly (it emits stray `.js`); use `yarn lint` (eslint + tsc) or `yarn typecheck`. For tests, `yarn test` (Jest) and `yarn test-flows [spec]` (Playwright). Full dev/CI loop in [PLAYBOOK.md](PLAYBOOK.md).
 - **Run tests; don't ask first.** Use `--config tools/jest/jest.config.js` when invoking Jest directly.
+- **Run `yarn precommit` before every `git push`.** This is the same gate CI's `build` job enforces (`eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test`). The repo ships a husky `.husky/pre-commit` that does this for human contributors, but it only fires after a one-time `yarn husky-init` (wires `core.hooksPath` to `.husky`). Fresh sandboxes / Codespaces / CI workers often skip that step, so `git commit` runs with no hooks and a red CI is the first signal something's wrong. Don't rely on the hook — run `yarn precommit` yourself before pushing. If `yarn` deps aren't installed, run `yarn install` first.
 
 
 ## When to read what
