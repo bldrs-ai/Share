@@ -103,6 +103,74 @@ GitHub API integration for model versioning and collaboration:
 4. 3D scene setup and rendering (`Infrastructure/`)
 5. UI state synchronization and user interactions
 
+## Render loop & perf monitor
+
+The `requestAnimationFrame` loop is driven by the `web-ifc-viewer` fork.
+Each frame the fork calls `renderer.update`, which we replace at startup
+with our own closure via `ThreeContext.setRenderUpdate(fn)`
+(`src/viewer/three/ThreeContext.js`). That closure is the **only**
+per-frame render path we control — there is no second `composer.render()`
+or `renderer.render()` callsite in our code.
+
+Today the closure is built in `src/viewer/three/IfcHighlighter.js`
+(it needs the `EffectComposer` to drive the outline effect). If/when a
+future refactor pulls render-driving out of the highlighter — e.g. into
+a dedicated `RenderLoop` module — `setRenderUpdate` is the seam that
+moves with it.
+
+Perf instrumentation attaches at that seam, not inside the closure:
+
+```js
+// IfcHighlighter constructor:
+context.setRenderUpdate(withPerf(newUpdateFunction(context, getComposer)))
+```
+
+`withPerf` (in `src/utils/PerfMonitor.js`) is gated on the
+`?feature=perf` URL flag, evaluated once at module load:
+
+- **Flag off (default):** `withPerf(fn)` returns `fn` unchanged. The
+  render closure has no perf code; `window.perf` is not defined; no DOM
+  or sampling state is created. Zero per-frame cost.
+- **Flag on:** `withPerf` returns a wrapper that brackets `fn()` with
+  `monitor.begin()` / `monitor.end()`. The Monitor singleton is built
+  at module load but **not** attached to the DOM yet; sampling runs on
+  the offscreen canvases regardless. `window.perf` is installed for
+  show/hide/toggle from devtools.
+
+The panel is docked in the bottom bar, immediately left of the
+Help/Bot control — wrapped with that control in a small sub-stack
+inside `src/Containers/BottomBar.jsx` so the outer
+`justifyContent='space-between'` doesn't float perf into the middle
+of the bar. `src/Components/AppBar.jsx` is *not* used by the running
+app (the real chrome is the `ControlsGroup` / `OperationsGroup` /
+`BottomBar` trio laid out by `RootLandscape`).
+
+`src/Components/PerfToolbarSlot.jsx` is the only React bridge: it
+reads the module-level `isPerfEnabled` exported from `PerfMonitor.js`
+(same source of truth as `window.perf` — synchronous, never lags a
+render the way `useExistInFeature` would), renders a `<Box ref>`, and
+bridges mount/unmount via `mountPerfPanel(slotEl)` /
+`unmountPerfPanel()` from `PerfMonitor.js`. No mobile gate — the
+panel needs to be visible on mobile (where users can't reach a
+devtools console) and the bottom bar has enough lateral room across
+form factors.
+
+The panel is **on by default** when `?feature=perf` is set — the
+canvas wrapper is created without `display:none` and `mountPerfPanel`
+just `appendChild`s it. `window.perf.off()` / `on()` /  `toggle()`
+remain available for developers who want to hide/show it without
+reloading.
+
+Three panels rotate on click — FPS, frame time (ms), JS heap MB (the
+last only where Chromium's `performance.memory` is available). The
+module is a minimal port of mrdoob's stats.js — the panel the three.js
+examples use.
+
+Offscreen renders (screenshots taken via
+`ShareViewer.takeScreenshot()` -> `IfcRenderer.newScreenshot`) are
+**not** instrumented; they take a different render path and would
+distort steady-state FPS samples.
+
 ## Authentication & Collaboration
 - Auth0 integration for user authentication
 - GitHub integration for model versioning and storage
