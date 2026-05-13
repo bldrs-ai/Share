@@ -1,4 +1,3 @@
-/* eslint-disable no-magic-numbers */
 /**
  * Lightweight render-loop perf panel — FPS, frame time (ms), and JS heap
  * memory (MB, where `performance.memory` exists).  A minimal port of
@@ -10,10 +9,10 @@
  *   - `withPerf(fn)` returns `fn` unchanged, so the render loop pays
  *     no per-frame branch or closure cost.
  *
- * When the flag is on the panel is docked inside the AppBar toolbar
- * (left of the profile icon) by `src/Components/PerfToolbarSlot.jsx`,
- * which calls `mountPerfPanel(slotEl)` on React mount.  Sampling starts
- * at module load regardless of whether the panel is attached to the DOM
+ * When the flag is on the panel is docked in the bottom bar (left of
+ * the Help/Bot control) by `src/Components/PerfToolbarSlot.jsx`, which
+ * calls `mountPerfPanel(slotEl)` on React mount.  Sampling starts at
+ * module load regardless of whether the panel is attached to the DOM
  * — the canvases just aren't visible until mounted.
  *
  * Devtools controls (only defined when the flag is on):
@@ -26,6 +25,14 @@
  * Today the only render closure that uses `withPerf` is the one installed
  * by `src/viewer/three/IfcHighlighter.js` via `ThreeContext.setRenderUpdate`;
  * see DESIGN.md "Render loop & perf monitor" for the architectural seam.
+ *
+ * Test note: this module has module-load side effects gated on the URL
+ * flag — `window.location.search` is read once at import.  jsdom-based
+ * tests run with an empty search string by default, so the side-effect
+ * block is skipped and the module is a no-op.  Tests that need to
+ * exercise the on-path should set `window.location.search` *before*
+ * importing the module (and use `jest.isolateModules`/`jest.resetModules`
+ * to re-run the module-level code).
  */
 
 const PERF_FEATURE_FLAG = 'perf'
@@ -116,16 +123,17 @@ const FPS_MAX = 100
 const MS_MAX = 200
 const BYTES_PER_MB = 1048576
 
-// Panel indices into Monitor#panels — order matches PANELS below.
-const I_FPS = 0
-const I_MS = 1
-const I_MB = 2
-
 const PANELS = [
   {name: 'FPS', fg: '#0ff', bg: '#002'},
   {name: 'MS', fg: '#0f0', bg: '#020'},
   {name: 'MB', fg: '#f08', bg: '#201'},
 ]
+
+// Panel indices into Monitor#panels — derived from PANELS so reordering
+// the spec list doesn't silently break Monitor.end().
+const I_FPS = PANELS.findIndex((p) => p.name === 'FPS')
+const I_MS = PANELS.findIndex((p) => p.name === 'MS')
+const I_MB = PANELS.findIndex((p) => p.name === 'MB')
 
 
 /**
@@ -147,7 +155,15 @@ class Panel {
     canvas.style.cssText = `width:${PANEL_WIDTH}px;height:${PANEL_HEIGHT}px;display:block`
     this.canvas = canvas
 
+    // `getContext('2d')` returns null in headless / no-canvas
+    // environments (notably jsdom, where the tests run).  Keep the
+    // canvas element in the DOM so mount/unmount and visibility tests
+    // still work, but skip drawing — `update()` mirrors this check.
     const ctx = canvas.getContext('2d')
+    this.ctx = ctx
+    if (!ctx) {
+      return
+    }
     ctx.font = `bold ${TEXT_PX}px Helvetica,Arial,sans-serif`
     ctx.textBaseline = 'top'
 
@@ -161,7 +177,6 @@ class Panel {
     ctx.fillStyle = spec.bg
     ctx.globalAlpha = 0.9
     ctx.fillRect(GX, GY, GW, GH)
-    this.ctx = ctx
   }
 
   /**
@@ -177,6 +192,10 @@ class Panel {
     this.max = Math.max(this.max, value)
 
     const {ctx, spec} = this
+    // Headless / jsdom — see the constructor's matching guard.
+    if (!ctx) {
+      return
+    }
     ctx.fillStyle = spec.bg
     ctx.globalAlpha = 1
     ctx.fillRect(0, 0, PW, GY)
@@ -200,6 +219,7 @@ class Panel {
 
 /** Holds the panels and stitched DOM container; created lazily on init. */
 class Monitor {
+  /** Build the three sub-panels, the click-to-cycle host div, and seed the timers. */
   constructor() {
     this.activeIndex = 0
     this.panels = PANELS.map((spec) => new Panel(spec))
@@ -229,6 +249,7 @@ class Monitor {
     this.frames = 0
   }
 
+  /** Advance to the next sub-panel and update which canvas is visible. */
   showNext() {
     this.activeIndex = (this.activeIndex + 1) % this.panels.length
     this.panels.forEach((p, i) => {
@@ -236,10 +257,16 @@ class Monitor {
     })
   }
 
+  /** Stamp the frame-start time.  Paired with `end()`. */
   begin() {
     this.beginTime = performance.now()
   }
 
+  /**
+   * Stamp the frame-end time and push samples into the sub-panels.
+   * MS updates every frame; FPS and MB update once per `FPS_REFRESH_MS`
+   * so the displayed numbers don't strobe.
+   */
   end() {
     this.frames++
     const time = performance.now()
@@ -260,7 +287,6 @@ class Monitor {
       this.prevTime = time
       this.frames = 0
     }
-    return time
   }
 }
 
@@ -298,8 +324,9 @@ if (isPerfEnabled) {
 
 
 /**
- * Dock the panel inside `parent`.  Called by `PerfToolbarSlot` once the
- * AppBar has rendered its slot.  No-op when the feature flag is off.
+ * Dock the panel inside `parent`.  Called by `PerfToolbarSlot` once
+ * the BottomBar has rendered its slot.  No-op when the feature flag
+ * is off.
  *
  * Safe to call multiple times — `appendChild` of an already-parented
  * node detaches it from its previous parent first.
