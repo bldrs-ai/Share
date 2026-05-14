@@ -121,6 +121,7 @@ export async function compressGlb(glbBytes, mode) {
       await MeshoptEncoder.ready
       const {meshopt} = await import('@gltf-transform/functions')
       io.registerExtensions([EXTMeshoptCompression])
+        .registerDependencies({'meshopt.encoder': MeshoptEncoder})
       transformOp = meshopt({encoder: MeshoptEncoder, level: 'medium'})
     } else {
       glbInfo(`compress: unknown mode "${mode}"; passing bytes through`)

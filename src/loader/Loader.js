@@ -31,7 +31,7 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
-import {activeSchemaVersion} from './glbCompress'
+import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 import {
@@ -883,6 +883,7 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
     // Schema version varies with the active compression flag so a flag-
     // off reader never picks up a flag-on writer's compressed bytes
     // (and vice versa). See glbCompress.js#schemaVersionFor.
+    const requestedMode = activeGlbCompressionMode()
     const schemaVer = activeSchemaVersion()
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     const exists = await doesFileExistInOPFS(
@@ -890,8 +891,31 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
     if (!exists) {
       return null
     }
-    return await readModelByPathFromOPFS(
+    const file = await readModelByPathFromOPFS(
       key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    if (!file) {
+      return null
+    }
+    // Verify the cached artifact's compression mode matches what the
+    // user asked for. The schema-suffix filename partitioning is the
+    // first line of defense; this is the second — it catches stale
+    // artifacts written by an earlier code revision (pre-mode-byte) or
+    // pollution in the OPFS slot. On mismatch we treat it as a miss
+    // so the IFC parse path runs and the writer rewrites a correct
+    // artifact.
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    if (!isBldrsGlbContainer(bytes)) {
+      glbInfo('reader: found OPFS file but it is not a Bldrs container; treating as miss')
+      return null
+    }
+    const peek = unpackGlbContainer(bytes)
+    if (peek.mode !== requestedMode) {
+      glbInfo(
+        `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
+        `requested=${requestedMode || 'none'}); treating as miss`)
+      return null
+    }
+    return file
   } catch (e) {
     glbInfo('reader: lookup failed, falling back to source path:', e)
     return null
@@ -932,11 +956,13 @@ function swapToGlbLoader(viewer) {
  * @return {Promise<{scenes: object[]}>}
  */
 async function parseBldrsGlbContainer(loader, containerBytes) {
-  const chunkBuffers = unpackGlbContainer(containerBytes)
-  glbInfo(`reader: unpacked Bldrs container — ${chunkBuffers.length} GLB chunk(s)`)
+  const {chunks, mode, version} = unpackGlbContainer(containerBytes)
+  glbInfo(
+    `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
+    `mode=${mode || 'none'}`)
   const merged = new Group()
-  for (let i = 0; i < chunkBuffers.length; i++) {
-    const chunkAb = chunkBuffers[i]
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkAb = chunks[i]
     const gltf = await new Promise((resolve, reject) => {
       try {
         loader.parse(chunkAb, './', (m) => resolve(m), (err) => {

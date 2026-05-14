@@ -151,7 +151,7 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs}) {
     // flag (it would expect compressed input on the next load).
     const {bytes, mode} = await compressGlb(rawBytes, requestedMode)
     const schemaVer = schemaVersionFor(mode)
-    const packed = packGlbChunks([bytes])
+    const packed = packGlbChunks([bytes], mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
