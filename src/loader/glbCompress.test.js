@@ -75,14 +75,18 @@ describe('loader/glbCompress', () => {
   })
 
   describe('compressGlb', () => {
-    it('returns input unchanged on null mode', async () => {
+    it('returns {bytes, mode:null} on null mode', async () => {
       const input = new Uint8Array([1, 2, 3])
-      expect(await compressGlb(input, null)).toBe(input)
+      const result = await compressGlb(input, null)
+      expect(result.bytes).toBe(input)
+      expect(result.mode).toBeNull()
     })
 
-    it('passes through on unrecognised mode rather than throwing', async () => {
+    it('passes through on unrecognised mode (mode reported as null)', async () => {
       const input = new Uint8Array([1, 2, 3])
-      expect(await compressGlb(input, 'lz4')).toBe(input)
+      const result = await compressGlb(input, 'lz4')
+      expect(result.bytes).toBe(input)
+      expect(result.mode).toBeNull()
     })
   })
 })

@@ -9,15 +9,19 @@
 //
 // Encoder loading strategy:
 // - **DRACO**: inject a `<script>` tag pointing at our existing
-//   `/static/js/draco/draco_encoder.js` (already shipped via
-//   `public/static/js/draco/`). The `draco3dgltf` npm package would be
-//   the conventional choice but its emscripten glue does `require("fs")`
-//   /`require("path")` for wasm bootstrap, which doesn't play nicely
-//   with esbuild's browser bundling. Loading the script lazily side-
-//   steps the bundler entirely and reuses assets the reader path
-//   already pays for.
-// - **Meshopt**: `MeshoptEncoder` from the `meshoptimizer` package is a
-//   proper browser ES module; import directly.
+//   `/static/js/draco/draco_encoder.js` (shipped via
+//   `public/static/js/draco/`). The encoder JS is the WASM-aware build
+//   from Google's `draco3d` npm package — it loads `draco_encoder.wasm`
+//   sibling at runtime via our `locateFile` callback. Earlier we shipped
+//   the asm.js-only encoder build (no `.wasm` sibling), which hung the
+//   main thread at 100% CPU on dense meshes; the WASM build is ~10× faster.
+//   Loading via script tag (vs `import 'draco3d'`) sidesteps the
+//   package's `require("fs")` / `require("path")` calls in browser
+//   bundlers like esbuild.
+// - **Meshopt**: `MeshoptEncoder` from `meshoptimizer/encoder` subpath
+//   (the default `'meshoptimizer'` re-export doesn't surface the
+//   encoder under bundler dedup with our reader-side `meshoptimizer/decoder`
+//   static import).
 //
 // All work is deferred until `compressGlb()` is called; nothing imports
 // the encoder modules at module-load time so the cost is zero when the
@@ -83,17 +87,20 @@ export function activeSchemaVersion() {
 
 /**
  * Compress an uncompressed GLB's geometry buffers using the named
- * extension. Resolves to the original bytes (unchanged) on `null` mode
- * or any failure — the caller treats compression as best-effort and
- * keeps the artifact rather than dropping the cache write entirely.
+ * extension. Returns `{bytes, mode}` so callers can tell whether
+ * compression actually applied — on any failure (or `null` mode) the
+ * returned mode is `null` and bytes are the original input. Cache
+ * writers use the *returned* mode to pick the schema slot, so a
+ * failed-and-fell-back artifact lands in the uncompressed slot rather
+ * than masquerading as compressed.
  *
  * @param {Uint8Array} glbBytes uncompressed GLB binary
  * @param {GlbCompressionMode} mode
- * @return {Promise<Uint8Array>}
+ * @return {Promise<{bytes:Uint8Array, mode:GlbCompressionMode}>}
  */
 export async function compressGlb(glbBytes, mode) {
   if (!mode) {
-    return glbBytes
+    return {bytes: glbBytes, mode: null}
   }
   const startMs = Date.now()
   try {
@@ -110,14 +117,14 @@ export async function compressGlb(glbBytes, mode) {
         .registerDependencies({'draco3d.encoder': encoderModule})
       transformOp = draco({method: 'edgebreaker'})
     } else if (mode === 'meshopt') {
-      const {MeshoptEncoder} = await import('meshoptimizer')
+      const {MeshoptEncoder} = await import('meshoptimizer/encoder')
       await MeshoptEncoder.ready
       const {meshopt} = await import('@gltf-transform/functions')
       io.registerExtensions([EXTMeshoptCompression])
       transformOp = meshopt({encoder: MeshoptEncoder, level: 'medium'})
     } else {
       glbInfo(`compress: unknown mode "${mode}"; passing bytes through`)
-      return glbBytes
+      return {bytes: glbBytes, mode: null}
     }
 
     const doc = await io.readBinary(glbBytes)
@@ -127,10 +134,10 @@ export async function compressGlb(glbBytes, mode) {
     glbInfo(
       `compress: ${mode} ${glbBytes.byteLength}B → ${out.byteLength}B ` +
       `(${ratio}% reduction) in ${Date.now() - startMs}ms`)
-    return out
+    return {bytes: out, mode}
   } catch (e) {
     glbInfo(`compress: ${mode} failed, falling back to uncompressed:`, e)
-    return glbBytes
+    return {bytes: glbBytes, mode: null}
   }
 }
 

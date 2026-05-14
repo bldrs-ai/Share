@@ -19,10 +19,10 @@ jest.mock('three/examples/jsm/exporters/GLTFExporter.js', () => ({
 // short-circuit it to a passthrough so the writer's behavior is testable
 // without standing up the wasm encoder pipeline.
 const mockActiveMode = jest.fn(() => null)
-const mockCompressGlb = jest.fn((bytes) => Promise.resolve(bytes))
+const mockCompressGlb = jest.fn((bytes, mode) => Promise.resolve({bytes, mode: mode || null}))
 jest.mock('./glbCompress', () => ({
   activeGlbCompressionMode: () => mockActiveMode(),
-  activeSchemaVersion: () => '0.5.0',
+  schemaVersionFor: (mode) => (mode ? `0.5.0-${mode}` : '0.5.0'),
   compressGlb: (...args) => mockCompressGlb(...args),
 }))
 
@@ -36,7 +36,7 @@ describe('loader/glbExport', () => {
     mockWriteGlbBytesToOPFS.mockReset().mockResolvedValue(true)
     mockExporterParse.mockReset()
     mockActiveMode.mockReset().mockReturnValue(null)
-    mockCompressGlb.mockReset().mockImplementation((bytes) => Promise.resolve(bytes))
+    mockCompressGlb.mockReset().mockImplementation((bytes, mode) => Promise.resolve({bytes, mode: mode || null}))
   })
 
   describe('exportThreeModelAsGlb', () => {

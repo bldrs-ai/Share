@@ -29,8 +29,8 @@ import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
-  activeSchemaVersion,
   compressGlb,
+  schemaVersionFor,
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
@@ -42,35 +42,76 @@ import {glbInfo, glbVerbose} from './glbLog'
  * throwing — the source model is already loaded; the cache write is a
  * fire-and-forget warm-up.
  *
+ * Note on console noise: GLTFExporter emits one `console.warn` per
+ * non-PBR material (`MeshStandardMaterial`/`MeshBasicMaterial`
+ * recommended). web-ifc-three's IFCLoader produces `MeshLambertMaterial`,
+ * so a typical IFC fires dozens of these warnings. They aren't
+ * actionable from our side without rewriting every material to PBR
+ * (which would change appearance), so we silence GLTFExporter's
+ * specific message during parse and let other warnings through.
+ *
  * @param {object} model Three.js root (Mesh / Group / Scene)
  * @return {Promise<Uint8Array|null>}
  */
 export function exportThreeModelAsGlb(model) {
   return new Promise((resolve) => {
+    const restoreConsoleWarn = silenceGltfExporterMaterialWarnings()
+    const finish = (value) => {
+      restoreConsoleWarn()
+      resolve(value)
+    }
     try {
       const exporter = new GLTFExporter()
       exporter.parse(
         model,
         (result) => {
           if (result instanceof ArrayBuffer) {
-            resolve(new Uint8Array(result))
+            finish(new Uint8Array(result))
           } else {
             // Non-binary mode shouldn't fire here, but guard anyway.
             glbInfo('writer: GLTFExporter returned non-binary; skipping')
-            resolve(null)
+            finish(null)
           }
         },
         (err) => {
           glbInfo('writer: GLTFExporter onError:', err)
-          resolve(null)
+          finish(null)
         },
         {binary: true},
       )
     } catch (e) {
       glbInfo('writer: GLTFExporter threw:', e)
-      resolve(null)
+      finish(null)
     }
   })
+}
+
+
+/**
+ * Wrap `console.warn` for the duration of a GLTFExporter `parse` call
+ * to swallow the per-material "Use MeshStandardMaterial or
+ * MeshBasicMaterial for best results" warning. Returns a restore
+ * function the caller invokes when parse settles. Counts suppressed
+ * warnings and surfaces a single summary line via glbVerbose.
+ *
+ * @return {Function} restore — call to undo the patch
+ */
+function silenceGltfExporterMaterialWarnings() {
+  const originalWarn = console.warn
+  let suppressed = 0
+  console.warn = function patchedWarn(...args) {
+    if (typeof args[0] === 'string' && args[0].startsWith('GLTFExporter: Use MeshStandardMaterial')) {
+      suppressed++
+      return
+    }
+    originalWarn.apply(this, args)
+  }
+  return () => {
+    console.warn = originalWarn
+    if (suppressed > 0) {
+      glbVerbose(`writer: silenced ${suppressed} GLTFExporter material warnings`)
+    }
+  }
 }
 
 
@@ -92,19 +133,24 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs}) {
   const startMs = Date.now()
   try {
     const filePath = cacheKeyArgs.sourcePath
-    const mode = activeGlbCompressionMode()
-    const schemaVer = activeSchemaVersion()
+    const requestedMode = activeGlbCompressionMode()
     glbInfo(
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-      `${filePath} sha=${cacheKeyArgs.sourceHash} schema=${schemaVer}`)
-    glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs, 'compression =', mode || 'none')
+      `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
+    glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
     const rawBytes = await exportThreeModelAsGlb(model)
     if (!rawBytes || rawBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
-    const bytes = await compressGlb(rawBytes, mode)
+    // Use the *actual* compression mode (compressGlb may fall back to
+    // null on encoder failure) so the cached artifact lands in the
+    // matching schema slot. Otherwise a -draco / -meshopt suffix on
+    // uncompressed bytes would mislead a reader running with the same
+    // flag (it would expect compressed input on the next load).
+    const {bytes, mode} = await compressGlb(rawBytes, requestedMode)
+    const schemaVer = schemaVersionFor(mode)
     const packed = packGlbChunks([bytes])
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
