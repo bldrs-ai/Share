@@ -31,7 +31,19 @@ export default {
     '.tsx': 'tsx',
   },
   minify: (process.env.MINIFY || 'true') === 'true',
-  keepNames: true, // TODO: have had breakage without this
+  // keepNames preserves function/class names through minification by
+  // wrapping every function expression in a `__name(fn, "name")` helper
+  // call. That breaks three.js's `DRACOLoader._initDecoder`, which uses
+  // `Function.prototype.toString()` to copy a function body into a
+  // worker — the minified body references the `__name` helper by its
+  // bundle-local mangled identifier (e.g. `s`) that isn't defined in the
+  // worker scope, causing every worker to throw `ReferenceError: s is
+  // not defined` and DRACO decode to fail silently on cache-hit loads.
+  // Disabled because no current code relies on `.name` for runtime
+  // behavior; the TODO that flagged "have had breakage without this"
+  // predates the r184 upgrade and may no longer apply. Sourcemaps still
+  // give debuggers readable names.
+  keepNames: false,
   splitting: false,
   metafile: true,
   sourcemap: true,
