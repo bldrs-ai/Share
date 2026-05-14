@@ -9,10 +9,21 @@ jest.mock('../OPFS/utils', () => ({
 }))
 
 const mockExporterParse = jest.fn()
-jest.mock('three/examples/jsm/exporters/GLTFExporter', () => ({
+jest.mock('three/examples/jsm/exporters/GLTFExporter.js', () => ({
   GLTFExporter: jest.fn().mockImplementation(() => ({
     parse: (...args) => mockExporterParse(...args),
   })),
+}))
+
+// The real glbCompress lazy-imports @gltf-transform; in unit tests we
+// short-circuit it to a passthrough so the writer's behavior is testable
+// without standing up the wasm encoder pipeline.
+const mockActiveMode = jest.fn(() => null)
+const mockCompressGlb = jest.fn((bytes) => Promise.resolve(bytes))
+jest.mock('./glbCompress', () => ({
+  activeGlbCompressionMode: () => mockActiveMode(),
+  activeSchemaVersion: () => '0.5.0',
+  compressGlb: (...args) => mockCompressGlb(...args),
 }))
 
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
@@ -24,6 +35,8 @@ describe('loader/glbExport', () => {
   beforeEach(() => {
     mockWriteGlbBytesToOPFS.mockReset().mockResolvedValue(true)
     mockExporterParse.mockReset()
+    mockActiveMode.mockReset().mockReturnValue(null)
+    mockCompressGlb.mockReset().mockImplementation((bytes) => Promise.resolve(bytes))
   })
 
   describe('exportThreeModelAsGlb', () => {
@@ -104,6 +117,26 @@ describe('loader/glbExport', () => {
 
       const ok = await exportAndCacheGlb({model: {}, ...ctx})
       expect(ok).toBe(false)
+    })
+
+    it('passes the exported bytes through compressGlb with the active mode', async () => {
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+      mockActiveMode.mockReturnValue('draco')
+
+      const ok = await exportAndCacheGlb({model: {}, ...ctx})
+      expect(ok).toBe(true)
+      expect(mockCompressGlb).toHaveBeenCalledTimes(1)
+      const [bytes, mode] = mockCompressGlb.mock.calls[0]
+      expect(bytes).toBeInstanceOf(Uint8Array)
+      expect(mode).toBe('draco')
+    })
+
+    it('still calls compressGlb (with null mode) when no flag is on', async () => {
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(fakeGlbBytes.buffer))
+
+      const ok = await exportAndCacheGlb({model: {}, ...ctx})
+      expect(ok).toBe(true)
+      expect(mockCompressGlb).toHaveBeenCalledWith(expect.any(Uint8Array), null)
     })
   })
 })

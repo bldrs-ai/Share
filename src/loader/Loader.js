@@ -7,6 +7,7 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
+import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
 import {
   doesFileExistInOPFS,
@@ -30,6 +31,7 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
+import {activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 import {
@@ -715,12 +717,13 @@ async function findLoader(pathname, viewer) {
  * design/new/glb-model-sharing.md) expose their gzipped properties payload
  * on `gltf.scene.userData.bldrsPayload`.
  *
- * DRACO decoder wiring is gated on the `glbDraco` feature flag (URL
- * `?feature=glbDraco` or set via FeatureFlags.js). The original Three 0.135
- * regression is resolved by the r184 upgrade (PR #1514); the flag is kept
- * for now because our cache writer emits uncompressed GLBs, so wiring up
- * the decoder unconditionally would only pay off when an externally
- * DRACO-encoded asset arrives.
+ * Decoder wiring is gated on the matching compression feature flag, so
+ * a reader that's already paying for a compressed-artifact cache hit
+ * gets the right decoder; readers running with the flag off skip the
+ * decoder cost (and would miss the cache anyway because the schema
+ * version embedded in the filename partitions compressed vs not).
+ * Three 0.135's DRACO regression is resolved by the r184 upgrade
+ * (PR #1514); the flag now exists to gate both write and read.
  *
  * @return {GLTFLoader}
  */
@@ -732,6 +735,12 @@ function newGltfLoader() {
     dracoLoader.setDecoderPath('/static/js/draco/')
     dracoLoader.setDecoderConfig({type: 'wasm'})
     loader.setDRACOLoader(dracoLoader)
+  }
+  if (isFeatureEnabled('glbMeshopt')) {
+    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
+    // awaits it internally before decoding a buffer view tagged with
+    // EXT_meshopt_compression, so registering here is cheap.
+    loader.setMeshoptDecoder(MeshoptDecoder)
   }
   return loader
 }
@@ -871,7 +880,11 @@ export class NotFoundError extends Error {
  */
 async function tryLoadCachedGlb(cacheKeyArgs) {
   try {
-    const key = glbCacheKey(cacheKeyArgs)
+    // Schema version varies with the active compression flag so a flag-
+    // off reader never picks up a flag-on writer's compressed bytes
+    // (and vice versa). See glbCompress.js#schemaVersionFor.
+    const schemaVer = activeSchemaVersion()
+    const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     const exists = await doesFileExistInOPFS(
       key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
     if (!exists) {

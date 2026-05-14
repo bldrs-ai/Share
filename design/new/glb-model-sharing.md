@@ -228,21 +228,46 @@ generalised key derivation (`glbCacheKey.test.js`).
    [glb] feature enabled
    [glb] reader: cache lookup <kind> key=<ns1>/<ns2>/<ns3>/<path> sha=<sha>
    [glb] reader: <kind> cache MISS, will export after parse
-   [glb] writer: <kind> source, key=<ns1>/<ns2>/<ns3>/<path> sha=<sha>
-   [glb] writer: wrote <bytes>B to <ns1>/<ns2>/<ns3>/<path>.<schemaVer>.glb in <ms>ms
+   [glb] writer: <kind> source, key=<ns1>/<ns2>/<ns3>/<path> sha=<sha> schema=<ver>
+   [glb] writer: wrote <bytes>B (1 chunk) to <ns1>/<ns2>/<ns3>/<path>.<ver>.glb in <ms>ms
    ```
 3. Reload the same URL. On a warm load you should see:
    ```
    [glb] reader: cache lookup <kind> ...
-   [glb] reader: <kind> cache HIT, serving GLB and skipping IFC parse
+   [glb] reader: <kind> cache HIT (<bytes>B); swapping to GLB loader
+   [glb] reader: unpacked Bldrs container — 1 GLB chunk(s)
+   [glb] reader: parsed GLB OK: nodes=N meshes=M verts=V bounds=… centerOffset=…
    ```
 4. Inspect OPFS via `snapshotOPFS()` in the dev console. Confirm a
-   `.<schemaVer>.glb` file under the per-source namespace.
+   `.<schemaVer>.glb` file under the per-source namespace (same dir as
+   the source IFC).
 5. Add `,glbVerbose` to the feature flag to surface cache-key descriptors,
-   modelID, geometry size, and chunk count.
-6. If you see `[glb] writer: skipped (no scene found ...)`, the conway
-   passthrough reach-around in `glbExport.js#getSceneFromIfcAPI` failed —
-   that's the PHASE2-FOLLOWUP. Capture the console output in the PR.
+   GLTFExporter byte counts, and a recursive scene traversal summary
+   (mesh count, vertex count, bounds, center offset).
+
+### Testing compression (DRACO / Meshopt)
+
+Both compressors are off-by-default; enable per-tab via URL flag. The
+cached artifact's filename embeds a compression-aware schema suffix
+(`-draco` / `-meshopt`) so compressed and uncompressed caches don't
+collide — a flag-off reader never picks up a flag-on writer's bytes
+(and vice versa).
+
+1. `?feature=glb,glbDraco` — writer runs the GLTFExporter output through
+   `@gltf-transform`'s `draco()` transform (`KHR_draco_mesh_compression`).
+   Reader wires `DRACOLoader` (decoder at `/static/js/draco/`).
+2. `?feature=glb,glbMeshopt` — writer uses `meshopt()`
+   (`EXT_meshopt_compression`). Reader wires `MeshoptDecoder` from the
+   `meshoptimizer` package.
+3. New log line surfaces the ratio:
+   ```
+   [glb] compress: draco 5074244B → 1283009B (74.7% reduction) in 412ms
+   [glb] writer: wrote 1283091B (1 chunk, draco-compressed) to ... in 580ms
+   ```
+4. When both `glbDraco` and `glbMeshopt` are on, **DRACO wins**
+   (deterministic tie-break). Toggle the other off to A/B.
+5. To compare cold/warm timing or memory, pair with `?feature=perf`
+   (#1513's PerfMonitor panel).
 
 
 ## Adapter layer — replacing `convertToShareModel`

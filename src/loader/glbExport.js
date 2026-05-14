@@ -27,6 +27,11 @@
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {glbCacheKey} from './glbCacheKey'
+import {
+  activeGlbCompressionMode,
+  activeSchemaVersion,
+  compressGlb,
+} from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 
@@ -87,23 +92,26 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs}) {
   const startMs = Date.now()
   try {
     const filePath = cacheKeyArgs.sourcePath
+    const mode = activeGlbCompressionMode()
+    const schemaVer = activeSchemaVersion()
     glbInfo(
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-      `${filePath} sha=${cacheKeyArgs.sourceHash}`)
-    glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    const bytes = await exportThreeModelAsGlb(model)
-    if (!bytes || bytes.byteLength === 0) {
+      `${filePath} sha=${cacheKeyArgs.sourceHash} schema=${schemaVer}`)
+    glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs, 'compression =', mode || 'none')
+    const rawBytes = await exportThreeModelAsGlb(model)
+    if (!rawBytes || rawBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
     }
-    glbVerbose('writer: GLTFExporter produced', bytes.byteLength, 'bytes')
+    glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
+    const bytes = await compressGlb(rawBytes, mode)
     const packed = packGlbChunks([bytes])
-    const key = glbCacheKey(cacheKeyArgs)
+    const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
     glbInfo(
-      `writer: wrote ${packed.byteLength}B (1 chunk) to ${key.owner}/${key.repo}/${key.branch}/` +
-      `${key.originalFilePath} in ${Date.now() - startMs}ms`)
+      `writer: wrote ${packed.byteLength}B (1 chunk${mode ? `, ${mode}-compressed` : ''}) ` +
+      `to ${key.owner}/${key.repo}/${key.branch}/${key.originalFilePath} in ${Date.now() - startMs}ms`)
     return true
   } catch (e) {
     glbInfo('writer: skipped (threw); reader will fall back to source on next load:', e)

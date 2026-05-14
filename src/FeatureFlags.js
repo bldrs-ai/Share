@@ -18,14 +18,21 @@ export const flags = [
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
   {name: 'glb', isActive: false},
-  // DRACOLoader wiring on the GLTFLoader. The original Three 0.135 DRACO
-  // regression that motivated this flag was resolved by the r184 upgrade
-  // (PR #1514). Kept off-by-default for now because our cache writer
-  // (GLTFExporter) emits uncompressed GLBs, so the decoder is dead weight
-  // unless a DRACO-compressed asset arrives from elsewhere. Flip on via
-  // `?feature=glbDraco` to verify the unblock against an externally
-  // DRACO-encoded model. Independent of `glb`.
+  // DRACO compression for cached GLBs. Applies to BOTH write and read:
+  // writer pipes the GLTFExporter output through @gltf-transform's
+  // draco() transform; reader wires DRACOLoader into the GLTFLoader.
+  // The cached artifact's filename embeds a `-draco` schema suffix so
+  // compressed and uncompressed caches don't collide. Three 0.135's
+  // DRACO regression is resolved by the r184 upgrade (PR #1514).
+  // Off-by-default because compression adds 100-300ms per cache write;
+  // flip on via `?feature=glb,glbDraco` to size-compare on your models.
   {name: 'glbDraco', isActive: false},
+  // Meshopt compression for cached GLBs. Mirror of `glbDraco` using
+  // EXT_meshopt_compression via @gltf-transform's meshopt() transform.
+  // Typically faster to decode than DRACO with comparable ratios.
+  // When both `glbDraco` and `glbMeshopt` are on, DRACO wins
+  // (deterministic; toggle the other off to compare).
+  {name: 'glbMeshopt', isActive: false},
   // Verbose GLB writer/reader diagnostics (cache-key descriptor dump,
   // modelID, geometry size, chunk count). Top-level `[glb] writer/reader:`
   // milestone lines stay on whenever `glb` is on; this is the extra detail.
