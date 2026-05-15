@@ -25,7 +25,7 @@ import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
-import {attachElementSubsets} from '../viewer/three/elementSubsets'
+import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -357,6 +357,17 @@ export async function load(
   if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
     const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
     attachElementSubsets(model, scene)
+    // Diagnostic: how many distinct per-vertex element IDs are in
+    // this model? Compared against the IFC's true element count, a
+    // gap signals lost instance identity through write/read — most
+    // commonly because the original IFC used mapped-item / type-
+    // shared representations (multiple visible positions sharing
+    // one element express ID), in which case selecting any of those
+    // positions correctly highlights every other position too.
+    const stats = summariseElementIdAttribute(model)
+    glbInfo(
+      `reader: per-vertex element-IDs — ${stats.uniqueIds} unique across ` +
+      `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
   // Fire-and-forget: serialize the rendered model to GLB and stash in

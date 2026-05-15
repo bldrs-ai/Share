@@ -304,6 +304,12 @@ export class ShareViewer extends IfcViewerAPI {
           removePrevious: true,
           material: this.IFC.selector?.selection?.material,
         })
+        const triCount = subsetMeshes.reduce(
+          (n, m) => n + ((m.geometry?.getIndex()?.count ?? 0) / 3), 0)
+        // eslint-disable-next-line no-console
+        console.info(
+          `[glb] picker: selection ids=${JSON.stringify(toBeSelected)} → ` +
+          `${subsetMeshes.length} subset mesh(es), ${triCount} triangle(s)`)
         debug().log('ShareViewer#setSelection, subset meshes:', subsetMeshes)
         this.highlighter.setHighlighted(subsetMeshes)
       }

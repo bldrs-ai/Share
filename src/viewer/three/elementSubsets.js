@@ -211,6 +211,49 @@ export function buildModelSubsets(modelRoot, ids, opts = {}) {
 
 
 /**
+ * Diagnostic: summarise the per-vertex element-ID attribute on a
+ * loaded model. Walks every child Mesh, counts unique IDs and total
+ * indexed vertices. Used to verify cache-read fidelity — when an
+ * IFC originator emits, say, 500 elements but the loaded GLB reports
+ * 12 unique IDs, somewhere along the write-read path collapsed
+ * instance identity (most often: mapped-item / type-shared
+ * representations where multiple visible positions legitimately
+ * share one IFC element express ID).
+ *
+ * Cheap: one pass per mesh, single Set membership test per vertex.
+ *
+ * @param {object} modelRoot
+ * @param {object} [opts]
+ * @param {string} [opts.attrName]
+ * @return {{uniqueIds: number, vertices: number, meshes: number}}
+ */
+export function summariseElementIdAttribute(modelRoot, opts = {}) {
+  const attrName = opts.attrName ?? 'expressID'
+  const ids = new Set()
+  let vertices = 0
+  let meshes = 0
+  if (!modelRoot || typeof modelRoot.traverse !== 'function') {
+    return {uniqueIds: 0, vertices: 0, meshes: 0}
+  }
+  modelRoot.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry) {
+      return
+    }
+    const attr = obj.geometry.attributes?.[attrName]
+    if (!attr || attr.count <= 1) {
+      return
+    }
+    meshes++
+    for (let i = 0; i < attr.count; i++) {
+      ids.add(attr.getX(i))
+      vertices++
+    }
+  })
+  return {uniqueIds: ids.size, vertices, meshes}
+}
+
+
+/**
  * Attach `createSubset` / `removeSubset` methods to a model so
  * call-sites can invoke `model.createSubset({ids, ...})` regardless
  * of underlying storage. Matches the shape proposed for Phase 3's
