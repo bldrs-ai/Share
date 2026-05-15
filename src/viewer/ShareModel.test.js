@@ -1,7 +1,8 @@
-import {Object3D} from 'three'
+import {BufferAttribute, BufferGeometry, Group, Mesh, Object3D} from 'three'
 import {
   capabilitiesForFormat,
   decorateShareModel,
+  inferModelCapabilities,
   modelHasCapability,
   modelHasUnstructuredMeshClipper,
 } from './ShareModel'
@@ -87,6 +88,51 @@ describe('viewer/ShareModel', () => {
     it('returns false for a model that has not been decorated', () => {
       const model = new Object3D()
       expect(modelHasCapability(model, 'expressIdPicking')).toBe(false)
+    })
+  })
+
+  describe('inferModelCapabilities', () => {
+    /**
+     * @param {string} [attrName]
+     * @param {number} [count]
+     * @return {Mesh}
+     */
+    function makeMeshWithIdAttr(attrName = 'expressID', count = 3) {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
+      geom.setAttribute(attrName, new BufferAttribute(new Int32Array(count), 1))
+      return new Mesh(geom)
+    }
+
+    it('promotes expressIdPicking when any mesh has per-vertex expressID', () => {
+      const root = new Group()
+      root.add(makeMeshWithIdAttr())
+      const caps = inferModelCapabilities(root)
+      expect(caps.expressIdPicking).toBe(true)
+    })
+
+    it('does not promote on a single-vertex (count===1) attribute (mesh-level fallback)', () => {
+      const caps = inferModelCapabilities(makeMeshWithIdAttr('expressID', 1))
+      expect(caps.expressIdPicking).toBeUndefined()
+    })
+
+    it('returns empty object when no mesh carries the attribute', () => {
+      const root = new Group()
+      const mesh = new Mesh(new BufferGeometry())
+      root.add(mesh)
+      expect(inferModelCapabilities(root)).toEqual({})
+    })
+
+    it('supports a custom attribute name for non-IFC formats', () => {
+      const root = makeMeshWithIdAttr('_FEATURE_ID_0', 3)
+      const caps = inferModelCapabilities(root, {attrName: '_FEATURE_ID_0'})
+      expect(caps.expressIdPicking).toBe(true)
+    })
+
+    it('does not throw on null / non-Object3D inputs', () => {
+      expect(() => inferModelCapabilities(null)).not.toThrow()
+      expect(inferModelCapabilities(null)).toEqual({})
+      expect(inferModelCapabilities({})).toEqual({})
     })
   })
 

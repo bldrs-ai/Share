@@ -24,7 +24,8 @@ import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
-import {decorateShareModel} from '../viewer/ShareModel'
+import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
+import {attachElementSubsets} from '../viewer/three/elementSubsets'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -335,6 +336,28 @@ export async function load(
   // `format` + `capabilities` so call-sites can branch on intrinsic
   // model capability instead of guessing from `viewer.IFC.type`.
   decorateShareModel(model, loader.type)
+
+  // Runtime capability augmentation. The format default for 'glb'
+  // is all-off, but a cache-hit GLB carries the per-vertex
+  // `expressID` attribute preserved from the original IFC parse —
+  // it supports `expressIdPicking` even though its format is 'glb'.
+  // `inferModelCapabilities` walks the geometry and promotes the
+  // flag when the attribute is actually present. Additive only —
+  // never demotes a format-default capability.
+  Object.assign(model.capabilities, inferModelCapabilities(model))
+
+  // For models with per-vertex element IDs but no `ifcSubsets`
+  // capability (i.e., cache-hit GLB — IFC parser state is not
+  // present, so web-ifc-three's createSubset cannot run), attach
+  // our own `model.createSubset` / `removeSubset` methods backed
+  // by the per-vertex attribute. Matches the shape proposed for
+  // Phase 3's `IfcModel#createSubset`
+  // (design/new/viewer-replacement.md §3b.i) so the same call-sites
+  // work against both implementations.
+  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
+    const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
+    attachElementSubsets(model, scene)
+  }
 
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
@@ -961,21 +984,15 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
 function swapToGlbLoader(viewer) {
   const loader = newGltfLoader()
   loader.type = 'glb'
-  // Mark the viewer's IFC type as 'ifc' so the downstream selection
-  // pipeline (`ShareViewer#setSelection`, `ShareViewer#highlightIfcItem`)
-  // proceeds rather than early-returning on the `type !== 'ifc'` gate.
-  // The cache-hit model IS structurally an IFC model — it carries the
-  // per-vertex `expressID` attribute restored by convertToShareModel
-  // (see Phase 2b.1) — just delivered via GLB instead of parsed from
-  // source bytes. Element-level outline highlighting via
-  // `pickIfcItemsByID` works as long as the model is registered with
-  // the IFC manager (it is — `addIfcModel(model)` runs in load()).
-  //
-  // Phase 4 (the ShareModelDecorator from #1512) will replace this
-  // `viewer.IFC.type` discriminant with `model.capabilities` checks,
-  // at which point this line goes away in favor of setting
-  // `capabilities.expressIdPicking = true` on the cache-hit model.
-  viewer.IFC.type = 'ifc'
+  // Element-level picking on cache-hit GLB is now handled by the
+  // capability-driven path in `ShareViewer#setSelection` /
+  // `#highlightIfcItem`: `inferModelCapabilities` promotes
+  // `expressIdPicking` on the loaded model (it has per-vertex
+  // `expressID` from the IFC→GLB cache round-trip), and
+  // `attachElementSubsets` gives the model a `createSubset` method
+  // that synthesises the selection / preselection meshes directly
+  // from the per-vertex attribute. No need to fake `viewer.IFC.type`.
+  viewer.IFC.type = 'glb'
   return [loader, false /* isLoaderAsync */, false /* isFormatText */, false /* isIfc */, glbToThree]
 }
 

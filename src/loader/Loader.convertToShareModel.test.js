@@ -5,8 +5,10 @@
 // stock `IFCLoader#getExpressId` works without modification. Older
 // (mesh-level / no per-vertex IDs) paths must continue to behave as before.
 
-import {BufferAttribute, BufferGeometry, Mesh} from 'three'
+import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {convertToShareModel} from './Loader'
+import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
+import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
 
 /**
@@ -131,5 +133,92 @@ describe('Loader/convertToShareModel — Phase 2b picking-fix', () => {
     // element-level; picks on `meshWithout` fall back to mesh-level
     // (whatever stock getExpressId yields on a 1-byte attr).
     expect(viewer.IFC.loader.ifcManager.getExpressId).toBe(stockGetExpressId)
+  })
+})
+
+
+describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring', () => {
+  // These tests cover the full post-convertToShareModel sequence done
+  // in Loader.js#load: decorateShareModel → inferModelCapabilities →
+  // attachElementSubsets. The pipeline is exercised explicitly (rather
+  // than via load()) because the failing screenshot trace ran through
+  // exactly this sequence: setSelection branches on the capabilities
+  // these three calls produce.
+
+  it('cache-hit GLB roundtrip flips expressIdPicking on and attaches createSubset', () => {
+    const idTriangleA = [10, 10, 10]
+    const idTriangleB = [20, 20, 20]
+    const ids = new Int32Array([...idTriangleA, ...idTriangleB])
+    const geom = new BufferGeometry()
+    geom.setAttribute('position', new BufferAttribute(new Float32Array(18), 3))
+    geom.setAttribute('_expressid', new BufferAttribute(ids, 1))
+    geom.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2, 3, 4, 5]), 1))
+    const mesh = new Mesh(geom)
+    const viewer = makeViewerStub()
+
+    // The exact sequence Loader.js#load performs:
+    convertToShareModel(mesh, viewer)
+    decorateShareModel(mesh, 'glb')
+    Object.assign(mesh.capabilities, inferModelCapabilities(mesh))
+    const scene = new Scene()
+    if (mesh.capabilities.expressIdPicking && !mesh.capabilities.ifcSubsets) {
+      attachElementSubsets(mesh, scene)
+    }
+
+    expect(mesh.format).toBe('glb')
+    expect(mesh.capabilities.expressIdPicking).toBe(true)
+    // No web-ifc-three parser state on a cache-hit GLB.
+    expect(mesh.capabilities.ifcSubsets).toBe(false)
+    expect(typeof mesh.createSubset).toBe('function')
+    // The selection path call-sites use this exact shape.
+    const subset = mesh.createSubset({
+      ids: [10],
+      customID: 'selection',
+      removePrevious: true,
+    })
+    expect(subset.length).toBe(1)
+    expect(scene.children).toContain(subset[0])
+  })
+
+  it('unstructured GLB upload (no per-vertex IDs) gets all-off capabilities and no createSubset', () => {
+    const geom = new BufferGeometry()
+    geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+    const mesh = new Mesh(geom)
+    const viewer = makeViewerStub()
+
+    convertToShareModel(mesh, viewer)
+    decorateShareModel(mesh, 'glb')
+    Object.assign(mesh.capabilities, inferModelCapabilities(mesh))
+    if (mesh.capabilities.expressIdPicking && !mesh.capabilities.ifcSubsets) {
+      attachElementSubsets(mesh, new Scene())
+    }
+
+    expect(mesh.capabilities.expressIdPicking).toBe(false)
+    // No subset machinery — falls through to mesh-level picking only.
+    expect(mesh.createSubset).toBeUndefined()
+  })
+
+  it('real-IFC path (format=ifc) keeps ifcSubsets on; no element-subset attachment runs', () => {
+    // Simulates the format=ifc branch. We pass an IFC-shaped model;
+    // capability defaults turn everything on; the per-vertex inspector
+    // doesn't trigger attachElementSubsets (because ifcSubsets is true).
+    const ids = new Int32Array([100, 100, 100])
+    const geom = new BufferGeometry()
+    geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+    geom.setAttribute('expressID', new BufferAttribute(ids, 1))
+    const mesh = new Mesh(geom)
+
+    decorateShareModel(mesh, 'ifc')
+    Object.assign(mesh.capabilities, inferModelCapabilities(mesh))
+    let attached = false
+    if (mesh.capabilities.expressIdPicking && !mesh.capabilities.ifcSubsets) {
+      attached = true
+      attachElementSubsets(mesh, new Scene())
+    }
+    expect(mesh.capabilities.ifcSubsets).toBe(true)
+    expect(attached).toBe(false)
+    // No model.createSubset attached — real-IFC routes through
+    // web-ifc-three's IFC.selector.pickIfcItemsByID instead.
+    expect(mesh.createSubset).toBeUndefined()
   })
 })

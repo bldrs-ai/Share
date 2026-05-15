@@ -286,7 +286,7 @@ Replacement: a single `GlbAsIfcModelAdapter` class that:
 
 Single seam where "this isn't really an IFC model" is contained.
 
-### Picking granularity — **fixed in Phase 2b.1**
+### Picking granularity — **fixed in Phase 2b.1 + 2b.2**
 
 Previously: raycast-picking on a GLB-cache-hit model selected the
 whole mesh ("click a wall, get the whole floor"). Cause: GLTFExporter
@@ -299,19 +299,60 @@ mesh-level synthetic, and also globally overwrote
 `viewer.IFC.loader.ifcManager.getExpressId` with `(geom) => geom.id`
 (polluting picks on every subsequently loaded model too).
 
-Phase 2b.1 fix (single function, ~20 lines):
+**Phase 2b.1 fix** (data layer, `convertToShareModel`):
 
 - `recursiveDecorate` detects `_expressid` per-vertex (count > 1) and
   renames back to `expressID`, skipping the 1-byte synthetic.
 - The global `ifcManager.getExpressId` override only fires when the
   whole model has no per-vertex source — preserves the legacy fallback
   for OBJ / STL / direct .glb upload paths.
-- Picks now go through `web-ifc-three`'s stock
-  `IFCLoader#getExpressId` (`IFCLoader.js:2353`) which reads
-  `geometry.attributes.expressID` at `index.array[3 * faceIndex]` —
-  element-level granularity restored.
+- `obj3d.expressID` is left undefined when per-vertex source exists,
+  so `CadView.jsx`'s click handler resolves IDs via the per-vertex
+  attribute (`geom.attributes.expressID.getX(index[3 * faceIndex])`)
+  instead of the wrong mesh-level fallback.
 
-Out of scope of this fix (later Phase 2b slices):
+**Phase 2b.2 fix** (highlight layer, `ShareViewer.setSelection` /
+`#highlightIfcItem`):
+
+After 2b.1, IDs resolved correctly but the visual outline still
+covered the whole mesh — `ShareViewer.setSelection` early-returned
+on the legacy `IFC.type !== 'ifc'` gate, so the element-level outline
+chain (`pickIfcItemsByID → createSubset → highlighter.setHighlighted`)
+never ran. Routing past that gate ran the chain but
+`web-ifc-three.createSubset` failed inside `ItemsMap.getGeometry`
+(no IFC parser state on a cache-hit GLB — `state.models[modelID].mesh`
+is undefined).
+
+The fix lives **above the web-ifc-three boundary**:
+
+- `src/viewer/three/elementSubsets.js` — generic triangle-filter
+  primitive. `buildSubsetMesh(sourceMesh, idSet, {attrName})` reads
+  the per-vertex element-ID attribute + `geometry.index`, returns a
+  new Mesh with only the matching triangles. `attachElementSubsets(model, scene)`
+  hangs `model.createSubset({ids, customID, removePrevious})` /
+  `model.removeSubset(customID)` off the model — the same shape
+  proposed for Phase 3's `IfcModel#createSubset` in
+  `design/new/viewer-replacement.md` §3b.i, so Phase 3 can absorb
+  the implementation without changing call-sites.
+- `src/viewer/ShareModel.js` adds `inferModelCapabilities(model)`,
+  a runtime inspector that promotes `capabilities.expressIdPicking`
+  to `true` when the model actually carries the per-vertex attribute
+  — independent of `format`. Cache-hit GLB now has
+  `{expressIdPicking: true, ifcSubsets: false, ...}`.
+- `ShareViewer.setSelection` / `#highlightIfcItem` branch on
+  `capabilities.ifcSubsets` (legacy web-ifc-three path) vs
+  `capabilities.expressIdPicking` without `ifcSubsets` (new path
+  via `model.createSubset`). The mesh-level early-return is now
+  gated on `capabilities.expressIdPicking` instead of `IFC.type`.
+  The `viewer.IFC.type = 'ifc'` shim from 2b.1's interim attempt
+  is removed.
+
+Format-agnostic by design: the attribute name is parameterised
+(default `expressID`), so future per-element-ID encodings (Khronos
+`EXT_mesh_features`, non-IFC source-format conventions, etc.) plug
+in through the same machinery.
+
+Out of scope (later Phase 2b slices):
 
 - `BLDRS_spatial_tree` extension → nav tree on cache-hit (writer +
   reader).

@@ -7,6 +7,7 @@ import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
+import {modelHasCapability} from './ShareModel'
 import {areDefinedAndNotNull} from '../utils/assert'
 
 
@@ -254,8 +255,9 @@ export class ShareViewer extends IfcViewerAPI {
    * @param {boolean} focusSelection Whether to focus on selection
    */
   async setSelection(modelID, expressIds, focusSelection) {
-    if (this.IFC.type !== 'ifc') {
-      debug().warn('setSelection is not supported for this type of model')
+    const model = this._modelById(modelID)
+    if (!modelHasCapability(model, 'expressIdPicking')) {
+      debug().warn('setSelection: model does not support expressIdPicking')
       return
     }
     this._selectedExpressIds = expressIds
@@ -264,22 +266,60 @@ export class ShareViewer extends IfcViewerAPI {
       // if not specified, only focus on item if it was the first one to be selected
       focusSelection = toBeSelected.length === 1
     }
-    if (toBeSelected.length !== 0) {
-      try {
-        debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
+    if (toBeSelected.length === 0) {
+      this.highlighter.setHighlighted(null)
+      if (modelHasCapability(model, 'ifcSubsets')) {
+        this.IFC.selector.unpickIfcItems()
+      } else if (typeof model.removeSubset === 'function') {
+        model.removeSubset('selection')
+      }
+      return
+    }
+    try {
+      debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
+      if (modelHasCapability(model, 'ifcSubsets')) {
+        // Real-IFC path: web-ifc-three holds the parser state needed
+        // by createSubset / SubsetCreator.
         const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
         const removePrevious = true
         await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
         debug().log('ShareViewer#setSelection, meshes: ', this.IFC.selector.selection.meshes)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
-      } catch (e) {
-        console.warn('selection failure', e)
-        debug().error('ShareViewer#setSelection$onError: ', e)
+      } else {
+        // Per-vertex-element-ID path (today: cache-hit GLB). The model
+        // owns `createSubset` (attached by attachElementSubsets at load
+        // time) and synthesises the subset Mesh from the in-memory
+        // per-vertex attribute. No web-ifc-three parser state required.
+        const subsetMeshes = model.createSubset({
+          ids: toBeSelected,
+          customID: 'selection',
+          removePrevious: true,
+        })
+        debug().log('ShareViewer#setSelection, subset meshes:', subsetMeshes)
+        this.highlighter.setHighlighted(subsetMeshes)
       }
-    } else {
-      this.highlighter.setHighlighted(null)
-      this.IFC.selector.unpickIfcItems()
+    } catch (e) {
+      console.warn('selection failure', e)
+      debug().error('ShareViewer#setSelection$onError: ', e)
     }
+  }
+
+
+  /**
+   * Look up a registered model by modelID. Today the viewer holds
+   * at most one model and call-sites always pass `0`; we still index
+   * for symmetry with the underlying `ifcModels` array.
+   *
+   * @param {number} modelID
+   * @return {object|null}
+   * @private
+   */
+  _modelById(modelID) {
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models)) {
+      return null
+    }
+    return models[modelID] ?? null
   }
 
 
@@ -291,13 +331,84 @@ export class ShareViewer extends IfcViewerAPI {
     const found = this.context.castRayIfc()
     if (!found) {
       this.IFC.selector.preselection.toggleVisibility(false)
+      this._clearPreselectionForAllModels()
       return
     }
     const id = this.getPickedItemId(found)
-    if (this.IFC.type === 'ifc' && this.isolator.canBePickedInScene(id)) {
+    if ((id === null || id === undefined) || !this.isolator.canBePickedInScene(id)) {
+      return
+    }
+    const model = this._modelForPickedObject(found.object)
+    if (!modelHasCapability(model, 'expressIdPicking')) {
+      return
+    }
+    if (modelHasCapability(model, 'ifcSubsets')) {
+      // Real-IFC path: web-ifc-three's preselection.pick handles
+      // subset construction.
       await this.IFC.selector.preselection.pick(found)
       this.highlightPreselection()
+    } else if (typeof model.createSubset === 'function') {
+      // Per-vertex-element-ID path: synthesise a preselection
+      // subset from the per-vertex attribute. The `'preselection'`
+      // customID slot replaces the previous one each call, matching
+      // IfcSelector.preselection semantics (hover replaces).
+      const subsetMeshes = model.createSubset({
+        ids: [id],
+        customID: 'preselection',
+        removePrevious: true,
+      })
+      for (const mesh of subsetMeshes) {
+        this.highlighter.addToHighlighting(mesh)
+      }
     }
+  }
+
+
+  /**
+   * Drop any per-model preselection subset when the cursor leaves
+   * all geometry. Mirrors what `IFC.selector.preselection.toggleVisibility(false)`
+   * does for the real-IFC path — preselection is hover-only and
+   * should not linger off-model.
+   *
+   * @private
+   */
+  _clearPreselectionForAllModels() {
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models)) {
+      return
+    }
+    for (const m of models) {
+      if (typeof m?.removeSubset === 'function') {
+        m.removeSubset('preselection')
+      }
+    }
+  }
+
+
+  /**
+   * Walk a picked Object3D's ancestor chain to find the registered
+   * model it belongs to. Necessary because the raycast hit gives us
+   * a leaf Mesh, but capabilities live on the model root.
+   *
+   * @param {object} pickedObject
+   * @return {object|null}
+   * @private
+   */
+  _modelForPickedObject(pickedObject) {
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models) || models.length === 0 || !pickedObject) {
+      return null
+    }
+    const modelSet = new Set(models)
+    let cursor = pickedObject
+    while (cursor) {
+      if (modelSet.has(cursor)) {
+        return cursor
+      }
+      cursor = cursor.parent
+    }
+    // Fallback: single-model case (the common case today).
+    return models[0] ?? null
   }
 
 
