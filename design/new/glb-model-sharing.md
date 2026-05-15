@@ -286,40 +286,42 @@ Replacement: a single `GlbAsIfcModelAdapter` class that:
 
 Single seam where "this isn't really an IFC model" is contained.
 
-### Picking granularity — symptom of the convertToShareModel gap
+### Picking granularity — **fixed in Phase 2b.1**
 
-The user-visible manifestation of the still-missing adapter is that
-**raycast-picking on a GLB-cache-hit model selects the whole mesh, not
-the individual element**. Empirically: clicking a wall on Bldrs_Plaza
-loaded via cache hit highlights the entire floor slab; clicking the
-same wall on an IFC-source load highlights just the wall.
+Previously: raycast-picking on a GLB-cache-hit model selected the
+whole mesh ("click a wall, get the whole floor"). Cause: GLTFExporter
+preserves `web-ifc-three`'s per-vertex `expressID` attribute as
+`_EXPRESSID` on write (custom-attr → `_`-prefixed, uppercase); GLTFLoader
+lowercases unknown attrs on read, so it lands at
+`geometry.attributes._expressid` on reload. Then
+`convertToShareModel#recursiveDecorate` overwrote it with a 1-byte
+mesh-level synthetic, and also globally overwrote
+`viewer.IFC.loader.ifcManager.getExpressId` with `(geom) => geom.id`
+(polluting picks on every subsequently loaded model too).
 
-The cause is on the writer side AND the reader side:
+Phase 2b.1 fix (single function, ~20 lines):
 
-1. **Writer**: `GLTFExporter` *does* preserve `web-ifc-three`'s per-vertex
-   `expressID` buffer attribute as `_EXPRESSID` (the glTF custom-attribute
-   convention prefixes with `_`). So the GLB on disk carries a true
-   per-vertex expressID.
-2. **Reader**: today's cache-hit path goes through
-   `convertToShareModel#recursiveDecorate`, which **overwrites** the
-   per-vertex attribute with a one-byte mesh-level serial:
+- `recursiveDecorate` detects `_expressid` per-vertex (count > 1) and
+  renames back to `expressID`, skipping the 1-byte synthetic.
+- The global `ifcManager.getExpressId` override only fires when the
+  whole model has no per-vertex source — preserves the legacy fallback
+  for OBJ / STL / direct .glb upload paths.
+- Picks now go through `web-ifc-three`'s stock
+  `IFCLoader#getExpressId` (`IFCLoader.js:2353`) which reads
+  `geometry.attributes.expressID` at `index.array[3 * faceIndex]` —
+  element-level granularity restored.
 
-   ```js
-   const ids = new Int8Array(1)      // one byte for the whole mesh
-   ids[0] = id                       // monotonic per Object3D visited
-   obj3d.geometry.attributes.expressID = new BufferAttribute(ids, 1)
-   ```
+Out of scope of this fix (later Phase 2b slices):
 
-   The raycast → faceIndex → expressID lookup therefore returns the
-   same mesh-level value for every face, and the picker selects the
-   whole mesh.
-
-The fix is the Phase 2b work above: `GlbAsIfcModelAdapter` skips the
-recursiveDecorate overwrite entirely and reads from the existing
-`_EXPRESSID` attribute. Until then, cache-hit picking is at-mesh
-granularity, and the cache feature stays behind `?feature=glb`
-off-by-default so production users opting into cache speedup do so
-knowing this tradeoff.
+- `BLDRS_spatial_tree` extension → nav tree on cache-hit (writer +
+  reader).
+- `BLDRS_element_properties` extension → properties panel on cache-hit
+  (writer + reader, lazy decode).
+- Full `GlbAsIfcModelAdapter` class refactor → replaces the entire
+  `convertToShareModel` closure-patch pattern with a proper adapter.
+  The picking fix above is intentionally a minimal patch in-place;
+  the refactor consolidates the adapter surface once the BLDRS_*
+  extensions land and there's enough material to justify it.
 
 
 ## Clipping

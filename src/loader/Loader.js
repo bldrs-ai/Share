@@ -436,8 +436,19 @@ async function axiosDownload(path, isFormatText, onProgress) {
  * @param {object} viewer
  * @return {Mesh}
  */
-function convertToShareModel(model, viewer) {
+export function convertToShareModel(model, viewer) {
   let objIdSerial = 0
+  // Whether we found per-vertex IFC expressIDs preserved through the
+  // GLB cache round-trip. GLTFExporter renames our `expressID` attribute
+  // to `_EXPRESSID` (custom attr → `_`-prefixed, uppercase) on write;
+  // GLTFLoader lowercases unknown attribute names on read, so the
+  // attribute lands at `geometry.attributes._expressid`. When we see
+  // it, we rename back to `expressID` so web-ifc-three's stock
+  // `IFCLoader#getExpressId` (which reads `attributes.expressID` at
+  // `index.array[3 * faceIndex]`) works without modification — element-
+  // level picking is restored on cache-hit models. See
+  // design/new/glb-model-sharing.md §"Picking granularity".
+  let foundPreservedExpressId = false
 
   /**
    * Recursively visit the model and its children to add `expressID` and
@@ -454,29 +465,23 @@ function convertToShareModel(model, viewer) {
     const id = objIdSerial++
     obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     if (obj3d.geometry) {
-      const ids = new Int8Array(1)
-      ids[0] = id
-      // TODO(pablo)
-      // obj3d.geometry = obj3d.geometry || {attributes: {}}
-
-      // const ba = new BufferAttribute(ids, 1)
-      // ba.onUpload(() => {})
-
-      // obj3d.geometry.attributes = ba
-
-      const expressIdAttr = new BufferAttribute(ids, 1)
-      // eslint-disable-next-line no-empty-function
-      expressIdAttr.onUpload(() => {})
-
-      obj3d.geometry.attributes.expressID = expressIdAttr
-
-      const numQuickLookup = 5000 // TODO(pablo): rethink this approach
-      const geomIndex = new Array(numQuickLookup)
-      for (let i = 0; i < numQuickLookup; i++) {
-        geomIndex[i] = obj3d.expressID
+      // Fast path: this geometry came from a GLB roundtrip and still
+      // has the per-vertex IFC expressID under the `_EXPRESSID` →
+      // `_expressid` GLTFLoader-lowercased name. Rename back to
+      // `expressID` and skip the mesh-level synthetic write below.
+      const preserved = obj3d.geometry.attributes._expressid
+      if (preserved && preserved.count > 1) {
+        obj3d.geometry.setAttribute('expressID', preserved)
+        delete obj3d.geometry.attributes._expressid
+        foundPreservedExpressId = true
+      } else {
+        const ids = new Int8Array(1)
+        ids[0] = id
+        const expressIdAttr = new BufferAttribute(ids, 1)
+        // eslint-disable-next-line no-empty-function
+        expressIdAttr.onUpload(() => {})
+        obj3d.geometry.attributes.expressID = expressIdAttr
       }
-      // throw new Error('obj3d')
-      // obj3d.geometry.attributes.index = {array: geomIndex}
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
@@ -505,9 +510,20 @@ function convertToShareModel(model, viewer) {
   model.ifcManager.getSpatialStructure = () => {
     return model
   }
-  model.ifcManager.getExpressId = (geom, faceNdx) => {
-    debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
-    return geom.id
+  // Only override the manager's stock `getExpressId` for genuinely
+  // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
+  // expressID attribute on any mesh). When the model came from our IFC→
+  // GLB cache, the renamed `expressID` attribute restored above lets
+  // web-ifc-three's stock implementation work correctly. The previous
+  // unconditional override polluted the manager globally — every
+  // subsequent pick on any model returned `geom.id` until page refresh.
+  if (!foundPreservedExpressId) {
+    model.ifcManager.getExpressId = (geom, faceNdx) => {
+      debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
+      return geom.id
+    }
+  } else {
+    glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
