@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {BufferAttribute, Matrix4, Mesh, Object3D} from 'three'
+import {Box3, BufferAttribute, Group, Matrix4, Mesh, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -7,8 +7,16 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
+import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
+import {
+  doesFileExistInOPFS,
+  downloadModel,
+  downloadToOPFS,
+  getModelFromOPFS,
+  readModelByPathFromOPFS,
+  writeBase64Model,
+} from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
@@ -19,11 +27,25 @@ import {testUuid} from '../utils/strings'
 import {decorateShareModel} from '../viewer/ShareModel'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
+import {exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
+import {glbCacheKey} from './glbCacheKey'
+import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
+import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
+import {glbInfo, glbVerbose} from './glbLog'
+import {
+  externalCacheKey,
+  gitHubCacheKey,
+  localCacheKey,
+  uploadCacheKey,
+} from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
+import {isFeatureEnabled} from '../FeatureFlags'
+import {sha1Hex} from '../utils/contentHash'
 import {isOutOfMemoryError} from '../utils/oom'
 
 
@@ -89,7 +111,8 @@ export async function load(
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   onProgress(`Determining file type...`)
-  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  // GLB skip path below may swap these to the GLB loader tuple.
+  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -98,14 +121,34 @@ export async function load(
   }
 
   let modelData
+  // GLB export context: captured after the source file is in hand if the
+  // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
+  // (source-kind namespace + sourceHash) the post-parse writer will use.
+  // Stays null when the GLB cache skip-path fires (file is already a GLB).
+  let glbExportContext = null
+  // Set when we swap the IFC source with a cached GLB. Drives post-parse
+  // diagnostics so the user can see what the GLTF parser produced.
+  let cameFromGlbCache = false
+  const wantGlb = isFeatureEnabled('glb') && isIfc
+  if (wantGlb) {
+    glbInfo('feature enabled')
+  }
+
   if (isOpfsAvailable) {
     onProgress('Preparing file download...')
-    // download to file using caching system or else...
     let file
+    // Per-source-kind cache-key context. Built eagerly for GitHub (we have
+    // the upstream sha before download) and lazily for everything else
+    // (we hash the bytes after they're in OPFS).
+    let cacheKeyArgs = null
+    let kindLabel = null
+
     if (isUploadedFile) {
+      kindLabel = 'upload'
       debug().log('Loader#load: getModelFromOPFS for upload:', path)
       file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
     } else if (isLocallyHostedFile) {
+      kindLabel = 'local'
       debug().log('Loader#load: local file:', path)
       file = await downloadToOPFS(
         path,
@@ -123,6 +166,7 @@ export async function load(
         throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
       }
       if (pathUrl.host === 'github.com') {
+        kindLabel = 'github'
         // TODO: path was gitpath originally
         const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
@@ -131,26 +175,49 @@ export async function load(
           [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
         }
 
-        if (isBase64) {
-          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
-        } else {
-          debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-          file = await downloadModel(
-            derefPath,
-            shaHash,
-            filePath,
-            accessToken,
-            owner,
-            repo,
-            branch,
-            setOpfsFile,
-            onProgress,
-            (lastModifiedGithub) => {
-              const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
-              updateRecentFileLastModified(sharePath, lastModifiedGithub)
-            })
+        // GitHub gives us a stable upstream sha *before* we download — so
+        // the GLB cache lookup can happen pre-download (fastest hit path).
+        if (wantGlb && shaHash) {
+          cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
+          glbInfo(
+            `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+            `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
+          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+          if (glbFile) {
+            glbInfo(
+              `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
+            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+            file = glbFile
+            cameFromGlbCache = true
+          } else {
+            glbInfo('reader: github cache MISS, will export after parse:', filePath)
+          }
+        }
+
+        if (!file) {
+          if (isBase64) {
+            file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+          } else {
+            debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
+            file = await downloadModel(
+              derefPath,
+              shaHash,
+              filePath,
+              accessToken,
+              owner,
+              repo,
+              branch,
+              setOpfsFile,
+              onProgress,
+              (lastModifiedGithub) => {
+                const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
+                updateRecentFileLastModified(sharePath, lastModifiedGithub)
+              })
+          }
         }
       } else {
+        kindLabel = 'external'
         const opfsFilename = pathUrl.pathname
         debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
         file = await downloadToOPFS(
@@ -165,6 +232,36 @@ export async function load(
     }
     debug().log('Loader#load: File from OPFS:', file)
     setOpfsFile(file)
+
+    // For non-GitHub sources we don't have an upstream sha, so we hash the
+    // bytes ourselves to build the cache key. This is the same File we'd
+    // read for parse below; reading it twice is cheap (OPFS).
+    if (wantGlb && !cacheKeyArgs && file) {
+      const sourceBytes = await file.arrayBuffer()
+      const contentSha = await sha1Hex(sourceBytes)
+      cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
+      if (cacheKeyArgs) {
+        glbInfo(
+          `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
+        glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+        const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+        if (glbFile) {
+          glbInfo(
+            `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
+          ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+          file = glbFile
+          cameFromGlbCache = true
+        } else {
+          glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+        }
+      }
+    }
+
+    if (wantGlb && isIfc && cacheKeyArgs) {
+      glbExportContext = {kindLabel, cacheKeyArgs}
+    }
+
     onProgress('Reading model data...')
     modelData = await file.arrayBuffer()
     if (isFormatText) {
@@ -214,6 +311,18 @@ export async function load(
   if (!isIfc) {
     onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
+    if (cameFromGlbCache) {
+      const summary = summarizeGlbScene(model)
+      glbInfo(
+        `reader: parsed GLB OK: nodes=${summary.nodes} meshes=${summary.meshes} ` +
+        `verts=${summary.vertices} bounds=${summary.boundsStr} ` +
+        `centerOffset=${summary.centerOffsetStr}`)
+      if (summary.meshes === 0) {
+        glbInfo('reader: WARN — GLB has 0 meshes; export likely produced an empty scene')
+      } else if (summary.vertices === 0) {
+        glbInfo('reader: WARN — GLB has meshes but 0 vertices; degenerate geometry')
+      }
+    }
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
@@ -226,6 +335,21 @@ export async function load(
   // `format` + `capabilities` so call-sites can branch on intrinsic
   // model capability instead of guessing from `viewer.IFC.type`.
   decorateShareModel(model, loader.type)
+
+  // Fire-and-forget: serialize the rendered model to GLB and stash in
+  // OPFS so the next load of the same source can skip the IFC parse.
+  // Triggered for every source kind (github, local, upload, external)
+  // when the `glb` feature flag is on. Failures are logged but never
+  // thrown — the source is already on screen; this is cache warm-up only.
+  // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
+  if (glbExportContext) {
+    glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
+    exportAndCacheGlb({
+      model,
+      kindLabel: glbExportContext.kindLabel,
+      cacheKeyArgs: glbExportContext.cacheKeyArgs,
+    })
+  }
 
   return model
 }
@@ -409,17 +533,21 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
-    model = await new Promise((resolve, reject) => {
-      try {
-        loader.parse(modelData, './', (m) => {
-          resolve(m)
-        }, (err) => {
-          reject(new Error(`Loader error during parse: ${err}`))
-        })
-      } catch (e) {
-        reject(new Error(`Unhandled error in parse ${e}`))
-      }
-    })
+    if (isBldrsGlbContainer(modelData)) {
+      model = await parseBldrsGlbContainer(loader, modelData)
+    } else {
+      model = await new Promise((resolve, reject) => {
+        try {
+          loader.parse(modelData, './', (m) => {
+            resolve(m)
+          }, (err) => {
+            reject(new Error(`Loader error during parse: ${err}`))
+          })
+        } catch (e) {
+          reject(new Error(`Unhandled error in parse ${e}`))
+        }
+      })
+    }
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
     if (isIfc && onProgress) {
@@ -583,13 +711,37 @@ async function findLoader(pathname, viewer) {
 
 
 /**
- * @return {GLTFLoader} With DRACO codec enabled
+ * Construct the GLTFLoader used for .glb/.gltf loads.
+ *
+ * Registers `ExtBldrsPropertiesPayload` so cached Bldrs GLB artifacts (see
+ * design/new/glb-model-sharing.md) expose their gzipped properties payload
+ * on `gltf.scene.userData.bldrsPayload`.
+ *
+ * Decoder wiring is gated on the matching compression feature flag, so
+ * a reader that's already paying for a compressed-artifact cache hit
+ * gets the right decoder; readers running with the flag off skip the
+ * decoder cost (and would miss the cache anyway because the schema
+ * version embedded in the filename partitions compressed vs not).
+ * Three 0.135's DRACO regression is resolved by the r184 upgrade
+ * (PR #1514); the flag now exists to gate both write and read.
+ *
+ * @return {GLTFLoader}
  */
 function newGltfLoader() {
-  const loader = new GLTFLoader
-  const dracoLoader = new DRACOLoader
-  dracoLoader.setDecoderPath('./node_modules/three/examples/jsm/libs/draco/')
-  loader.setDRACOLoader(dracoLoader)
+  const loader = new GLTFLoader()
+  loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
+  if (isFeatureEnabled('glbDraco')) {
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('/static/js/draco/')
+    dracoLoader.setDecoderConfig({type: 'wasm'})
+    loader.setDRACOLoader(dracoLoader)
+  }
+  if (isFeatureEnabled('glbMeshopt')) {
+    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
+    // awaits it internally before decoding a buffer view tagged with
+    // EXT_meshopt_compression, so registering here is cheap.
+    loader.setMeshoptDecoder(MeshoptDecoder)
+  }
   return loader
 }
 
@@ -711,4 +863,207 @@ export class NotFoundError extends Error {
       Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
     }
   }
+}
+
+
+/**
+ * Look up a cached Bldrs GLB artifact in OPFS for a given source file. Returns
+ * the GLB `File` if present, or `null` if no artifact has been generated yet
+ * (or has a mismatched schema/source hash). Never throws; failures resolve to
+ * null so the caller falls back to the IFC path.
+ *
+ * Design: design/new/glb-model-sharing.md §"Caching and lookup".
+ *
+ * @param {object} cacheKeyArgs Output of a sourceCacheKey adapter
+ *   ({ns1, ns2, ns3, sourcePath, sourceHash}).
+ * @return {Promise<File|null>}
+ */
+async function tryLoadCachedGlb(cacheKeyArgs) {
+  try {
+    // Schema version varies with the active compression flag so a flag-
+    // off reader never picks up a flag-on writer's compressed bytes
+    // (and vice versa). See glbCompress.js#schemaVersionFor.
+    const requestedMode = activeGlbCompressionMode()
+    const schemaVer = activeSchemaVersion()
+    const key = glbCacheKey({...cacheKeyArgs, schemaVer})
+    const exists = await doesFileExistInOPFS(
+      key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    if (!exists) {
+      return null
+    }
+    const file = await readModelByPathFromOPFS(
+      key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    if (!file) {
+      return null
+    }
+    // Verify the cached artifact's compression mode matches what the
+    // user asked for. The schema-suffix filename partitioning is the
+    // first line of defense; this is the second — it catches stale
+    // artifacts written by an earlier code revision (pre-mode-byte) or
+    // pollution in the OPFS slot. On mismatch we treat it as a miss
+    // so the IFC parse path runs and the writer rewrites a correct
+    // artifact.
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    if (!isBldrsGlbContainer(bytes)) {
+      glbInfo('reader: found OPFS file but it is not a Bldrs container; treating as miss')
+      return null
+    }
+    const peek = unpackGlbContainer(bytes)
+    if (peek.mode !== requestedMode) {
+      glbInfo(
+        `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
+        `requested=${requestedMode || 'none'}); treating as miss`)
+      return null
+    }
+    return file
+  } catch (e) {
+    glbInfo('reader: lookup failed, falling back to source path:', e)
+    return null
+  }
+}
+
+
+/**
+ * Swap the loader tuple from IFC to GLB. Used by the GLB cache skip-path
+ * once we've confirmed a cached artifact exists for the source.
+ *
+ * @param {object} viewer
+ * @return {[object, boolean, boolean, boolean, Function]} loader tuple
+ *   matching findLoader's return: [loader, isLoaderAsync, isFormatText,
+ *   isIfc, fixupCb].
+ */
+function swapToGlbLoader(viewer) {
+  const loader = newGltfLoader()
+  loader.type = 'glb'
+  viewer.IFC.type = 'glb'
+  return [loader, false /* isLoaderAsync */, false /* isFormatText */, false /* isIfc */, glbToThree]
+}
+
+
+/**
+ * Parse a Bldrs GLB container (see `glbContainer.js`) into the shape
+ * GLTFLoader normally returns: `{scenes: [Group]}` so the downstream
+ * `glbToThree` fixupCb extracts the single merged Group as the model.
+ *
+ * Each container chunk is itself a valid GLB; we parse them one at a time
+ * with the supplied GLTFLoader and add each chunk's scene to a shared
+ * parent Group. Complex IFCs typically split into multiple chunks
+ * because conway's GeometryConvertor segments output by buffer-size
+ * budget; without this we'd render only the first chunk.
+ *
+ * @param {GLTFLoader} loader
+ * @param {ArrayBuffer|Uint8Array} containerBytes
+ * @return {Promise<{scenes: object[]}>}
+ */
+async function parseBldrsGlbContainer(loader, containerBytes) {
+  const {chunks, mode, version} = unpackGlbContainer(containerBytes)
+  glbInfo(
+    `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
+    `mode=${mode || 'none'}`)
+  const merged = new Group()
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkAb = chunks[i]
+    const gltf = await new Promise((resolve, reject) => {
+      try {
+        loader.parse(chunkAb, './', (m) => resolve(m), (err) => {
+          reject(new Error(`Loader error parsing chunk ${i}: ${err}`))
+        })
+      } catch (e) {
+        reject(new Error(`Unhandled error parsing chunk ${i}: ${e}`))
+      }
+    })
+    if (gltf.scenes && gltf.scenes.length > 0) {
+      for (const s of gltf.scenes) {
+        merged.add(s)
+      }
+    } else if (gltf.scene) {
+      merged.add(gltf.scene)
+    }
+  }
+  return {scenes: [merged]}
+}
+
+
+/**
+ * Walk a Three.js scene and return a one-shot summary: node count, mesh
+ * count, vertex count, world-space bounds, and the magnitude of the offset
+ * between the bounds center and the world origin. Used post-parse to
+ * diagnose why a cached GLB might not appear in the viewport.
+ *
+ * @param {object} root Three.js Object3D / Group / Scene
+ * @return {{nodes:number, meshes:number, vertices:number, boundsStr:string, centerOffsetStr:string, centerOffsetMag:number}}
+ */
+function summarizeGlbScene(root) {
+  let nodes = 0
+  let meshes = 0
+  let vertices = 0
+  const bounds = new Box3()
+  bounds.makeEmpty()
+  root.traverse((obj) => {
+    nodes++
+    if (obj instanceof Mesh) {
+      meshes++
+      const posAttr = obj.geometry?.attributes?.position
+      if (posAttr) {
+        vertices += posAttr.count
+        const meshBounds = new Box3().setFromObject(obj)
+        if (!meshBounds.isEmpty()) {
+          bounds.union(meshBounds)
+        }
+      }
+    }
+  })
+  const center = new Vector3()
+  if (!bounds.isEmpty()) {
+    bounds.getCenter(center)
+  }
+  const size = new Vector3()
+  if (!bounds.isEmpty()) {
+    bounds.getSize(size)
+  }
+  const fmt = (v) => v.toExponential(2)
+  const boundsStr = bounds.isEmpty() ?
+    'empty' :
+    `size=(${fmt(size.x)},${fmt(size.y)},${fmt(size.z)})`
+  const centerOffsetMag = center.length()
+  const centerOffsetStr = bounds.isEmpty() ?
+    'n/a' :
+    `(${fmt(center.x)},${fmt(center.y)},${fmt(center.z)})`
+  return {nodes, meshes, vertices, boundsStr, centerOffsetStr, centerOffsetMag}
+}
+
+
+/**
+ * Build the cacheKeyArgs for a non-GitHub source kind after we've computed
+ * the content sha. Returns null for an unrecognised kindLabel so the caller
+ * can skip the lookup cleanly.
+ *
+ * @param {string} kindLabel 'local' | 'upload' | 'external'
+ * @param {string} path The path/URL the loader was invoked with.
+ * @param {string} contentSha Hex digest of the source bytes.
+ * @return {object|null}
+ */
+function buildNonGitHubCacheArgs(kindLabel, path, contentSha) {
+  if (kindLabel === 'local') {
+    // Locally-hosted files use the path as-is for OPFS (with leading slash
+    // stripped). Fallback name avoids an empty sourcePath for `/`.
+    const filePath = path.replace(/^\//, '') || 'model'
+    return localCacheKey({filePath, contentSha})
+  }
+  if (kindLabel === 'upload') {
+    // Uploads carry a UUID in the path; reuse the path tail as the file name.
+    const tail = path.split('/').pop() || 'upload'
+    return uploadCacheKey({filePath: tail, contentSha})
+  }
+  if (kindLabel === 'external') {
+    let pathUrl
+    try {
+      pathUrl = new URL(path)
+    } catch (e) {
+      return null
+    }
+    const filePath = pathUrl.pathname.replace(/^\//, '') || 'model'
+    return externalCacheKey({filePath, contentSha})
+  }
+  return null
 }
