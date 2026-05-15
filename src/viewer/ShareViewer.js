@@ -290,10 +290,19 @@ export class ShareViewer extends IfcViewerAPI {
         // owns `createSubset` (attached by attachElementSubsets at load
         // time) and synthesises the subset Mesh from the in-memory
         // per-vertex attribute. No web-ifc-three parser state required.
+        //
+        // Pass the legacy `selector.selection.material` so the
+        // synthetic subset renders the same translucent theme-blue
+        // overlay the IFC path does (CadView.jsx replaces the fork's
+        // magenta defaults at viewer init). Without an explicit
+        // material the subset reuses the source mesh's material — same
+        // color, same opacity → no visible overlay, only the
+        // OutlineEffect contributes.
         const subsetMeshes = model.createSubset({
           ids: toBeSelected,
           customID: 'selection',
           removePrevious: true,
+          material: this.IFC.selector?.selection?.material,
         })
         debug().log('ShareViewer#setSelection, subset meshes:', subsetMeshes)
         this.highlighter.setHighlighted(subsetMeshes)
@@ -352,10 +361,16 @@ export class ShareViewer extends IfcViewerAPI {
       // subset from the per-vertex attribute. The `'preselection'`
       // customID slot replaces the previous one each call, matching
       // IfcSelector.preselection semantics (hover replaces).
+      //
+      // Pass selector.preselection.material — the theme-blue
+      // translucent overlay CadView installs at viewer init.
+      // Without it the subset reuses the source material and no
+      // visible overlay shows (only the outline edges).
       const subsetMeshes = model.createSubset({
         ids: [id],
         customID: 'preselection',
         removePrevious: true,
+        material: this.IFC.selector?.preselection?.material,
       })
       for (const mesh of subsetMeshes) {
         this.highlighter.addToHighlighting(mesh)
