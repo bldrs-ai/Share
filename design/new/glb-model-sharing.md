@@ -286,6 +286,41 @@ Replacement: a single `GlbAsIfcModelAdapter` class that:
 
 Single seam where "this isn't really an IFC model" is contained.
 
+### Picking granularity — symptom of the convertToShareModel gap
+
+The user-visible manifestation of the still-missing adapter is that
+**raycast-picking on a GLB-cache-hit model selects the whole mesh, not
+the individual element**. Empirically: clicking a wall on Bldrs_Plaza
+loaded via cache hit highlights the entire floor slab; clicking the
+same wall on an IFC-source load highlights just the wall.
+
+The cause is on the writer side AND the reader side:
+
+1. **Writer**: `GLTFExporter` *does* preserve `web-ifc-three`'s per-vertex
+   `expressID` buffer attribute as `_EXPRESSID` (the glTF custom-attribute
+   convention prefixes with `_`). So the GLB on disk carries a true
+   per-vertex expressID.
+2. **Reader**: today's cache-hit path goes through
+   `convertToShareModel#recursiveDecorate`, which **overwrites** the
+   per-vertex attribute with a one-byte mesh-level serial:
+
+   ```js
+   const ids = new Int8Array(1)      // one byte for the whole mesh
+   ids[0] = id                       // monotonic per Object3D visited
+   obj3d.geometry.attributes.expressID = new BufferAttribute(ids, 1)
+   ```
+
+   The raycast → faceIndex → expressID lookup therefore returns the
+   same mesh-level value for every face, and the picker selects the
+   whole mesh.
+
+The fix is the Phase 2b work above: `GlbAsIfcModelAdapter` skips the
+recursiveDecorate overwrite entirely and reads from the existing
+`_EXPRESSID` attribute. Until then, cache-hit picking is at-mesh
+granularity, and the cache feature stays behind `?feature=glb`
+off-by-default so production users opting into cache speedup do so
+knowing this tradeoff.
+
 
 ## Clipping
 
