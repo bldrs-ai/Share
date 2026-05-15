@@ -1146,9 +1146,17 @@ export async function retrieveFileWithPathNew(rootHandle, filePath, etag, commit
           return [currentHandle, fileHandle] // Return the new file handle
         }
 
-        // Search for any file in the directory that contains either the etag or commitHash
+        // Search for any file in the directory that contains either the etag or commitHash.
+        // The etag branch only fires when etag is non-null — otherwise `name.includes(null)`
+        // coerces to `name.includes("null")`, which matches every file written via
+        // `writeFileToPath` (their names always embed the literal "null" placeholder
+        // when no etag is provided, e.g. our GLB cache writer's
+        // `<segment>.null.<commitHash>` layout). That coercion was producing
+        // cross-file collisions: two uploads in the same OPFS dir would hit each
+        // other's slot on cache lookup.
         for await (const [name, handle] of currentHandle.entries()) {
-          if (handle.kind === 'file' && (name.includes(etag) ||
+          if (handle.kind === 'file' && (
+            (etag !== null && etag !== undefined && name.includes(etag)) ||
            (commitHash !== null && name.includes(commitHash) && name.startsWith(segment)))) {
             return [currentHandle, handle] // Return the handle of the matching file
           }
