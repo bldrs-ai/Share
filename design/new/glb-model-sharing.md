@@ -352,12 +352,44 @@ Format-agnostic by design: the attribute name is parameterised
 `EXT_mesh_features`, non-IFC source-format conventions, etc.) plug
 in through the same machinery.
 
+#### Known limitation: shared-geometry granularity
+
+Cache-hit picking is granular to **shared-geometry templates**, not
+individual IFC element instances. When an IFC source uses
+`IfcMappedItem` to instance one `IfcRepresentationMap` across
+multiple visible positions, conway's `streamAllMeshes` resolves the
+per-vertex id via `model.getElementByLocalID(geometry.localID)` —
+the *shared geometry's* localID — so every visible position of that
+template inherits the same expressID at the per-vertex level.
+Empirically: Momentum.ifc loads with 63 unique per-vertex IDs across
+2.1M vertices, while the IFC contains thousands of distinct
+elements. Clicking any one window of a shared template highlights
+every other window of the same template.
+
+The IFC **source** path doesn't show this because
+`web-ifc-three.SubsetCreator` uses `state.models[modelID].items` —
+an `ItemsMap` keyed by per-instance expressID with explicit
+geometry-range entries — as an independent source of truth. The
+per-vertex buffer is only used for face-index → expressID resolution
+at pick time; subset construction is per-instance via the items map.
+
+The cache doesn't carry that items map. Fix lands in the viewer
+replacement: `design/new/viewer-replacement.md` §3b.ii spells out
+the per-triangle `triangleIndexToExpressId` lookup table the new
+`IfcModelService` builds at parse, plus the
+`BLDRS_per_triangle_express_ids` glTF extension that persists it
+through the cache. Until then this PR documents the limitation.
+
 Out of scope (later Phase 2b slices):
 
 - `BLDRS_spatial_tree` extension → nav tree on cache-hit (writer +
   reader).
 - `BLDRS_element_properties` extension → properties panel on cache-hit
   (writer + reader, lazy decode).
+- `BLDRS_per_triangle_express_ids` extension → per-instance picking
+  on cache-hit. Specified in `viewer-replacement.md` §3b.ii. Sized
+  similarly to the spatial-tree extension and shares the same
+  side-table infrastructure once landed.
 - Full `GlbAsIfcModelAdapter` class refactor → replaces the entire
   `convertToShareModel` closure-patch pattern with a proper adapter.
   The picking fix above is intentionally a minimal patch in-place;
