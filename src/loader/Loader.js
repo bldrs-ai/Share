@@ -463,7 +463,7 @@ export function convertToShareModel(model, viewer) {
     obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
     obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
     const id = objIdSerial++
-    obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
+    let hasPerVertex = false
     if (obj3d.geometry) {
       // Fast path: this geometry came from a GLB roundtrip and still
       // has the per-vertex IFC expressID under the `_EXPRESSID` →
@@ -474,6 +474,7 @@ export function convertToShareModel(model, viewer) {
         obj3d.geometry.setAttribute('expressID', preserved)
         delete obj3d.geometry.attributes._expressid
         foundPreservedExpressId = true
+        hasPerVertex = true
       } else {
         const ids = new Int8Array(1)
         ids[0] = id
@@ -482,6 +483,15 @@ export function convertToShareModel(model, viewer) {
         expressIdAttr.onUpload(() => {})
         obj3d.geometry.attributes.expressID = expressIdAttr
       }
+    }
+    // Only set the mesh-level `obj3d.expressID` serial when the geometry
+    // does NOT carry per-vertex IDs. Otherwise leave it undefined so
+    // CadView's click handler takes the per-vertex branch
+    // (`geom.attributes.expressID.getX(geoIndex[3 * faceIndex])`) instead
+    // of the wrong fallback that treats `mesh.expressID` as the answer
+    // for every face of the mesh.
+    if (!hasPerVertex) {
+      obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
@@ -951,7 +961,21 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
 function swapToGlbLoader(viewer) {
   const loader = newGltfLoader()
   loader.type = 'glb'
-  viewer.IFC.type = 'glb'
+  // Mark the viewer's IFC type as 'ifc' so the downstream selection
+  // pipeline (`ShareViewer#setSelection`, `ShareViewer#highlightIfcItem`)
+  // proceeds rather than early-returning on the `type !== 'ifc'` gate.
+  // The cache-hit model IS structurally an IFC model — it carries the
+  // per-vertex `expressID` attribute restored by convertToShareModel
+  // (see Phase 2b.1) — just delivered via GLB instead of parsed from
+  // source bytes. Element-level outline highlighting via
+  // `pickIfcItemsByID` works as long as the model is registered with
+  // the IFC manager (it is — `addIfcModel(model)` runs in load()).
+  //
+  // Phase 4 (the ShareModelDecorator from #1512) will replace this
+  // `viewer.IFC.type` discriminant with `model.capabilities` checks,
+  // at which point this line goes away in favor of setting
+  // `capabilities.expressIdPicking = true` on the cache-hit model.
+  viewer.IFC.type = 'ifc'
   return [loader, false /* isLoaderAsync */, false /* isFormatText */, false /* isIfc */, glbToThree]
 }
 

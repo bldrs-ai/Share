@@ -95,6 +95,24 @@ describe('Loader/convertToShareModel — Phase 2b picking-fix', () => {
     expect(viewer.IFC.loader.ifcManager.getExpressId).not.toBe(stockGetExpressId)
   })
 
+  it('leaves obj3d.expressID undefined when per-vertex source exists', () => {
+    // CadView's click handler branches on `mesh.expressID !== undefined`.
+    // If we set a mesh-level serial here, the handler resolves the whole
+    // mesh to one expressID for every face — back to the bug we are
+    // trying to fix. The per-vertex source must be the only signal.
+    const ids = new Int32Array([10, 10, 10, 20, 20, 20])
+    const mesh = makeMesh({_expressid: new BufferAttribute(ids, 1)})
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.expressID).toBeUndefined()
+  })
+
+  it('sets the legacy mesh-level expressID when there is no per-vertex source', () => {
+    // Other non-IFC paths (OBJ / STL / direct .glb) rely on the serial.
+    const mesh = makeMesh({position: new BufferAttribute(new Float32Array(9), 3)})
+    convertToShareModel(mesh, makeViewerStub())
+    expect(typeof mesh.expressID).toBe('number')
+  })
+
   it('rolls up preservation across a hierarchy: any one mesh keeps stock getExpressId', () => {
     const meshWith = makeMesh({_expressid: new BufferAttribute(new Int32Array([1, 2, 3]), 1)})
     const meshWithout = makeMesh({position: new BufferAttribute(new Float32Array(9), 3)})
