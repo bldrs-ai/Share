@@ -124,12 +124,30 @@ describe('viewer/three/elementSubsets', () => {
       expect(buildSubsetMesh(mesh, new Set([10]))).toBeNull()
     })
 
-    it('copies source world transform onto the subset', () => {
+    it('copies source local transform onto the subset', () => {
       const src = makeTwoElementMesh()
       src.position.set(5, 0, 0)
       src.updateMatrixWorld(true)
       const subset = buildSubsetMesh(src, new Set([10]))
       expect(subset.position.x).toBe(5)
+    })
+
+    it('marks the subset raycast-invisible so click pickers cannot resolve through it', () => {
+      // Picker.castRay(scene.children) walks every Object3D's
+      // raycast() method. The subset sits coplanar with the source —
+      // tie-break order is undefined, and the subset's bounding
+      // sphere covers the full shared vertex buffer (not just its
+      // subset triangles), broadening the broad-phase admission.
+      // Resolving picks through the subset is fragile; the source
+      // mesh is the canonical pick target.
+      const src = makeTwoElementMesh()
+      const subset = buildSubsetMesh(src, new Set([10]))
+      // Setting raycast to a no-op makes Three.Raycaster skip this
+      // object entirely (Mesh.raycast is the per-instance hook).
+      expect(typeof subset.raycast).toBe('function')
+      const intersects = []
+      subset.raycast(null, intersects)
+      expect(intersects).toEqual([])
     })
 
     it('uses the source material by default; honours an override', () => {
@@ -203,87 +221,139 @@ describe('viewer/three/elementSubsets', () => {
 
 
   describe('attachElementSubsets', () => {
+    /**
+     * Build a "GLB-like" model tree: scene → group → mesh, with the
+     * group carrying a translation. Exercises the subset-parenting
+     * path that needs to inherit the ancestor transform.
+     *
+     * @return {{scene: Scene, group: Object3D, mesh: Mesh}}
+     */
+    function makeNestedScene() {
+      const scene = new Scene()
+      const group = new Object3D()
+      group.position.set(100, 0, 0)
+      const mesh = makeTwoElementMesh()
+      group.add(mesh)
+      scene.add(group)
+      scene.updateMatrixWorld(true)
+      return {scene, group, mesh}
+    }
+
     it('exposes createSubset / removeSubset / disposeSubsets on the model', () => {
       const model = makeTwoElementMesh()
       const scene = new Scene()
+      scene.add(model)
       attachElementSubsets(model, scene)
       expect(typeof model.createSubset).toBe('function')
       expect(typeof model.removeSubset).toBe('function')
       expect(typeof model.disposeSubsets).toBe('function')
     })
 
-    it('createSubset adds subset meshes to the scene', () => {
+    it('parents subset under sourceMesh.parent so ancestor transforms apply', () => {
+      // The bug this guards against: if subsets are parented directly
+      // under the scene root with only the source's local transform,
+      // any non-identity ancestor transform on the source (very
+      // common in GLB hierarchies) misplaces the subset. The picker
+      // and the OutlineEffect both then see the subset at the wrong
+      // world position — "adjacent element" picks, off-center
+      // outlines.
+      const {scene, group, mesh} = makeNestedScene()
+      attachElementSubsets(mesh, scene)
+      const subsets = mesh.createSubset({ids: [10], customID: 'selection'})
+      expect(subsets.length).toBe(1)
+      // Subset is a sibling of `mesh` under `group`, NOT a direct
+      // child of scene.
+      expect(subsets[0].parent).toBe(group)
+      expect(scene.children).not.toContain(subsets[0])
+      // World transform matches source mesh's world transform —
+      // both inherit group's translation.
+      subsets[0].updateMatrixWorld(true)
+      mesh.updateMatrixWorld(true)
+      expect(subsets[0].matrixWorld.elements).toEqual(mesh.matrixWorld.elements)
+    })
+
+    it('createSubset adds subset meshes to source.parent (parent-of-mesh adds them)', () => {
       const model = makeTwoElementMesh()
       const scene = new Scene()
+      scene.add(model)
       attachElementSubsets(model, scene)
       const subsets = model.createSubset({ids: [10], customID: 'selection'})
       expect(subsets.length).toBe(1)
-      expect(scene.children).toContain(subsets[0])
+      // Source is `model`; its parent is `scene`. Subset gets
+      // parented there.
+      expect(subsets[0].parent).toBe(scene)
     })
 
     it('createSubset with removePrevious=true clears the previous subset under the same customID', () => {
-      const model = makeTwoElementMesh()
-      const scene = new Scene()
-      attachElementSubsets(model, scene)
-      const first = model.createSubset({ids: [10], customID: 'selection'})
-      expect(scene.children).toContain(first[0])
-      const second = model.createSubset({ids: [20], customID: 'selection', removePrevious: true})
-      expect(scene.children).not.toContain(first[0])
-      expect(scene.children).toContain(second[0])
+      const {scene, group, mesh} = makeNestedScene()
+      attachElementSubsets(mesh, scene)
+      const first = mesh.createSubset({ids: [10], customID: 'selection'})
+      expect(group.children).toContain(first[0])
+      const second = mesh.createSubset({ids: [20], customID: 'selection', removePrevious: true})
+      expect(group.children).not.toContain(first[0])
+      expect(group.children).toContain(second[0])
     })
 
     it('createSubset with different customIDs keeps both subsets', () => {
-      const model = makeTwoElementMesh()
-      const scene = new Scene()
-      attachElementSubsets(model, scene)
-      const sel = model.createSubset({ids: [10], customID: 'selection'})
-      const pre = model.createSubset({ids: [20], customID: 'preselection'})
-      expect(scene.children).toContain(sel[0])
-      expect(scene.children).toContain(pre[0])
+      const {scene, group, mesh} = makeNestedScene()
+      attachElementSubsets(mesh, scene)
+      const sel = mesh.createSubset({ids: [10], customID: 'selection'})
+      const pre = mesh.createSubset({ids: [20], customID: 'preselection'})
+      expect(group.children).toContain(sel[0])
+      expect(group.children).toContain(pre[0])
     })
 
     it('removeSubset clears a named slot', () => {
-      const model = makeTwoElementMesh()
-      const scene = new Scene()
-      attachElementSubsets(model, scene)
-      const subsets = model.createSubset({ids: [10], customID: 'selection'})
-      model.removeSubset('selection')
-      expect(scene.children).not.toContain(subsets[0])
+      const {scene, group, mesh} = makeNestedScene()
+      attachElementSubsets(mesh, scene)
+      const subsets = mesh.createSubset({ids: [10], customID: 'selection'})
+      mesh.removeSubset('selection')
+      expect(group.children).not.toContain(subsets[0])
     })
 
     it('removeSubset is a no-op for unknown customID', () => {
       const model = makeTwoElementMesh()
       const scene = new Scene()
+      scene.add(model)
       attachElementSubsets(model, scene)
       expect(() => model.removeSubset('nope')).not.toThrow()
     })
 
     it('disposeSubsets clears every slot', () => {
-      const model = makeTwoElementMesh()
-      const scene = new Scene()
-      attachElementSubsets(model, scene)
-      const sel = model.createSubset({ids: [10], customID: 'selection'})
-      const pre = model.createSubset({ids: [20], customID: 'preselection'})
-      model.disposeSubsets()
-      expect(scene.children).not.toContain(sel[0])
-      expect(scene.children).not.toContain(pre[0])
+      const {scene, group, mesh} = makeNestedScene()
+      attachElementSubsets(mesh, scene)
+      const sel = mesh.createSubset({ids: [10], customID: 'selection'})
+      const pre = mesh.createSubset({ids: [20], customID: 'preselection'})
+      mesh.disposeSubsets()
+      expect(group.children).not.toContain(sel[0])
+      expect(group.children).not.toContain(pre[0])
     })
 
-    it('returns [] when no triangles match — no scene mutation', () => {
-      const model = makeTwoElementMesh()
-      const scene = new Scene()
-      const sceneChildCount = scene.children.length
-      attachElementSubsets(model, scene)
-      const subsets = model.createSubset({ids: [999], customID: 'selection'})
+    it('returns [] when no triangles match — no scene-tree mutation', () => {
+      const {scene, group, mesh} = makeNestedScene()
+      const groupChildCount = group.children.length
+      attachElementSubsets(mesh, scene)
+      const subsets = mesh.createSubset({ids: [999], customID: 'selection'})
       expect(subsets).toEqual([])
-      expect(scene.children.length).toBe(sceneChildCount)
+      expect(group.children.length).toBe(groupChildCount)
     })
 
-    it('tolerates a null scene (headless usage)', () => {
+    it('falls back to the supplied fallbackParent when source has no parent', () => {
+      const model = makeTwoElementMesh()
+      const fallback = new Scene()
+      // model.parent is null; controller falls back.
+      attachElementSubsets(model, fallback)
+      const subsets = model.createSubset({ids: [10], customID: 'selection'})
+      expect(subsets.length).toBe(1)
+      expect(subsets[0].parent).toBe(fallback)
+    })
+
+    it('tolerates a null fallbackParent — leaves orphan subsets', () => {
       const model = makeTwoElementMesh()
       attachElementSubsets(model, null)
       const subsets = model.createSubset({ids: [10], customID: 'selection'})
       expect(subsets.length).toBe(1)
+      expect(subsets[0].parent).toBeNull()
       expect(() => model.removeSubset('selection')).not.toThrow()
     })
 
@@ -301,6 +371,7 @@ describe('viewer/three/elementSubsets', () => {
       geom.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
       const model = new Mesh(geom, new MeshBasicMaterial())
       const scene = new Scene()
+      scene.add(model)
       attachElementSubsets(model, scene, {attrName: '_FEATURE_ID_0'})
       const subsets = model.createSubset({ids: [7], customID: 'selection'})
       expect(subsets.length).toBe(1)

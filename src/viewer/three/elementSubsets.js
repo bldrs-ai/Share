@@ -137,15 +137,37 @@ export function buildSubsetMesh(sourceMesh, idSet, opts = {}) {
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
   const subsetMaterial = material ?? sourceMesh.material
   const subsetMesh = new Mesh(dstGeom, subsetMaterial)
-  // Match source world transform exactly. The vertex buffers are
-  // the same; the world transform must be too, or the subset
-  // appears at a different position from the source.
+  // Local transform mirrors source's local transform. World
+  // transform alignment is the caller's responsibility (parent the
+  // subset under `sourceMesh.parent` — see attachElementSubsets) so
+  // any ancestor Group transforms apply identically to source and
+  // subset. Parenting the subset directly under the scene root with
+  // only the local transform would misplace the subset whenever the
+  // source has a non-identity ancestor matrix (very common in
+  // GLB-exported IFC hierarchies, where the GLB scene contains
+  // nested Groups).
   subsetMesh.matrixAutoUpdate = sourceMesh.matrixAutoUpdate
   subsetMesh.position.copy(sourceMesh.position)
   subsetMesh.quaternion.copy(sourceMesh.quaternion)
   subsetMesh.scale.copy(sourceMesh.scale)
   subsetMesh.updateMatrix()
-  subsetMesh.updateMatrixWorld(true)
+  // Mark the subset raycast-invisible. The subset exists only to
+  // drive the OutlineEffect's mask pass (which renders it via its
+  // own override material and is unaffected by `raycast`). The
+  // click-time raycaster in CadView.jsx fires against
+  // `scene.children` — without this guard the raycaster would hit
+  // the subset (which is coplanar with the source mesh and may sort
+  // ahead of it on ties), pulling `picked.faceIndex` into the
+  // subset's filtered index buffer. That stays internally
+  // consistent, but the subset's bounding sphere is derived from
+  // the entire shared vertex buffer (not just the subset's
+  // triangles), so the broad-phase test admits rays that wouldn't
+  // hit the actual subset triangles, and tie-break order shifts. By
+  // making the subset opaque to the raycaster, click picking
+  // always resolves through the source mesh — same as hover, which
+  // uses the curated `pickableIfcModels` list (subsets are not in
+  // it).
+  subsetMesh.raycast = () => {/* raycast-invisible — see comment above */}
   // Tag for diagnostics + downstream debug.
   subsetMesh.name = `${sourceMesh.name || 'mesh'}__subset`
   subsetMesh.userData.sourceMesh = sourceMesh
@@ -201,26 +223,30 @@ export function buildModelSubsets(modelRoot, ids, opts = {}) {
  * subset under the same customID before installing the new one,
  * matching `web-ifc-three.createSubset`'s removePrevious semantics.
  *
- * If `scene` is provided, subset Meshes are added to / removed from
- * the scene as they come and go. Required for postprocessing
- * `OutlineEffect` to pick them up (the effect's mask pass renders
- * only objects already in the scene tree). Pass `null` for headless
- * usage (tests).
+ * Subsets are parented directly under their respective source
+ * mesh's parent (sibling of the source). This inherits the source's
+ * full ancestor transform chain — important because GLB scenes
+ * routinely nest Mesh under several Group transforms, and parenting
+ * the subset under the scene root with only the local transform
+ * would misplace it. Falls back to `fallbackParent` (or the scene)
+ * when the source has no parent (e.g., the model is itself the
+ * root).
  *
  * @param {object} model root Object3D to attach the controller to
- * @param {object|null} scene Three Scene (or any Object3D) that
- *   subsets should be parented to. Pass `null` to skip scene-side
- *   plumbing.
+ * @param {object|null} fallbackParent default parent for subsets
+ *   when the source mesh has no parent (test scenarios, headless
+ *   usage). Pass `null` to leave such subsets orphaned (they exist
+ *   in memory but render nothing).
  * @param {object} [defaults] default values for `createSubset` opts
  *   (e.g., `{attrName: 'expressID'}`)
  * @return {object} model (same reference, mutated)
  */
-export function attachElementSubsets(model, scene, defaults = {}) {
+export function attachElementSubsets(model, fallbackParent, defaults = {}) {
   if (!model) {
     return model
   }
-  // Each customID maps to the Mesh[] currently parented in the scene
-  // for that slot. Cleared / replaced by removePrevious=true.
+  // Each customID maps to the Mesh[] currently parented for that
+  // slot. Cleared / replaced by removePrevious=true.
   const subsetsByCustomID = new Map()
 
 
@@ -230,9 +256,7 @@ export function attachElementSubsets(model, scene, defaults = {}) {
       return
     }
     for (const m of prev) {
-      if (scene) {
-        scene.remove(m)
-      }
+      m.removeFromParent()
       // Subset geometry shares attribute buffers with source, but
       // owns its own index buffer; release it.
       if (m.geometry && m.geometry !== m.userData.sourceMesh?.geometry) {
@@ -259,8 +283,9 @@ export function attachElementSubsets(model, scene, defaults = {}) {
       return []
     }
     for (const m of meshes) {
-      if (scene) {
-        scene.add(m)
+      const parent = m.userData.sourceMesh?.parent ?? fallbackParent
+      if (parent) {
+        parent.add(m)
       }
     }
     subsetsByCustomID.set(customID, meshes)

@@ -156,11 +156,16 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     const mesh = new Mesh(geom)
     const viewer = makeViewerStub()
 
+    // Simulate the GLB-typical hierarchy: scene → mesh (or scene →
+    // group → mesh). attachElementSubsets parents under
+    // sourceMesh.parent for correct world-transform inheritance.
+    const scene = new Scene()
+    scene.add(mesh)
+
     // The exact sequence Loader.js#load performs:
     convertToShareModel(mesh, viewer)
     decorateShareModel(mesh, 'glb')
     Object.assign(mesh.capabilities, inferModelCapabilities(mesh))
-    const scene = new Scene()
     if (mesh.capabilities.expressIdPicking && !mesh.capabilities.ifcSubsets) {
       attachElementSubsets(mesh, scene)
     }
@@ -177,7 +182,9 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
       removePrevious: true,
     })
     expect(subset.length).toBe(1)
-    expect(scene.children).toContain(subset[0])
+    // Subset is parented under mesh.parent (= scene here), inheriting
+    // any ancestor transforms.
+    expect(subset[0].parent).toBe(scene)
   })
 
   it('unstructured GLB upload (no per-vertex IDs) gets all-off capabilities and no createSubset', () => {
