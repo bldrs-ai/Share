@@ -24,7 +24,8 @@ import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
-import {decorateShareModel} from '../viewer/ShareModel'
+import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
+import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -336,6 +337,39 @@ export async function load(
   // model capability instead of guessing from `viewer.IFC.type`.
   decorateShareModel(model, loader.type)
 
+  // Runtime capability augmentation. The format default for 'glb'
+  // is all-off, but a cache-hit GLB carries the per-vertex
+  // `expressID` attribute preserved from the original IFC parse —
+  // it supports `expressIdPicking` even though its format is 'glb'.
+  // `inferModelCapabilities` walks the geometry and promotes the
+  // flag when the attribute is actually present. Additive only —
+  // never demotes a format-default capability.
+  Object.assign(model.capabilities, inferModelCapabilities(model))
+
+  // For models with per-vertex element IDs but no `ifcSubsets`
+  // capability (i.e., cache-hit GLB — IFC parser state is not
+  // present, so web-ifc-three's createSubset cannot run), attach
+  // our own `model.createSubset` / `removeSubset` methods backed
+  // by the per-vertex attribute. Matches the shape proposed for
+  // Phase 3's `IfcModel#createSubset`
+  // (design/new/viewer-replacement.md §3b.i) so the same call-sites
+  // work against both implementations.
+  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
+    const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
+    attachElementSubsets(model, scene)
+    // Diagnostic: how many distinct per-vertex element IDs are in
+    // this model? Compared against the IFC's true element count, a
+    // gap signals lost instance identity through write/read — most
+    // commonly because the original IFC used mapped-item / type-
+    // shared representations (multiple visible positions sharing
+    // one element express ID), in which case selecting any of those
+    // positions correctly highlights every other position too.
+    const stats = summariseElementIdAttribute(model)
+    glbInfo(
+      `reader: per-vertex element-IDs — ${stats.uniqueIds} unique across ` +
+      `${stats.vertices} vertices in ${stats.meshes} meshes`)
+  }
+
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
   // Triggered for every source kind (github, local, upload, external)
@@ -436,8 +470,19 @@ async function axiosDownload(path, isFormatText, onProgress) {
  * @param {object} viewer
  * @return {Mesh}
  */
-function convertToShareModel(model, viewer) {
+export function convertToShareModel(model, viewer) {
   let objIdSerial = 0
+  // Whether we found per-vertex IFC expressIDs preserved through the
+  // GLB cache round-trip. GLTFExporter renames our `expressID` attribute
+  // to `_EXPRESSID` (custom attr → `_`-prefixed, uppercase) on write;
+  // GLTFLoader lowercases unknown attribute names on read, so the
+  // attribute lands at `geometry.attributes._expressid`. When we see
+  // it, we rename back to `expressID` so web-ifc-three's stock
+  // `IFCLoader#getExpressId` (which reads `attributes.expressID` at
+  // `index.array[3 * faceIndex]`) works without modification — element-
+  // level picking is restored on cache-hit models. See
+  // design/new/glb-model-sharing.md §"Picking granularity".
+  let foundPreservedExpressId = false
 
   /**
    * Recursively visit the model and its children to add `expressID` and
@@ -452,31 +497,35 @@ function convertToShareModel(model, viewer) {
     obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
     obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
     const id = objIdSerial++
-    obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
+    let hasPerVertex = false
     if (obj3d.geometry) {
-      const ids = new Int8Array(1)
-      ids[0] = id
-      // TODO(pablo)
-      // obj3d.geometry = obj3d.geometry || {attributes: {}}
-
-      // const ba = new BufferAttribute(ids, 1)
-      // ba.onUpload(() => {})
-
-      // obj3d.geometry.attributes = ba
-
-      const expressIdAttr = new BufferAttribute(ids, 1)
-      // eslint-disable-next-line no-empty-function
-      expressIdAttr.onUpload(() => {})
-
-      obj3d.geometry.attributes.expressID = expressIdAttr
-
-      const numQuickLookup = 5000 // TODO(pablo): rethink this approach
-      const geomIndex = new Array(numQuickLookup)
-      for (let i = 0; i < numQuickLookup; i++) {
-        geomIndex[i] = obj3d.expressID
+      // Fast path: this geometry came from a GLB roundtrip and still
+      // has the per-vertex IFC expressID under the `_EXPRESSID` →
+      // `_expressid` GLTFLoader-lowercased name. Rename back to
+      // `expressID` and skip the mesh-level synthetic write below.
+      const preserved = obj3d.geometry.attributes._expressid
+      if (preserved && preserved.count > 1) {
+        obj3d.geometry.setAttribute('expressID', preserved)
+        delete obj3d.geometry.attributes._expressid
+        foundPreservedExpressId = true
+        hasPerVertex = true
+      } else {
+        const ids = new Int8Array(1)
+        ids[0] = id
+        const expressIdAttr = new BufferAttribute(ids, 1)
+        // eslint-disable-next-line no-empty-function
+        expressIdAttr.onUpload(() => {})
+        obj3d.geometry.attributes.expressID = expressIdAttr
       }
-      // throw new Error('obj3d')
-      // obj3d.geometry.attributes.index = {array: geomIndex}
+    }
+    // Only set the mesh-level `obj3d.expressID` serial when the geometry
+    // does NOT carry per-vertex IDs. Otherwise leave it undefined so
+    // CadView's click handler takes the per-vertex branch
+    // (`geom.attributes.expressID.getX(geoIndex[3 * faceIndex])`) instead
+    // of the wrong fallback that treats `mesh.expressID` as the answer
+    // for every face of the mesh.
+    if (!hasPerVertex) {
+      obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
@@ -505,9 +554,20 @@ function convertToShareModel(model, viewer) {
   model.ifcManager.getSpatialStructure = () => {
     return model
   }
-  model.ifcManager.getExpressId = (geom, faceNdx) => {
-    debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
-    return geom.id
+  // Only override the manager's stock `getExpressId` for genuinely
+  // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
+  // expressID attribute on any mesh). When the model came from our IFC→
+  // GLB cache, the renamed `expressID` attribute restored above lets
+  // web-ifc-three's stock implementation work correctly. The previous
+  // unconditional override polluted the manager globally — every
+  // subsequent pick on any model returned `geom.id` until page refresh.
+  if (!foundPreservedExpressId) {
+    model.ifcManager.getExpressId = (geom, faceNdx) => {
+      debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
+      return geom.id
+    }
+  } else {
+    glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
@@ -935,6 +995,14 @@ async function tryLoadCachedGlb(cacheKeyArgs) {
 function swapToGlbLoader(viewer) {
   const loader = newGltfLoader()
   loader.type = 'glb'
+  // Element-level picking on cache-hit GLB is now handled by the
+  // capability-driven path in `ShareViewer#setSelection` /
+  // `#highlightIfcItem`: `inferModelCapabilities` promotes
+  // `expressIdPicking` on the loaded model (it has per-vertex
+  // `expressID` from the IFC→GLB cache round-trip), and
+  // `attachElementSubsets` gives the model a `createSubset` method
+  // that synthesises the selection / preselection meshes directly
+  // from the per-vertex attribute. No need to fake `viewer.IFC.type`.
   viewer.IFC.type = 'glb'
   return [loader, false /* isLoaderAsync */, false /* isFormatText */, false /* isIfc */, glbToThree]
 }

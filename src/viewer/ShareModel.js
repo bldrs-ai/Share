@@ -147,6 +147,52 @@ export function modelHasUnstructuredMeshClipper(model) {
 
 
 /**
+ * Inspect a loaded model's geometry to detect capabilities the
+ * format-based default in `capabilitiesForFormat` doesn't know about.
+ *
+ * Today's case: the Bldrs IFC→GLB cache preserves the original IFC's
+ * per-vertex `expressID` attribute through the GLTF round-trip
+ * (writer via `GLTFExporter`'s `_EXPRESSID`, reader normalises back
+ * to `expressID` in `Loader.js#convertToShareModel`). Such a model
+ * has `format: 'glb'` — the all-off default — but actually supports
+ * `expressIdPicking`. This inspector flips the flag on by examining
+ * the geometry.
+ *
+ * Returns a *partial* capabilities object; callers `Object.assign`
+ * it over the format defaults. The shape is intentionally additive —
+ * the inspector promotes capabilities, never demotes them.
+ *
+ * Generic over the attribute name (default `expressID`) so future
+ * formats carrying per-element IDs under different conventions
+ * (Khronos `EXT_mesh_features`, etc.) can be detected by passing
+ * the appropriate attribute name.
+ *
+ * @param {object} model loaded Object3D (Mesh, Group, etc.)
+ * @param {object} [opts]
+ * @param {string} [opts.attrName] per-vertex element-ID attribute
+ *   name to look for. Default `expressID`.
+ * @return {Partial<ShareModelCapabilities>}
+ */
+export function inferModelCapabilities(model, opts = {}) {
+  const caps = {}
+  if (!model || typeof model.traverse !== 'function') {
+    return caps
+  }
+  const attrName = opts.attrName ?? 'expressID'
+  let hasPerVertexElementIds = false
+  model.traverse((obj) => {
+    if (obj.isMesh && obj.geometry?.attributes?.[attrName]?.count > 1) {
+      hasPerVertexElementIds = true
+    }
+  })
+  if (hasPerVertexElementIds) {
+    caps.expressIdPicking = true
+  }
+  return caps
+}
+
+
+/**
  * Capability lookup that gracefully tolerates the pre-decoration window
  * (loaders mutate the model after construction; some early call-sites can
  * fire before the decorator runs).

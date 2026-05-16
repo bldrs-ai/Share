@@ -286,40 +286,115 @@ Replacement: a single `GlbAsIfcModelAdapter` class that:
 
 Single seam where "this isn't really an IFC model" is contained.
 
-### Picking granularity — symptom of the convertToShareModel gap
+### Picking granularity — **fixed in Phase 2b.1 + 2b.2**
 
-The user-visible manifestation of the still-missing adapter is that
-**raycast-picking on a GLB-cache-hit model selects the whole mesh, not
-the individual element**. Empirically: clicking a wall on Bldrs_Plaza
-loaded via cache hit highlights the entire floor slab; clicking the
-same wall on an IFC-source load highlights just the wall.
+Previously: raycast-picking on a GLB-cache-hit model selected the
+whole mesh ("click a wall, get the whole floor"). Cause: GLTFExporter
+preserves `web-ifc-three`'s per-vertex `expressID` attribute as
+`_EXPRESSID` on write (custom-attr → `_`-prefixed, uppercase); GLTFLoader
+lowercases unknown attrs on read, so it lands at
+`geometry.attributes._expressid` on reload. Then
+`convertToShareModel#recursiveDecorate` overwrote it with a 1-byte
+mesh-level synthetic, and also globally overwrote
+`viewer.IFC.loader.ifcManager.getExpressId` with `(geom) => geom.id`
+(polluting picks on every subsequently loaded model too).
 
-The cause is on the writer side AND the reader side:
+**Phase 2b.1 fix** (data layer, `convertToShareModel`):
 
-1. **Writer**: `GLTFExporter` *does* preserve `web-ifc-three`'s per-vertex
-   `expressID` buffer attribute as `_EXPRESSID` (the glTF custom-attribute
-   convention prefixes with `_`). So the GLB on disk carries a true
-   per-vertex expressID.
-2. **Reader**: today's cache-hit path goes through
-   `convertToShareModel#recursiveDecorate`, which **overwrites** the
-   per-vertex attribute with a one-byte mesh-level serial:
+- `recursiveDecorate` detects `_expressid` per-vertex (count > 1) and
+  renames back to `expressID`, skipping the 1-byte synthetic.
+- The global `ifcManager.getExpressId` override only fires when the
+  whole model has no per-vertex source — preserves the legacy fallback
+  for OBJ / STL / direct .glb upload paths.
+- `obj3d.expressID` is left undefined when per-vertex source exists,
+  so `CadView.jsx`'s click handler resolves IDs via the per-vertex
+  attribute (`geom.attributes.expressID.getX(index[3 * faceIndex])`)
+  instead of the wrong mesh-level fallback.
 
-   ```js
-   const ids = new Int8Array(1)      // one byte for the whole mesh
-   ids[0] = id                       // monotonic per Object3D visited
-   obj3d.geometry.attributes.expressID = new BufferAttribute(ids, 1)
-   ```
+**Phase 2b.2 fix** (highlight layer, `ShareViewer.setSelection` /
+`#highlightIfcItem`):
 
-   The raycast → faceIndex → expressID lookup therefore returns the
-   same mesh-level value for every face, and the picker selects the
-   whole mesh.
+After 2b.1, IDs resolved correctly but the visual outline still
+covered the whole mesh — `ShareViewer.setSelection` early-returned
+on the legacy `IFC.type !== 'ifc'` gate, so the element-level outline
+chain (`pickIfcItemsByID → createSubset → highlighter.setHighlighted`)
+never ran. Routing past that gate ran the chain but
+`web-ifc-three.createSubset` failed inside `ItemsMap.getGeometry`
+(no IFC parser state on a cache-hit GLB — `state.models[modelID].mesh`
+is undefined).
 
-The fix is the Phase 2b work above: `GlbAsIfcModelAdapter` skips the
-recursiveDecorate overwrite entirely and reads from the existing
-`_EXPRESSID` attribute. Until then, cache-hit picking is at-mesh
-granularity, and the cache feature stays behind `?feature=glb`
-off-by-default so production users opting into cache speedup do so
-knowing this tradeoff.
+The fix lives **above the web-ifc-three boundary**:
+
+- `src/viewer/three/elementSubsets.js` — generic triangle-filter
+  primitive. `buildSubsetMesh(sourceMesh, idSet, {attrName})` reads
+  the per-vertex element-ID attribute + `geometry.index`, returns a
+  new Mesh with only the matching triangles. `attachElementSubsets(model, scene)`
+  hangs `model.createSubset({ids, customID, removePrevious})` /
+  `model.removeSubset(customID)` off the model — the same shape
+  proposed for Phase 3's `IfcModel#createSubset` in
+  `design/new/viewer-replacement.md` §3b.i, so Phase 3 can absorb
+  the implementation without changing call-sites.
+- `src/viewer/ShareModel.js` adds `inferModelCapabilities(model)`,
+  a runtime inspector that promotes `capabilities.expressIdPicking`
+  to `true` when the model actually carries the per-vertex attribute
+  — independent of `format`. Cache-hit GLB now has
+  `{expressIdPicking: true, ifcSubsets: false, ...}`.
+- `ShareViewer.setSelection` / `#highlightIfcItem` branch on
+  `capabilities.ifcSubsets` (legacy web-ifc-three path) vs
+  `capabilities.expressIdPicking` without `ifcSubsets` (new path
+  via `model.createSubset`). The mesh-level early-return is now
+  gated on `capabilities.expressIdPicking` instead of `IFC.type`.
+  The `viewer.IFC.type = 'ifc'` shim from 2b.1's interim attempt
+  is removed.
+
+Format-agnostic by design: the attribute name is parameterised
+(default `expressID`), so future per-element-ID encodings (Khronos
+`EXT_mesh_features`, non-IFC source-format conventions, etc.) plug
+in through the same machinery.
+
+#### Known limitation: shared-geometry granularity
+
+Cache-hit picking is granular to **shared-geometry templates**, not
+individual IFC element instances. When an IFC source uses
+`IfcMappedItem` to instance one `IfcRepresentationMap` across
+multiple visible positions, conway's `streamAllMeshes` resolves the
+per-vertex id via `model.getElementByLocalID(geometry.localID)` —
+the *shared geometry's* localID — so every visible position of that
+template inherits the same expressID at the per-vertex level.
+Empirically: Momentum.ifc loads with 63 unique per-vertex IDs across
+2.1M vertices, while the IFC contains thousands of distinct
+elements. Clicking any one window of a shared template highlights
+every other window of the same template.
+
+The IFC **source** path doesn't show this because
+`web-ifc-three.SubsetCreator` uses `state.models[modelID].items` —
+an `ItemsMap` keyed by per-instance expressID with explicit
+geometry-range entries — as an independent source of truth. The
+per-vertex buffer is only used for face-index → expressID resolution
+at pick time; subset construction is per-instance via the items map.
+
+The cache doesn't carry that items map. Fix lands in the viewer
+replacement: `design/new/viewer-replacement.md` §3b.ii spells out
+the per-triangle `triangleIndexToExpressId` lookup table the new
+`IfcModelService` builds at parse, plus the
+`BLDRS_per_triangle_express_ids` glTF extension that persists it
+through the cache. Until then this PR documents the limitation.
+
+Out of scope (later Phase 2b slices):
+
+- `BLDRS_spatial_tree` extension → nav tree on cache-hit (writer +
+  reader).
+- `BLDRS_element_properties` extension → properties panel on cache-hit
+  (writer + reader, lazy decode).
+- `BLDRS_per_triangle_express_ids` extension → per-instance picking
+  on cache-hit. Specified in `viewer-replacement.md` §3b.ii. Sized
+  similarly to the spatial-tree extension and shares the same
+  side-table infrastructure once landed.
+- Full `GlbAsIfcModelAdapter` class refactor → replaces the entire
+  `convertToShareModel` closure-patch pattern with a proper adapter.
+  The picking fix above is intentionally a minimal patch in-place;
+  the refactor consolidates the adapter surface once the BLDRS_*
+  extensions land and there's enough material to justify it.
 
 
 ## Clipping

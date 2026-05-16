@@ -147,6 +147,65 @@ class IfcModel extends Mesh {
 ```
 Keeping the same `expressID` per-vertex `BufferAttribute` we already set means **no call-site change for `getPickedItemId`** (`mesh.geometry, picked.faceIndex` → expressID). `three-mesh-bvh@^0.7` provides `acceleratedRaycast` and `computeBoundsTree` we can attach for `applyBVH: true` semantics.
 
+#### 3b.ii. The per-vertex attribute is *not* sufficient for per-instance picking
+
+Surfaced during Phase 2b.2 picking work (#1516, see
+`design/new/glb-model-sharing.md` §"Picking granularity"). The
+conway → `web-ifc-three.IFCLoader` pipeline tags every vertex of
+every placed geometry with `mesh.expressID` (line 226 of
+`web-ifc-three/IFCLoader.js`) — but when an IFC source uses
+`IfcMappedItem` to instance one `IfcRepresentationMap` across
+multiple visible positions, conway's `streamAllMeshes` resolves the
+per-vertex id via `model.getElementByLocalID(geometry.localID)`,
+which is keyed on the *shared geometry's* localID. All visible
+positions of that shared template inherit the **same** expressID at
+the per-vertex level. Empirically observed on Momentum.ifc: 63
+unique per-vertex IDs across 2.1M vertices for a building with
+thousands of distinct elements.
+
+The IFC source path doesn't expose this because
+`web-ifc-three.SubsetCreator` builds subsets from a separate
+**per-instance** structure (`state.models[modelID].items` — an
+`ItemsMap` keyed by real IFC expressID, with explicit
+geometry-range entries per element). The per-vertex attribute is
+only used for face-index → expressID resolution at pick time;
+subset construction has its own per-instance source of truth.
+
+Implication for §3b.i: `triangleIndexToExpressId` (above) must be
+populated **per-IFC-instance**, *not* by reading the per-vertex
+attribute, even though the per-vertex attribute looks identical in
+shape. Concretely the new `IfcModelService` should:
+
+1. At parse / load: iterate placed geometries in order. For each
+   placed geometry of IFC element `e`, append `e` to
+   `triangleIndexToExpressId` for every triangle that geometry
+   contributes — **regardless of whether the underlying shape is
+   shared with another element via `IfcMappedItem`**. This mirrors
+   what `web-ifc-three.IfcGeometryStorage` does today; conway's
+   shared-geometry resolution is bypassed at this layer.
+2. Build `expressIdToTriangleIndices` as the inverse.
+3. The per-vertex `expressID` `BufferAttribute` can remain (kept for
+   compatibility with `getExpressId(geometry, faceIndex)`) but
+   **callers must read instance identity from
+   `triangleIndexToExpressId`, not from the vertex attribute**.
+   Specifically `getExpressId(geometry, faceIndex) =
+   triangleIndexToExpressId[faceIndex]`.
+
+For the GLB cache (`design/new/glb-model-sharing.md`): persist
+`triangleIndexToExpressId` as a glTF accessor under a Bldrs
+extension (provisional name `BLDRS_per_triangle_express_ids`). On
+cache-hit load, the reader skips the conway-mediated parse and
+restores `triangleIndexToExpressId` directly. The per-vertex
+attribute can be dropped from the cache once readers depend on the
+per-triangle table — saves ~4 bytes × N_vertices.
+
+Until this lands, cache-hit picking is **granular to
+shared-geometry templates**: clicking any one instance of a
+mapped-item-shared geometry highlights all of them. Phase 2b PRs
+explicitly note this limitation; the data the cache carries today
+cannot support per-instance picking. Source-path picking is
+unaffected.
+
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
 
@@ -412,6 +471,7 @@ with Phase 5". Removing them is a four-line diff at that point.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Conway's spatial-structure / properties output isn't byte-equivalent to `web-ifc-three`'s | Medium | Breaks NavTree, Properties panel, search index | Phase 3 parity test against fixture IFCs; keep flag until parity confirmed |
+| `IfcModelService` reads per-instance expressID from the conway-supplied per-vertex buffer | High | Cache-hit picking collapses to shared-geometry granularity (observed Phase 2b.2 — 63 unique IDs / 2.1M verts on Momentum.ifc); breaks per-instance Hide/Isolate/Reveal too | Per §3b.ii, build `triangleIndexToExpressId` per-instance at parse — bypass conway's `getElementByLocalID(geometry.localID)` resolution. Persist via `BLDRS_per_triangle_express_ids` extension for cache parity. |
 | Subset raycasting performance regression vs `web-ifc-three`'s native worker path | Medium | Hover-pick lag on big models | Add `three-mesh-bvh@^0.7` `acceleratedRaycast` from day one; measure on a >100MB IFC |
 | Outline highlight visual drift after color-management change | Low | Cosmetic | Snapshot tests in Cosmos; tune `OutlineEffect` colors if needed |
 | Hidden coupling between `web-ifc-viewer.IfcContext` and `IfcManager` we missed | Medium | Phase 4 cutover stalls | Phase 3's parallel-run flag means we discover this before deletion |
