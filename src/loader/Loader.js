@@ -26,6 +26,12 @@ import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {
+  compareItemsMaps,
+  formatComparison,
+  itemsMapFromFlatMeshes,
+  itemsMapFromPerVertexAttribute,
+} from '../viewer/ifc/IfcItemsMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -837,10 +843,23 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
+      // Phase-3 prep: capture Conway's FlatMesh stream during the live
+      // parse so the parity check below can read the original
+      // per-instance data without a second StreamAllMeshes walk.
+      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
+      const parityCapture = isFeatureEnabled('ifcItemsMapParity') ?
+        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
+        null
+
       if (onProgress) {
         onProgress('Parsing model geometry...')
       }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
+      let ifcModel
+      try {
+        ifcModel = await this.loader.parse(buffer, onProgress)
+      } finally {
+        parityCapture?.restore()
+      }
       this.addIfcModel(ifcModel)
 
       if (onProgress) {
@@ -877,6 +896,17 @@ function newIfcLoader(viewer) {
       if (onProgress) {
         onProgress('Model loaded successfully!')
       }
+
+      // Phase-3 prep: parallel-run the new IfcItemsMap populators
+      // against the live model and log the diff. Diagnostic only —
+      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
+      // See design/new/viewer-replacement.md §3b.ii for the
+      // per-vertex-vs-per-instance story this check exposes.
+      if (parityCapture) {
+        runIfcItemsMapParityCheck(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+
       return ifcModel
     } catch (err) {
       loader.ifcLastError = err
@@ -893,6 +923,137 @@ function newIfcLoader(viewer) {
     }
   }
   return loader
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * Conway-direct stream) for a freshly-parsed IFC model, then log a
+ * one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * What we're watching for: an `onlyInB` count greater than zero
+ * (Conway-direct sees instance IDs the per-vertex attribute
+ * collapses). That's the IfcMappedItem case — design/new/viewer-replacement.md
+ * §3b.ii. A clean model with no mapped items prints `both=N
+ * onlyA=0 onlyB=0` and tells us the per-vertex path is already
+ * per-instance for this file.
+ *
+ * `triCountDeltas > 0` would be a stronger signal: the two
+ * populators agree on the ID set but disagree on triangle counts
+ * per ID. That implies an emission-order mismatch and should be
+ * investigated before promoting Conway-direct.
+ *
+ * Safe to fail silently — if Conway's API surface differs from what
+ * we expect (e.g., a future adapter version drops `StreamAllMeshes`),
+ * the parity check warns once and returns; the load completes
+ * normally.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ */
+/**
+ * Wrap `ifcAPI.StreamAllMeshes` so every FlatMesh that flows through
+ * the live parse is captured by reference into a local array. Returns
+ * `{captured, restore}` — `captured` accumulates as parse runs;
+ * `restore` puts the original method back regardless of parse outcome.
+ *
+ * Why capture-via-wrapper instead of reading
+ * `ifcAPI.models.get(modelID).model[4]` (the cached `vectorFlatMesh`):
+ * the adapter's vector has a bounds-check bug
+ * (ifc_api_proxy_ifc.js:138-152 — `get(index)` checks
+ * `placedGeometryArray.length` (an unrelated empty array) instead of
+ * `flatMeshArray.length`, so `get(i)` returns a dummy for every
+ * index). `size()` and `push()` work; `get()` is functionally write-
+ * only. The wrapper gives us the FlatMeshes via the callback path,
+ * where the inner per-PlacedGeometry vectors ARE well-formed.
+ *
+ * Capture is by reference — Conway doesn't mutate a FlatMesh after
+ * emitting it through the callback (the scene.walk() at line 562
+ * finalises each entity's PlacedGeometry vector before
+ * `meshMap.forEach` fires the callbacks at line 705).
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @return {{captured: Array, restore: Function}}
+ */
+function installFlatMeshCapture(ifcAPI) {
+  const captured = []
+  const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
+  ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
+    return orig(modelID, (flatMesh) => {
+      captured.push(flatMesh)
+      cb(flatMesh)
+    })
+  }
+  return {
+    captured,
+    restore: () => {
+      ifcAPI.StreamAllMeshes = orig
+    },
+  }
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * captured FlatMesh stream) for a freshly-parsed IFC model, then log
+ * a one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ * @param {Array} capturedFlatMeshes FlatMeshes captured during the
+ *   live parse via installFlatMeshCapture
+ */
+function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    const modelID = ifcModel.modelID
+    const geom = ifcModel.geometry
+    const perVertex = itemsMapFromPerVertexAttribute(geom)
+    if (!perVertex) {
+      console.warn(
+        '[ifcItemsMapParity] per-vertex populator returned null ' +
+        '(no expressID attribute or no index) — skipping parity check')
+      return
+    }
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[ifcItemsMapParity] no FlatMesh capture from parse — ' +
+        'skipping parity check (web-ifc-three may not have called ' +
+        'StreamAllMeshes for this load)')
+      return
+    }
+    const conway = itemsMapFromFlatMeshes(
+      capturedFlatMeshes, ifcAPI, modelID, {geometry: geom})
+    const cmp = compareItemsMaps(perVertex, conway)
+    console.warn(
+      `[ifcItemsMapParity] modelID=${modelID} ` +
+      `perVertexElements=${perVertex.elementCount} ` +
+      `conwayElements=${conway.elementCount} ` +
+      `perVertexTriangles=${perVertex.triangleCount} ` +
+      `conwayTriangles=${conway.triangleCount} ` +
+      `${formatComparison(cmp)}`)
+    // First few count deltas, for spot-checking emission-order issues.
+    if (cmp.triangleCountDeltas.length > 0) {
+      const head = cmp.triangleCountDeltas.slice(0, 5)
+        .map((d) => `${d.id}:${d.a}vs${d.b}`).join(' ')
+      console.warn(`[ifcItemsMapParity] sample triCountDeltas: ${head}`)
+    }
+    if (cmp.onlyInB > 0) {
+      console.warn(
+        `[ifcItemsMapParity] Conway sees ${cmp.onlyInB} additional ` +
+        'instance IDs — this is the IfcMappedItem per-instance ' +
+        'delta the per-vertex path collapses')
+    }
+    if (!cmp.agreeingTriangleCounts) {
+      console.warn(
+        `[ifcItemsMapParity] ${cmp.triangleCountDeltas.length} IDs ` +
+        'have triangle-count deltas — emission order may differ; ' +
+        'investigate before promoting Conway-direct')
+    }
+  } catch (e) {
+    console.warn('[ifcItemsMapParity] check failed:', e)
+  }
 }
 
 
