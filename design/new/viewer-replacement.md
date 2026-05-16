@@ -191,6 +191,29 @@ shape. Concretely the new `IfcModelService` should:
    Specifically `getExpressId(geometry, faceIndex) =
    triangleIndexToExpressId[faceIndex]`.
 
+**Initial implementation lives in `src/viewer/ifc/IfcItemsMap.js`** (test
+phase). The class holds the two tables; three populators feed it:
+- `itemsMapFromPerVertexAttribute(geometry)` — fallback / cache-hit
+  GLB path. Builds the table from `geometry.attributes.expressID`.
+  Subject to the IfcMappedItem collapse described above; documents
+  the shared-geometry limitation.
+- `itemsMapFromOrderedRanges(ranges, {geometry})` — pure data-flow
+  populator. Caller supplies an ordered `{expressID, triangleCount}`
+  stream; the table builds positionally. Decoupled from any specific
+  IFC engine.
+- `itemsMapFromConwayStream(api, modelID, {geometry})` — the
+  destination shape. Walks `api.StreamAllMeshes(modelID, cb)`,
+  reads `FlatMesh.expressID` (per-instance) and
+  `IfcGeometry.GetIndexDataSize()` (per-PlacedGeometry triangle
+  count), and threads them through `itemsMapFromOrderedRanges`. This
+  is the populator the future `IfcModelService` will own; the
+  geometry assembler lands alongside it in the next slice.
+
+All three feed the same consumer surface
+(`createSubsetMesh(ids, opts)`, `getExpressIdByTriangle(t)`). The
+swap from per-vertex to Conway-direct in the live load path is
+isolated to one call site once the geometry assembler is in place.
+
 For the GLB cache (`design/new/glb-model-sharing.md`): persist
 `triangleIndexToExpressId` as a glTF accessor under a Bldrs
 extension (provisional name `BLDRS_per_triangle_express_ids`). On

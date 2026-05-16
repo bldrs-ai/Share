@@ -9,6 +9,8 @@ import {buildSubsetMesh} from '../three/elementSubsets'
 import {
   IfcItemsMap,
   NO_EXPRESS_ID,
+  itemsMapFromConwayStream,
+  itemsMapFromOrderedRanges,
   itemsMapFromPerVertexAttribute,
 } from './IfcItemsMap'
 
@@ -278,6 +280,243 @@ describe('viewer/ifc/IfcItemsMap', () => {
       expect(fromAttr.geometry.getIndex().array.length).toBe(6)
       expect(trianglesOf(fromMap.geometry.getIndex().array))
         .toEqual(trianglesOf(fromAttr.geometry.getIndex().array))
+    })
+  })
+
+
+  describe('itemsMapFromOrderedRanges', () => {
+    it('builds the table positionally from a per-instance range stream', () => {
+      // Three instances in emission order: 100 → 2 tris, 200 → 1 tri, 100 → 3 tris.
+      // Two of them carry expressID 100 — that's the IfcMappedItem case
+      // (same template, two distinct instances). Both ranges must
+      // contribute to the same id's triangle list.
+      const map = itemsMapFromOrderedRanges([
+        {expressID: 100, triangleCount: 2},
+        {expressID: 200, triangleCount: 1},
+        {expressID: 100, triangleCount: 3},
+      ])
+      expect(map.triangleCount).toBe(6)
+      expect(Array.from(map.triangleIndexToExpressId))
+        .toEqual([100, 100, 200, 100, 100, 100])
+      expect(Array.from(map.expressIdToTriangleIndices.get(100)))
+        .toEqual([0, 1, 3, 4, 5])
+      expect(Array.from(map.expressIdToTriangleIndices.get(200))).toEqual([2])
+    })
+
+    it('skips zero- or negative-count ranges', () => {
+      const map = itemsMapFromOrderedRanges([
+        {expressID: 10, triangleCount: 1},
+        {expressID: 20, triangleCount: 0},
+        {expressID: 30, triangleCount: -1},
+        {expressID: 40, triangleCount: 2},
+      ])
+      expect(map.triangleCount).toBe(3)
+      expect(Array.from(map.triangleIndexToExpressId)).toEqual([10, 40, 40])
+    })
+
+    it('handles an empty stream', () => {
+      const map = itemsMapFromOrderedRanges([])
+      expect(map.triangleCount).toBe(0)
+      expect(map.elementCount).toBe(0)
+    })
+
+    it('attaches a supplied geometry so subset construction can run', () => {
+      // Synthetic 3-triangle geometry, three single-vertex elements.
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(27), 3))
+      geom.setIndex(new BufferAttribute(
+        new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8]), 1,
+      ))
+      const map = itemsMapFromOrderedRanges([
+        {expressID: 10, triangleCount: 1},
+        {expressID: 20, triangleCount: 1},
+        {expressID: 30, triangleCount: 1},
+      ], {geometry: geom})
+      const subset = map.createSubsetMesh([20])
+      expect(subset.geometry.getIndex().array.length).toBe(3)
+      // Triangle index 1 → source indices 3,4,5.
+      expect(Array.from(subset.geometry.getIndex().array)).toEqual([3, 4, 5])
+    })
+  })
+
+
+  describe('itemsMapFromConwayStream', () => {
+    /**
+     * Minimal Conway IfcAPI mock. `StreamAllMeshes` invokes `cb` once
+     * per FlatMesh in `flatMeshes`; `GetGeometry` returns a stub with
+     * the per-geometry index count from `geometriesByExpressId`.
+     *
+     * @param {Array<{expressID: number, placed: Array<number>}>} flatMeshes
+     *   each entry: a placing element ID + a list of geometryExpressIDs
+     *   it instantiates (PlacedGeometry references).
+     * @param {Record<number, number>} indexCountByGeometryExpressId
+     *   GetIndexDataSize() value per geometryExpressID. Triangles =
+     *   indices / 3 (Conway always emits indexed geometry at the
+     *   adapter boundary).
+     * @return {object}
+     */
+    function makeMockConwayApi(flatMeshes, indexCountByGeometryExpressId) {
+      return {
+        StreamAllMeshes(_modelID, cb) {
+          for (const fm of flatMeshes) {
+            cb({
+              expressID: fm.expressID,
+              geometries: {
+                size: () => fm.placed.length,
+                get: (i) => ({
+                  geometryExpressID: fm.placed[i],
+                  color: {x: 1, y: 1, z: 1, w: 1},
+                  flatTransformation: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+                }),
+              },
+            })
+          }
+        },
+        GetGeometry(_modelID, geometryExpressID) {
+          const indexCount = indexCountByGeometryExpressId[geometryExpressID]
+          if (indexCount === undefined || indexCount === null) {
+            return null
+          }
+          return {
+            GetIndexDataSize: () => indexCount,
+            GetVertexDataSize: () => indexCount * 6, // 2 floats per index, dummy
+            GetIndexData: () => 0,
+            GetVertexData: () => 0,
+          }
+        },
+      }
+    }
+
+    it('reads expressID off the FlatMesh (per-instance), not off the geometry', () => {
+      // FlatMesh A (expressID 100) and FlatMesh B (expressID 200) both
+      // place the SAME geometryExpressID 999 — that's the IfcMappedItem
+      // case: one shared representation, two distinct instances. The
+      // per-vertex attribute (built from getElementByLocalID(geometry.localID))
+      // would assign id 999's element-id to both vertex ranges, collapsing
+      // the instances. Conway's stream keeps them separate because we
+      // read FlatMesh.expressID, not the placed geometry's.
+      const api = makeMockConwayApi(
+        [
+          {expressID: 100, placed: [999]},
+          {expressID: 200, placed: [999]},
+        ],
+        {999: 6}, // 2 triangles per instance
+      )
+      const map = itemsMapFromConwayStream(api, 0)
+      expect(map.elementCount).toBe(2) // not 1 — the collapse is gone
+      expect(map.triangleCount).toBe(4)
+      expect(Array.from(map.expressIdToTriangleIndices.get(100))).toEqual([0, 1])
+      expect(Array.from(map.expressIdToTriangleIndices.get(200))).toEqual([2, 3])
+    })
+
+    it('sums triangles across multiple PlacedGeometries within one FlatMesh', () => {
+      // One IFC element with two placed geometries (e.g., a wall whose
+      // representation references two sub-shapes). Both contribute to
+      // the same expressID's triangle list.
+      const api = makeMockConwayApi(
+        [{expressID: 100, placed: [50, 51]}],
+        {50: 9, 51: 6}, // 3 + 2 = 5 triangles
+      )
+      const map = itemsMapFromConwayStream(api, 0)
+      expect(map.elementCount).toBe(1)
+      expect(map.triangleCount).toBe(5)
+      expect(Array.from(map.expressIdToTriangleIndices.get(100)))
+        .toEqual([0, 1, 2, 3, 4])
+    })
+
+    it('skips PlacedGeometries whose geometry GetGeometry returns null', () => {
+      const api = makeMockConwayApi(
+        [{expressID: 100, placed: [50, 51]}],
+        {50: 6}, // 51 deliberately missing
+      )
+      const map = itemsMapFromConwayStream(api, 0)
+      expect(map.triangleCount).toBe(2)
+    })
+
+    it('skips PlacedGeometries with zero triangles', () => {
+      const api = makeMockConwayApi(
+        [{expressID: 100, placed: [50, 51]}],
+        {50: 0, 51: 6},
+      )
+      const map = itemsMapFromConwayStream(api, 0)
+      expect(map.triangleCount).toBe(2)
+    })
+
+    it('attaches a supplied geometry to the result', () => {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      geom.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
+      const api = makeMockConwayApi(
+        [{expressID: 100, placed: [50]}],
+        {50: 3},
+      )
+      const map = itemsMapFromConwayStream(api, 0, {geometry: geom})
+      expect(map.sourceGeometry).toBe(geom)
+      expect(map.createSubsetMesh([100])).not.toBeNull()
+    })
+  })
+
+
+  describe('per-vertex vs. Conway divergence (the IfcMappedItem story)', () => {
+    // The point of the Conway populator: per-instance IDs even when
+    // the source IFC shares one IfcRepresentationMap across positions.
+    // The per-vertex populator can't recover this — conway's
+    // `getElementByLocalID(geometry.localID)` collapses both instances
+    // onto the shared template's expressID. The Conway populator
+    // reads FlatMesh.expressID and keeps them separate.
+
+    it('per-vertex collapses two instances onto one ID; Conway keeps them separate', () => {
+      // Per-vertex view of the data (what GLB cache or web-ifc-three's
+      // attribute would carry for two IfcMappedItem instances of the
+      // same template): same expressID across two vertex ranges.
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(36), 3))
+      geom.setAttribute(
+        'expressID',
+        // 6 verts per instance, 2 triangles per instance, all tagged
+        // with the shared template's id (999) — the collapse.
+        new BufferAttribute(new Int32Array(
+          [999, 999, 999, 999, 999, 999, 999, 999, 999, 999, 999, 999]), 1),
+      )
+      geom.setIndex(new BufferAttribute(
+        new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]), 1,
+      ))
+      const perVertex = itemsMapFromPerVertexAttribute(geom)
+      expect(perVertex.elementCount).toBe(1)
+      expect(perVertex.expressIdToTriangleIndices.get(999).length).toBe(4)
+
+      // Same triangle layout, fed through the Conway stream. The
+      // FlatMesh.expressID is the per-instance ID. Two FlatMeshes
+      // → two distinct ids → two distinct subsets selectable.
+      const conway = itemsMapFromConwayStream(
+        {
+          StreamAllMeshes(_id, cb) {
+            cb({
+              expressID: 100,
+              geometries: {size: () => 1, get: () => ({geometryExpressID: 999})},
+            })
+            cb({
+              expressID: 200,
+              geometries: {size: () => 1, get: () => ({geometryExpressID: 999})},
+            })
+          },
+          GetGeometry() {
+            return {GetIndexDataSize: () => 6}
+          },
+        },
+        0,
+        {geometry: geom},
+      )
+      expect(conway.elementCount).toBe(2)
+      expect(Array.from(conway.expressIdToTriangleIndices.get(100))).toEqual([0, 1])
+      expect(Array.from(conway.expressIdToTriangleIndices.get(200))).toEqual([2, 3])
+
+      // The subset for instance 100 must contain only its own 2
+      // triangles — not all 4. That's the per-instance picking the
+      // GLB cache today can't deliver (design/new/glb-model-sharing.md
+      // §"Known limitation: shared-geometry granularity").
+      const subset100 = conway.createSubsetMesh([100])
+      expect(subset100.geometry.getIndex().array.length).toBe(6) // 2 tris × 3
     })
   })
 })

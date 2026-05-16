@@ -192,6 +192,136 @@ export class IfcItemsMap {
 
 
 /**
+ * Build an IfcItemsMap from an ordered stream of per-instance triangle
+ * ranges. Each entry contributes `triangleCount` consecutive triangles
+ * to the flat mesh, tagged with `expressID`.
+ *
+ * **This is the per-instance populator the viewer-replacement §3b.ii
+ * spec calls for.** `expressID` is the *placing* element's ID — for
+ * IfcMappedItem instances, this is the instance's own expressID, NOT
+ * the shared representation's. Each instance contributes its own
+ * range with its own ID, so the table is per-instance even when the
+ * underlying shapes are shared. The per-vertex `expressID` attribute
+ * (conway tags via `getElementByLocalID(geometry.localID)`) collapses
+ * this — see design/new/viewer-replacement.md §3b.ii. Driving the
+ * populator from an ordered range stream sidesteps the collapse.
+ *
+ * The caller is responsible for keeping the stream order consistent
+ * with the geometry assembler's triangle emission order — the table
+ * is positional. A natural pairing: produce the range stream from
+ * the same iteration that builds the geometry index buffer.
+ *
+ * @param {Array<{expressID: number, triangleCount: number}>} ranges
+ *   per-instance triangle ranges in emission order (any iterable is
+ *   accepted at runtime; documented as Array for the lint surface)
+ * @param {object} [opts]
+ * @param {BufferGeometry} [opts.geometry] destination geometry the
+ *   table will index into. Attached to the returned IfcItemsMap so
+ *   `createSubsetMesh` can share its vertex attributes.
+ * @return {IfcItemsMap}
+ */
+export function itemsMapFromOrderedRanges(ranges, opts = {}) {
+  let total = 0
+  const buffered = []
+  for (const r of ranges) {
+    if (!r || r.triangleCount <= 0) {
+      continue
+    }
+    buffered.push(r)
+    total += r.triangleCount
+  }
+  const triangleIndexToExpressId = new Uint32Array(total)
+  const triangleListsById = new Map()
+  let cursor = 0
+  for (const {expressID, triangleCount} of buffered) {
+    let list = triangleListsById.get(expressID)
+    if (!list) {
+      list = []
+      triangleListsById.set(expressID, list)
+    }
+    for (let i = 0; i < triangleCount; i++) {
+      triangleIndexToExpressId[cursor] = expressID
+      list.push(cursor)
+      cursor++
+    }
+  }
+  const expressIdToTriangleIndices = new Map()
+  for (const [id, list] of triangleListsById) {
+    expressIdToTriangleIndices.set(id, Uint32Array.from(list))
+  }
+  return new IfcItemsMap({
+    triangleIndexToExpressId,
+    expressIdToTriangleIndices,
+    sourceGeometry: opts.geometry ?? null,
+  })
+}
+
+
+/**
+ * Conway-direct populator. Walks `api.StreamAllMeshes(modelID, cb)`,
+ * accumulates one per-instance range per (FlatMesh × PlacedGeometry),
+ * and hands the stream to `itemsMapFromOrderedRanges`.
+ *
+ * Why this populator exists — and why it's the destination shape —
+ * see design/new/viewer-replacement.md §3b.ii. Conway's `FlatMesh`
+ * carries `expressID` for the *placing* element (per-instance), so
+ * driving the items map directly from the stream gives per-instance
+ * subsets even when the source IFC uses `IfcMappedItem` to share one
+ * representation across many positions. The per-vertex attribute
+ * route collapses such instances onto one ID; this route doesn't.
+ *
+ * Triangle count comes from `IfcGeometry.GetIndexDataSize()` (returns
+ * a number of indices; triangles = indices / 3). The caller must
+ * keep the geometry assembler's per-instance emission order
+ * identical to this stream's order so triangle indices match — this
+ * is normally trivial since they share the same `StreamAllMeshes`
+ * walk.
+ *
+ * @param {object} api Conway-compatible IfcAPI (must expose
+ *   `StreamAllMeshes(modelID, cb)` and `GetGeometry(modelID, id)`).
+ * @param {number} modelID
+ * @param {object} [opts]
+ * @param {BufferGeometry} [opts.geometry] destination geometry to
+ *   attach to the IfcItemsMap (for subset attribute sharing).
+ * @return {IfcItemsMap}
+ */
+export function itemsMapFromConwayStream(api, modelID, opts = {}) {
+  const ranges = []
+  // Conway's IfcAPI uses PascalCase method names matching the upstream
+  // web-ifc C-API (see ifc_api.d.ts). Inline disables for `new-cap`
+  // mirror the pattern Loader.js#newIfcLoader uses for the same API.
+  // eslint-disable-next-line new-cap
+  api.StreamAllMeshes(modelID, (flatMesh) => {
+    const placedVec = flatMesh?.geometries
+    if (!placedVec) {
+      return
+    }
+    const placedSize = typeof placedVec.size === 'function' ?
+      placedVec.size() : placedVec.length
+    for (let i = 0; i < placedSize; i++) {
+      const placed = typeof placedVec.get === 'function' ?
+        placedVec.get(i) : placedVec[i]
+      // eslint-disable-next-line new-cap
+      const geom = api.GetGeometry(modelID, placed.geometryExpressID)
+      if (!geom) {
+        continue
+      }
+      // `GetIndexDataSize` returns a count of indices. Three indices
+      // per triangle. Conway geometries are always indexed at the
+      // adapter boundary (see ifc_api.d.ts: `IfcGeometry.GetIndexData/Size`).
+      // eslint-disable-next-line new-cap
+      const triangleCount = (geom.GetIndexDataSize() / 3) | 0
+      if (triangleCount <= 0) {
+        continue
+      }
+      ranges.push({expressID: flatMesh.expressID, triangleCount})
+    }
+  })
+  return itemsMapFromOrderedRanges(ranges, opts)
+}
+
+
+/**
  * Build an IfcItemsMap from a geometry's per-vertex element-ID
  * attribute. This is the "clean room" populator — same data shape
  * elementSubsets.buildSubsetMesh consumes today, repackaged into the
