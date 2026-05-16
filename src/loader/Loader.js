@@ -843,10 +843,23 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
+      // Phase-3 prep: capture Conway's FlatMesh stream during the live
+      // parse so the parity check below can read the original
+      // per-instance data without a second StreamAllMeshes walk.
+      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
+      const parityCapture = isFeatureEnabled('ifcItemsMapParity') ?
+        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
+        null
+
       if (onProgress) {
         onProgress('Parsing model geometry...')
       }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
+      let ifcModel
+      try {
+        ifcModel = await this.loader.parse(buffer, onProgress)
+      } finally {
+        parityCapture?.restore()
+      }
       this.addIfcModel(ifcModel)
 
       if (onProgress) {
@@ -889,8 +902,9 @@ function newIfcLoader(viewer) {
       // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
       // See design/new/viewer-replacement.md §3b.ii for the
       // per-vertex-vs-per-instance story this check exposes.
-      if (isFeatureEnabled('ifcItemsMapParity')) {
-        runIfcItemsMapParityCheck(this.loader.ifcManager.ifcAPI, ifcModel)
+      if (parityCapture) {
+        runIfcItemsMapParityCheck(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
 
       return ifcModel
@@ -938,7 +952,60 @@ function newIfcLoader(viewer) {
  * @param {object} ifcAPI Conway-compatible IfcAPI
  * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
  */
-function runIfcItemsMapParityCheck(ifcAPI, ifcModel) {
+/**
+ * Wrap `ifcAPI.StreamAllMeshes` so every FlatMesh that flows through
+ * the live parse is captured by reference into a local array. Returns
+ * `{captured, restore}` — `captured` accumulates as parse runs;
+ * `restore` puts the original method back regardless of parse outcome.
+ *
+ * Why capture-via-wrapper instead of reading
+ * `ifcAPI.models.get(modelID).model[4]` (the cached `vectorFlatMesh`):
+ * the adapter's vector has a bounds-check bug
+ * (ifc_api_proxy_ifc.js:138-152 — `get(index)` checks
+ * `placedGeometryArray.length` (an unrelated empty array) instead of
+ * `flatMeshArray.length`, so `get(i)` returns a dummy for every
+ * index). `size()` and `push()` work; `get()` is functionally write-
+ * only. The wrapper gives us the FlatMeshes via the callback path,
+ * where the inner per-PlacedGeometry vectors ARE well-formed.
+ *
+ * Capture is by reference — Conway doesn't mutate a FlatMesh after
+ * emitting it through the callback (the scene.walk() at line 562
+ * finalises each entity's PlacedGeometry vector before
+ * `meshMap.forEach` fires the callbacks at line 705).
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @return {{captured: Array, restore: Function}}
+ */
+function installFlatMeshCapture(ifcAPI) {
+  const captured = []
+  const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
+  ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
+    return orig(modelID, (flatMesh) => {
+      captured.push(flatMesh)
+      cb(flatMesh)
+    })
+  }
+  return {
+    captured,
+    restore: () => {
+      ifcAPI.StreamAllMeshes = orig
+    },
+  }
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * captured FlatMesh stream) for a freshly-parsed IFC model, then log
+ * a one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ * @param {Array} capturedFlatMeshes FlatMeshes captured during the
+ *   live parse via installFlatMeshCapture
+ */
+function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
   try {
     const modelID = ifcModel.modelID
     const geom = ifcModel.geometry
@@ -949,25 +1016,15 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel) {
         '(no expressID attribute or no index) — skipping parity check')
       return
     }
-    // Read Conway's cached FlatMesh vector instead of calling
-    // StreamAllMeshes a second time. The adapter's StreamAllMeshes/
-    // LoadAllGeometry mutate the cached meshMap on every call
-    // (ifc_api_proxy_ifc.js:657 — each invocation pushes a fresh
-    // PlacedGeometry onto every entry), so a second walk after
-    // web-ifc-three's parse would double every triangle count.
-    // The cached `vectorFlatMesh` (at `model[4]`) holds the original
-    // per-instance data web-ifc-three saw; reading it is a no-op.
-    const modelEntry = ifcAPI?.models?.get?.(modelID)
-    const cachedFlatMeshes = Array.isArray(modelEntry?.model) ? modelEntry.model[4] : null
-    if (!cachedFlatMeshes ||
-        typeof cachedFlatMeshes.size !== 'function' ||
-        cachedFlatMeshes.size() === 0) {
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
       console.warn(
-        '[ifcItemsMapParity] no cached Conway FlatMesh vector — ' +
-        'skipping parity check (adapter shape may have drifted)')
+        '[ifcItemsMapParity] no FlatMesh capture from parse — ' +
+        'skipping parity check (web-ifc-three may not have called ' +
+        'StreamAllMeshes for this load)')
       return
     }
-    const conway = itemsMapFromFlatMeshes(cachedFlatMeshes, ifcAPI, modelID, {geometry: geom})
+    const conway = itemsMapFromFlatMeshes(
+      capturedFlatMeshes, ifcAPI, modelID, {geometry: geom})
     const cmp = compareItemsMaps(perVertex, conway)
     console.warn(
       `[ifcItemsMapParity] modelID=${modelID} ` +
