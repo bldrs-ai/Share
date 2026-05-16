@@ -9,6 +9,8 @@ import {buildSubsetMesh} from '../three/elementSubsets'
 import {
   IfcItemsMap,
   NO_EXPRESS_ID,
+  compareItemsMaps,
+  formatComparison,
   itemsMapFromConwayStream,
   itemsMapFromOrderedRanges,
   itemsMapFromPerVertexAttribute,
@@ -517,6 +519,83 @@ describe('viewer/ifc/IfcItemsMap', () => {
       // §"Known limitation: shared-geometry granularity").
       const subset100 = conway.createSubsetMesh([100])
       expect(subset100.geometry.getIndex().array.length).toBe(6) // 2 tris × 3
+    })
+  })
+
+
+  describe('compareItemsMaps', () => {
+    it('reports total agreement when both populators see the same elements with the same triangle counts', () => {
+      const a = itemsMapFromOrderedRanges([
+        {expressID: 10, triangleCount: 2},
+        {expressID: 20, triangleCount: 3},
+      ])
+      const b = itemsMapFromOrderedRanges([
+        {expressID: 10, triangleCount: 2},
+        {expressID: 20, triangleCount: 3},
+      ])
+      const cmp = compareItemsMaps(a, b)
+      expect(cmp.bothElements).toBe(2)
+      expect(cmp.onlyInA).toBe(0)
+      expect(cmp.onlyInB).toBe(0)
+      expect(cmp.agreeingTriangleCounts).toBe(true)
+      expect(cmp.triangleCountDeltas).toEqual([])
+    })
+
+    it('reports onlyInB when the Conway populator splits an IfcMappedItem the per-vertex one collapses', () => {
+      // The motivating case: per-vertex sees one ID (999), Conway
+      // sees two distinct instance IDs (100, 200).
+      const perVertex = itemsMapFromOrderedRanges([
+        {expressID: 999, triangleCount: 4},
+      ])
+      const conway = itemsMapFromOrderedRanges([
+        {expressID: 100, triangleCount: 2},
+        {expressID: 200, triangleCount: 2},
+      ])
+      const cmp = compareItemsMaps(perVertex, conway)
+      expect(cmp.bothElements).toBe(0)
+      expect(cmp.onlyInA).toBe(1) // 999 (only in per-vertex)
+      expect(cmp.onlyInB).toBe(2) // 100, 200 (only in Conway)
+    })
+
+    it('reports triangle-count deltas for IDs both populators agree on but with different counts', () => {
+      // Same element ID, different triangle assignments — signals
+      // an ordering or scope mismatch between the two emission paths.
+      const a = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 5}])
+      const b = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 7}])
+      const cmp = compareItemsMaps(a, b)
+      expect(cmp.bothElements).toBe(1)
+      expect(cmp.agreeingTriangleCounts).toBe(false)
+      expect(cmp.triangleCountDeltas).toEqual([{id: 10, a: 5, b: 7}])
+    })
+
+    it('handles empty maps on either side', () => {
+      const empty = itemsMapFromOrderedRanges([])
+      const populated = itemsMapFromOrderedRanges([
+        {expressID: 10, triangleCount: 1},
+      ])
+      expect(compareItemsMaps(empty, populated)).toMatchObject({
+        bothElements: 0, onlyInA: 0, onlyInB: 1, agreeingTriangleCounts: true,
+      })
+      expect(compareItemsMaps(populated, empty)).toMatchObject({
+        bothElements: 0, onlyInA: 1, onlyInB: 0, agreeingTriangleCounts: true,
+      })
+    })
+  })
+
+
+  describe('formatComparison', () => {
+    it('renders the agreement-counts summary', () => {
+      const a = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 1}])
+      const b = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 1}])
+      expect(formatComparison(compareItemsMaps(a, b)))
+        .toBe('both=1 onlyA=0 onlyB=0')
+    })
+
+    it('appends triCountDeltas when assignments disagree', () => {
+      const a = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 1}])
+      const b = itemsMapFromOrderedRanges([{expressID: 10, triangleCount: 2}])
+      expect(formatComparison(compareItemsMaps(a, b)))
+        .toBe('both=1 onlyA=0 onlyB=0 triCountDeltas=1')
     })
   })
 })

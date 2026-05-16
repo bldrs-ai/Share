@@ -386,3 +386,89 @@ export function itemsMapFromPerVertexAttribute(geometry, opts = {}) {
     sourceGeometry: geometry,
   })
 }
+
+
+/**
+ * Compare two IfcItemsMap instances. Used for the parallel-run
+ * parity test that validates the Conway populator against the
+ * per-vertex-attribute populator on a live model.
+ *
+ * The interesting signal is **element-count divergence**. When an
+ * IFC source uses `IfcMappedItem` to share one representation
+ * across multiple positions, the per-vertex populator collapses
+ * those instances onto one ID; the Conway populator keeps them
+ * separate (design/new/viewer-replacement.md §3b.ii). So
+ * `onlyInB` (Conway IDs absent from per-vertex) is the per-instance
+ * delta — every entry in it is a window/door/desk/etc. that the
+ * per-vertex path can't pick individually.
+ *
+ * For overlapping IDs, `agreeingTriangleCounts` reports whether the
+ * triangle assignments match. A divergence here is a deeper issue
+ * (likely a triangle-ordering mismatch between the two emission
+ * paths) and warrants investigation before promoting the Conway
+ * populator to the live subset path.
+ *
+ * @param {IfcItemsMap} a first map (typically the per-vertex /
+ *   "current behavior" map)
+ * @param {IfcItemsMap} b second map (typically the Conway /
+ *   "destination" map)
+ * @return {{
+ *   bothElements: number,
+ *   onlyInA: number,
+ *   onlyInB: number,
+ *   agreeingTriangleCounts: boolean,
+ *   triangleCountDeltas: Array<{id: number, a: number, b: number}>,
+ * }}
+ */
+export function compareItemsMaps(a, b) {
+  const idsA = new Set(a.expressIdToTriangleIndices.keys())
+  const idsB = new Set(b.expressIdToTriangleIndices.keys())
+  let onlyInA = 0
+  let onlyInB = 0
+  let bothElements = 0
+  const triangleCountDeltas = []
+  for (const id of idsA) {
+    if (idsB.has(id)) {
+      bothElements++
+      const ca = a.expressIdToTriangleIndices.get(id).length
+      const cb = b.expressIdToTriangleIndices.get(id).length
+      if (ca !== cb) {
+        triangleCountDeltas.push({id, a: ca, b: cb})
+      }
+    } else {
+      onlyInA++
+    }
+  }
+  for (const id of idsB) {
+    if (!idsA.has(id)) {
+      onlyInB++
+    }
+  }
+  return {
+    bothElements,
+    onlyInA,
+    onlyInB,
+    agreeingTriangleCounts: triangleCountDeltas.length === 0,
+    triangleCountDeltas,
+  }
+}
+
+
+/**
+ * Format the result of `compareItemsMaps` as a single-line summary.
+ * Goes to console for the live parity-check log line.
+ *
+ * @param {object} cmp result of `compareItemsMaps`
+ * @return {string}
+ */
+export function formatComparison(cmp) {
+  const parts = [
+    `both=${cmp.bothElements}`,
+    `onlyA=${cmp.onlyInA}`,
+    `onlyB=${cmp.onlyInB}`,
+  ]
+  if (!cmp.agreeingTriangleCounts) {
+    parts.push(`triCountDeltas=${cmp.triangleCountDeltas.length}`)
+  }
+  return parts.join(' ')
+}

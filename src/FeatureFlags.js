@@ -37,6 +37,13 @@ export const flags = [
   // modelID, geometry size, chunk count). Top-level `[glb] writer/reader:`
   // milestone lines stay on whenever `glb` is on; this is the extra detail.
   {name: 'glbVerbose', isActive: false},
+  // Post-parse parity check that runs the new IfcItemsMap populators
+  // against the live model and logs the diff. Diagnostic only — no
+  // behavior change. Phase-3 prep work for the viewer replacement
+  // (design/new/viewer-replacement.md §3b). Flip on via
+  // `?feature=ifcItemsMapParity` to compare the per-vertex and
+  // Conway-direct populators on a real IFC.
+  {name: 'ifcItemsMapParity', isActive: false},
 ]
 
 

@@ -26,6 +26,12 @@ import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {
+  compareItemsMaps,
+  formatComparison,
+  itemsMapFromConwayStream,
+  itemsMapFromPerVertexAttribute,
+} from '../viewer/ifc/IfcItemsMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -877,6 +883,16 @@ function newIfcLoader(viewer) {
       if (onProgress) {
         onProgress('Model loaded successfully!')
       }
+
+      // Phase-3 prep: parallel-run the new IfcItemsMap populators
+      // against the live model and log the diff. Diagnostic only —
+      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
+      // See design/new/viewer-replacement.md §3b.ii for the
+      // per-vertex-vs-per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity')) {
+        runIfcItemsMapParityCheck(this.loader.ifcManager.ifcAPI, ifcModel)
+      }
+
       return ifcModel
     } catch (err) {
       loader.ifcLastError = err
@@ -893,6 +909,69 @@ function newIfcLoader(viewer) {
     }
   }
   return loader
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * Conway-direct stream) for a freshly-parsed IFC model, then log a
+ * one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * What we're watching for: an `onlyInB` count greater than zero
+ * (Conway-direct sees instance IDs the per-vertex attribute
+ * collapses). That's the IfcMappedItem case — design/new/viewer-replacement.md
+ * §3b.ii. A clean model with no mapped items prints `both=N
+ * onlyA=0 onlyB=0` and tells us the per-vertex path is already
+ * per-instance for this file.
+ *
+ * `triCountDeltas > 0` would be a stronger signal: the two
+ * populators agree on the ID set but disagree on triangle counts
+ * per ID. That implies an emission-order mismatch and should be
+ * investigated before promoting Conway-direct.
+ *
+ * Safe to fail silently — if Conway's API surface differs from what
+ * we expect (e.g., a future adapter version drops `StreamAllMeshes`),
+ * the parity check warns once and returns; the load completes
+ * normally.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ */
+function runIfcItemsMapParityCheck(ifcAPI, ifcModel) {
+  try {
+    const modelID = ifcModel.modelID
+    const geom = ifcModel.geometry
+    const perVertex = itemsMapFromPerVertexAttribute(geom)
+    if (!perVertex) {
+      console.warn(
+        '[ifcItemsMapParity] per-vertex populator returned null ' +
+        '(no expressID attribute or no index) — skipping parity check')
+      return
+    }
+    const conway = itemsMapFromConwayStream(ifcAPI, modelID, {geometry: geom})
+    const cmp = compareItemsMaps(perVertex, conway)
+    console.warn(
+      `[ifcItemsMapParity] modelID=${modelID} ` +
+      `perVertexElements=${perVertex.elementCount} ` +
+      `conwayElements=${conway.elementCount} ` +
+      `triangles=${perVertex.triangleCount} ` +
+      `${formatComparison(cmp)}`)
+    if (cmp.onlyInB > 0) {
+      console.warn(
+        `[ifcItemsMapParity] Conway sees ${cmp.onlyInB} additional ` +
+        'instance IDs — this is the IfcMappedItem per-instance ' +
+        'delta the per-vertex path collapses')
+    }
+    if (!cmp.agreeingTriangleCounts) {
+      console.warn(
+        `[ifcItemsMapParity] ${cmp.triangleCountDeltas.length} IDs ` +
+        'have triangle-count deltas — emission order may differ; ' +
+        'investigate before promoting Conway-direct')
+    }
+  } catch (e) {
+    console.warn('[ifcItemsMapParity] check failed:', e)
+  }
 }
 
 
