@@ -12,6 +12,7 @@ import {
   compareItemsMaps,
   formatComparison,
   itemsMapFromConwayStream,
+  itemsMapFromFlatMeshes,
   itemsMapFromOrderedRanges,
   itemsMapFromPerVertexAttribute,
 } from './IfcItemsMap'
@@ -455,6 +456,86 @@ describe('viewer/ifc/IfcItemsMap', () => {
       const map = itemsMapFromConwayStream(api, 0, {geometry: geom})
       expect(map.sourceGeometry).toBe(geom)
       expect(map.createSubsetMesh([100])).not.toBeNull()
+    })
+  })
+
+
+  describe('itemsMapFromFlatMeshes (cached-vector path)', () => {
+    // The non-mutating path used by the live parity check: read
+    // FlatMeshes from Conway's cached vectorFlatMesh instead of
+    // re-running StreamAllMeshes (which mutates per-call state).
+
+    /**
+     * @param {Array<{expressID: number, placed: Array<number>}>} entries
+     * @return {object} a Conway-style Vector<FlatMesh>
+     */
+    function makeFlatMeshVector(entries) {
+      const items = entries.map((e) => ({
+        expressID: e.expressID,
+        geometries: {
+          size: () => e.placed.length,
+          get: (i) => ({geometryExpressID: e.placed[i]}),
+        },
+      }))
+      return {
+        size: () => items.length,
+        get: (i) => items[i],
+      }
+    }
+
+    /**
+     * @param {Record<number, number>} sizes index counts per geometryExpressID
+     * @return {object} a Conway-shaped api stub
+     */
+    function makeApiStub(sizes) {
+      return {
+        GetGeometry(_modelID, geometryExpressID) {
+          const indexCount = sizes[geometryExpressID]
+          if (indexCount === undefined) {
+            return null
+          }
+          return {GetIndexDataSize: () => indexCount}
+        },
+      }
+    }
+
+    it('walks a Conway Vector<FlatMesh> shape (size()/get(i))', () => {
+      const flatMeshes = makeFlatMeshVector([
+        {expressID: 100, placed: [50]},
+        {expressID: 200, placed: [50]},
+      ])
+      const api = makeApiStub({50: 6})
+      const map = itemsMapFromFlatMeshes(flatMeshes, api, 0)
+      expect(map.elementCount).toBe(2)
+      expect(Array.from(map.expressIdToTriangleIndices.get(100))).toEqual([0, 1])
+      expect(Array.from(map.expressIdToTriangleIndices.get(200))).toEqual([2, 3])
+    })
+
+    it('walks a plain array of FlatMeshes (length / index access)', () => {
+      const flatMeshes = [
+        {expressID: 100, geometries: [{geometryExpressID: 50}]},
+        {expressID: 200, geometries: [{geometryExpressID: 50}]},
+      ]
+      const api = makeApiStub({50: 6})
+      const map = itemsMapFromFlatMeshes(flatMeshes, api, 0)
+      expect(map.elementCount).toBe(2)
+      expect(map.triangleCount).toBe(4)
+    })
+
+    it('does not mutate the source (the whole point)', () => {
+      const flatMeshes = makeFlatMeshVector([
+        {expressID: 100, placed: [50, 51]},
+      ])
+      const api = makeApiStub({50: 6, 51: 3})
+      const sizeBefore = flatMeshes.size()
+      const placedSizeBefore = flatMeshes.get(0).geometries.size()
+      itemsMapFromFlatMeshes(flatMeshes, api, 0)
+      itemsMapFromFlatMeshes(flatMeshes, api, 0)
+      // Iterating twice produces identical results; the source is
+      // unchanged. Conway's StreamAllMeshes would have appended on
+      // each call.
+      expect(flatMeshes.size()).toBe(sizeBefore)
+      expect(flatMeshes.get(0).geometries.size()).toBe(placedSizeBefore)
     })
   })
 

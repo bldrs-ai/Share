@@ -29,7 +29,7 @@ import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three
 import {
   compareItemsMaps,
   formatComparison,
-  itemsMapFromConwayStream,
+  itemsMapFromFlatMeshes,
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
@@ -949,14 +949,39 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel) {
         '(no expressID attribute or no index) — skipping parity check')
       return
     }
-    const conway = itemsMapFromConwayStream(ifcAPI, modelID, {geometry: geom})
+    // Read Conway's cached FlatMesh vector instead of calling
+    // StreamAllMeshes a second time. The adapter's StreamAllMeshes/
+    // LoadAllGeometry mutate the cached meshMap on every call
+    // (ifc_api_proxy_ifc.js:657 — each invocation pushes a fresh
+    // PlacedGeometry onto every entry), so a second walk after
+    // web-ifc-three's parse would double every triangle count.
+    // The cached `vectorFlatMesh` (at `model[4]`) holds the original
+    // per-instance data web-ifc-three saw; reading it is a no-op.
+    const modelEntry = ifcAPI?.models?.get?.(modelID)
+    const cachedFlatMeshes = Array.isArray(modelEntry?.model) ? modelEntry.model[4] : null
+    if (!cachedFlatMeshes ||
+        typeof cachedFlatMeshes.size !== 'function' ||
+        cachedFlatMeshes.size() === 0) {
+      console.warn(
+        '[ifcItemsMapParity] no cached Conway FlatMesh vector — ' +
+        'skipping parity check (adapter shape may have drifted)')
+      return
+    }
+    const conway = itemsMapFromFlatMeshes(cachedFlatMeshes, ifcAPI, modelID, {geometry: geom})
     const cmp = compareItemsMaps(perVertex, conway)
     console.warn(
       `[ifcItemsMapParity] modelID=${modelID} ` +
       `perVertexElements=${perVertex.elementCount} ` +
       `conwayElements=${conway.elementCount} ` +
-      `triangles=${perVertex.triangleCount} ` +
+      `perVertexTriangles=${perVertex.triangleCount} ` +
+      `conwayTriangles=${conway.triangleCount} ` +
       `${formatComparison(cmp)}`)
+    // First few count deltas, for spot-checking emission-order issues.
+    if (cmp.triangleCountDeltas.length > 0) {
+      const head = cmp.triangleCountDeltas.slice(0, 5)
+        .map((d) => `${d.id}:${d.a}vs${d.b}`).join(' ')
+      console.warn(`[ifcItemsMapParity] sample triCountDeltas: ${head}`)
+    }
     if (cmp.onlyInB > 0) {
       console.warn(
         `[ifcItemsMapParity] Conway sees ${cmp.onlyInB} additional ` +

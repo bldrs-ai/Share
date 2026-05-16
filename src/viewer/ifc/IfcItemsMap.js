@@ -258,57 +258,64 @@ export function itemsMapFromOrderedRanges(ranges, opts = {}) {
 
 
 /**
- * Conway-direct populator. Walks `api.StreamAllMeshes(modelID, cb)`,
- * accumulates one per-instance range per (FlatMesh × PlacedGeometry),
- * and hands the stream to `itemsMapFromOrderedRanges`.
+ * Iterate a Conway FlatMesh vector (or any FlatMesh source) and feed
+ * per-PlacedGeometry triangle ranges into `itemsMapFromOrderedRanges`.
  *
- * Why this populator exists — and why it's the destination shape —
- * see design/new/viewer-replacement.md §3b.ii. Conway's `FlatMesh`
- * carries `expressID` for the *placing* element (per-instance), so
- * driving the items map directly from the stream gives per-instance
- * subsets even when the source IFC uses `IfcMappedItem` to share one
- * representation across many positions. The per-vertex attribute
- * route collapses such instances onto one ID; this route doesn't.
+ * The `flatMeshes` source must expose either:
+ *   - `size()` + `get(i)` (Conway's Vector<FlatMesh>), or
+ *   - a `length` + numeric index (plain Array, test fixtures).
  *
- * Triangle count comes from `IfcGeometry.GetIndexDataSize()` (returns
- * a number of indices; triangles = indices / 3). The caller must
- * keep the geometry assembler's per-instance emission order
- * identical to this stream's order so triangle indices match — this
- * is normally trivial since they share the same `StreamAllMeshes`
- * walk.
+ * Triangle counts are read via `api.GetGeometry(modelID, geomExpressID).GetIndexDataSize() / 3`.
+ * Conway emits one PlacedGeometry per visible instance with the
+ * placing element's `FlatMesh.expressID` — so the resulting items
+ * map is per-instance even when the underlying geometry is shared
+ * via IfcMappedItem (design/new/viewer-replacement.md §3b.ii).
  *
- * @param {object} api Conway-compatible IfcAPI (must expose
- *   `StreamAllMeshes(modelID, cb)` and `GetGeometry(modelID, id)`).
+ * **Why this is a separate entry point from `itemsMapFromConwayStream`:**
+ * Conway's `StreamAllMeshes` (and `LoadAllGeometry`) mutate per-call
+ * — each invocation re-walks `scene.walk()` and pushes a fresh
+ * PlacedGeometry copy onto every cached `meshMap` entry. Calling
+ * `StreamAllMeshes` a second time after web-ifc-three's parse
+ * doubles every triangle count in the cached vector (and 3x on the
+ * third call, etc.). The parity-check path on the live parse path
+ * uses this entry point with the *cached* `vectorFlatMesh` Conway
+ * stored during the original walk; the fresh-Conway-driver path
+ * (Phase 3) uses `itemsMapFromConwayStream` directly because there
+ * is no prior walk to collide with.
+ *
+ * @param {object|Array} flatMeshes FlatMesh source (size()/get(i) or Array)
+ * @param {object} api Conway-compatible IfcAPI (needs GetGeometry)
  * @param {number} modelID
  * @param {object} [opts]
  * @param {BufferGeometry} [opts.geometry] destination geometry to
- *   attach to the IfcItemsMap (for subset attribute sharing).
+ *   attach to the IfcItemsMap (for subset attribute sharing)
  * @return {IfcItemsMap}
  */
-export function itemsMapFromConwayStream(api, modelID, opts = {}) {
+export function itemsMapFromFlatMeshes(flatMeshes, api, modelID, opts = {}) {
   const ranges = []
-  // Conway's IfcAPI uses PascalCase method names matching the upstream
-  // web-ifc C-API (see ifc_api.d.ts). Inline disables for `new-cap`
-  // mirror the pattern Loader.js#newIfcLoader uses for the same API.
-  // eslint-disable-next-line new-cap
-  api.StreamAllMeshes(modelID, (flatMesh) => {
+  const size = typeof flatMeshes?.size === 'function' ?
+    flatMeshes.size() : (flatMeshes?.length ?? 0)
+  for (let i = 0; i < size; i++) {
+    const flatMesh = typeof flatMeshes.get === 'function' ?
+      flatMeshes.get(i) : flatMeshes[i]
     const placedVec = flatMesh?.geometries
     if (!placedVec) {
-      return
+      continue
     }
     const placedSize = typeof placedVec.size === 'function' ?
       placedVec.size() : placedVec.length
-    for (let i = 0; i < placedSize; i++) {
+    for (let j = 0; j < placedSize; j++) {
       const placed = typeof placedVec.get === 'function' ?
-        placedVec.get(i) : placedVec[i]
+        placedVec.get(j) : placedVec[j]
       // eslint-disable-next-line new-cap
       const geom = api.GetGeometry(modelID, placed.geometryExpressID)
       if (!geom) {
         continue
       }
-      // `GetIndexDataSize` returns a count of indices. Three indices
-      // per triangle. Conway geometries are always indexed at the
-      // adapter boundary (see ifc_api.d.ts: `IfcGeometry.GetIndexData/Size`).
+      // `GetIndexDataSize` returns a count of u32 indices (verified
+      // via the adapter's `getSubArray` math at ifc_api.js:333 —
+      // sizeBytes there is misnamed; the slice math treats it as an
+      // element count). Three indices per triangle.
       // eslint-disable-next-line new-cap
       const triangleCount = (geom.GetIndexDataSize() / 3) | 0
       if (triangleCount <= 0) {
@@ -316,8 +323,37 @@ export function itemsMapFromConwayStream(api, modelID, opts = {}) {
       }
       ranges.push({expressID: flatMesh.expressID, triangleCount})
     }
-  })
+  }
   return itemsMapFromOrderedRanges(ranges, opts)
+}
+
+
+/**
+ * Conway-direct populator for the fresh-parse path. Calls
+ * `api.StreamAllMeshes(modelID, cb)`, accumulates the FlatMesh stream,
+ * and threads it through `itemsMapFromFlatMeshes`.
+ *
+ * Do **not** call this against an api+model that has already been
+ * walked by `StreamAllMeshes` (or `LoadAllGeometry`) — see the
+ * mutation note on `itemsMapFromFlatMeshes`. Use that function with
+ * the cached `vectorFlatMesh` instead.
+ *
+ * @param {object} api Conway-compatible IfcAPI
+ * @param {number} modelID
+ * @param {object} [opts]
+ * @param {BufferGeometry} [opts.geometry] destination geometry
+ * @return {IfcItemsMap}
+ */
+export function itemsMapFromConwayStream(api, modelID, opts = {}) {
+  const flatMeshes = []
+  // Conway's IfcAPI uses PascalCase method names matching the upstream
+  // web-ifc C-API (see ifc_api.d.ts). Inline disables for `new-cap`
+  // mirror the pattern Loader.js#newIfcLoader uses for the same API.
+  // eslint-disable-next-line new-cap
+  api.StreamAllMeshes(modelID, (flatMesh) => {
+    flatMeshes.push(flatMesh)
+  })
+  return itemsMapFromFlatMeshes(flatMeshes, api, modelID, opts)
 }
 
 
