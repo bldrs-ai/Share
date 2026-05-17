@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {Box3, BufferAttribute, Group, Matrix4, Mesh, Object3D, Vector3} from 'three'
+import {Box3, BufferAttribute, FrontSide, Group, Matrix4, Mesh, MeshLambertMaterial, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -1190,9 +1190,28 @@ function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
     }
     const t0 = (typeof performance !== 'undefined' && performance.now) ?
       performance.now() : Date.now()
+    // Single-material rendering for the smoke test. web-ifc-three's
+    // `ifcModel.material` is an *array* of MeshLambertMaterials (one
+    // per Conway PlacedGeometry color), and its geometry has matching
+    // `geometry.groups` that bind each triangle range to a material
+    // index. Our Conway-direct merged BufferGeometry doesn't carry
+    // groups (yet), and the wit-three materials use `vertexColors:
+    // true` which expects a per-vertex `color` attribute we don't
+    // emit — leaving `ifcModel.material` as-is renders an invisible
+    // mesh (no group → no material binding, or vertex-color fallback
+    // to black). For this slice we render with a single fallback
+    // material; per-color binning (rebuild `geometry.groups` from
+    // Conway's `PlacedGeometry.color` + reuse the wit-three material
+    // array) is the obvious follow-up. The lambert color is the same
+    // mid-grey the existing GLB cache path uses so the model looks
+    // consistent between paths.
+    const fallbackMaterial = new MeshLambertMaterial({
+      color: 0xcccccc,
+      side: FrontSide,
+    })
     const {mesh: conwayMesh, instanceMap, stats} = buildConwayIfcModel(
       capturedFlatMeshes, ifcAPI, ifcModel.modelID,
-      {material: ifcModel.material})
+      {material: fallbackMaterial})
     const t1 = (typeof performance !== 'undefined' && performance.now) ?
       performance.now() : Date.now()
     const witTriangles = ifcModel.geometry?.getIndex()?.count / 3
@@ -1204,6 +1223,12 @@ function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
       ifcModel.geometry.dispose()
     }
     ifcModel.geometry = conwayMesh.geometry
+    // Replace web-ifc-three's per-color material array with the single
+    // fallback — same material the new geometry was built against (no
+    // groups, no vertex colors). Leaving the wit-three array in place
+    // would render nothing (see the comment where `fallbackMaterial`
+    // is constructed above).
+    ifcModel.material = fallbackMaterial
     // Recompute bounds for `fitModelToFrame`. BufferGeometry would
     // lazy-compute on first access but the IFC manager / clipper read
     // bounds eagerly; explicit is cheaper than the surprise.
