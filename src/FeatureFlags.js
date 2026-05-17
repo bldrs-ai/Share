@@ -44,6 +44,15 @@ export const flags = [
   // `?feature=ifcItemsMapParity` to compare the per-vertex and
   // Conway-direct populators on a real IFC.
   {name: 'ifcItemsMapParity', isActive: false},
+  // Conway-direct IFC model build: assemble the BufferGeometry and
+  // build an IfcInstanceMap from captured FlatMeshes, in parallel
+  // with web-ifc-three's own parse. Logs assembly stats and a
+  // comparison against the per-vertex view; does NOT replace the
+  // rendered mesh yet (web-ifc-three's model is still the one
+  // shown). Smoke-test toggle for the geometry assembler + per-
+  // instance items map. Implies (turns on) `ifcItemsMapParity` —
+  // both require the StreamAllMeshes capture wrapper.
+  {name: 'conwayDirectIfc', isActive: false},
 ]
 
 

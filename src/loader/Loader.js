@@ -32,6 +32,7 @@ import {
   itemsMapFromFlatMeshes,
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
+import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -844,10 +845,13 @@ function newIfcLoader(viewer) {
       })
 
       // Phase-3 prep: capture Conway's FlatMesh stream during the live
-      // parse so the parity check below can read the original
+      // parse so the diagnostics below can read the original
       // per-instance data without a second StreamAllMeshes walk.
       // See runIfcItemsMapParityCheck for why a second walk is unsafe.
-      const parityCapture = isFeatureEnabled('ifcItemsMapParity') ?
+      // Both flags share the capture wrapper.
+      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
+        isFeatureEnabled('conwayDirectIfc')
+      const parityCapture = captureEnabled ?
         installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
         null
 
@@ -902,8 +906,17 @@ function newIfcLoader(viewer) {
       // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
       // See design/new/viewer-replacement.md §3b.ii for the
       // per-vertex-vs-per-instance story this check exposes.
-      if (parityCapture) {
+      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
         runIfcItemsMapParityCheck(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+      // Phase-3 smoke: build the Conway-direct mesh + IfcInstanceMap
+      // from the same captured FlatMeshes. Logs assembly stats so we
+      // can compare against what web-ifc-three produced. Does NOT
+      // replace the rendered mesh — web-ifc-three's model is still
+      // the one shown. Toggle via `?feature=conwayDirectIfc`.
+      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
+        runConwayDirectBuildSmoke(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
 
@@ -1127,6 +1140,59 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
     }
   } catch (e) {
     console.warn('[ifcItemsMapParity] check failed:', e)
+  }
+}
+
+
+/**
+ * Smoke-test the Conway-direct geometry assembler + per-instance
+ * items map against a freshly-parsed model. Builds a parallel
+ * Mesh + IfcInstanceMap from the captured FlatMeshes and logs
+ * assembly stats. Pure observation — does not touch the rendered
+ * mesh, does not feed the build into the scene. Toggle with
+ * `?feature=conwayDirectIfc`.
+ *
+ * What the log line tells us:
+ *   - `vertices` should match web-ifc-three's accumulated vertex
+ *     count for the same input (a triangle-count match without a
+ *     vertex match signals a vertex-dedup divergence).
+ *   - `instances` should equal Conway's PlacedGeometry total — the
+ *     per-instance granularity floor the parity probe exposed.
+ *   - `parents` should equal Conway's FlatMesh count and match
+ *     `perVertexElements` from the parity log.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh (for
+ *   comparison shape; not consumed)
+ * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
+ */
+function runConwayDirectBuildSmoke(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[conwayDirect] no FlatMesh capture from parse — ' +
+        'skipping Conway-direct build')
+      return
+    }
+    const t0 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    const {stats} = buildConwayIfcModel(
+      capturedFlatMeshes, ifcAPI, ifcModel.modelID)
+    const t1 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    const witTriangles = ifcModel.geometry?.getIndex()?.count / 3
+    const witVertices = ifcModel.geometry?.getAttribute('position')?.count
+    console.warn(
+      `[conwayDirect] built modelID=${ifcModel.modelID} ` +
+      `in ${(t1 - t0).toFixed(1)}ms — ` +
+      `vertices=${stats.vertexCount} (wit=${witVertices}) ` +
+      `triangles=${stats.triangleCount} (wit=${witTriangles}) ` +
+      `instances=${stats.instanceCount} ` +
+      `parents=${stats.parentCount} ` +
+      `skippedFlatMeshes=${stats.skippedFlatMeshes} ` +
+      `skippedPlaced=${stats.skippedPlacedGeometries}`)
+  } catch (e) {
+    console.warn('[conwayDirect] build failed:', e)
   }
 }
 

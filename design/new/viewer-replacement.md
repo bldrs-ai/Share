@@ -147,49 +147,86 @@ class IfcModel extends Mesh {
 ```
 Keeping the same `expressID` per-vertex `BufferAttribute` we already set means **no call-site change for `getPickedItemId`** (`mesh.geometry, picked.faceIndex` → expressID). `three-mesh-bvh@^0.7` provides `acceleratedRaycast` and `computeBoundsTree` we can attach for `applyBVH: true` semantics.
 
-#### 3b.ii. The per-vertex attribute is *not* sufficient for per-instance picking
+#### 3b.ii. Per-instance picking — what's actually true (revised)
 
-Surfaced during Phase 2b.2 picking work (#1516, see
-`design/new/glb-model-sharing.md` §"Picking granularity"). The
-conway → `web-ifc-three.IFCLoader` pipeline tags every vertex of
-every placed geometry with `mesh.expressID` (line 226 of
-`web-ifc-three/IFCLoader.js`) — but when an IFC source uses
-`IfcMappedItem` to instance one `IfcRepresentationMap` across
-multiple visible positions, conway's `streamAllMeshes` resolves the
-per-vertex id via `model.getElementByLocalID(geometry.localID)`,
-which is keyed on the *shared geometry's* localID. All visible
-positions of that shared template inherit the **same** expressID at
-the per-vertex level. Empirically observed on Momentum.ifc: 63
-unique per-vertex IDs across 2.1M vertices for a building with
-thousands of distinct elements.
+*This section was rewritten 2026-05 after the
+`ifcItemsMapParity` smoke probe — see `src/loader/Loader.js#runIfcItemsMapParityCheck`.
+The previous text claimed `web-ifc-three.SubsetCreator` held a
+separate "per-instance" `ItemsMap` keyed by real IFC expressID,
+distinct from the per-vertex attribute. That was wrong.
+`web-ifc-three`'s `ItemsMap` (IFCLoader.js:309) is built by reading
+the per-vertex `expressID` attribute (line 367) — both surfaces
+derive from the same Conway emission and have identical granularity.*
 
-The IFC source path doesn't expose this because
-`web-ifc-three.SubsetCreator` builds subsets from a separate
-**per-instance** structure (`state.models[modelID].items` — an
-`ItemsMap` keyed by real IFC expressID, with explicit
-geometry-range entries per element). The per-vertex attribute is
-only used for face-index → expressID resolution at pick time;
-subset construction has its own per-instance source of truth.
+The real story, confirmed empirically across several models:
 
-Implication for §3b.i: `triangleIndexToExpressId` (above) must be
-populated **per-IFC-instance**, *not* by reading the per-vertex
-attribute, even though the per-vertex attribute looks identical in
-shape. Concretely the new `IfcModelService` should:
+**Conway's `StreamAllMeshes` emits one `FlatMesh` per IFC product**
+(`flatMesh.expressID` = the IFC product's expressID, e.g. `IfcWall`,
+`IfcWindow`). Within each FlatMesh, `flatMesh.geometries` is a
+`Vector<PlacedGeometry>` — one entry per visible instance, each
+with its own `flatTransformation` (4×4 placement matrix) and a
+`geometryExpressID` referencing the underlying shape.
 
-1. At parse / load: iterate placed geometries in order. For each
-   placed geometry of IFC element `e`, append `e` to
-   `triangleIndexToExpressId` for every triangle that geometry
-   contributes — **regardless of whether the underlying shape is
-   shared with another element via `IfcMappedItem`**. This mirrors
-   what `web-ifc-three.IfcGeometryStorage` does today; conway's
-   shared-geometry resolution is bypassed at this layer.
-2. Build `expressIdToTriangleIndices` as the inverse.
-3. The per-vertex `expressID` `BufferAttribute` can remain (kept for
-   compatibility with `getExpressId(geometry, faceIndex)`) but
-   **callers must read instance identity from
-   `triangleIndexToExpressId`, not from the vertex attribute**.
-   Specifically `getExpressId(geometry, faceIndex) =
-   triangleIndexToExpressId[faceIndex]`.
+Two distinct sub-cases live under one FlatMesh with multiple
+PlacedGeometries:
+
+1. **IfcMappedItem instances.** Multiple PlacedGeometries SHARE
+   one `geometryExpressID` and differ only in `flatTransformation`.
+   The IFC source uses `IfcMappedItem` / `IfcRepresentationMap` to
+   instance one shape at many positions. Per-instance picking is
+   the right answer here — each visible placement is logically a
+   distinct selectable element. The per-vertex `expressID`
+   attribute collapses them onto the parent product's id, which
+   is what generates the "click one wall, highlight 42" UX.
+
+2. **Compound representation.** PlacedGeometries have DIFFERENT
+   `geometryExpressID`s — one IFC element's representation is built
+   from multiple distinct geometric primitives (e.g. a window
+   product = frame + glass + handle, three distinct shapes; a wall
+   = N material layers). Per-instance picking would be wrong here:
+   subcomponents are not independently selectable in IFC semantics.
+
+**Empirical mix from the smoke probe** (`?feature=ifcItemsMapParity`):
+
+| Model | Exporter | Multi-placed FlatMeshes | allShared (case 1) | allUnique (case 2) |
+|---|---|---|---|---|
+| Momentum | ArchiCAD | 34 of 63 | 0 | 34 |
+| Schependomlaan | ArchiCAD | 731 of 3505 | 277 | 454 |
+| Snowdon (IFC 2x3) | Revit | 4051 of 6023 | 2284 | 1767 |
+| Snowdon (IFC 4) | Revit | 5034 of 6023 | 2280 | 2754 |
+
+Revit emits `IfcMappedItem` heavily; ArchiCAD's usage varies per
+project. Per-instance picking matters on the case-1 portion of
+the data and is a no-op for case-2.
+
+**Implication for §3b.i.** Two complementary lookup structures
+under one class hierarchy:
+
+- `IfcItemsMap` — per-IFC-product keying. Matches today's
+  `web-ifc-three` semantics. One entry per FlatMesh; subsets
+  highlight every visible position of that product together.
+  Used for "select the wall" workflows.
+- `IfcInstanceMap` — per-PlacedGeometry keying via synthetic
+  instance IDs. One entry per visible position. Resolves back to
+  the parent IFC product via `getParentExpressIdByInstance(id)`.
+  Used for "select this specific visible placement" workflows.
+
+Both are populated from the same Conway `StreamAllMeshes` walk
+(see `src/viewer/ifc/IfcItemsMap.js#itemsMapFromFlatMeshes` and
+`src/viewer/ifc/IfcInstanceMap.js#instanceMapFromFlatMeshes`) — the
+extra cost of building both is one extra typed-array allocation;
+the walk is shared. The `flatMeshToBufferGeometry` assembler emits
+both `expressID` and `instanceID` per-vertex attributes so picking
+can resolve to whichever granularity the caller asks for via the
+items map / instance map respectively.
+
+**For the GLB cache:** persist `triangleIndexToInstanceId` plus the
+`instanceIdToParentExpressId` resolver as a Bldrs glTF extension
+(provisional name `BLDRS_per_triangle_instance_ids`). On cache-hit
+load, restore both side tables and skip Conway entirely. The
+per-vertex `expressID` attribute can be dropped from the cache
+once readers depend on the per-triangle table — saves ~4 bytes ×
+N_vertices.
 
 **Initial implementation lives in `src/viewer/ifc/IfcItemsMap.js`** (test
 phase). The class holds the two tables; three populators feed it:
