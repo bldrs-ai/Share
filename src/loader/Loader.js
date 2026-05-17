@@ -1026,6 +1026,30 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
     const conway = itemsMapFromFlatMeshes(
       capturedFlatMeshes, ifcAPI, modelID, {geometry: geom})
     const cmp = compareItemsMaps(perVertex, conway)
+    // Conway-level shape: how many PlacedGeometries fit under how
+    // many FlatMeshes? `placedCount > flatMeshCount` means some
+    // FlatMeshes have multiple PlacedGeometries — the IfcMappedItem
+    // case where one IFC parent has several visible instances
+    // sharing one representation. That's the data we'd need to
+    // recover per-instance picking below the FlatMesh.expressID
+    // level. `placedCount === flatMeshCount` means each FlatMesh
+    // emits one PlacedGeometry and Conway IS the granularity floor.
+    let flatMeshCount = 0
+    let placedCount = 0
+    let multiPlacedFlatMeshes = 0
+    let maxPlacedInOneFlatMesh = 0
+    for (const fm of capturedFlatMeshes) {
+      flatMeshCount++
+      const g = fm?.geometries
+      const n = typeof g?.size === 'function' ? g.size() : (g?.length ?? 0)
+      placedCount += n
+      if (n > 1) {
+        multiPlacedFlatMeshes++
+      }
+      if (n > maxPlacedInOneFlatMesh) {
+        maxPlacedInOneFlatMesh = n
+      }
+    }
     console.warn(
       `[ifcItemsMapParity] modelID=${modelID} ` +
       `perVertexElements=${perVertex.elementCount} ` +
@@ -1033,6 +1057,11 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
       `perVertexTriangles=${perVertex.triangleCount} ` +
       `conwayTriangles=${conway.triangleCount} ` +
       `${formatComparison(cmp)}`)
+    console.warn(
+      `[ifcItemsMapParity] Conway emission: flatMeshes=${flatMeshCount} ` +
+      `placedGeometries=${placedCount} ` +
+      `multiPlacedFlatMeshes=${multiPlacedFlatMeshes} ` +
+      `maxPlacedInOneFlatMesh=${maxPlacedInOneFlatMesh}`)
     // First few count deltas, for spot-checking emission-order issues.
     if (cmp.triangleCountDeltas.length > 0) {
       const head = cmp.triangleCountDeltas.slice(0, 5)
