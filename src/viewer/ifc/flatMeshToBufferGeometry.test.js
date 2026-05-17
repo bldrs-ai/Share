@@ -316,9 +316,144 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
 
   it('handles an empty input (no FlatMeshes)', () => {
     const api = makeApi({})
-    const {geometry, ranges, placedGeometryCount} = flatMeshToBufferGeometry([], api, 0)
+    const {geometry, ranges, placedGeometryCount, materials} = flatMeshToBufferGeometry([], api, 0)
     expect(geometry.getAttribute('position').count).toBe(0)
     expect(ranges).toEqual([])
     expect(placedGeometryCount).toBe(0)
+    expect(materials).toEqual([])
+  })
+
+
+  describe('color binning', () => {
+    it('defaults to a single material when no PlacedGeometry has a color', () => {
+      // The fallback-DEFAULT_COLOR path. All entries land in one bin
+      // → one material → one group covering the whole index range.
+      const api = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      const flatMeshes = [{
+        expressID: 100,
+        geometries: {
+          size: () => 2,
+          get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT}),
+        },
+      }]
+      const {geometry, materials} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+      expect(materials.length).toBe(1)
+      expect(geometry.groups.length).toBe(1)
+      expect(geometry.groups[0].materialIndex).toBe(0)
+      expect(geometry.groups[0].start).toBe(0)
+      expect(geometry.groups[0].count).toBe(6) // 2 triangles × 3 indices
+    })
+
+    it('builds one material per distinct PlacedGeometry color', () => {
+      const api = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      // Three PlacedGeometries: red, blue, red. Two bins (red, blue).
+      const RED = {x: 1, y: 0, z: 0, w: 1}
+      const BLUE = {x: 0, y: 0, z: 1, w: 1}
+      const flatMeshes = [{
+        expressID: 100,
+        geometries: {
+          size: () => 3,
+          get: (i) => ({
+            geometryExpressID: 999,
+            flatTransformation: IDENTITY_MAT,
+            color: [RED, BLUE, RED][i],
+          }),
+        },
+      }]
+      const {geometry, materials} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+      expect(materials.length).toBe(2)
+      expect(materials[0].color.r).toBe(1) // first-seen colour → material 0 (red)
+      expect(materials[0].color.b).toBe(0)
+      expect(materials[1].color.r).toBe(0) // second-seen → material 1 (blue)
+      expect(materials[1].color.b).toBe(1)
+      // Geometry must have one group per bin.
+      expect(geometry.groups.length).toBe(2)
+      // Bin order: red contributes the 2 red entries (6 indices),
+      // blue contributes the 1 blue entry (3 indices). Indices
+      // 0..5 → group 0 (red), 6..8 → group 1 (blue).
+      expect(geometry.groups[0].materialIndex).toBe(0)
+      expect(geometry.groups[0].start).toBe(0)
+      expect(geometry.groups[0].count).toBe(6)
+      expect(geometry.groups[1].materialIndex).toBe(1)
+      expect(geometry.groups[1].start).toBe(6)
+      expect(geometry.groups[1].count).toBe(3)
+    })
+
+    it('marks alpha < 1 materials transparent (matches wit-three)', () => {
+      const api = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      const GLASS = {x: 0.5, y: 0.7, z: 0.9, w: 0.3}
+      const flatMeshes = [{
+        expressID: 100,
+        geometries: {
+          size: () => 1,
+          get: () => ({
+            geometryExpressID: 999,
+            flatTransformation: IDENTITY_MAT,
+            color: GLASS,
+          }),
+        },
+      }]
+      const {materials} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+      expect(materials[0].transparent).toBe(true)
+      expect(materials[0].opacity).toBeCloseTo(0.3)
+    })
+
+    it('reorders ranges/instanceID into bin order so per-instance picking stays consistent', () => {
+      // FlatMesh-walk order: parent 100 (red), parent 200 (blue),
+      // parent 100 (red). Bin order: parents 100 + 100 in the red
+      // bin, then parent 200 in the blue bin. Synthetic instance
+      // IDs follow EMISSION order, not walk order:
+      //   instance 0 → parent 100 (first red)
+      //   instance 1 → parent 100 (second red)
+      //   instance 2 → parent 200 (only blue)
+      const api = wireGeomFetch(makeApi({
+        999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+      }))
+      const RED = {x: 1, y: 0, z: 0, w: 1}
+      const BLUE = {x: 0, y: 0, z: 1, w: 1}
+      const flatMeshes = [
+        {
+          expressID: 100,
+          geometries: {
+            size: () => 1,
+            get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: RED}),
+          },
+        },
+        {
+          expressID: 200,
+          geometries: {
+            size: () => 1,
+            get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: BLUE}),
+          },
+        },
+        {
+          expressID: 100,
+          geometries: {
+            size: () => 1,
+            get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: RED}),
+          },
+        },
+      ]
+      const {ranges, geometry} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+      // Ranges follow bin (emission) order, not walk order.
+      expect(ranges).toEqual([
+        {parentExpressId: 100, triangleCount: 1}, // first red
+        {parentExpressId: 100, triangleCount: 1}, // second red
+        {parentExpressId: 200, triangleCount: 1}, // blue
+      ])
+      // The per-vertex instanceID attribute follows the same order.
+      // Vertices 0..2 → instance 0 (parent 100), 3..5 → instance 1
+      // (parent 100), 6..8 → instance 2 (parent 200).
+      const instIds = Array.from(geometry.getAttribute('instanceID').array)
+      expect(instIds).toEqual([0, 0, 0, 1, 1, 1, 2, 2, 2])
+      const exprIds = Array.from(geometry.getAttribute('expressID').array)
+      expect(exprIds).toEqual([100, 100, 100, 100, 100, 100, 200, 200, 200])
+    })
   })
 })

@@ -1,4 +1,4 @@
-import {Mesh, MeshLambertMaterial} from 'three'
+import {Mesh} from 'three'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {instanceMapFromOrderedPlacedRanges} from './IfcInstanceMap'
 
@@ -37,16 +37,25 @@ import {instanceMapFromOrderedPlacedRanges} from './IfcInstanceMap'
  * @param {object} api Conway-compatible IfcAPI
  * @param {number} modelID
  * @param {object} [opts]
- * @param {object} [opts.material] override the default material
- * @return {object} `{mesh, instanceMap, stats}` — see source for
- *   shape; stats includes vertexCount, triangleCount, instanceCount,
- *   parentCount, skippedFlatMeshes, skippedPlacedGeometries.
+ * @param {object} [opts.material] override material — single material
+ *   ignores the per-color binning the assembler produced; pass this
+ *   only when you want flat-shaded smoke output.
+ * @return {object} `{mesh, instanceMap, materials, stats}` — see
+ *   source for shape; stats includes vertexCount, triangleCount,
+ *   instanceCount, parentCount, skippedFlatMeshes,
+ *   skippedPlacedGeometries.
  */
 export function buildConwayIfcModel(capturedFlatMeshes, api, modelID, opts = {}) {
   const assembled = flatMeshToBufferGeometry(capturedFlatMeshes, api, modelID)
   const instanceMap = instanceMapFromOrderedPlacedRanges(
     assembled.ranges, {geometry: assembled.geometry})
-  const material = opts.material ?? new MeshLambertMaterial({color: 0xcccccc})
+  // Multi-material rendering by default — one MeshLambertMaterial per
+  // distinct PlacedGeometry.color, matched up with `geometry.groups[]`
+  // entries the assembler attached. A caller passing `opts.material`
+  // overrides this with a single material, which renders the whole
+  // mesh in one colour (useful for grayscale smoke output, but
+  // discards the per-element colour fidelity).
+  const material = opts.material ?? assembled.materials
   const mesh = new Mesh(assembled.geometry, material)
   mesh.modelID = modelID
   // Two attached references so call-sites that pick can resolve
@@ -60,8 +69,9 @@ export function buildConwayIfcModel(capturedFlatMeshes, api, modelID, opts = {})
     triangleCount: instanceMap.triangleCount,
     instanceCount: instanceMap.instanceCount,
     parentCount: instanceMap.parentCount,
+    materialCount: assembled.materials.length,
     skippedFlatMeshes: assembled.skippedFlatMeshes,
     skippedPlacedGeometries: assembled.skippedPlacedGeometries,
   }
-  return {mesh, instanceMap, stats}
+  return {mesh, instanceMap, materials: assembled.materials, stats}
 }
