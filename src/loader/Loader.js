@@ -1028,16 +1028,29 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
     const cmp = compareItemsMaps(perVertex, conway)
     // Conway-level shape: how many PlacedGeometries fit under how
     // many FlatMeshes? `placedCount > flatMeshCount` means some
-    // FlatMeshes have multiple PlacedGeometries — the IfcMappedItem
-    // case where one IFC parent has several visible instances
-    // sharing one representation. That's the data we'd need to
-    // recover per-instance picking below the FlatMesh.expressID
-    // level. `placedCount === flatMeshCount` means each FlatMesh
-    // emits one PlacedGeometry and Conway IS the granularity floor.
+    // FlatMeshes have multiple PlacedGeometries. Two distinct
+    // sub-cases hide there:
+    //   (i)  IfcMappedItem-style instances: many PlacedGeometries
+    //        SHARE one `geometryExpressID` and differ only in their
+    //        flatTransformation. Per-instance picking is the right
+    //        answer for these.
+    //   (ii) Compound representation: one IFC element's geometry is
+    //        built from N distinct geometric primitives, each with
+    //        its own `geometryExpressID`. Subcomponents are not
+    //        independently selectable in IFC semantics; per-instance
+    //        picking would be wrong here.
+    // Tracking shared vs unique geometryExpressIDs across the
+    // multi-placed FlatMeshes tells us the mix.
     let flatMeshCount = 0
     let placedCount = 0
     let multiPlacedFlatMeshes = 0
     let maxPlacedInOneFlatMesh = 0
+    // Case (i) and (ii) accounting across multi-placed FlatMeshes:
+    let sharedShapeInstances = 0 // PlacedGeometries that share a geomExpressID with a sibling
+    let uniqueShapeInstances = 0 // PlacedGeometries with a geomExpressID unique within the FlatMesh
+    let multiPlacedAllShared = 0 // FlatMeshes where every placedGeom shares one geomExpressID (pure case i)
+    let multiPlacedAllUnique = 0 // FlatMeshes where every placedGeom has a unique geomExpressID (pure case ii)
+    let multiPlacedMixed = 0 // FlatMeshes that are a mix
     for (const fm of capturedFlatMeshes) {
       flatMeshCount++
       const g = fm?.geometries
@@ -1045,6 +1058,31 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
       placedCount += n
       if (n > 1) {
         multiPlacedFlatMeshes++
+        // Count occurrences of each geomExpressID inside this FlatMesh.
+        const counts = new Map()
+        for (let i = 0; i < n; i++) {
+          const placed = typeof g.get === 'function' ? g.get(i) : g[i]
+          const id = placed?.geometryExpressID
+          counts.set(id, (counts.get(id) ?? 0) + 1)
+        }
+        let sharedHere = 0
+        let uniqueHere = 0
+        for (const c of counts.values()) {
+          if (c > 1) {
+            sharedHere += c
+          } else {
+            uniqueHere += c
+          }
+        }
+        sharedShapeInstances += sharedHere
+        uniqueShapeInstances += uniqueHere
+        if (sharedHere === n) {
+          multiPlacedAllShared++
+        } else if (uniqueHere === n) {
+          multiPlacedAllUnique++
+        } else {
+          multiPlacedMixed++
+        }
       }
       if (n > maxPlacedInOneFlatMesh) {
         maxPlacedInOneFlatMesh = n
@@ -1062,6 +1100,13 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
       `placedGeometries=${placedCount} ` +
       `multiPlacedFlatMeshes=${multiPlacedFlatMeshes} ` +
       `maxPlacedInOneFlatMesh=${maxPlacedInOneFlatMesh}`)
+    console.warn(
+      `[ifcItemsMapParity] multi-placed breakdown: ` +
+      `allShared=${multiPlacedAllShared} ` +
+      `allUnique=${multiPlacedAllUnique} ` +
+      `mixed=${multiPlacedMixed} ` +
+      `sharedShapeInstances=${sharedShapeInstances} ` +
+      `uniqueShapeInstances=${uniqueShapeInstances}`)
     // First few count deltas, for spot-checking emission-order issues.
     if (cmp.triangleCountDeltas.length > 0) {
       const head = cmp.triangleCountDeltas.slice(0, 5)
