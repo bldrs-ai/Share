@@ -45,6 +45,12 @@
  *     True when `model.createSubset({ids, material, customID})` is a
  *     meaningful operation. This is what IfcIsolator needs for Hide /
  *     Isolate / Reveal-hidden. Today: IFC/STEP only.
+ * @property {boolean} instancePicking
+ *     True when the model carries an `IfcInstanceMap` and per-instance
+ *     selection (one visible PlacedGeometry, not the whole IFC product)
+ *     is meaningful. Set by Loader.js when the Conway-direct build
+ *     (`?feature=conwayDirectIfc`) replaces the rendered geometry; the
+ *     map lives on `model.instanceMap`.
  * @property {boolean} useIfcClipper
  *     True when the legacy `viewer.clipper` (web-ifc clipper, tied to
  *     `pickableIfcModels`) is the right cut-plane implementation. False
@@ -69,6 +75,9 @@ export function capabilitiesForFormat(format) {
       spatialStructure: true,
       typedProperties: true,
       ifcSubsets: true,
+      // Off by default; Loader.js flips it on for the Conway-direct path
+      // (after substituting geometry + attaching IfcInstanceMap).
+      instancePicking: false,
       useIfcClipper: true,
     }
   }
@@ -92,6 +101,7 @@ function allOffCaps() {
     spatialStructure: false,
     typedProperties: false,
     ifcSubsets: false,
+    instancePicking: false,
     useIfcClipper: false,
   }
 }

@@ -910,13 +910,13 @@ function newIfcLoader(viewer) {
         runIfcItemsMapParityCheck(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
-      // Phase-3 smoke: build the Conway-direct mesh + IfcInstanceMap
-      // from the same captured FlatMeshes. Logs assembly stats so we
-      // can compare against what web-ifc-three produced. Does NOT
-      // replace the rendered mesh — web-ifc-three's model is still
-      // the one shown. Toggle via `?feature=conwayDirectIfc`.
+      // Phase-3 cut-over: replace web-ifc-three's geometry with the
+      // Conway-direct merged buffer + attach an IfcInstanceMap. The
+      // IFC manager (properties, spatial tree, typed search) stays —
+      // only the rendered triangles + the picking source of truth
+      // change. Toggle via `?feature=conwayDirectIfc`.
       if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
-        runConwayDirectBuildSmoke(
+        installConwayDirectGeometry(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
 
@@ -1145,45 +1145,105 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
 
 
 /**
- * Smoke-test the Conway-direct geometry assembler + per-instance
- * items map against a freshly-parsed model. Builds a parallel
- * Mesh + IfcInstanceMap from the captured FlatMeshes and logs
- * assembly stats. Pure observation — does not touch the rendered
- * mesh, does not feed the build into the scene. Toggle with
- * `?feature=conwayDirectIfc`.
+ * Replace web-ifc-three's rendered geometry with the Conway-direct
+ * merged BufferGeometry built from the captured FlatMesh stream, and
+ * attach the matching `IfcInstanceMap` for per-instance picking.
  *
- * What the log line tells us:
- *   - `vertices` should match web-ifc-three's accumulated vertex
- *     count for the same input (a triangle-count match without a
- *     vertex match signals a vertex-dedup divergence).
+ * Why we keep `ifcModel` rather than returning a new Mesh: the IFC
+ * manager (web-ifc-three's `IFCManager`) is what owns property
+ * lookups, spatial structure, typed search, the isolator's hide /
+ * isolate workflow, and the existing preselection material. Building
+ * a separate object would require porting all that wiring; swapping
+ * just the geometry preserves it.
+ *
+ * Capability flips:
+ *   - `ifcSubsets` → false: `ShareViewer.setSelection` will skip
+ *     `IFC.selector.pickIfcItemsByID` (web-ifc-three's `SubsetCreator`
+ *     can't run against the swapped geometry) and take the per-vertex
+ *     branch, which uses `model.createSubset` — attached below.
+ *   - `expressIdPicking` → true: parity with the existing per-vertex
+ *     path. The Conway-built geometry carries the `expressID`
+ *     attribute so the per-vertex subset builder works as-is.
+ *   - `instancePicking` → true: signals to `CadView`'s click handler
+ *     and `ShareViewer.setInstanceSelection` that
+ *     `mesh.instanceMap.getInstanceIdByTriangle` is available.
+ *
+ * What the log line tells us (same shape as the earlier smoke):
+ *   - `vertices` / `triangles` should match web-ifc-three's totals;
+ *     a divergence here means the assembler is dropping data.
  *   - `instances` should equal Conway's PlacedGeometry total — the
  *     per-instance granularity floor the parity probe exposed.
- *   - `parents` should equal Conway's FlatMesh count and match
- *     `perVertexElements` from the parity log.
+ *   - `parents` should equal Conway's FlatMesh count.
  *
  * @param {object} ifcAPI Conway-compatible IfcAPI
- * @param {object} ifcModel freshly-parsed web-ifc-three Mesh (for
- *   comparison shape; not consumed)
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh; its
+ *   `geometry` is REPLACED in place
  * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
  */
-function runConwayDirectBuildSmoke(ifcAPI, ifcModel, capturedFlatMeshes) {
+function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
   try {
     if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
       console.warn(
         '[conwayDirect] no FlatMesh capture from parse — ' +
-        'skipping Conway-direct build')
+        'skipping Conway-direct install')
       return
     }
     const t0 = (typeof performance !== 'undefined' && performance.now) ?
       performance.now() : Date.now()
-    const {stats} = buildConwayIfcModel(
-      capturedFlatMeshes, ifcAPI, ifcModel.modelID)
+    const {mesh: conwayMesh, instanceMap, stats} = buildConwayIfcModel(
+      capturedFlatMeshes, ifcAPI, ifcModel.modelID,
+      {material: ifcModel.material})
     const t1 = (typeof performance !== 'undefined' && performance.now) ?
       performance.now() : Date.now()
     const witTriangles = ifcModel.geometry?.getIndex()?.count / 3
     const witVertices = ifcModel.geometry?.getAttribute('position')?.count
+    // Dispose web-ifc-three's geometry GPU resources before letting
+    // the reference go — the IFCModel won't dispose it for us once we
+    // overwrite `.geometry`.
+    if (typeof ifcModel.geometry?.dispose === 'function') {
+      ifcModel.geometry.dispose()
+    }
+    ifcModel.geometry = conwayMesh.geometry
+    // Recompute bounds for `fitModelToFrame`. BufferGeometry would
+    // lazy-compute on first access but the IFC manager / clipper read
+    // bounds eagerly; explicit is cheaper than the surprise.
+    ifcModel.geometry.computeBoundingBox()
+    ifcModel.geometry.computeBoundingSphere()
+    // Build the BVH so picking is fast. `computeBoundsTree` is
+    // monkey-patched onto BufferGeometry.prototype by web-ifc-three's
+    // IFCLoader during init — by the time we get here the parse
+    // already ran, so the patch is in place. Guard with optional-call
+    // in case the loader changed its init behavior.
+    if (typeof ifcModel.geometry.computeBoundsTree === 'function') {
+      ifcModel.geometry.computeBoundsTree()
+    }
+    ifcModel.instanceMap = instanceMap
+    // The instance map's `sourceGeometry` was set by buildConwayIfcModel
+    // to the assembled BufferGeometry — same object we just attached.
+    // Re-anchor explicitly for clarity (a future caller might construct
+    // the map separately).
+    instanceMap.sourceGeometry = ifcModel.geometry
+    // Capability flips: redirect setSelection to the per-vertex
+    // (createSubset-attached) branch and announce per-instance.
+    if (ifcModel.capabilities) {
+      ifcModel.capabilities.ifcSubsets = false
+      ifcModel.capabilities.instancePicking = true
+      ifcModel.capabilities.expressIdPicking = true
+    }
+    // NOTE: we intentionally do NOT call `attachElementSubsets`
+    // here. That helper overwrites `model.createSubset` with an
+    // array-returning per-vertex implementation; `IfcIsolator`
+    // expects the web-ifc-three native `createSubset` that returns
+    // a single Mesh. ShareViewer.setSelection / setInstanceSelection
+    // build highlights from `instanceMap` directly (capability
+    // `instancePicking`) so they bypass `model.createSubset`
+    // entirely. The isolator's createSubset stays bound to
+    // web-ifc-three's; isolate/hide is known to be broken with
+    // conwayDirectIfc (web-ifc-three's IfcGeometryStorage references
+    // its original geometry, not the swapped one) and will be
+    // addressed in a follow-up slice.
     console.warn(
-      `[conwayDirect] built modelID=${ifcModel.modelID} ` +
+      `[conwayDirect] installed modelID=${ifcModel.modelID} ` +
       `in ${(t1 - t0).toFixed(1)}ms — ` +
       `vertices=${stats.vertexCount} (wit=${witVertices}) ` +
       `triangles=${stats.triangleCount} (wit=${witTriangles}) ` +
@@ -1192,7 +1252,7 @@ function runConwayDirectBuildSmoke(ifcAPI, ifcModel, capturedFlatMeshes) {
       `skippedFlatMeshes=${stats.skippedFlatMeshes} ` +
       `skippedPlaced=${stats.skippedPlacedGeometries}`)
   } catch (e) {
-    console.warn('[conwayDirect] build failed:', e)
+    console.warn('[conwayDirect] install failed:', e)
   }
 }
 

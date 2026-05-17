@@ -61,6 +61,8 @@ export default function CadView({
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
+  const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
+  const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -451,6 +453,45 @@ export default function CadView({
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point
       viewer.setHighlighted([mesh])
+      // Per-instance picking path (Conway-direct):
+      //   no-shift = just this PlacedGeometry
+      //   shift     = the whole IFC element (every instance)
+      //
+      // Note this DISPLACES the legacy "Shift = add to multi-select"
+      // semantic in `elementSelection` when the model carries an
+      // instanceMap. Multi-select is rarely-used in the IFC workflow;
+      // per-instance picking is the primary improvement from the
+      // viewer-replacement work, so it wins the modifier slot. Models
+      // without an instanceMap (today's wit-three path, GLB cache hit)
+      // keep the legacy Shift behavior unchanged.
+      if (mesh.instanceMap) {
+        const faceIdx = picked.faceIndex
+        const instanceId = mesh.instanceMap.getInstanceIdByTriangle(faceIdx)
+        if (instanceId === null) {
+          return
+        }
+        const parentExpressId = mesh.instanceMap.getParentExpressIdByInstance(instanceId)
+        if (parentExpressId === null) {
+          return
+        }
+        if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
+          return
+        }
+        // Always set parent expressID as the "selection" so the
+        // properties panel / nav tree / search highlight respond
+        // normally. The per-instance highlight is layered on top via
+        // selectedInstanceIds.
+        setSelectedElements([`${parentExpressId}`])
+        setSelectedInstanceIds(event.shiftKey ? [] : [instanceId])
+        return
+      }
+      // Non-instance branch: clear any stale per-instance highlight
+      // so a Conway-click followed by a click on a non-Conway mesh
+      // doesn't leave the old single-instance subset stuck on the
+      // OutlineEffect.
+      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0) {
+        setSelectedInstanceIds([])
+      }
       if (mesh.expressID !== undefined) {
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
@@ -716,6 +757,17 @@ export default function CadView({
       // Update The selection on the scene pick/unpick
       const ids = selectedElements.map((id) => parseInt(id))
       await viewer.setSelection(0, ids)
+      // Per-instance highlight (Conway-direct): if the click handler
+      // tagged us with a specific PlacedGeometry's synthetic ID,
+      // restrict the visible highlight to just that instance. The
+      // setSelection call above already rendered the full parent
+      // element; setInstanceSelection replaces that with a one-
+      // instance subset. Empty array = no override (Shift-click or
+      // legacy path).
+      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0 &&
+          typeof viewer.setInstanceSelection === 'function') {
+        viewer.setInstanceSelection(0, selectedInstanceIds)
+      }
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
@@ -738,7 +790,7 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements])
+  }, [selectedElements, selectedInstanceIds])
   /* eslint-enable */
 
 

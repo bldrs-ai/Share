@@ -277,7 +277,23 @@ export class ShareViewer extends IfcViewerAPI {
     }
     try {
       debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
-      if (modelHasCapability(model, 'ifcSubsets')) {
+      if (modelHasCapability(model, 'instancePicking') && model.instanceMap) {
+        // Conway-direct path: build the highlight from IfcInstanceMap.
+        // Parent-level subset — every PlacedGeometry instance of each
+        // requested IFC product. The `setInstanceSelection` method
+        // overrides this with a one-instance subset when the click
+        // handler also set `selectedInstanceIds`, but the parent-level
+        // mesh produced here is the right default (e.g. nav-tree
+        // selection, search-result selection, Shift-click).
+        const subsetMesh = model.instanceMap.createSubsetMeshByParent(toBeSelected, {
+          material: this.IFC.selector?.selection?.material,
+        })
+        if (subsetMesh) {
+          this.highlighter.setHighlighted([subsetMesh])
+        } else {
+          this.highlighter.setHighlighted(null)
+        }
+      } else if (modelHasCapability(model, 'ifcSubsets')) {
         // Real-IFC path: web-ifc-three holds the parser state needed
         // by createSubset / SubsetCreator.
         const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
@@ -321,6 +337,54 @@ export class ShareViewer extends IfcViewerAPI {
 
 
   /**
+   * Per-instance highlight using the model's `IfcInstanceMap`.
+   * Called from `CadView`'s selection useEffect alongside
+   * `setSelection` when the user clicks a specific PlacedGeometry
+   * (default behavior on the Conway-direct path). The highlight
+   * covers ONE visible placement of an IFC product rather than every
+   * instance of it — the IfcMappedItem case the parity probe
+   * surfaced.
+   *
+   * Properties / nav tree / search still track the parent IFC
+   * product through `setSelection`'s `expressIds` argument; this
+   * method only changes what the OutlineEffect renders.
+   *
+   * Pass `instanceIds = []` to clear the per-instance highlight
+   * without touching parent-level selection.
+   *
+   * @param {number} modelID
+   * @param {number[]} instanceIds synthetic IfcInstanceMap IDs
+   */
+  setInstanceSelection(modelID, instanceIds) {
+    const model = this._modelById(modelID)
+    if (!modelHasCapability(model, 'instancePicking')) {
+      debug().warn('setInstanceSelection: model lacks instancePicking capability')
+      return
+    }
+    if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
+      // Caller asked for "no per-instance highlight." Don't touch the
+      // highlighter — `setSelection` is the source of truth for
+      // parent-level highlight and will have run alongside this
+      // method.
+      return
+    }
+    const instanceMap = model.instanceMap
+    if (!instanceMap) {
+      debug().warn('setInstanceSelection: model has instancePicking but no instanceMap')
+      return
+    }
+    const subsetMesh = instanceMap.createSubsetMeshByInstance(instanceIds, {
+      material: this.IFC.selector?.selection?.material,
+    })
+    if (!subsetMesh) {
+      this.highlighter.setHighlighted(null)
+      return
+    }
+    this.highlighter.setHighlighted([subsetMesh])
+  }
+
+
+  /**
    * Look up a registered model by modelID. Today the viewer holds
    * at most one model and call-sites always pass `0`; we still index
    * for symmetry with the underlying `ifcModels` array.
@@ -357,7 +421,17 @@ export class ShareViewer extends IfcViewerAPI {
     if (!modelHasCapability(model, 'expressIdPicking')) {
       return
     }
-    if (modelHasCapability(model, 'ifcSubsets')) {
+    if (modelHasCapability(model, 'instancePicking') && model.instanceMap) {
+      // Conway-direct path: hover preselection deliberately not
+      // implemented in this slice. The existing per-vertex preselection
+      // relies on `model.removeSubset` to swap subset meshes in/out of
+      // the scene each hover (without it, every hover leaks a mesh
+      // into the highlighter's selection set). We didn't wire that
+      // helper here because the isolator's `createSubset` contract
+      // diverges from the per-vertex one. Click selection still works
+      // through the `instancePicking` branch in `setSelection`; hover
+      // falls through to the no-op tail.
+    } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
       await this.IFC.selector.preselection.pick(found)

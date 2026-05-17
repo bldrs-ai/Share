@@ -17,6 +17,9 @@ describe('viewer/ShareModel', () => {
         spatialStructure: true,
         typedProperties: true,
         ifcSubsets: true,
+        // off by default; Loader's Conway-direct path flips it on after
+        // attaching an IfcInstanceMap.
+        instancePicking: false,
         useIfcClipper: true,
       })
     })
@@ -29,6 +32,7 @@ describe('viewer/ShareModel', () => {
         expect(caps.spatialStructure).toBe(false)
         expect(caps.typedProperties).toBe(false)
         expect(caps.ifcSubsets).toBe(false)
+        expect(caps.instancePicking).toBe(false)
         expect(caps.useIfcClipper).toBe(false)
       },
     )
