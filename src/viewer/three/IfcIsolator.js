@@ -157,6 +157,27 @@ export default class IfcIsolator {
    * preselection on the same models, keeping picking behaviour
    * consistent across overlapping highlight sources.
    *
+   * Uses `scene.attach(m)` (not `scene.add(m)`) for two reasons:
+   *
+   *   1. **Preserves world transform under reparent.** For a
+   *      cache-hit Conway-direct model (ifcModel is a `Group`,
+   *      children are per-material Meshes), `attachInstanceMapSubsets`
+   *      parents each subset under its source mesh's parent — the
+   *      Group itself. By the time `_addSubsetToScene` runs the Group
+   *      has already been detached from the scene (above), so the
+   *      subsets are in a dangling subtree. `scene.attach` lifts each
+   *      subset to the scene root while baking the Group's accumulated
+   *      ancestor transform into the subset's local matrix, so it
+   *      renders at the same world position the source did.
+   *      `scene.add(m)` would skip dangling-parent subsets entirely
+   *      (since they're not orphan, `m.parent !== null`) and leave
+   *      them invisible — see the H-toggle bug fixed in this PR.
+   *   2. **Idempotent for already-in-scene subsets.** For cache-miss
+   *      single-Mesh `ifcModel`, source.parent was the scene itself,
+   *      so the subset is already a scene child. `scene.attach` of
+   *      an existing-child is a transform-preserving no-op (apart
+   *      from order-in-children).
+   *
    * @param {Mesh|Mesh[]|null} subset
    * @private
    */
@@ -168,16 +189,7 @@ export default class IfcIsolator {
     const scene = this.context.getScene()
     const pickable = this.context.getPickableModels()
     for (const m of meshes) {
-      // `attachInstanceMapSubsets` parents the subset Mesh under the
-      // source mesh's parent at creation time. Re-adding to the scene
-      // when the subset is already under (say) `ifcModel`'s parent
-      // would no-op via three's add-detaches-from-old-parent; this
-      // explicit add keeps the legacy `scene.add(subset)` semantic for
-      // the single-Mesh wit-three return where the subset lives at
-      // the scene root anyway.
-      if (m.parent === null) {
-        scene.add(m)
-      }
+      scene.attach(m)
       pickable.push(m)
     }
   }
@@ -186,6 +198,12 @@ export default class IfcIsolator {
   /**
    * Remove a subset (single Mesh or Mesh[]) from the scene +
    * pickable-models registry. Counterpart to `_addSubsetToScene`.
+   *
+   * Uses `m.removeFromParent()` (not `scene.remove(m)`) because the
+   * subset's current parent may not be the scene root — e.g.,
+   * `attachInstanceMapSubsets` may have left it under the source
+   * mesh's parent (a Group for cache-hit Conway-direct). `removeFromParent`
+   * always cleans up regardless of which parent.
    *
    * For `pickableModels`, removes each entry by reference rather than
    * `pop()` — the array may have other models pushed by the loader
@@ -201,10 +219,9 @@ export default class IfcIsolator {
     if (meshes.length === 0) {
       return
     }
-    const scene = this.context.getScene()
     const pickable = this.context.getPickableModels()
     for (const m of meshes) {
-      scene.remove(m)
+      m.removeFromParent()
       const idx = pickable.indexOf(m)
       if (idx >= 0) {
         pickable.splice(idx, 1)
@@ -463,12 +480,24 @@ export default class IfcIsolator {
         customID: this.revealSubsetCustomId,
         material: this.hiddenMaterial,
       })
-      // For the wit-three path the subset is parented at scene root
-      // by `createSubset` itself; for the Conway-direct path
-      // (`attachInstanceMapSubsets`) the subset is parented under
-      // each source mesh's parent — already in the scene tree, no
-      // explicit add needed. Both paths render with the cyan
-      // translucent material.
+      // Two paths reach the scene differently:
+      //   - wit-three: `createSubset` itself does `config.scene.add(subset)`,
+      //     so the subset is already parented at the scene root.
+      //   - Conway-direct (`attachInstanceMapSubsets`): the subset is
+      //     parented under the source mesh's parent. For cache-miss
+      //     (single Mesh source) that parent IS the scene; for cache-
+      //     hit (Group source) it's the Group, which the isolator
+      //     just removed from scene. `scene.attach` lifts the subset
+      //     to the scene root either way, baking the ancestor
+      //     transform so the ghost renders at the source's world
+      //     position. Idempotent for the wit-three / cache-miss path
+      //     (already-a-scene-child reattach is a no-op apart from
+      //     children-order). Reveal subsets stay out of
+      //     `pickableModels` — the cyan ghost overlay is decorative
+      //     and not a click target.
+      for (const m of this._subsetMeshes(this.revealedElementsSubset)) {
+        this.context.getScene().attach(m)
+      }
     }
   }
 

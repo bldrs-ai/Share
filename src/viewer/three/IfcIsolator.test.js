@@ -200,19 +200,41 @@ describe('viewer/three/IfcIsolator', () => {
       expect(pickable).toEqual([])
     })
 
-    it('does not add to scene when mesh already has a parent', () => {
-      // `attachInstanceMapSubsets` parents subsets under their source
-      // mesh's parent at creation time, so the subset is already in
-      // the scene tree. `_addSubsetToScene` must not re-parent.
+    it('lifts subsets parented under a sub-Group to scene root', () => {
+      // Cache-hit Conway-direct case: `attachInstanceMapSubsets`
+      // parents the subset under its source mesh's parent — the
+      // ifcModel Group. By the time `_addSubsetToScene` runs, the
+      // isolator has just removed that Group from the scene, so a
+      // subset that stays under it would be invisible (detached
+      // subtree). Use `scene.attach` to lift it to the scene root
+      // with world transform preserved.
       const {scene, pickable, iso} = setup()
       const innerGroup = new Group()
       scene.add(innerGroup)
       const m = new Mesh()
       innerGroup.add(m)
       iso._addSubsetToScene(m)
-      // Still under innerGroup, not scene root.
-      expect(m.parent).toBe(innerGroup)
-      // Still added to pickable though.
+      expect(m.parent).toBe(scene)
+      expect(innerGroup.children).not.toContain(m)
+      expect(pickable).toEqual([m])
+    })
+
+    it('lifts subsets parented under a DETACHED Group to scene root (the H bug fix)', () => {
+      // The exact ordering that hit the original H-toggle bug:
+      //   1. Group is in scene with original children.
+      //   2. Isolator removes Group → Group.parent = null (detached).
+      //   3. `attachInstanceMapSubsets` creates subsets and parents
+      //      them under each source mesh's parent (the now-detached
+      //      Group).
+      //   4. `_addSubsetToScene` must rescue them to scene root,
+      //      otherwise they render nowhere.
+      const {scene, pickable, iso} = setup()
+      const detachedGroup = new Group()
+      const m = new Mesh()
+      detachedGroup.add(m)
+      // detachedGroup is NOT in scene; m's parent is detachedGroup.
+      iso._addSubsetToScene(m)
+      expect(m.parent).toBe(scene)
       expect(pickable).toEqual([m])
     })
 
@@ -303,6 +325,202 @@ describe('viewer/three/IfcIsolator', () => {
       return iso.setModel(root).then(() => {
         expect(iso.visualElementsIds).toEqual([5])
       })
+    })
+  })
+
+
+  // ----------------------------------------------------------------
+  // Integration: full isolate / hide / reveal flows against a model
+  // wired with `attachInstanceMapSubsets`. Reproduces the cache-hit
+  // Conway-direct shape (ifcModel = Group, children = per-material
+  // Meshes with `instanceMap`). The cache-miss single-Mesh shape is
+  // a degenerate special case of this — covered by the
+  // `_addSubsetToScene`/`_removeSubsetFromScene` tests above.
+  //
+  // Tracks `expressID` granularity at parent-IFC-product level (one
+  // PlacedGeometry per product, three products, two child Meshes for
+  // material variety). Each test sets up a fresh scene + isolator
+  // and asserts the post-operation invariants on (a) what's in the
+  // scene, (b) what's in `pickableModels`, (c) the isolator's
+  // internal slot state.
+  // ----------------------------------------------------------------
+  describe('isolate / hide / reveal combinations (cache-hit Conway-direct)', () => {
+    // Lazy-loaded inside `beforeAll` because `attachInstanceMapSubsets`
+    // touches three.js internals that need the module-scope imports.
+    let attachInstanceMapSubsets
+    let instanceMapFromOrderedPlacedRanges
+    beforeAll(() => {
+      attachInstanceMapSubsets = require('./elementSubsets').attachInstanceMapSubsets
+      instanceMapFromOrderedPlacedRanges = require('../ifc/IfcInstanceMap').instanceMapFromOrderedPlacedRanges
+    })
+
+    /**
+     * Build a Group containing two child Meshes, each with its own
+     * instanceMap covering different parent IFC products. Matches the
+     * cache-hit Conway-direct shape: one mesh per material group.
+     *
+     *   childMesh1: parents [100, 200] (1 instance each, 1 tri each)
+     *   childMesh2: parents [300]      (1 instance, 1 tri)
+     *
+     * Total visualElementsIds = [100, 200, 300].
+     *
+     * @return {{model: Group, c1: Mesh, c2: Mesh}}
+     */
+    function makeHierarchicalModel() {
+      const c1 = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 200, triangleCount: 1},
+      ])
+      const c2 = makeChildMesh([
+        {parentExpressId: 300, triangleCount: 1},
+      ])
+      const model = new Group()
+      model.add(c1, c2)
+      attachInstanceMapSubsets(model, null)
+      return {model, c1, c2}
+    }
+
+
+    /**
+     * @param {Array<{parentExpressId: number, triangleCount: number}>} ranges
+     * @return {Mesh}
+     */
+    function makeChildMesh(ranges) {
+      const totalTri = ranges.reduce((n, r) => n + r.triangleCount, 0)
+      const geom = new BufferGeometry()
+      // Three vertices per triangle, sequential index.
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(totalTri * 9), 3))
+      const indexArr = new Uint32Array(totalTri * 3)
+      for (let i = 0; i < indexArr.length; i++) {
+        indexArr[i] = i
+      }
+      geom.setIndex(new BufferAttribute(indexArr, 1))
+      const mesh = new Mesh(geom, new MeshBasicMaterial())
+      mesh.instanceMap = instanceMapFromOrderedPlacedRanges(ranges, {geometry: geom})
+      return mesh
+    }
+
+
+    /**
+     * @return {{scene: Group, pickable: Array, iso: IfcIsolator, model: Group}}
+     */
+    function setupIsolatorWithModel() {
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const {model} = makeHierarchicalModel()
+      scene.add(model)
+      pickable.push(model)
+      // Seed isolator state — bypass the full `setModel` flow (which
+      // requires a stubbed `ifcManager.getSpatialStructure`).
+      iso.ifcModel = model
+      iso.visualElementsIds = [100, 200, 300]
+      iso.spatialStructure = {}
+      return {scene, pickable, iso, model}
+    }
+
+    it('isolate-on (initTemporaryIsolationSubset) shows only the isolated parents', () => {
+      const {scene, pickable, iso, model} = setupIsolatorWithModel()
+      iso.initTemporaryIsolationSubset([100])
+      // Model is detached.
+      expect(scene.children).not.toContain(model)
+      expect(pickable).not.toContain(model)
+      // Isolation subsets are now scene children.
+      const subsetMeshes = iso._subsetMeshes(iso.isolationSubset)
+      expect(subsetMeshes.length).toBeGreaterThan(0)
+      for (const m of subsetMeshes) {
+        expect(m.parent).toBe(scene)
+        expect(pickable).toContain(m)
+      }
+    })
+
+    it('hide-then-isolate cycle leaves the model visible via subsets, not orphaned', () => {
+      // The exact flow the user reported. Pre-fix: subsets stayed
+      // parented under the detached Group → invisible. Post-fix:
+      // scene.attach lifts them to the scene root.
+      const {scene, pickable, iso} = setupIsolatorWithModel()
+      // Step 1: hide element 100.
+      iso.hiddenIds = [100]
+      const toBeShown = iso.visualElementsIds.filter((e) => !iso.hiddenIds.includes(e))
+      iso.initHideOperationsSubset(toBeShown)
+      const hideSubsets = iso._subsetMeshes(iso.unhiddenSubset)
+      expect(hideSubsets.length).toBeGreaterThan(0)
+      for (const m of hideSubsets) {
+        expect(m.parent).toBe(scene)
+      }
+      // Step 2: isolate element 300 (toggle resets hide first via
+      // initTemporaryIsolationSubset — but we test the entry path).
+      iso.initTemporaryIsolationSubset([300])
+      const isoSubsets = iso._subsetMeshes(iso.isolationSubset)
+      for (const m of isoSubsets) {
+        expect(m.parent).toBe(scene)
+        expect(pickable).toContain(m)
+      }
+      // Hide subsets are no longer tracked / in scene (replaced by
+      // isolation under the same customID — wins via removePrevious).
+      for (const m of hideSubsets) {
+        expect(m.parent).not.toBe(scene)
+      }
+    })
+
+    it('reveal subsets attach to the scene root (not the detached Group)', () => {
+      const {scene, iso} = setupIsolatorWithModel()
+      // Enter hide mode first so the reveal has something to render.
+      iso.hiddenIds = [100, 200]
+      const toBeShown = iso.visualElementsIds.filter((e) => !iso.hiddenIds.includes(e))
+      iso.initHideOperationsSubset(toBeShown)
+      // Reveal: should show ghosts of hidden elements.
+      iso.toggleRevealHiddenElements()
+      expect(iso.revealHiddenElementsMode).toBe(true)
+      const revealMeshes = iso._subsetMeshes(iso.revealedElementsSubset)
+      expect(revealMeshes.length).toBeGreaterThan(0)
+      for (const m of revealMeshes) {
+        expect(m.parent).toBe(scene)
+      }
+    })
+
+    it('unhide-all restores the original model to the scene', () => {
+      const {scene, pickable, iso, model} = setupIsolatorWithModel()
+      // Hide an element.
+      iso.hiddenIds = [100]
+      const toBeShown = iso.visualElementsIds.filter((e) => !iso.hiddenIds.includes(e))
+      iso.initHideOperationsSubset(toBeShown)
+      expect(scene.children).not.toContain(model)
+      // Unhide all.
+      iso.unHideAllElements()
+      expect(scene.children).toContain(model)
+      expect(pickable).toContain(model)
+      expect(iso.unhiddenSubset).toBeNull()
+      expect(iso.hiddenIds).toEqual([])
+    })
+
+    it('reset-isolation with no hidden ids restores the model', () => {
+      const {scene, pickable, iso, model} = setupIsolatorWithModel()
+      iso.tempIsolationModeOn = true
+      iso.initTemporaryIsolationSubset([100])
+      expect(scene.children).not.toContain(model)
+      iso.resetTempIsolation()
+      expect(scene.children).toContain(model)
+      expect(pickable).toContain(model)
+      expect(iso.isolationSubset).toBeNull()
+      expect(iso.tempIsolationModeOn).toBe(false)
+    })
+
+    it('reset-isolation with hidden ids routes back to the hide-subset state', () => {
+      const {scene, pickable, iso, model} = setupIsolatorWithModel()
+      iso.tempIsolationModeOn = true
+      iso.hiddenIds = [100]
+      iso.initTemporaryIsolationSubset([200])
+      // Now reset — should rebuild the hide subset (show 200 + 300,
+      // hide 100), not just put the model back.
+      iso.resetTempIsolation()
+      expect(scene.children).not.toContain(model)
+      const unhide = iso._subsetMeshes(iso.unhiddenSubset)
+      expect(unhide.length).toBeGreaterThan(0)
+      for (const m of unhide) {
+        expect(m.parent).toBe(scene)
+        expect(pickable).toContain(m)
+      }
     })
   })
 
