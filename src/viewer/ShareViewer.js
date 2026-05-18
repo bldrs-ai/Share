@@ -460,6 +460,83 @@ export class ShareViewer extends IfcViewerAPI {
 
 
   /**
+   * Install a per-instance preselection (hover) subset against the
+   * Conway-direct model. Two essential differences from the selection
+   * helper:
+   *
+   *   1. **One mesh, one instance.** Hover always resolves to a single
+   *      face → single PlacedGeometry instance, so we build just one
+   *      subset from the picked Mesh's own `instanceMap` (no model-
+   *      wide traversal — the cache-hit case still works because the
+   *      hovered Mesh is one of the per-material child Meshes, and
+   *      its map covers exactly the instances in its triangle subset).
+   *
+   *   2. **Adds, doesn't replace.** The highlighter holds *both* the
+   *      selection set and the preselection at once; the user sees the
+   *      selected element outlined alongside whatever they're hovering
+   *      over. So we `addToHighlighting(subset)` rather than
+   *      `setHighlighted([subset])` — replacing would clobber the
+   *      selection-level highlights.
+   *
+   * The tracker slot is necessary because `addToHighlighting` doesn't
+   * auto-clean: a fresh subset Mesh is built every hover, so without
+   * pruning the previous one the OutlineEffect's selection set grows
+   * unboundedly across mouse moves. `_clearConwayPreselectionSubsets`
+   * removes the prior subset from both the scene tree and the
+   * highlighter's selection set before we install the new one.
+   *
+   * @param {object} pickedMesh the Mesh under the cursor
+   * @param {number} faceIndex triangle index from the raycaster hit
+   * @private
+   */
+  _setConwayPreselectionFromHit(pickedMesh, faceIndex) {
+    this._clearConwayPreselectionSubsets()
+    if (!pickedMesh?.instanceMap) {
+      return
+    }
+    const instanceId = pickedMesh.instanceMap.getInstanceIdByTriangle(faceIndex)
+    if (instanceId === null) {
+      return
+    }
+    const subset = pickedMesh.instanceMap.createSubsetMeshByInstance([instanceId], {
+      material: this.IFC.selector?.preselection?.material,
+    })
+    if (!subset) {
+      return
+    }
+    const parent = pickedMesh.parent ?? this.context.getScene()
+    parent.add(subset)
+    subset.userData.sourceMesh = pickedMesh
+    this.highlighter.addToHighlighting(subset)
+    this._conwayPreselectionSubsets = [subset]
+  }
+
+
+  /**
+   * Remove the tracked Conway-direct preselection subset(s) from
+   * scene + highlighter. Called at the top of each new hover (to
+   * replace) and on mouse-leave-all (to clear).
+   *
+   * @private
+   */
+  _clearConwayPreselectionSubsets() {
+    if (!this._conwayPreselectionSubsets || this._conwayPreselectionSubsets.length === 0) {
+      this._conwayPreselectionSubsets = []
+      return
+    }
+    for (const m of this._conwayPreselectionSubsets) {
+      this.highlighter.removeFromHighlighting(m)
+      m.removeFromParent()
+      const subsetGeom = m.geometry
+      if (subsetGeom && subsetGeom !== m.userData.sourceMesh?.geometry) {
+        subsetGeom.dispose?.()
+      }
+    }
+    this._conwayPreselectionSubsets = []
+  }
+
+
+  /**
    * Look up a registered model by modelID. Today the viewer holds
    * at most one model and call-sites always pass `0`; we still index
    * for symmetry with the underlying `ifcModels` array.
@@ -496,16 +573,14 @@ export class ShareViewer extends IfcViewerAPI {
     if (!modelHasCapability(model, 'expressIdPicking')) {
       return
     }
-    if (modelHasCapability(model, 'instancePicking') && model.instanceMap) {
-      // Conway-direct path: hover preselection deliberately not
-      // implemented in this slice. The existing per-vertex preselection
-      // relies on `model.removeSubset` to swap subset meshes in/out of
-      // the scene each hover (without it, every hover leaks a mesh
-      // into the highlighter's selection set). We didn't wire that
-      // helper here because the isolator's `createSubset` contract
-      // diverges from the per-vertex one. Click selection still works
-      // through the `instancePicking` branch in `setSelection`; hover
-      // falls through to the no-op tail.
+    if (modelHasCapability(model, 'instancePicking')) {
+      // Conway-direct path: per-instance preselection. Resolves the
+      // raycaster hit's faceIndex through the picked Mesh's own
+      // `instanceMap` to find the exact PlacedGeometry under the
+      // cursor, then highlights just its triangles. Matches the click
+      // handler's no-shift semantic — hover preview should match what
+      // a click would select.
+      this._setConwayPreselectionFromHit(found.object, found.faceIndex)
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
@@ -543,6 +618,11 @@ export class ShareViewer extends IfcViewerAPI {
    * @private
    */
   _clearPreselectionForAllModels() {
+    // Conway-direct preselection lives on the viewer (a single tracker
+    // slot, not on each model) — clear it before walking models for
+    // the legacy per-vertex subset removal. Cheap no-op when the slot
+    // is empty / the flag isn't on.
+    this._clearConwayPreselectionSubsets()
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return

@@ -61,6 +61,28 @@ export default class IfcHighlighter {
       // NOTE: the added mesh will be automatically be removed from the scene when the prepick changes
     }
   }
+
+  /**
+   * Remove a previously-added preselection mesh from the OutlineEffect's
+   * selection set. Counterpart to `addToHighlighting` for callers that
+   * track their own preselection slot and need to prune stale entries
+   * before adding the next one (otherwise the set grows unboundedly
+   * across hovers). The Conway-direct hover path uses this — its
+   * per-Mesh subsets are freshly built each hover, so we can't rely on
+   * `setHighlighted`'s wholesale replacement without clobbering the
+   * coexisting selection-level highlights.
+   *
+   * @param {Mesh} mesh
+   */
+  removeFromHighlighting(mesh) {
+    if (!mesh) {
+      return
+    }
+    const currentSelection = this._selectionOutlineEffect.getSelection()
+    if (currentSelection.indexOf(mesh) !== -1) {
+      currentSelection.delete(mesh)
+    }
+  }
 }
 
 
