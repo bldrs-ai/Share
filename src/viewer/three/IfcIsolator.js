@@ -7,15 +7,29 @@ import {isDefinedAndNotNull} from '../../utils/assert'
 import ThreeContext from './ThreeContext'
 
 
-/** Provides hiding, unhiding, isolation, and unisolation functionalities */
+/**
+ * Provides hiding, unhiding, isolation, and unisolation functionalities.
+ *
+ * Subset-shape contract. The three subset slots (`unhiddenSubset`,
+ * `isolationSubset`, `revealedElementsSubset`) hold whatever
+ * `ifcModel.createSubset(...)` returned: a single `Mesh` for the
+ * web-ifc-three native path, or a `Mesh[]` for the Conway-direct path
+ * (via `attachInstanceMapSubsets`). Internal `_addSubsetToScene` /
+ * `_removeSubsetFromScene` / `_subsetMeshes` helpers normalise both
+ * shapes so the public methods don't branch. See
+ * design/new/viewer-replacement.md §3b.iii.
+ */
 export default class IfcIsolator {
   subsetCustomId = 'Bldrs::Share::Isolator'
   revealSubsetCustomId = 'Bldrs::Share::HiddenElements'
   context = null
   ifcModel = null
   viewer = null
+  /** @type {Mesh|Mesh[]|null} */
   unhiddenSubset = null
+  /** @type {Mesh|Mesh[]|null} */
   isolationSubset = null
+  /** @type {Mesh|Mesh[]|null} */
   revealedElementsSubset = null
   currentSelectionSubsets = []
   visualElementsIds = []
@@ -52,22 +66,150 @@ export default class IfcIsolator {
   }
 
   /**
-   * Sets the loaded model to the isolator context
+   * Sets the loaded model to the isolator context.
    *
-   * @param {Mesh} ifcModel The loaded ifc model mesh
+   * Two model shapes are supported:
+   *
+   *  - **Single Mesh.** Web-ifc-three native (wit-three model is an
+   *    `IFCModel` subclass of `Mesh`) and Conway-direct cache-miss
+   *    (same `IFCModel` instance with geometry swapped, single Mesh
+   *    rooted with per-vertex `expressID`). Read element IDs straight
+   *    from `ifcModel.geometry.attributes.expressID`.
+   *  - **Group / hierarchy.** Conway-direct cache-hit: GLTFExporter
+   *    splits the merged mesh into N per-material child Meshes, each
+   *    with its own `expressID` per-vertex attribute. Traverse and
+   *    union the IDs across children.
+   *
+   * @param {Mesh|object} ifcModel The loaded ifc model (Mesh or Group)
    */
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
-    if (!isDefinedAndNotNull(ifcModel.geometry)) {
+    const ids = new Set()
+    if (ifcModel.geometry && ifcModel.geometry.attributes) {
+      const attr = ifcModel.geometry.attributes.expressID
+      if (attr) {
+        const arr = attr.array
+        for (let i = 0; i < arr.length; i++) {
+          ids.add(arr[i])
+        }
+      }
+    } else if (typeof ifcModel.traverse === 'function') {
+      // Hierarchical model (cache-hit Conway-direct). Union across
+      // child meshes' per-vertex `expressID` attribute.
+      ifcModel.traverse((obj) => {
+        if (!obj.isMesh) {
+          return
+        }
+        const attr = obj.geometry?.attributes?.expressID
+        if (!attr) {
+          return
+        }
+        const arr = attr.array
+        for (let i = 0; i < arr.length; i++) {
+          ids.add(arr[i])
+        }
+      })
+    } else if (ifcModel.expressID) {
+      for (const id of ifcModel.expressID) {
+        ids.add(id)
+      }
+    }
+    if (ids.size === 0 && !isDefinedAndNotNull(ifcModel.geometry) &&
+        typeof ifcModel.traverse !== 'function') {
+      // Pre-existing guard: bail when there's nothing to read from.
       return
     }
-    if (ifcModel.geometry && ifcModel.geometry.attributes) {
-      this.visualElementsIds = [...new Set(ifcModel.geometry.attributes.expressID.array)]
-    } else if (ifcModel.expressID) {
-      this.visualElementsIds = [...new Set(ifcModel.expressID)]
-    }
+    this.visualElementsIds = [...ids]
     const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
     this.collectSpatialElementsId(rootElement)
+  }
+
+
+  /**
+   * Normalise a subset value to a `Mesh[]`. The web-ifc-three
+   * `createSubset` returns a single Mesh; the Conway-direct path
+   * (`attachInstanceMapSubsets`) returns an array of Meshes — one per
+   * child mesh of a hierarchical model. The slot fields below hold
+   * whichever shape `createSubset` returned, and the public methods
+   * call this helper before iterating.
+   *
+   * @param {Mesh|Mesh[]|null|undefined} subset
+   * @return {Mesh[]}
+   * @private
+   */
+  _subsetMeshes(subset) {
+    if (!subset) {
+      return []
+    }
+    return Array.isArray(subset) ? subset : [subset]
+  }
+
+
+  /**
+   * Add a subset (single Mesh or Mesh[]) to the scene + pickable-models
+   * registry. Mirrors the legacy `scene.add(subset) +
+   * pickableModels.push(subset)` pair, generalised to handle the
+   * array shape returned by the Conway-direct `createSubset`.
+   *
+   * For the array shape, every mesh is pushed onto `pickableModels`
+   * individually so the raycaster sees them as siblings — this matches
+   * the per-mesh shape ShareViewer already produces for selection /
+   * preselection on the same models, keeping picking behaviour
+   * consistent across overlapping highlight sources.
+   *
+   * @param {Mesh|Mesh[]|null} subset
+   * @private
+   */
+  _addSubsetToScene(subset) {
+    const meshes = this._subsetMeshes(subset)
+    if (meshes.length === 0) {
+      return
+    }
+    const scene = this.context.getScene()
+    const pickable = this.context.getPickableModels()
+    for (const m of meshes) {
+      // `attachInstanceMapSubsets` parents the subset Mesh under the
+      // source mesh's parent at creation time. Re-adding to the scene
+      // when the subset is already under (say) `ifcModel`'s parent
+      // would no-op via three's add-detaches-from-old-parent; this
+      // explicit add keeps the legacy `scene.add(subset)` semantic for
+      // the single-Mesh wit-three return where the subset lives at
+      // the scene root anyway.
+      if (m.parent === null) {
+        scene.add(m)
+      }
+      pickable.push(m)
+    }
+  }
+
+
+  /**
+   * Remove a subset (single Mesh or Mesh[]) from the scene +
+   * pickable-models registry. Counterpart to `_addSubsetToScene`.
+   *
+   * For `pickableModels`, removes each entry by reference rather than
+   * `pop()` — the array may have other models pushed by the loader
+   * between this isolator's add and remove (e.g., a second model
+   * loaded mid-isolation), so popping is unsafe. The single-element
+   * wit-three case still works because the loop iterates one ref.
+   *
+   * @param {Mesh|Mesh[]|null} subset
+   * @private
+   */
+  _removeSubsetFromScene(subset) {
+    const meshes = this._subsetMeshes(subset)
+    if (meshes.length === 0) {
+      return
+    }
+    const scene = this.context.getScene()
+    const pickable = this.context.getPickableModels()
+    for (const m of meshes) {
+      scene.remove(m)
+      const idx = pickable.indexOf(m)
+      if (idx >= 0) {
+        pickable.splice(idx, 1)
+      }
+    }
   }
 
   /**
@@ -124,8 +266,7 @@ export default class IfcIsolator {
    */
   initHideOperationsSubset(includedIds, removeModel = true) {
     if (removeModel) {
-      this.context.getScene().remove(this.ifcModel)
-      this.context.getPickableModels().pop()
+      this._removeSubsetFromScene(this.ifcModel)
       this.viewer.IFC.selector.selection.unpick()
       this.viewer.IFC.selector.preselection.unpick()
     }
@@ -137,7 +278,7 @@ export default class IfcIsolator {
       removePrevious: true,
       customID: this.subsetCustomId,
     })
-    this.context.getPickableModels().push(this.unhiddenSubset)
+    this._addSubsetToScene(this.unhiddenSubset)
   }
 
   /**
@@ -146,8 +287,7 @@ export default class IfcIsolator {
    * @param {Array} includedIds element ids included in the subset
    */
   initTemporaryIsolationSubset(includedIds) {
-    this.context.getScene().remove(this.ifcModel)
-    this.context.getPickableModels().pop()
+    this._removeSubsetFromScene(this.ifcModel)
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
@@ -156,8 +296,12 @@ export default class IfcIsolator {
       removePrevious: true,
       customID: this.subsetCustomId,
     })
-    this.context.getPickableModels().push(this.isolationSubset)
-    this.isolationOutlineEffect.setSelection([this.isolationSubset])
+    this._addSubsetToScene(this.isolationSubset)
+    // OutlineEffect.setSelection takes an array of Object3Ds. The
+    // Conway-direct path returns Mesh[]; the wit-three path returns
+    // a single Mesh. Normalise so the postprocess pass sees a flat
+    // list either way.
+    this.isolationOutlineEffect.setSelection(this._subsetMeshes(this.isolationSubset))
   }
 
   /**
@@ -272,11 +416,9 @@ export default class IfcIsolator {
     if (this.tempIsolationModeOn) {
       return
     }
-    this.context.getScene().remove(this.unhiddenSubset)
-    this.context.getPickableModels().pop()
-    delete this.unhiddenSubset
-    this.context.getScene().add(this.ifcModel)
-    this.context.getPickableModels().push(this.ifcModel)
+    this._removeSubsetFromScene(this.unhiddenSubset)
+    this.unhiddenSubset = null
+    this._addSubsetToScene(this.ifcModel)
     this.hiddenIds = []
     useStore.setState({hiddenElements: {}})
     if (this.revealHiddenElementsMode) {
@@ -291,16 +433,24 @@ export default class IfcIsolator {
   toggleRevealHiddenElements() {
     if (this.revealHiddenElementsMode) {
       this.revealHiddenElementsMode = false
-      this.context.getScene().remove(this.revealedElementsSubset)
-      delete this.revealedElementsSubset
+      // Reveal subsets aren't added to `pickableModels` (the
+      // translucent cyan overlay isn't a click target — it shows
+      // hidden elements as ghosts), so we go around the helper and
+      // just remove them from the scene by-mesh.
+      for (const m of this._subsetMeshes(this.revealedElementsSubset)) {
+        this.context.getScene().remove(m)
+      }
+      this.revealedElementsSubset = null
     } else {
       let hidden = this.hiddenIds
       if (this.tempIsolationModeOn) {
         hidden = hidden.concat(this.visualElementsIds.filter((e) => !this.isolatedIds.includes(e)))
       }
       if (hidden.length === 0) {
-        this.context.getScene().remove(this.revealedElementsSubset)
-        delete this.revealedElementsSubset
+        for (const m of this._subsetMeshes(this.revealedElementsSubset)) {
+          this.context.getScene().remove(m)
+        }
+        this.revealedElementsSubset = null
         return
       }
       this.revealHiddenElementsMode = true
@@ -313,6 +463,12 @@ export default class IfcIsolator {
         customID: this.revealSubsetCustomId,
         material: this.hiddenMaterial,
       })
+      // For the wit-three path the subset is parented at scene root
+      // by `createSubset` itself; for the Conway-direct path
+      // (`attachInstanceMapSubsets`) the subset is parented under
+      // each source mesh's parent — already in the scene tree, no
+      // explicit add needed. Both paths render with the cyan
+      // translucent material.
     }
   }
 
@@ -385,15 +541,13 @@ export default class IfcIsolator {
     useStore.setState({isTempIsolationModeOn: false})
     this.isolatedIds = []
     useStore.setState({isolatedElements: {}})
-    this.context.getScene().remove(this.isolationSubset)
-    this.context.getPickableModels().pop()
-    delete this.isolationSubset
+    this._removeSubsetFromScene(this.isolationSubset)
+    this.isolationSubset = null
     if (this.hiddenIds.length > 0) {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes( el ))
       this.initHideOperationsSubset(toBeShown, false)
     } else {
-      this.context.getScene().add(this.ifcModel)
-      this.context.getPickableModels().push(this.ifcModel)
+      this._addSubsetToScene(this.ifcModel)
     }
     this.isolationOutlineEffect.setSelection([])
   }

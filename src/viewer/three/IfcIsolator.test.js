@@ -7,7 +7,18 @@
 //
 // The `flattenChildren(stringLabel)` branch calls `useStore` to find
 // element types, so those tests are skipped here.
+//
+// `_subsetMeshes` / `_addSubsetToScene` / `_removeSubsetFromScene` are
+// the Conway-direct surface area (Mesh[] return shape). Tested below
+// with real `Group` / `Mesh` instances against the stubbed context.
 
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+} from 'three'
 import IfcIsolator from './IfcIsolator'
 
 
@@ -34,11 +45,15 @@ jest.mock('../../store/useStore', () => ({
  * Build a minimally-viable IfcIsolator by injecting stubs for the
  * context and viewer the constructor depends on.
  *
+ * @param {object} [overrides]
  * @return {IfcIsolator}
  */
-function makeIsolator() {
+function makeIsolator(overrides = {}) {
+  const scene = overrides.scene ?? {add: jest.fn(), remove: jest.fn()}
+  const pickable = overrides.pickable ?? []
   const context = {
-    getScene: () => ({add: jest.fn(), remove: jest.fn()}),
+    getScene: () => scene,
+    getPickableModels: () => pickable,
     getClippingPlanes: () => [],
     renderer: {
       update: jest.fn(),
@@ -121,6 +136,173 @@ describe('viewer/three/IfcIsolator', () => {
       iso.spatialStructure = {10: []}
       // int 10 matches string key "10"
       expect(iso.canBeHidden(10)).toBe(true)
+    })
+  })
+
+
+  // ----------------------------------------------------------------
+  // Conway-direct subset shape — Mesh[] return from createSubset.
+  // ----------------------------------------------------------------
+
+
+  describe('_subsetMeshes', () => {
+    it('returns [] for null / undefined / empty array', () => {
+      const iso = makeIsolator()
+      expect(iso._subsetMeshes(null)).toEqual([])
+      expect(iso._subsetMeshes(undefined)).toEqual([])
+      expect(iso._subsetMeshes([])).toEqual([])
+    })
+
+    it('wraps a single Mesh in a one-element array', () => {
+      const iso = makeIsolator()
+      const m = new Mesh()
+      expect(iso._subsetMeshes(m)).toEqual([m])
+    })
+
+    it('returns the array as-is for Mesh[] input', () => {
+      const iso = makeIsolator()
+      const a = new Mesh()
+      const b = new Mesh()
+      expect(iso._subsetMeshes([a, b])).toEqual([a, b])
+    })
+  })
+
+
+  describe('_addSubsetToScene / _removeSubsetFromScene', () => {
+    /**
+     * @return {{scene: Group, pickable: Array, iso: IfcIsolator}}
+     */
+    function setup() {
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      return {scene, pickable, iso}
+    }
+
+    it('adds and removes a single Mesh — wit-three return shape', () => {
+      const {scene, pickable, iso} = setup()
+      const m = new Mesh()
+      iso._addSubsetToScene(m)
+      expect(scene.children).toContain(m)
+      expect(pickable).toEqual([m])
+      iso._removeSubsetFromScene(m)
+      expect(scene.children).not.toContain(m)
+      expect(pickable).toEqual([])
+    })
+
+    it('adds and removes a Mesh[] — Conway-direct return shape', () => {
+      const {pickable, iso} = setup()
+      const a = new Mesh()
+      const b = new Mesh()
+      iso._addSubsetToScene([a, b])
+      expect(pickable).toEqual([a, b])
+      iso._removeSubsetFromScene([a, b])
+      expect(pickable).toEqual([])
+    })
+
+    it('does not add to scene when mesh already has a parent', () => {
+      // `attachInstanceMapSubsets` parents subsets under their source
+      // mesh's parent at creation time, so the subset is already in
+      // the scene tree. `_addSubsetToScene` must not re-parent.
+      const {scene, pickable, iso} = setup()
+      const innerGroup = new Group()
+      scene.add(innerGroup)
+      const m = new Mesh()
+      innerGroup.add(m)
+      iso._addSubsetToScene(m)
+      // Still under innerGroup, not scene root.
+      expect(m.parent).toBe(innerGroup)
+      // Still added to pickable though.
+      expect(pickable).toEqual([m])
+    })
+
+    it('removes by reference, not pop() — safe when other models intervene', () => {
+      // After `_addSubsetToScene(a)`, suppose another loader pushes `x`
+      // onto pickable. `_removeSubsetFromScene(a)` must still find and
+      // remove `a` without disturbing `x`.
+      const {pickable, iso} = setup()
+      const a = new Mesh()
+      const x = new Mesh()
+      iso._addSubsetToScene(a)
+      pickable.push(x)
+      iso._removeSubsetFromScene(a)
+      expect(pickable).toEqual([x])
+    })
+
+    it('tolerates pickable not containing the mesh on remove', () => {
+      const {scene, iso} = setup()
+      const m = new Mesh()
+      scene.add(m)
+      // Pickable was never primed for this mesh.
+      expect(() => iso._removeSubsetFromScene(m)).not.toThrow()
+      expect(scene.children).not.toContain(m)
+    })
+  })
+
+
+  describe('setModel — hierarchical (cache-hit Conway-direct) shape', () => {
+    /**
+     * Stub ifcManager.getSpatialStructure so setModel doesn't crash
+     * on the spatial-collection step.
+     *
+     * @return {object}
+     */
+    function makeFakeManager() {
+      return {
+        getSpatialStructure: jest.fn(() => Promise.resolve({
+          expressID: 1,
+          children: [],
+        })),
+      }
+    }
+
+    it('reads expressIDs from a single-Mesh model via geometry attribute', () => {
+      const iso = makeIsolator()
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Uint32Array([10, 20, 30]), 1))
+      const model = new Mesh(geom, new MeshBasicMaterial())
+      model.ifcManager = makeFakeManager()
+      return iso.setModel(model).then(() => {
+        expect(iso.visualElementsIds.sort()).toEqual([10, 20, 30])
+      })
+    })
+
+    it('unions expressIDs across child Meshes for a Group model', () => {
+      const iso = makeIsolator()
+      const root = new Group()
+      // Child Mesh 1 — expressIDs 10, 20
+      const g1 = new BufferGeometry()
+      g1.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      g1.setAttribute('expressID', new BufferAttribute(new Uint32Array([10, 10, 20]), 1))
+      root.add(new Mesh(g1, new MeshBasicMaterial()))
+      // Child Mesh 2 — expressIDs 20, 30, 40 (20 overlaps with child 1)
+      const g2 = new BufferGeometry()
+      g2.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      g2.setAttribute('expressID', new BufferAttribute(new Uint32Array([20, 30, 40]), 1))
+      root.add(new Mesh(g2, new MeshBasicMaterial()))
+      root.ifcManager = makeFakeManager()
+      return iso.setModel(root).then(() => {
+        expect(iso.visualElementsIds.sort((a, b) => a - b)).toEqual([10, 20, 30, 40])
+      })
+    })
+
+    it('skips Group children without an expressID attribute', () => {
+      const iso = makeIsolator()
+      const root = new Group()
+      // Mesh with attribute.
+      const g1 = new BufferGeometry()
+      g1.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      g1.setAttribute('expressID', new BufferAttribute(new Uint32Array([5]), 1))
+      root.add(new Mesh(g1, new MeshBasicMaterial()))
+      // Mesh without attribute.
+      const g2 = new BufferGeometry()
+      g2.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      root.add(new Mesh(g2, new MeshBasicMaterial()))
+      root.ifcManager = makeFakeManager()
+      return iso.setModel(root).then(() => {
+        expect(iso.visualElementsIds).toEqual([5])
+      })
     })
   })
 

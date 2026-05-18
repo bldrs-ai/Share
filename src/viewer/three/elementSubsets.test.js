@@ -10,9 +10,13 @@ import {
 } from 'three'
 import {
   attachElementSubsets,
+  attachInstanceMapSubsets,
+  buildInstanceMapModelSubsets,
+  buildInstanceMapSubsetMesh,
   buildModelSubsets,
   buildSubsetMesh,
 } from './elementSubsets'
+import {instanceMapFromOrderedPlacedRanges} from '../ifc/IfcInstanceMap'
 
 
 /**
@@ -375,6 +379,260 @@ describe('viewer/three/elementSubsets', () => {
       attachElementSubsets(model, scene, {attrName: '_FEATURE_ID_0'})
       const subsets = model.createSubset({ids: [7], customID: 'selection'})
       expect(subsets.length).toBe(1)
+    })
+  })
+
+
+  // ----------------------------------------------------------------
+  // Conway-direct path — IfcInstanceMap-backed subsets.
+  // ----------------------------------------------------------------
+
+
+  /**
+   * Build a Mesh with a 6-tri geometry split into 3 PlacedGeometries
+   * (2 triangles each) under 2 parent expressIDs.
+   *
+   *   instance 0 (parent 100) → tris 0,1
+   *   instance 1 (parent 100) → tris 2,3  (so parent 100 has 2 instances)
+   *   instance 2 (parent 200) → tris 4,5
+   *
+   * @return {Mesh}
+   */
+  function makeInstanceMappedMesh() {
+    const geom = new BufferGeometry()
+    geom.setAttribute('position', new BufferAttribute(new Float32Array(54), 3))
+    geom.setIndex(new BufferAttribute(
+      new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]), 1,
+    ))
+    const mesh = new Mesh(geom, new MeshBasicMaterial())
+    mesh.instanceMap = instanceMapFromOrderedPlacedRanges([
+      {parentExpressId: 100, triangleCount: 2}, // inst 0
+      {parentExpressId: 100, triangleCount: 2}, // inst 1
+      {parentExpressId: 200, triangleCount: 2}, // inst 2
+    ], {geometry: geom})
+    return mesh
+  }
+
+
+  describe('buildInstanceMapSubsetMesh', () => {
+    it('builds a subset for every PlacedGeometry under the requested parents', () => {
+      const src = makeInstanceMappedMesh()
+      // Parent 100 has 2 instances (4 tris). Subset should contain
+      // those 4 triangles (12 index entries).
+      const subset = buildInstanceMapSubsetMesh(src, new Set([100]))
+      expect(subset).toBeInstanceOf(Mesh)
+      expect(subset.geometry.getIndex().array.length).toBe(12)
+    })
+
+    it('inherits source local transform', () => {
+      const src = makeInstanceMappedMesh()
+      src.position.set(1, 2, 3)
+      src.scale.set(2, 2, 2)
+      src.updateMatrix()
+      const subset = buildInstanceMapSubsetMesh(src, new Set([100]))
+      expect(subset.position.toArray()).toEqual([1, 2, 3])
+      expect(subset.scale.toArray()).toEqual([2, 2, 2])
+    })
+
+    it('uses an explicit material override; defaults to source material', () => {
+      const src = makeInstanceMappedMesh()
+      const overrideMaterial = new MeshBasicMaterial()
+      const subset = buildInstanceMapSubsetMesh(
+        src, new Set([100]), {material: overrideMaterial})
+      expect(subset.material).toBe(overrideMaterial)
+      // No override → falls back to source.
+      const subset2 = buildInstanceMapSubsetMesh(src, new Set([100]))
+      expect(subset2.material).toBe(src.material)
+    })
+
+    it('the subset is raycast-active (not invisible)', () => {
+      const src = makeInstanceMappedMesh()
+      const subset = buildInstanceMapSubsetMesh(src, new Set([100]))
+      // Source mesh's default `Mesh.prototype.raycast` is a real
+      // function. The instance-map's `raycastInvisible: false`
+      // contract on `buildSubsetMesh` keeps the prototype's raycast
+      // in place rather than replacing it with a no-op.
+      expect(subset.raycast).toBe(Mesh.prototype.raycast)
+    })
+
+    it('returns null when source has no instanceMap', () => {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      const mesh = new Mesh(geom, new MeshBasicMaterial())
+      expect(buildInstanceMapSubsetMesh(mesh, new Set([100]))).toBeNull()
+    })
+
+    it('returns null when ids do not match any instance', () => {
+      const src = makeInstanceMappedMesh()
+      expect(buildInstanceMapSubsetMesh(src, new Set([999]))).toBeNull()
+    })
+
+    it('tags userData.sourceMesh', () => {
+      const src = makeInstanceMappedMesh()
+      const subset = buildInstanceMapSubsetMesh(src, new Set([100]))
+      expect(subset.userData.sourceMesh).toBe(src)
+    })
+  })
+
+
+  describe('buildInstanceMapModelSubsets', () => {
+    it('walks a hierarchy and builds one subset per child Mesh with instanceMap', () => {
+      // Mimic cache-hit Conway-direct: Group with 2 per-material child Meshes.
+      const root = new Group()
+      const m1 = makeInstanceMappedMesh()
+      const m2 = makeInstanceMappedMesh()
+      root.add(m1, m2)
+      const subsets = buildInstanceMapModelSubsets(root, [100])
+      expect(subsets.length).toBe(2)
+      expect(subsets[0].userData.sourceMesh).toBe(m1)
+      expect(subsets[1].userData.sourceMesh).toBe(m2)
+    })
+
+    it('skips Meshes without instanceMap', () => {
+      const root = new Group()
+      const withMap = makeInstanceMappedMesh()
+      const withoutMap = new Mesh(
+        new BufferGeometry().setAttribute(
+          'position', new BufferAttribute(new Float32Array(9), 3)),
+        new MeshBasicMaterial())
+      root.add(withMap, withoutMap)
+      const subsets = buildInstanceMapModelSubsets(root, [100])
+      expect(subsets.length).toBe(1)
+      expect(subsets[0].userData.sourceMesh).toBe(withMap)
+    })
+
+    it('returns [] for empty id list / unknown ids / non-traversable input', () => {
+      const src = makeInstanceMappedMesh()
+      expect(buildInstanceMapModelSubsets(src, [])).toEqual([])
+      expect(buildInstanceMapModelSubsets(src, [999])).toEqual([])
+      expect(buildInstanceMapModelSubsets(null, [100])).toEqual([])
+      expect(buildInstanceMapModelSubsets({}, [100])).toEqual([])
+    })
+
+    it('accepts a Set as input', () => {
+      const src = makeInstanceMappedMesh()
+      const subsets = buildInstanceMapModelSubsets(src, new Set([100]))
+      expect(subsets.length).toBe(1)
+    })
+  })
+
+
+  describe('attachInstanceMapSubsets', () => {
+    it('attaches createSubset / removeSubset / disposeSubsets', () => {
+      const src = makeInstanceMappedMesh()
+      attachInstanceMapSubsets(src, new Scene())
+      expect(typeof src.createSubset).toBe('function')
+      expect(typeof src.removeSubset).toBe('function')
+      expect(typeof src.disposeSubsets).toBe('function')
+    })
+
+    it('createSubset returns Mesh[] (not a single Mesh)', () => {
+      const src = makeInstanceMappedMesh()
+      const scene = new Scene()
+      scene.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const result = src.createSubset({ids: [100], customID: 'isolator'})
+      expect(Array.isArray(result)).toBe(true)
+      expect(result.length).toBe(1)
+      expect(result[0]).toBeInstanceOf(Mesh)
+    })
+
+    it('parents subsets under the source mesh\'s parent', () => {
+      const src = makeInstanceMappedMesh()
+      const group = new Group()
+      const scene = new Scene()
+      scene.add(group)
+      group.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const subsets = src.createSubset({ids: [100], customID: 'isolator'})
+      // Source's parent is `group` — subset goes there, not the
+      // fallback scene.
+      expect(subsets[0].parent).toBe(group)
+    })
+
+    it('falls back to fallbackParent when source has no parent', () => {
+      const src = makeInstanceMappedMesh()
+      const fallback = new Scene()
+      attachInstanceMapSubsets(src, fallback)
+      const subsets = src.createSubset({ids: [100], customID: 'isolator'})
+      expect(subsets[0].parent).toBe(fallback)
+    })
+
+    it('removePrevious: true clears the previous subset under the same customID', () => {
+      const src = makeInstanceMappedMesh()
+      const scene = new Scene()
+      scene.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const first = src.createSubset({ids: [100], customID: 'isolator'})
+      expect(first[0].parent).toBe(scene)
+      const second = src.createSubset({ids: [200], customID: 'isolator', removePrevious: true})
+      expect(first[0].parent).toBeNull()
+      expect(second[0].parent).toBe(scene)
+    })
+
+    it('different customIDs keep their slots separate', () => {
+      const src = makeInstanceMappedMesh()
+      const scene = new Scene()
+      scene.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const a = src.createSubset({ids: [100], customID: 'a'})
+      const b = src.createSubset({ids: [200], customID: 'b'})
+      expect(a[0].parent).toBe(scene)
+      expect(b[0].parent).toBe(scene)
+    })
+
+    it('removeSubset is a no-op for unknown customID', () => {
+      const src = makeInstanceMappedMesh()
+      attachInstanceMapSubsets(src, new Scene())
+      expect(() => src.removeSubset('nope')).not.toThrow()
+    })
+
+    it('disposeSubsets clears every slot', () => {
+      const src = makeInstanceMappedMesh()
+      const scene = new Scene()
+      scene.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const a = src.createSubset({ids: [100], customID: 'a'})
+      const b = src.createSubset({ids: [200], customID: 'b'})
+      src.disposeSubsets()
+      expect(a[0].parent).toBeNull()
+      expect(b[0].parent).toBeNull()
+    })
+
+    it('threads material through to the subset', () => {
+      const src = makeInstanceMappedMesh()
+      const override = new MeshBasicMaterial()
+      const scene = new Scene()
+      scene.add(src)
+      attachInstanceMapSubsets(src, scene)
+      const subsets = src.createSubset({ids: [100], customID: 'reveal', material: override})
+      expect(subsets[0].material).toBe(override)
+    })
+
+    it('returns [] when ids match nothing', () => {
+      const src = makeInstanceMappedMesh()
+      attachInstanceMapSubsets(src, new Scene())
+      expect(src.createSubset({ids: [999], customID: 'a'})).toEqual([])
+    })
+
+    it('returns model unchanged for null input', () => {
+      expect(attachInstanceMapSubsets(null, new Scene())).toBeNull()
+    })
+
+    it('works against a hierarchical model (cache-hit Conway-direct shape)', () => {
+      const root = new Group()
+      const m1 = makeInstanceMappedMesh()
+      const m2 = makeInstanceMappedMesh()
+      root.add(m1, m2)
+      const scene = new Scene()
+      scene.add(root)
+      attachInstanceMapSubsets(root, scene)
+      // Both child Meshes contribute subsets.
+      const subsets = root.createSubset({ids: [100], customID: 'isolator'})
+      expect(subsets.length).toBe(2)
+      // Subsets are parented under each child mesh's parent (root).
+      expect(subsets[0].parent).toBe(root)
+      expect(subsets[1].parent).toBe(root)
     })
   })
 })

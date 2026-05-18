@@ -348,3 +348,203 @@ export function attachElementSubsets(model, fallbackParent, defaults = {}) {
   model.disposeSubsets = disposeSubsets
   return model
 }
+
+
+/**
+ * Build a Mesh containing only the triangles of `sourceMesh` whose
+ * IFC parent product is in `ids`, using the mesh's pre-computed
+ * `IfcInstanceMap`. Counterpart to `buildSubsetMesh` for the
+ * Conway-direct path (design/new/viewer-replacement.md §3b.ii).
+ *
+ * Differs from the per-vertex `buildSubsetMesh` in three ways:
+ *
+ *  1. Lookup happens through `instanceMap.parentExpressIdToInstanceIds`
+ *     + `instanceMap.instanceIdToTriangleIndices` (precomputed at
+ *     load time) rather than scanning every triangle's per-vertex
+ *     attribute. Cheaper on big models where the filter selects a
+ *     small fraction of triangles.
+ *  2. The IFC product → triangle mapping is exact at parent-level
+ *     granularity. For `IfcMappedItem`-shared shapes the per-vertex
+ *     path is correct too, but the instanceMap can answer at finer
+ *     (per-PlacedGeometry) granularity if needed — kept for parity
+ *     with the existing `instanceMap.createSubsetMeshByParent` API
+ *     used by `ShareViewer._setConwaySelectionFromModel`.
+ *  3. Inherits the source's local transform so the subset renders
+ *     at the same world position when parented under
+ *     `sourceMesh.parent`. Matches `buildSubsetMesh`'s parenting
+ *     contract.
+ *
+ * Returns `null` when the source has no `instanceMap`, or zero
+ * matching triangles.
+ *
+ * @param {Mesh} sourceMesh must have `sourceMesh.instanceMap`
+ * @param {Set<number>} parentIdSet IFC product expressIDs
+ * @param {object} [opts]
+ * @param {object} [opts.material]
+ * @return {Mesh|null}
+ */
+export function buildInstanceMapSubsetMesh(sourceMesh, parentIdSet, opts = {}) {
+  if (!sourceMesh || !sourceMesh.isMesh || !sourceMesh.instanceMap) {
+    return null
+  }
+  // Default material: the source's own material. For cache-hit
+  // Conway-direct models each child Mesh is single-material (one
+  // material per PlacedGeometry.color bin — GLTFExporter split by
+  // material group on write). For cache-miss the source carries an
+  // array material + `geometry.groups[]`; three.js renders our subset
+  // with `material[0]` because subset geometries are built without
+  // groups[]. Visually approximate but functional — the "isolation
+  // shows monochrome on cache-miss" small regression is documented
+  // in §3b.iii. Cache-hit (the steady-state) renders with correct
+  // per-PlacedGeometry colors.
+  const subset = sourceMesh.instanceMap.createSubsetMeshByParent(parentIdSet, {
+    material: opts.material,
+    defaultMaterial: sourceMesh.material,
+    // Pickable. Isolation surfaces are click targets — the click
+    // handler in CadView.jsx falls back to the per-vertex `expressID`
+    // attribute branch when the picked mesh has no `instanceMap`
+    // attached (the subset does not). Parent-level picking via the
+    // shared per-vertex attribute is sufficient for the isolation
+    // workflow; per-instance picking on isolated elements is a
+    // future polish (deisolate first to get it back).
+    raycastInvisible: false,
+  })
+  if (!subset) {
+    return null
+  }
+  // Inherit local transform from the source. World transform
+  // alignment is the caller's responsibility (parent under
+  // `sourceMesh.parent` — same contract as `buildSubsetMesh`).
+  subset.matrixAutoUpdate = sourceMesh.matrixAutoUpdate
+  subset.position.copy(sourceMesh.position)
+  subset.quaternion.copy(sourceMesh.quaternion)
+  subset.scale.copy(sourceMesh.scale)
+  subset.updateMatrix()
+  subset.name = `${sourceMesh.name || 'mesh'}__instance_subset`
+  subset.userData.sourceMesh = sourceMesh
+  return subset
+}
+
+
+/**
+ * Walk a model tree and build one subset Mesh per child Mesh that
+ * carries an `IfcInstanceMap` and contributes at least one matching
+ * triangle. Sister to `buildModelSubsets` for the Conway-direct path.
+ *
+ * @param {object} modelRoot
+ * @param {Array<number>|Set<number>} ids parent IFC expressIDs
+ * @param {object} [opts]
+ * @return {Mesh[]}
+ */
+export function buildInstanceMapModelSubsets(modelRoot, ids, opts = {}) {
+  if (!modelRoot || typeof modelRoot.traverse !== 'function') {
+    return []
+  }
+  const idSet = ids instanceof Set ? ids : new Set(ids)
+  if (idSet.size === 0) {
+    return []
+  }
+  const subsets = []
+  modelRoot.traverse((obj) => {
+    if (!obj.isMesh || !obj.instanceMap) {
+      return
+    }
+    const subset = buildInstanceMapSubsetMesh(obj, idSet, opts)
+    if (subset) {
+      subsets.push(subset)
+    }
+  })
+  return subsets
+}
+
+
+/**
+ * Attach `createSubset` / `removeSubset` methods to a Conway-direct
+ * model. The Conway-direct sibling of `attachElementSubsets`. Routes
+ * subset construction through each child Mesh's pre-built
+ * `IfcInstanceMap` rather than scanning per-vertex `expressID`.
+ *
+ * Why a sibling instead of branching inside `attachElementSubsets`:
+ *
+ *  - Different lookup pipeline (instance map vs. per-vertex scan),
+ *    different default-material story (source material vs. opt-in
+ *    only), and the two are likely to diverge further as the
+ *    instance map gains finer-granularity entry points (e.g. an
+ *    isolation API that picks a specific PlacedGeometry).
+ *  - Keeping `attachElementSubsets` unchanged means the pre-existing
+ *    per-vertex GLB-cache path (no `instanceMap`, expressID-only)
+ *    keeps working without behaviour drift.
+ *
+ * The return shape is `Mesh[]` — same as `attachElementSubsets`. The
+ * isolator's `unhiddenSubset` / `isolationSubset` / `revealedElementsSubset`
+ * slots were updated to track an array (or array-or-single, branching
+ * on `Array.isArray`) so a unified consumer shape across both
+ * Conway-direct and the legacy wit-three path becomes possible
+ * without forcing the wit-three side to change today.
+ *
+ * @param {object} model root Object3D
+ * @param {object|null} fallbackParent
+ * @param {object} [defaults]
+ * @return {object} model (mutated)
+ */
+export function attachInstanceMapSubsets(model, fallbackParent, defaults = {}) {
+  if (!model) {
+    return model
+  }
+  const subsetsByCustomID = new Map()
+
+
+  const removeSubset = (customID) => {
+    const prev = subsetsByCustomID.get(customID)
+    if (!prev) {
+      return
+    }
+    for (const m of prev) {
+      m.removeFromParent()
+      // Subset geometry owns a fresh index buffer but shares vertex
+      // attributes with the source — dispose just the subset geom.
+      if (m.geometry && m.geometry !== m.userData.sourceMesh?.geometry) {
+        m.geometry.dispose?.()
+      }
+    }
+    subsetsByCustomID.delete(customID)
+  }
+
+
+  const createSubset = (opts) => {
+    const {
+      ids,
+      customID = 'default',
+      removePrevious = true,
+      material = defaults.material,
+    } = opts || {}
+    if (removePrevious) {
+      removeSubset(customID)
+    }
+    const meshes = buildInstanceMapModelSubsets(model, ids ?? [], {material})
+    if (meshes.length === 0) {
+      return []
+    }
+    for (const m of meshes) {
+      const parent = m.userData.sourceMesh?.parent ?? fallbackParent
+      if (parent) {
+        parent.add(m)
+      }
+    }
+    subsetsByCustomID.set(customID, meshes)
+    return meshes
+  }
+
+
+  const disposeSubsets = () => {
+    for (const customID of [...subsetsByCustomID.keys()]) {
+      removeSubset(customID)
+    }
+  }
+
+
+  model.createSubset = createSubset
+  model.removeSubset = removeSubset
+  model.disposeSubsets = disposeSubsets
+  return model
+}

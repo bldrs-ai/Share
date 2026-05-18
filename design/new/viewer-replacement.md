@@ -301,22 +301,53 @@ GLTFExporter preserves attribute values verbatim.
 
 #### 3b.iii. Known limitations + follow-up slices
 
-**Up next — isolate routing.** `IfcIsolator.initHideOperationsSubset`
-(and the temporary-isolation / revealed-elements counterparts at
-`src/viewer/three/IfcIsolator.js:125,148,303`) calls
+**Done — isolate routing.** Resolved 2026-05 (this slice).
+`IfcIsolator.initHideOperationsSubset` / `initTemporaryIsolationSubset`
+/ `toggleRevealHiddenElements` previously called
 `this.ifcModel.createSubset(...)` expecting `web-ifc-three.SubsetCreator`'s
-single-Mesh return against the *original* geometry. We swapped the
-geometry but left `createSubset` bound — so hide/isolate operations
-on `conwayDirectIfc` models either render against the wrong vertices
-or crash. The fix is to route isolator subset construction through
-the same `IfcInstanceMap.createSubsetMeshByParent` path the
-selection / hover code already uses. Design choice: do we keep
-`model.createSubset` as the single boundary (returns `Mesh[]` for
-the per-vertex / Conway paths, `Mesh` for wit-three) and adapt
-the isolator's three call sites, or add a parallel
-`model.createIsolatorSubset` that returns the legacy single-Mesh
-shape? The first is cleaner; the second is less surgical. This
-gates **default-on** for `conwayDirectIfc`.
+single-Mesh return against the *original* (pre-swap) geometry. Now
+resolved by routing through `attachInstanceMapSubsets`
+(`src/viewer/three/elementSubsets.js`) — a sibling of
+`attachElementSubsets` that backs `model.createSubset` with each
+child mesh's `IfcInstanceMap.createSubsetMeshByParent`.
+
+The chosen design: **unify `model.createSubset` to return `Mesh[]`
+on the Conway-direct paths.** Wit-three's stock single-Mesh return
+stays for non-Conway models (the path is going away in Phase 5
+anyway). The isolator normalises both shapes through three internal
+helpers (`_subsetMeshes` / `_addSubsetToScene` /
+`_removeSubsetFromScene`); the three subset-construction call sites
+kept their existing shape. `pickableModels` push by-reference,
+remove by `indexOf` + `splice` rather than `.pop()` — robust to
+other models being pushed mid-isolation.
+
+Visual quality follows model shape:
+
+- **Cache-hit Conway-direct** (steady state — Group of N per-material
+  child Meshes). Each child contributes one subset that inherits the
+  child's single material → per-PlacedGeometry colors render
+  correctly. Outline + translucent x-ray fill both work.
+- **Cache-miss Conway-direct** (first load only — single Mesh with
+  array material + `geometry.groups[]`). The subset inherits the
+  array material without groups, so three renders all subset
+  triangles with `material[0]`. Small visual regression in isolation
+  mode on first load, corrects on reload (cache hit). Acceptable
+  for an admittedly rare workflow.
+
+Pickability:
+
+- Subsets are raycast-active (`raycastInvisible: false` passed
+  through to `instanceMap.createSubsetMeshByParent`) so clicks on
+  isolated elements work.
+- The subset does *not* carry its own `instanceMap`. Clicks fall
+  through `CadView.jsx`'s `mesh.instanceMap` check to the per-vertex
+  `expressID` attribute branch, which returns the parent IFC product.
+  Per-instance picking on isolated elements is unavailable until
+  deisolated — acceptable trade-off for the rare workflow.
+
+`setModel` was extended to handle hierarchical models — when
+`ifcModel.geometry` is undefined it traverses children and unions
+the per-vertex `expressID` attribute across child Meshes.
 
 **Other open items:**
 
@@ -334,8 +365,20 @@ gates **default-on** for `conwayDirectIfc`.
   are rare so impact is lower) and could be lifted into a
   general SubsetPool the isolator + clipper consume too.
 
-**Default-on gating:** isolate routing first; everything else can
-ship behind the flag and turn on with a separate decision.
+**Default-on gating:** isolate routing now done. Remaining blockers
+before flipping the `conwayDirectIfc` flag default-on:
+
+1. **Portable IFC spatial hierarchy** — NavTree currently sources
+   `getSpatialStructure(...)` from `viewer.IFC.loader.ifcManager`,
+   which only has parser state on cache-miss IFC parses. Cache-hit
+   GLB needs `BLDRS_spatial_tree` (see `design/new/glb-model-sharing.md`
+   §"Extensions") written at export and read back on cache-hit.
+2. **Portable IFC properties / property sets** — ItemProperties
+   similarly currently sources from the ifcManager. Needs the
+   `BLDRS_element_properties` extension wired through the writer +
+   reader so the panel works on cache-hit too.
+
+Issues / comments can be done later (post-prod-flip).
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
