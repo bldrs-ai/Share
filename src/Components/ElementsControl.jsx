@@ -113,17 +113,23 @@ export default function ElementsControl({deselectItems}) {
 
         {/*
          * Clear. Always available when something's selected,
-         * including during isolation — deselecting mid-isolation is
-         * a valid step (e.g., when the user wants to use Esc /
-         * shortcut to clear before picking the next element), and
-         * the Isolate button stays visible through the
-         * `|| isTempIsolationModeOn` clause above so the user can
-         * still exit.
+         * including during isolation. On click, exits isolation
+         * first if active — "deselect the thing I isolated" is
+         * the natural read of clicking the X next to the selection
+         * during isolation, and leaving isolation orphaned with no
+         * selection that drove it produces the "invalid state"
+         * described in the user feedback (Isolate button stays lit
+         * but there's nothing logically isolated).
          */}
         {isSelected &&
          <TooltipIconButton
            title='Clear'
-           onClick={deselectItems}
+           onClick={() => {
+             if (isTempIsolationModeOn) {
+               viewer.isolator.toggleIsolationMode()
+             }
+             deselectItems()
+           }}
            icon={<CloseIcon className='icon-share'/>}
            placement='top'
            variant='solid'

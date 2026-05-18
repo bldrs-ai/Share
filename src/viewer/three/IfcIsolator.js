@@ -296,6 +296,16 @@ export default class IfcIsolator {
       customID: this.subsetCustomId,
     })
     this._addSubsetToScene(this.unhiddenSubset)
+    // Diagnostic: confirms the hide-subset is wired up correctly when
+    // the user reports the visual H-bug. Print includedIds count, the
+    // returned subset shape (single Mesh vs Mesh[]), per-mesh triangle
+    // counts, and post-add scene/pickable membership. If any of these
+    // are wrong, the bug is in the data path; if they're right but
+    // the user still sees only the selected element, the bug is in
+    // rendering (material visibility, frustum cull, etc.). Leaving in
+    // until §3b.iii is fully off the runway — cheap to emit, easy to
+    // pull when isolate routing stabilises.
+    this._diagSubset('[isolator/hide]', includedIds, this.unhiddenSubset)
   }
 
   /**
@@ -319,6 +329,45 @@ export default class IfcIsolator {
     // a single Mesh. Normalise so the postprocess pass sees a flat
     // list either way.
     this.isolationOutlineEffect.setSelection(this._subsetMeshes(this.isolationSubset))
+    // See `_diagSubset` rationale in `initHideOperationsSubset`. Both
+    // paths share the same subset slot and code so anomalies in one
+    // surface in the other; logging both lets us compare counts
+    // side-by-side without changing the user's repro.
+    this._diagSubset('[isolator/isolate]', includedIds, this.isolationSubset)
+  }
+
+
+  /**
+   * Diagnostic console log for an isolator subset operation. Prints
+   * the requested ids, the returned subset's mesh count + per-mesh
+   * triangle counts, and the resulting scene / pickable membership.
+   * Helps triangulate visual regressions where the data path looks
+   * correct in unit tests but the user reports the wrong rendering.
+   *
+   * @param {string} label
+   * @param {Array<number>} ids
+   * @param {Mesh|Mesh[]|null} subset
+   * @private
+   */
+  _diagSubset(label, ids, subset) {
+    const meshes = this._subsetMeshes(subset)
+    const scene = this.context.getScene()
+    const pickable = this.context.getPickableModels()
+    const triCount = (m) => m?.geometry?.getIndex?.()?.count / 3 || 0
+    const perMesh = meshes.map((m) => ({
+      tris: triCount(m),
+      inScene: m.parent === scene,
+      inPickable: pickable.indexOf(m) >= 0,
+      visible: m.visible !== false,
+    }))
+    const totalTris = perMesh.reduce((sum, m) => sum + m.tris, 0)
+    console.warn(
+      `${label} ids=${ids.length}, returned ${meshes.length} mesh(es), ` +
+      `totalTriangles=${totalTris}, perMesh=${JSON.stringify(perMesh)}, ` +
+      `ifcModelInScene=${scene.children.includes(this.ifcModel)}, ` +
+      `ifcModelInPickable=${pickable.indexOf(this.ifcModel) >= 0}, ` +
+      `visualElementsIdsLength=${this.visualElementsIds.length}, ` +
+      `hiddenIdsLength=${this.hiddenIds.length}`)
   }
 
   /**

@@ -463,6 +463,74 @@ describe('viewer/three/IfcIsolator', () => {
       }
     })
 
+
+    /**
+     * Count triangles across a subset (single Mesh or Mesh[]).
+     *
+     * @param {object} iso
+     * @param {Mesh|Mesh[]|null} subset
+     * @return {number}
+     */
+    function countTriangles(iso, subset) {
+      const meshes = iso._subsetMeshes(subset)
+      let total = 0
+      for (const m of meshes) {
+        const idx = m.geometry?.getIndex?.()
+        if (idx) {
+          total += idx.count / 3
+        }
+      }
+      return total
+    }
+
+
+    it('hide subset CONTAINS the to-be-shown elements (not the hidden one)', () => {
+      // Content-level regression gate. The earlier "H acts like
+      // isolate" report turned out to be the cache-hit Group case:
+      // subsets stayed under the detached Group and rendered as
+      // nothing; the only thing visible was the selection overlay
+      // on the would-be-hidden element, mimicking isolation. This
+      // test counts triangles in the subset to confirm the SHOWN
+      // elements are present — not just that the subset is in the
+      // scene tree.
+      //
+      // Fixture: 3 parents [100, 200, 300] × 1 tri each across two
+      // child Meshes (childMesh1 owns 100+200, childMesh2 owns 300).
+      // Hide 100 → subset must contain 2 tris (200 + 300), NOT 1
+      // (which would mean it contained only 100, i.e. the inverse).
+      const {iso} = setupIsolatorWithModel()
+      iso.hiddenIds = [100]
+      const toBeShown = iso.visualElementsIds.filter((e) => !iso.hiddenIds.includes(e))
+      iso.initHideOperationsSubset(toBeShown)
+      expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
+    })
+
+
+    it('hide subset triangle count matches toBeShown.length × tris-per-parent', () => {
+      // 3 parents, 1 tri each → total 3.
+      // Hide 1, expect 2 tris.
+      // Hide 2, expect 1 tri.
+      // Hide 3 (all), expect 0 tris.
+      const {iso} = setupIsolatorWithModel()
+      for (const hidden of [[100], [100, 200], [100, 200, 300]]) {
+        iso.hiddenIds = hidden
+        const toBeShown = iso.visualElementsIds.filter((e) => !hidden.includes(e))
+        iso.initHideOperationsSubset(toBeShown)
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(toBeShown.length)
+      }
+    })
+
+
+    it('isolate subset CONTAINS the isolated elements only', () => {
+      // Symmetric check for isolate — must contain JUST the isolated
+      // element(s).
+      const {iso} = setupIsolatorWithModel()
+      iso.initTemporaryIsolationSubset([100])
+      expect(countTriangles(iso, iso.isolationSubset)).toBe(1)
+      iso.initTemporaryIsolationSubset([100, 200])
+      expect(countTriangles(iso, iso.isolationSubset)).toBe(2)
+    })
+
     it('reveal subsets attach to the scene root (not the detached Group)', () => {
       const {scene, iso} = setupIsolatorWithModel()
       // Enter hide mode first so the reveal has something to render.
