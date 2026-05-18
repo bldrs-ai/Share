@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement} from 'react'
 import {ButtonGroup, Stack} from '@mui/material'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
@@ -12,7 +12,23 @@ import {
 
 
 /**
- * ElementsControl contains tools for controlling element visibility
+ * ElementsControl contains tools for controlling element visibility.
+ *
+ * State sources. Pre-2026-05 this component tracked `isIsolate` and
+ * `isHidden` in React local state, mutated only by its own button
+ * clicks. That drifted out of sync any time the isolator changed
+ * state through another path — keyboard shortcuts (I/H/U/R via
+ * `setKeydownListeners`), the per-element Hide/Unhide icon in the
+ * nav tree, programmatic isolator calls, etc. — leaving the user
+ * with no way to exit isolation when the Isolate button's gating
+ * `selectedElement !== null` had become false (e.g. after pressing
+ * `Esc` mid-isolation).
+ *
+ * The store's `isTempIsolationModeOn` and `hiddenElements` are
+ * already the single source of truth — the isolator writes them
+ * directly. This component now reads them and lets button
+ * visibility follow the real state. See
+ * design/new/viewer-replacement.md §3b.iii open items.
  *
  * @property {Function} deselectItems deselects currently selected element
  * @return {ReactElement}
@@ -20,15 +36,14 @@ import {
 export default function ElementsControl({deselectItems}) {
   const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
-  const [isIsolate, setIsIsolate] = useState(false)
-  const [isHidden, setIsHidden] = useState(false)
-
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null
-    )
-    return ifSelected
-  }
+  const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
+  const hiddenElements = useStore((state) => state.hiddenElements)
+  const isSelected = selectedElement !== null
+  // `hiddenElements` is a sparse map keyed by expressID with `true`
+  // for currently-hidden, `false` for explicitly-unhidden, missing
+  // for never-touched. `unHideAllElements` resets to `{}`. Show the
+  // "Show all" button whenever any entry is currently `true`.
+  const hasHidden = Object.values(hiddenElements).some(Boolean)
 
 
   return (
@@ -40,47 +55,72 @@ export default function ElementsControl({deselectItems}) {
       data-testid='element-group'
     >
       <ButtonGroup orientation='horizontal' variant='controls'>
-        {!isIsolate && <CutPlaneMenu/>}
+        {/*
+         * Cut plane stays hidden during isolation — its clipping
+         * planes would interact poorly with the isolation subset
+         * (which replaces the model's geometry slot).
+         */}
+        {!isTempIsolationModeOn && <CutPlaneMenu/>}
 
-        {isSelected() && selectedElement !== null &&
+        {/*
+         * Isolate toggle. Visible whenever there's something to
+         * isolate (a selection) OR we're currently isolated —
+         * critical for the "always have a way to exit isolation"
+         * invariant. Without the `|| isTempIsolationModeOn` clause,
+         * deselecting mid-isolation strands the user with no UI
+         * affordance to leave isolation mode.
+         */}
+        {(isSelected || isTempIsolationModeOn) &&
          <TooltipIconButton
            title='Isolate'
-           onClick={() => {
-             viewer.isolator.toggleIsolationMode()
-             setIsIsolate(!isIsolate)
-           }}
+           onClick={() => viewer.isolator.toggleIsolationMode()}
            icon={<FilterCenterFocusIcon className='icon-share'/>}
            placement='top'
            variant='solid'
-           selected={isIsolate}
+           selected={isTempIsolationModeOn}
          />}
 
-        {isHidden && !isIsolate &&
+        {/*
+         * Show all. The isolator's `unHideAllElements` guards on
+         * `tempIsolationModeOn` (no-op during isolation — the
+         * unhide path goes through `resetTempIsolation`'s
+         * hiddenIds-aware branch). Match that guard here so the
+         * button isn't a dead click during isolation; users exit
+         * isolation first, then unhide.
+         */}
+        {hasHidden && !isTempIsolationModeOn &&
           <TooltipIconButton
             title='Show all'
-            onClick={() => {
-              viewer.isolator.unHideAllElements()
-              setIsHidden(false)
-            }}
+            onClick={() => viewer.isolator.unHideAllElements()}
             icon={<VisibilityOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
           />}
 
-        {isSelected() && !isIsolate &&
+        {/*
+         * Hide. Same isolation guard as `hideSelectedElements`
+         * (`if (this.tempIsolationModeOn) return`) — don't surface
+         * a button that no-ops.
+         */}
+        {isSelected && !isTempIsolationModeOn &&
          <TooltipIconButton
            title='Hide'
-           onClick={() => {
-             viewer.isolator.hideSelectedElements()
-             setIsHidden(true)
-           }}
+           onClick={() => viewer.isolator.hideSelectedElements()}
            icon={<HideSourceOutlinedIcon className='icon-share'/>}
            placement='top'
            variant='solid'
-           selected={isIsolate}
          />}
 
-        {isSelected() && !isIsolate &&
+        {/*
+         * Clear. Always available when something's selected,
+         * including during isolation — deselecting mid-isolation is
+         * a valid step (e.g., when the user wants to use Esc /
+         * shortcut to clear before picking the next element), and
+         * the Isolate button stays visible through the
+         * `|| isTempIsolationModeOn` clause above so the user can
+         * still exit.
+         */}
+        {isSelected &&
          <TooltipIconButton
            title='Clear'
            onClick={deselectItems}
