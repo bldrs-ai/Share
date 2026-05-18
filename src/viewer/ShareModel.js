@@ -220,6 +220,38 @@ export function inferModelCapabilities(model, opts = {}) {
 
 
 /**
+ * Normalise a Mesh's `material` field to a flat array regardless of
+ * underlying shape. Three.js Meshes accept either a single material
+ * or an array (with `geometry.groups[]` binding triangle ranges to
+ * material indices); both shapes co-exist across the codebase:
+ *
+ *   - `web-ifc-three.IFCModel` is always an array (one per Conway
+ *     PlacedGeometry colour bin, IFCLoader.js:182).
+ *   - `flatMeshToBufferGeometry` post-Conway-swap is also an array
+ *     (one per colour bin — see installConwayDirectGeometry).
+ *   - GLB cache-hit child Meshes (one Mesh per glTF primitive /
+ *     material group) carry a single material each.
+ *   - Markers, SVGs, helper meshes carry a single material.
+ *
+ * Call-sites that want to iterate all materials (e.g. for disposal,
+ * clip-plane assignment, depthTest toggle) use this helper to avoid
+ * branching on the underlying type. Returns an empty array when the
+ * mesh has no material — same shape as the union of "single null
+ * material" and "empty material array" cases, so callers don't need
+ * a separate null guard.
+ *
+ * @param {object|null|undefined} mesh any Three.js Object3D
+ * @return {Array<object>} materials (zero, one, or many)
+ */
+export function getMeshMaterials(mesh) {
+  if (!mesh || !mesh.material) {
+    return []
+  }
+  return Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+}
+
+
+/**
  * Capability lookup that gracefully tolerates the pre-decoration window
  * (loaders mutate the model after construction; some early call-sites can
  * fire before the decorator runs).

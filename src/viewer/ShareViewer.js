@@ -1,5 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {ColorManagement, LinearSRGBColorSpace} from 'three'
+import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import IfcHighlighter from './three/IfcHighlighter'
@@ -8,6 +8,25 @@ import CustomPostProcessor from './three/CustomPostProcessor'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
+
+
+// Minimum index-buffer capacity for the preselection pool. 256 u32
+// entries ≈ 85 triangles — covers the vast majority of single-
+// PlacedGeometry instances without growing the buffer on first hover.
+const MIN_PRESELECTION_INDEX_CAP = 256
+
+
+/**
+ * @param {number} n
+ * @return {number} smallest power of 2 ≥ n.
+ */
+function nextPow2(n) {
+  let p = 1
+  while (p < n) {
+    p <<= 1
+  }
+  return p
+}
 import {areDefinedAndNotNull} from '../utils/assert'
 
 
@@ -490,61 +509,172 @@ export class ShareViewer extends IfcViewerAPI {
    *      `setHighlighted([subset])` — replacing would clobber the
    *      selection-level highlights.
    *
-   * The tracker slot is necessary because `addToHighlighting` doesn't
-   * auto-clean: a fresh subset Mesh is built every hover, so without
-   * pruning the previous one the OutlineEffect's selection set grows
-   * unboundedly across mouse moves. `_clearConwayPreselectionSubsets`
-   * removes the prior subset from both the scene tree and the
-   * highlighter's selection set before we install the new one.
+   * **Pooling.** A naïve implementation allocates a fresh
+   * `BufferGeometry` + `Uint32Array` + `Mesh` per call, which at
+   * interactive mouse-move rates on big models (Snowdon, 25k+
+   * PlacedGeometries) makes hover visibly stutter from GC pressure.
+   * Instead we keep a single `Mesh` alive in `_conwayPreselectionPool`
+   * and update its index buffer in place:
+   *
+   *   - Index buffer grows on demand to the largest instance seen so
+   *     far (rounded to a power of two so we don't re-allocate on
+   *     every adjacent instance click).
+   *   - Vertex attributes are reassigned per hover (cheap reference
+   *     copy) so the pool can serve any child Mesh on a cache-hit
+   *     multi-Mesh model.
+   *   - Parent re-attach only happens when the hovered Mesh's parent
+   *     actually changed (within one child Mesh this is a no-op).
+   *   - `addToHighlighting` is called once per show; subsequent
+   *     hovers leave the pool in the OutlineEffect's selection set.
+   *   - Hide path sets `mesh.visible = false` and prunes the
+   *     highlighter; nothing is disposed, so the next hover skips
+   *     allocation entirely in steady state.
+   *
+   * The pool object is initialised lazily on first hover so models
+   * that never engage `instancePicking` pay nothing.
    *
    * @param {object} pickedMesh the Mesh under the cursor
    * @param {number} faceIndex triangle index from the raycaster hit
    * @private
    */
   _setConwayPreselectionFromHit(pickedMesh, faceIndex) {
-    this._clearConwayPreselectionSubsets()
     if (!pickedMesh?.instanceMap) {
+      this._clearConwayPreselectionSubsets()
       return
     }
     const instanceId = pickedMesh.instanceMap.getInstanceIdByTriangle(faceIndex)
     if (instanceId === null) {
+      this._clearConwayPreselectionSubsets()
       return
     }
-    const subset = pickedMesh.instanceMap.createSubsetMeshByInstance([instanceId], {
-      material: this.IFC.selector?.preselection?.material,
-    })
-    if (!subset) {
+    const tris = pickedMesh.instanceMap.instanceIdToTriangleIndices.get(instanceId)
+    if (!tris || tris.length === 0) {
+      this._clearConwayPreselectionSubsets()
       return
     }
+    const srcGeom = pickedMesh.geometry
+    const srcIndex = srcGeom?.getIndex()
+    if (!srcGeom || !srcIndex) {
+      this._clearConwayPreselectionSubsets()
+      return
+    }
+    const srcIndexArr = srcIndex.array
+    const needed = tris.length * 3
+
+    const pool = this._ensureConwayPreselectionPool(needed)
+
+    // Fill the index buffer in place. Writing past `needed` is
+    // harmless since `setDrawRange` below caps the rendered count.
+    const dstArr = pool.indexArray
+    let w = 0
+    for (let i = 0; i < tris.length; i++) {
+      const t = tris[i]
+      const base = t * 3
+      dstArr[w++] = srcIndexArr[base]
+      dstArr[w++] = srcIndexArr[base + 1]
+      dstArr[w++] = srcIndexArr[base + 2]
+    }
+    pool.indexAttribute.needsUpdate = true
+
+    // Reassign vertex attributes from the source. Cheap reference
+    // copies — the underlying typed arrays are already on the GPU,
+    // so this doesn't trigger re-upload. Only iterates when the
+    // source actually changed (cache-hit multi-Mesh hover moves
+    // between primitives).
+    if (pool.attributeSource !== srcGeom) {
+      const dstGeom = pool.geometry
+      for (const name of Object.keys(srcGeom.attributes)) {
+        dstGeom.setAttribute(name, srcGeom.attributes[name])
+      }
+      pool.attributeSource = srcGeom
+    }
+
+    pool.geometry.setDrawRange(0, needed)
+
+    // Re-parent only when the hovered Mesh's parent changed. Avoids
+    // scene-graph churn while hovering within one child Mesh.
     const parent = pickedMesh.parent ?? this.context.getScene()
-    parent.add(subset)
-    subset.userData.sourceMesh = pickedMesh
-    this.highlighter.addToHighlighting(subset)
-    this._conwayPreselectionSubsets = [subset]
+    if (pool.mesh.parent !== parent) {
+      pool.mesh.removeFromParent()
+      parent.add(pool.mesh)
+    }
+    pool.mesh.userData.sourceMesh = pickedMesh
+    pool.mesh.visible = true
+
+    if (!pool.inHighlighter) {
+      this.highlighter.addToHighlighting(pool.mesh)
+      pool.inHighlighter = true
+    }
   }
 
 
   /**
-   * Remove the tracked Conway-direct preselection subset(s) from
-   * scene + highlighter. Called at the top of each new hover (to
-   * replace) and on mouse-leave-all (to clear).
+   * Lazy-init / grow the preselection mesh pool. Returns the live
+   * pool object. Called by `_setConwayPreselectionFromHit` immediately
+   * before each fill; the `neededIndexLen` arg drives the growth
+   * policy (round-up to a power of 2 keeps reallocs sparse across a
+   * model's normal range of instance triangle counts).
+   *
+   * @param {number} neededIndexLen
+   * @return {object} the pool — `{mesh, geometry, indexArray, indexAttribute, inHighlighter, attributeSource}`
+   * @private
+   */
+  _ensureConwayPreselectionPool(neededIndexLen) {
+    let pool = this._conwayPreselectionPool
+    if (!pool) {
+      const geometry = new BufferGeometry()
+      const mesh = new Mesh(geometry, this.IFC.selector?.preselection?.material ?? null)
+      // The pool sits in the scene tree once a hover lands it there.
+      // Without raycast-invisible the pool would compete with source
+      // meshes for picks (it's geometrically coplanar with whichever
+      // instance it's currently visualising).
+      mesh.raycast = () => {/* raycast-invisible — see IfcInstanceMap subset */}
+      mesh.visible = false
+      mesh.userData.isConwayPreselectionPool = true
+      pool = {
+        mesh,
+        geometry,
+        indexArray: null,
+        indexAttribute: null,
+        attributeSource: null,
+        inHighlighter: false,
+      }
+      this._conwayPreselectionPool = pool
+    }
+    // Grow if needed. Round up to the next power of 2 so adjacent
+    // hovers of slightly-different instance sizes reuse the same
+    // buffer without reallocation.
+    if (!pool.indexArray || pool.indexArray.length < neededIndexLen) {
+      const cap = nextPow2(Math.max(neededIndexLen, MIN_PRESELECTION_INDEX_CAP))
+      pool.indexArray = new Uint32Array(cap)
+      pool.indexAttribute = new BufferAttribute(pool.indexArray, 1)
+      pool.geometry.setIndex(pool.indexAttribute)
+    }
+    return pool
+  }
+
+
+  /**
+   * Hide the preselection pool. Sets `mesh.visible = false`, prunes
+   * the highlighter, leaves the pool's GPU buffers alone so the next
+   * hover is allocation-free. Idempotent.
+   *
+   * Named `_clearConwayPreselectionSubsets` (plural) for symmetry
+   * with the older pluggable-tracker callers — kept stable so the
+   * `_clearPreselectionForAllModels` site doesn't need to change.
    *
    * @private
    */
   _clearConwayPreselectionSubsets() {
-    if (!this._conwayPreselectionSubsets || this._conwayPreselectionSubsets.length === 0) {
-      this._conwayPreselectionSubsets = []
+    const pool = this._conwayPreselectionPool
+    if (!pool) {
       return
     }
-    for (const m of this._conwayPreselectionSubsets) {
-      this.highlighter.removeFromHighlighting(m)
-      m.removeFromParent()
-      const subsetGeom = m.geometry
-      if (subsetGeom && subsetGeom !== m.userData.sourceMesh?.geometry) {
-        subsetGeom.dispose?.()
-      }
+    if (pool.inHighlighter) {
+      this.highlighter.removeFromHighlighting(pool.mesh)
+      pool.inHighlighter = false
     }
-    this._conwayPreselectionSubsets = []
+    pool.mesh.visible = false
   }
 
 

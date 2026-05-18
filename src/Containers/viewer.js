@@ -1,4 +1,5 @@
 import {Color} from 'three'
+import {getMeshMaterials} from '../viewer/ShareModel'
 import {ShareViewer} from '../viewer/ShareViewer'
 
 
@@ -59,8 +60,8 @@ export function disposeViewer() {
       if (obj.geometry) {
         obj.geometry.dispose()
       }
-      if (obj.material) {
-        const materials = Array.isArray(obj.material) ? obj.material : [obj.material]
+      const materials = getMeshMaterials(obj)
+      if (materials.length > 0) {
         materials.forEach((mat) => {
           TEXTURE_MAP_SLOTS.forEach((slot) => {
             if (mat[slot]) {

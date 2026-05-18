@@ -127,7 +127,7 @@ function makeViewerLike() {
   const viewer = Object.create(ShareViewer.prototype)
   Object.assign(viewer, {
     _conwaySelectionSubsets: [],
-    _conwayPreselectionSubsets: [],
+    _conwayPreselectionPool: null,
     context: {getScene: () => scene},
     highlighter,
     IFC: {selector: {selection: {material: null}, preselection: {material: null}}},
@@ -248,7 +248,7 @@ describe('viewer/ShareViewer Conway-direct selection helpers', () => {
   })
 
 
-  describe('_setConwayPreselectionFromHit', () => {
+  describe('_setConwayPreselectionFromHit (pooled)', () => {
     it('builds a single-instance subset from the picked Mesh\'s map and adds to highlighting', () => {
       const viewer = makeViewerLike()
       const m0 = makeTaggedMesh(3, 100) // 3 instances under parent 100
@@ -257,70 +257,156 @@ describe('viewer/ShareViewer Conway-direct selection helpers', () => {
       // Hover at faceIndex=1 → instance 1 (the second triangle).
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 1)
 
-      expect(viewer._conwayPreselectionSubsets.length).toBe(1)
-      const subset = viewer._conwayPreselectionSubsets[0]
-      // Subset covers exactly one triangle — instance 1.
-      expect(subset.geometry.getIndex().count).toBe(3)
-      expect(subset.parent).toBe(viewer._scene) // parented under source's parent
-      expect(viewer.highlighter.addToHighlighting).toHaveBeenCalledWith(subset)
+      const pool = viewer._conwayPreselectionPool
+      expect(pool).not.toBeNull()
+      expect(pool.mesh.visible).toBe(true)
+      // Subset covers exactly one triangle — instance 1. The index
+      // buffer's capacity may be larger (rounded up); the *rendered*
+      // count comes from setDrawRange.
+      expect(pool.geometry.drawRange.count).toBe(3)
+      expect(pool.mesh.parent).toBe(viewer._scene)
+      expect(viewer.highlighter.addToHighlighting).toHaveBeenCalledWith(pool.mesh)
+      expect(pool.inHighlighter).toBe(true)
     })
 
-    it('clears previous preselection before installing new (no leak across hovers)', () => {
+    it('reuses the same pool across hovers (allocation-free in steady state)', () => {
+      // The motivating perf fix: hovering at interactive rates over a
+      // big model previously allocated a fresh Mesh + BufferGeometry
+      // + Uint32Array per move. The pool keeps one Mesh alive and
+      // updates the index buffer in place.
       const viewer = makeViewerLike()
       const m0 = makeTaggedMesh(3, 100)
       viewer._scene.add(m0)
 
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
-      const first = viewer._conwayPreselectionSubsets[0]
+      const firstMesh = viewer._conwayPreselectionPool.mesh
+      const firstIndexArr = viewer._conwayPreselectionPool.indexArray
 
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 2)
-      const second = viewer._conwayPreselectionSubsets[0]
+      const secondMesh = viewer._conwayPreselectionPool.mesh
+      const secondIndexArr = viewer._conwayPreselectionPool.indexArray
 
-      expect(first).not.toBe(second)
-      expect(first.parent).toBeNull() // first removed from scene
-      // First also pruned from highlighter (the leak prevention).
-      expect(viewer.highlighter.removeFromHighlighting).toHaveBeenCalledWith(first)
+      // Same Mesh + same backing index array — pool reused.
+      expect(secondMesh).toBe(firstMesh)
+      expect(secondIndexArr).toBe(firstIndexArr)
+      // Highlighter saw exactly one add — the pool stays in the set
+      // across hovers (no remove + re-add churn).
+      expect(viewer.highlighter.addToHighlighting).toHaveBeenCalledTimes(1)
+      expect(viewer.highlighter.removeFromHighlighting).not.toHaveBeenCalled()
     })
 
-    it('picked mesh without instanceMap → no-op', () => {
+    it('grows the index buffer to fit a larger instance, but only when needed', () => {
+      const viewer = makeViewerLike()
+      // Make an instance with enough triangles that the first
+      // allocation (rounded up to MIN_PRESELECTION_INDEX_CAP=256
+      // via nextPow2) will need to grow.
+      const m0 = makeTaggedMesh(200, 100) // 200 instances of 1 tri each
+      viewer._scene.add(m0)
+
+      // First hover: tiny instance, default cap.
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
+      const initialCap = viewer._conwayPreselectionPool.indexArray.length
+
+      // For makeTaggedMesh, each instance has only 1 triangle (3
+      // indices), well below the default 256 cap. So no growth.
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 199)
+      expect(viewer._conwayPreselectionPool.indexArray.length).toBe(initialCap)
+    })
+
+    it('reparents only when the hovered Mesh\'s parent actually changed', () => {
+      // Cache-hit multi-Mesh case: hovering within ONE child Mesh
+      // should not churn the scene tree.
+      const viewer = makeViewerLike()
+      const m0 = makeTaggedMesh(5, 100)
+      viewer._scene.add(m0)
+
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
+      const pool = viewer._conwayPreselectionPool
+      const initialParent = pool.mesh.parent
+      const initialChildCount = initialParent.children.length
+
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 3)
+      // Still parented under the same node, no remove + add cycle.
+      expect(pool.mesh.parent).toBe(initialParent)
+      expect(initialParent.children.length).toBe(initialChildCount)
+    })
+
+    it('reassigns vertex attributes when hovering across source meshes (cache-hit multi-mesh)', () => {
+      // Cache-hit GLB has N child Meshes (one per material primitive).
+      // Hovering moves between them; pool's geometry attrs need to
+      // point at whichever source is hovered.
+      const viewer = makeViewerLike()
+      const m0 = makeTaggedMesh(2, 100)
+      const m1 = makeTaggedMesh(2, 200)
+      viewer._scene.add(m0)
+      viewer._scene.add(m1)
+
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
+      const pool = viewer._conwayPreselectionPool
+      expect(pool.geometry.getAttribute('position')).toBe(m0.geometry.getAttribute('position'))
+
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m1, 0)
+      expect(pool.geometry.getAttribute('position')).toBe(m1.geometry.getAttribute('position'))
+    })
+
+    it('picked mesh without instanceMap → hides the pool (idempotent if not yet shown)', () => {
       const viewer = makeViewerLike()
       const m0 = new Mesh(new BufferGeometry())
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
-      expect(viewer._conwayPreselectionSubsets).toEqual([])
+      expect(viewer._conwayPreselectionPool).toBeNull()
       expect(viewer.highlighter.addToHighlighting).not.toHaveBeenCalled()
     })
 
-    it('out-of-range faceIndex → no-op', () => {
+    it('out-of-range faceIndex → hides the pool', () => {
       const viewer = makeViewerLike()
       const m0 = makeTaggedMesh(2, 100)
+      // Show first so the pool exists.
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
+      expect(viewer._conwayPreselectionPool.mesh.visible).toBe(true)
+      // Then hover an invalid face.
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 999)
-      expect(viewer._conwayPreselectionSubsets).toEqual([])
-      expect(viewer.highlighter.addToHighlighting).not.toHaveBeenCalled()
+      expect(viewer._conwayPreselectionPool.mesh.visible).toBe(false)
+      expect(viewer.highlighter.removeFromHighlighting)
+        .toHaveBeenCalledWith(viewer._conwayPreselectionPool.mesh)
     })
   })
 
 
-  describe('_clearConwayPreselectionSubsets', () => {
-    it('removes from highlighter, scene, and disposes geometry', () => {
+  describe('_clearConwayPreselectionSubsets (pooled)', () => {
+    it('hides the pool mesh and prunes it from the highlighter without disposing', () => {
       const viewer = makeViewerLike()
       const m0 = makeTaggedMesh(2, 100)
       viewer._scene.add(m0)
       ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
-      const subset = viewer._conwayPreselectionSubsets[0]
-      const disposeSpy = jest.spyOn(subset.geometry, 'dispose')
+      const pool = viewer._conwayPreselectionPool
+      const disposeSpy = jest.spyOn(pool.geometry, 'dispose')
 
       ShareViewer.prototype._clearConwayPreselectionSubsets.call(viewer)
 
-      expect(subset.parent).toBeNull()
-      expect(disposeSpy).toHaveBeenCalled()
-      expect(viewer.highlighter.removeFromHighlighting).toHaveBeenCalledWith(subset)
-      expect(viewer._conwayPreselectionSubsets).toEqual([])
+      // Pool stays alive (re-used on next hover), just hidden.
+      expect(viewer._conwayPreselectionPool).toBe(pool)
+      expect(pool.mesh.visible).toBe(false)
+      expect(pool.inHighlighter).toBe(false)
+      expect(viewer.highlighter.removeFromHighlighting).toHaveBeenCalledWith(pool.mesh)
+      // No dispose — that's the whole point of the pool.
+      expect(disposeSpy).not.toHaveBeenCalled()
     })
 
-    it('safe to call on empty slot', () => {
+    it('safe to call before any hover (pool not yet initialised)', () => {
       const viewer = makeViewerLike()
       expect(() => ShareViewer.prototype._clearConwayPreselectionSubsets.call(viewer))
         .not.toThrow()
+      expect(viewer.highlighter.removeFromHighlighting).not.toHaveBeenCalled()
+    })
+
+    it('safe to call twice in a row (idempotent)', () => {
+      const viewer = makeViewerLike()
+      const m0 = makeTaggedMesh(2, 100)
+      ShareViewer.prototype._setConwayPreselectionFromHit.call(viewer, m0, 0)
+      ShareViewer.prototype._clearConwayPreselectionSubsets.call(viewer)
+      ShareViewer.prototype._clearConwayPreselectionSubsets.call(viewer)
+      // Only one removeFromHighlighting call.
+      expect(viewer.highlighter.removeFromHighlighting).toHaveBeenCalledTimes(1)
     })
   })
 })

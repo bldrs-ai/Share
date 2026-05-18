@@ -1262,7 +1262,13 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
  *
  * @param {object} ifcAPI Conway-compatible IfcAPI
  * @param {object} ifcModel freshly-parsed web-ifc-three Mesh; its
- *   `geometry` is REPLACED in place
+ *   `geometry` is REPLACED in place. `ifcModel.material` is also
+ *   replaced with an *array* (one MeshLambertMaterial per Conway
+ *   PlacedGeometry color bin, paired with `geometry.groups[]`) —
+ *   same shape `web-ifc-three.IFCModel` natively produces
+ *   (IFCLoader.js:182), so downstream code that already handles
+ *   array-or-single materials (see `getMeshMaterials` in ShareModel.js)
+ *   keeps working without change.
  * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
  */
 function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {

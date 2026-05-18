@@ -1,7 +1,8 @@
-import {BufferAttribute, BufferGeometry, Group, Mesh, Object3D} from 'three'
+import {BufferAttribute, BufferGeometry, Group, Mesh, MeshBasicMaterial, Object3D} from 'three'
 import {
   capabilitiesForFormat,
   decorateShareModel,
+  getMeshMaterials,
   inferModelCapabilities,
   modelHasCapability,
   modelHasUnstructuredMeshClipper,
@@ -201,6 +202,36 @@ describe('viewer/ShareModel', () => {
       expect(modelHasUnstructuredMeshClipper(null)).toBe(false)
       expect(modelHasUnstructuredMeshClipper(undefined)).toBe(false)
       expect(modelHasUnstructuredMeshClipper(new Object3D())).toBe(false)
+    })
+  })
+
+
+  describe('getMeshMaterials', () => {
+    it('wraps a single material in a length-1 array', () => {
+      const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial())
+      const mats = getMeshMaterials(mesh)
+      expect(mats.length).toBe(1)
+      expect(mats[0]).toBe(mesh.material)
+    })
+
+    it('returns the array as-is when material is already an array', () => {
+      const a = new MeshBasicMaterial()
+      const b = new MeshBasicMaterial()
+      const mesh = new Mesh(new BufferGeometry(), [a, b])
+      const mats = getMeshMaterials(mesh)
+      expect(mats).toEqual([a, b])
+    })
+
+    it('returns empty array when mesh has no material', () => {
+      const mesh = new Mesh(new BufferGeometry(), null)
+      expect(getMeshMaterials(mesh)).toEqual([])
+    })
+
+    it('safe on null / undefined / non-mesh inputs', () => {
+      expect(getMeshMaterials(null)).toEqual([])
+      expect(getMeshMaterials(undefined)).toEqual([])
+      expect(getMeshMaterials({})).toEqual([])
+      expect(getMeshMaterials(new Object3D())).toEqual([])
     })
   })
 })
