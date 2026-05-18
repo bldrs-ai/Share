@@ -378,6 +378,40 @@ export async function load(
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
+  // Restore IfcInstanceMap on cache-hit Conway-direct models. The
+  // GLB write captured per-vertex `instanceID` alongside `expressID`;
+  // `inferModelCapabilities` flipped `instancePicking` when both are
+  // present. Build the map from geometry attributes (same path
+  // post-BVH-reorder uses on cache-miss — instanceMapFromGeometry
+  // works on any BufferGeometry carrying the two attributes,
+  // regardless of how it got there). Attach to the first Mesh that
+  // has the attributes, and surface a reference at the model root
+  // so call-sites that read `model.instanceMap` (ShareViewer's
+  // setSelection branch) find it without traversing.
+  //
+  // Skip when an instanceMap is already attached — the Conway-direct
+  // cache-miss path attaches one directly during the parse swap;
+  // this block is only for cache-hit restoration.
+  if (model.capabilities.instancePicking && !model.instanceMap) {
+    let attached = null
+    model.traverse((obj) => {
+      if (attached) {
+        return
+      }
+      if (obj.isMesh && obj.geometry?.attributes?.instanceID?.count > 1) {
+        const map = instanceMapFromGeometry(obj.geometry)
+        obj.instanceMap = map
+        attached = map
+      }
+    })
+    if (attached) {
+      model.instanceMap = attached
+      glbInfo(
+        `reader: restored IfcInstanceMap — ${attached.instanceCount} instances ` +
+        `under ${attached.parentCount} IFC products`)
+    }
+  }
+
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
   // Triggered for every source kind (github, local, upload, external)
@@ -491,6 +525,15 @@ export function convertToShareModel(model, viewer) {
   // level picking is restored on cache-hit models. See
   // design/new/glb-model-sharing.md §"Picking granularity".
   let foundPreservedExpressId = false
+  // Same trip for the Conway-direct path's per-vertex `instanceID`
+  // attribute (synthetic IfcInstanceMap instance per-PlacedGeometry).
+  // Written by GLTFExporter as `_INSTANCEID`, returned by GLTFLoader as
+  // `_instanceid`. Rename back so `inferModelCapabilities` can flip
+  // `instancePicking` on and `instanceMapFromGeometry` can derive the
+  // map from per-vertex attributes — no custom glTF extension needed,
+  // three.js's auto-renaming carries the data through verbatim. See
+  // design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+  let foundPreservedInstanceId = false
 
   /**
    * Recursively visit the model and its children to add `expressID` and
@@ -524,6 +567,26 @@ export function convertToShareModel(model, viewer) {
         // eslint-disable-next-line no-empty-function
         expressIdAttr.onUpload(() => {})
         obj3d.geometry.attributes.expressID = expressIdAttr
+      }
+      // Independent restore of the per-vertex `instanceID` attribute.
+      // The Conway-direct path emits this alongside `expressID`;
+      // GLTFExporter serialises it as `_INSTANCEID` (custom attr →
+      // `_`-prefixed, uppercase), GLTFLoader returns it as
+      // `_instanceid`. Promote back so `inferModelCapabilities` can
+      // flip `instancePicking` on and `instanceMapFromGeometry` (run
+      // by the cache-hit decoration block in `Loader#load`) can
+      // reconstruct the full IfcInstanceMap from per-vertex data
+      // alone — no custom glTF extension needed. A cache-hit GLB
+      // carrying both `expressID` and `instanceID` was originated
+      // under the Conway-direct path; one carrying only `expressID`
+      // came from a pre-Conway-direct parse. Same reader handles
+      // both; capability inference decides which features apply.
+      // See design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+      const preservedInst = obj3d.geometry.attributes._instanceid
+      if (preservedInst && preservedInst.count > 1) {
+        obj3d.geometry.setAttribute('instanceID', preservedInst)
+        delete obj3d.geometry.attributes._instanceid
+        foundPreservedInstanceId = true
       }
     }
     // Only set the mesh-level `obj3d.expressID` serial when the geometry
@@ -576,6 +639,9 @@ export function convertToShareModel(model, viewer) {
     }
   } else {
     glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
+  }
+  if (foundPreservedInstanceId) {
+    glbInfo('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType

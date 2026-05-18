@@ -189,14 +189,31 @@ export function inferModelCapabilities(model, opts = {}) {
     return caps
   }
   const attrName = opts.attrName ?? 'expressID'
+  const instAttrName = opts.instanceAttrName ?? 'instanceID'
   let hasPerVertexElementIds = false
+  let hasPerVertexInstanceIds = false
   model.traverse((obj) => {
-    if (obj.isMesh && obj.geometry?.attributes?.[attrName]?.count > 1) {
+    if (!obj.isMesh || !obj.geometry?.attributes) {
+      return
+    }
+    if (obj.geometry.attributes[attrName]?.count > 1) {
       hasPerVertexElementIds = true
+    }
+    if (obj.geometry.attributes[instAttrName]?.count > 1) {
+      hasPerVertexInstanceIds = true
     }
   })
   if (hasPerVertexElementIds) {
     caps.expressIdPicking = true
+  }
+  // Per-vertex `instanceID` only appears on cache-hit GLBs that were
+  // originated under the Conway-direct path (the assembler emits this
+  // attribute alongside expressID; GLTFExporter's auto-rename carries
+  // it through). When present, the model supports per-instance picking
+  // via `IfcInstanceMap` — Loader.js's cache-hit decoration block
+  // builds the map from this attribute and attaches it.
+  if (hasPerVertexInstanceIds) {
+    caps.instancePicking = true
   }
   return caps
 }

@@ -220,13 +220,25 @@ both `expressID` and `instanceID` per-vertex attributes so picking
 can resolve to whichever granularity the caller asks for via the
 items map / instance map respectively.
 
-**For the GLB cache:** persist `triangleIndexToInstanceId` plus the
-`instanceIdToParentExpressId` resolver as a Bldrs glTF extension
-(provisional name `BLDRS_per_triangle_instance_ids`). On cache-hit
-load, restore both side tables and skip Conway entirely. The
-per-vertex `expressID` attribute can be dropped from the cache
-once readers depend on the per-triangle table — saves ~4 bytes ×
-N_vertices.
+**For the GLB cache:** done — no custom extension required, the
+Conway-direct path's per-vertex `instanceID` attribute travels
+through the cache automatically. GLTFExporter renames custom
+attributes to `_UPPERCASE` on write (so `instanceID` →
+`_INSTANCEID`), GLTFLoader returns them lowercased on read
+(`_instanceid`). `Loader.js#convertToShareModel` renames back to
+`instanceID`, mirroring the long-standing `expressID` round-trip.
+`inferModelCapabilities` flips `instancePicking` when both
+attributes are present; `instanceMapFromGeometry` rebuilds the
+full `IfcInstanceMap` from per-vertex data alone, no triangle-
+keyed side table needed in the cache.
+
+This dropped the originally-planned `BLDRS_per_triangle_instance_ids`
+extension entirely. Custom glTF extensions are still the right
+shape if/when we want to drop one of the per-vertex attributes
+from the cache (saves ~4 bytes × N_vertices), but the value
+density of an extra two integers per vertex is low enough that
+the simpler "just write the attribute" path stays the default
+for now.
 
 **Initial implementation lives in `src/viewer/ifc/IfcItemsMap.js`** (test
 phase). The class holds the two tables; three populators feed it:

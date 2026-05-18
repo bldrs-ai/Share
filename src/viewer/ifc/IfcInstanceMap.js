@@ -45,10 +45,12 @@ import {
  * the index list anyway so consumers can mix-and-match instances
  * across parents without range arithmetic.
  *
- * Source-agnostic by design: populators below today walk Conway
- * FlatMeshes; future populators can restore from GLB cache side
- * tables, etc. The consumer surface (`createSubsetMeshByInstance`,
- * `createSubsetMeshByParent`) is stable across sources.
+ * Source-agnostic by design: three populators below cover the
+ * production cases — Conway FlatMesh stream (cache-miss),
+ * pre-built emission-order range list (assembler hand-off), and
+ * BufferGeometry per-vertex attributes (cache-hit GLB + post-BVH
+ * rebuild). The consumer surface (`createSubsetMeshByInstance`,
+ * `createSubsetMeshByParent`) is stable across all three.
  */
 
 

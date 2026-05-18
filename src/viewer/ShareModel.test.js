@@ -138,6 +138,49 @@ describe('viewer/ShareModel', () => {
       expect(inferModelCapabilities(null)).toEqual({})
       expect(inferModelCapabilities({})).toEqual({})
     })
+
+    /**
+     * Build a mesh with both `expressID` and `instanceID` per-vertex
+     * attributes — the shape a cache-hit GLB carries after the
+     * Conway-direct round-trip.
+     *
+     * @param {number} [count]
+     * @return {Mesh}
+     */
+    function makeMeshWithBothIdAttrs(count = 3) {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Int32Array(count), 1))
+      geom.setAttribute('instanceID', new BufferAttribute(new Int32Array(count), 1))
+      return new Mesh(geom)
+    }
+
+    it('promotes instancePicking when per-vertex instanceID is present', () => {
+      const root = new Group()
+      root.add(makeMeshWithBothIdAttrs())
+      const caps = inferModelCapabilities(root)
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.instancePicking).toBe(true)
+    })
+
+    it('leaves instancePicking off when only expressID is present', () => {
+      // Today's pre-Conway-direct GLB cache shape. Element-level
+      // picking works (createSubset via attachElementSubsets); per-
+      // instance picking does not.
+      const caps = inferModelCapabilities(makeMeshWithIdAttr('expressID', 5))
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.instancePicking).toBeUndefined()
+    })
+
+    it('leaves instancePicking off on a single-vertex (count===1) attribute', () => {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(3), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Int32Array(1), 1))
+      geom.setAttribute('instanceID', new BufferAttribute(new Int32Array(1), 1))
+      const caps = inferModelCapabilities(new Mesh(geom))
+      expect(caps.expressIdPicking).toBeUndefined()
+      expect(caps.instancePicking).toBeUndefined()
+    })
   })
 
   describe('modelHasUnstructuredMeshClipper', () => {
