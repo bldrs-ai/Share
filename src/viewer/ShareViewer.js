@@ -268,6 +268,7 @@ export class ShareViewer extends IfcViewerAPI {
     }
     if (toBeSelected.length === 0) {
       this.highlighter.setHighlighted(null)
+      this._clearConwaySelectionSubsets()
       if (modelHasCapability(model, 'ifcSubsets')) {
         this.IFC.selector.unpickIfcItems()
       } else if (typeof model.removeSubset === 'function') {
@@ -277,22 +278,27 @@ export class ShareViewer extends IfcViewerAPI {
     }
     try {
       debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
-      if (modelHasCapability(model, 'instancePicking') && model.instanceMap) {
-        // Conway-direct path: build the highlight from IfcInstanceMap.
-        // Parent-level subset — every PlacedGeometry instance of each
-        // requested IFC product. The `setInstanceSelection` method
-        // overrides this with a one-instance subset when the click
-        // handler also set `selectedInstanceIds`, but the parent-level
-        // mesh produced here is the right default (e.g. nav-tree
+      if (modelHasCapability(model, 'instancePicking')) {
+        // Conway-direct path: build the highlight from per-Mesh
+        // IfcInstanceMaps. Parent-level subset — every PlacedGeometry
+        // instance of each requested IFC product across every child
+        // Mesh. The `setInstanceSelection` method called afterwards
+        // by the click handler overrides this with a one-instance
+        // subset when `selectedInstanceIds` is non-empty; the parent-
+        // level mesh produced here is the right default (nav-tree
         // selection, search-result selection, Shift-click).
-        const subsetMesh = model.instanceMap.createSubsetMeshByParent(toBeSelected, {
-          material: this.IFC.selector?.selection?.material,
-        })
-        if (subsetMesh) {
-          this.highlighter.setHighlighted([subsetMesh])
-        } else {
-          this.highlighter.setHighlighted(null)
-        }
+        //
+        // Traversal handles both cache-miss (single Mesh = ifcModel)
+        // and cache-hit (Group containing N child Meshes per material
+        // group); each Mesh's instanceMap is built against its own
+        // geometry, so subsets are constructed per-mesh too. The
+        // parented-into-scene step is what makes the translucent x-ray
+        // overlay actually render — OutlineEffect alone only draws
+        // edges.
+        this._setConwaySelectionFromModel(model, (mesh) =>
+          mesh.instanceMap.createSubsetMeshByParent(toBeSelected, {
+            material: this.IFC.selector?.selection?.material,
+          }))
       } else if (modelHasCapability(model, 'ifcSubsets')) {
         // Real-IFC path: web-ifc-three holds the parser state needed
         // by createSubset / SubsetCreator.
@@ -368,19 +374,88 @@ export class ShareViewer extends IfcViewerAPI {
       // method.
       return
     }
-    const instanceMap = model.instanceMap
-    if (!instanceMap) {
-      debug().warn('setInstanceSelection: model has instancePicking but no instanceMap')
-      return
-    }
-    const subsetMesh = instanceMap.createSubsetMeshByInstance(instanceIds, {
-      material: this.IFC.selector?.selection?.material,
+    // Traverse per-Mesh instanceMaps. Cache-miss is the degenerate
+    // single-Mesh case; cache-hit has N child Meshes per material
+    // group, instance IDs are globally unique across them
+    // (GLTFExporter preserves attribute values verbatim through the
+    // split) so we just build a subset from every Mesh whose map
+    // covers any of the requested instance IDs.
+    this._setConwaySelectionFromModel(model, (mesh) =>
+      mesh.instanceMap.createSubsetMeshByInstance(instanceIds, {
+        material: this.IFC.selector?.selection?.material,
+      }))
+  }
+
+
+  /**
+   * Traverse a Conway-direct model, build a subset Mesh from every
+   * child Mesh's `instanceMap` via `buildSubset(mesh)`, parent each
+   * subset under the corresponding source mesh's parent (so the
+   * subset inherits the model's world transform), track the set so
+   * the next selection can remove them, and install the array as the
+   * highlighter's selection. Empty array → highlight cleared.
+   *
+   * Parenting matters: the highlighter's OutlineEffect only draws
+   * edges; the translucent x-ray fill comes from the subset Mesh
+   * actually being in the scene tree (rendered as a regular Mesh
+   * with the selection material's `transparent + opacity`). Without
+   * this step, clicks update selection state but no overlay shows.
+   *
+   * Mirrors what `attachElementSubsets`'s `createSubset` does for the
+   * legacy per-vertex GLB-cache path (elementSubsets.js:329) — same
+   * parent-under-source-parent dance + customID slot management,
+   * specialised here to the Conway-direct call site instead of being
+   * attached as a model method (we don't replace `model.createSubset`
+   * because the isolator binds to web-ifc-three's stock version).
+   *
+   * @param {object} model top-level Object3D (may itself be a Mesh)
+   * @param {Function} buildSubset
+   *   `mesh` → Mesh|null. Returns the subset Mesh for this child, or
+   *   null when the child contributes nothing to the selection.
+   * @private
+   */
+  _setConwaySelectionFromModel(model, buildSubset) {
+    this._clearConwaySelectionSubsets()
+    const subsets = []
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.instanceMap) {
+        return
+      }
+      const subset = buildSubset(obj)
+      if (!subset) {
+        return
+      }
+      const parent = obj.parent ?? this.context.getScene()
+      parent.add(subset)
+      subset.userData.sourceMesh = obj
+      subsets.push(subset)
     })
-    if (!subsetMesh) {
-      this.highlighter.setHighlighted(null)
+    this._conwaySelectionSubsets = subsets
+    this.highlighter.setHighlighted(subsets.length > 0 ? subsets : null)
+  }
+
+
+  /**
+   * Remove the tracked Conway-direct selection subsets from their
+   * parents and dispose their per-subset index buffers. Vertex
+   * attribute buffers are shared with the source meshes — never
+   * disposed here.
+   *
+   * @private
+   */
+  _clearConwaySelectionSubsets() {
+    if (!this._conwaySelectionSubsets || this._conwaySelectionSubsets.length === 0) {
+      this._conwaySelectionSubsets = []
       return
     }
-    this.highlighter.setHighlighted([subsetMesh])
+    for (const m of this._conwaySelectionSubsets) {
+      m.removeFromParent()
+      const subsetGeom = m.geometry
+      if (subsetGeom && subsetGeom !== m.userData.sourceMesh?.geometry) {
+        subsetGeom.dispose?.()
+      }
+    }
+    this._conwaySelectionSubsets = []
   }
 
 

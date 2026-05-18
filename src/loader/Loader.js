@@ -378,37 +378,55 @@ export async function load(
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
-  // Restore IfcInstanceMap on cache-hit Conway-direct models. The
-  // GLB write captured per-vertex `instanceID` alongside `expressID`;
-  // `inferModelCapabilities` flipped `instancePicking` when both are
-  // present. Build the map from geometry attributes (same path
-  // post-BVH-reorder uses on cache-miss — instanceMapFromGeometry
-  // works on any BufferGeometry carrying the two attributes,
-  // regardless of how it got there). Attach to the first Mesh that
-  // has the attributes, and surface a reference at the model root
-  // so call-sites that read `model.instanceMap` (ShareViewer's
-  // setSelection branch) find it without traversing.
+  // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
+  // models. The GLB write captured per-vertex `instanceID` alongside
+  // `expressID`; `inferModelCapabilities` flipped `instancePicking`
+  // when both are present. Build a map per child Mesh from its own
+  // geometry attributes.
   //
-  // Skip when an instanceMap is already attached — the Conway-direct
-  // cache-miss path attaches one directly during the parse swap;
-  // this block is only for cache-hit restoration.
-  if (model.capabilities.instancePicking && !model.instanceMap) {
-    let attached = null
+  // Why per-mesh, not single: GLTFExporter splits one indexed mesh
+  // into N primitives — one per `geometry.groups[]` entry — and
+  // duplicates shared vertices. So the cache-write turn this:
+  //   ifcModel (1 Mesh, geometry with M material groups, V verts)
+  // into this:
+  //   Group containing M child Meshes, each with its own vertex
+  //   subset + its own index buffer. Total V_cache ≈ V × avg_share_factor.
+  //
+  // On read, each child Mesh has its own copy of `expressID` +
+  // `instanceID` per-vertex; the instance IDs are globally unique
+  // across the meshes (GLTFExporter doesn't renumber attributes when
+  // splitting). So one IfcInstanceMap per child Mesh, attached as
+  // `mesh.instanceMap`, is the right shape. ShareViewer.setSelection
+  // and setInstanceSelection traverse the model and build subsets
+  // from each map. (Cache-miss is the degenerate single-Mesh case:
+  // `ifcModel` is itself the Mesh, traversal visits one node, same
+  // code path produces the same result.)
+  //
+  // Skip when a mesh already has an instanceMap attached — the
+  // Conway-direct cache-miss path attaches one directly during the
+  // parse swap; this block is only for cache-hit restoration.
+  if (model.capabilities.instancePicking) {
+    let attached = 0
+    let totalInstances = 0
+    const allParents = new Set()
     model.traverse((obj) => {
-      if (attached) {
+      if (!obj.isMesh || obj.instanceMap) {
         return
       }
-      if (obj.isMesh && obj.geometry?.attributes?.instanceID?.count > 1) {
+      if (obj.geometry?.attributes?.instanceID?.count > 1) {
         const map = instanceMapFromGeometry(obj.geometry)
         obj.instanceMap = map
-        attached = map
+        attached++
+        totalInstances += map.instanceCount
+        for (const pid of map.parentExpressIdToInstanceIds.keys()) {
+          allParents.add(pid)
+        }
       }
     })
-    if (attached) {
-      model.instanceMap = attached
+    if (attached > 0) {
       glbInfo(
-        `reader: restored IfcInstanceMap — ${attached.instanceCount} instances ` +
-        `under ${attached.parentCount} IFC products`)
+        `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
+        `${totalInstances} instances under ${allParents.size} IFC products`)
     }
   }
 
