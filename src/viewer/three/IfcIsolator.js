@@ -287,6 +287,19 @@ export default class IfcIsolator {
       this.viewer.IFC.selector.selection.unpick()
       this.viewer.IFC.selector.preselection.unpick()
     }
+    // Conway-direct: also clear the hover preselection pool. It
+    // lives on ShareViewer (not the IFC selector), tracks the last-
+    // hovered instance, and stays visible at its last position until
+    // the next mousemove. After hide / isolate, the user's cursor
+    // hasn't moved — so the pool is still showing the just-clicked
+    // element. Since selection click also focuses the camera on that
+    // element, the pool overlay ends up being the only thing on
+    // screen, masking the actual subset render (which is correct but
+    // at other parts of the model that are now off-camera). Clear
+    // the pool here so the subset is what the user actually sees.
+    if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
+      this.viewer._clearPreselectionForAllModels()
+    }
     this.unhiddenSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
@@ -315,6 +328,13 @@ export default class IfcIsolator {
    */
   initTemporaryIsolationSubset(includedIds) {
     this._removeSubsetFromScene(this.ifcModel)
+    // Same hover-pool cleanup reasoning as in `initHideOperationsSubset`.
+    // For isolate this matters less visually (the pool's last-hovered
+    // element typically IS the isolated one, so it's redundant rather
+    // than wrong), but keeping the two paths symmetric avoids drift.
+    if (typeof this.viewer._clearPreselectionForAllModels === 'function') {
+      this.viewer._clearPreselectionForAllModels()
+    }
     this.isolationSubset = this.ifcModel.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
@@ -368,6 +388,78 @@ export default class IfcIsolator {
       `ifcModelInPickable=${pickable.indexOf(this.ifcModel) >= 0}, ` +
       `visualElementsIdsLength=${this.visualElementsIds.length}, ` +
       `hiddenIdsLength=${this.hiddenIds.length}`)
+    // Per-mesh dive into the instanceMap + actual rendered triangle
+    // positions. Catches the "data path looks right but renders only
+    // the selected element" surface: if the map only has ONE parent
+    // entry (instead of N), createSubsetMeshByParent collects only
+    // that parent's instances no matter what `ids` is, and the
+    // resulting subset renders just that one element. The position
+    // sample distinguishes "subset is wrong" (positions all near the
+    // selected element) from "subset is right" (positions spread
+    // across the model bbox).
+    this._diagSourceMeshes(label, ids)
+  }
+
+
+  /**
+   * Walk the ifcModel and log each source Mesh's instanceMap stats
+   * plus a small position sample from the would-be subset.
+   *
+   * @param {string} label
+   * @param {Array<number>} ids the parent expressIDs the caller passed
+   * @private
+   */
+  _diagSourceMeshes(label, ids) {
+    if (!this.ifcModel || typeof this.ifcModel.traverse !== 'function') {
+      return
+    }
+    const idSet = new Set(ids)
+    let meshIdx = 0
+    this.ifcModel.traverse((obj) => {
+      if (!obj.isMesh || !obj.instanceMap) {
+        return
+      }
+      const map = obj.instanceMap
+      const matchingPids = []
+      for (const pid of idSet) {
+        if (map.parentExpressIdToInstanceIds.has(pid)) {
+          matchingPids.push(pid)
+        }
+      }
+      // For each matching parent, find a sample triangle and dump its
+      // 3 vertex positions. If positions are clustered ~one element's
+      // size, the map is mis-mapping; if spread across the model,
+      // the map is right and the bug is rendering.
+      const posAttr = obj.geometry?.getAttribute?.('position')
+      const sampleParents = matchingPids.slice(0, 3)
+      const samples = sampleParents.map((pid) => {
+        const instIds = map.parentExpressIdToInstanceIds.get(pid)
+        if (!instIds || instIds.length === 0) {
+          return {pid, sample: 'no instances'}
+        }
+        const inst = instIds[0]
+        const tris = map.instanceIdToTriangleIndices.get(inst)
+        if (!tris || tris.length === 0) {
+          return {pid, sample: 'no triangles'}
+        }
+        const t = tris[0]
+        const idxArr = obj.geometry.getIndex().array
+        const v0 = idxArr[t * 3]
+        const pos = [
+          posAttr?.getX?.(v0)?.toFixed(2),
+          posAttr?.getY?.(v0)?.toFixed(2),
+          posAttr?.getZ?.(v0)?.toFixed(2),
+        ]
+        return {pid, inst, t, v0, pos}
+      })
+      console.warn(
+        `${label} mesh[${meshIdx}] (${obj.name || 'anon'}): ` +
+        `parentCount=${map.parentCount}, instanceCount=${map.instanceCount}, ` +
+        `triangleCount=${map.triangleCount}, ` +
+        `requestedIds=${ids.length}, matchingInMap=${matchingPids.length}, ` +
+        `samples=${JSON.stringify(samples)}`)
+      meshIdx++
+    })
   }
 
   /**
