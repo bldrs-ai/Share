@@ -35,9 +35,14 @@ export const SITE_LOCALE = 'en_US'
 export const OG_IMAGE = `${SITE_URL}/og-default.png`
 
 export const SOCIAL = {
-  github: 'https://github.com/bldrs-ai/Share',
+  github: 'https://github.com/bldrs-ai',
+  githubShare: 'https://github.com/bldrs-ai/Share',
   discord: 'https://discord.gg/9SxguBkFfQ',
+  linkedin: 'https://www.linkedin.com/company/bldrs-ai',
+  twitter: 'https://twitter.com/bldrs_ai',
   contact: 'mailto:info@bldrs.ai',
+  sales: 'mailto:hello@bldrs.ai',
+  services: 'mailto:services@bldrs.ai',
 } as const
 
 /** Where the viewer SPA lives. Marketing pages link here for "Launch app". */
@@ -46,5 +51,7 @@ export const VIEWER_PATH = '/share'
 /** Top-of-site navigation. The marketing site owns these paths. */
 export const NAV_ITEMS: ReadonlyArray<{label: string; path: string}> = [
   {label: 'About', path: '/about'},
+  {label: 'Pricing', path: '/pricing'},
+  {label: 'Services', path: '/services'},
   {label: 'Blog', path: '/blog'},
 ]

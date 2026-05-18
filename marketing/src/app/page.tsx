@@ -4,7 +4,8 @@ import {Box, Button, Container, Stack, Typography} from '@mui/material'
 import RocketIcon from '@mui/icons-material/Rocket'
 import SiteNav from '@/components/SiteNav'
 import SiteFooter from '@/components/SiteFooter'
-import {SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, VIEWER_PATH} from '@/lib/site'
+import {SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE} from '@/lib/site'
+import {CYAN, LIME, LIME_HOVER} from '@/lib/theme'
 
 
 export const metadata: Metadata = {
@@ -20,26 +21,26 @@ export default function HomePage() {
       <SiteNav/>
 
       <Box
-        component="section"
+        component="main"
         sx={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           background:
             'radial-gradient(60% 50% at 50% 0%, rgba(0,240,255,0.08) 0%, transparent 70%), ' +
-            'linear-gradient(180deg, rgba(160,255,0,0.04) 0%, transparent 60%)',
+            'linear-gradient(180deg, rgba(0,255,0,0.04) 0%, transparent 60%)',
         }}
       >
         <Container maxWidth="md" sx={{textAlign: 'center', py: {xs: 8, md: 14}}}>
           <Typography
             variant="overline"
-            sx={{color: 'primary.main', fontWeight: 700, letterSpacing: 2, fontSize: '0.85rem'}}
+            sx={{color: LIME, fontSize: '0.85rem', display: 'block', textTransform: 'uppercase', mb: 2}}
           >
             {SITE_TAGLINE}
           </Typography>
-          <Typography variant="h1" component="h1" sx={{mt: 2, mb: 3}}>
-            BIM &amp; CAD collaboration{' '}
-            <Box component="span" sx={{color: 'secondary.main'}}>in the browser</Box>.
+          <Typography variant="h1" component="h1" sx={{mb: 3}}>
+            Tomorrow&apos;s innovations won&apos;t start with a drawing.{' '}
+            <Box component="span" sx={{color: CYAN}}>They will start with a prompt.</Box>
           </Typography>
           <Typography
             variant="body1"
@@ -55,21 +56,22 @@ export default function HomePage() {
           >
             <Button
               component="a"
-              href={VIEWER_PATH}
+              href="/share"
               variant="contained"
               size="large"
               startIcon={<RocketIcon/>}
+              sx={{bgcolor: LIME, color: '#000', fontWeight: 700, px: 4, py: 1.5, fontSize: '1.1rem', '&:hover': {bgcolor: LIME_HOVER}}}
             >
-              Launch the viewer
+              Launch the Viewer
             </Button>
             <Button
               component={Link}
               href="/about"
               variant="outlined"
               size="large"
-              sx={{borderColor: 'divider', color: 'text.primary'}}
+              sx={{borderColor: 'rgba(255,255,255,0.3)', color: 'inherit', fontWeight: 600, px: 4, py: 1.5, fontSize: '1.1rem', '&:hover': {borderColor: CYAN, color: CYAN}}}
             >
-              Read about Bldrs
+              Learn More
             </Button>
           </Stack>
         </Container>

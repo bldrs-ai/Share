@@ -20,7 +20,9 @@ import {
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import RocketIcon from '@mui/icons-material/Rocket'
+import LogoB from './LogoB'
 import {NAV_ITEMS, SITE_NAME, VIEWER_PATH} from '@/lib/site'
+import {LIME, LIME_HOVER} from '@/lib/theme'
 
 
 /**
@@ -43,26 +45,33 @@ export default function SiteNav() {
       position="sticky"
       elevation={0}
       sx={{
-        bgcolor: 'rgba(10,10,10,0.85)',
-        backdropFilter: 'blur(12px)',
+        bgcolor: '#000000',
+        color: '#ffffff',
         borderBottom: 1,
         borderColor: 'divider',
       }}
     >
       <Toolbar sx={{justifyContent: 'space-between', gap: 2}}>
-        <Typography
+        <Stack
           component={Link}
           href="/"
-          variant="h6"
-          sx={{
-            color: 'inherit',
-            textDecoration: 'none',
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-          }}
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{color: 'inherit', textDecoration: 'none'}}
         >
-          {SITE_NAME}
-        </Typography>
+          <LogoB sx={{width: 36, height: 36}}/>
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              display: {xs: 'none', sm: 'block'},
+            }}
+          >
+            {SITE_NAME.toLowerCase()}
+          </Typography>
+        </Stack>
 
         {isMobile ? (
           <>
@@ -89,7 +98,10 @@ export default function SiteNav() {
                         onClick={() => setDrawerOpen(false)}
                         selected={isActive(item.path)}
                       >
-                        <ListItemText primary={item.label}/>
+                        <ListItemText
+                          primary={item.label}
+                          primaryTypographyProps={isActive(item.path) ? {color: LIME, fontWeight: 700} : undefined}
+                        />
                       </ListItemButton>
                     </ListItem>
                   ))}
@@ -100,7 +112,7 @@ export default function SiteNav() {
                       onClick={() => setDrawerOpen(false)}
                     >
                       <ListItemText
-                        primary="Launch app"
+                        primary="Launch App"
                         primaryTypographyProps={{color: 'primary', fontWeight: 700}}
                       />
                     </ListItemButton>
@@ -117,8 +129,10 @@ export default function SiteNav() {
                 component={Link}
                 href={item.path}
                 sx={{
-                  color: isActive(item.path) ? 'primary.main' : 'inherit',
-                  fontWeight: isActive(item.path) ? 700 : 500,
+                  color: isActive(item.path) ? LIME : 'inherit',
+                  fontWeight: isActive(item.path) ? 700 : 400,
+                  fontSize: '0.95rem',
+                  '&:hover': {color: LIME},
                 }}
               >
                 {item.label}
@@ -129,9 +143,15 @@ export default function SiteNav() {
               href={VIEWER_PATH}
               variant="contained"
               startIcon={<RocketIcon/>}
-              sx={{ml: 2}}
+              sx={{
+                ml: 2,
+                bgcolor: LIME,
+                color: '#000',
+                fontWeight: 700,
+                '&:hover': {bgcolor: LIME_HOVER},
+              }}
             >
-              Launch app
+              Launch App
             </Button>
           </Stack>
         )}
