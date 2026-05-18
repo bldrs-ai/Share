@@ -124,6 +124,44 @@ Use dash-separated, converted from CamelCase:
 - **Use @return**: Instead of @returns
 - **Tag lines**: Allow flexible tag line formatting
 
+## Comments
+
+We write comments. **Don't default to no comments** — a well-placed
+paragraph saves a future reader (or AI assistant) twenty minutes of
+git-blame archaeology. The bar for *what* to comment is:
+
+- **Load-bearing context.** Why this code looks the way it does
+  given a constraint that isn't visible at the call site — e.g. an
+  upstream API quirk, an ordering requirement, a workaround for a
+  library bug, a performance reason for an unusual approach.
+- **Non-obvious assumptions.** What this code expects to be true
+  about its callers, the data, or the environment. Document it
+  where it matters — a deleted assumption check leaves no scar.
+- **Important context.** Why a thing exists, what problem it
+  solves, what the alternatives were and why they were rejected.
+  Especially valuable for non-trivial design choices (e.g.
+  "Option A: per-instance default; Shift expands to whole element"
+  — the rationale lives in the comment, not just the commit).
+- **Sequence / coordination.** When ordering between calls matters
+  (e.g. "must run after BVH compute, before subset construction"),
+  say so at the seam.
+- **Cross-file references.** When understanding this code requires
+  reading another file or design doc, name it
+  (`design/new/viewer-replacement.md §3b.ii`).
+
+What NOT to comment:
+
+- **Restating what well-named code already says.** `// increment
+  counter` next to `counter++` is noise.
+- **Stale change-history.** "Used to do X, now does Y" belongs in
+  git blame, not in the source.
+- **TODOs without context.** A bare `// TODO: fix this` rots. If
+  it's worth writing, say what "fix" means and what blocks it.
+
+JSDoc on exported / public API stays mandatory (it's lint-enforced).
+Inline comments are about *non-obvious reasoning*, not the code's
+mechanical action.
+
 ## Accessibility (a11y)
 - **Follow jsx-a11y**: All recommended accessibility rules
 - **Semantic HTML**: Use proper HTML elements

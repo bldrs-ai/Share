@@ -1,4 +1,5 @@
 import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere} from 'three'
+import {getMeshMaterials} from '../viewer/ShareModel'
 import debug from '../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 
@@ -194,8 +195,8 @@ export default class GlbClipper {
     const clippingPlanes = this.planes.map((pd) => pd.plane)
 
     const setClipping = (node) => {
-      if (node.material) {
-        const materials = Array.isArray(node.material) ? node.material : [node.material]
+      const materials = getMeshMaterials(node)
+      if (materials.length > 0) {
         materials.forEach((mat) => {
           mat.clippingPlanes = clippingPlanes
           mat.clipIntersection = false
@@ -225,8 +226,8 @@ export default class GlbClipper {
     }
 
     const clearClipping = (node) => {
-      if (node.material) {
-        const materials = Array.isArray(node.material) ? node.material : [node.material]
+      const materials = getMeshMaterials(node)
+      if (materials.length > 0) {
         materials.forEach((mat) => {
           mat.clippingPlanes = null
           mat.needsUpdate = true

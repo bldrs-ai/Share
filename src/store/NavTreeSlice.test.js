@@ -24,6 +24,8 @@ describe('store/NavTreeSlice', () => {
       expect(state.expandedTypes).toEqual([])
       expect(state.selectedElement).toBeNull()
       expect(state.selectedElements).toEqual([])
+      // selectedInstanceIds — Conway-direct per-instance highlight layer
+      expect(state.selectedInstanceIds).toEqual([])
     })
   })
 
@@ -98,6 +100,27 @@ describe('store/NavTreeSlice', () => {
       store.getState().setSelectedElement({expressID: 1})
       store.getState().setSelectedElement(null)
       expect(store.getState().selectedElement).toBeNull()
+    })
+
+    /* eslint-disable no-magic-numbers */
+    it('setSelectedInstanceIds replaces the list', () => {
+      const store = makeStore()
+      store.getState().setSelectedInstanceIds([7, 11])
+      expect(store.getState().selectedInstanceIds).toEqual([7, 11])
+      store.getState().setSelectedInstanceIds([])
+      expect(store.getState().selectedInstanceIds).toEqual([])
+    })
+    /* eslint-enable no-magic-numbers */
+
+    it('selectedInstanceIds is independent of selectedElements', () => {
+      // Parent IFC expressID + the synthetic per-instance ID can vary
+      // independently — the Conway-direct click sets both, Shift-click
+      // sets only `selectedElements`.
+      const store = makeStore()
+      store.getState().setSelectedElements(['100'])
+      store.getState().setSelectedInstanceIds([3])
+      expect(store.getState().selectedElements).toEqual(['100'])
+      expect(store.getState().selectedInstanceIds).toEqual([3])
     })
   })
 })

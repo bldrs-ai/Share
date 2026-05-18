@@ -1,7 +1,8 @@
-import {BufferAttribute, BufferGeometry, Group, Mesh, Object3D} from 'three'
+import {BufferAttribute, BufferGeometry, Group, Mesh, MeshBasicMaterial, Object3D} from 'three'
 import {
   capabilitiesForFormat,
   decorateShareModel,
+  getMeshMaterials,
   inferModelCapabilities,
   modelHasCapability,
   modelHasUnstructuredMeshClipper,
@@ -17,6 +18,9 @@ describe('viewer/ShareModel', () => {
         spatialStructure: true,
         typedProperties: true,
         ifcSubsets: true,
+        // off by default; Loader's Conway-direct path flips it on after
+        // attaching an IfcInstanceMap.
+        instancePicking: false,
         useIfcClipper: true,
       })
     })
@@ -29,6 +33,7 @@ describe('viewer/ShareModel', () => {
         expect(caps.spatialStructure).toBe(false)
         expect(caps.typedProperties).toBe(false)
         expect(caps.ifcSubsets).toBe(false)
+        expect(caps.instancePicking).toBe(false)
         expect(caps.useIfcClipper).toBe(false)
       },
     )
@@ -134,6 +139,49 @@ describe('viewer/ShareModel', () => {
       expect(inferModelCapabilities(null)).toEqual({})
       expect(inferModelCapabilities({})).toEqual({})
     })
+
+    /**
+     * Build a mesh with both `expressID` and `instanceID` per-vertex
+     * attributes — the shape a cache-hit GLB carries after the
+     * Conway-direct round-trip.
+     *
+     * @param {number} [count]
+     * @return {Mesh}
+     */
+    function makeMeshWithBothIdAttrs(count = 3) {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Int32Array(count), 1))
+      geom.setAttribute('instanceID', new BufferAttribute(new Int32Array(count), 1))
+      return new Mesh(geom)
+    }
+
+    it('promotes instancePicking when per-vertex instanceID is present', () => {
+      const root = new Group()
+      root.add(makeMeshWithBothIdAttrs())
+      const caps = inferModelCapabilities(root)
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.instancePicking).toBe(true)
+    })
+
+    it('leaves instancePicking off when only expressID is present', () => {
+      // Today's pre-Conway-direct GLB cache shape. Element-level
+      // picking works (createSubset via attachElementSubsets); per-
+      // instance picking does not.
+      const caps = inferModelCapabilities(makeMeshWithIdAttr('expressID', 5))
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.instancePicking).toBeUndefined()
+    })
+
+    it('leaves instancePicking off on a single-vertex (count===1) attribute', () => {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(3), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Int32Array(1), 1))
+      geom.setAttribute('instanceID', new BufferAttribute(new Int32Array(1), 1))
+      const caps = inferModelCapabilities(new Mesh(geom))
+      expect(caps.expressIdPicking).toBeUndefined()
+      expect(caps.instancePicking).toBeUndefined()
+    })
   })
 
   describe('modelHasUnstructuredMeshClipper', () => {
@@ -154,6 +202,36 @@ describe('viewer/ShareModel', () => {
       expect(modelHasUnstructuredMeshClipper(null)).toBe(false)
       expect(modelHasUnstructuredMeshClipper(undefined)).toBe(false)
       expect(modelHasUnstructuredMeshClipper(new Object3D())).toBe(false)
+    })
+  })
+
+
+  describe('getMeshMaterials', () => {
+    it('wraps a single material in a length-1 array', () => {
+      const mesh = new Mesh(new BufferGeometry(), new MeshBasicMaterial())
+      const mats = getMeshMaterials(mesh)
+      expect(mats.length).toBe(1)
+      expect(mats[0]).toBe(mesh.material)
+    })
+
+    it('returns the array as-is when material is already an array', () => {
+      const a = new MeshBasicMaterial()
+      const b = new MeshBasicMaterial()
+      const mesh = new Mesh(new BufferGeometry(), [a, b])
+      const mats = getMeshMaterials(mesh)
+      expect(mats).toEqual([a, b])
+    })
+
+    it('returns empty array when mesh has no material', () => {
+      const mesh = new Mesh(new BufferGeometry(), null)
+      expect(getMeshMaterials(mesh)).toEqual([])
+    })
+
+    it('safe on null / undefined / non-mesh inputs', () => {
+      expect(getMeshMaterials(null)).toEqual([])
+      expect(getMeshMaterials(undefined)).toEqual([])
+      expect(getMeshMaterials({})).toEqual([])
+      expect(getMeshMaterials(new Object3D())).toEqual([])
     })
   })
 })

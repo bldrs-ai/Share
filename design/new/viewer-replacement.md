@@ -147,64 +147,195 @@ class IfcModel extends Mesh {
 ```
 Keeping the same `expressID` per-vertex `BufferAttribute` we already set means **no call-site change for `getPickedItemId`** (`mesh.geometry, picked.faceIndex` → expressID). `three-mesh-bvh@^0.7` provides `acceleratedRaycast` and `computeBoundsTree` we can attach for `applyBVH: true` semantics.
 
-#### 3b.ii. The per-vertex attribute is *not* sufficient for per-instance picking
+#### 3b.ii. Per-instance picking — what's actually true (revised)
 
-Surfaced during Phase 2b.2 picking work (#1516, see
-`design/new/glb-model-sharing.md` §"Picking granularity"). The
-conway → `web-ifc-three.IFCLoader` pipeline tags every vertex of
-every placed geometry with `mesh.expressID` (line 226 of
-`web-ifc-three/IFCLoader.js`) — but when an IFC source uses
-`IfcMappedItem` to instance one `IfcRepresentationMap` across
-multiple visible positions, conway's `streamAllMeshes` resolves the
-per-vertex id via `model.getElementByLocalID(geometry.localID)`,
-which is keyed on the *shared geometry's* localID. All visible
-positions of that shared template inherit the **same** expressID at
-the per-vertex level. Empirically observed on Momentum.ifc: 63
-unique per-vertex IDs across 2.1M vertices for a building with
-thousands of distinct elements.
+*This section was rewritten 2026-05 after the
+`ifcItemsMapParity` smoke probe — see `src/loader/Loader.js#runIfcItemsMapParityCheck`.
+The previous text claimed `web-ifc-three.SubsetCreator` held a
+separate "per-instance" `ItemsMap` keyed by real IFC expressID,
+distinct from the per-vertex attribute. That was wrong.
+`web-ifc-three`'s `ItemsMap` (IFCLoader.js:309) is built by reading
+the per-vertex `expressID` attribute (line 367) — both surfaces
+derive from the same Conway emission and have identical granularity.*
 
-The IFC source path doesn't expose this because
-`web-ifc-three.SubsetCreator` builds subsets from a separate
-**per-instance** structure (`state.models[modelID].items` — an
-`ItemsMap` keyed by real IFC expressID, with explicit
-geometry-range entries per element). The per-vertex attribute is
-only used for face-index → expressID resolution at pick time;
-subset construction has its own per-instance source of truth.
+The real story, confirmed empirically across several models:
 
-Implication for §3b.i: `triangleIndexToExpressId` (above) must be
-populated **per-IFC-instance**, *not* by reading the per-vertex
-attribute, even though the per-vertex attribute looks identical in
-shape. Concretely the new `IfcModelService` should:
+**Conway's `StreamAllMeshes` emits one `FlatMesh` per IFC product**
+(`flatMesh.expressID` = the IFC product's expressID, e.g. `IfcWall`,
+`IfcWindow`). Within each FlatMesh, `flatMesh.geometries` is a
+`Vector<PlacedGeometry>` — one entry per visible instance, each
+with its own `flatTransformation` (4×4 placement matrix) and a
+`geometryExpressID` referencing the underlying shape.
 
-1. At parse / load: iterate placed geometries in order. For each
-   placed geometry of IFC element `e`, append `e` to
-   `triangleIndexToExpressId` for every triangle that geometry
-   contributes — **regardless of whether the underlying shape is
-   shared with another element via `IfcMappedItem`**. This mirrors
-   what `web-ifc-three.IfcGeometryStorage` does today; conway's
-   shared-geometry resolution is bypassed at this layer.
-2. Build `expressIdToTriangleIndices` as the inverse.
-3. The per-vertex `expressID` `BufferAttribute` can remain (kept for
-   compatibility with `getExpressId(geometry, faceIndex)`) but
-   **callers must read instance identity from
-   `triangleIndexToExpressId`, not from the vertex attribute**.
-   Specifically `getExpressId(geometry, faceIndex) =
-   triangleIndexToExpressId[faceIndex]`.
+Two distinct sub-cases live under one FlatMesh with multiple
+PlacedGeometries:
 
-For the GLB cache (`design/new/glb-model-sharing.md`): persist
-`triangleIndexToExpressId` as a glTF accessor under a Bldrs
-extension (provisional name `BLDRS_per_triangle_express_ids`). On
-cache-hit load, the reader skips the conway-mediated parse and
-restores `triangleIndexToExpressId` directly. The per-vertex
-attribute can be dropped from the cache once readers depend on the
-per-triangle table — saves ~4 bytes × N_vertices.
+1. **IfcMappedItem instances.** Multiple PlacedGeometries SHARE
+   one `geometryExpressID` and differ only in `flatTransformation`.
+   The IFC source uses `IfcMappedItem` / `IfcRepresentationMap` to
+   instance one shape at many positions. Per-instance picking is
+   the right answer here — each visible placement is logically a
+   distinct selectable element. The per-vertex `expressID`
+   attribute collapses them onto the parent product's id, which
+   is what generates the "click one wall, highlight 42" UX.
 
-Until this lands, cache-hit picking is **granular to
-shared-geometry templates**: clicking any one instance of a
-mapped-item-shared geometry highlights all of them. Phase 2b PRs
-explicitly note this limitation; the data the cache carries today
-cannot support per-instance picking. Source-path picking is
-unaffected.
+2. **Compound representation.** PlacedGeometries have DIFFERENT
+   `geometryExpressID`s — one IFC element's representation is built
+   from multiple distinct geometric primitives (e.g. a window
+   product = frame + glass + handle, three distinct shapes; a wall
+   = N material layers). Per-instance picking would be wrong here:
+   subcomponents are not independently selectable in IFC semantics.
+
+**Empirical mix from the smoke probe** (`?feature=ifcItemsMapParity`):
+
+| Model | Exporter | Multi-placed FlatMeshes | allShared (case 1) | allUnique (case 2) |
+|---|---|---|---|---|
+| Momentum | ArchiCAD | 34 of 63 | 0 | 34 |
+| Schependomlaan | ArchiCAD | 731 of 3505 | 277 | 454 |
+| Snowdon (IFC 2x3) | Revit | 4051 of 6023 | 2284 | 1767 |
+| Snowdon (IFC 4) | Revit | 5034 of 6023 | 2280 | 2754 |
+
+Revit emits `IfcMappedItem` heavily; ArchiCAD's usage varies per
+project. Per-instance picking matters on the case-1 portion of
+the data and is a no-op for case-2.
+
+**Implication for §3b.i.** Two complementary lookup structures
+under one class hierarchy:
+
+- `IfcItemsMap` — per-IFC-product keying. Matches today's
+  `web-ifc-three` semantics. One entry per FlatMesh; subsets
+  highlight every visible position of that product together.
+  Used for "select the wall" workflows.
+- `IfcInstanceMap` — per-PlacedGeometry keying via synthetic
+  instance IDs. One entry per visible position. Resolves back to
+  the parent IFC product via `getParentExpressIdByInstance(id)`.
+  Used for "select this specific visible placement" workflows.
+
+Both are populated from the same Conway `StreamAllMeshes` walk
+(see `src/viewer/ifc/IfcItemsMap.js#itemsMapFromFlatMeshes` and
+`src/viewer/ifc/IfcInstanceMap.js#instanceMapFromFlatMeshes`) — the
+extra cost of building both is one extra typed-array allocation;
+the walk is shared. The `flatMeshToBufferGeometry` assembler emits
+both `expressID` and `instanceID` per-vertex attributes so picking
+can resolve to whichever granularity the caller asks for via the
+items map / instance map respectively.
+
+The cache-side concerns are addressed below in "Cache round-trip" —
+no custom glTF extension was needed; per-vertex `instanceID` rides
+through GLTFExporter's `_UPPERCASE` rename verbatim.
+
+**Live implementation** (behind `?feature=conwayDirectIfc`, on track
+to default-on once the open items in §3b.iii land):
+
+- `src/viewer/ifc/IfcItemsMap.js` — per-IFC-product table. Three
+  populators: per-vertex-attribute (fallback / cache-hit before
+  Conway-direct), ordered-ranges (data-flow), Conway stream walk.
+
+- `src/viewer/ifc/IfcInstanceMap.js` — per-PlacedGeometry table.
+  Three populators mirroring `IfcItemsMap`'s set:
+  - `instanceMapFromOrderedPlacedRanges(ranges, {geometry})` — data-flow
+    populator. Used by the assembler hand-off.
+  - `instanceMapFromGeometry(geometry)` — the BVH-safe + cache-hit
+    populator. Reads the per-vertex `expressID` + `instanceID`
+    attributes and the (possibly BVH-reordered) index buffer to
+    derive all four lookup tables. Lives in two roles: (a)
+    post-`computeBoundsTree()` rebuild on cache-miss because
+    `three-mesh-bvh` permutes the index buffer in place; (b) cache-
+    hit restoration from per-vertex data alone.
+  - `instanceMapFromFlatMeshes(flatMeshes, api, modelID)` — Conway
+    stream walk. Used by the parity probe; not on the live render
+    path (the assembler's data feeds the BVH-safe populator
+    instead).
+
+- `src/viewer/ifc/flatMeshToBufferGeometry.js` — the assembler.
+  Walks captured FlatMeshes, applies `flatTransformation` to
+  positions and normals, bins PlacedGeometries by
+  `PlacedGeometry.color` into contiguous index-buffer groups,
+  emits one `MeshLambertMaterial` per bin (matching
+  `web-ifc-three.IFCParser#storeGeometryByMaterial`'s shape exactly).
+  Returns `{geometry, ranges, materials}`.
+
+- `src/viewer/ifc/buildConwayIfcModel.js` — glue. Combines the
+  assembler + `instanceMapFromOrderedPlacedRanges` into a
+  `{mesh, instanceMap, materials, stats}` bundle.
+
+- `src/loader/Loader.js#installConwayDirectGeometry` — on cache-
+  miss IFC parse, swaps `ifcModel.geometry` / `.material` to the
+  Conway-direct outputs, computes BVH (which reorders the index
+  buffer), then rebuilds the `IfcInstanceMap` via
+  `instanceMapFromGeometry` so the post-reorder triangle indices
+  match the picking map. Flips capabilities (`ifcSubsets: false`,
+  `instancePicking: true`).
+
+- `src/viewer/ShareViewer.js` — selection + preselection routing.
+  When `instancePicking` is set, both `setSelection` (parent-level)
+  and `setInstanceSelection` (one-instance) traverse the model and
+  build subsets via per-Mesh `instanceMap.createSubsetMesh*`. Each
+  subset is parented under the source mesh's parent so the
+  translucent x-ray fill renders, then handed to the OutlineEffect
+  for the edge outline. Hover preselection (`highlightIfcItem`)
+  takes the same path scoped to the picked Mesh only.
+
+- `src/Containers/CadView.jsx` — click handler. When the picked
+  Mesh has an `instanceMap`, resolves the (instanceId, parentExpressId)
+  via `getInstanceIdByTriangle` + `getParentExpressIdByInstance`,
+  writes `selectedElements` = [parentExpressId] and
+  `selectedInstanceIds` = [instanceId] (or `[]` when Shift is held,
+  to expand to whole element). The selection useEffect chains
+  `viewer.setSelection(0, ids)` then
+  `viewer.setInstanceSelection(0, instanceIds)`.
+
+**Cache round-trip** (`?feature=conwayDirectIfc,glb`):
+
+Per-vertex `instanceID` rides through the IFC→GLB→IFC cache
+natively via GLTFExporter's `_UPPERCASE` rename — no custom glTF
+extension needed. The reader side renames `_instanceid` back to
+`instanceID`, `inferModelCapabilities` detects the attribute and
+flips `instancePicking`, the cache-hit decoration block in
+`Loader.js` walks each child Mesh (GLTFExporter splits one indexed
+mesh into N glTF primitives per material group) and attaches a
+per-Mesh `instanceMap` via `instanceMapFromGeometry`. ShareViewer's
+traversal-based subset build naturally handles the multi-Mesh
+shape — instance IDs are globally unique across the splits since
+GLTFExporter preserves attribute values verbatim.
+
+#### 3b.iii. Known limitations + follow-up slices
+
+**Up next — isolate routing.** `IfcIsolator.initHideOperationsSubset`
+(and the temporary-isolation / revealed-elements counterparts at
+`src/viewer/three/IfcIsolator.js:125,148,303`) calls
+`this.ifcModel.createSubset(...)` expecting `web-ifc-three.SubsetCreator`'s
+single-Mesh return against the *original* geometry. We swapped the
+geometry but left `createSubset` bound — so hide/isolate operations
+on `conwayDirectIfc` models either render against the wrong vertices
+or crash. The fix is to route isolator subset construction through
+the same `IfcInstanceMap.createSubsetMeshByParent` path the
+selection / hover code already uses. Design choice: do we keep
+`model.createSubset` as the single boundary (returns `Mesh[]` for
+the per-vertex / Conway paths, `Mesh` for wit-three) and adapt
+the isolator's three call sites, or add a parallel
+`model.createIsolatorSubset` that returns the legacy single-Mesh
+shape? The first is cleaner; the second is less surgical. This
+gates **default-on** for `conwayDirectIfc`.
+
+**Other open items:**
+
+- **Cmd/Ctrl for multi-select** on `instancePicking` models.
+  Shift now means "expand to whole IFC element" (Option A from
+  the per-instance UX choice — confirmed). The legacy "Shift =
+  add to selection" semantic gets pushed off Shift; Cmd/Ctrl is
+  the obvious slot. Not urgent — multi-select isn't on the hot
+  IFC workflow path — but worth picking up alongside the
+  isolate-routing slice while the click handler is open.
+
+- **Hover preselection pooling.** `_setConwayPreselectionFromHit`
+  reuses a single pooled subset Mesh to keep mouse-move costs
+  flat; the same optimisation could apply to selection (clicks
+  are rare so impact is lower) and could be lifted into a
+  general SubsetPool the isolator + clipper consume too.
+
+**Default-on gating:** isolate routing first; everything else can
+ship behind the flag and turn on with a separate decision.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

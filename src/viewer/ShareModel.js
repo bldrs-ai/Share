@@ -45,6 +45,12 @@
  *     True when `model.createSubset({ids, material, customID})` is a
  *     meaningful operation. This is what IfcIsolator needs for Hide /
  *     Isolate / Reveal-hidden. Today: IFC/STEP only.
+ * @property {boolean} instancePicking
+ *     True when the model carries an `IfcInstanceMap` and per-instance
+ *     selection (one visible PlacedGeometry, not the whole IFC product)
+ *     is meaningful. Set by Loader.js when the Conway-direct build
+ *     (`?feature=conwayDirectIfc`) replaces the rendered geometry; the
+ *     map lives on `model.instanceMap`.
  * @property {boolean} useIfcClipper
  *     True when the legacy `viewer.clipper` (web-ifc clipper, tied to
  *     `pickableIfcModels`) is the right cut-plane implementation. False
@@ -69,6 +75,9 @@ export function capabilitiesForFormat(format) {
       spatialStructure: true,
       typedProperties: true,
       ifcSubsets: true,
+      // Off by default; Loader.js flips it on for the Conway-direct path
+      // (after substituting geometry + attaching IfcInstanceMap).
+      instancePicking: false,
       useIfcClipper: true,
     }
   }
@@ -92,6 +101,7 @@ function allOffCaps() {
     spatialStructure: false,
     typedProperties: false,
     ifcSubsets: false,
+    instancePicking: false,
     useIfcClipper: false,
   }
 }
@@ -179,16 +189,65 @@ export function inferModelCapabilities(model, opts = {}) {
     return caps
   }
   const attrName = opts.attrName ?? 'expressID'
+  const instAttrName = opts.instanceAttrName ?? 'instanceID'
   let hasPerVertexElementIds = false
+  let hasPerVertexInstanceIds = false
   model.traverse((obj) => {
-    if (obj.isMesh && obj.geometry?.attributes?.[attrName]?.count > 1) {
+    if (!obj.isMesh || !obj.geometry?.attributes) {
+      return
+    }
+    if (obj.geometry.attributes[attrName]?.count > 1) {
       hasPerVertexElementIds = true
+    }
+    if (obj.geometry.attributes[instAttrName]?.count > 1) {
+      hasPerVertexInstanceIds = true
     }
   })
   if (hasPerVertexElementIds) {
     caps.expressIdPicking = true
   }
+  // Per-vertex `instanceID` only appears on cache-hit GLBs that were
+  // originated under the Conway-direct path (the assembler emits this
+  // attribute alongside expressID; GLTFExporter's auto-rename carries
+  // it through). When present, the model supports per-instance picking
+  // via `IfcInstanceMap` — Loader.js's cache-hit decoration block
+  // builds the map from this attribute and attaches it.
+  if (hasPerVertexInstanceIds) {
+    caps.instancePicking = true
+  }
   return caps
+}
+
+
+/**
+ * Normalise a Mesh's `material` field to a flat array regardless of
+ * underlying shape. Three.js Meshes accept either a single material
+ * or an array (with `geometry.groups[]` binding triangle ranges to
+ * material indices); both shapes co-exist across the codebase:
+ *
+ *   - `web-ifc-three.IFCModel` is always an array (one per Conway
+ *     PlacedGeometry colour bin, IFCLoader.js:182).
+ *   - `flatMeshToBufferGeometry` post-Conway-swap is also an array
+ *     (one per colour bin — see installConwayDirectGeometry).
+ *   - GLB cache-hit child Meshes (one Mesh per glTF primitive /
+ *     material group) carry a single material each.
+ *   - Markers, SVGs, helper meshes carry a single material.
+ *
+ * Call-sites that want to iterate all materials (e.g. for disposal,
+ * clip-plane assignment, depthTest toggle) use this helper to avoid
+ * branching on the underlying type. Returns an empty array when the
+ * mesh has no material — same shape as the union of "single null
+ * material" and "empty material array" cases, so callers don't need
+ * a separate null guard.
+ *
+ * @param {object|null|undefined} mesh any Three.js Object3D
+ * @return {Array<object>} materials (zero, one, or many)
+ */
+export function getMeshMaterials(mesh) {
+  if (!mesh || !mesh.material) {
+    return []
+  }
+  return Array.isArray(mesh.material) ? mesh.material : [mesh.material]
 }
 
 

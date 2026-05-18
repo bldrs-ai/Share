@@ -26,6 +26,14 @@ import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {
+  compareItemsMaps,
+  formatComparison,
+  itemsMapFromFlatMeshes,
+  itemsMapFromPerVertexAttribute,
+} from '../viewer/ifc/IfcItemsMap'
+import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
+import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -370,6 +378,58 @@ export async function load(
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
+  // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
+  // models. The GLB write captured per-vertex `instanceID` alongside
+  // `expressID`; `inferModelCapabilities` flipped `instancePicking`
+  // when both are present. Build a map per child Mesh from its own
+  // geometry attributes.
+  //
+  // Why per-mesh, not single: GLTFExporter splits one indexed mesh
+  // into N primitives — one per `geometry.groups[]` entry — and
+  // duplicates shared vertices. So the cache-write turn this:
+  //   ifcModel (1 Mesh, geometry with M material groups, V verts)
+  // into this:
+  //   Group containing M child Meshes, each with its own vertex
+  //   subset + its own index buffer. Total V_cache ≈ V × avg_share_factor.
+  //
+  // On read, each child Mesh has its own copy of `expressID` +
+  // `instanceID` per-vertex; the instance IDs are globally unique
+  // across the meshes (GLTFExporter doesn't renumber attributes when
+  // splitting). So one IfcInstanceMap per child Mesh, attached as
+  // `mesh.instanceMap`, is the right shape. ShareViewer.setSelection
+  // and setInstanceSelection traverse the model and build subsets
+  // from each map. (Cache-miss is the degenerate single-Mesh case:
+  // `ifcModel` is itself the Mesh, traversal visits one node, same
+  // code path produces the same result.)
+  //
+  // Skip when a mesh already has an instanceMap attached — the
+  // Conway-direct cache-miss path attaches one directly during the
+  // parse swap; this block is only for cache-hit restoration.
+  if (model.capabilities.instancePicking) {
+    let attached = 0
+    let totalInstances = 0
+    const allParents = new Set()
+    model.traverse((obj) => {
+      if (!obj.isMesh || obj.instanceMap) {
+        return
+      }
+      if (obj.geometry?.attributes?.instanceID?.count > 1) {
+        const map = instanceMapFromGeometry(obj.geometry)
+        obj.instanceMap = map
+        attached++
+        totalInstances += map.instanceCount
+        for (const pid of map.parentExpressIdToInstanceIds.keys()) {
+          allParents.add(pid)
+        }
+      }
+    })
+    if (attached > 0) {
+      glbInfo(
+        `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
+        `${totalInstances} instances under ${allParents.size} IFC products`)
+    }
+  }
+
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
   // Triggered for every source kind (github, local, upload, external)
@@ -483,6 +543,15 @@ export function convertToShareModel(model, viewer) {
   // level picking is restored on cache-hit models. See
   // design/new/glb-model-sharing.md §"Picking granularity".
   let foundPreservedExpressId = false
+  // Same trip for the Conway-direct path's per-vertex `instanceID`
+  // attribute (synthetic IfcInstanceMap instance per-PlacedGeometry).
+  // Written by GLTFExporter as `_INSTANCEID`, returned by GLTFLoader as
+  // `_instanceid`. Rename back so `inferModelCapabilities` can flip
+  // `instancePicking` on and `instanceMapFromGeometry` can derive the
+  // map from per-vertex attributes — no custom glTF extension needed,
+  // three.js's auto-renaming carries the data through verbatim. See
+  // design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+  let foundPreservedInstanceId = false
 
   /**
    * Recursively visit the model and its children to add `expressID` and
@@ -516,6 +585,26 @@ export function convertToShareModel(model, viewer) {
         // eslint-disable-next-line no-empty-function
         expressIdAttr.onUpload(() => {})
         obj3d.geometry.attributes.expressID = expressIdAttr
+      }
+      // Independent restore of the per-vertex `instanceID` attribute.
+      // The Conway-direct path emits this alongside `expressID`;
+      // GLTFExporter serialises it as `_INSTANCEID` (custom attr →
+      // `_`-prefixed, uppercase), GLTFLoader returns it as
+      // `_instanceid`. Promote back so `inferModelCapabilities` can
+      // flip `instancePicking` on and `instanceMapFromGeometry` (run
+      // by the cache-hit decoration block in `Loader#load`) can
+      // reconstruct the full IfcInstanceMap from per-vertex data
+      // alone — no custom glTF extension needed. A cache-hit GLB
+      // carrying both `expressID` and `instanceID` was originated
+      // under the Conway-direct path; one carrying only `expressID`
+      // came from a pre-Conway-direct parse. Same reader handles
+      // both; capability inference decides which features apply.
+      // See design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+      const preservedInst = obj3d.geometry.attributes._instanceid
+      if (preservedInst && preservedInst.count > 1) {
+        obj3d.geometry.setAttribute('instanceID', preservedInst)
+        delete obj3d.geometry.attributes._instanceid
+        foundPreservedInstanceId = true
       }
     }
     // Only set the mesh-level `obj3d.expressID` serial when the geometry
@@ -568,6 +657,9 @@ export function convertToShareModel(model, viewer) {
     }
   } else {
     glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
+  }
+  if (foundPreservedInstanceId) {
+    glbInfo('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
@@ -837,10 +929,26 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
+      // Phase-3 prep: capture Conway's FlatMesh stream during the live
+      // parse so the diagnostics below can read the original
+      // per-instance data without a second StreamAllMeshes walk.
+      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
+      // Both flags share the capture wrapper.
+      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
+        isFeatureEnabled('conwayDirectIfc')
+      const parityCapture = captureEnabled ?
+        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
+        null
+
       if (onProgress) {
         onProgress('Parsing model geometry...')
       }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
+      let ifcModel
+      try {
+        ifcModel = await this.loader.parse(buffer, onProgress)
+      } finally {
+        parityCapture?.restore()
+      }
       this.addIfcModel(ifcModel)
 
       if (onProgress) {
@@ -877,6 +985,26 @@ function newIfcLoader(viewer) {
       if (onProgress) {
         onProgress('Model loaded successfully!')
       }
+
+      // Phase-3 prep: parallel-run the new IfcItemsMap populators
+      // against the live model and log the diff. Diagnostic only —
+      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
+      // See design/new/viewer-replacement.md §3b.ii for the
+      // per-vertex-vs-per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
+        runIfcItemsMapParityCheck(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+      // Phase-3 cut-over: replace web-ifc-three's geometry with the
+      // Conway-direct merged buffer + attach an IfcInstanceMap. The
+      // IFC manager (properties, spatial tree, typed search) stays —
+      // only the rendered triangles + the picking source of truth
+      // change. Toggle via `?feature=conwayDirectIfc`.
+      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
+        installConwayDirectGeometry(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+
       return ifcModel
     } catch (err) {
       loader.ifcLastError = err
@@ -893,6 +1021,360 @@ function newIfcLoader(viewer) {
     }
   }
   return loader
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * Conway-direct stream) for a freshly-parsed IFC model, then log a
+ * one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * What we're watching for: an `onlyInB` count greater than zero
+ * (Conway-direct sees instance IDs the per-vertex attribute
+ * collapses). That's the IfcMappedItem case — design/new/viewer-replacement.md
+ * §3b.ii. A clean model with no mapped items prints `both=N
+ * onlyA=0 onlyB=0` and tells us the per-vertex path is already
+ * per-instance for this file.
+ *
+ * `triCountDeltas > 0` would be a stronger signal: the two
+ * populators agree on the ID set but disagree on triangle counts
+ * per ID. That implies an emission-order mismatch and should be
+ * investigated before promoting Conway-direct.
+ *
+ * Safe to fail silently — if Conway's API surface differs from what
+ * we expect (e.g., a future adapter version drops `StreamAllMeshes`),
+ * the parity check warns once and returns; the load completes
+ * normally.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ */
+/**
+ * Wrap `ifcAPI.StreamAllMeshes` so every FlatMesh that flows through
+ * the live parse is captured by reference into a local array. Returns
+ * `{captured, restore}` — `captured` accumulates as parse runs;
+ * `restore` puts the original method back regardless of parse outcome.
+ *
+ * Why capture-via-wrapper instead of reading
+ * `ifcAPI.models.get(modelID).model[4]` (the cached `vectorFlatMesh`):
+ * the adapter's vector has a bounds-check bug
+ * (ifc_api_proxy_ifc.js:138-152 — `get(index)` checks
+ * `placedGeometryArray.length` (an unrelated empty array) instead of
+ * `flatMeshArray.length`, so `get(i)` returns a dummy for every
+ * index). `size()` and `push()` work; `get()` is functionally write-
+ * only. The wrapper gives us the FlatMeshes via the callback path,
+ * where the inner per-PlacedGeometry vectors ARE well-formed.
+ *
+ * Capture is by reference — Conway doesn't mutate a FlatMesh after
+ * emitting it through the callback (the scene.walk() at line 562
+ * finalises each entity's PlacedGeometry vector before
+ * `meshMap.forEach` fires the callbacks at line 705).
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @return {{captured: Array, restore: Function}}
+ */
+function installFlatMeshCapture(ifcAPI) {
+  const captured = []
+  const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
+  ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
+    return orig(modelID, (flatMesh) => {
+      captured.push(flatMesh)
+      cb(flatMesh)
+    })
+  }
+  return {
+    captured,
+    restore: () => {
+      ifcAPI.StreamAllMeshes = orig
+    },
+  }
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * captured FlatMesh stream) for a freshly-parsed IFC model, then log
+ * a one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ * @param {Array} capturedFlatMeshes FlatMeshes captured during the
+ *   live parse via installFlatMeshCapture
+ */
+function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    const modelID = ifcModel.modelID
+    const geom = ifcModel.geometry
+    const perVertex = itemsMapFromPerVertexAttribute(geom)
+    if (!perVertex) {
+      console.warn(
+        '[ifcItemsMapParity] per-vertex populator returned null ' +
+        '(no expressID attribute or no index) — skipping parity check')
+      return
+    }
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[ifcItemsMapParity] no FlatMesh capture from parse — ' +
+        'skipping parity check (web-ifc-three may not have called ' +
+        'StreamAllMeshes for this load)')
+      return
+    }
+    const conway = itemsMapFromFlatMeshes(
+      capturedFlatMeshes, ifcAPI, modelID, {geometry: geom})
+    const cmp = compareItemsMaps(perVertex, conway)
+    // Conway-level shape: how many PlacedGeometries fit under how
+    // many FlatMeshes? `placedCount > flatMeshCount` means some
+    // FlatMeshes have multiple PlacedGeometries. Two distinct
+    // sub-cases hide there:
+    //   (i)  IfcMappedItem-style instances: many PlacedGeometries
+    //        SHARE one `geometryExpressID` and differ only in their
+    //        flatTransformation. Per-instance picking is the right
+    //        answer for these.
+    //   (ii) Compound representation: one IFC element's geometry is
+    //        built from N distinct geometric primitives, each with
+    //        its own `geometryExpressID`. Subcomponents are not
+    //        independently selectable in IFC semantics; per-instance
+    //        picking would be wrong here.
+    // Tracking shared vs unique geometryExpressIDs across the
+    // multi-placed FlatMeshes tells us the mix.
+    let flatMeshCount = 0
+    let placedCount = 0
+    let multiPlacedFlatMeshes = 0
+    let maxPlacedInOneFlatMesh = 0
+    // Case (i) and (ii) accounting across multi-placed FlatMeshes:
+    let sharedShapeInstances = 0 // PlacedGeometries that share a geomExpressID with a sibling
+    let uniqueShapeInstances = 0 // PlacedGeometries with a geomExpressID unique within the FlatMesh
+    let multiPlacedAllShared = 0 // FlatMeshes where every placedGeom shares one geomExpressID (pure case i)
+    let multiPlacedAllUnique = 0 // FlatMeshes where every placedGeom has a unique geomExpressID (pure case ii)
+    let multiPlacedMixed = 0 // FlatMeshes that are a mix
+    for (const fm of capturedFlatMeshes) {
+      flatMeshCount++
+      const g = fm?.geometries
+      const n = typeof g?.size === 'function' ? g.size() : (g?.length ?? 0)
+      placedCount += n
+      if (n > 1) {
+        multiPlacedFlatMeshes++
+        // Count occurrences of each geomExpressID inside this FlatMesh.
+        const counts = new Map()
+        for (let i = 0; i < n; i++) {
+          const placed = typeof g.get === 'function' ? g.get(i) : g[i]
+          const id = placed?.geometryExpressID
+          counts.set(id, (counts.get(id) ?? 0) + 1)
+        }
+        let sharedHere = 0
+        let uniqueHere = 0
+        for (const c of counts.values()) {
+          if (c > 1) {
+            sharedHere += c
+          } else {
+            uniqueHere += c
+          }
+        }
+        sharedShapeInstances += sharedHere
+        uniqueShapeInstances += uniqueHere
+        if (sharedHere === n) {
+          multiPlacedAllShared++
+        } else if (uniqueHere === n) {
+          multiPlacedAllUnique++
+        } else {
+          multiPlacedMixed++
+        }
+      }
+      if (n > maxPlacedInOneFlatMesh) {
+        maxPlacedInOneFlatMesh = n
+      }
+    }
+    console.warn(
+      `[ifcItemsMapParity] modelID=${modelID} ` +
+      `perVertexElements=${perVertex.elementCount} ` +
+      `conwayElements=${conway.elementCount} ` +
+      `perVertexTriangles=${perVertex.triangleCount} ` +
+      `conwayTriangles=${conway.triangleCount} ` +
+      `${formatComparison(cmp)}`)
+    console.warn(
+      `[ifcItemsMapParity] Conway emission: flatMeshes=${flatMeshCount} ` +
+      `placedGeometries=${placedCount} ` +
+      `multiPlacedFlatMeshes=${multiPlacedFlatMeshes} ` +
+      `maxPlacedInOneFlatMesh=${maxPlacedInOneFlatMesh}`)
+    console.warn(
+      `[ifcItemsMapParity] multi-placed breakdown: ` +
+      `allShared=${multiPlacedAllShared} ` +
+      `allUnique=${multiPlacedAllUnique} ` +
+      `mixed=${multiPlacedMixed} ` +
+      `sharedShapeInstances=${sharedShapeInstances} ` +
+      `uniqueShapeInstances=${uniqueShapeInstances}`)
+    // First few count deltas, for spot-checking emission-order issues.
+    if (cmp.triangleCountDeltas.length > 0) {
+      const head = cmp.triangleCountDeltas.slice(0, 5)
+        .map((d) => `${d.id}:${d.a}vs${d.b}`).join(' ')
+      console.warn(`[ifcItemsMapParity] sample triCountDeltas: ${head}`)
+    }
+    if (cmp.onlyInB > 0) {
+      console.warn(
+        `[ifcItemsMapParity] Conway sees ${cmp.onlyInB} additional ` +
+        'instance IDs — this is the IfcMappedItem per-instance ' +
+        'delta the per-vertex path collapses')
+    }
+    if (!cmp.agreeingTriangleCounts) {
+      console.warn(
+        `[ifcItemsMapParity] ${cmp.triangleCountDeltas.length} IDs ` +
+        'have triangle-count deltas — emission order may differ; ' +
+        'investigate before promoting Conway-direct')
+    }
+  } catch (e) {
+    console.warn('[ifcItemsMapParity] check failed:', e)
+  }
+}
+
+
+/**
+ * Replace web-ifc-three's rendered geometry with the Conway-direct
+ * merged BufferGeometry built from the captured FlatMesh stream, and
+ * attach the matching `IfcInstanceMap` for per-instance picking.
+ *
+ * Why we keep `ifcModel` rather than returning a new Mesh: the IFC
+ * manager (web-ifc-three's `IFCManager`) is what owns property
+ * lookups, spatial structure, typed search, the isolator's hide /
+ * isolate workflow, and the existing preselection material. Building
+ * a separate object would require porting all that wiring; swapping
+ * just the geometry preserves it.
+ *
+ * Capability flips:
+ *   - `ifcSubsets` → false: `ShareViewer.setSelection` will skip
+ *     `IFC.selector.pickIfcItemsByID` (web-ifc-three's `SubsetCreator`
+ *     can't run against the swapped geometry) and take the per-vertex
+ *     branch, which uses `model.createSubset` — attached below.
+ *   - `expressIdPicking` → true: parity with the existing per-vertex
+ *     path. The Conway-built geometry carries the `expressID`
+ *     attribute so the per-vertex subset builder works as-is.
+ *   - `instancePicking` → true: signals to `CadView`'s click handler
+ *     and `ShareViewer.setInstanceSelection` that
+ *     `mesh.instanceMap.getInstanceIdByTriangle` is available.
+ *
+ * What the log line tells us (same shape as the earlier smoke):
+ *   - `vertices` / `triangles` should match web-ifc-three's totals;
+ *     a divergence here means the assembler is dropping data.
+ *   - `instances` should equal Conway's PlacedGeometry total — the
+ *     per-instance granularity floor the parity probe exposed.
+ *   - `parents` should equal Conway's FlatMesh count.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh; its
+ *   `geometry` is REPLACED in place. `ifcModel.material` is also
+ *   replaced with an *array* (one MeshLambertMaterial per Conway
+ *   PlacedGeometry color bin, paired with `geometry.groups[]`) —
+ *   same shape `web-ifc-three.IFCModel` natively produces
+ *   (IFCLoader.js:182), so downstream code that already handles
+ *   array-or-single materials (see `getMeshMaterials` in ShareModel.js)
+ *   keeps working without change.
+ * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
+ */
+export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[conwayDirect] no FlatMesh capture from parse — ' +
+        'skipping Conway-direct install')
+      return
+    }
+    const t0 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    // Multi-material rendering: the assembler bins PlacedGeometries
+    // by `placedGeometry.color` and produces one MeshLambertMaterial
+    // per distinct RGBA + matching `geometry.groups[]`, mirroring
+    // `web-ifc-three.IFCParser`'s output shape exactly (IFCLoader.js:
+    // 168-184). The IFC visual identity carries through: each
+    // element renders with its source colour, transparency works for
+    // glass/glazing (alpha < 1 → `transparent: true; opacity:
+    // alpha`), single material per bin keeps draw-call count near
+    // wit-three's.
+    // The pre-BVH instanceMap returned here is intentionally
+    // discarded — see the comment near `computeBoundsTree` below. We
+    // rebuild a triangle-keyed map from the post-reorder geometry
+    // attributes instead.
+    const {mesh: conwayMesh, materials, stats} = buildConwayIfcModel(
+      capturedFlatMeshes, ifcAPI, ifcModel.modelID)
+    const t1 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    const witTriangles = ifcModel.geometry?.getIndex()?.count / 3
+    const witVertices = ifcModel.geometry?.getAttribute('position')?.count
+    // Dispose web-ifc-three's geometry GPU resources before letting
+    // the reference go — the IFCModel won't dispose it for us once we
+    // overwrite `.geometry`.
+    if (typeof ifcModel.geometry?.dispose === 'function') {
+      ifcModel.geometry.dispose()
+    }
+    ifcModel.geometry = conwayMesh.geometry
+    // Replace wit-three's material array with our binned-by-color
+    // array. Same shape (Array<MeshLambertMaterial>), same per-bin
+    // colour intent — just rebuilt from Conway's PlacedGeometry
+    // emission so it matches the merged geometry's `groups[]`.
+    ifcModel.material = materials
+    // Recompute bounds for `fitModelToFrame`. BufferGeometry would
+    // lazy-compute on first access but the IFC manager / clipper read
+    // bounds eagerly; explicit is cheaper than the surprise.
+    ifcModel.geometry.computeBoundingBox()
+    ifcModel.geometry.computeBoundingSphere()
+    // Build the BVH so picking is fast. `computeBoundsTree` is
+    // monkey-patched onto BufferGeometry.prototype by web-ifc-three's
+    // IFCLoader during init — by the time we get here the parse
+    // already ran, so the patch is in place. Guard with optional-call
+    // in case the loader changed its init behavior.
+    //
+    // CRITICAL: this REORDERS the geometry's index buffer in place
+    // for cache-coherent ray traversal. After reorder, the original
+    // emission-order `instanceMap` from `buildConwayIfcModel` is
+    // wrong — `triangleIndexToInstanceId[T]` was keyed by emission
+    // position, but `T` now refers to a different (BVH-reordered)
+    // triangle. The raycaster's `faceIndex` is the post-reorder
+    // position, so the lookup mismatches and clicks highlight the
+    // wrong instance.
+    //
+    // Fix: discard the emission-order map, build a fresh one from
+    // the geometry's per-vertex `instanceID` + `expressID`
+    // attributes (which BVH doesn't touch — vertices stay put, only
+    // the index buffer is permuted). `instanceMapFromGeometry` reads
+    // the post-reorder index buffer + the unchanged per-vertex IDs
+    // to produce a triangle-keyed map that matches the geometry's
+    // actual layout.
+    if (typeof ifcModel.geometry.computeBoundsTree === 'function') {
+      ifcModel.geometry.computeBoundsTree()
+    }
+    ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
+    // Capability flips: redirect setSelection to the per-vertex
+    // (createSubset-attached) branch and announce per-instance.
+    if (ifcModel.capabilities) {
+      ifcModel.capabilities.ifcSubsets = false
+      ifcModel.capabilities.instancePicking = true
+      ifcModel.capabilities.expressIdPicking = true
+    }
+    // NOTE: we intentionally do NOT call `attachElementSubsets`
+    // here. That helper overwrites `model.createSubset` with an
+    // array-returning per-vertex implementation; `IfcIsolator`
+    // expects the web-ifc-three native `createSubset` that returns
+    // a single Mesh. ShareViewer.setSelection / setInstanceSelection
+    // build highlights from `instanceMap` directly (capability
+    // `instancePicking`) so they bypass `model.createSubset`
+    // entirely. The isolator's createSubset stays bound to
+    // web-ifc-three's; isolate/hide is known to be broken with
+    // conwayDirectIfc (web-ifc-three's IfcGeometryStorage references
+    // its original geometry, not the swapped one) and will be
+    // addressed in a follow-up slice.
+    console.warn(
+      `[conwayDirect] installed modelID=${ifcModel.modelID} ` +
+      `in ${(t1 - t0).toFixed(1)}ms — ` +
+      `vertices=${stats.vertexCount} (wit=${witVertices}) ` +
+      `triangles=${stats.triangleCount} (wit=${witTriangles}) ` +
+      `instances=${stats.instanceCount} ` +
+      `parents=${stats.parentCount} ` +
+      `materials=${stats.materialCount} ` +
+      `skippedFlatMeshes=${stats.skippedFlatMeshes} ` +
+      `skippedPlaced=${stats.skippedPlacedGeometries}`)
+  } catch (e) {
+    console.warn('[conwayDirect] install failed:', e)
+  }
 }
 
 
