@@ -1271,7 +1271,7 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
  *   keeps working without change.
  * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
  */
-function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
+export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
   try {
     if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
       console.warn(
