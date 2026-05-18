@@ -220,63 +220,108 @@ both `expressID` and `instanceID` per-vertex attributes so picking
 can resolve to whichever granularity the caller asks for via the
 items map / instance map respectively.
 
-**For the GLB cache:** done — no custom extension required, the
-Conway-direct path's per-vertex `instanceID` attribute travels
-through the cache automatically. GLTFExporter renames custom
-attributes to `_UPPERCASE` on write (so `instanceID` →
-`_INSTANCEID`), GLTFLoader returns them lowercased on read
-(`_instanceid`). `Loader.js#convertToShareModel` renames back to
-`instanceID`, mirroring the long-standing `expressID` round-trip.
-`inferModelCapabilities` flips `instancePicking` when both
-attributes are present; `instanceMapFromGeometry` rebuilds the
-full `IfcInstanceMap` from per-vertex data alone, no triangle-
-keyed side table needed in the cache.
+The cache-side concerns are addressed below in "Cache round-trip" —
+no custom glTF extension was needed; per-vertex `instanceID` rides
+through GLTFExporter's `_UPPERCASE` rename verbatim.
 
-This dropped the originally-planned `BLDRS_per_triangle_instance_ids`
-extension entirely. Custom glTF extensions are still the right
-shape if/when we want to drop one of the per-vertex attributes
-from the cache (saves ~4 bytes × N_vertices), but the value
-density of an extra two integers per vertex is low enough that
-the simpler "just write the attribute" path stays the default
-for now.
+**Live implementation** (behind `?feature=conwayDirectIfc`, on track
+to default-on once the open items in §3b.iii land):
 
-**Initial implementation lives in `src/viewer/ifc/IfcItemsMap.js`** (test
-phase). The class holds the two tables; three populators feed it:
-- `itemsMapFromPerVertexAttribute(geometry)` — fallback / cache-hit
-  GLB path. Builds the table from `geometry.attributes.expressID`.
-  Subject to the IfcMappedItem collapse described above; documents
-  the shared-geometry limitation.
-- `itemsMapFromOrderedRanges(ranges, {geometry})` — pure data-flow
-  populator. Caller supplies an ordered `{expressID, triangleCount}`
-  stream; the table builds positionally. Decoupled from any specific
-  IFC engine.
-- `itemsMapFromConwayStream(api, modelID, {geometry})` — the
-  destination shape. Walks `api.StreamAllMeshes(modelID, cb)`,
-  reads `FlatMesh.expressID` (per-instance) and
-  `IfcGeometry.GetIndexDataSize()` (per-PlacedGeometry triangle
-  count), and threads them through `itemsMapFromOrderedRanges`. This
-  is the populator the future `IfcModelService` will own; the
-  geometry assembler lands alongside it in the next slice.
+- `src/viewer/ifc/IfcItemsMap.js` — per-IFC-product table. Three
+  populators: per-vertex-attribute (fallback / cache-hit before
+  Conway-direct), ordered-ranges (data-flow), Conway stream walk.
 
-All three feed the same consumer surface
-(`createSubsetMesh(ids, opts)`, `getExpressIdByTriangle(t)`). The
-swap from per-vertex to Conway-direct in the live load path is
-isolated to one call site once the geometry assembler is in place.
+- `src/viewer/ifc/IfcInstanceMap.js` — per-PlacedGeometry table.
+  Three populators mirroring `IfcItemsMap`'s set:
+  - `instanceMapFromOrderedPlacedRanges(ranges, {geometry})` — data-flow
+    populator. Used by the assembler hand-off.
+  - `instanceMapFromGeometry(geometry)` — the BVH-safe + cache-hit
+    populator. Reads the per-vertex `expressID` + `instanceID`
+    attributes and the (possibly BVH-reordered) index buffer to
+    derive all four lookup tables. Lives in two roles: (a)
+    post-`computeBoundsTree()` rebuild on cache-miss because
+    `three-mesh-bvh` permutes the index buffer in place; (b) cache-
+    hit restoration from per-vertex data alone.
+  - `instanceMapFromFlatMeshes(flatMeshes, api, modelID)` — Conway
+    stream walk. Used by the parity probe; not on the live render
+    path (the assembler's data feeds the BVH-safe populator
+    instead).
 
-For the GLB cache (`design/new/glb-model-sharing.md`): persist
-`triangleIndexToExpressId` as a glTF accessor under a Bldrs
-extension (provisional name `BLDRS_per_triangle_express_ids`). On
-cache-hit load, the reader skips the conway-mediated parse and
-restores `triangleIndexToExpressId` directly. The per-vertex
-attribute can be dropped from the cache once readers depend on the
-per-triangle table — saves ~4 bytes × N_vertices.
+- `src/viewer/ifc/flatMeshToBufferGeometry.js` — the assembler.
+  Walks captured FlatMeshes, applies `flatTransformation` to
+  positions and normals, bins PlacedGeometries by
+  `PlacedGeometry.color` into contiguous index-buffer groups,
+  emits one `MeshLambertMaterial` per bin (matching
+  `web-ifc-three.IFCParser#storeGeometryByMaterial`'s shape exactly).
+  Returns `{geometry, ranges, materials}`.
 
-Until this lands, cache-hit picking is **granular to
-shared-geometry templates**: clicking any one instance of a
-mapped-item-shared geometry highlights all of them. Phase 2b PRs
-explicitly note this limitation; the data the cache carries today
-cannot support per-instance picking. Source-path picking is
-unaffected.
+- `src/viewer/ifc/buildConwayIfcModel.js` — glue. Combines the
+  assembler + `instanceMapFromOrderedPlacedRanges` into a
+  `{mesh, instanceMap, materials, stats}` bundle.
+
+- `src/loader/Loader.js#installConwayDirectGeometry` — on cache-
+  miss IFC parse, swaps `ifcModel.geometry` / `.material` to the
+  Conway-direct outputs, computes BVH (which reorders the index
+  buffer), then rebuilds the `IfcInstanceMap` via
+  `instanceMapFromGeometry` so the post-reorder triangle indices
+  match the picking map. Flips capabilities (`ifcSubsets: false`,
+  `instancePicking: true`).
+
+- `src/viewer/ShareViewer.js` — selection + preselection routing.
+  When `instancePicking` is set, both `setSelection` (parent-level)
+  and `setInstanceSelection` (one-instance) traverse the model and
+  build subsets via per-Mesh `instanceMap.createSubsetMesh*`. Each
+  subset is parented under the source mesh's parent so the
+  translucent x-ray fill renders, then handed to the OutlineEffect
+  for the edge outline. Hover preselection (`highlightIfcItem`)
+  takes the same path scoped to the picked Mesh only.
+
+- `src/Containers/CadView.jsx` — click handler. When the picked
+  Mesh has an `instanceMap`, resolves the (instanceId, parentExpressId)
+  via `getInstanceIdByTriangle` + `getParentExpressIdByInstance`,
+  writes `selectedElements` = [parentExpressId] and
+  `selectedInstanceIds` = [instanceId] (or `[]` when Shift is held,
+  to expand to whole element). The selection useEffect chains
+  `viewer.setSelection(0, ids)` then
+  `viewer.setInstanceSelection(0, instanceIds)`.
+
+**Cache round-trip** (`?feature=conwayDirectIfc,glb`):
+
+Per-vertex `instanceID` rides through the IFC→GLB→IFC cache
+natively via GLTFExporter's `_UPPERCASE` rename — no custom glTF
+extension needed. The reader side renames `_instanceid` back to
+`instanceID`, `inferModelCapabilities` detects the attribute and
+flips `instancePicking`, the cache-hit decoration block in
+`Loader.js` walks each child Mesh (GLTFExporter splits one indexed
+mesh into N glTF primitives per material group) and attaches a
+per-Mesh `instanceMap` via `instanceMapFromGeometry`. ShareViewer's
+traversal-based subset build naturally handles the multi-Mesh
+shape — instance IDs are globally unique across the splits since
+GLTFExporter preserves attribute values verbatim.
+
+#### 3b.iii. Known limitations + follow-up slices
+
+- **Isolate / hide UI is broken with `conwayDirectIfc` on.**
+  `IfcIsolator` calls `model.createSubset` expecting
+  `web-ifc-three.SubsetCreator`'s single-Mesh return, which
+  references the original (pre-swap) geometry. We deliberately do
+  NOT call `attachElementSubsets` over the existing method because
+  the per-vertex helper returns `Mesh[]`. Fix: route isolator
+  subset construction through `IfcInstanceMap.createSubsetMeshByParent`
+  alongside the selection / hover paths.
+
+- **Multi-select via Shift is displaced** on `instancePicking`
+  models. Shift now means "expand to whole IFC element" (Option A
+  from the per-instance UX choice). Models without an `instanceMap`
+  (today's `wit-three` path, GLB cache hit pre-Conway-direct) keep
+  the legacy "Shift = add to selection" behaviour. Cmd/Ctrl is the
+  obvious slot for multi-select on `instancePicking` models when
+  the UX matters.
+
+- **Default-on** is gated on those two items shipping. The flag is
+  in test-phase now — clean smoke test reports across Momentum,
+  Snowdon, index, plus the cache round-trip working both
+  directions.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

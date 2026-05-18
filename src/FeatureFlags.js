@@ -44,14 +44,24 @@ export const flags = [
   // `?feature=ifcItemsMapParity` to compare the per-vertex and
   // Conway-direct populators on a real IFC.
   {name: 'ifcItemsMapParity', isActive: false},
-  // Conway-direct IFC model build: assemble the BufferGeometry and
-  // build an IfcInstanceMap from captured FlatMeshes, in parallel
-  // with web-ifc-three's own parse. Logs assembly stats and a
-  // comparison against the per-vertex view; does NOT replace the
-  // rendered mesh yet (web-ifc-three's model is still the one
-  // shown). Smoke-test toggle for the geometry assembler + per-
-  // instance items map. Implies (turns on) `ifcItemsMapParity` —
-  // both require the StreamAllMeshes capture wrapper.
+  // Conway-direct IFC model build. When on:
+  //   * The Conway-direct assembler builds a merged BufferGeometry +
+  //     per-color material array from the captured FlatMesh stream,
+  //     and that geometry REPLACES web-ifc-three's rendered output.
+  //     The IFC manager (properties, spatial tree, typed search) is
+  //     preserved; only the rendered triangles + picking source of
+  //     truth change.
+  //   * Picking is per-PlacedGeometry instance by default (matches
+  //     what was clicked, not the whole IFC product). Shift-click
+  //     expands to every instance of the parent. Hover preselection
+  //     follows the same per-instance semantic.
+  //   * With `glb` also on, per-vertex `instanceID` round-trips
+  //     through the IFC→GLB→IFC cache automatically (GLTFExporter's
+  //     `_INSTANCEID` rename + reader-side restore + capability
+  //     inference + cache-hit IfcInstanceMap reconstruction).
+  // Test-phase flag — not yet on by default. Implies (turns on) the
+  // StreamAllMeshes capture wrapper; `ifcItemsMapParity` shares the
+  // same capture. Design: design/new/viewer-replacement.md §3b.
   {name: 'conwayDirectIfc', isActive: false},
 ]
 
