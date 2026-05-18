@@ -53,6 +53,18 @@ export class ShareViewer extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
+  // Conway-direct selection / preselection slots. Tracked as class
+  // fields so the `_clearXxx` helpers don't need defensive
+  // initialisation on first call. Mutated in place by the
+  // `_setConwayXxxFrom*` helpers; the previous slot's subsets are
+  // removed from scene + highlighter + disposed before the new ones
+  // land. See §3b.ii of design/new/viewer-replacement.md.
+  _conwaySelectionSubsets = []
+  // Reusable preselection mesh pool — see `_setConwayPreselectionFromHit`.
+  // Hover at interactive rates churns through subset meshes; the pool
+  // keeps one Mesh/BufferGeometry/Uint32Array alive across calls and
+  // updates the index buffer in place rather than allocating per hover.
+  _conwayPreselectionPool = null
   /**
    * @param {object} options - Configuration options
    */
@@ -622,6 +634,17 @@ export class ShareViewer extends IfcViewerAPI {
     // slot, not on each model) — clear it before walking models for
     // the legacy per-vertex subset removal. Cheap no-op when the slot
     // is empty / the flag isn't on.
+    //
+    // TODO(preselection-routing): the two clears are independent today
+    // (different storage), but if Conway-direct models eventually also
+    // gain a per-model `removeSubset('preselection')` (e.g. via the
+    // isolate-routing follow-up that unifies subset construction —
+    // viewer-replacement.md §3b.iii item 1), the order will matter.
+    // The Conway path takes precedence on `instancePicking` models, so
+    // it clears first; the IFC-model walk is a no-op then. Worth
+    // revisiting once the unified subset API lands so this routing
+    // logic stays in one place instead of being split between
+    // ShareViewer (Conway) and each model's `removeSubset` (legacy).
     this._clearConwayPreselectionSubsets()
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {

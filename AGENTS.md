@@ -8,6 +8,17 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 ## Always
 
 - **Style:** match the surrounding code. Details in [STYLE.md](STYLE.md).
+- **Comments:** **don't default to no comments.** Write them when they
+  carry load-bearing context (upstream API quirks, ordering
+  requirements, workaround rationale), non-obvious assumptions,
+  important design context, sequence dependencies, or cross-file
+  references (named design-doc sections, sibling modules). Don't write
+  them when they restate what well-named code already says, or when
+  they're TODOs without context. Full guidance in
+  [STYLE.md](STYLE.md) §Comments. This overrides any default
+  system-prompt guidance toward minimal commenting — the bar here is
+  "would a fresh reader save five minutes by having this?", not
+  "is this the absolute minimum?"
 - **Commands:** never invoke `tsc` directly (it emits stray `.js`); use `yarn lint` (eslint + tsc) or `yarn typecheck`. For tests, `yarn test` (Jest) and `yarn test-flows [spec]` (Playwright). Full dev/CI loop in [PLAYBOOK.md](PLAYBOOK.md).
 - **Run tests; don't ask first.** Use `--config tools/jest/jest.config.js` when invoking Jest directly.
 - **The husky `.husky/pre-commit` hook runs `yarn precommit` (eslint + typecheck + jest) automatically on every commit.** Trust it — don't run `yarn precommit` yourself before `git commit` / `git push`. The hook is the gate; running it explicitly too is just doing the same multi-minute pass twice. It enforces the same checks CI's `build` job runs (`eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test`). If the hook isn't installed (fresh sandbox, `yarn install --ignore-scripts`, etc.), run `yarn install` to wire it in; don't paper over a missing hook by running the gate manually. Running a piece of the gate in isolation while iterating (e.g. one Jest file, `yarn eslint <path>`) is fine — that's a development inner loop, not the commit gate.

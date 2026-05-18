@@ -301,27 +301,41 @@ GLTFExporter preserves attribute values verbatim.
 
 #### 3b.iii. Known limitations + follow-up slices
 
-- **Isolate / hide UI is broken with `conwayDirectIfc` on.**
-  `IfcIsolator` calls `model.createSubset` expecting
-  `web-ifc-three.SubsetCreator`'s single-Mesh return, which
-  references the original (pre-swap) geometry. We deliberately do
-  NOT call `attachElementSubsets` over the existing method because
-  the per-vertex helper returns `Mesh[]`. Fix: route isolator
-  subset construction through `IfcInstanceMap.createSubsetMeshByParent`
-  alongside the selection / hover paths.
+**Up next — isolate routing.** `IfcIsolator.initHideOperationsSubset`
+(and the temporary-isolation / revealed-elements counterparts at
+`src/viewer/three/IfcIsolator.js:125,148,303`) calls
+`this.ifcModel.createSubset(...)` expecting `web-ifc-three.SubsetCreator`'s
+single-Mesh return against the *original* geometry. We swapped the
+geometry but left `createSubset` bound — so hide/isolate operations
+on `conwayDirectIfc` models either render against the wrong vertices
+or crash. The fix is to route isolator subset construction through
+the same `IfcInstanceMap.createSubsetMeshByParent` path the
+selection / hover code already uses. Design choice: do we keep
+`model.createSubset` as the single boundary (returns `Mesh[]` for
+the per-vertex / Conway paths, `Mesh` for wit-three) and adapt
+the isolator's three call sites, or add a parallel
+`model.createIsolatorSubset` that returns the legacy single-Mesh
+shape? The first is cleaner; the second is less surgical. This
+gates **default-on** for `conwayDirectIfc`.
 
-- **Multi-select via Shift is displaced** on `instancePicking`
-  models. Shift now means "expand to whole IFC element" (Option A
-  from the per-instance UX choice). Models without an `instanceMap`
-  (today's `wit-three` path, GLB cache hit pre-Conway-direct) keep
-  the legacy "Shift = add to selection" behaviour. Cmd/Ctrl is the
-  obvious slot for multi-select on `instancePicking` models when
-  the UX matters.
+**Other open items:**
 
-- **Default-on** is gated on those two items shipping. The flag is
-  in test-phase now — clean smoke test reports across Momentum,
-  Snowdon, index, plus the cache round-trip working both
-  directions.
+- **Cmd/Ctrl for multi-select** on `instancePicking` models.
+  Shift now means "expand to whole IFC element" (Option A from
+  the per-instance UX choice — confirmed). The legacy "Shift =
+  add to selection" semantic gets pushed off Shift; Cmd/Ctrl is
+  the obvious slot. Not urgent — multi-select isn't on the hot
+  IFC workflow path — but worth picking up alongside the
+  isolate-routing slice while the click handler is open.
+
+- **Hover preselection pooling.** `_setConwayPreselectionFromHit`
+  reuses a single pooled subset Mesh to keep mouse-move costs
+  flat; the same optimisation could apply to selection (clicks
+  are rare so impact is lower) and could be lifted into a
+  general SubsetPool the isolator + clipper consume too.
+
+**Default-on gating:** isolate routing first; everything else can
+ship behind the flag and turn on with a separate decision.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

@@ -51,6 +51,33 @@ import {
  * BufferGeometry per-vertex attributes (cache-hit GLB + post-BVH
  * rebuild). The consumer surface (`createSubsetMeshByInstance`,
  * `createSubsetMeshByParent`) is stable across all three.
+ *
+ * TODO(format-generic): once per-instance picking lands for a second
+ * format (the obvious next candidate is GLTF `EXT_mesh_features` —
+ * Khronos's per-vertex feature-ID convention used by Cesium 3D Tiles
+ * and similar pipelines), promote this to a format-agnostic
+ * `InstanceMap` base + thin format adapters. The current shape is
+ * already format-neutral at the data level — `triangleIndexToInstanceId`
+ * + `instanceIdToParentExpressId` are just typed-array integer
+ * tables; the IFC-specificity is purely in the naming ("expressID",
+ * "Ifc-"). When abstracting:
+ *
+ *   - Rename `parentExpressId` → `ownerId` (or `featureId`) in the
+ *     base class; IFC subclass adds a thin `getIfcProductId(instId)`
+ *     alias.
+ *   - The geometry populator (`instanceMapFromGeometry`) is already
+ *     fully generic — only the attribute names are parameterised
+ *     candidates (today both `expressID` and `instanceID` are
+ *     hard-coded; the latter could become an `attrName` opt like
+ *     `inferModelCapabilities` already supports).
+ *   - The Conway-specific populator stays as the IFC adapter;
+ *     `EXT_mesh_features` parsing would land as a sibling populator
+ *     in a new `GltfFeaturesInstanceMap` file.
+ *
+ * Until that second format arrives, the IFC-named version is the
+ * right shape — premature abstraction would obscure the IFC
+ * vocabulary (`expressID`, IfcMappedItem) the design doc and
+ * call-sites use throughout.
  */
 
 
