@@ -9,6 +9,7 @@ import {
   IfcInstanceMap,
   NO_INSTANCE_ID,
   instanceMapFromFlatMeshes,
+  instanceMapFromGeometry,
   instanceMapFromOrderedPlacedRanges,
 } from './IfcInstanceMap'
 
@@ -328,6 +329,109 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       ])
       const api = makeApi({50: 9})
       const map = instanceMapFromFlatMeshes(flatMeshes, api, 0, {geometry: geom})
+      expect(map.sourceGeometry).toBe(geom)
+      expect(map.createSubsetMeshByInstance([0])).toBeInstanceOf(Mesh)
+    })
+  })
+
+
+  describe('instanceMapFromGeometry (BVH-safe derivation)', () => {
+    /**
+     * Construct a 3-triangle geometry with explicit per-vertex
+     * expressID + instanceID attributes. Index buffer is laid out
+     * so each triangle's three vertices share a single instance.
+     *
+     * @param {object} layout `{indices, expressIDs, instanceIDs}`
+     * @return {BufferGeometry}
+     */
+    function makeTaggedGeometry(layout) {
+      const geom = new BufferGeometry()
+      const vertCount = layout.expressIDs.length
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(vertCount * 3), 3))
+      geom.setAttribute('expressID', new BufferAttribute(new Uint32Array(layout.expressIDs), 1))
+      geom.setAttribute('instanceID', new BufferAttribute(new Uint32Array(layout.instanceIDs), 1))
+      geom.setIndex(new BufferAttribute(new Uint32Array(layout.indices), 1))
+      return geom
+    }
+
+    it('derives all four lookup tables from per-vertex attributes', () => {
+      // 3 instances of 1 triangle each. Instance 0/1 share parent 100;
+      // instance 2 is parent 200.
+      const geom = makeTaggedGeometry({
+        indices: [0, 1, 2, 3, 4, 5, 6, 7, 8],
+        expressIDs: [100, 100, 100, 100, 100, 100, 200, 200, 200],
+        instanceIDs: [0, 0, 0, 1, 1, 1, 2, 2, 2],
+      })
+      const map = instanceMapFromGeometry(geom)
+      expect(map.triangleCount).toBe(3)
+      expect(map.instanceCount).toBe(3)
+      expect(map.parentCount).toBe(2)
+      expect(Array.from(map.triangleIndexToInstanceId)).toEqual([0, 1, 2])
+      expect(map.getParentExpressIdByInstance(0)).toBe(100)
+      expect(map.getParentExpressIdByInstance(1)).toBe(100)
+      expect(map.getParentExpressIdByInstance(2)).toBe(200)
+      expect(Array.from(map.parentExpressIdToInstanceIds.get(100))).toEqual([0, 1])
+      expect(Array.from(map.parentExpressIdToInstanceIds.get(200))).toEqual([2])
+    })
+
+    it('produces the right map when the index buffer is reordered (BVH-style permutation)', () => {
+      // Same vertex layout as above (3 instances of 1 tri, instances
+      // 0/1 → parent 100, instance 2 → parent 200), but the index
+      // buffer is permuted: triangles are now in [instance 2,
+      // instance 0, instance 1] order — the kind of reshuffling
+      // three-mesh-bvh produces. The map must follow the new
+      // triangle order so the raycaster's faceIndex maps to the
+      // correct instance.
+      const geom = makeTaggedGeometry({
+        indices: [6, 7, 8, 0, 1, 2, 3, 4, 5], // permuted: tri 2, tri 0, tri 1
+        expressIDs: [100, 100, 100, 100, 100, 100, 200, 200, 200],
+        instanceIDs: [0, 0, 0, 1, 1, 1, 2, 2, 2],
+      })
+      const map = instanceMapFromGeometry(geom)
+      // Triangle 0 (post-reorder) reads vertex 6 → instance 2 → parent 200.
+      // Triangle 1 (post-reorder) reads vertex 0 → instance 0 → parent 100.
+      // Triangle 2 (post-reorder) reads vertex 3 → instance 1 → parent 100.
+      expect(Array.from(map.triangleIndexToInstanceId)).toEqual([2, 0, 1])
+      expect(map.getParentExpressIdByTriangle(0)).toBe(200)
+      expect(map.getParentExpressIdByTriangle(1)).toBe(100)
+      expect(map.getParentExpressIdByTriangle(2)).toBe(100)
+      // Inverse map: each instance now points at its new triangle
+      // index (not its emission-order position).
+      expect(Array.from(map.instanceIdToTriangleIndices.get(0))).toEqual([1])
+      expect(Array.from(map.instanceIdToTriangleIndices.get(1))).toEqual([2])
+      expect(Array.from(map.instanceIdToTriangleIndices.get(2))).toEqual([0])
+    })
+
+    it('subset construction reads from the post-reorder index buffer', () => {
+      // Subset for instance 0: should contain the single triangle
+      // that now sits at index position 1 (vertices 0, 1, 2).
+      const geom = makeTaggedGeometry({
+        indices: [6, 7, 8, 0, 1, 2, 3, 4, 5],
+        expressIDs: [100, 100, 100, 100, 100, 100, 200, 200, 200],
+        instanceIDs: [0, 0, 0, 1, 1, 1, 2, 2, 2],
+      })
+      const map = instanceMapFromGeometry(geom)
+      const subset = map.createSubsetMeshByInstance([0])
+      // The subset's index buffer should contain just the vertices
+      // belonging to instance 0 — 0, 1, 2 — pulled from the
+      // post-reorder source at position 1.
+      expect(Array.from(subset.geometry.getIndex().array)).toEqual([0, 1, 2])
+    })
+
+    it('throws helpfully when the geometry is missing required attributes', () => {
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      geom.setIndex(new BufferAttribute(new Uint32Array([0, 1, 2]), 1))
+      expect(() => instanceMapFromGeometry(geom)).toThrow(/missing.*attributes/)
+    })
+
+    it('attaches the geometry as sourceGeometry (subsets work immediately)', () => {
+      const geom = makeTaggedGeometry({
+        indices: [0, 1, 2],
+        expressIDs: [100, 100, 100],
+        instanceIDs: [0, 0, 0],
+      })
+      const map = instanceMapFromGeometry(geom)
       expect(map.sourceGeometry).toBe(geom)
       expect(map.createSubsetMeshByInstance([0])).toBeInstanceOf(Mesh)
     })

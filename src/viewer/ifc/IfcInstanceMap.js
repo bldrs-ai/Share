@@ -339,6 +339,95 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
 
 
 /**
+ * Derive an IfcInstanceMap from a BufferGeometry's per-vertex
+ * `expressID` + `instanceID` attributes. The BVH-safe populator —
+ * three-mesh-bvh reorders the index buffer in place when building
+ * its acceleration tree, so a map built from emission-order ranges
+ * (see `instanceMapFromOrderedPlacedRanges`) becomes incorrect:
+ * `triangleIndexToInstanceId[T]` no longer matches the triangle now
+ * at position T in the reordered buffer.
+ *
+ * Per-vertex attributes survive reorder (BVH only touches the index
+ * buffer, not vertex data), so reading the parent / instance ID for
+ * a triangle's first vertex always yields the correct value
+ * regardless of triangle-index permutation. This populator does
+ * exactly that — one walk of the (possibly reordered) index buffer,
+ * reading attribute values per triangle.
+ *
+ * Call AFTER any BVH compute, never before.
+ *
+ * @param {object} geometry BufferGeometry with `expressID` +
+ *   `instanceID` per-vertex attributes and an index buffer
+ * @return {IfcInstanceMap}
+ */
+export function instanceMapFromGeometry(geometry) {
+  const indexAttr = geometry?.getIndex?.()
+  const exprIdAttr = geometry?.getAttribute?.('expressID')
+  const instIdAttr = geometry?.getAttribute?.('instanceID')
+  if (!indexAttr || !exprIdAttr || !instIdAttr) {
+    throw new Error(
+      'instanceMapFromGeometry: geometry missing index or per-vertex ID attributes')
+  }
+  const indices = indexAttr.array
+  const expressIDs = exprIdAttr.array
+  const instanceIDs = instIdAttr.array
+  const triCount = (indices.length / 3) | 0
+  // Pass 1: per-triangle instance ID + collect tri lists per instance.
+  // The triangle's three vertices all carry the same parent/instance
+  // by construction (the assembler emits one ID per vertex of a
+  // PlacedGeometry's slab), so reading the first vertex is enough.
+  const triangleIndexToInstanceId = new Uint32Array(triCount)
+  const trisByInstance = new Map()
+  let maxInstance = -1
+  for (let t = 0; t < triCount; t++) {
+    const v0 = indices[t * 3]
+    const inst = instanceIDs[v0]
+    triangleIndexToInstanceId[t] = inst
+    let list = trisByInstance.get(inst)
+    if (!list) {
+      list = []
+      trisByInstance.set(inst, list)
+    }
+    list.push(t)
+    if (inst > maxInstance) {
+      maxInstance = inst
+    }
+  }
+  const instanceCount = maxInstance + 1
+  const instanceIdToTriangleIndices = new Map()
+  for (const [inst, tris] of trisByInstance) {
+    instanceIdToTriangleIndices.set(inst, Uint32Array.from(tris))
+  }
+  // Pass 2: parent expressID per instance + parent → instances list.
+  // Read parent ID from any triangle of the instance (all carry it).
+  const instanceIdToParentExpressId = new Uint32Array(instanceCount)
+  const instancesByParent = new Map()
+  for (const [inst, tris] of trisByInstance) {
+    const v0 = indices[tris[0] * 3]
+    const parent = expressIDs[v0]
+    instanceIdToParentExpressId[inst] = parent
+    let plist = instancesByParent.get(parent)
+    if (!plist) {
+      plist = []
+      instancesByParent.set(parent, plist)
+    }
+    plist.push(inst)
+  }
+  const parentExpressIdToInstanceIds = new Map()
+  for (const [pid, list] of instancesByParent) {
+    parentExpressIdToInstanceIds.set(pid, Uint32Array.from(list))
+  }
+  return new IfcInstanceMap({
+    triangleIndexToInstanceId,
+    instanceIdToTriangleIndices,
+    instanceIdToParentExpressId,
+    parentExpressIdToInstanceIds,
+    sourceGeometry: geometry,
+  })
+}
+
+
+/**
  * Conway-direct populator. Walks a captured FlatMesh source and
  * emits one synthetic instance per PlacedGeometry, tagged with the
  * parent `FlatMesh.expressID`.

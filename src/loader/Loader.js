@@ -33,6 +33,7 @@ import {
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
 import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
+import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
@@ -1199,7 +1200,11 @@ function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
     // glass/glazing (alpha < 1 → `transparent: true; opacity:
     // alpha`), single material per bin keeps draw-call count near
     // wit-three's.
-    const {mesh: conwayMesh, instanceMap, materials, stats} = buildConwayIfcModel(
+    // The pre-BVH instanceMap returned here is intentionally
+    // discarded — see the comment near `computeBoundsTree` below. We
+    // rebuild a triangle-keyed map from the post-reorder geometry
+    // attributes instead.
+    const {mesh: conwayMesh, materials, stats} = buildConwayIfcModel(
       capturedFlatMeshes, ifcAPI, ifcModel.modelID)
     const t1 = (typeof performance !== 'undefined' && performance.now) ?
       performance.now() : Date.now()
@@ -1227,15 +1232,27 @@ function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
     // IFCLoader during init — by the time we get here the parse
     // already ran, so the patch is in place. Guard with optional-call
     // in case the loader changed its init behavior.
+    //
+    // CRITICAL: this REORDERS the geometry's index buffer in place
+    // for cache-coherent ray traversal. After reorder, the original
+    // emission-order `instanceMap` from `buildConwayIfcModel` is
+    // wrong — `triangleIndexToInstanceId[T]` was keyed by emission
+    // position, but `T` now refers to a different (BVH-reordered)
+    // triangle. The raycaster's `faceIndex` is the post-reorder
+    // position, so the lookup mismatches and clicks highlight the
+    // wrong instance.
+    //
+    // Fix: discard the emission-order map, build a fresh one from
+    // the geometry's per-vertex `instanceID` + `expressID`
+    // attributes (which BVH doesn't touch — vertices stay put, only
+    // the index buffer is permuted). `instanceMapFromGeometry` reads
+    // the post-reorder index buffer + the unchanged per-vertex IDs
+    // to produce a triangle-keyed map that matches the geometry's
+    // actual layout.
     if (typeof ifcModel.geometry.computeBoundsTree === 'function') {
       ifcModel.geometry.computeBoundsTree()
     }
-    ifcModel.instanceMap = instanceMap
-    // The instance map's `sourceGeometry` was set by buildConwayIfcModel
-    // to the assembled BufferGeometry — same object we just attached.
-    // Re-anchor explicitly for clarity (a future caller might construct
-    // the map separately).
-    instanceMap.sourceGeometry = ifcModel.geometry
+    ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
     // Capability flips: redirect setSelection to the per-vertex
     // (createSubset-attached) branch and announce per-instance.
     if (ifcModel.capabilities) {
