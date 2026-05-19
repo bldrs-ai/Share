@@ -295,7 +295,34 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
     dstGeom.setAttribute(name, sourceGeometry.attributes[name])
   }
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
-  const subsetMaterial = opts.material ?? opts.defaultMaterial ?? null
+  let subsetMaterial = opts.material ?? opts.defaultMaterial ?? null
+  // Three.js's WebGLRenderer `projectObject` (see r135 three.module.js
+  // around line 17842) iterates `geometry.groups` when the material
+  // is an array — and pushes NOTHING to the render list if `groups`
+  // is empty. So a subset with `material: Array(N)` + no groups gets
+  // silently skipped. Conway-direct's assembler always emits `material`
+  // as an array (one entry per PlacedGeometry.color bin); even a
+  // single-color model gets `Array(1)`. Two options here, both keep
+  // the subset rendering:
+  //  - If the array has a single material, unwrap to scalar — the
+  //    renderer takes the `else if (material.visible)` branch and
+  //    pushes once. This is the cache-hit Conway-direct path for
+  //    monochrome models (the index.ifc test case that surfaced the
+  //    bug).
+  //  - If the array has multiple materials, add a single `group`
+  //    spanning the full index buffer, pointing at `material[0]`.
+  //    Subset renders monochrome (lose per-color fidelity for the
+  //    visible elements) but at least it's *visible*. The proper fix
+  //    is to walk the source's `geometry.groups` and emit a sub-group
+  //    per material the subset's triangles span; that's a separate
+  //    pass and tracked as a TODO in §3b.iii.
+  if (Array.isArray(subsetMaterial)) {
+    if (subsetMaterial.length === 1) {
+      subsetMaterial = subsetMaterial[0]
+    } else if (subsetMaterial.length > 1) {
+      dstGeom.addGroup(0, dstIndexArr.length, 0)
+    }
+  }
   const mesh = new Mesh(dstGeom, subsetMaterial)
   if (opts.raycastInvisible !== false) {
     mesh.raycast = () => {/* see IfcItemsMap.createSubsetMesh */}

@@ -475,22 +475,10 @@ export class ShareViewer extends IfcViewerAPI {
    * @private
    */
   _clearConwaySelectionSubsets() {
-    const scene = this.context.getScene()
-    const count = this._conwaySelectionSubsets?.length || 0
-    if (!this._conwaySelectionSubsets || count === 0) {
+    if (!this._conwaySelectionSubsets || this._conwaySelectionSubsets.length === 0) {
       this._conwaySelectionSubsets = []
-      console.warn(`[isolator/clearSel] empty — nothing to clear`)
       return
     }
-    const parents = this._conwaySelectionSubsets.map((m) => {
-      if (!m.parent) {
-        return 'null'
-      }
-      if (m.parent === scene) {
-        return 'scene'
-      }
-      return `other:${m.parent.type || 'unknown'}`
-    })
     for (const m of this._conwaySelectionSubsets) {
       m.removeFromParent()
       const subsetGeom = m.geometry
@@ -499,7 +487,6 @@ export class ShareViewer extends IfcViewerAPI {
       }
     }
     this._conwaySelectionSubsets = []
-    console.warn(`[isolator/clearSel] cleared ${count} subset(s), priorParents=${JSON.stringify(parents)}`)
   }
 
 

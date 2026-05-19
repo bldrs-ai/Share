@@ -135,7 +135,21 @@ export function buildSubsetMesh(sourceMesh, idSet, opts = {}) {
     dstGeom.setAttribute(name, srcGeom.attributes[name])
   }
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
-  const subsetMaterial = material ?? sourceMesh.material
+  let subsetMaterial = material ?? sourceMesh.material
+  // Three.js r135's `WebGLRenderer.projectObject` skips Meshes when
+  // `material` is an array but `geometry.groups.length === 0` — the
+  // group-walk in the renderer pushes nothing to the render list.
+  // Conway-direct models always carry `material: Array(N)` (one per
+  // color bin), so a subset with shared array material + no groups
+  // is invisible. Same shape, same fix here as in
+  // IfcInstanceMap#buildSubsetMesh.
+  if (Array.isArray(subsetMaterial)) {
+    if (subsetMaterial.length === 1) {
+      subsetMaterial = subsetMaterial[0]
+    } else if (subsetMaterial.length > 1) {
+      dstGeom.addGroup(0, dstIndexArr.length, 0)
+    }
+  }
   const subsetMesh = new Mesh(dstGeom, subsetMaterial)
   // Local transform mirrors source's local transform. World
   // transform alignment is the caller's responsibility (parent the

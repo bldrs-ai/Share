@@ -184,6 +184,50 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       subset.raycast(null, hits)
       expect(hits).toEqual([])
     })
+
+    it('unwraps a single-element material Array (renderer-skip fix)', () => {
+      // Three.js r135's projectObject iterates `geometry.groups` when
+      // material is an array and pushes nothing to the render list
+      // when groups is empty. Conway-direct's assembler always emits
+      // `material: Array(N)` (one entry per color bin) — a
+      // single-color model still gets Array(1). Without this unwrap,
+      // the subset would inherit Array(1) and silently not render —
+      // the exact "all elements hidden" bug surfaced on index.ifc.
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ], {geometry: geom})
+      const singleMat = new MeshBasicMaterial()
+      const subset = map.createSubsetMeshByInstance([0],
+        {defaultMaterial: [singleMat]})
+      // Array(1) unwrapped to scalar so renderer takes the
+      // `material.visible` branch instead of the empty-groups walk.
+      expect(subset.material).toBe(singleMat)
+      expect(Array.isArray(subset.material)).toBe(false)
+    })
+
+    it('adds a group spanning the index buffer when material is multi-element Array', () => {
+      // Multi-material case (e.g., Snowdon with N color bins). Keep
+      // the array material reference so call-sites that rely on it
+      // (highlighting fallbacks, downstream subset construction)
+      // still see Array(N), but add a group so the renderer iterates
+      // at least once and pushes the subset onto the render list.
+      // Per-material per-triangle correctness is a TODO §3b.iii.
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ], {geometry: geom})
+      const a = new MeshBasicMaterial()
+      const b = new MeshBasicMaterial()
+      const subset = map.createSubsetMeshByInstance([0],
+        {defaultMaterial: [a, b]})
+      expect(subset.material).toEqual([a, b])
+      const groups = subset.geometry.groups
+      expect(groups.length).toBe(1)
+      expect(groups[0].start).toBe(0)
+      expect(groups[0].count).toBe(subset.geometry.getIndex().count)
+      expect(groups[0].materialIndex).toBe(0)
+    })
   })
 
 
