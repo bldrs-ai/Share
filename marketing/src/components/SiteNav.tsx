@@ -54,7 +54,7 @@ export default function SiteNav() {
       <Toolbar sx={{justifyContent: 'space-between', gap: 2}}>
         <Stack
           component={Link}
-          href="/"
+          href="/about"
           direction="row"
           alignItems="center"
           spacing={1}

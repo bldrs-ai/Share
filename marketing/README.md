@@ -5,14 +5,17 @@ HTML at build time — crawlers, social-card scrapers, and humans get the real p
 not an SPA shell.
 
 This is a **sibling build** to the viewer SPA in `../src`. The viewer keeps its
-esbuild pipeline; this site owns everything outside `/share/*`.
+esbuild pipeline; this site owns specific marketing routes (listed below).
+**Root `/` stays with the SPA** — it redirects through react-router to the
+homepage IFC model at `/share/v/p/index.ifc` and must not be claimed here.
 
 ## Routes
 
 | Path | Source |
 |---|---|
-| `/` | `src/app/page.tsx` — landing |
-| `/about` | `src/app/about/page.tsx` |
+| `/about` | `src/app/about/page.tsx` — primary marketing landing |
+| `/pricing` | `src/app/pricing/page.tsx` |
+| `/services` | `src/app/services/page.tsx` |
 | `/privacy` | `src/app/privacy/page.tsx` |
 | `/tos` | `src/app/tos/page.tsx` |
 | `/blog` | `src/app/blog/page.tsx` — auto-listed from `content/blog/*.mdx` |
@@ -20,6 +23,11 @@ esbuild pipeline; this site owns everything outside `/share/*`.
 | `/sitemap.xml` | `src/app/sitemap.ts` |
 | `/robots.txt` | `src/app/robots.ts` |
 | `/feed.xml` | `src/app/feed.xml/route.ts` — RSS |
+
+Routes that **don't** live here:
+
+- `/` — SPA, redirects to the homepage IFC model
+- `/share/*` — SPA (the viewer)
 
 ## Dev loop
 
@@ -91,30 +99,54 @@ What still needs you:
 
 ## Deploy
 
-The marketing build outputs `out/` (static HTML); the viewer SPA outputs
-`docs/` (also static). Both go under one domain via path-based routing.
+**Status:** not wired into the existing Netlify pipeline yet. The PR #1519
+deploy preview only builds the SPA (per the root `netlify.toml`), so the new
+marketing pages won't appear there until the build step below is added.
 
-**Netlify / Cloudflare Pages** (easiest):
+The marketing build outputs `out/` (static HTML); the SPA outputs `docs/`
+(also static). Both go under one domain via path-based routing.
 
-```text
-# netlify.toml or _redirects equivalent:
-# 1. /share/* → SPA bundle (fallback index for client-side router)
-# 2. everything else → marketing build
-```
+### Local preview
 
-Build command (example):
+To verify the marketing build before wiring CI:
 
 ```bash
-yarn build                          # SPA → docs/
-cd marketing && yarn build && cd .. # marketing → marketing/out/
-# stage: copy marketing/out/* into a deploy folder, then docs/* under /share/
+cd marketing
+yarn install
+yarn build                       # → marketing/out/
+npx serve out                    # http://localhost:3000
 ```
 
-**GitHub Pages**: workable but messier — the existing SPA-on-GH-Pages 404
-redirect hack in `../public/index.html` conflicts with marketing's static
-HTML. Use a custom 404 only inside `/share/` if going this route.
+### Netlify (suggested wiring)
 
-Pick the platform and wire up a CI step; this scaffold is platform-agnostic.
+The SPA's `netlify.toml` publishes `docs/`. To layer the marketing build on
+top, extend the build to copy `marketing/out/*` into `docs/` after the SPA
+build runs. Because every marketing route lands in its own subdirectory
+(`/about/index.html`, `/pricing/index.html`, …), Netlify will serve those
+static files first and only fall back to the SPA's `docs/index.html` for
+unmatched routes (`/`, `/share/*`).
+
+Add to the root `netlify.toml`:
+
+```toml
+[build]
+  command = """
+    yarn build && \\
+    cd marketing && yarn install && yarn build && cd .. && \\
+    cp -r marketing/out/* docs/
+  """
+  publish = "docs"
+```
+
+Because the marketing build does **not** emit `out/index.html`, copying
+`out/*` into `docs/` does not clobber the SPA's `docs/index.html` — `/`
+keeps its react-router-based redirect to the homepage IFC model.
+
+### GitHub Pages
+
+Workable but messier — the existing SPA-on-GH-Pages 404 redirect hack in
+`../public/index.html` conflicts with marketing's static HTML. If going
+this route, use a custom 404 only inside `/share/`.
 
 ## Why not extend the SPA's esbuild build?
 

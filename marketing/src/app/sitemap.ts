@@ -9,17 +9,16 @@ export const dynamic = 'force-static'
 
 
 /**
- * Static-export sitemap. Includes top-level marketing pages + every blog post.
- * The /share/* viewer routes are intentionally excluded — they're dynamic and
- * served by a separate build that doesn't want crawler attention.
+ * Static-export sitemap. Lists every marketing-owned route. The viewer SPA
+ * owns `/` (and `/share/*`) — those routes are dynamic, redirect to the
+ * homepage IFC model, and don't belong in the marketing sitemap.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await listBlogPosts()
   const now = new Date().toISOString()
 
   const staticRoutes: MetadataRoute.Sitemap = [
-    {url: `${SITE_URL}/`, lastModified: now, changeFrequency: 'weekly', priority: 1},
-    {url: `${SITE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.9},
+    {url: `${SITE_URL}/about`, lastModified: now, changeFrequency: 'monthly', priority: 1},
     {url: `${SITE_URL}/pricing`, lastModified: now, changeFrequency: 'monthly', priority: 0.9},
     {url: `${SITE_URL}/services`, lastModified: now, changeFrequency: 'monthly', priority: 0.9},
     {url: `${SITE_URL}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.9},
