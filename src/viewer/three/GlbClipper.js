@@ -1,6 +1,6 @@
 import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere} from 'three'
-import {getMeshMaterials} from '../viewer/ShareModel'
-import debug from '../utils/debug'
+import {getMeshMaterials} from '../ShareModel'
+import debug from '../../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 
 

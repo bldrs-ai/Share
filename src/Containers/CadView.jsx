@@ -192,9 +192,9 @@ export default function CadView({
       depthTest: true,
     })
 
-    if (viewer.IFC.selector) {
-      viewer.IFC.selector.preselection.material = preselectMat
-      viewer.IFC.selector.selection.material = selectMat
+    if (viewer.selector?.hasForkSelector) {
+      viewer.selector.setPreselectionMaterial(preselectMat)
+      viewer.selector.setSelectionMaterial(selectMat)
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)

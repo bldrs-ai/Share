@@ -25,6 +25,7 @@ jest.mock('three', () => jest.requireActual('three'))
 import {BufferAttribute, BufferGeometry, Group, Mesh, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
 import {instanceMapFromGeometry} from './ifc/IfcInstanceMap'
+import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 
 
@@ -125,12 +126,17 @@ function makeViewerLike() {
   // sibling helper methods (e.g. `_setConwaySelectionFromModel` calls
   // `this._clearConwaySelectionSubsets()` internally).
   const viewer = Object.create(ShareViewer.prototype)
+  const forkSelector = {
+    selection: {material: null},
+    preselection: {material: null},
+  }
   Object.assign(viewer, {
     _conwaySelectionSubsets: [],
     _conwayPreselectionPool: null,
     context: {getScene: () => scene},
     highlighter,
-    IFC: {selector: {selection: {material: null}, preselection: {material: null}}},
+    IFC: {selector: forkSelector},
+    selector: new Selector(forkSelector),
     _scene: scene,
   })
   return viewer

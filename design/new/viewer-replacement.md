@@ -408,6 +408,96 @@ Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a
 - `Highlighter` — `src/Infrastructure/IfcHighlighter.js` lives here unchanged.
 - `Isolator` — `src/Infrastructure/IfcIsolator.js` lives here unchanged. Only its dep on `IfcContext` from `web-ifc-viewer/dist/components` becomes `ThreeContext` (a type-only swap).
 
+#### 3c.iv. Plugin migration progress (2026-05)
+
+Phase 2-3 landed five of the six plugins under a **flat** `src/viewer/three/`
+namespace rather than the per-concern subdirectories sketched in §5
+(`picker/`, `postprocess/`, `isolator/`, etc.). The flat layout matches
+the existing co-located test convention and keeps the cross-references
+between Picker / Highlighter / Isolator / Postprocessor on relative
+imports without `../` hops. The per-concern subdirs in §5 are
+descriptive of *what the plugins are*, not where they live; the actual
+filesystem layout is the flatter shape below.
+
+**Done:**
+
+| Plugin | Source location | Notes |
+|---|---|---|
+| `ThreeContext` | `src/viewer/three/ThreeContext.js` | Wraps the fork's `IfcContext`; will be standalone in Phase 5. |
+| `Picker` | `src/viewer/three/Picker.js` | Moved from `src/view/Picker.js`. |
+| `Postprocessor` | `src/viewer/three/CustomPostProcessor.js` | Moved from `Infrastructure/`. |
+| `Highlighter` | `src/viewer/three/IfcHighlighter.js` | Moved from `Infrastructure/`. |
+| `Isolator` | `src/viewer/three/IfcIsolator.js` | Moved from `Infrastructure/`; isolate routing through `IfcInstanceMap` landed in PR #1518. |
+
+**Next slices (in order):**
+
+1. **Selector facade** *(current slice)*. Land a `src/viewer/three/Selector.js`
+   that wraps the fork's `IFC.selector` behind a stable local API.
+   ShareViewer / IfcIsolator / CadView stop reaching into
+   `viewer.IFC.selector.X` (~16 call-sites) and route through
+   `viewer.selector.X` instead. Pure refactor; no behavior change.
+   This is a stepping stone — the §3c "Selection" plugin's eventual
+   contract (backed by `IfcModelService.createSubset` +
+   `postprocessing.OutlineEffect`) stays the destination; the facade
+   gives us a single seam to swap the impl in Phase 5 without churning
+   every call-site again.
+
+   API surface (mirrors what's read today):
+   ```js
+   viewer.selector.getSelectionMaterial() / setSelectionMaterial(m)
+   viewer.selector.getPreselectionMaterial() / setPreselectionMaterial(m)
+   viewer.selector.getSelectionMeshes()      // legacy IFC path; returns IFCSubset[] from web-ifc-three
+   viewer.selector.getPreselectionMeshes()
+   await viewer.selector.pickByIds(modelID, ids, focusSelection, removePrevious)
+   viewer.selector.unpick()                  // clears selection
+   await viewer.selector.preselectFromPick(raycastHit)
+   await viewer.selector.preselectByIds(modelID, ids, focusSelection, removePrevious)
+   viewer.selector.togglePreselectionVisibility(visible)
+   viewer.selector.clearSelection()          // = .selection.unpick() on the fork
+   viewer.selector.clearPreselection()       // = .preselection.unpick() on the fork
+   ```
+
+   The facade holds an internal reference to `viewer.IFC.selector`
+   (the fork's object) and delegates every method. The Conway-direct
+   paths (`instancePicking` models) don't touch the facade today —
+   their picking flows through `IfcInstanceMap` and the highlighter
+   directly. The facade still owns the *materials* both paths share
+   (selection / preselection theme colors), so `CadView`'s viewer-init
+   material assignment lands on the facade rather than the fork.
+
+2. **Move `GlbClipper` + `CutPlaneArrowHelper` to `viewer/three/`**
+   *(current slice — small cleanup)*. The clipper unification
+   (slice 3) wants both files under `src/viewer/three/` first; this is
+   a pure relocation with import updates in `CutPlaneMenu.jsx`.
+
+3. **Unified `Clipper` plugin** *(next slice)*. Erase the
+   `modelHasUnstructuredMeshClipper` branch in `CutPlaneMenu.jsx`:
+   one `Clipper` plugin exposes the surface (`{active, planes,
+   createFromNormalAndCoplanarPoint, deleteAllPlanes,
+   setInteractionEnabled}`) and dispatches internally to either the
+   IFC clipper (pickable-IFC-model raycast) or the arrow-handle
+   clipper (GLB / unstructured mesh) based on `model.capabilities`.
+   `useIfcClipper` capability drops out of `ShareModel` once the
+   branch is gone.
+
+4. **`IfcViewsManager` deletion** *(per §8.1)*. Single referenced
+   site is the `view=ch.sia380-1.heatmap` URL-parameter branch in
+   `ShareViewer.js` lines 3, 56–61. Drop together with
+   `Infrastructure/IfcElementsStyleManager.js`,
+   `Infrastructure/ViewRulesCompiler.js`,
+   `Infrastructure/IfcColor.js`,
+   `Infrastructure/ColorHelperFunctions.js`,
+   `Infrastructure/IfcCustomViewSettings.js` (last one is also used
+   by `WidgetApi/event-handlers/ChangeViewSettingsEventHandler.js`
+   — that call site needs to migrate to a `ShareModel`-level
+   post-build hook before the file can go).
+
+5. **`PlaceMark` relocation** *(post-Phase-5)*. Moves from
+   `Infrastructure/PlaceMark.js` to `src/viewer/three/PlaceMark.js`
+   alongside the markers' DOM-overlay code in `Components/Markers/`.
+   Low priority — the file is self-contained and the move is purely
+   organisational.
+
 ### 3d. `ShareViewer` facade
 The only construct that `Containers/viewer.js#initViewer` instantiates. It composes the layers above and exposes the **same property names** the rest of the code already uses:
 ```js
@@ -456,8 +546,15 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ### Phase 4 — cut over `IfcViewerAPIExtended` → `ShareViewer`
 - New module `src/viewer/ShareViewer.js` exporting the facade in §3d.
-- Update `Containers/viewer.js` to import `ShareViewer` instead of `IfcViewerAPIExtended`. The property surface is identical, so call-sites don't change.
-- Delete `Infrastructure/IfcViewerAPIExtended.js`.
+  *(2026-05: done; the class lives here and still extends the fork's
+  `IfcViewerAPI` until Phase 5.)*
+- Update `Containers/viewer.js` to import `ShareViewer` instead of `IfcViewerAPIExtended`. The property surface is identical, so call-sites don't change. *(2026-05: done.)*
+- Delete `Infrastructure/IfcViewerAPIExtended.js`. *(2026-05: done.)*
+- Land the **Selector facade** (§3c.iv slice 1) so the fork's
+  `IFC.selector` is reached only through `viewer.selector`. Pure
+  refactor; no behavior change. Sets up the Phase 5 impl swap.
+- Land the **GlbClipper relocation** (§3c.iv slice 2) — moves
+  `GlbClipper` + `CutPlaneArrowHelper` to `src/viewer/three/`.
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
 - Remove `web-ifc-viewer-1.0.209-bldrs-7.tgz` and the `web-ifc-viewer` dep.
@@ -481,33 +578,42 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ## 5. New layout
 
+The original sketch grouped plugins under per-concern subdirectories
+(`picker/`, `selection/`, `clipper/`, etc.). The implementation
+converged on a **flat `src/viewer/three/`** namespace — the per-plugin
+files cross-reference each other heavily (Highlighter ↔ Postprocessor,
+Selector ↔ Highlighter, Isolator ↔ Highlighter + Selector + Picker),
+and the flat shape keeps those imports on `./X` rather than `../Y/Z`.
+Co-located `*.test.js` files use the same convention.
+
+Actual layout (current state — top): destination layout (post-Phase 5
+— bottom):
+
 ```
 src/viewer/
   ShareViewer.js              ← facade, replaces IfcViewerAPIExtended
+  ShareModel.js               ← capability + format decoration (§8.2)
   three/
-    ThreeContext.js           ← replaces web-ifc-viewer/components/context
-    fitToFrame.js
-    dispose.js                ← extracted from Containers/viewer.js
+    ThreeContext.js           ← extracted Phase 2; standalone in Phase 5
+    Picker.js                 ← moved from view/Picker.js
+    CustomPostProcessor.js    ← moved from Infrastructure/
+    IfcHighlighter.js         ← moved from Infrastructure/
+    IfcIsolator.js            ← moved from Infrastructure/
+    Selector.js               ← §3c.iv slice 1 — facade over IFC.selector
+    GlbClipper.js             ← §3c.iv slice 2 — moved from Infrastructure/
+    CutPlaneArrowHelper.ts    ← §3c.iv slice 2 — moved from Infrastructure/
+    Clipper.js                ← §3c.iv slice 3 — unified clipper (future)
+    elementSubsets.js         ← shared subset helpers (legacy + Conway-direct)
   ifc/
-    IfcModelService.js        ← replaces web-ifc-three + IFC.loader.ifcManager
-    IfcModel.js               ← extends Mesh; subsets live here
     flatMeshToBufferGeometry.js
-    IfcViewsManager.js        ← moved from Infrastructure
-  picker/
-    Picker.js                 ← moved + tightened from view/Picker.js
-  selection/
-    Selector.js               ← replaces IFC.selector
-  clipper/
-    Clipper.js                ← merges Clipper + GlbClipper into one
-    CutPlaneArrowHelper.ts    ← moved from Infrastructure
-  postprocess/
-    Postprocessor.js          ← moved from Infrastructure/CustomPostProcessor.js
-    Highlighter.js            ← moved from Infrastructure/IfcHighlighter.js
-  isolator/
-    Isolator.js               ← moved from Infrastructure/IfcIsolator.js
+    IfcItemsMap.js            ← per-IFC-product table (§3b.ii)
+    IfcInstanceMap.js         ← per-PlacedGeometry table (§3b.ii)
+    buildConwayIfcModel.js
+    IfcModelService.js        ← Phase 5 — replaces IFC.loader.ifcManager
+    IfcModel.js               ← Phase 5 — extends Mesh; subsets live here
 ```
 
-Tests live next to source as today.
+Tests live next to source.
 
 ---
 

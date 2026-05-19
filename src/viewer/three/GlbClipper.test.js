@@ -33,7 +33,7 @@ function makeBoxModel() {
 }
 
 
-describe('Infrastructure/GlbClipper', () => {
+describe('viewer/three/GlbClipper', () => {
   describe('computeModelBoundingSphere', () => {
     it('returns a Sphere for a non-empty model', () => {
       const clipper = new GlbClipper(makeViewerStub(), makeBoxModel())
