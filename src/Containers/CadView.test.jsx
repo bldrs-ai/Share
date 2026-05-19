@@ -156,6 +156,31 @@ describe('CadView', () => {
   })
 
 
+  // Regression: the React effect `[selectedElements, selectedInstanceIds]`
+  // dispatches `viewer.setInstanceSelection` whenever `selectedInstanceIds`
+  // is non-empty. Pre-`ids.length > 0` guard, a stale `selectedInstanceIds`
+  // left over after a parent-selection clear (or after a hide that
+  // preserves store state) would re-create the Conway selection subset
+  // against an orphan parent — the cyan-rebirth-after-hide regression.
+  // The guard makes the effect skip `setInstanceSelection` when the
+  // parent-level ids are empty. This test exercises that path.
+  it('useEffect skips setInstanceSelection when selectedElements is empty', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
+    // Set ONLY selectedInstanceIds — leave selectedElements at its
+    // empty-array default. The effect runs on the dep change; the
+    // guard should swallow it.
+    viewer.setInstanceSelection.mockClear()
+    const STALE_INSTANCE_ID = 42
+    await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
+    await actAsyncFlush()
+    expect(viewer.setInstanceSelection).not.toHaveBeenCalled()
+  })
+
+
   // TODO(nickcastel50): See Issue #956
   it.skip('renders and selects the element ID from URL', async () => {
     const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/89'}

@@ -25,7 +25,7 @@ import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
-import {attachElementSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
 import {
   compareItemsMaps,
   formatComparison,
@@ -362,9 +362,21 @@ export async function load(
   // Phase 3's `IfcModel#createSubset`
   // (design/new/viewer-replacement.md §3b.i) so the same call-sites
   // work against both implementations.
+  //
+  // Conway-direct models (instancePicking) get the instance-map-
+  // aware variant — same return shape (`Mesh[]`), but subsets are
+  // built via each child mesh's `IfcInstanceMap` rather than scanning
+  // per-vertex `expressID`. The instance maps themselves are attached
+  // in the next block (cache-hit restoration); the createSubset
+  // closure resolves them lazily at invoke time, so the attach-here-
+  // populate-below order is fine.
   if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
     const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
-    attachElementSubsets(model, scene)
+    if (model.capabilities.instancePicking) {
+      attachInstanceMapSubsets(model, scene)
+    } else {
+      attachElementSubsets(model, scene)
+    }
     // Diagnostic: how many distinct per-vertex element IDs are in
     // this model? Compared against the IFC's true element count, a
     // gap signals lost instance identity through write/read — most
@@ -1350,18 +1362,25 @@ export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes
       ifcModel.capabilities.instancePicking = true
       ifcModel.capabilities.expressIdPicking = true
     }
-    // NOTE: we intentionally do NOT call `attachElementSubsets`
-    // here. That helper overwrites `model.createSubset` with an
-    // array-returning per-vertex implementation; `IfcIsolator`
-    // expects the web-ifc-three native `createSubset` that returns
-    // a single Mesh. ShareViewer.setSelection / setInstanceSelection
-    // build highlights from `instanceMap` directly (capability
-    // `instancePicking`) so they bypass `model.createSubset`
-    // entirely. The isolator's createSubset stays bound to
-    // web-ifc-three's; isolate/hide is known to be broken with
-    // conwayDirectIfc (web-ifc-three's IfcGeometryStorage references
-    // its original geometry, not the swapped one) and will be
-    // addressed in a follow-up slice.
+    // Replace web-ifc-three's native `createSubset` with the
+    // instance-map-aware one. Wit-three's stock `SubsetCreator` reads
+    // from the original (pre-swap) geometry through `ItemsMap`, so
+    // post-swap it builds subsets against the WRONG vertex buffer —
+    // the isolator's hide / isolate / reveal modes render against
+    // stale data on conwayDirectIfc. Routing through `attachInstanceMapSubsets`
+    // sources the subset from each child mesh's `IfcInstanceMap` (set
+    // a few lines above) — same vertex buffer, same triangle ranges
+    // as what's currently rendered, plus parent-product granularity
+    // matching the rest of the Conway-direct selection pipeline. See
+    // design/new/viewer-replacement.md §3b.iii.
+    // `fallbackParent = null` is intentional: by the time the
+    // isolator (or any other consumer) calls `createSubset`, the
+    // model is already added to the scene by `Containers/viewer.js`,
+    // so `sourceMesh.parent` is set. Tests and headless code that
+    // call before scene-attachment will get a null-parent subset —
+    // that's a known edge they need to handle (no production caller
+    // does this today).
+    attachInstanceMapSubsets(ifcModel, null)
     console.warn(
       `[conwayDirect] installed modelID=${ifcModel.modelID} ` +
       `in ${(t1 - t0).toFixed(1)}ms — ` +

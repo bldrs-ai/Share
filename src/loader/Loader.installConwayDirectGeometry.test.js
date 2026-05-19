@@ -210,6 +210,41 @@ describe('loader/installConwayDirectGeometry', () => {
     expect(ifcModel.capabilities.expressIdPicking).toBe(true)
   })
 
+  it('replaces createSubset with the instance-map-aware variant (returns Mesh[])', () => {
+    // Pre-swap: wit-three's stock `createSubset` reads against the
+    // ORIGINAL geometry through `ItemsMap`. After we swap geometry,
+    // wit-three's createSubset would build subsets against a stale
+    // vertex buffer — the regression that broke isolate/hide on
+    // conwayDirectIfc. After the install, `createSubset` is bound to
+    // `attachInstanceMapSubsets`, which sources subsets from the
+    // post-swap geometry through the IfcInstanceMap.
+    const api = makeApi({
+      999: {
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+      },
+    })
+    const ifcModel = makeIfcModel()
+    installConwayDirectGeometry(api, ifcModel, makeFlatMeshes([
+      {expressID: 100, placed: [{geometryExpressID: 999}]},
+      {expressID: 200, placed: [{geometryExpressID: 999}]},
+    ]))
+    expect(typeof ifcModel.createSubset).toBe('function')
+    expect(typeof ifcModel.removeSubset).toBe('function')
+    const result = ifcModel.createSubset({
+      // eslint-disable-next-line no-magic-numbers
+      ids: [100],
+      customID: 'Bldrs::Share::Isolator',
+    })
+    expect(Array.isArray(result)).toBe(true)
+    expect(result.length).toBe(1)
+    // The subset is built from the new (post-swap) geometry's
+    // attributes — vertex count matches the assembled buffer, not
+    // wit-three's pre-swap placeholder.
+    expect(result[0].geometry.getAttribute('position')).toBe(
+      ifcModel.geometry.getAttribute('position'))
+  })
+
   it('computes bounding box + sphere on the new geometry', () => {
     const api = makeApi({
       999: {
