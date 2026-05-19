@@ -20,9 +20,9 @@ import {
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import RocketIcon from '@mui/icons-material/Rocket'
+import ColorModeToggle from './ColorModeToggle'
 import LogoB from './LogoB'
 import {NAV_ITEMS, SITE_NAME, VIEWER_PATH} from '@/lib/site'
-import {LIME, LIME_HOVER} from '@/lib/theme'
 
 
 /**
@@ -45,8 +45,6 @@ export default function SiteNav() {
       position="sticky"
       elevation={0}
       sx={{
-        bgcolor: '#000000',
-        color: '#ffffff',
         borderBottom: 1,
         borderColor: 'divider',
       }}
@@ -74,7 +72,8 @@ export default function SiteNav() {
         </Stack>
 
         {isMobile ? (
-          <>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <ColorModeToggle/>
             <IconButton
               edge="end"
               color="inherit"
@@ -100,7 +99,7 @@ export default function SiteNav() {
                       >
                         <ListItemText
                           primary={item.label}
-                          primaryTypographyProps={isActive(item.path) ? {color: LIME, fontWeight: 700} : undefined}
+                          primaryTypographyProps={isActive(item.path) ? {color: 'primary.main', fontWeight: 700} : undefined}
                         />
                       </ListItemButton>
                     </ListItem>
@@ -113,14 +112,14 @@ export default function SiteNav() {
                     >
                       <ListItemText
                         primary="Launch App"
-                        primaryTypographyProps={{color: 'primary', fontWeight: 700}}
+                        primaryTypographyProps={{color: 'primary.main', fontWeight: 700}}
                       />
                     </ListItemButton>
                   </ListItem>
                 </List>
               </Box>
             </Drawer>
-          </>
+          </Stack>
         ) : (
           <Stack direction="row" spacing={1} alignItems="center">
             {NAV_ITEMS.map((item) => (
@@ -129,26 +128,25 @@ export default function SiteNav() {
                 component={Link}
                 href={item.path}
                 sx={{
-                  color: isActive(item.path) ? LIME : 'inherit',
+                  color: isActive(item.path) ? 'primary.main' : 'inherit',
                   fontWeight: isActive(item.path) ? 700 : 400,
                   fontSize: '0.95rem',
-                  '&:hover': {color: LIME},
+                  '&:hover': {color: 'primary.main'},
                 }}
               >
                 {item.label}
               </Button>
             ))}
+            <ColorModeToggle/>
             <Button
               component="a"
               href={VIEWER_PATH}
               variant="contained"
+              color="primary"
               startIcon={<RocketIcon/>}
               sx={{
-                ml: 2,
-                bgcolor: LIME,
-                color: '#000',
+                ml: 1,
                 fontWeight: 700,
-                '&:hover': {bgcolor: LIME_HOVER},
               }}
             >
               Launch App

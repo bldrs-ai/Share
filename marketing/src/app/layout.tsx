@@ -1,6 +1,7 @@
 import type {Metadata, Viewport} from 'next'
 import {AppRouterCacheProvider} from '@mui/material-nextjs/v15-appRouter'
 import ThemeRegistry from '@/components/ThemeRegistry'
+import {INIT_SCRIPT} from '@/lib/colorMode'
 import {
   OG_IMAGE,
   SITE_DESCRIPTION,
@@ -45,8 +46,13 @@ export const metadata: Metadata = {
   icons: {icon: '/favicon.ico'},
 }
 
+// Two theme-color entries let the browser chrome (mobile address bar) match
+// whichever scheme actually renders, instead of being locked to night.
 export const viewport: Viewport = {
-  themeColor: '#0A0A0A',
+  themeColor: [
+    {media: '(prefers-color-scheme: dark)', color: '#0A0A0A'},
+    {media: '(prefers-color-scheme: light)', color: '#ffffff'},
+  ],
   width: 'device-width',
   initialScale: 1,
 }
@@ -54,7 +60,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Sets data-color-mode on <html> before hydration so the first paint
+            matches the cookie. Inline (not a chunk) to avoid a network round
+            trip — the script body is ~250 bytes after minification. */}
+        <script dangerouslySetInnerHTML={{__html: INIT_SCRIPT}}/>
+      </head>
       <body>
         <AppRouterCacheProvider options={{key: 'mui'}}>
           <ThemeRegistry>{children}</ThemeRegistry>
