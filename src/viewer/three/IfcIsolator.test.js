@@ -594,34 +594,53 @@ describe('viewer/three/IfcIsolator', () => {
       }
     })
 
-    it('hideSelectedElements clears BOTH selectedElements and selectedInstanceIds', () => {
-      // Regression: pre-fix, hideSelectedElements only cleared
-      // selectedElements. selectedInstanceIds was left with the
-      // pre-hide instance ID, so the React useEffect in CadView
-      // re-ran on selectedElements change, saw the stale
-      // selectedInstanceIds, and called
-      // viewer.setInstanceSelection — which re-created the cyan
-      // per-instance selection subset via _setConwaySelectionFromModel.
-      // From the user's perspective: "hide cleared selection logs say
-      // so, but the cyan overlay is still there." The fix is to
-      // clear both lists in a single setState so the rerender sees
-      // a coherent zero state.
+    it('hideSelectedElements preserves selection state for H-toggle semantics', () => {
+      // The H key should toggle: first press hides the selected
+      // element, second press unhides it. For toggle to work, the
+      // selection list MUST persist across the hide — otherwise a
+      // second `getSelectedIds()` returns empty and the early-return
+      // kicks in.
+      //
+      // Preserving selection also dodges the "selection rebirth" the
+      // earlier setState-clears-both fix was guarding against: the
+      // React effect's deps (`selectedElements`, `selectedInstanceIds`)
+      // stay unchanged through the hide, so the effect doesn't re-run
+      // and `setInstanceSelection` doesn't get called on a stale
+      // instance id.
       const useStore = require('../../store/useStore').default
+      // Mock's setState is the module-singleton — calls accumulate
+      // across tests. Clear before exercising the path under test.
+      useStore.setState.mockClear()
       const {iso} = setupIsolatorWithModel()
       iso.viewer.getSelectedIds = () => [100]
       iso.hiddenIds = []
       iso.hideSelectedElements()
-      // Find the setState call that zeroed the selection. The other
-      // setState calls (hiddenElements + isolatedElements) precede
-      // this one and shouldn't be confused with the selection clear.
+      // The hidden-state setState went through.
       const setStateCalls = useStore.setState.mock.calls.map((c) => c[0])
+      const hiddenWrite = setStateCalls.find(
+        (call) => call && 'hiddenElements' in call)
+      expect(hiddenWrite).toBeDefined()
+      expect(hiddenWrite.hiddenElements).toEqual({100: true})
+      // But NO setState ever zeroed selectedElements / selectedInstanceIds.
+      // The store-side selection is left alone so the next H sees
+      // the same selection.
       const selectionClear = setStateCalls.find(
-        (call) => call &&
-          'selectedElements' in call &&
-          Array.isArray(call.selectedElements) &&
-          call.selectedElements.length === 0)
-      expect(selectionClear).toBeDefined()
-      expect(selectionClear.selectedInstanceIds).toEqual([])
+        (call) => call && 'selectedElements' in call)
+      expect(selectionClear).toBeUndefined()
+    })
+
+    it('hideSelectedElements on already-hidden selection unhides (H toggle)', () => {
+      const {iso} = setupIsolatorWithModel()
+      iso.viewer.getSelectedIds = () => [100]
+      // Spy on unHideElementsById so we know the toggle branch fired
+      // — mock the implementation so the spy intercepts before the
+      // full unhide cascade (which would need a more elaborate store
+      // setup to walk through cleanly).
+      const unHideSpy = jest.spyOn(iso, 'unHideElementsById').mockImplementation(() => {})
+      iso.hiddenIds = [100] // already hidden
+      iso.hideSelectedElements()
+      expect(unHideSpy).toHaveBeenCalledWith([100])
+      unHideSpy.mockRestore()
     })
   })
 

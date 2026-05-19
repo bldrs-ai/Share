@@ -353,8 +353,19 @@ export default class IfcIsolator {
     if (selection.length === 0) {
       return
     }
-    const noChanges = unsortedArraysAreEqual(selection, this.hiddenIds)
-    if (noChanges) {
+    // Toggle semantics: a second H press on an already-hidden
+    // selection unhides it. The selection list is preserved across
+    // hide / unhide so the same H press can flip back; the React
+    // effect's deps (`selectedElements`, `selectedInstanceIds`) stay
+    // unchanged, which also avoids the "selection rebirth" path that
+    // re-created the cyan subset on a stale `selectedInstanceIds`
+    // (see prior commit). The cyan selection overlay rendered against
+    // shared per-vertex attributes stays at the source element's
+    // position through the hide — it's the UI cue that "this is what
+    // you have selected, and right now it's hidden."
+    const allSelectedHidden = selection.every((id) => this.hiddenIds.includes(id))
+    if (allSelectedHidden) {
+      this.unHideElementsById([...selection])
       return
     }
 
@@ -365,20 +376,6 @@ export default class IfcIsolator {
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
-    // Clear BOTH selection lists. `selectedInstanceIds` lives in the
-    // store alongside `selectedElements` (set by the click handler's
-    // per-instance branch in `CadView.canvasDoubleClickHandler`); the
-    // React useEffect re-runs on either change and calls
-    // `viewer.setInstanceSelection(0, selectedInstanceIds)` if it's
-    // non-empty. Without clearing it here, the post-hide rerender
-    // RE-CREATES the cyan per-instance selection subset via
-    // `_setConwaySelectionFromModel`, so the just-cleared
-    // `_conwaySelectionSubsets` gets refilled with the old instance.
-    // The user sees the cyan overlay as if hide hadn't happened —
-    // exactly the regression caught in this PR's review. Clearing
-    // both in one setState keeps the React rerender batched.
-    useStore.setState({selectedElements: [], selectedInstanceIds: []})
-    this.viewer.setSelection(0, [], false)
   }
 
   /**
