@@ -365,6 +365,24 @@ the per-vertex `expressID` attribute across child Meshes.
   are rare so impact is lower) and could be lifted into a
   general SubsetPool the isolator + clipper consume too.
 
+- **Per-IFC-product Mesh emission as the long-term hide / pick
+  architecture.** The current assembler bins
+  `PlacedGeometries` by `placedGeometry.color`, producing one
+  child Mesh per color bin — which is what forces every hide /
+  isolate to construct a filtered subset Mesh and what made the
+  array-material `geometry.groups`-empty render-skip bug
+  reachable in the first place. An alternative shape — one
+  Mesh per IFC product (per `FlatMesh.expressID`) — would make
+  hide trivially `mesh.visible = false`, drop the entire
+  subset-construction surface for the simple case, and remove
+  the multi-material monochrome regression in `buildSubsetMesh`'s
+  `Array(N>1)` fallback. The cost is N draw calls instead of M
+  binned ones; on Snowdon (~6k products) that's noticeable but
+  recoverable with InstancedMesh batching for the
+  `IfcMappedItem`-heavy portion and per-product Mesh for the
+  rest. Worth a separate spike post-default-on. Captured here
+  so the idea doesn't fall off the followup list.
+
 **Default-on gating:** isolate routing now done. Remaining blockers
 before flipping the `conwayDirectIfc` flag default-on:
 

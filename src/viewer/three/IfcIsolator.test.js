@@ -66,8 +66,11 @@ function makeIsolator(overrides = {}) {
     },
     IFC: {selector: {selection: {unpick: jest.fn()}, preselection: {unpick: jest.fn()}}},
     setSelection: jest.fn(),
+    setInstanceSelection: jest.fn(),
     getSelectedIds: jest.fn(() => []),
+    highlighter: {setHighlighted: jest.fn()},
     _clearPreselectionForAllModels: jest.fn(),
+    _clearConwaySelectionSubsets: jest.fn(),
   }
   return new IfcIsolator(context, viewer)
 }
@@ -641,6 +644,78 @@ describe('viewer/three/IfcIsolator', () => {
       iso.hideSelectedElements()
       expect(unHideSpy).toHaveBeenCalledWith([100])
       unHideSpy.mockRestore()
+    })
+
+    it('hideSelectedElements clears the cyan selection visual after building hide subset', () => {
+      // The cyan overlay used to linger at the hidden element's
+      // position because hide preserved the store-side selection
+      // (for H-toggle) AND didn't touch the visual. User feedback:
+      // "it should be removed, via the clear and rebuilt as you
+      // say." So hide now drives `_clearSelectionVisualOnly` after
+      // assembling the hide subset; the store-side selection is
+      // still preserved so the next H press can rebuild it.
+      const {iso} = setupIsolatorWithModel()
+      iso.viewer.getSelectedIds = () => [100]
+      iso.hiddenIds = []
+      iso.hideSelectedElements()
+      expect(iso.viewer.highlighter.setHighlighted).toHaveBeenCalledWith(null)
+      expect(iso.viewer._clearConwaySelectionSubsets).toHaveBeenCalled()
+      // And no store-side selection clear happened (toggle relies on
+      // the selection persisting).
+      const useStore = require('../../store/useStore').default
+      const setStateCalls = useStore.setState.mock.calls.map((c) => c[0])
+      const selectionWrite = setStateCalls.find(
+        (call) => call && 'selectedElements' in call)
+      expect(selectionWrite).toBeUndefined()
+    })
+
+
+    it('_rebuildSelectionVisualFromStore re-issues setSelection + setInstanceSelection from store', () => {
+      const useStore = require('../../store/useStore').default
+      const {iso} = setupIsolatorWithModel()
+      // Seed the store so the rebuild has something to read.
+      useStore.getState.mockImplementation(() => ({
+        elementTypesMap: [],
+        selectedElements: ['100'],
+        selectedInstanceIds: [4],
+      }))
+      iso._rebuildSelectionVisualFromStore()
+      // Parent-level rebuild dispatched.
+      expect(iso.viewer.setSelection).toHaveBeenCalledWith(0, [100], false)
+      // Per-instance narrowing dispatched too (the original click
+      // tagged us with a PlacedGeometry).
+      expect(iso.viewer.setInstanceSelection).toHaveBeenCalledWith(0, [4])
+    })
+
+
+    it('_rebuildSelectionVisualFromStore no-ops when store has no selection', () => {
+      const useStore = require('../../store/useStore').default
+      const {iso} = setupIsolatorWithModel()
+      useStore.getState.mockImplementation(() => ({
+        elementTypesMap: [],
+        selectedElements: [],
+        selectedInstanceIds: [],
+      }))
+      iso.viewer.setSelection.mockClear()
+      iso.viewer.setInstanceSelection.mockClear()
+      iso._rebuildSelectionVisualFromStore()
+      expect(iso.viewer.setSelection).not.toHaveBeenCalled()
+      expect(iso.viewer.setInstanceSelection).not.toHaveBeenCalled()
+    })
+
+
+    it('_rebuildSelectionVisualFromStore skips setInstanceSelection when no instance ids', () => {
+      const useStore = require('../../store/useStore').default
+      const {iso} = setupIsolatorWithModel()
+      useStore.getState.mockImplementation(() => ({
+        elementTypesMap: [],
+        selectedElements: ['100'],
+        selectedInstanceIds: [],
+      }))
+      iso.viewer.setInstanceSelection.mockClear()
+      iso._rebuildSelectionVisualFromStore()
+      expect(iso.viewer.setSelection).toHaveBeenCalledWith(0, [100], false)
+      expect(iso.viewer.setInstanceSelection).not.toHaveBeenCalled()
     })
   })
 

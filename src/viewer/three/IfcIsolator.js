@@ -354,15 +354,16 @@ export default class IfcIsolator {
       return
     }
     // Toggle semantics: a second H press on an already-hidden
-    // selection unhides it. The selection list is preserved across
-    // hide / unhide so the same H press can flip back; the React
-    // effect's deps (`selectedElements`, `selectedInstanceIds`) stay
-    // unchanged, which also avoids the "selection rebirth" path that
-    // re-created the cyan subset on a stale `selectedInstanceIds`
-    // (see prior commit). The cyan selection overlay rendered against
-    // shared per-vertex attributes stays at the source element's
-    // position through the hide — it's the UI cue that "this is what
-    // you have selected, and right now it's hidden."
+    // selection unhides it. The store-side selection list is
+    // preserved across hide / unhide so the same H press can flip
+    // back; the React effect's deps (`selectedElements`,
+    // `selectedInstanceIds`) stay unchanged, which also avoids the
+    // "selection rebirth" path that re-created the cyan subset on a
+    // stale `selectedInstanceIds`. On the visual side we DO clear
+    // the cyan selection overlay (see `_clearSelectionVisualOnly`
+    // below) so the hide reads cleanly; the unhide branch
+    // (`unHideElementsById` / `unHideAllElements`) rebuilds it from
+    // the preserved store state via `_rebuildSelectionVisualFromStore`.
     const allSelectedHidden = selection.every((id) => this.hiddenIds.includes(id))
     if (allSelectedHidden) {
       this.unHideElementsById([...selection])
@@ -376,6 +377,58 @@ export default class IfcIsolator {
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
+    this._clearSelectionVisualOnly()
+  }
+
+
+  /**
+   * Clear the Conway-direct selection visual (cyan outline + fill
+   * subsets + OutlineEffect selection set) WITHOUT touching the
+   * store-side `selectedElements` / `selectedInstanceIds` or the
+   * viewer's `_selectedExpressIds` cache.
+   *
+   * Used by hide-paths that preserve selection state for H-toggle
+   * semantics but still want the cyan to disappear so the hide reads
+   * cleanly. The counterpart `_rebuildSelectionVisualFromStore`
+   * resyncs the visual from the (preserved) store state on unhide.
+   *
+   * @private
+   */
+  _clearSelectionVisualOnly() {
+    if (this.viewer.highlighter && typeof this.viewer.highlighter.setHighlighted === 'function') {
+      this.viewer.highlighter.setHighlighted(null)
+    }
+    if (typeof this.viewer._clearConwaySelectionSubsets === 'function') {
+      this.viewer._clearConwaySelectionSubsets()
+    }
+  }
+
+
+  /**
+   * Rebuild the selection visual (cyan subset + outline) from the
+   * current store state. Called by unhide-paths after the hide-subset
+   * teardown so the cyan returns to its original spot.
+   *
+   * Mirrors what `CadView`'s `[selectedElements, selectedInstanceIds]`
+   * useEffect does — first `setSelection` for parent-level highlight,
+   * then `setInstanceSelection` to narrow to a specific PlacedGeometry
+   * if the click handler tagged us with one. The React effect won't
+   * re-run on its own because hide didn't change either dep.
+   *
+   * @private
+   */
+  _rebuildSelectionVisualFromStore() {
+    const sel = useStore.getState().selectedElements
+    if (!Array.isArray(sel) || sel.length === 0) {
+      return
+    }
+    const ids = sel.map((e) => Number(e))
+    this.viewer.setSelection(0, ids, false)
+    const instIds = useStore.getState().selectedInstanceIds
+    if (Array.isArray(instIds) && instIds.length > 0 &&
+        typeof this.viewer.setInstanceSelection === 'function') {
+      this.viewer.setInstanceSelection(0, instIds)
+    }
   }
 
   /**
@@ -445,8 +498,13 @@ export default class IfcIsolator {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
       this.initHideOperationsSubset(toBeShown)
     }
-    const selection = useStore.getState().selectedElements.map((e) => Number(e))
-    this.viewer.setSelection(0, selection, false)
+    // Rebuild the selection visual (cyan) from the preserved store
+    // state. Goes through both `setSelection` (parent-level) and
+    // `setInstanceSelection` (per-PlacedGeometry narrowing) to match
+    // what the original click handler set up — without this, the H-
+    // toggle that hides per-instance + unhides would land on a
+    // parent-level cyan and lose the per-instance precision.
+    this._rebuildSelectionVisualFromStore()
     // reset reveal mode
     if (this.revealHiddenElementsMode) {
       this.revealHiddenElementsMode = false
@@ -467,6 +525,13 @@ export default class IfcIsolator {
     this._addSubsetToScene(this.ifcModel)
     this.hiddenIds = []
     useStore.setState({hiddenElements: {}})
+    // Rebuild the cyan selection visual from the preserved store
+    // state. `hideSelectedElements` cleared the visual but kept the
+    // store side (for H-toggle semantics); the Show All button
+    // routes through here without going through `unHideElementsById`'s
+    // setSelection call, so without this the visual stays cleared
+    // even though the store still has a selection.
+    this._rebuildSelectionVisualFromStore()
     if (this.revealHiddenElementsMode) {
       this.toggleRevealHiddenElements()
     }
@@ -608,6 +673,14 @@ export default class IfcIsolator {
       this._addSubsetToScene(this.ifcModel)
     }
     this.isolationOutlineEffect.setSelection([])
+    // Rebuild the cyan selection visual. Covers the hide-then-
+    // isolate-then-deisolate flow: hide cleared the visual, isolate
+    // didn't touch it, and resetTempIsolation now restores it from
+    // the preserved store-side selection. For the non-hide-prior
+    // isolate-toggle flow this is effectively a no-op (the visual
+    // was never cleared, `_setConwaySelectionFromModel` inside
+    // setSelection clears + rebuilds at the same position).
+    this._rebuildSelectionVisualFromStore()
   }
 
   /**

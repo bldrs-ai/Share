@@ -296,8 +296,8 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
   }
   dstGeom.setIndex(new BufferAttribute(dstIndexArr, 1))
   let subsetMaterial = opts.material ?? opts.defaultMaterial ?? null
-  // Three.js's WebGLRenderer `projectObject` (see r135 three.module.js
-  // around line 17842) iterates `geometry.groups` when the material
+  // Three.js's WebGLRenderer `projectObject` (three.module.js around
+  // line 17842 in r184) iterates `geometry.groups` when the material
   // is an array — and pushes NOTHING to the render list if `groups`
   // is empty. So a subset with `material: Array(N)` + no groups gets
   // silently skipped. Conway-direct's assembler always emits `material`
