@@ -374,11 +374,22 @@ export default class IfcIsolator {
     const scene = this.context.getScene()
     const pickable = this.context.getPickableModels()
     const triCount = (m) => m?.geometry?.getIndex?.()?.count / 3 || 0
+    const matInfo = (mat) => {
+      if (!mat) {
+        return 'null'
+      }
+      if (Array.isArray(mat)) {
+        return `Array(${mat.length})[${mat.map((m) => m?.color?.getHexString?.() || '?').join(',')}]`
+      }
+      const base = `${mat.type || '?'}#${mat.color?.getHexString?.() || '?'}`
+      return mat.transparent ? `${base}(t,o=${mat.opacity})` : base
+    }
     const perMesh = meshes.map((m) => ({
       tris: triCount(m),
       inScene: m.parent === scene,
       inPickable: pickable.indexOf(m) >= 0,
       visible: m.visible !== false,
+      mat: matInfo(m.material),
     }))
     const totalTris = perMesh.reduce((sum, m) => sum + m.tris, 0)
     console.warn(
@@ -388,16 +399,25 @@ export default class IfcIsolator {
       `ifcModelInPickable=${pickable.indexOf(this.ifcModel) >= 0}, ` +
       `visualElementsIdsLength=${this.visualElementsIds.length}, ` +
       `hiddenIdsLength=${this.hiddenIds.length}`)
-    // Per-mesh dive into the instanceMap + actual rendered triangle
-    // positions. Catches the "data path looks right but renders only
-    // the selected element" surface: if the map only has ONE parent
-    // entry (instead of N), createSubsetMeshByParent collects only
-    // that parent's instances no matter what `ids` is, and the
-    // resulting subset renders just that one element. The position
-    // sample distinguishes "subset is wrong" (positions all near the
-    // selected element) from "subset is right" (positions spread
-    // across the model bbox).
     this._diagSourceMeshes(label, ids)
+    // Snapshot the full scene tree so we can see what's actually
+    // visible after hide / isolate. Filters to renderable Meshes
+    // (skips lights, cameras, helpers) and lists each with material
+    // info + position offset. If something cyan is rendering that
+    // shouldn't be, it'll show up here.
+    const sceneMeshes = []
+    scene.traverse((obj) => {
+      if (!obj.isMesh) {
+        return
+      }
+      sceneMeshes.push({
+        name: obj.name || '?',
+        tris: triCount(obj),
+        visible: obj.visible !== false,
+        mat: matInfo(obj.material),
+      })
+    })
+    console.warn(`${label} scene contents: ${JSON.stringify(sceneMeshes)}`)
   }
 
 
