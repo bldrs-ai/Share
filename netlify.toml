@@ -1,6 +1,22 @@
 # Skip the deploy preview when the only changes are documentation. The script
 # exits 0 to skip and 1 to build; logic and edge cases are documented inline.
+#
+# The build runs the SPA (yarn build → docs/), then the Next.js marketing
+# site (marketing/yarn install + yarn build → marketing/out/), then overlays
+# the marketing static files onto docs/ so the merged tree serves:
+#   /                  → SPA (docs/index.html — react-router → IFC homepage)
+#   /share/*           → SPA (_redirects /* /index.html 200 catches it)
+#   /about/, /pricing/,
+#   /services/, /blog/,
+#   /privacy/, /tos/   → marketing static HTML (file match wins before _redirects)
+#   /sitemap.xml,
+#   /robots.txt,
+#   /feed.xml          → marketing
+# `cp -r marketing/out/. docs/` merges contents; `out/` deliberately has no
+# index.html (page.tsx was removed) so the SPA's docs/index.html survives.
 [build]
+  command = "yarn build && cd marketing && yarn install --frozen-lockfile && yarn build && cd .. && cp -r marketing/out/. docs/"
+  publish = "docs"
   ignore = "bash tools/netlify/ignore-build.sh"
 
 # Local development. `npx netlify dev` launches `yarn serve-prod` (the
