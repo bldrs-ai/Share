@@ -764,7 +764,17 @@ export default function CadView({
       // element; setInstanceSelection replaces that with a one-
       // instance subset. Empty array = no override (Shift-click or
       // legacy path).
-      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0 &&
+      //
+      // `ids.length > 0` guard: setInstanceSelection re-creates the
+      // Conway selection subset from scratch, so calling it when the
+      // parent selection has been cleared (e.g., right after Hide)
+      // would re-add a cyan overlay tied to a stale instanceId — the
+      // exact regression spotted during isolator review. Hide /
+      // similar paths now clear `selectedInstanceIds` alongside
+      // `selectedElements` (see IfcIsolator#hideSelectedElements);
+      // this guard backstops any future path that forgets.
+      if (ids.length > 0 &&
+          Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0 &&
           typeof viewer.setInstanceSelection === 'function') {
         viewer.setInstanceSelection(0, selectedInstanceIds)
       }

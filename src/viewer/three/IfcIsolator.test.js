@@ -65,6 +65,9 @@ function makeIsolator(overrides = {}) {
       createOutlineEffect: jest.fn(() => ({setSelection: jest.fn()})),
     },
     IFC: {selector: {selection: {unpick: jest.fn()}, preselection: {unpick: jest.fn()}}},
+    setSelection: jest.fn(),
+    getSelectedIds: jest.fn(() => []),
+    _clearPreselectionForAllModels: jest.fn(),
   }
   return new IfcIsolator(context, viewer)
 }
@@ -589,6 +592,36 @@ describe('viewer/three/IfcIsolator', () => {
         expect(m.parent).toBe(scene)
         expect(pickable).toContain(m)
       }
+    })
+
+    it('hideSelectedElements clears BOTH selectedElements and selectedInstanceIds', () => {
+      // Regression: pre-fix, hideSelectedElements only cleared
+      // selectedElements. selectedInstanceIds was left with the
+      // pre-hide instance ID, so the React useEffect in CadView
+      // re-ran on selectedElements change, saw the stale
+      // selectedInstanceIds, and called
+      // viewer.setInstanceSelection — which re-created the cyan
+      // per-instance selection subset via _setConwaySelectionFromModel.
+      // From the user's perspective: "hide cleared selection logs say
+      // so, but the cyan overlay is still there." The fix is to
+      // clear both lists in a single setState so the rerender sees
+      // a coherent zero state.
+      const useStore = require('../../store/useStore').default
+      const {iso} = setupIsolatorWithModel()
+      iso.viewer.getSelectedIds = () => [100]
+      iso.hiddenIds = []
+      iso.hideSelectedElements()
+      // Find the setState call that zeroed the selection. The other
+      // setState calls (hiddenElements + isolatedElements) precede
+      // this one and shouldn't be confused with the selection clear.
+      const setStateCalls = useStore.setState.mock.calls.map((c) => c[0])
+      const selectionClear = setStateCalls.find(
+        (call) => call &&
+          'selectedElements' in call &&
+          Array.isArray(call.selectedElements) &&
+          call.selectedElements.length === 0)
+      expect(selectionClear).toBeDefined()
+      expect(selectionClear.selectedInstanceIds).toEqual([])
     })
   })
 

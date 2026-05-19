@@ -506,7 +506,19 @@ export default class IfcIsolator {
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
-    useStore.setState({selectedElements: []})
+    // Clear BOTH selection lists. `selectedInstanceIds` lives in the
+    // store alongside `selectedElements` (set by the click handler's
+    // per-instance branch in `CadView.canvasDoubleClickHandler`); the
+    // React useEffect re-runs on either change and calls
+    // `viewer.setInstanceSelection(0, selectedInstanceIds)` if it's
+    // non-empty. Without clearing it here, the post-hide rerender
+    // RE-CREATES the cyan per-instance selection subset via
+    // `_setConwaySelectionFromModel`, so the just-cleared
+    // `_conwaySelectionSubsets` gets refilled with the old instance.
+    // The user sees the cyan overlay as if hide hadn't happened —
+    // exactly the regression caught in this PR's review. Clearing
+    // both in one setState keeps the React rerender batched.
+    useStore.setState({selectedElements: [], selectedInstanceIds: []})
     this.viewer.setSelection(0, [], false)
   }
 
