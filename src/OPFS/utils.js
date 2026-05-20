@@ -184,59 +184,82 @@ export function writeBase64Model(
   branch,
   setOpfsFile) {
   assertDefined(content, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile)
+  return awaitTerminalWorkerEvent(
+    () => opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken),
+    {setOpfsFile})
+}
+
+
+/**
+ * Subscribe to the OPFS worker's single-terminal-event protocol and return a
+ * Promise that resolves with the final File (or rejects on `{error}`).
+ *
+ * The worker emits exactly one terminal `completed` event per request —
+ * `exists`, `renamed`, or `download` (the last is the commit-hash / rename
+ * fallback path; we still resolve with the un-renamed File so the load
+ * completes). Progress events (`progressEvent: true`) are forwarded to
+ * `onProgress` and don't terminate the listener.
+ *
+ * Extracted from the duplicate listeners in `downloadModel` /
+ * `writeBase64Model` so the protocol contract lives in one place.
+ *
+ * @param {Function} kickoff Invokes the corresponding `opfsService` entry
+ *   point. Called after the listener is wired up so we don't miss the
+ *   first message.
+ * @param {object} hooks
+ * @param {Function} hooks.setOpfsFile Called with the resolved File.
+ * @param {Function} [hooks.onProgress] Called on each progress update.
+ * @param {Function} [hooks.onLastModifiedGithub] Called once with the commit
+ *   epoch ms if the terminal event carries it.
+ * @return {Promise<File>}
+ */
+function awaitTerminalWorkerEvent(kickoff, {setOpfsFile, onProgress, onLastModifiedGithub}) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // See the listener in downloadModel below for the protocol details —
-      // same single-terminal-event flow, same legacy-tolerance.
-      let downloadSeen = false
-      let waitingForTerminal = false
-      let pendingDownloadEvent = null
-      const finishWith = (event) => {
-        workerRef.removeEventListener('message', listener)
-        const file = event.data.file
-        if (file instanceof File) {
-          setOpfsFile(file)
-        } else if (typeof Blob !== 'undefined' && file instanceof Blob) {
-          setOpfsFile(file)
-        } else {
-          debug().error('Retrieved object is not of type File.')
-        }
-        resolve(file)
-      }
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener)
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          if (event.data.event === 'download' && !downloadSeen) {
-            downloadSeen = true
-            waitingForTerminal = true
-            pendingDownloadEvent = event
-            debug().warn('Worker finished downloading file')
-            Promise.resolve().then(() => {
-              if (waitingForTerminal && pendingDownloadEvent) {
-                waitingForTerminal = false
-                finishWith(pendingDownloadEvent)
-                pendingDownloadEvent = null
-              }
-            })
-            return
-          }
-          if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
-          }
-          waitingForTerminal = false
-          pendingDownloadEvent = null
-          finishWith(event)
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
+    if (workerRef === null) {
       reject(new Error('Worker initialization failed'))
+      return
     }
-    opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.progressEvent) {
+        if (onProgress) {
+          onProgress({
+            lengthComputable: event.data.contentLength !== 0,
+            contentLength: event.data.contentLength,
+            receivedLength: event.data.receivedLength,
+          })
+        }
+        return
+      }
+      if (!event.data.completed) {
+        return
+      }
+      // Terminal event. Log the variant for diagnostics, then resolve.
+      if (event.data.event === 'download') {
+        debug().warn('Worker finished downloading file')
+      } else if (event.data.event === 'exists') {
+        debug().warn('Commit exists in OPFS.')
+      }
+      if (event.data.lastModifiedGithub && onLastModifiedGithub) {
+        onLastModifiedGithub(event.data.lastModifiedGithub)
+      }
+      workerRef.removeEventListener('message', listener)
+      const file = event.data.file
+      if (file instanceof File) {
+        setOpfsFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+      resolve(file)
+    }
+    workerRef.addEventListener('message', listener)
+    kickoff()
   })
 }
 
@@ -267,85 +290,9 @@ export function downloadModel(
   onProgress,
   onLastModifiedGithub = null) {
   assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker.
-      //
-      // The worker now emits exactly one terminal completed event per call
-      // (`exists`, `renamed`, or — when the post-download commit-hash fetch
-      // or rename failed and we fell back to the un-renamed handle —
-      // `download`). The legacy two-event sequence (`download` followed by
-      // `renamed`) is still tolerated for tests and any classic-worker
-      // callers: we treat the first `download` as intermediate and wait for
-      // a follow-up terminal event, but if no follow-up arrives in the
-      // next microtask we accept the `download` AS terminal so the load
-      // never hangs.
-      let downloadSeen = false
-      let waitingForTerminal = false
-      let pendingDownloadEvent = null
-      const finishWith = (event) => {
-        workerRef.removeEventListener('message', listener)
-        const file = event.data.file
-        if (file instanceof File) {
-          setOpfsFile(file)
-        } else if (typeof Blob !== 'undefined' && file instanceof Blob) {
-          // In jest tests File ≡ Blob — accept the Blob path.
-          setOpfsFile(file)
-        } else {
-          debug().error('Retrieved object is not of type File.')
-        }
-        resolve(file)
-      }
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener)
-          reject(new Error(event.data.error))
-        } else if (event.data.progressEvent) {
-          if (onProgress) {
-            onProgress({
-              lengthComputable: event.data.contentLength !== 0,
-              contentLength: event.data.contentLength,
-              receivedLength: event.data.receivedLength,
-            })
-          }
-        } else if (event.data.completed) {
-          if (event.data.lastModifiedGithub && onLastModifiedGithub) {
-            onLastModifiedGithub(event.data.lastModifiedGithub)
-          }
-          if (event.data.event === 'download' && !downloadSeen) {
-            // Legacy two-event flow: hold this event in case it's
-            // intermediate. If a follow-up `renamed`/`exists` doesn't arrive
-            // in the next microtask, treat the `download` AS terminal so the
-            // load doesn't hang (commit-hash-fallback path).
-            downloadSeen = true
-            waitingForTerminal = true
-            pendingDownloadEvent = event
-            debug().warn('Worker finished downloading file')
-            Promise.resolve().then(() => {
-              if (waitingForTerminal && pendingDownloadEvent) {
-                waitingForTerminal = false
-                finishWith(pendingDownloadEvent)
-                pendingDownloadEvent = null
-              }
-            })
-            return
-          }
-          if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
-          }
-          waitingForTerminal = false
-          pendingDownloadEvent = null
-          finishWith(event)
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-    opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
-  })
+  return awaitTerminalWorkerEvent(
+    () => opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress)),
+    {setOpfsFile, onProgress, onLastModifiedGithub})
 }
 
 /**

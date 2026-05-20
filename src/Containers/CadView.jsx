@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
@@ -32,11 +32,6 @@ import {initViewer} from './viewer'
 
 
 let count = 0
-// Tracks the theme-change listener registered by onModelPath() so we
-// can remove it before registering a new one on the next model load.
-// Otherwise each prior listener stays in the registry, capturing its
-// (now-disposed) viewer via closure and pinning it from GC.
-let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -81,6 +76,14 @@ export default function CadView({
   // AppSlice
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
+
+  // Tracks the theme-change listener registered by onModelPath() so we
+  // can remove it before registering a new one on the next model load.
+  // Otherwise each prior listener stays in the registry, capturing its
+  // (now-disposed) viewer via closure and pinning it from GC. A ref
+  // (not module-level state) so two CadView mounts in the same process —
+  // tests, multi-pane layouts — don't stomp each other.
+  const previousThemeChangeCbRef = useRef(null)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -148,10 +151,10 @@ export default function CadView({
     if (isModelReady) {
       resetState()
     }
-    if (previousThemeChangeCb) {
-      theme.removeThemeChangeListener(previousThemeChangeCb)
+    if (previousThemeChangeCbRef.current) {
+      theme.removeThemeChangeListener(previousThemeChangeCbRef.current)
     }
-    previousThemeChangeCb = initViewerCb
+    previousThemeChangeCbRef.current = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }

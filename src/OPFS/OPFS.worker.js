@@ -612,7 +612,7 @@ export function base64ToBlob(base64, mimeType = 'application/octet-stream') {
  * @param {number|null} fallbackLastModified Last-modified from cache, used
  *   when rename succeeds but commit-date didn't come back (legacy cache rows).
  */
-async function postFinalDownloadEventAfterRename(
+export async function postFinalDownloadEventAfterRename(
   modelDirectoryHandle,
   modelBlobFileHandle,
   originalFilePath,
