@@ -144,150 +144,196 @@ export async function load(
   }
 
   if (isOpfsAvailable) {
-    onProgress('Preparing file download...')
-    let file
-    // Per-source-kind cache-key context. Built eagerly for GitHub (we have
-    // the upstream sha before download) and lazily for everything else
-    // (we hash the bytes after they're in OPFS).
-    let cacheKeyArgs = null
-    let kindLabel = null
+    // OPFS is a CACHE, not a hard dependency. Any failure inside this block
+    // — Safari's `InvalidStateError` on `createSyncAccessHandle`, a corrupt
+    // entry from a previous failed session, a missing rename target, etc. —
+    // should fall through to the direct-fetch path so the user still gets
+    // their model. The cost is one cache miss this load; the next load will
+    // try OPFS again from scratch.
+    try {
+      onProgress('Preparing file download...')
+      let file
+      // Per-source-kind cache-key context. Built eagerly for GitHub (we have
+      // the upstream sha before download) and lazily for everything else
+      // (we hash the bytes after they're in OPFS).
+      let cacheKeyArgs = null
+      let kindLabel = null
 
-    if (isUploadedFile) {
-      kindLabel = 'upload'
-      debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
-    } else if (isLocallyHostedFile) {
-      kindLabel = 'local'
-      debug().log('Loader#load: local file:', path)
-      file = await downloadToOPFS(
-        path,
-        path,
-        'bldrs-ai',
-        'BldrsLocalStorage',
-        'V1',
-        'Projects',
-        onProgress)
-    } else {
-      let pathUrl
-      try {
-        pathUrl = new URL(path)
-      } catch (e) {
-        throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
-      }
-      if (pathUrl.host === 'github.com') {
-        kindLabel = 'github'
-        // TODO: path was gitpath originally
-        const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
-
-        // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
-        if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
-          [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
-        }
-
-        // GitHub gives us a stable upstream sha *before* we download — so
-        // the GLB cache lookup can happen pre-download (fastest hit path).
-        if (wantGlb && shaHash) {
-          cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
-          glbInfo(
-            `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-            `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
-          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
-          if (glbFile) {
-            glbInfo(
-              `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
-            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
-            file = glbFile
-            cameFromGlbCache = true
-          } else {
-            glbInfo('reader: github cache MISS, will export after parse:', filePath)
-          }
-        }
-
-        if (!file) {
-          if (isBase64) {
-            file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
-          } else {
-            debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-            file = await downloadModel(
-              derefPath,
-              shaHash,
-              filePath,
-              accessToken,
-              owner,
-              repo,
-              branch,
-              setOpfsFile,
-              onProgress,
-              (lastModifiedGithub) => {
-                const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
-                updateRecentFileLastModified(sharePath, lastModifiedGithub)
-              })
-          }
-        }
-      } else {
-        kindLabel = 'external'
-        const opfsFilename = pathUrl.pathname
-        debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
+      if (isUploadedFile) {
+        kindLabel = 'upload'
+        debug().log('Loader#load: getModelFromOPFS for upload:', path)
+        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      } else if (isLocallyHostedFile) {
+        kindLabel = 'local'
+        debug().log('Loader#load: local file:', path)
         file = await downloadToOPFS(
           path,
-          opfsFilename,
-          pathUrl.host,
+          path,
+          'bldrs-ai',
           'BldrsLocalStorage',
           'V1',
           'Projects',
           onProgress)
-      }
-    }
-    debug().log('Loader#load: File from OPFS:', file)
-    setOpfsFile(file)
+      } else {
+        let pathUrl
+        try {
+          pathUrl = new URL(path)
+        } catch (e) {
+          throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
+        }
+        if (pathUrl.host === 'github.com') {
+          kindLabel = 'github'
+          // TODO: path was gitpath originally
+          const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
 
-    // For non-GitHub sources we don't have an upstream sha, so we hash the
-    // bytes ourselves to build the cache key. This is the same File we'd
-    // read for parse below; reading it twice is cheap (OPFS).
-    if (wantGlb && !cacheKeyArgs && file) {
-      const sourceBytes = await file.arrayBuffer()
-      const contentSha = await sha1Hex(sourceBytes)
-      cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
-      if (cacheKeyArgs) {
-        glbInfo(
-          `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
-        glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-        const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
-        if (glbFile) {
-          glbInfo(
-            `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
-          ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
-          file = glbFile
-          cameFromGlbCache = true
+          // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
+          if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
+            [derefPath, shaHash, isCacheHit, isBase64] =
+              await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
+          }
+
+          // GitHub gives us a stable upstream sha *before* we download — so
+          // the GLB cache lookup can happen pre-download (fastest hit path).
+          if (wantGlb && shaHash) {
+            cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
+            glbInfo(
+              `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+            `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
+            glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            if (glbFile) {
+              glbInfo(
+                `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
+              ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+              file = glbFile
+              cameFromGlbCache = true
+            } else {
+              glbInfo('reader: github cache MISS, will export after parse:', filePath)
+            }
+          }
+
+          if (!file) {
+            if (isBase64) {
+              file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+            } else {
+              debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
+              file = await downloadModel(
+                derefPath,
+                shaHash,
+                filePath,
+                accessToken,
+                owner,
+                repo,
+                branch,
+                setOpfsFile,
+                onProgress,
+                (lastModifiedGithub) => {
+                  const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
+                  updateRecentFileLastModified(sharePath, lastModifiedGithub)
+                })
+            }
+          }
         } else {
-          glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+          kindLabel = 'external'
+          const opfsFilename = pathUrl.pathname
+          debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
+          file = await downloadToOPFS(
+            path,
+            opfsFilename,
+            pathUrl.host,
+            'BldrsLocalStorage',
+            'V1',
+            'Projects',
+            onProgress)
         }
       }
-    }
+      debug().log('Loader#load: File from OPFS:', file)
+      setOpfsFile(file)
 
-    if (wantGlb && isIfc && cacheKeyArgs) {
-      glbExportContext = {kindLabel, cacheKeyArgs}
-    }
+      // For non-GitHub sources we don't have an upstream sha, so we hash the
+      // bytes ourselves to build the cache key. This is the same File we'd
+      // read for parse below; reading it twice is cheap (OPFS).
+      if (wantGlb && !cacheKeyArgs && file) {
+        const sourceBytes = await file.arrayBuffer()
+        const contentSha = await sha1Hex(sourceBytes)
+        cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
+        if (cacheKeyArgs) {
+          glbInfo(
+            `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
+          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+          if (glbFile) {
+            glbInfo(
+              `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
+            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+            file = glbFile
+            cameFromGlbCache = true
+          } else {
+            glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+          }
+        }
+      }
 
-    onProgress('Reading model data...')
-    modelData = await file.arrayBuffer()
-    if (isFormatText) {
+      if (wantGlb && isIfc && cacheKeyArgs) {
+        glbExportContext = {kindLabel, cacheKeyArgs}
+      }
+
+      onProgress('Reading model data...')
+      modelData = await file.arrayBuffer()
+      if (isFormatText) {
+        onProgress('Decoding model data...')
+        const decoder = new TextDecoder('utf-8')
+        modelData = decoder.decode(modelData)
+        debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
+      }
+    } catch (opfsError) {
+      // Uploaded files (drag-drop, file picker) only exist in OPFS — there
+      // is no remote URL to fall back to. Re-throw so the user sees the
+      // error rather than a misleading "fall-through succeeded" outcome.
+      if (isUploadedFile) {
+        throw opfsError
+      }
+      // Bad-input errors (unparseable URL, unknown GitHub repo shape) are
+      // not transient OPFS issues — falling back to axiosDownload would just
+      // produce a less informative "Failed to fetch model data". Surface the
+      // original error.
+      if (opfsError?.message?.startsWith('Invalid URL path')) {
+        throw opfsError
+      }
+      debug().warn(
+        `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
+        'falling back to direct fetch. ' +
+        'The OPFS cache is treated as best-effort — corrupt or browser- ' +
+        'rejected entries (Safari InvalidStateError, leaked sync handles, ' +
+        'half-written files from previous sessions) should not block load.')
+      // A GLB writer-side artifact context only makes sense for a load that
+      // actually came through the OPFS path. Drop it on fallback so we don't
+      // try to associate the freshly-fetched bytes with the failed cache key.
+      glbExportContext = null
+      cameFromGlbCache = false
+      // modelData stays undefined — falls through to the direct-fetch block
+      // below, same as when `isOpfsAvailable` was false to begin with.
+    }
+  }
+
+  if (modelData === undefined) {
+    // Either OPFS is unavailable in this browser, or the OPFS attempt above
+    // failed and we're falling back. Either way, fetch the bytes directly.
+    if (isBase64) {
+      // Contents API returned the file inline; no download fetch needed.
       onProgress('Decoding model data...')
-      const decoder = new TextDecoder('utf-8')
-      modelData = decoder.decode(modelData)
-      debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
+      modelData = decodeBase64ModelData(derefPath, isFormatText)
+      debug().log('Loader#load: modelData from inline base64 (decoded):', modelData)
+    } else {
+      onProgress('Downloading model data...')
+      // For locally-hosted files when OPFS was available, the deref step
+      // above was skipped (no GitHub Contents API dereference for `/index.ifc`),
+      // so `derefPath` is unset — `path` is the URL we want.
+      const fetchUrl = derefPath || path
+      modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
+      debug().log('Loader#load: modelData from axios download:', modelData)
     }
-  } else if (isBase64) {
-    // Contents API returned the file inline; no download fetch needed.
-    onProgress('Decoding model data...')
-    modelData = decodeBase64ModelData(derefPath, isFormatText)
-    debug().log('Loader#load: modelData from inline base64 (decoded):', modelData)
-  } else {
-    onProgress('Downloading model data...')
-    modelData = await axiosDownload(derefPath, isFormatText, onProgress)
-    debug().log('Loader#load: modelData from axios download:', modelData)
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for

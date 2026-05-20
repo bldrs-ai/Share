@@ -365,6 +365,52 @@ export async function computeGitBlobSha1FromFile(file) {
 
 
 /**
+ * Open a `FileSystemSyncAccessHandle`, with one self-healing retry if Safari
+ * refuses the first attempt with `InvalidStateError`.
+ *
+ * Safari's OPFS implementation can hold an internal handle reference to a
+ * file even across worker terminations / `clearOPFSCache()` calls, so a
+ * brand-new `createSyncAccessHandle()` against a file path the browser still
+ * thinks is "open" raises `InvalidStateError: The object is in an invalid
+ * state.` Removing the file (which forces Safari to drop the stale ref) and
+ * re-creating it usually clears the condition.
+ *
+ * @param {FileSystemDirectoryHandle} parentDirectory
+ * @param {FileSystemFileHandle} fileHandle - Pre-created file handle. Used
+ *   for the first attempt. If we have to recreate, `parentDirectory` +
+ *   `fileName` are how we get a fresh handle back.
+ * @param {string} fileName - Name to recreate the file under on retry.
+ * @return {Promise<{handle: FileSystemSyncAccessHandle, fileHandle: FileSystemFileHandle}>}
+ *   Updated `fileHandle` (different object if we recreated) and the open
+ *   sync access handle. Caller MUST close the access handle.
+ */
+async function openSyncAccessHandleWithRetry(parentDirectory, fileHandle, fileName) {
+  try {
+    const handle = await fileHandle.createSyncAccessHandle()
+    return {handle, fileHandle}
+  } catch (firstErr) {
+    const isInvalidState = firstErr && (
+      firstErr.name === 'InvalidStateError' ||
+      /invalid state/i.test(firstErr.message || ''))
+    if (!isInvalidState) {
+      throw firstErr
+    }
+    // Best-effort: drop Safari's stale internal reference by removing the
+    // entry, then recreate the file and try the handle once more.
+    try {
+      await parentDirectory.removeEntry(fileName)
+    } catch (_) {/* file may already be gone — that's fine */}
+    const freshHandle = await parentDirectory.getFileHandle(fileName, {create: true})
+    // If THIS throws too, we're out of options — let it propagate. The
+    // resilience fix in `Loader.js` will catch it and fall back to direct
+    // fetch so the user still gets their model.
+    const handle = await freshHandle.createSyncAccessHandle()
+    return {handle, fileHandle: freshHandle}
+  }
+}
+
+
+/**
  * Write temporary file to OPFS (Origin Private File System)
  *
  * @param {Response} response - The response from the request.
@@ -399,11 +445,15 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
 
   try {
     [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null)
-    // Create FileSystemSyncAccessHandle on the file.
-    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+    // `openSyncAccessHandleWithRetry` handles Safari's stale-internal-ref
+    // case — InvalidStateError on a fresh file, even after clearOPFSCache().
+    // If the retry also fails, the throw propagates; the resilience fix in
+    // Loader.js catches it and falls back to direct fetch.
+    const opened = await openSyncAccessHandleWithRetry(
+      modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
+    blobAccessHandle = opened.handle
+    modelBlobFileHandle = opened.fileHandle
   } catch (error) {
-    // If create succeeded but the handle didn't, close defensively so a
-    // retry isn't blocked by Safari's InvalidStateError on the leaked handle.
     if (blobAccessHandle) {
       try {
         await blobAccessHandle.close()
@@ -982,10 +1032,12 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     }
   }
   try {
-    // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, true)
-    // Create FileSystemSyncAccessHandle on the file.
-    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+    // Same Safari self-heal as in writeTemporaryFileToOPFS.
+    const opened = await openSyncAccessHandleWithRetry(
+      modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
+    blobAccessHandle = opened.handle
+    modelBlobFileHandle = opened.fileHandle
   } catch (error) {
     if (blobAccessHandle) {
       try {
