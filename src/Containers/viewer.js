@@ -85,9 +85,8 @@ export function disposeViewer() {
       renderer.forceContextLoss()
     }
 
-    if (currentViewer.glbClipper && typeof currentViewer.glbClipper.dispose === 'function') {
-      currentViewer.glbClipper.dispose()
-      currentViewer.glbClipper = null
+    if (currentViewer.clipper && typeof currentViewer.clipper.dispose === 'function') {
+      currentViewer.clipper.dispose()
     }
 
     // Belt-and-suspenders: call any built-in dispose on the viewer for

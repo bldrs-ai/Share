@@ -428,59 +428,98 @@ filesystem layout is the flatter shape below.
 | `Postprocessor` | `src/viewer/three/CustomPostProcessor.js` | Moved from `Infrastructure/`. |
 | `Highlighter` | `src/viewer/three/IfcHighlighter.js` | Moved from `Infrastructure/`. |
 | `Isolator` | `src/viewer/three/IfcIsolator.js` | Moved from `Infrastructure/`; isolate routing through `IfcInstanceMap` landed in PR #1518. |
+| `Selector` | `src/viewer/three/Selector.js` | Facade over the fork's `IFC.selector` — landed in the slice that opened §3c.iv. ~16 call-sites now route through `viewer.selector.X`. |
+| `GlbClipper` + `CutPlaneArrowHelper` | `src/viewer/three/` | Relocated from `Infrastructure/` — landed alongside the Selector facade. |
+| `Clipper` | `src/viewer/three/Clipper.js` | Unified facade over the fork's `IfcClipper` + the in-repo `GlbClipper`. Mounts as `viewer.clipper`, dispatches per-model via `setModel(model)`. Erases the `modelHasUnstructuredMeshClipper` branch from `CutPlaneMenu.jsx`. |
 
-**Next slices (in order):**
+**Selector facade — landed (recap).**
+Wraps the fork's `IFC.selector` behind a stable local API
+(`viewer.selector.X`). Pure refactor; no behavior change. The §3c
+"Selection" plugin's eventual contract (backed by
+`IfcModelService.createSubset` + `postprocessing.OutlineEffect`)
+stays the destination; the facade gives us a single seam to swap
+the impl in Phase 5 without churning every call-site again. API
+surface mirrors what was read on the fork today: materials
+get/set, meshes accessors, pickByIds / unpick / preselectFromPick
+/ preselectByIds / togglePreselectionVisibility / clearSelection /
+clearPreselection.
 
-1. **Selector facade** *(current slice)*. Land a `src/viewer/three/Selector.js`
-   that wraps the fork's `IFC.selector` behind a stable local API.
-   ShareViewer / IfcIsolator / CadView stop reaching into
-   `viewer.IFC.selector.X` (~16 call-sites) and route through
-   `viewer.selector.X` instead. Pure refactor; no behavior change.
-   This is a stepping stone — the §3c "Selection" plugin's eventual
-   contract (backed by `IfcModelService.createSubset` +
-   `postprocessing.OutlineEffect`) stays the destination; the facade
-   gives us a single seam to swap the impl in Phase 5 without churning
-   every call-site again.
+**Unified Clipper — landed (this slice).**
+One `viewer.clipper` object dispatching per-loaded-model between the
+fork's `IfcClipper` and the in-repo `GlbClipper`. Call-sites
+(`CutPlaneMenu.jsx`, `viewer.js`, `shortcutKeys.js`,
+`hashState.js`) no longer branch on `modelHasUnstructuredMeshClipper`
+— they call `viewer.clipper.X` and trust the plugin. The fork
+clipper is captured at `ShareViewer` construction as
+`viewer._forkClipper` so the IFC backing impl is preserved. Model
+binding happens via `viewer.clipper.setModel(model)`, called from
+`CutPlaneMenu`'s existing model-watching effect.
 
-   API surface (mirrors what's read today):
-   ```js
-   viewer.selector.getSelectionMaterial() / setSelectionMaterial(m)
-   viewer.selector.getPreselectionMaterial() / setPreselectionMaterial(m)
-   viewer.selector.getSelectionMeshes()      // legacy IFC path; returns IFCSubset[] from web-ifc-three
-   viewer.selector.getPreselectionMeshes()
-   await viewer.selector.pickByIds(modelID, ids, focusSelection, removePrevious)
-   viewer.selector.unpick()                  // clears selection
-   await viewer.selector.preselectFromPick(raycastHit)
-   await viewer.selector.preselectByIds(modelID, ids, focusSelection, removePrevious)
-   viewer.selector.togglePreselectionVisibility(visible)
-   viewer.selector.clearSelection()          // = .selection.unpick() on the fork
-   viewer.selector.clearPreselection()       // = .preselection.unpick() on the fork
-   ```
+**Clipper API surface:**
+```js
+viewer.clipper.setModel(model)
+viewer.clipper.active / orthogonalY / clickDrag       // fork-only state (passthrough)
+viewer.clipper.planes                                 // unified plane list
+viewer.clipper.context                                // legacy escape (fork only)
+viewer.clipper.createFromNormalAndCoplanarPoint(n, p, direction?, offset?)
+viewer.clipper.createPlane()                          // IFC keyboard shortcut (Q)
+viewer.clipper.deletePlane()                          // IFC keyboard shortcut (W)
+viewer.clipper.deleteAllPlanes()
+viewer.clipper.setInteractionEnabled(enabled)         // GLB-only arrow drag handlers
+viewer.clipper.dispose()
+```
 
-   The facade holds an internal reference to `viewer.IFC.selector`
-   (the fork's object) and delegates every method. The Conway-direct
-   paths (`instancePicking` models) don't touch the facade today —
-   their picking flows through `IfcInstanceMap` and the highlighter
-   directly. The facade still owns the *materials* both paths share
-   (selection / preselection theme colors), so `CadView`'s viewer-init
-   material assignment lands on the facade rather than the fork.
+**Perf wins folded into the GlbClipper refactor**
+(`framerate has always been too slow` — addressed in-flight):
 
-2. **Move `GlbClipper` + `CutPlaneArrowHelper` to `viewer/three/`**
-   *(current slice — small cleanup)*. The clipper unification
-   (slice 3) wants both files under `src/viewer/three/` first; this is
-   a pure relocation with import updates in `CutPlaneMenu.jsx`.
+  1. **Clipping planes bound to materials ONCE per add/remove.** The
+     previous impl re-walked the scene tree + set `material.needsUpdate
+     = true` on every drag mousemove, forcing a shader recompile per
+     affected material per tick. On a 1000-mesh model that was tens of
+     ms per frame for the entire drag duration. New impl mutates the
+     existing `Plane` in place (normal/constant); Three.js re-reads
+     plane uniforms each frame for free without rebind.
+  2. **`needsUpdate` only on plane-count change.** Three.js compiles
+     a shader variant per clipping-plane *count*; plane-value mutations
+     re-use the existing shader. The plugin tracks the last bound
+     count and skips the tree walk + needsUpdate when unchanged.
+  3. **Stable `_clippingPlanes` array reference.** Bound once at first
+     `createPlane()` to both `renderer.clippingPlanes` and each
+     `material.clippingPlanes`. Subsequent add/remove mutates in place;
+     no rebind needed.
+  4. **Scratch `Vector3` / `Plane` preallocation** in mouse handlers.
+     ~5 allocations/event eliminated; cumulative GC win at 60Hz drag.
+  5. **Bug fix while refactoring.** `Ray.intersectPlane(plane, target)`
+     returns `null` on a parallel-ray miss, not a sentinel value in
+     `target`. The previous code checked `if (intersectionPoint)`
+     against the always-truthy target object — never detected misses.
+     New code checks the return value.
 
-3. **Unified `Clipper` plugin** *(next slice)*. Erase the
-   `modelHasUnstructuredMeshClipper` branch in `CutPlaneMenu.jsx`:
-   one `Clipper` plugin exposes the surface (`{active, planes,
-   createFromNormalAndCoplanarPoint, deleteAllPlanes,
-   setInteractionEnabled}`) and dispatches internally to either the
-   IFC clipper (pickable-IFC-model raycast) or the arrow-handle
-   clipper (GLB / unstructured mesh) based on `model.capabilities`.
-   `useIfcClipper` capability drops out of `ShareModel` once the
-   branch is gone.
+**Open perf items (deferred):**
 
-4. **`IfcViewsManager` deletion** *(per §8.1)*. Single referenced
+  - **On-demand rendering.** The fork's `IfcContext.render` runs
+    `requestAnimationFrame(this.render)` *unconditionally* — 60 frames/
+    second even when the scene is idle (no camera move, no hover, no
+    selection change). Switching to a dirty-flag policy (render only
+    when camera-controls fires `change`, or when one of the plugins
+    mutates the scene) is the single biggest framerate win available.
+    Requires hooking the render loop, which means owning
+    `ThreeContext.render` instead of forwarding it to the fork — most
+    naturally falls out of Phase 5 when the fork is dropped. A
+    transitional implementation could replace
+    `ThreeContext._legacy.render` with a dirty-aware wrapper, but the
+    fork's animator + camera-controls integration would need careful
+    re-plumbing. Tracked here for the Phase 5 PR.
+  - **Hover-pick throttling tightening.** Today `viewer.js` throttles
+    `highlightIfcItem` to ~30Hz (`PICK_INTERVAL = 33`). On big models
+    even 30Hz is too aggressive — the actual raycast cost dominates
+    over the throttle interval. Worth measuring with a real model and
+    raising the interval (e.g. 50ms) if the visual impact is
+    imperceptible.
+
+**Remaining §3c.iv slices:**
+
+1. **`IfcViewsManager` deletion** *(per §8.1)*. Single referenced
    site is the `view=ch.sia380-1.heatmap` URL-parameter branch in
    `ShareViewer.js` lines 3, 56–61. Drop together with
    `Infrastructure/IfcElementsStyleManager.js`,
@@ -492,11 +531,20 @@ filesystem layout is the flatter shape below.
    — that call site needs to migrate to a `ShareModel`-level
    post-build hook before the file can go).
 
-5. **`PlaceMark` relocation** *(post-Phase-5)*. Moves from
+2. **`PlaceMark` relocation** *(post-Phase-5)*. Moves from
    `Infrastructure/PlaceMark.js` to `src/viewer/three/PlaceMark.js`
    alongside the markers' DOM-overlay code in `Components/Markers/`.
    Low priority — the file is self-contained and the move is purely
    organisational.
+
+3. **`useIfcClipper` capability cleanup** *(small, post-Clipper)*.
+   The capability is no longer read by any call-site outside of the
+   Clipper plugin's internal `modelHasUnstructuredMeshClipper` helper.
+   Could be dropped from `ShareModel.capabilities` once the unified
+   Clipper has been in production long enough that no external code
+   relies on it (currently zero in-tree consumers besides the plugin
+   itself — but the field is on every ShareModel and visible to
+   embedders).
 
 ### 3d. `ShareViewer` facade
 The only construct that `Containers/viewer.js#initViewer` instantiates. It composes the layers above and exposes the **same property names** the rest of the code already uses:
@@ -555,6 +603,12 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
   refactor; no behavior change. Sets up the Phase 5 impl swap.
 - Land the **GlbClipper relocation** (§3c.iv slice 2) — moves
   `GlbClipper` + `CutPlaneArrowHelper` to `src/viewer/three/`.
+- Land the **unified Clipper** (§3c.iv slice 3) — one `viewer.clipper`
+  facade dispatching per-model; folds the `modelHasUnstructuredMeshClipper`
+  branch out of `CutPlaneMenu.jsx`. Includes a perf refactor of the
+  GLB drag-time path (bind clipping planes to materials once;
+  in-place plane mutation on drag rather than per-tick rebind + shader
+  recompile).
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
 - Remove `web-ifc-viewer-1.0.209-bldrs-7.tgz` and the `web-ifc-viewer` dep.
@@ -602,7 +656,7 @@ src/viewer/
     Selector.js               ← §3c.iv slice 1 — facade over IFC.selector
     GlbClipper.js             ← §3c.iv slice 2 — moved from Infrastructure/
     CutPlaneArrowHelper.ts    ← §3c.iv slice 2 — moved from Infrastructure/
-    Clipper.js                ← §3c.iv slice 3 — unified clipper (future)
+    Clipper.js                ← §3c.iv slice 3 — unified clipper facade
     elementSubsets.js         ← shared subset helpers (legacy + Conway-direct)
   ifc/
     flatMeshToBufferGeometry.js

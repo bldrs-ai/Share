@@ -132,12 +132,19 @@ const impl = {
       parse: jest.fn(() => loadedModel),
     },
   },
+  // Mirrors the surface of `viewer/three/Clipper.js` — the unified
+  // facade that wraps the fork's `IfcClipper` + the in-repo
+  // `GlbClipper`. The methods below are no-op stubs sized to what
+  // CutPlaneMenu / viewer.js / shortcutKeys consume.
   clipper: {
     active: false,
     setActive: jest.fn(),
     deleteAllPlanes: jest.fn(() => {
       return 'cutPlane'
     }),
+    setInteractionEnabled: jest.fn(),
+    setModel: jest.fn(),
+    dispose: jest.fn(),
     context: {
       clippingPlanes: [],
     },

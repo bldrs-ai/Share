@@ -2,6 +2,7 @@ import {IfcViewerAPI} from 'web-ifc-viewer'
 import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
+import Clipper from './three/Clipper'
 import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
@@ -126,6 +127,23 @@ export class ShareViewer extends IfcViewerAPI {
     // selector as the underlying impl until Phase 5 swaps it for an
     // IfcModelService-backed `Selection` plugin.
     this.selector = new Selector(this.IFC?.selector)
+    // Clipper — §3c.iv slice 3 unified facade over the fork's
+    // `IfcClipper` + in-repo `GlbClipper`. Replaces `viewer.clipper`
+    // (set by IfcViewerAPI's super() call) with one object that
+    // dispatches per-model. Call-sites no longer branch on
+    // `viewer.IFC.type === 'glb'` — they call `viewer.clipper.X`
+    // and trust the plugin. The fork's clipper is captured here
+    // before being overwritten so the IFC backing impl is preserved.
+    //
+    // Guard for the test-singleton path: __mocks__/web-ifc-viewer.js
+    // reuses one `impl` across every `new ShareViewer()` call. Without
+    // the `instanceof Clipper` check, the second construction would
+    // capture the *previous* Clipper plugin as `_forkClipper`, losing
+    // the underlying fork clipper.
+    if (!(this.clipper instanceof Clipper)) {
+      this._forkClipper = this.clipper
+      this.clipper = new Clipper(this, this._forkClipper)
+    }
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 

@@ -1,22 +1,30 @@
 /* eslint-disable no-magic-numbers */
-import {Group, Mesh, BoxGeometry, MeshBasicMaterial, Sphere} from 'three'
+import {Group, Mesh, BoxGeometry, MeshBasicMaterial, Sphere, Vector3} from 'three'
 import GlbClipper from './GlbClipper'
 
 
 /**
  * Build a minimal viewer stub that satisfies GlbClipper's constructor
- * (needs `context.getDomElement()` and `context.getScene()`).
+ * (needs `context.getDomElement()`, `context.getScene()`, and the
+ * methods called from createPlane / drag handlers).
  *
  * @return {object}
  */
 function makeViewerStub() {
   const canvas = document.createElement('canvas')
   canvas.getBoundingClientRect = () => ({left: 0, top: 0, width: 800, height: 600})
+  const scene = new Group()
+  const rendererWrapper = {clippingPlanes: [], localClippingEnabled: false}
   return {
     context: {
       getDomElement: () => canvas,
-      getScene: () => new Group(),
+      getScene: () => scene,
+      getLegacyRendererWrapper: () => rendererWrapper,
+      getCamera: () => ({getWorldDirection: (target) => target.set(0, 0, -1)}),
+      getCameraControls: () => null,
     },
+    _scene: scene,
+    _renderer: rendererWrapper,
   }
 }
 
@@ -121,6 +129,112 @@ describe('viewer/three/GlbClipper', () => {
     it('returns an empty array when there are no planes', () => {
       const clipper = new GlbClipper(makeViewerStub(), makeBoxModel())
       expect(clipper.getIntersects()).toEqual([])
+    })
+  })
+
+
+  describe('clipping plane binding (perf semantics)', () => {
+    it('binds the stable plane array to renderer + materials on createPlane', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      const child = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial())
+      model.add(child)
+      const clipper = new GlbClipper(viewer, model)
+
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+
+      expect(viewer._renderer.clippingPlanes).toBe(clipper._clippingPlanes)
+      expect(viewer._renderer.localClippingEnabled).toBe(true)
+      expect(child.material.clippingPlanes).toBe(clipper._clippingPlanes)
+      expect(child.material.clippingPlanes.length).toBe(1)
+    })
+
+    it('only re-walks the tree when the plane count actually changes', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      const child = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial())
+      model.add(child)
+      const clipper = new GlbClipper(viewer, model)
+
+      // First createPlane: count 0 → 1, must rebind + bump material.version
+      // (Three.js increments `version` when `needsUpdate = true` is set,
+      // which is the canonical readable signal for "recompile pending").
+      const versionBeforeFirst = child.material.version
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+      expect(child.material.version).toBeGreaterThan(versionBeforeFirst)
+      const versionAfterFirst = child.material.version
+
+      // Re-trigger sync without changing the plane count (simulates the
+      // drag path defensively calling _syncClippingBindings, though it
+      // shouldn't need to). Count unchanged → no rebind, no needsUpdate.
+      clipper.planes[0].plane.constant = 5
+      clipper._syncClippingBindings()
+      expect(child.material.version).toBe(versionAfterFirst)
+
+      // Second createPlane: count 1 → 2, must rebind + bump version.
+      clipper.createPlane(new Vector3(1, 0, 0), new Vector3(0, 0, 0), 'x', 0)
+      expect(child.material.version).toBeGreaterThan(versionAfterFirst)
+    })
+
+    it('unbinds clipping planes from materials on deleteAllPlanes', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      const child = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial())
+      model.add(child)
+      const clipper = new GlbClipper(viewer, model)
+
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+      expect(child.material.clippingPlanes).toBe(clipper._clippingPlanes)
+
+      clipper.deleteAllPlanes()
+      expect(child.material.clippingPlanes).toBeNull()
+      expect(viewer._renderer.localClippingEnabled).toBe(false)
+    })
+
+    it('keeps a stable _clippingPlanes array reference across mutations', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      model.add(new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial()))
+      const clipper = new GlbClipper(viewer, model)
+      const initialArray = clipper._clippingPlanes
+
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+      clipper.createPlane(new Vector3(1, 0, 0), new Vector3(0, 0, 0), 'x', 0)
+      clipper.deleteAllPlanes()
+      clipper.createPlane(new Vector3(0, 0, 1), new Vector3(0, 0, 0), 'z', 0)
+
+      // Same array instance survives all mutations — renderer and
+      // material bindings done at first createPlane stay valid.
+      expect(clipper._clippingPlanes).toBe(initialArray)
+    })
+
+    it('handles models with array-shaped material via getMeshMaterials', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      const mat0 = new MeshBasicMaterial()
+      const mat1 = new MeshBasicMaterial()
+      const child = new Mesh(new BoxGeometry(2, 2, 2), [mat0, mat1])
+      model.add(child)
+      const clipper = new GlbClipper(viewer, model)
+
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+
+      expect(mat0.clippingPlanes).toBe(clipper._clippingPlanes)
+      expect(mat1.clippingPlanes).toBe(clipper._clippingPlanes)
+    })
+
+    it('traverses nested children when binding', () => {
+      const viewer = makeViewerStub()
+      const model = new Group()
+      const innerGroup = new Group()
+      const deepChild = new Mesh(new BoxGeometry(2, 2, 2), new MeshBasicMaterial())
+      innerGroup.add(deepChild)
+      model.add(innerGroup)
+      const clipper = new GlbClipper(viewer, model)
+
+      clipper.createPlane(new Vector3(0, 1, 0), new Vector3(0, 0, 0), 'y', 0)
+
+      expect(deepChild.material.clippingPlanes).toBe(clipper._clippingPlanes)
     })
   })
 })
