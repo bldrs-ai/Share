@@ -85,6 +85,16 @@ export default function CadView({
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
 
+  // Two useEffects below can each trigger `onViewer()` — the
+  // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
+  // [isAuthLoading, …]-dep effect fires (with an `!isViewerLoaded` guard) so
+  // a model whose initial `onViewer` returned early on auth-not-ready
+  // retries once auth settles. If auth settles WHILE the first onViewer is
+  // mid-`loadModel`, `isViewerLoaded` is still false (it's only set at the
+  // end), so both fire end-to-end → double load. This in-flight ref
+  // dedupes overlapping calls; whichever effect tick wins, the other skips.
+  const onViewerInFlightRef = useRef(false)
+
   // IFCSlice
   const model = useStore((state) => state.model)
   const setIsModelLoading = useStore((state) => state.setIsModelLoading)
@@ -695,12 +705,17 @@ export default function CadView({
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (!isViewerLoaded) {
+    if (!isViewerLoaded && !onViewerInFlightRef.current) {
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
       if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
-        (async () => {
-          await onViewer()
+        onViewerInFlightRef.current = true
+        ;(async () => {
+          try {
+            await onViewer()
+          } finally {
+            onViewerInFlightRef.current = false
+          }
         })()
       }
     }
@@ -717,8 +732,18 @@ export default function CadView({
 
   // Viewer changes in onModelPath (above)
   useEffect(() => {
-    (async () => {
-      await onViewer()
+    if (onViewerInFlightRef.current) {
+      // The auth-state effect above already kicked off a load — skip so we
+      // don't run two `onViewer`s end-to-end (the Safari double-load).
+      return
+    }
+    onViewerInFlightRef.current = true
+    ;(async () => {
+      try {
+        await onViewer()
+      } finally {
+        onViewerInFlightRef.current = false
+      }
     })()
   }, [viewer])
 
