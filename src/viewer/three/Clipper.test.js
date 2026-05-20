@@ -312,15 +312,46 @@ describe('viewer/three/Clipper', () => {
       expect(clipper._glbClipper).toBeNull()
     })
 
-    it('is idempotent', () => {
-      const clipper = new Clipper(makeViewerStub(), makeForkClipperStub())
-      clipper.setModel(makeGlbModel())
+    it('delegates to fork clipper dispose (releases planes + listeners)', () => {
+      const fork = makeForkClipperStub()
+      fork.dispose = jest.fn()
+      const clipper = new Clipper(makeViewerStub(), fork)
       clipper.dispose()
-      expect(() => clipper.dispose()).not.toThrow()
+      expect(fork.dispose).toHaveBeenCalledTimes(1)
+      // _forkClipper nulled to make a second dispose a no-op (viewer.js
+      // and IfcViewerAPI.dispose both call clipper.dispose, so we
+      // defensively guard against double-dispose).
+      expect(clipper._forkClipper).toBeNull()
+    })
+
+    it('is idempotent across multiple dispose calls', () => {
+      const fork = makeForkClipperStub()
+      fork.dispose = jest.fn()
+      const clipper = new Clipper(makeViewerStub(), fork)
+      clipper.setModel(makeGlbModel())
+      const glbSpy = jest.spyOn(clipper._glbClipper, 'dispose')
+      clipper.dispose()
+      clipper.dispose()
+      expect(glbSpy).toHaveBeenCalledTimes(1)
+      expect(fork.dispose).toHaveBeenCalledTimes(1)
     })
 
     it('is safe with no GLB impl active', () => {
       const clipper = new Clipper(makeViewerStub(), makeForkClipperStub())
+      expect(() => clipper.dispose()).not.toThrow()
+    })
+
+    it('is safe with no fork clipper', () => {
+      const clipper = new Clipper(makeViewerStub(), null)
+      expect(() => clipper.dispose()).not.toThrow()
+    })
+
+    it('tolerates a fork clipper without a dispose method', () => {
+      // The fork's IfcClipper has dispose() in production, but defensive
+      // stubs in tests / mocks may omit it.
+      const fork = makeForkClipperStub()
+      delete fork.dispose
+      const clipper = new Clipper(makeViewerStub(), fork)
       expect(() => clipper.dispose()).not.toThrow()
     })
   })

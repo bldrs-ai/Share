@@ -248,13 +248,32 @@ export default class Clipper {
 
 
   /**
-   * Tear down the GLB clipper if any. The fork's clipper is owned by
-   * `IfcViewerAPI` and disposed via the viewer's main `dispose()`.
+   * Tear down the GLB clipper if any, then delegate to the fork's
+   * `IfcClipper.dispose()` so its `planes` (and their `TransformControls`
+   * DOM listeners) are released.
+   *
+   * Called from two places:
+   *   1. `Containers/viewer.js#disposeViewer` — explicit clipper.dispose()
+   *      before `viewer.dispose()`.
+   *   2. The fork's `IfcViewerAPI.dispose()` — which internally calls
+   *      `this.clipper.dispose()` (then sets `this.clipper = null`).
+   *      Without the delegation below the fork clipper's resources
+   *      would leak on every theme-change reload (viewer.js disposes
+   *      and re-creates the viewer for each Day/Night swap).
+   *
+   * Idempotent: a second call has nothing to dispose. The fork
+   * clipper's own `dispose()` is safe to call once but defensively
+   * we null `_forkClipper` after the first call so a double-dispose
+   * (viewer.js then IfcViewerAPI.dispose) doesn't hit it twice.
    */
   dispose() {
     if (this._glbClipper) {
       this._glbClipper.dispose()
       this._glbClipper = null
+    }
+    if (this._forkClipper && typeof this._forkClipper.dispose === 'function') {
+      this._forkClipper.dispose()
+      this._forkClipper = null
     }
   }
 }
