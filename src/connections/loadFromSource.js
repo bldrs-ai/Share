@@ -97,6 +97,7 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
     const blobUrl = URL.createObjectURL(blob)
     const dotParts = filename.split('.')
     if (dotParts.length <= 1) {
+      URL.revokeObjectURL(blobUrl)
       throw new Error('Cannot extract filetype from filename')
     }
     const ext = dotParts[dotParts.length - 1]
@@ -108,10 +109,15 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
           if (event.data.error) {
             debug().error('loadFromSource: OPFS write error:', event.data.error)
             workerRef.removeEventListener('message', listener)
+            // Revoke once the worker is done with the URL. Without this,
+            // each load leaked a blob backing — Safari surfaces those as
+            // `WebKitBlobResource error 1` lines on every fresh load.
+            URL.revokeObjectURL(blobUrl)
             reject(new Error(event.data.error))
           } else if (event.data.completed && event.data.event === 'write') {
             debug().log('loadFromSource: OPFS write complete')
             workerRef.removeEventListener('message', listener)
+            URL.revokeObjectURL(blobUrl)
             onLoad(event.data.fileName)
             resolve()
           }
@@ -123,6 +129,7 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
         opfsWriteModel(blobUrl, filename, `${blobName}.${ext}`)
       })
     }
+    URL.revokeObjectURL(blobUrl)
   }
 
   // Fallback: use blob URL directly (no OPFS)
