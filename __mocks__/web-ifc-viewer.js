@@ -163,6 +163,7 @@ const impl = {
   pickIfcItemsByID: jest.fn(),
   preselectElementsByIds: jest.fn(),
   setSelection: jest.fn(),
+  setInstanceSelection: jest.fn(),
   setCustomViewSettings: jest.fn(),
   takeScreenshot: jest.fn(),
 }

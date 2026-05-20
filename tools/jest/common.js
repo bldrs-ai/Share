@@ -11,6 +11,7 @@ export const excludedNodeModules = [
   'decode-named-character-reference',
   'hast-util-whitespace',
   'is-plain-obj',
+  'meshoptimizer',
   'mdast-util-definitions',
   'mdast-util-from-markdown',
   'mdast-util-to-hast',

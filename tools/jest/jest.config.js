@@ -14,6 +14,7 @@ export default {
   testTimeout: 20000,
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
+    '\\.mjs$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
     '\\.md$': '<rootDir>/tools/jest/mdTransform.js',
   },

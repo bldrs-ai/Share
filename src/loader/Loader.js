@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {BufferAttribute, Matrix4, Mesh, Object3D} from 'three'
+import {Box3, BufferAttribute, Group, Matrix4, Mesh, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -7,8 +7,16 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
+import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {getModelFromOPFS, downloadToOPFS, downloadModel, doesFileExistInOPFS, writeBase64Model} from '../OPFS/utils'
+import {
+  doesFileExistInOPFS,
+  downloadModel,
+  downloadToOPFS,
+  getModelFromOPFS,
+  readModelByPathFromOPFS,
+  writeBase64Model,
+} from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
@@ -16,14 +24,37 @@ import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
 import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
-import {decorateShareModel} from '../viewer/ShareModel'
+import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
+import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
+import {
+  compareItemsMaps,
+  formatComparison,
+  itemsMapFromFlatMeshes,
+  itemsMapFromPerVertexAttribute,
+} from '../viewer/ifc/IfcItemsMap'
+import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
+import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
+import {exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
+import {glbCacheKey} from './glbCacheKey'
+import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
+import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
+import {glbInfo, glbVerbose} from './glbLog'
+import {
+  externalCacheKey,
+  gitHubCacheKey,
+  localCacheKey,
+  uploadCacheKey,
+} from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
+import {isFeatureEnabled} from '../FeatureFlags'
+import {sha1Hex} from '../utils/contentHash'
 import {isOutOfMemoryError} from '../utils/oom'
 
 
@@ -89,7 +120,8 @@ export async function load(
 
   // Find loader can do a head download for content typecheck, but full download is delayed
   onProgress(`Determining file type...`)
-  const [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
+  // GLB skip path below may swap these to the GLB loader tuple.
+  let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
     `Loader#load: loader=${loader.constructor.name} isLoaderAsync=${isLoaderAsync} isFormatText=${isFormatText} path=${path}`)
 
@@ -98,90 +130,210 @@ export async function load(
   }
 
   let modelData
+  // GLB export context: captured after the source file is in hand if the
+  // `glb` feature is on and the source is IFC. Carries the cacheKeyArgs
+  // (source-kind namespace + sourceHash) the post-parse writer will use.
+  // Stays null when the GLB cache skip-path fires (file is already a GLB).
+  let glbExportContext = null
+  // Set when we swap the IFC source with a cached GLB. Drives post-parse
+  // diagnostics so the user can see what the GLTF parser produced.
+  let cameFromGlbCache = false
+  const wantGlb = isFeatureEnabled('glb') && isIfc
+  if (wantGlb) {
+    glbInfo('feature enabled')
+  }
+
   if (isOpfsAvailable) {
-    onProgress('Preparing file download...')
-    // download to file using caching system or else...
-    let file
-    if (isUploadedFile) {
-      debug().log('Loader#load: getModelFromOPFS for upload:', path)
-      file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
-    } else if (isLocallyHostedFile) {
-      debug().log('Loader#load: local file:', path)
-      file = await downloadToOPFS(
-        path,
-        path,
-        'bldrs-ai',
-        'BldrsLocalStorage',
-        'V1',
-        'Projects',
-        onProgress)
-    } else {
-      let pathUrl
-      try {
-        pathUrl = new URL(path)
-      } catch (e) {
-        throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
-      }
-      if (pathUrl.host === 'github.com') {
-        // TODO: path was gitpath originally
-        const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
+    // OPFS is a CACHE, not a hard dependency. Any failure inside this block
+    // — Safari's `InvalidStateError` on `createSyncAccessHandle`, a corrupt
+    // entry from a previous failed session, a missing rename target, etc. —
+    // should fall through to the direct-fetch path so the user still gets
+    // their model. The cost is one cache miss this load; the next load will
+    // try OPFS again from scratch.
+    try {
+      onProgress('Preparing file download...')
+      let file
+      // Per-source-kind cache-key context. Built eagerly for GitHub (we have
+      // the upstream sha before download) and lazily for everything else
+      // (we hash the bytes after they're in OPFS).
+      let cacheKeyArgs = null
+      let kindLabel = null
 
-        // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
-        if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
-          [derefPath, shaHash, isCacheHit, isBase64] = await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
-        }
-
-        if (isBase64) {
-          file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
-        } else {
-          debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
-          file = await downloadModel(
-            derefPath,
-            shaHash,
-            filePath,
-            accessToken,
-            owner,
-            repo,
-            branch,
-            setOpfsFile,
-            onProgress,
-            (lastModifiedGithub) => {
-              const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
-              updateRecentFileLastModified(sharePath, lastModifiedGithub)
-            })
-        }
-      } else {
-        const opfsFilename = pathUrl.pathname
-        debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
+      if (isUploadedFile) {
+        kindLabel = 'upload'
+        debug().log('Loader#load: getModelFromOPFS for upload:', path)
+        file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', path)
+      } else if (isLocallyHostedFile) {
+        kindLabel = 'local'
+        debug().log('Loader#load: local file:', path)
         file = await downloadToOPFS(
           path,
-          opfsFilename,
-          pathUrl.host,
+          path,
+          'bldrs-ai',
           'BldrsLocalStorage',
           'V1',
           'Projects',
           onProgress)
+      } else {
+        let pathUrl
+        try {
+          pathUrl = new URL(path)
+        } catch (e) {
+          throw new Error(`Invalid URL path.  Cannot load resource: ${e}, path for URL: ${path}`)
+        }
+        if (pathUrl.host === 'github.com') {
+          kindLabel = 'github'
+          // TODO: path was gitpath originally
+          const {owner, repo, branch, filePath} = parseGitHubPath(pathUrl.pathname)
+
+          // if we got a cache hit and the file doesn't exist in OPFS, query with no cache
+          if (isCacheHit && !(await doesFileExistInOPFS(filePath, shaHash, owner, repo, branch))) {
+            [derefPath, shaHash, isCacheHit, isBase64] =
+              await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
+          }
+
+          // GitHub gives us a stable upstream sha *before* we download — so
+          // the GLB cache lookup can happen pre-download (fastest hit path).
+          if (wantGlb && shaHash) {
+            cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
+            glbInfo(
+              `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+            `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
+            glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            if (glbFile) {
+              glbInfo(
+                `reader: github cache HIT (${glbFile.size}B); swapping to GLB loader for: ${filePath}`)
+              ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+              file = glbFile
+              cameFromGlbCache = true
+            } else {
+              glbInfo('reader: github cache MISS, will export after parse:', filePath)
+            }
+          }
+
+          if (!file) {
+            if (isBase64) {
+              file = await writeBase64Model(derefPath, shaHash, filePath, accessToken, owner, repo, branch, setOpfsFile)
+            } else {
+              debug().log(`Loader#load: downloadModel with owner, repo, branch, filePath:`, owner, repo, branch, filePath)
+              file = await downloadModel(
+                derefPath,
+                shaHash,
+                filePath,
+                accessToken,
+                owner,
+                repo,
+                branch,
+                setOpfsFile,
+                onProgress,
+                (lastModifiedGithub) => {
+                  const sharePath = navigateBaseOnModelPath(owner, repo, branch, `/${filePath}`)
+                  updateRecentFileLastModified(sharePath, lastModifiedGithub)
+                })
+            }
+          }
+        } else {
+          kindLabel = 'external'
+          const opfsFilename = pathUrl.pathname
+          debug().log(`Loader#load: downloadToOPFS with opfsFilename:`, opfsFilename)
+          file = await downloadToOPFS(
+            path,
+            opfsFilename,
+            pathUrl.host,
+            'BldrsLocalStorage',
+            'V1',
+            'Projects',
+            onProgress)
+        }
       }
+      debug().log('Loader#load: File from OPFS:', file)
+      setOpfsFile(file)
+
+      // For non-GitHub sources we don't have an upstream sha, so we hash the
+      // bytes ourselves to build the cache key. This is the same File we'd
+      // read for parse below; reading it twice is cheap (OPFS).
+      if (wantGlb && !cacheKeyArgs && file) {
+        const sourceBytes = await file.arrayBuffer()
+        const contentSha = await sha1Hex(sourceBytes)
+        cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
+        if (cacheKeyArgs) {
+          glbInfo(
+            `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
+          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+          if (glbFile) {
+            glbInfo(
+              `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
+            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+            file = glbFile
+            cameFromGlbCache = true
+          } else {
+            glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+          }
+        }
+      }
+
+      if (wantGlb && isIfc && cacheKeyArgs) {
+        glbExportContext = {kindLabel, cacheKeyArgs}
+      }
+
+      onProgress('Reading model data...')
+      modelData = await file.arrayBuffer()
+      if (isFormatText) {
+        onProgress('Decoding model data...')
+        const decoder = new TextDecoder('utf-8')
+        modelData = decoder.decode(modelData)
+        debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
+      }
+    } catch (opfsError) {
+      // Uploaded files (drag-drop, file picker) only exist in OPFS — there
+      // is no remote URL to fall back to. Re-throw so the user sees the
+      // error rather than a misleading "fall-through succeeded" outcome.
+      if (isUploadedFile) {
+        throw opfsError
+      }
+      // Bad-input errors (unparseable URL, unknown GitHub repo shape) are
+      // not transient OPFS issues — falling back to axiosDownload would just
+      // produce a less informative "Failed to fetch model data". Surface the
+      // original error.
+      if (opfsError?.message?.startsWith('Invalid URL path')) {
+        throw opfsError
+      }
+      debug().warn(
+        `Loader#load: OPFS path failed (${opfsError?.message || opfsError}); ` +
+        'falling back to direct fetch. ' +
+        'The OPFS cache is treated as best-effort — corrupt or browser- ' +
+        'rejected entries (Safari InvalidStateError, leaked sync handles, ' +
+        'half-written files from previous sessions) should not block load.')
+      // A GLB writer-side artifact context only makes sense for a load that
+      // actually came through the OPFS path. Drop it on fallback so we don't
+      // try to associate the freshly-fetched bytes with the failed cache key.
+      glbExportContext = null
+      cameFromGlbCache = false
+      // modelData stays undefined — falls through to the direct-fetch block
+      // below, same as when `isOpfsAvailable` was false to begin with.
     }
-    debug().log('Loader#load: File from OPFS:', file)
-    setOpfsFile(file)
-    onProgress('Reading model data...')
-    modelData = await file.arrayBuffer()
-    if (isFormatText) {
+  }
+
+  if (modelData === undefined) {
+    // Either OPFS is unavailable in this browser, or the OPFS attempt above
+    // failed and we're falling back. Either way, fetch the bytes directly.
+    if (isBase64) {
+      // Contents API returned the file inline; no download fetch needed.
       onProgress('Decoding model data...')
-      const decoder = new TextDecoder('utf-8')
-      modelData = decoder.decode(modelData)
-      debug().log('Loader#load: modelData from OPFS (decoded):', modelData)
+      modelData = decodeBase64ModelData(derefPath, isFormatText)
+      debug().log('Loader#load: modelData from inline base64 (decoded):', modelData)
+    } else {
+      onProgress('Downloading model data...')
+      // For locally-hosted files when OPFS was available, the deref step
+      // above was skipped (no GitHub Contents API dereference for `/index.ifc`),
+      // so `derefPath` is unset — `path` is the URL we want.
+      const fetchUrl = derefPath || path
+      modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
+      debug().log('Loader#load: modelData from axios download:', modelData)
     }
-  } else if (isBase64) {
-    // Contents API returned the file inline; no download fetch needed.
-    onProgress('Decoding model data...')
-    modelData = decodeBase64ModelData(derefPath, isFormatText)
-    debug().log('Loader#load: modelData from inline base64 (decoded):', modelData)
-  } else {
-    onProgress('Downloading model data...')
-    modelData = await axiosDownload(derefPath, isFormatText, onProgress)
-    debug().log('Loader#load: modelData from axios download:', modelData)
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for
@@ -214,6 +366,18 @@ export async function load(
   if (!isIfc) {
     onProgress('Converting model format...')
     debug().log('Loader#load: converting non-IFC model to IFC:', model)
+    if (cameFromGlbCache) {
+      const summary = summarizeGlbScene(model)
+      glbInfo(
+        `reader: parsed GLB OK: nodes=${summary.nodes} meshes=${summary.meshes} ` +
+        `verts=${summary.vertices} bounds=${summary.boundsStr} ` +
+        `centerOffset=${summary.centerOffsetStr}`)
+      if (summary.meshes === 0) {
+        glbInfo('reader: WARN — GLB has 0 meshes; export likely produced an empty scene')
+      } else if (summary.vertices === 0) {
+        glbInfo('reader: WARN — GLB has meshes but 0 vertices; degenerate geometry')
+      }
+    }
     convertToShareModel(model, viewer)
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
@@ -226,6 +390,118 @@ export async function load(
   // `format` + `capabilities` so call-sites can branch on intrinsic
   // model capability instead of guessing from `viewer.IFC.type`.
   decorateShareModel(model, loader.type)
+
+  // Runtime capability augmentation. The format default for 'glb'
+  // is all-off, but a cache-hit GLB carries the per-vertex
+  // `expressID` attribute preserved from the original IFC parse —
+  // it supports `expressIdPicking` even though its format is 'glb'.
+  // `inferModelCapabilities` walks the geometry and promotes the
+  // flag when the attribute is actually present. Additive only —
+  // never demotes a format-default capability.
+  Object.assign(model.capabilities, inferModelCapabilities(model))
+
+  // For models with per-vertex element IDs but no `ifcSubsets`
+  // capability (i.e., cache-hit GLB — IFC parser state is not
+  // present, so web-ifc-three's createSubset cannot run), attach
+  // our own `model.createSubset` / `removeSubset` methods backed
+  // by the per-vertex attribute. Matches the shape proposed for
+  // Phase 3's `IfcModel#createSubset`
+  // (design/new/viewer-replacement.md §3b.i) so the same call-sites
+  // work against both implementations.
+  //
+  // Conway-direct models (instancePicking) get the instance-map-
+  // aware variant — same return shape (`Mesh[]`), but subsets are
+  // built via each child mesh's `IfcInstanceMap` rather than scanning
+  // per-vertex `expressID`. The instance maps themselves are attached
+  // in the next block (cache-hit restoration); the createSubset
+  // closure resolves them lazily at invoke time, so the attach-here-
+  // populate-below order is fine.
+  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
+    const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
+    if (model.capabilities.instancePicking) {
+      attachInstanceMapSubsets(model, scene)
+    } else {
+      attachElementSubsets(model, scene)
+    }
+    // Diagnostic: how many distinct per-vertex element IDs are in
+    // this model? Compared against the IFC's true element count, a
+    // gap signals lost instance identity through write/read — most
+    // commonly because the original IFC used mapped-item / type-
+    // shared representations (multiple visible positions sharing
+    // one element express ID), in which case selecting any of those
+    // positions correctly highlights every other position too.
+    const stats = summariseElementIdAttribute(model)
+    glbInfo(
+      `reader: per-vertex element-IDs — ${stats.uniqueIds} unique across ` +
+      `${stats.vertices} vertices in ${stats.meshes} meshes`)
+  }
+
+  // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
+  // models. The GLB write captured per-vertex `instanceID` alongside
+  // `expressID`; `inferModelCapabilities` flipped `instancePicking`
+  // when both are present. Build a map per child Mesh from its own
+  // geometry attributes.
+  //
+  // Why per-mesh, not single: GLTFExporter splits one indexed mesh
+  // into N primitives — one per `geometry.groups[]` entry — and
+  // duplicates shared vertices. So the cache-write turn this:
+  //   ifcModel (1 Mesh, geometry with M material groups, V verts)
+  // into this:
+  //   Group containing M child Meshes, each with its own vertex
+  //   subset + its own index buffer. Total V_cache ≈ V × avg_share_factor.
+  //
+  // On read, each child Mesh has its own copy of `expressID` +
+  // `instanceID` per-vertex; the instance IDs are globally unique
+  // across the meshes (GLTFExporter doesn't renumber attributes when
+  // splitting). So one IfcInstanceMap per child Mesh, attached as
+  // `mesh.instanceMap`, is the right shape. ShareViewer.setSelection
+  // and setInstanceSelection traverse the model and build subsets
+  // from each map. (Cache-miss is the degenerate single-Mesh case:
+  // `ifcModel` is itself the Mesh, traversal visits one node, same
+  // code path produces the same result.)
+  //
+  // Skip when a mesh already has an instanceMap attached — the
+  // Conway-direct cache-miss path attaches one directly during the
+  // parse swap; this block is only for cache-hit restoration.
+  if (model.capabilities.instancePicking) {
+    let attached = 0
+    let totalInstances = 0
+    const allParents = new Set()
+    model.traverse((obj) => {
+      if (!obj.isMesh || obj.instanceMap) {
+        return
+      }
+      if (obj.geometry?.attributes?.instanceID?.count > 1) {
+        const map = instanceMapFromGeometry(obj.geometry)
+        obj.instanceMap = map
+        attached++
+        totalInstances += map.instanceCount
+        for (const pid of map.parentExpressIdToInstanceIds.keys()) {
+          allParents.add(pid)
+        }
+      }
+    })
+    if (attached > 0) {
+      glbInfo(
+        `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
+        `${totalInstances} instances under ${allParents.size} IFC products`)
+    }
+  }
+
+  // Fire-and-forget: serialize the rendered model to GLB and stash in
+  // OPFS so the next load of the same source can skip the IFC parse.
+  // Triggered for every source kind (github, local, upload, external)
+  // when the `glb` feature flag is on. Failures are logged but never
+  // thrown — the source is already on screen; this is cache warm-up only.
+  // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
+  if (glbExportContext) {
+    glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
+    exportAndCacheGlb({
+      model,
+      kindLabel: glbExportContext.kindLabel,
+      cacheKeyArgs: glbExportContext.cacheKeyArgs,
+    })
+  }
 
   return model
 }
@@ -312,8 +588,28 @@ async function axiosDownload(path, isFormatText, onProgress) {
  * @param {object} viewer
  * @return {Mesh}
  */
-function convertToShareModel(model, viewer) {
+export function convertToShareModel(model, viewer) {
   let objIdSerial = 0
+  // Whether we found per-vertex IFC expressIDs preserved through the
+  // GLB cache round-trip. GLTFExporter renames our `expressID` attribute
+  // to `_EXPRESSID` (custom attr → `_`-prefixed, uppercase) on write;
+  // GLTFLoader lowercases unknown attribute names on read, so the
+  // attribute lands at `geometry.attributes._expressid`. When we see
+  // it, we rename back to `expressID` so web-ifc-three's stock
+  // `IFCLoader#getExpressId` (which reads `attributes.expressID` at
+  // `index.array[3 * faceIndex]`) works without modification — element-
+  // level picking is restored on cache-hit models. See
+  // design/new/glb-model-sharing.md §"Picking granularity".
+  let foundPreservedExpressId = false
+  // Same trip for the Conway-direct path's per-vertex `instanceID`
+  // attribute (synthetic IfcInstanceMap instance per-PlacedGeometry).
+  // Written by GLTFExporter as `_INSTANCEID`, returned by GLTFLoader as
+  // `_instanceid`. Rename back so `inferModelCapabilities` can flip
+  // `instancePicking` on and `instanceMapFromGeometry` can derive the
+  // map from per-vertex attributes — no custom glTF extension needed,
+  // three.js's auto-renaming carries the data through verbatim. See
+  // design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+  let foundPreservedInstanceId = false
 
   /**
    * Recursively visit the model and its children to add `expressID` and
@@ -328,31 +624,55 @@ function convertToShareModel(model, viewer) {
     obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
     obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
     const id = objIdSerial++
-    obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
+    let hasPerVertex = false
     if (obj3d.geometry) {
-      const ids = new Int8Array(1)
-      ids[0] = id
-      // TODO(pablo)
-      // obj3d.geometry = obj3d.geometry || {attributes: {}}
-
-      // const ba = new BufferAttribute(ids, 1)
-      // ba.onUpload(() => {})
-
-      // obj3d.geometry.attributes = ba
-
-      const expressIdAttr = new BufferAttribute(ids, 1)
-      // eslint-disable-next-line no-empty-function
-      expressIdAttr.onUpload(() => {})
-
-      obj3d.geometry.attributes.expressID = expressIdAttr
-
-      const numQuickLookup = 5000 // TODO(pablo): rethink this approach
-      const geomIndex = new Array(numQuickLookup)
-      for (let i = 0; i < numQuickLookup; i++) {
-        geomIndex[i] = obj3d.expressID
+      // Fast path: this geometry came from a GLB roundtrip and still
+      // has the per-vertex IFC expressID under the `_EXPRESSID` →
+      // `_expressid` GLTFLoader-lowercased name. Rename back to
+      // `expressID` and skip the mesh-level synthetic write below.
+      const preserved = obj3d.geometry.attributes._expressid
+      if (preserved && preserved.count > 1) {
+        obj3d.geometry.setAttribute('expressID', preserved)
+        delete obj3d.geometry.attributes._expressid
+        foundPreservedExpressId = true
+        hasPerVertex = true
+      } else {
+        const ids = new Int8Array(1)
+        ids[0] = id
+        const expressIdAttr = new BufferAttribute(ids, 1)
+        // eslint-disable-next-line no-empty-function
+        expressIdAttr.onUpload(() => {})
+        obj3d.geometry.attributes.expressID = expressIdAttr
       }
-      // throw new Error('obj3d')
-      // obj3d.geometry.attributes.index = {array: geomIndex}
+      // Independent restore of the per-vertex `instanceID` attribute.
+      // The Conway-direct path emits this alongside `expressID`;
+      // GLTFExporter serialises it as `_INSTANCEID` (custom attr →
+      // `_`-prefixed, uppercase), GLTFLoader returns it as
+      // `_instanceid`. Promote back so `inferModelCapabilities` can
+      // flip `instancePicking` on and `instanceMapFromGeometry` (run
+      // by the cache-hit decoration block in `Loader#load`) can
+      // reconstruct the full IfcInstanceMap from per-vertex data
+      // alone — no custom glTF extension needed. A cache-hit GLB
+      // carrying both `expressID` and `instanceID` was originated
+      // under the Conway-direct path; one carrying only `expressID`
+      // came from a pre-Conway-direct parse. Same reader handles
+      // both; capability inference decides which features apply.
+      // See design/new/viewer-replacement.md §3b.ii ("For the GLB cache").
+      const preservedInst = obj3d.geometry.attributes._instanceid
+      if (preservedInst && preservedInst.count > 1) {
+        obj3d.geometry.setAttribute('instanceID', preservedInst)
+        delete obj3d.geometry.attributes._instanceid
+        foundPreservedInstanceId = true
+      }
+    }
+    // Only set the mesh-level `obj3d.expressID` serial when the geometry
+    // does NOT carry per-vertex IDs. Otherwise leave it undefined so
+    // CadView's click handler takes the per-vertex branch
+    // (`geom.attributes.expressID.getX(geoIndex[3 * faceIndex])`) instead
+    // of the wrong fallback that treats `mesh.expressID` as the answer
+    // for every face of the mesh.
+    if (!hasPerVertex) {
+      obj3d.expressID = Number.isSafeInteger(obj3d.expressID) ? obj3d.expressID : id
     }
 
     if (obj3d.children && obj3d.children.length > 0) {
@@ -381,9 +701,23 @@ function convertToShareModel(model, viewer) {
   model.ifcManager.getSpatialStructure = () => {
     return model
   }
-  model.ifcManager.getExpressId = (geom, faceNdx) => {
-    debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
-    return geom.id
+  // Only override the manager's stock `getExpressId` for genuinely
+  // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
+  // expressID attribute on any mesh). When the model came from our IFC→
+  // GLB cache, the renamed `expressID` attribute restored above lets
+  // web-ifc-three's stock implementation work correctly. The previous
+  // unconditional override polluted the manager globally — every
+  // subsequent pick on any model returned `geom.id` until page refresh.
+  if (!foundPreservedExpressId) {
+    model.ifcManager.getExpressId = (geom, faceNdx) => {
+      debug().log('getExpressId, geom, facedNdx', geom, faceNdx)
+      return geom.id
+    }
+  } else {
+    glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
+  }
+  if (foundPreservedInstanceId) {
+    glbInfo('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
@@ -409,17 +743,21 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   // TODO(pablo): GLTF also generates errors for texture loads, but
   // that seems to be deep in the promise stack within the loader.
   if (loader instanceof GLTFLoader) {
-    model = await new Promise((resolve, reject) => {
-      try {
-        loader.parse(modelData, './', (m) => {
-          resolve(m)
-        }, (err) => {
-          reject(new Error(`Loader error during parse: ${err}`))
-        })
-      } catch (e) {
-        reject(new Error(`Unhandled error in parse ${e}`))
-      }
-    })
+    if (isBldrsGlbContainer(modelData)) {
+      model = await parseBldrsGlbContainer(loader, modelData)
+    } else {
+      model = await new Promise((resolve, reject) => {
+        try {
+          loader.parse(modelData, './', (m) => {
+            resolve(m)
+          }, (err) => {
+            reject(new Error(`Loader error during parse: ${err}`))
+          })
+        } catch (e) {
+          reject(new Error(`Unhandled error in parse ${e}`))
+        }
+      })
+    }
   } else if (isLoaderAsync) {
     debug().log(`async loader(->) parsing data:`, loader, modelData)
     if (isIfc && onProgress) {
@@ -583,13 +921,37 @@ async function findLoader(pathname, viewer) {
 
 
 /**
- * @return {GLTFLoader} With DRACO codec enabled
+ * Construct the GLTFLoader used for .glb/.gltf loads.
+ *
+ * Registers `ExtBldrsPropertiesPayload` so cached Bldrs GLB artifacts (see
+ * design/new/glb-model-sharing.md) expose their gzipped properties payload
+ * on `gltf.scene.userData.bldrsPayload`.
+ *
+ * Decoder wiring is gated on the matching compression feature flag, so
+ * a reader that's already paying for a compressed-artifact cache hit
+ * gets the right decoder; readers running with the flag off skip the
+ * decoder cost (and would miss the cache anyway because the schema
+ * version embedded in the filename partitions compressed vs not).
+ * Three 0.135's DRACO regression is resolved by the r184 upgrade
+ * (PR #1514); the flag now exists to gate both write and read.
+ *
+ * @return {GLTFLoader}
  */
 function newGltfLoader() {
-  const loader = new GLTFLoader
-  const dracoLoader = new DRACOLoader
-  dracoLoader.setDecoderPath('./node_modules/three/examples/jsm/libs/draco/')
-  loader.setDRACOLoader(dracoLoader)
+  const loader = new GLTFLoader()
+  loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
+  if (isFeatureEnabled('glbDraco')) {
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('/static/js/draco/')
+    dracoLoader.setDecoderConfig({type: 'wasm'})
+    loader.setDRACOLoader(dracoLoader)
+  }
+  if (isFeatureEnabled('glbMeshopt')) {
+    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
+    // awaits it internally before decoding a buffer view tagged with
+    // EXT_meshopt_compression, so registering here is cheap.
+    loader.setMeshoptDecoder(MeshoptDecoder)
+  }
   return loader
 }
 
@@ -625,10 +987,26 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
+      // Phase-3 prep: capture Conway's FlatMesh stream during the live
+      // parse so the diagnostics below can read the original
+      // per-instance data without a second StreamAllMeshes walk.
+      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
+      // Both flags share the capture wrapper.
+      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
+        isFeatureEnabled('conwayDirectIfc')
+      const parityCapture = captureEnabled ?
+        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
+        null
+
       if (onProgress) {
         onProgress('Parsing model geometry...')
       }
-      const ifcModel = await this.loader.parse(buffer, onProgress)
+      let ifcModel
+      try {
+        ifcModel = await this.loader.parse(buffer, onProgress)
+      } finally {
+        parityCapture?.restore()
+      }
       this.addIfcModel(ifcModel)
 
       if (onProgress) {
@@ -665,6 +1043,26 @@ function newIfcLoader(viewer) {
       if (onProgress) {
         onProgress('Model loaded successfully!')
       }
+
+      // Phase-3 prep: parallel-run the new IfcItemsMap populators
+      // against the live model and log the diff. Diagnostic only —
+      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
+      // See design/new/viewer-replacement.md §3b.ii for the
+      // per-vertex-vs-per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
+        runIfcItemsMapParityCheck(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+      // Phase-3 cut-over: replace web-ifc-three's geometry with the
+      // Conway-direct merged buffer + attach an IfcInstanceMap. The
+      // IFC manager (properties, spatial tree, typed search) stays —
+      // only the rendered triangles + the picking source of truth
+      // change. Toggle via `?feature=conwayDirectIfc`.
+      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
+        installConwayDirectGeometry(
+          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
+      }
+
       return ifcModel
     } catch (err) {
       loader.ifcLastError = err
@@ -681,6 +1079,367 @@ function newIfcLoader(viewer) {
     }
   }
   return loader
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * Conway-direct stream) for a freshly-parsed IFC model, then log a
+ * one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * What we're watching for: an `onlyInB` count greater than zero
+ * (Conway-direct sees instance IDs the per-vertex attribute
+ * collapses). That's the IfcMappedItem case — design/new/viewer-replacement.md
+ * §3b.ii. A clean model with no mapped items prints `both=N
+ * onlyA=0 onlyB=0` and tells us the per-vertex path is already
+ * per-instance for this file.
+ *
+ * `triCountDeltas > 0` would be a stronger signal: the two
+ * populators agree on the ID set but disagree on triangle counts
+ * per ID. That implies an emission-order mismatch and should be
+ * investigated before promoting Conway-direct.
+ *
+ * Safe to fail silently — if Conway's API surface differs from what
+ * we expect (e.g., a future adapter version drops `StreamAllMeshes`),
+ * the parity check warns once and returns; the load completes
+ * normally.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ */
+/**
+ * Wrap `ifcAPI.StreamAllMeshes` so every FlatMesh that flows through
+ * the live parse is captured by reference into a local array. Returns
+ * `{captured, restore}` — `captured` accumulates as parse runs;
+ * `restore` puts the original method back regardless of parse outcome.
+ *
+ * Why capture-via-wrapper instead of reading
+ * `ifcAPI.models.get(modelID).model[4]` (the cached `vectorFlatMesh`):
+ * the adapter's vector has a bounds-check bug
+ * (ifc_api_proxy_ifc.js:138-152 — `get(index)` checks
+ * `placedGeometryArray.length` (an unrelated empty array) instead of
+ * `flatMeshArray.length`, so `get(i)` returns a dummy for every
+ * index). `size()` and `push()` work; `get()` is functionally write-
+ * only. The wrapper gives us the FlatMeshes via the callback path,
+ * where the inner per-PlacedGeometry vectors ARE well-formed.
+ *
+ * Capture is by reference — Conway doesn't mutate a FlatMesh after
+ * emitting it through the callback (the scene.walk() at line 562
+ * finalises each entity's PlacedGeometry vector before
+ * `meshMap.forEach` fires the callbacks at line 705).
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @return {{captured: Array, restore: Function}}
+ */
+function installFlatMeshCapture(ifcAPI) {
+  const captured = []
+  const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
+  ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
+    return orig(modelID, (flatMesh) => {
+      captured.push(flatMesh)
+      cb(flatMesh)
+    })
+  }
+  return {
+    captured,
+    restore: () => {
+      ifcAPI.StreamAllMeshes = orig
+    },
+  }
+}
+
+
+/**
+ * Build the new IfcItemsMap two ways (per-vertex attribute and
+ * captured FlatMesh stream) for a freshly-parsed IFC model, then log
+ * a one-line comparison. Diagnostic only — pure observation; the
+ * caller drops both maps on the floor.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh
+ * @param {Array} capturedFlatMeshes FlatMeshes captured during the
+ *   live parse via installFlatMeshCapture
+ */
+function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    const modelID = ifcModel.modelID
+    const geom = ifcModel.geometry
+    const perVertex = itemsMapFromPerVertexAttribute(geom)
+    if (!perVertex) {
+      console.warn(
+        '[ifcItemsMapParity] per-vertex populator returned null ' +
+        '(no expressID attribute or no index) — skipping parity check')
+      return
+    }
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[ifcItemsMapParity] no FlatMesh capture from parse — ' +
+        'skipping parity check (web-ifc-three may not have called ' +
+        'StreamAllMeshes for this load)')
+      return
+    }
+    const conway = itemsMapFromFlatMeshes(
+      capturedFlatMeshes, ifcAPI, modelID, {geometry: geom})
+    const cmp = compareItemsMaps(perVertex, conway)
+    // Conway-level shape: how many PlacedGeometries fit under how
+    // many FlatMeshes? `placedCount > flatMeshCount` means some
+    // FlatMeshes have multiple PlacedGeometries. Two distinct
+    // sub-cases hide there:
+    //   (i)  IfcMappedItem-style instances: many PlacedGeometries
+    //        SHARE one `geometryExpressID` and differ only in their
+    //        flatTransformation. Per-instance picking is the right
+    //        answer for these.
+    //   (ii) Compound representation: one IFC element's geometry is
+    //        built from N distinct geometric primitives, each with
+    //        its own `geometryExpressID`. Subcomponents are not
+    //        independently selectable in IFC semantics; per-instance
+    //        picking would be wrong here.
+    // Tracking shared vs unique geometryExpressIDs across the
+    // multi-placed FlatMeshes tells us the mix.
+    let flatMeshCount = 0
+    let placedCount = 0
+    let multiPlacedFlatMeshes = 0
+    let maxPlacedInOneFlatMesh = 0
+    // Case (i) and (ii) accounting across multi-placed FlatMeshes:
+    let sharedShapeInstances = 0 // PlacedGeometries that share a geomExpressID with a sibling
+    let uniqueShapeInstances = 0 // PlacedGeometries with a geomExpressID unique within the FlatMesh
+    let multiPlacedAllShared = 0 // FlatMeshes where every placedGeom shares one geomExpressID (pure case i)
+    let multiPlacedAllUnique = 0 // FlatMeshes where every placedGeom has a unique geomExpressID (pure case ii)
+    let multiPlacedMixed = 0 // FlatMeshes that are a mix
+    for (const fm of capturedFlatMeshes) {
+      flatMeshCount++
+      const g = fm?.geometries
+      const n = typeof g?.size === 'function' ? g.size() : (g?.length ?? 0)
+      placedCount += n
+      if (n > 1) {
+        multiPlacedFlatMeshes++
+        // Count occurrences of each geomExpressID inside this FlatMesh.
+        const counts = new Map()
+        for (let i = 0; i < n; i++) {
+          const placed = typeof g.get === 'function' ? g.get(i) : g[i]
+          const id = placed?.geometryExpressID
+          counts.set(id, (counts.get(id) ?? 0) + 1)
+        }
+        let sharedHere = 0
+        let uniqueHere = 0
+        for (const c of counts.values()) {
+          if (c > 1) {
+            sharedHere += c
+          } else {
+            uniqueHere += c
+          }
+        }
+        sharedShapeInstances += sharedHere
+        uniqueShapeInstances += uniqueHere
+        if (sharedHere === n) {
+          multiPlacedAllShared++
+        } else if (uniqueHere === n) {
+          multiPlacedAllUnique++
+        } else {
+          multiPlacedMixed++
+        }
+      }
+      if (n > maxPlacedInOneFlatMesh) {
+        maxPlacedInOneFlatMesh = n
+      }
+    }
+    console.warn(
+      `[ifcItemsMapParity] modelID=${modelID} ` +
+      `perVertexElements=${perVertex.elementCount} ` +
+      `conwayElements=${conway.elementCount} ` +
+      `perVertexTriangles=${perVertex.triangleCount} ` +
+      `conwayTriangles=${conway.triangleCount} ` +
+      `${formatComparison(cmp)}`)
+    console.warn(
+      `[ifcItemsMapParity] Conway emission: flatMeshes=${flatMeshCount} ` +
+      `placedGeometries=${placedCount} ` +
+      `multiPlacedFlatMeshes=${multiPlacedFlatMeshes} ` +
+      `maxPlacedInOneFlatMesh=${maxPlacedInOneFlatMesh}`)
+    console.warn(
+      `[ifcItemsMapParity] multi-placed breakdown: ` +
+      `allShared=${multiPlacedAllShared} ` +
+      `allUnique=${multiPlacedAllUnique} ` +
+      `mixed=${multiPlacedMixed} ` +
+      `sharedShapeInstances=${sharedShapeInstances} ` +
+      `uniqueShapeInstances=${uniqueShapeInstances}`)
+    // First few count deltas, for spot-checking emission-order issues.
+    if (cmp.triangleCountDeltas.length > 0) {
+      const head = cmp.triangleCountDeltas.slice(0, 5)
+        .map((d) => `${d.id}:${d.a}vs${d.b}`).join(' ')
+      console.warn(`[ifcItemsMapParity] sample triCountDeltas: ${head}`)
+    }
+    if (cmp.onlyInB > 0) {
+      console.warn(
+        `[ifcItemsMapParity] Conway sees ${cmp.onlyInB} additional ` +
+        'instance IDs — this is the IfcMappedItem per-instance ' +
+        'delta the per-vertex path collapses')
+    }
+    if (!cmp.agreeingTriangleCounts) {
+      console.warn(
+        `[ifcItemsMapParity] ${cmp.triangleCountDeltas.length} IDs ` +
+        'have triangle-count deltas — emission order may differ; ' +
+        'investigate before promoting Conway-direct')
+    }
+  } catch (e) {
+    console.warn('[ifcItemsMapParity] check failed:', e)
+  }
+}
+
+
+/**
+ * Replace web-ifc-three's rendered geometry with the Conway-direct
+ * merged BufferGeometry built from the captured FlatMesh stream, and
+ * attach the matching `IfcInstanceMap` for per-instance picking.
+ *
+ * Why we keep `ifcModel` rather than returning a new Mesh: the IFC
+ * manager (web-ifc-three's `IFCManager`) is what owns property
+ * lookups, spatial structure, typed search, the isolator's hide /
+ * isolate workflow, and the existing preselection material. Building
+ * a separate object would require porting all that wiring; swapping
+ * just the geometry preserves it.
+ *
+ * Capability flips:
+ *   - `ifcSubsets` → false: `ShareViewer.setSelection` will skip
+ *     `IFC.selector.pickIfcItemsByID` (web-ifc-three's `SubsetCreator`
+ *     can't run against the swapped geometry) and take the per-vertex
+ *     branch, which uses `model.createSubset` — attached below.
+ *   - `expressIdPicking` → true: parity with the existing per-vertex
+ *     path. The Conway-built geometry carries the `expressID`
+ *     attribute so the per-vertex subset builder works as-is.
+ *   - `instancePicking` → true: signals to `CadView`'s click handler
+ *     and `ShareViewer.setInstanceSelection` that
+ *     `mesh.instanceMap.getInstanceIdByTriangle` is available.
+ *
+ * What the log line tells us (same shape as the earlier smoke):
+ *   - `vertices` / `triangles` should match web-ifc-three's totals;
+ *     a divergence here means the assembler is dropping data.
+ *   - `instances` should equal Conway's PlacedGeometry total — the
+ *     per-instance granularity floor the parity probe exposed.
+ *   - `parents` should equal Conway's FlatMesh count.
+ *
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {object} ifcModel freshly-parsed web-ifc-three Mesh; its
+ *   `geometry` is REPLACED in place. `ifcModel.material` is also
+ *   replaced with an *array* (one MeshLambertMaterial per Conway
+ *   PlacedGeometry color bin, paired with `geometry.groups[]`) —
+ *   same shape `web-ifc-three.IFCModel` natively produces
+ *   (IFCLoader.js:182), so downstream code that already handles
+ *   array-or-single materials (see `getMeshMaterials` in ShareModel.js)
+ *   keeps working without change.
+ * @param {Array} capturedFlatMeshes FlatMeshes from installFlatMeshCapture
+ */
+export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
+  try {
+    if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
+      console.warn(
+        '[conwayDirect] no FlatMesh capture from parse — ' +
+        'skipping Conway-direct install')
+      return
+    }
+    const t0 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    // Multi-material rendering: the assembler bins PlacedGeometries
+    // by `placedGeometry.color` and produces one MeshLambertMaterial
+    // per distinct RGBA + matching `geometry.groups[]`, mirroring
+    // `web-ifc-three.IFCParser`'s output shape exactly (IFCLoader.js:
+    // 168-184). The IFC visual identity carries through: each
+    // element renders with its source colour, transparency works for
+    // glass/glazing (alpha < 1 → `transparent: true; opacity:
+    // alpha`), single material per bin keeps draw-call count near
+    // wit-three's.
+    // The pre-BVH instanceMap returned here is intentionally
+    // discarded — see the comment near `computeBoundsTree` below. We
+    // rebuild a triangle-keyed map from the post-reorder geometry
+    // attributes instead.
+    const {mesh: conwayMesh, materials, stats} = buildConwayIfcModel(
+      capturedFlatMeshes, ifcAPI, ifcModel.modelID)
+    const t1 = (typeof performance !== 'undefined' && performance.now) ?
+      performance.now() : Date.now()
+    const witTriangles = ifcModel.geometry?.getIndex()?.count / 3
+    const witVertices = ifcModel.geometry?.getAttribute('position')?.count
+    // Dispose web-ifc-three's geometry GPU resources before letting
+    // the reference go — the IFCModel won't dispose it for us once we
+    // overwrite `.geometry`.
+    if (typeof ifcModel.geometry?.dispose === 'function') {
+      ifcModel.geometry.dispose()
+    }
+    ifcModel.geometry = conwayMesh.geometry
+    // Replace wit-three's material array with our binned-by-color
+    // array. Same shape (Array<MeshLambertMaterial>), same per-bin
+    // colour intent — just rebuilt from Conway's PlacedGeometry
+    // emission so it matches the merged geometry's `groups[]`.
+    ifcModel.material = materials
+    // Recompute bounds for `fitModelToFrame`. BufferGeometry would
+    // lazy-compute on first access but the IFC manager / clipper read
+    // bounds eagerly; explicit is cheaper than the surprise.
+    ifcModel.geometry.computeBoundingBox()
+    ifcModel.geometry.computeBoundingSphere()
+    // Build the BVH so picking is fast. `computeBoundsTree` is
+    // monkey-patched onto BufferGeometry.prototype by web-ifc-three's
+    // IFCLoader during init — by the time we get here the parse
+    // already ran, so the patch is in place. Guard with optional-call
+    // in case the loader changed its init behavior.
+    //
+    // CRITICAL: this REORDERS the geometry's index buffer in place
+    // for cache-coherent ray traversal. After reorder, the original
+    // emission-order `instanceMap` from `buildConwayIfcModel` is
+    // wrong — `triangleIndexToInstanceId[T]` was keyed by emission
+    // position, but `T` now refers to a different (BVH-reordered)
+    // triangle. The raycaster's `faceIndex` is the post-reorder
+    // position, so the lookup mismatches and clicks highlight the
+    // wrong instance.
+    //
+    // Fix: discard the emission-order map, build a fresh one from
+    // the geometry's per-vertex `instanceID` + `expressID`
+    // attributes (which BVH doesn't touch — vertices stay put, only
+    // the index buffer is permuted). `instanceMapFromGeometry` reads
+    // the post-reorder index buffer + the unchanged per-vertex IDs
+    // to produce a triangle-keyed map that matches the geometry's
+    // actual layout.
+    if (typeof ifcModel.geometry.computeBoundsTree === 'function') {
+      ifcModel.geometry.computeBoundsTree()
+    }
+    ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
+    // Capability flips: redirect setSelection to the per-vertex
+    // (createSubset-attached) branch and announce per-instance.
+    if (ifcModel.capabilities) {
+      ifcModel.capabilities.ifcSubsets = false
+      ifcModel.capabilities.instancePicking = true
+      ifcModel.capabilities.expressIdPicking = true
+    }
+    // Replace web-ifc-three's native `createSubset` with the
+    // instance-map-aware one. Wit-three's stock `SubsetCreator` reads
+    // from the original (pre-swap) geometry through `ItemsMap`, so
+    // post-swap it builds subsets against the WRONG vertex buffer —
+    // the isolator's hide / isolate / reveal modes render against
+    // stale data on conwayDirectIfc. Routing through `attachInstanceMapSubsets`
+    // sources the subset from each child mesh's `IfcInstanceMap` (set
+    // a few lines above) — same vertex buffer, same triangle ranges
+    // as what's currently rendered, plus parent-product granularity
+    // matching the rest of the Conway-direct selection pipeline. See
+    // design/new/viewer-replacement.md §3b.iii.
+    // `fallbackParent = null` is intentional: by the time the
+    // isolator (or any other consumer) calls `createSubset`, the
+    // model is already added to the scene by `Containers/viewer.js`,
+    // so `sourceMesh.parent` is set. Tests and headless code that
+    // call before scene-attachment will get a null-parent subset —
+    // that's a known edge they need to handle (no production caller
+    // does this today).
+    attachInstanceMapSubsets(ifcModel, null)
+    console.warn(
+      `[conwayDirect] installed modelID=${ifcModel.modelID} ` +
+      `in ${(t1 - t0).toFixed(1)}ms — ` +
+      `vertices=${stats.vertexCount} (wit=${witVertices}) ` +
+      `triangles=${stats.triangleCount} (wit=${witTriangles}) ` +
+      `instances=${stats.instanceCount} ` +
+      `parents=${stats.parentCount} ` +
+      `materials=${stats.materialCount} ` +
+      `skippedFlatMeshes=${stats.skippedFlatMeshes} ` +
+      `skippedPlaced=${stats.skippedPlacedGeometries}`)
+  } catch (e) {
+    console.warn('[conwayDirect] install failed:', e)
+  }
 }
 
 
@@ -711,4 +1470,215 @@ export class NotFoundError extends Error {
       Error.captureStackTrace(this, NotFoundError) // Captures stack trace, excluding constructor call
     }
   }
+}
+
+
+/**
+ * Look up a cached Bldrs GLB artifact in OPFS for a given source file. Returns
+ * the GLB `File` if present, or `null` if no artifact has been generated yet
+ * (or has a mismatched schema/source hash). Never throws; failures resolve to
+ * null so the caller falls back to the IFC path.
+ *
+ * Design: design/new/glb-model-sharing.md §"Caching and lookup".
+ *
+ * @param {object} cacheKeyArgs Output of a sourceCacheKey adapter
+ *   ({ns1, ns2, ns3, sourcePath, sourceHash}).
+ * @return {Promise<File|null>}
+ */
+async function tryLoadCachedGlb(cacheKeyArgs) {
+  try {
+    // Schema version varies with the active compression flag so a flag-
+    // off reader never picks up a flag-on writer's compressed bytes
+    // (and vice versa). See glbCompress.js#schemaVersionFor.
+    const requestedMode = activeGlbCompressionMode()
+    const schemaVer = activeSchemaVersion()
+    const key = glbCacheKey({...cacheKeyArgs, schemaVer})
+    const exists = await doesFileExistInOPFS(
+      key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    if (!exists) {
+      return null
+    }
+    const file = await readModelByPathFromOPFS(
+      key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
+    if (!file) {
+      return null
+    }
+    // Verify the cached artifact's compression mode matches what the
+    // user asked for. The schema-suffix filename partitioning is the
+    // first line of defense; this is the second — it catches stale
+    // artifacts written by an earlier code revision (pre-mode-byte) or
+    // pollution in the OPFS slot. On mismatch we treat it as a miss
+    // so the IFC parse path runs and the writer rewrites a correct
+    // artifact.
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    if (!isBldrsGlbContainer(bytes)) {
+      glbInfo('reader: found OPFS file but it is not a Bldrs container; treating as miss')
+      return null
+    }
+    const peek = unpackGlbContainer(bytes)
+    if (peek.mode !== requestedMode) {
+      glbInfo(
+        `reader: cached artifact mode mismatch (cached=${peek.mode || 'none'}, ` +
+        `requested=${requestedMode || 'none'}); treating as miss`)
+      return null
+    }
+    return file
+  } catch (e) {
+    glbInfo('reader: lookup failed, falling back to source path:', e)
+    return null
+  }
+}
+
+
+/**
+ * Swap the loader tuple from IFC to GLB. Used by the GLB cache skip-path
+ * once we've confirmed a cached artifact exists for the source.
+ *
+ * @param {object} viewer
+ * @return {[object, boolean, boolean, boolean, Function]} loader tuple
+ *   matching findLoader's return: [loader, isLoaderAsync, isFormatText,
+ *   isIfc, fixupCb].
+ */
+function swapToGlbLoader(viewer) {
+  const loader = newGltfLoader()
+  loader.type = 'glb'
+  // Element-level picking on cache-hit GLB is now handled by the
+  // capability-driven path in `ShareViewer#setSelection` /
+  // `#highlightIfcItem`: `inferModelCapabilities` promotes
+  // `expressIdPicking` on the loaded model (it has per-vertex
+  // `expressID` from the IFC→GLB cache round-trip), and
+  // `attachElementSubsets` gives the model a `createSubset` method
+  // that synthesises the selection / preselection meshes directly
+  // from the per-vertex attribute. No need to fake `viewer.IFC.type`.
+  viewer.IFC.type = 'glb'
+  return [loader, false /* isLoaderAsync */, false /* isFormatText */, false /* isIfc */, glbToThree]
+}
+
+
+/**
+ * Parse a Bldrs GLB container (see `glbContainer.js`) into the shape
+ * GLTFLoader normally returns: `{scenes: [Group]}` so the downstream
+ * `glbToThree` fixupCb extracts the single merged Group as the model.
+ *
+ * Each container chunk is itself a valid GLB; we parse them one at a time
+ * with the supplied GLTFLoader and add each chunk's scene to a shared
+ * parent Group. Complex IFCs typically split into multiple chunks
+ * because conway's GeometryConvertor segments output by buffer-size
+ * budget; without this we'd render only the first chunk.
+ *
+ * @param {GLTFLoader} loader
+ * @param {ArrayBuffer|Uint8Array} containerBytes
+ * @return {Promise<{scenes: object[]}>}
+ */
+async function parseBldrsGlbContainer(loader, containerBytes) {
+  const {chunks, mode, version} = unpackGlbContainer(containerBytes)
+  glbInfo(
+    `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
+    `mode=${mode || 'none'}`)
+  const merged = new Group()
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkAb = chunks[i]
+    const gltf = await new Promise((resolve, reject) => {
+      try {
+        loader.parse(chunkAb, './', (m) => resolve(m), (err) => {
+          reject(new Error(`Loader error parsing chunk ${i}: ${err}`))
+        })
+      } catch (e) {
+        reject(new Error(`Unhandled error parsing chunk ${i}: ${e}`))
+      }
+    })
+    if (gltf.scenes && gltf.scenes.length > 0) {
+      for (const s of gltf.scenes) {
+        merged.add(s)
+      }
+    } else if (gltf.scene) {
+      merged.add(gltf.scene)
+    }
+  }
+  return {scenes: [merged]}
+}
+
+
+/**
+ * Walk a Three.js scene and return a one-shot summary: node count, mesh
+ * count, vertex count, world-space bounds, and the magnitude of the offset
+ * between the bounds center and the world origin. Used post-parse to
+ * diagnose why a cached GLB might not appear in the viewport.
+ *
+ * @param {object} root Three.js Object3D / Group / Scene
+ * @return {{nodes:number, meshes:number, vertices:number, boundsStr:string, centerOffsetStr:string, centerOffsetMag:number}}
+ */
+function summarizeGlbScene(root) {
+  let nodes = 0
+  let meshes = 0
+  let vertices = 0
+  const bounds = new Box3()
+  bounds.makeEmpty()
+  root.traverse((obj) => {
+    nodes++
+    if (obj instanceof Mesh) {
+      meshes++
+      const posAttr = obj.geometry?.attributes?.position
+      if (posAttr) {
+        vertices += posAttr.count
+        const meshBounds = new Box3().setFromObject(obj)
+        if (!meshBounds.isEmpty()) {
+          bounds.union(meshBounds)
+        }
+      }
+    }
+  })
+  const center = new Vector3()
+  if (!bounds.isEmpty()) {
+    bounds.getCenter(center)
+  }
+  const size = new Vector3()
+  if (!bounds.isEmpty()) {
+    bounds.getSize(size)
+  }
+  const fmt = (v) => v.toExponential(2)
+  const boundsStr = bounds.isEmpty() ?
+    'empty' :
+    `size=(${fmt(size.x)},${fmt(size.y)},${fmt(size.z)})`
+  const centerOffsetMag = center.length()
+  const centerOffsetStr = bounds.isEmpty() ?
+    'n/a' :
+    `(${fmt(center.x)},${fmt(center.y)},${fmt(center.z)})`
+  return {nodes, meshes, vertices, boundsStr, centerOffsetStr, centerOffsetMag}
+}
+
+
+/**
+ * Build the cacheKeyArgs for a non-GitHub source kind after we've computed
+ * the content sha. Returns null for an unrecognised kindLabel so the caller
+ * can skip the lookup cleanly.
+ *
+ * @param {string} kindLabel 'local' | 'upload' | 'external'
+ * @param {string} path The path/URL the loader was invoked with.
+ * @param {string} contentSha Hex digest of the source bytes.
+ * @return {object|null}
+ */
+function buildNonGitHubCacheArgs(kindLabel, path, contentSha) {
+  if (kindLabel === 'local') {
+    // Locally-hosted files use the path as-is for OPFS (with leading slash
+    // stripped). Fallback name avoids an empty sourcePath for `/`.
+    const filePath = path.replace(/^\//, '') || 'model'
+    return localCacheKey({filePath, contentSha})
+  }
+  if (kindLabel === 'upload') {
+    // Uploads carry a UUID in the path; reuse the path tail as the file name.
+    const tail = path.split('/').pop() || 'upload'
+    return uploadCacheKey({filePath: tail, contentSha})
+  }
+  if (kindLabel === 'external') {
+    let pathUrl
+    try {
+      pathUrl = new URL(path)
+    } catch (e) {
+      return null
+    }
+    const filePath = pathUrl.pathname.replace(/^\//, '') || 'model'
+    return externalCacheKey({filePath, contentSha})
+  }
+  return null
 }

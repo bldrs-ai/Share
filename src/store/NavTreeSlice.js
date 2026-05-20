@@ -35,5 +35,18 @@ export default function createNavTreeSlice(set, get) {
 
     selectedElements: [],
     setSelectedElements: (elts) => set(() => ({selectedElements: elts})),
+
+    // Synthetic IfcInstanceMap instance IDs (one per Conway
+    // PlacedGeometry). Populated alongside `selectedElements` on the
+    // Conway-direct path (`?feature=conwayDirectIfc`) when the user
+    // clicks a specific visible placement of an IfcMappedItem-style
+    // shared shape: `selectedElements` still carries the parent IFC
+    // expressID so the properties panel / nav tree / search behave
+    // normally, but the highlight is restricted to just the clicked
+    // instance's triangles. Empty when the per-instance map is not
+    // available (today's web-ifc-three path) or when Shift-click
+    // selects the whole IFC element.
+    selectedInstanceIds: [],
+    setSelectedInstanceIds: (ids) => set(() => ({selectedInstanceIds: ids})),
   }
 }

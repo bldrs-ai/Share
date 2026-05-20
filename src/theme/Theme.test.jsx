@@ -1,4 +1,5 @@
-import {Themes, getSystemCurrentLightDark} from './Theme'
+import {act, renderHook} from '@testing-library/react'
+import useShareTheme, {Themes, getSystemCurrentLightDark} from './Theme'
 
 
 describe('Theme', () => {
@@ -91,6 +92,46 @@ describe('Theme', () => {
       // Should not throw and should default to Day when matchMedia is undefined
       expect(() => getSystemCurrentLightDark()).not.toThrow()
       expect(getSystemCurrentLightDark()).toBe(Themes.Day)
+    })
+  })
+
+  describe('useShareTheme listener firing', () => {
+    // Regression: CadView.onModelPath both calls its initViewerCb directly
+    // AND registers it as a theme listener. If useShareTheme fires listeners
+    // on initial mount, that's two viewer inits per model load — the Safari
+    // double-load symptom on Plaza/Momentum/index.ifc. The listener should
+    // only fire on actual theme transitions, not on the first commit.
+
+    test('does not fire registered listeners on initial mount', () => {
+      const listener = jest.fn()
+      const {result} = renderHook(() => useShareTheme())
+      act(() => {
+        result.current.addThemeChangeListener(listener)
+      })
+      expect(listener).not.toHaveBeenCalled()
+    })
+
+    test('fires listeners on subsequent theme changes', () => {
+      const listener = jest.fn()
+      const {result} = renderHook(() => useShareTheme())
+      act(() => {
+        result.current.addThemeChangeListener(listener)
+      })
+      act(() => {
+        result.current.setTheme(Themes.Night)
+      })
+      expect(listener).toHaveBeenCalledTimes(1)
+    })
+
+    test('does not refire listeners on re-render without a theme change', () => {
+      const listener = jest.fn()
+      const {result, rerender} = renderHook(() => useShareTheme())
+      act(() => {
+        result.current.addThemeChangeListener(listener)
+      })
+      rerender()
+      rerender()
+      expect(listener).not.toHaveBeenCalled()
     })
   })
 })

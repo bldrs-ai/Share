@@ -14,4 +14,89 @@ export const flags = [
   // land in identity-decoupling PR2.
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
+  // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
+  // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
+  // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
+  {name: 'glb', isActive: false},
+  // DRACO compression for cached GLBs. Applies to BOTH write and read:
+  // writer pipes the GLTFExporter output through @gltf-transform's
+  // draco() transform; reader wires DRACOLoader into the GLTFLoader.
+  // The cached artifact's filename embeds a `-draco` schema suffix so
+  // compressed and uncompressed caches don't collide. Three 0.135's
+  // DRACO regression is resolved by the r184 upgrade (PR #1514).
+  // Off-by-default because compression adds 100-300ms per cache write;
+  // flip on via `?feature=glb,glbDraco` to size-compare on your models.
+  {name: 'glbDraco', isActive: false},
+  // Meshopt compression for cached GLBs. Mirror of `glbDraco` using
+  // EXT_meshopt_compression via @gltf-transform's meshopt() transform.
+  // Typically faster to decode than DRACO with comparable ratios.
+  // When both `glbDraco` and `glbMeshopt` are on, DRACO wins
+  // (deterministic; toggle the other off to compare).
+  {name: 'glbMeshopt', isActive: false},
+  // Verbose GLB writer/reader diagnostics (cache-key descriptor dump,
+  // modelID, geometry size, chunk count). Top-level `[glb] writer/reader:`
+  // milestone lines stay on whenever `glb` is on; this is the extra detail.
+  {name: 'glbVerbose', isActive: false},
+  // Post-parse parity check that runs the new IfcItemsMap populators
+  // against the live model and logs the diff. Diagnostic only — no
+  // behavior change. Phase-3 prep work for the viewer replacement
+  // (design/new/viewer-replacement.md §3b). Flip on via
+  // `?feature=ifcItemsMapParity` to compare the per-vertex and
+  // Conway-direct populators on a real IFC.
+  {name: 'ifcItemsMapParity', isActive: false},
+  // Conway-direct IFC model build. When on:
+  //   * The Conway-direct assembler builds a merged BufferGeometry +
+  //     per-color material array from the captured FlatMesh stream,
+  //     and that geometry REPLACES web-ifc-three's rendered output.
+  //     The IFC manager (properties, spatial tree, typed search) is
+  //     preserved; only the rendered triangles + picking source of
+  //     truth change.
+  //   * Picking is per-PlacedGeometry instance by default (matches
+  //     what was clicked, not the whole IFC product). Shift-click
+  //     expands to every instance of the parent. Hover preselection
+  //     follows the same per-instance semantic.
+  //   * With `glb` also on, per-vertex `instanceID` round-trips
+  //     through the IFC→GLB→IFC cache automatically (GLTFExporter's
+  //     `_INSTANCEID` rename + reader-side restore + capability
+  //     inference + cache-hit IfcInstanceMap reconstruction).
+  // Test-phase flag — not yet on by default. Implies (turns on) the
+  // StreamAllMeshes capture wrapper; `ifcItemsMapParity` shares the
+  // same capture. Design: design/new/viewer-replacement.md §3b.
+  {name: 'conwayDirectIfc', isActive: false},
 ]
+
+
+/**
+ * Non-React feature-flag check. Mirrors `useExistInFeature` (in
+ * src/hooks/useExistInFeature.js) but is usable from non-component modules
+ * (loaders, services, etc.). A feature is enabled if its static flag has
+ * `isActive: true` OR if the URL contains `?feature=<name>` (comma-separated
+ * for multiple).
+ *
+ * Reads `window.location.search` directly, so this is a snapshot at call
+ * time. Components that need to react to URL changes should use
+ * `useExistInFeature` instead.
+ *
+ * @param {string} name Flag name (case-insensitive)
+ * @return {boolean}
+ */
+export function isFeatureEnabled(name) {
+  if (!name) {
+    return false
+  }
+  const lowerName = name.toLowerCase()
+
+  const staticFlag = flags.find((f) => f.name.toLowerCase() === lowerName)
+  if (staticFlag?.isActive) {
+    return true
+  }
+
+  if (typeof window === 'undefined' || !window.location) {
+    return false
+  }
+  const enabledFeatures = new URLSearchParams(window.location.search).get('feature')
+  if (!enabledFeatures) {
+    return false
+  }
+  return enabledFeatures.split(',').some((f) => f.trim().toLowerCase() === lowerName)
+}

@@ -1,5 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {ColorManagement, LinearSRGBColorSpace} from 'three'
+import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import IfcHighlighter from './three/IfcHighlighter'
@@ -7,6 +7,26 @@ import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
+import {modelHasCapability} from './ShareModel'
+
+
+// Minimum index-buffer capacity for the preselection pool. 256 u32
+// entries ≈ 85 triangles — covers the vast majority of single-
+// PlacedGeometry instances without growing the buffer on first hover.
+const MIN_PRESELECTION_INDEX_CAP = 256
+
+
+/**
+ * @param {number} n
+ * @return {number} smallest power of 2 ≥ n.
+ */
+function nextPow2(n) {
+  let p = 1
+  while (p < n) {
+    p <<= 1
+  }
+  return p
+}
 import {areDefinedAndNotNull} from '../utils/assert'
 
 
@@ -52,6 +72,18 @@ export class ShareViewer extends IfcViewerAPI {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
+  // Conway-direct selection / preselection slots. Tracked as class
+  // fields so the `_clearXxx` helpers don't need defensive
+  // initialisation on first call. Mutated in place by the
+  // `_setConwayXxxFrom*` helpers; the previous slot's subsets are
+  // removed from scene + highlighter + disposed before the new ones
+  // land. See §3b.ii of design/new/viewer-replacement.md.
+  _conwaySelectionSubsets = []
+  // Reusable preselection mesh pool — see `_setConwayPreselectionFromHit`.
+  // Hover at interactive rates churns through subset meshes; the pool
+  // keeps one Mesh/BufferGeometry/Uint32Array alive across calls and
+  // updates the index buffer in place rather than allocating per hover.
+  _conwayPreselectionPool = null
   /**
    * @param {object} options - Configuration options
    */
@@ -254,8 +286,9 @@ export class ShareViewer extends IfcViewerAPI {
    * @param {boolean} focusSelection Whether to focus on selection
    */
   async setSelection(modelID, expressIds, focusSelection) {
-    if (this.IFC.type !== 'ifc') {
-      debug().warn('setSelection is not supported for this type of model')
+    const model = this._modelById(modelID)
+    if (!modelHasCapability(model, 'expressIdPicking')) {
+      debug().warn('setSelection: model does not support expressIdPicking')
       return
     }
     this._selectedExpressIds = expressIds
@@ -264,22 +297,402 @@ export class ShareViewer extends IfcViewerAPI {
       // if not specified, only focus on item if it was the first one to be selected
       focusSelection = toBeSelected.length === 1
     }
-    if (toBeSelected.length !== 0) {
-      try {
-        debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
+    if (toBeSelected.length === 0) {
+      this.highlighter.setHighlighted(null)
+      this._clearConwaySelectionSubsets()
+      if (modelHasCapability(model, 'ifcSubsets')) {
+        this.IFC.selector.unpickIfcItems()
+      } else if (typeof model.removeSubset === 'function') {
+        model.removeSubset('selection')
+      }
+      return
+    }
+    try {
+      debug().log('ShareViewer#setSelection, with Array<toBeSelected>: ', toBeSelected)
+      if (modelHasCapability(model, 'instancePicking')) {
+        // Conway-direct path: build the highlight from per-Mesh
+        // IfcInstanceMaps. Parent-level subset — every PlacedGeometry
+        // instance of each requested IFC product across every child
+        // Mesh. The `setInstanceSelection` method called afterwards
+        // by the click handler overrides this with a one-instance
+        // subset when `selectedInstanceIds` is non-empty; the parent-
+        // level mesh produced here is the right default (nav-tree
+        // selection, search-result selection, Shift-click).
+        //
+        // Traversal handles both cache-miss (single Mesh = ifcModel)
+        // and cache-hit (Group containing N child Meshes per material
+        // group); each Mesh's instanceMap is built against its own
+        // geometry, so subsets are constructed per-mesh too. The
+        // parented-into-scene step is what makes the translucent x-ray
+        // overlay actually render — OutlineEffect alone only draws
+        // edges.
+        this._setConwaySelectionFromModel(model, (mesh) =>
+          mesh.instanceMap.createSubsetMeshByParent(toBeSelected, {
+            material: this.IFC.selector?.selection?.material,
+          }))
+      } else if (modelHasCapability(model, 'ifcSubsets')) {
+        // Real-IFC path: web-ifc-three holds the parser state needed
+        // by createSubset / SubsetCreator.
         const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
         const removePrevious = true
         await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
         debug().log('ShareViewer#setSelection, meshes: ', this.IFC.selector.selection.meshes)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
-      } catch (e) {
-        console.warn('selection failure', e)
-        debug().error('ShareViewer#setSelection$onError: ', e)
+      } else {
+        // Per-vertex-element-ID path (today: cache-hit GLB). The model
+        // owns `createSubset` (attached by attachElementSubsets at load
+        // time) and synthesises the subset Mesh from the in-memory
+        // per-vertex attribute. No web-ifc-three parser state required.
+        //
+        // Pass the legacy `selector.selection.material` so the
+        // synthetic subset renders the same translucent theme-blue
+        // overlay the IFC path does (CadView.jsx replaces the fork's
+        // magenta defaults at viewer init). Without an explicit
+        // material the subset reuses the source mesh's material — same
+        // color, same opacity → no visible overlay, only the
+        // OutlineEffect contributes.
+        const subsetMeshes = model.createSubset({
+          ids: toBeSelected,
+          customID: 'selection',
+          removePrevious: true,
+          material: this.IFC.selector?.selection?.material,
+        })
+        const triCount = subsetMeshes.reduce(
+          (n, m) => n + ((m.geometry?.getIndex()?.count ?? 0) / 3), 0)
+        // eslint-disable-next-line no-console
+        console.info(
+          `[glb] picker: selection ids=${JSON.stringify(toBeSelected)} → ` +
+          `${subsetMeshes.length} subset mesh(es), ${triCount} triangle(s)`)
+        debug().log('ShareViewer#setSelection, subset meshes:', subsetMeshes)
+        this.highlighter.setHighlighted(subsetMeshes)
       }
-    } else {
-      this.highlighter.setHighlighted(null)
-      this.IFC.selector.unpickIfcItems()
+    } catch (e) {
+      console.warn('selection failure', e)
+      debug().error('ShareViewer#setSelection$onError: ', e)
     }
+  }
+
+
+  /**
+   * Per-instance highlight using the model's `IfcInstanceMap`.
+   * Called from `CadView`'s selection useEffect alongside
+   * `setSelection` when the user clicks a specific PlacedGeometry
+   * (default behavior on the Conway-direct path). The highlight
+   * covers ONE visible placement of an IFC product rather than every
+   * instance of it — the IfcMappedItem case the parity probe
+   * surfaced.
+   *
+   * Properties / nav tree / search still track the parent IFC
+   * product through `setSelection`'s `expressIds` argument; this
+   * method only changes what the OutlineEffect renders.
+   *
+   * Pass `instanceIds = []` to clear the per-instance highlight
+   * without touching parent-level selection.
+   *
+   * @param {number} modelID
+   * @param {number[]} instanceIds synthetic IfcInstanceMap IDs
+   */
+  setInstanceSelection(modelID, instanceIds) {
+    const model = this._modelById(modelID)
+    if (!modelHasCapability(model, 'instancePicking')) {
+      debug().warn('setInstanceSelection: model lacks instancePicking capability')
+      return
+    }
+    if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
+      // Caller asked for "no per-instance highlight." Don't touch the
+      // highlighter — `setSelection` is the source of truth for
+      // parent-level highlight and will have run alongside this
+      // method.
+      return
+    }
+    // Traverse per-Mesh instanceMaps. Cache-miss is the degenerate
+    // single-Mesh case; cache-hit has N child Meshes per material
+    // group, instance IDs are globally unique across them
+    // (GLTFExporter preserves attribute values verbatim through the
+    // split) so we just build a subset from every Mesh whose map
+    // covers any of the requested instance IDs.
+    this._setConwaySelectionFromModel(model, (mesh) =>
+      mesh.instanceMap.createSubsetMeshByInstance(instanceIds, {
+        material: this.IFC.selector?.selection?.material,
+      }))
+  }
+
+
+  /**
+   * Traverse a Conway-direct model, build a subset Mesh from every
+   * child Mesh's `instanceMap` via `buildSubset(mesh)`, parent each
+   * subset under the corresponding source mesh's parent (so the
+   * subset inherits the model's world transform), track the set so
+   * the next selection can remove them, and install the array as the
+   * highlighter's selection. Empty array → highlight cleared.
+   *
+   * Parenting matters: the highlighter's OutlineEffect only draws
+   * edges; the translucent x-ray fill comes from the subset Mesh
+   * actually being in the scene tree (rendered as a regular Mesh
+   * with the selection material's `transparent + opacity`). Without
+   * this step, clicks update selection state but no overlay shows.
+   *
+   * Mirrors what `attachElementSubsets`'s `createSubset` does for the
+   * legacy per-vertex GLB-cache path (elementSubsets.js:329) — same
+   * parent-under-source-parent dance + customID slot management,
+   * specialised here to the Conway-direct call site instead of being
+   * attached as a model method (we don't replace `model.createSubset`
+   * because the isolator binds to web-ifc-three's stock version).
+   *
+   * @param {object} model top-level Object3D (may itself be a Mesh)
+   * @param {Function} buildSubset
+   *   `mesh` → Mesh|null. Returns the subset Mesh for this child, or
+   *   null when the child contributes nothing to the selection.
+   * @private
+   */
+  _setConwaySelectionFromModel(model, buildSubset) {
+    this._clearConwaySelectionSubsets()
+    const subsets = []
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.instanceMap) {
+        return
+      }
+      const subset = buildSubset(obj)
+      if (!subset) {
+        return
+      }
+      const parent = obj.parent ?? this.context.getScene()
+      parent.add(subset)
+      subset.userData.sourceMesh = obj
+      subsets.push(subset)
+    })
+    this._conwaySelectionSubsets = subsets
+    this.highlighter.setHighlighted(subsets.length > 0 ? subsets : null)
+  }
+
+
+  /**
+   * Remove the tracked Conway-direct selection subsets from their
+   * parents and dispose their per-subset index buffers. Vertex
+   * attribute buffers are shared with the source meshes — never
+   * disposed here.
+   *
+   * @private
+   */
+  _clearConwaySelectionSubsets() {
+    if (!this._conwaySelectionSubsets || this._conwaySelectionSubsets.length === 0) {
+      this._conwaySelectionSubsets = []
+      return
+    }
+    for (const m of this._conwaySelectionSubsets) {
+      m.removeFromParent()
+      const subsetGeom = m.geometry
+      if (subsetGeom && subsetGeom !== m.userData.sourceMesh?.geometry) {
+        subsetGeom.dispose?.()
+      }
+    }
+    this._conwaySelectionSubsets = []
+  }
+
+
+  /**
+   * Install a per-instance preselection (hover) subset against the
+   * Conway-direct model. Two essential differences from the selection
+   * helper:
+   *
+   *   1. **One mesh, one instance.** Hover always resolves to a single
+   *      face → single PlacedGeometry instance, so we build just one
+   *      subset from the picked Mesh's own `instanceMap` (no model-
+   *      wide traversal — the cache-hit case still works because the
+   *      hovered Mesh is one of the per-material child Meshes, and
+   *      its map covers exactly the instances in its triangle subset).
+   *
+   *   2. **Adds, doesn't replace.** The highlighter holds *both* the
+   *      selection set and the preselection at once; the user sees the
+   *      selected element outlined alongside whatever they're hovering
+   *      over. So we `addToHighlighting(subset)` rather than
+   *      `setHighlighted([subset])` — replacing would clobber the
+   *      selection-level highlights.
+   *
+   * **Pooling.** A naïve implementation allocates a fresh
+   * `BufferGeometry` + `Uint32Array` + `Mesh` per call, which at
+   * interactive mouse-move rates on big models (Snowdon, 25k+
+   * PlacedGeometries) makes hover visibly stutter from GC pressure.
+   * Instead we keep a single `Mesh` alive in `_conwayPreselectionPool`
+   * and update its index buffer in place:
+   *
+   *   - Index buffer grows on demand to the largest instance seen so
+   *     far (rounded to a power of two so we don't re-allocate on
+   *     every adjacent instance click).
+   *   - Vertex attributes are reassigned per hover (cheap reference
+   *     copy) so the pool can serve any child Mesh on a cache-hit
+   *     multi-Mesh model.
+   *   - Parent re-attach only happens when the hovered Mesh's parent
+   *     actually changed (within one child Mesh this is a no-op).
+   *   - `addToHighlighting` is called once per show; subsequent
+   *     hovers leave the pool in the OutlineEffect's selection set.
+   *   - Hide path sets `mesh.visible = false` and prunes the
+   *     highlighter; nothing is disposed, so the next hover skips
+   *     allocation entirely in steady state.
+   *
+   * The pool object is initialised lazily on first hover so models
+   * that never engage `instancePicking` pay nothing.
+   *
+   * @param {object} pickedMesh the Mesh under the cursor
+   * @param {number} faceIndex triangle index from the raycaster hit
+   * @private
+   */
+  _setConwayPreselectionFromHit(pickedMesh, faceIndex) {
+    if (!pickedMesh?.instanceMap) {
+      this._clearConwayPreselectionSubsets()
+      return
+    }
+    const instanceId = pickedMesh.instanceMap.getInstanceIdByTriangle(faceIndex)
+    if (instanceId === null) {
+      this._clearConwayPreselectionSubsets()
+      return
+    }
+    const tris = pickedMesh.instanceMap.instanceIdToTriangleIndices.get(instanceId)
+    if (!tris || tris.length === 0) {
+      this._clearConwayPreselectionSubsets()
+      return
+    }
+    const srcGeom = pickedMesh.geometry
+    const srcIndex = srcGeom?.getIndex()
+    if (!srcGeom || !srcIndex) {
+      this._clearConwayPreselectionSubsets()
+      return
+    }
+    const srcIndexArr = srcIndex.array
+    const needed = tris.length * 3
+
+    const pool = this._ensureConwayPreselectionPool(needed)
+
+    // Fill the index buffer in place. Writing past `needed` is
+    // harmless since `setDrawRange` below caps the rendered count.
+    const dstArr = pool.indexArray
+    let w = 0
+    for (let i = 0; i < tris.length; i++) {
+      const t = tris[i]
+      const base = t * 3
+      dstArr[w++] = srcIndexArr[base]
+      dstArr[w++] = srcIndexArr[base + 1]
+      dstArr[w++] = srcIndexArr[base + 2]
+    }
+    pool.indexAttribute.needsUpdate = true
+
+    // Reassign vertex attributes from the source. Cheap reference
+    // copies — the underlying typed arrays are already on the GPU,
+    // so this doesn't trigger re-upload. Only iterates when the
+    // source actually changed (cache-hit multi-Mesh hover moves
+    // between primitives).
+    if (pool.attributeSource !== srcGeom) {
+      const dstGeom = pool.geometry
+      for (const name of Object.keys(srcGeom.attributes)) {
+        dstGeom.setAttribute(name, srcGeom.attributes[name])
+      }
+      pool.attributeSource = srcGeom
+    }
+
+    pool.geometry.setDrawRange(0, needed)
+
+    // Re-parent only when the hovered Mesh's parent changed. Avoids
+    // scene-graph churn while hovering within one child Mesh.
+    const parent = pickedMesh.parent ?? this.context.getScene()
+    if (pool.mesh.parent !== parent) {
+      pool.mesh.removeFromParent()
+      parent.add(pool.mesh)
+    }
+    pool.mesh.userData.sourceMesh = pickedMesh
+    pool.mesh.visible = true
+
+    if (!pool.inHighlighter) {
+      this.highlighter.addToHighlighting(pool.mesh)
+      pool.inHighlighter = true
+    }
+  }
+
+
+  /**
+   * Lazy-init / grow the preselection mesh pool. Returns the live
+   * pool object. Called by `_setConwayPreselectionFromHit` immediately
+   * before each fill; the `neededIndexLen` arg drives the growth
+   * policy (round-up to a power of 2 keeps reallocs sparse across a
+   * model's normal range of instance triangle counts).
+   *
+   * @param {number} neededIndexLen
+   * @return {object} the pool — `{mesh, geometry, indexArray, indexAttribute, inHighlighter, attributeSource}`
+   * @private
+   */
+  _ensureConwayPreselectionPool(neededIndexLen) {
+    let pool = this._conwayPreselectionPool
+    if (!pool) {
+      const geometry = new BufferGeometry()
+      const mesh = new Mesh(geometry, this.IFC.selector?.preselection?.material ?? null)
+      // The pool sits in the scene tree once a hover lands it there.
+      // Without raycast-invisible the pool would compete with source
+      // meshes for picks (it's geometrically coplanar with whichever
+      // instance it's currently visualising).
+      mesh.raycast = () => {/* raycast-invisible — see IfcInstanceMap subset */}
+      mesh.visible = false
+      mesh.userData.isConwayPreselectionPool = true
+      pool = {
+        mesh,
+        geometry,
+        indexArray: null,
+        indexAttribute: null,
+        attributeSource: null,
+        inHighlighter: false,
+      }
+      this._conwayPreselectionPool = pool
+    }
+    // Grow if needed. Round up to the next power of 2 so adjacent
+    // hovers of slightly-different instance sizes reuse the same
+    // buffer without reallocation.
+    if (!pool.indexArray || pool.indexArray.length < neededIndexLen) {
+      const cap = nextPow2(Math.max(neededIndexLen, MIN_PRESELECTION_INDEX_CAP))
+      pool.indexArray = new Uint32Array(cap)
+      pool.indexAttribute = new BufferAttribute(pool.indexArray, 1)
+      pool.geometry.setIndex(pool.indexAttribute)
+    }
+    return pool
+  }
+
+
+  /**
+   * Hide the preselection pool. Sets `mesh.visible = false`, prunes
+   * the highlighter, leaves the pool's GPU buffers alone so the next
+   * hover is allocation-free. Idempotent.
+   *
+   * Named `_clearConwayPreselectionSubsets` (plural) for symmetry
+   * with the older pluggable-tracker callers — kept stable so the
+   * `_clearPreselectionForAllModels` site doesn't need to change.
+   *
+   * @private
+   */
+  _clearConwayPreselectionSubsets() {
+    const pool = this._conwayPreselectionPool
+    if (!pool) {
+      return
+    }
+    if (pool.inHighlighter) {
+      this.highlighter.removeFromHighlighting(pool.mesh)
+      pool.inHighlighter = false
+    }
+    pool.mesh.visible = false
+  }
+
+
+  /**
+   * Look up a registered model by modelID. Today the viewer holds
+   * at most one model and call-sites always pass `0`; we still index
+   * for symmetry with the underlying `ifcModels` array.
+   *
+   * @param {number} modelID
+   * @return {object|null}
+   * @private
+   */
+  _modelById(modelID) {
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models)) {
+      return null
+    }
+    return models[modelID] ?? null
   }
 
 
@@ -291,13 +704,114 @@ export class ShareViewer extends IfcViewerAPI {
     const found = this.context.castRayIfc()
     if (!found) {
       this.IFC.selector.preselection.toggleVisibility(false)
+      this._clearPreselectionForAllModels()
       return
     }
     const id = this.getPickedItemId(found)
-    if (this.IFC.type === 'ifc' && this.isolator.canBePickedInScene(id)) {
+    if ((id === null || id === undefined) || !this.isolator.canBePickedInScene(id)) {
+      return
+    }
+    const model = this._modelForPickedObject(found.object)
+    if (!modelHasCapability(model, 'expressIdPicking')) {
+      return
+    }
+    if (modelHasCapability(model, 'instancePicking')) {
+      // Conway-direct path: per-instance preselection. Resolves the
+      // raycaster hit's faceIndex through the picked Mesh's own
+      // `instanceMap` to find the exact PlacedGeometry under the
+      // cursor, then highlights just its triangles. Matches the click
+      // handler's no-shift semantic — hover preview should match what
+      // a click would select.
+      this._setConwayPreselectionFromHit(found.object, found.faceIndex)
+    } else if (modelHasCapability(model, 'ifcSubsets')) {
+      // Real-IFC path: web-ifc-three's preselection.pick handles
+      // subset construction.
       await this.IFC.selector.preselection.pick(found)
       this.highlightPreselection()
+    } else if (typeof model.createSubset === 'function') {
+      // Per-vertex-element-ID path: synthesise a preselection
+      // subset from the per-vertex attribute. The `'preselection'`
+      // customID slot replaces the previous one each call, matching
+      // IfcSelector.preselection semantics (hover replaces).
+      //
+      // Pass selector.preselection.material — the theme-blue
+      // translucent overlay CadView installs at viewer init.
+      // Without it the subset reuses the source material and no
+      // visible overlay shows (only the outline edges).
+      const subsetMeshes = model.createSubset({
+        ids: [id],
+        customID: 'preselection',
+        removePrevious: true,
+        material: this.IFC.selector?.preselection?.material,
+      })
+      for (const mesh of subsetMeshes) {
+        this.highlighter.addToHighlighting(mesh)
+      }
     }
+  }
+
+
+  /**
+   * Drop any per-model preselection subset when the cursor leaves
+   * all geometry. Mirrors what `IFC.selector.preselection.toggleVisibility(false)`
+   * does for the real-IFC path — preselection is hover-only and
+   * should not linger off-model.
+   *
+   * @private
+   */
+  _clearPreselectionForAllModels() {
+    // Conway-direct preselection lives on the viewer (a single tracker
+    // slot, not on each model) — clear it before walking models for
+    // the legacy per-vertex subset removal. Cheap no-op when the slot
+    // is empty / the flag isn't on.
+    //
+    // TODO(preselection-routing): the two clears are independent today
+    // (different storage), but if Conway-direct models eventually also
+    // gain a per-model `removeSubset('preselection')` (e.g. via the
+    // isolate-routing follow-up that unifies subset construction —
+    // viewer-replacement.md §3b.iii item 1), the order will matter.
+    // The Conway path takes precedence on `instancePicking` models, so
+    // it clears first; the IFC-model walk is a no-op then. Worth
+    // revisiting once the unified subset API lands so this routing
+    // logic stays in one place instead of being split between
+    // ShareViewer (Conway) and each model's `removeSubset` (legacy).
+    this._clearConwayPreselectionSubsets()
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models)) {
+      return
+    }
+    for (const m of models) {
+      if (typeof m?.removeSubset === 'function') {
+        m.removeSubset('preselection')
+      }
+    }
+  }
+
+
+  /**
+   * Walk a picked Object3D's ancestor chain to find the registered
+   * model it belongs to. Necessary because the raycast hit gives us
+   * a leaf Mesh, but capabilities live on the model root.
+   *
+   * @param {object} pickedObject
+   * @return {object|null}
+   * @private
+   */
+  _modelForPickedObject(pickedObject) {
+    const models = this.IFC?.context?.items?.ifcModels
+    if (!Array.isArray(models) || models.length === 0 || !pickedObject) {
+      return null
+    }
+    const modelSet = new Set(models)
+    let cursor = pickedObject
+    while (cursor) {
+      if (modelSet.has(cursor)) {
+        return cursor
+      }
+      cursor = cursor.parent
+    }
+    // Fallback: single-model case (the common case today).
+    return models[0] ?? null
   }
 
 

@@ -3,6 +3,8 @@ import {
   opfsDownloadToOPFS,
   opfsDownloadModel,
   opfsReadModel,
+  opfsReadModelByPath,
+  opfsWriteBytesByPath,
   opfsWriteModel,
   opfsWriteModelFileHandle,
   opfsDoesFileExist,
@@ -182,38 +184,82 @@ export function writeBase64Model(
   branch,
   setOpfsFile) {
   assertDefined(content, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile)
+  return awaitTerminalWorkerEvent(
+    () => opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken),
+    {setOpfsFile})
+}
+
+
+/**
+ * Subscribe to the OPFS worker's single-terminal-event protocol and return a
+ * Promise that resolves with the final File (or rejects on `{error}`).
+ *
+ * The worker emits exactly one terminal `completed` event per request —
+ * `exists`, `renamed`, or `download` (the last is the commit-hash / rename
+ * fallback path; we still resolve with the un-renamed File so the load
+ * completes). Progress events (`progressEvent: true`) are forwarded to
+ * `onProgress` and don't terminate the listener.
+ *
+ * Extracted from the duplicate listeners in `downloadModel` /
+ * `writeBase64Model` so the protocol contract lives in one place.
+ *
+ * @param {Function} kickoff Invokes the corresponding `opfsService` entry
+ *   point. Called after the listener is wired up so we don't miss the
+ *   first message.
+ * @param {object} hooks
+ * @param {Function} hooks.setOpfsFile Called with the resolved File.
+ * @param {Function} [hooks.onProgress] Called on each progress update.
+ * @param {Function} [hooks.onLastModifiedGithub] Called once with the commit
+ *   epoch ms if the terminal event carries it.
+ * @return {Promise<File>}
+ */
+function awaitTerminalWorkerEvent(kickoff, {setOpfsFile, onProgress, onLastModifiedGithub}) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          if (event.data.event === 'download') {
-            debug().warn('Worker finished downloading file')
-          } else if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
-          }
-          const file = event.data.file
-          if (event.data.event === 'renamed' || event.data.event === 'exists') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            if (file instanceof File) {
-              setOpfsFile(file)
-            } else {
-              debug().error('Retrieved object is not of type File.')
-            }
-          }
-          resolve(file) // Resolve the promise with the file
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
+    if (workerRef === null) {
       reject(new Error('Worker initialization failed'))
+      return
     }
-    opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken)
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.progressEvent) {
+        if (onProgress) {
+          onProgress({
+            lengthComputable: event.data.contentLength !== 0,
+            contentLength: event.data.contentLength,
+            receivedLength: event.data.receivedLength,
+          })
+        }
+        return
+      }
+      if (!event.data.completed) {
+        return
+      }
+      // Terminal event. Log the variant for diagnostics, then resolve.
+      if (event.data.event === 'download') {
+        debug().warn('Worker finished downloading file')
+      } else if (event.data.event === 'exists') {
+        debug().warn('Commit exists in OPFS.')
+      }
+      if (event.data.lastModifiedGithub && onLastModifiedGithub) {
+        onLastModifiedGithub(event.data.lastModifiedGithub)
+      }
+      workerRef.removeEventListener('message', listener)
+      const file = event.data.file
+      if (file instanceof File) {
+        setOpfsFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+      resolve(file)
+    }
+    workerRef.addEventListener('message', listener)
+    kickoff()
   })
 }
 
@@ -244,50 +290,9 @@ export function downloadModel(
   onProgress,
   onLastModifiedGithub = null) {
   assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.progressEvent) {
-          if (onProgress) {
-            onProgress({
-              lengthComputable: event.data.contentLength !== 0,
-              contentLength: event.data.contentLength,
-              receivedLength: event.data.receivedLength,
-            }) // Custom progress event
-          }
-        } else if (event.data.completed) {
-          if (event.data.event === 'download') {
-            debug().warn('Worker finished downloading file')
-          } else if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
-          }
-          if (event.data.lastModifiedGithub && onLastModifiedGithub) {
-            onLastModifiedGithub(event.data.lastModifiedGithub)
-          }
-          const file = event.data.file
-          if (event.data.event === 'renamed' || event.data.event === 'exists') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            if (file instanceof File) {
-              setOpfsFile(file)
-            } else {
-              debug().error('Retrieved object is not of type File.')
-            }
-          }
-          resolve(file) // Resolve the promise with the file
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-    opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress))
-  })
+  return awaitTerminalWorkerEvent(
+    () => opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress)),
+    {setOpfsFile, onProgress, onLastModifiedGithub})
 }
 
 /**
@@ -366,6 +371,90 @@ export function doesFileExistInOPFS(
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
+}
+
+
+/**
+ * Write raw bytes to OPFS at the same `(owner/repo/branch/originalFilePath,
+ * commitHash)` tuple used by {@link doesFileExistInOPFS} /
+ * {@link readModelByPathFromOPFS}. Used by the GLB artifact writer to cache
+ * a freshly-generated GLB next to its source.
+ *
+ * @param {Uint8Array|ArrayBuffer} bytes
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ * @return {Promise<boolean>} resolves to true on success
+ */
+export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, repo, branch) {
+  assertDefined(bytes, originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef === null) {
+      reject(new Error('Worker initialization failed'))
+      return
+    }
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.completed && event.data.event === 'wrote') {
+        workerRef.removeEventListener('message', listener)
+        resolve(true)
+      }
+    }
+    workerRef.addEventListener('message', listener)
+    opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch)
+  })
+}
+
+
+/**
+ * Read a cached file from OPFS by its `(owner/repo/branch/originalFilePath,
+ * commitHash)` tuple. Resolves to the File on success, or null if absent.
+ *
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ * @return {Promise<File|null>}
+ */
+export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, repo, branch) {
+  assertDefined(originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef === null) {
+      reject(new Error('Worker initialization failed'))
+      return
+    }
+    const listener = (event) => {
+      if (event.data.error) {
+        debug().error('Error from worker:', event.data.error)
+        workerRef.removeEventListener('message', listener)
+        reject(new Error(event.data.error))
+        return
+      }
+      if (event.data.completed) {
+        if (event.data.event === 'notexist') {
+          workerRef.removeEventListener('message', listener)
+          resolve(null)
+        } else if (event.data.event === 'read') {
+          workerRef.removeEventListener('message', listener)
+          resolve(event.data.file)
+        }
+      }
+    }
+    workerRef.addEventListener('message', listener)
+    opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch)
+  })
 }
 
 /**

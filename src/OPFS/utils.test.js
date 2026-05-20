@@ -159,7 +159,7 @@ describe('OPFS Test Suite', () => {
 
   describe('downloadModel', () => {
     it('should resolve with file when download completes', async () => {
-      const mockFile = new Blob(['dummy content'], {type: 'application/octet-stream'})
+      const mockFile = new File(['dummy content'], 'model.ifc', {type: 'application/octet-stream'})
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
@@ -201,12 +201,14 @@ describe('OPFS Test Suite', () => {
     })
 
     it('should call onProgress with progress data', async () => {
+      // The worker now emits exactly one terminal completed event per call
+      // (`renamed`, `exists`, or — fallback — `download`). Progress events
+      // arrive before that as `progressEvent: true` messages.
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
-            handler({data: {progressEvent: true, contentLength: 100, receivedLength: 50}}) // Simulate a progress update
-            handler({data: {completed: true, event: 'download', file: new Blob(['content'])}}) // Then download
-            handler({data: {completed: true, event: 'renamed', file: new Blob(['content'])}}) // Then complete
+            handler({data: {progressEvent: true, contentLength: 100, receivedLength: 50}})
+            handler({data: {completed: true, event: 'renamed', file: new File(['content'], 'model.ifc')}})
           })
         }),
         removeEventListener: jest.fn(),
@@ -236,7 +238,7 @@ describe('OPFS Test Suite', () => {
 
     it('calls onLastModifiedGithub when exists event carries the date', async () => {
       const EPOCH_MS = 1663842627000
-      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockFile = new File(['content'], 'model.ifc', {type: 'application/octet-stream'})
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
@@ -256,13 +258,15 @@ describe('OPFS Test Suite', () => {
       expect(onLastModifiedGithub).toHaveBeenCalledWith(EPOCH_MS)
     })
 
-    it('calls onLastModifiedGithub from deferred renamed event', async () => {
+    it('calls onLastModifiedGithub from a single renamed event', async () => {
+      // Replaces the old `download` + `renamed` two-event test. The worker's
+      // new contract is a single terminal event; if rename succeeded the
+      // commit date rides on the `renamed` message directly.
       const EPOCH_MS = 1663842627000
-      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockFile = new File(['content'], 'model.ifc', {type: 'application/octet-stream'})
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {
-            handler({data: {completed: true, event: 'download', file: mockFile}})
             handler({data: {completed: true, event: 'renamed', file: mockFile, lastModifiedGithub: EPOCH_MS}})
           })
         }),
@@ -277,10 +281,37 @@ describe('OPFS Test Suite', () => {
       )
 
       expect(onLastModifiedGithub).toHaveBeenCalledWith(EPOCH_MS)
+      expect(onLastModifiedGithub).toHaveBeenCalledTimes(1)
+    })
+
+    it('resolves with the file even when only a download event arrives (commit-hash fallback)', async () => {
+      // Fallback path: commits API or rename failed, worker posted `download`
+      // as the terminal event with the un-renamed handle. Promise should
+      // resolve normally so the load doesn't hang.
+      const mockFile = new File(['content'], 'model.ifc', {type: 'application/octet-stream'})
+      const mockWorker = {
+        addEventListener: jest.fn((_, handler) => {
+          process.nextTick(() => {
+            handler({data: {completed: true, event: 'download', file: mockFile}})
+          })
+        }),
+        removeEventListener: jest.fn(),
+      }
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+
+      const setOPFSFile = jest.fn()
+      const result = await downloadModel(
+        'objectUrl', 'shaHash', 'originalFilePath', 'accessToken',
+        'owner', 'repo', 'branch', setOPFSFile, jest.fn(),
+      )
+
+      expect(result).toBe(mockFile)
+      expect(setOPFSFile).toHaveBeenCalledWith(mockFile)
+      expect(mockWorker.removeEventListener).toHaveBeenCalledTimes(1)
     })
 
     it('does not call onLastModifiedGithub when no date in message', async () => {
-      const mockFile = new Blob(['content'], {type: 'application/octet-stream'})
+      const mockFile = new File(['content'], 'model.ifc', {type: 'application/octet-stream'})
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
           process.nextTick(() => {

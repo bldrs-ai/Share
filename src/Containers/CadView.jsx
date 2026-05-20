@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
@@ -32,11 +32,6 @@ import {initViewer} from './viewer'
 
 
 let count = 0
-// Tracks the theme-change listener registered by onModelPath() so we
-// can remove it before registering a new one on the next model load.
-// Otherwise each prior listener stays in the registry, capturing its
-// (now-disposed) viewer via closure and pinning it from GC.
-let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -61,6 +56,8 @@ export default function CadView({
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
+  const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
+  const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -79,6 +76,24 @@ export default function CadView({
   // AppSlice
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
+
+  // Tracks the theme-change listener registered by onModelPath() so we
+  // can remove it before registering a new one on the next model load.
+  // Otherwise each prior listener stays in the registry, capturing its
+  // (now-disposed) viewer via closure and pinning it from GC. A ref
+  // (not module-level state) so two CadView mounts in the same process —
+  // tests, multi-pane layouts — don't stomp each other.
+  const previousThemeChangeCbRef = useRef(null)
+
+  // Two useEffects below can each trigger `onViewer()` — the
+  // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
+  // [isAuthLoading, …]-dep effect fires (with an `!isViewerLoaded` guard) so
+  // a model whose initial `onViewer` returned early on auth-not-ready
+  // retries once auth settles. If auth settles WHILE the first onViewer is
+  // mid-`loadModel`, `isViewerLoaded` is still false (it's only set at the
+  // end), so both fire end-to-end → double load. This in-flight ref
+  // dedupes overlapping calls; whichever effect tick wins, the other skips.
+  const onViewerInFlightRef = useRef(false)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -146,10 +161,10 @@ export default function CadView({
     if (isModelReady) {
       resetState()
     }
-    if (previousThemeChangeCb) {
-      theme.removeThemeChangeListener(previousThemeChangeCb)
+    if (previousThemeChangeCbRef.current) {
+      theme.removeThemeChangeListener(previousThemeChangeCbRef.current)
     }
-    previousThemeChangeCb = initViewerCb
+    previousThemeChangeCbRef.current = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }
@@ -175,6 +190,27 @@ export default function CadView({
       return
     }
 
+    // Past the early returns — we're actually going to load. The in-flight
+    // guard sits HERE (not at the effect-callback level) so two effect ticks
+    // whose onViewer would both return early — e.g. initial mount in
+    // Playwright where viewer is still null at the [auth]-effect's render —
+    // don't accidentally claim the slot and starve the eventual successful
+    // load from the [viewer] effect.
+    if (onViewerInFlightRef.current) {
+      debug().warn('CadView#onViewer: already in flight; skipping duplicate')
+      return
+    }
+    onViewerInFlightRef.current = true
+    try {
+      await onViewerInternal()
+    } finally {
+      onViewerInFlightRef.current = false
+    }
+  }
+
+
+  /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
+  async function onViewerInternal() {
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -451,6 +487,45 @@ export default function CadView({
       const mesh = picked.object
       // TODO(pablo): obsolete? needed this in h3 at some point
       viewer.setHighlighted([mesh])
+      // Per-instance picking path (Conway-direct):
+      //   no-shift = just this PlacedGeometry
+      //   shift     = the whole IFC element (every instance)
+      //
+      // Note this DISPLACES the legacy "Shift = add to multi-select"
+      // semantic in `elementSelection` when the model carries an
+      // instanceMap. Multi-select is rarely-used in the IFC workflow;
+      // per-instance picking is the primary improvement from the
+      // viewer-replacement work, so it wins the modifier slot. Models
+      // without an instanceMap (today's wit-three path, GLB cache hit)
+      // keep the legacy Shift behavior unchanged.
+      if (mesh.instanceMap) {
+        const faceIdx = picked.faceIndex
+        const instanceId = mesh.instanceMap.getInstanceIdByTriangle(faceIdx)
+        if (instanceId === null) {
+          return
+        }
+        const parentExpressId = mesh.instanceMap.getParentExpressIdByInstance(instanceId)
+        if (parentExpressId === null) {
+          return
+        }
+        if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
+          return
+        }
+        // Always set parent expressID as the "selection" so the
+        // properties panel / nav tree / search highlight respond
+        // normally. The per-instance highlight is layered on top via
+        // selectedInstanceIds.
+        setSelectedElements([`${parentExpressId}`])
+        setSelectedInstanceIds(event.shiftKey ? [] : [instanceId])
+        return
+      }
+      // Non-instance branch: clear any stale per-instance highlight
+      // so a Conway-click followed by a click on a non-Conway mesh
+      // doesn't leave the old single-instance subset stuck on the
+      // OutlineEffect.
+      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0) {
+        setSelectedInstanceIds([])
+      }
       if (mesh.expressID !== undefined) {
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
@@ -656,6 +731,8 @@ export default function CadView({
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
       if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
         (async () => {
+          // onViewer's own in-flight guard dedupes when this races the
+          // [viewer]-effect during a mid-load auth resolution.
           await onViewer()
         })()
       }
@@ -674,6 +751,8 @@ export default function CadView({
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
+      // onViewer's own in-flight guard dedupes when this races the
+      // [auth]-state effect during a mid-load auth resolution.
       await onViewer()
     })()
   }, [viewer])
@@ -716,6 +795,29 @@ export default function CadView({
       // Update The selection on the scene pick/unpick
       const ids = selectedElements.map((id) => parseInt(id))
       await viewer.setSelection(0, ids)
+      // Per-instance highlight (Conway-direct): if the click handler
+      // tagged us with a specific PlacedGeometry's synthetic ID,
+      // restrict the visible highlight to just that instance. The
+      // setSelection call above already rendered the full parent
+      // element; setInstanceSelection replaces that with a one-
+      // instance subset. Empty array = no override (Shift-click or
+      // legacy path).
+      //
+      // `ids.length > 0` guard: setInstanceSelection re-creates the
+      // Conway selection subset from scratch, so calling it when the
+      // parent selection is empty would re-add a cyan overlay tied
+      // to a stale instanceId — the regression spotted during
+      // isolator review. The current hide path preserves selection
+      // state (for H-toggle semantics) and clears the cyan visual
+      // imperatively, so the dep-change path through this effect
+      // doesn't normally hit; this guard still backstops any future
+      // path that drops `selectedElements` without
+      // `selectedInstanceIds`.
+      if (ids.length > 0 &&
+          Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0 &&
+          typeof viewer.setInstanceSelection === 'function') {
+        viewer.setInstanceSelection(0, selectedInstanceIds)
+      }
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
@@ -738,7 +840,7 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements])
+  }, [selectedElements, selectedInstanceIds])
   /* eslint-enable */
 
 
