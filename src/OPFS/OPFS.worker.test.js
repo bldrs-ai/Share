@@ -531,3 +531,110 @@ test('fetchLatestCommitHash throws when no commits returned', async () => {
     worker.fetchLatestCommitHash('https://api.github.com', 'owner', 'repo', 'model.ifc', '', 'main'),
   ).rejects.toThrow('No commits found')
 })
+
+
+// ------------------------------------------------------------
+// postFinalDownloadEventAfterRename tests
+//
+// Helper underlies the Safari rename-race fix: rename the OPFS entry BEFORE
+// posting the File so the caller's `.arrayBuffer()` doesn't fault on an
+// invalidated blob backing. Three paths to cover: rename success, commits-
+// API failure (fallback to original handle), and rename failure (same
+// fallback, different cause).
+// ------------------------------------------------------------
+
+test('postFinalDownloadEventAfterRename posts `renamed` with the post-rename file on success', async () => {
+  const ISO_DATE = '2022-09-22T10:30:27Z'
+  const EPOCH_MS = new Date(ISO_DATE).getTime()
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: jest.fn().mockResolvedValue([{sha: 'commit123', commit: {author: {date: ISO_DATE}}}]),
+  })
+
+  const fileHandle = await rootDir.getFileHandle('model.ifc.sha1.temporary', {create: true})
+  fileHandle.data = new Uint8Array(Buffer.from('hello'))
+
+  await worker.postFinalDownloadEventAfterRename(
+    rootDir, fileHandle,
+    'model.ifc', 'sha1', 'cacheKey',
+    'owner', 'repo', 'main', '', null,
+  )
+
+  // The point of the helper: hand back the POST-rename File, with the commit
+  // date attached. Pre-fix we posted the pre-rename File which Safari then
+  // invalidated on the rename.
+  expect(self.postMessage).toHaveBeenCalledTimes(1)
+  const msg = self.postMessage.mock.calls[0][0]
+  expect(msg.completed).toBe(true)
+  expect(msg.event).toBe('renamed')
+  expect(msg.file).toBeInstanceOf(File)
+  expect(msg.file.name).toBe('model.ifc.sha1.commit123')
+  expect(msg.lastModifiedGithub).toBe(EPOCH_MS)
+})
+
+test('postFinalDownloadEventAfterRename falls back to `download` with the original file when commits API fails', async () => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: false,
+    statusText: 'Forbidden',
+    json: jest.fn().mockResolvedValue([]),
+  })
+
+  const fileHandle = await rootDir.getFileHandle('model.ifc.sha1.temporary', {create: true})
+  fileHandle.data = new Uint8Array(Buffer.from('hello'))
+  const FALLBACK_MS = 1234567890000
+
+  await worker.postFinalDownloadEventAfterRename(
+    rootDir, fileHandle,
+    'model.ifc', 'sha1', 'cacheKey',
+    'owner', 'repo', 'main', '', FALLBACK_MS,
+  )
+
+  // We resolve with the un-renamed file so the load completes; user just
+  // doesn't get commit-pinning on this load. The lastModified falls back to
+  // whatever the cache gave us (callers pass it from the cache headers).
+  expect(self.postMessage).toHaveBeenCalledTimes(1)
+  const msg = self.postMessage.mock.calls[0][0]
+  expect(msg.completed).toBe(true)
+  expect(msg.event).toBe('download')
+  expect(msg.file).toBeInstanceOf(File)
+  expect(msg.file.name).toBe('model.ifc.sha1.temporary')
+  expect(msg.lastModifiedGithub).toBe(FALLBACK_MS)
+})
+
+test('postFinalDownloadEventAfterRename falls back to `download` when rename throws', async () => {
+  const ISO_DATE = '2022-09-22T10:30:27Z'
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: jest.fn().mockResolvedValue([{sha: 'commit123', commit: {author: {date: ISO_DATE}}}]),
+  })
+
+  const fileHandle = await rootDir.getFileHandle('model.ifc.sha1.temporary', {create: true})
+  fileHandle.data = new Uint8Array(Buffer.from('hello'))
+  // Force the rename path to throw — `renameFileInOPFS` prefers `move()` when
+  // available; an unconditional throw exercises the helper's outer catch.
+  // eslint-disable-next-line require-await
+  fileHandle.move = jest.fn(async () => {
+    throw new Error('move blew up')
+  })
+  // Block the stream-copy fallback too, so `renameFileInOPFS` raises.
+  // eslint-disable-next-line require-await
+  rootDir.getFileHandle = jest.fn(async (name, opts) => {
+    if (name === 'model.ifc.sha1.commit123' && opts && opts.create === true) {
+      throw new Error('cannot create destination')
+    }
+    throw new Error('not found')
+  })
+
+  await worker.postFinalDownloadEventAfterRename(
+    rootDir, fileHandle,
+    'model.ifc', 'sha1', 'cacheKey',
+    'owner', 'repo', 'main', '', null,
+  )
+
+  expect(self.postMessage).toHaveBeenCalledTimes(1)
+  const msg = self.postMessage.mock.calls[0][0]
+  expect(msg.event).toBe('download')
+  // Fallback File comes from the ORIGINAL handle, not the (failed) rename.
+  expect(msg.file).toBeInstanceOf(File)
+  expect(msg.file.name).toBe('model.ifc.sha1.temporary')
+})
