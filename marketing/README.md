@@ -99,16 +99,13 @@ What still needs you:
 
 ## Deploy
 
-**Status:** not wired into the existing Netlify pipeline yet. The PR #1519
-deploy preview only builds the SPA (per the root `netlify.toml`), so the new
-marketing pages won't appear there until the build step below is added.
-
 The marketing build outputs `out/` (static HTML); the SPA outputs `docs/`
-(also static). Both go under one domain via path-based routing.
+(also static). Both go under one domain via path-based routing — the root
+`netlify.toml` runs both builds and overlays `marketing/out/` onto `docs/`.
 
 ### Local preview
 
-To verify the marketing build before wiring CI:
+To verify the marketing build in isolation:
 
 ```bash
 cd marketing
@@ -117,30 +114,37 @@ yarn build                       # → marketing/out/
 npx serve out                    # http://localhost:3000
 ```
 
-### Netlify (suggested wiring)
+To preview the merged tree exactly as Netlify will serve it:
 
-The SPA's `netlify.toml` publishes `docs/`. To layer the marketing build on
-top, extend the build to copy `marketing/out/*` into `docs/` after the SPA
-build runs. Because every marketing route lands in its own subdirectory
-(`/about/index.html`, `/pricing/index.html`, …), Netlify will serve those
-static files first and only fall back to the SPA's `docs/index.html` for
-unmatched routes (`/`, `/share/*`).
-
-Add to the root `netlify.toml`:
-
-```toml
-[build]
-  command = """
-    yarn build && \\
-    cd marketing && yarn install && yarn build && cd .. && \\
-    cp -r marketing/out/* docs/
-  """
-  publish = "docs"
+```bash
+yarn build && \
+  cd marketing && yarn install && yarn build && cd .. && \
+  cp -r marketing/out/. docs/
+npx serve docs
 ```
 
-Because the marketing build does **not** emit `out/index.html`, copying
-`out/*` into `docs/` does not clobber the SPA's `docs/index.html` — `/`
-keeps its react-router-based redirect to the homepage IFC model.
+### Netlify wiring (already in place)
+
+The root `netlify.toml` `[build]` block runs:
+
+```bash
+yarn build && \
+  cd marketing && yarn install --frozen-lockfile && yarn build && cd .. && \
+  cp -r marketing/out/. docs/
+```
+
+Every marketing route lands in its own subdirectory
+(`/about/index.html`, `/pricing/index.html`, …); Netlify resolves static
+files before consulting `public/_redirects`, so those win as 200
+pre-rendered HTML. `public/_redirects` carries an explicit SPA allowlist
+(`/share/*`, `/ipsum`, `/popup-auth`, `/popup-callback`) so unmatched
+paths 404 instead of returning the SPA shell with HTTP 200 — a soft-404
+SEO trap. Add a new entry there when adding a top-level SPA route.
+
+Because the marketing build does **not** emit `out/index.html` (root
+`page.tsx` was removed), copying `out/.` into `docs/` does not clobber
+the SPA's `docs/index.html` — `/` keeps its react-router-based redirect
+to the homepage IFC model.
 
 ### GitHub Pages
 
