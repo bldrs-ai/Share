@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import {createTheme} from '@mui/material/styles'
 import * as Preferences from '../privacy/preferences'
 import useStore from '../store/useStore'
@@ -40,8 +40,24 @@ export default function useShareTheme() {
   }, [effectiveMode, setMode, themeChangeListeners, mode])
 
 
+  // Fire registered listeners only on ACTUAL theme transitions. Skipping the
+  // initial-mount fire is what prevents CadView's onModelPath from running
+  // its initViewerCb twice: once via the direct call inside onModelPath,
+  // then a second time when this effect fires post-commit and walks the
+  // listener registry. The duplicate setViewer was driving Safari's double-
+  // load (Chrome/FF dedupe via automatic batching; Safari processes the two
+  // microtasks as separate batches, so each setViewer triggers a fresh
+  // [viewer]-effect → load()).
+  const lastTransitionKeyRef = useRef(null)
   useEffect(() => {
-    if (effectiveMode && theme) {
+    if (!effectiveMode || !theme) {
+      return
+    }
+    const key = String(effectiveMode)
+    const isInitial = lastTransitionKeyRef.current === null
+    const isChange = !isInitial && lastTransitionKeyRef.current !== key
+    lastTransitionKeyRef.current = key
+    if (isChange) {
       Object.values(themeChangeListeners).map((onChangeCb) => onChangeCb(effectiveMode, theme))
     }
   }, [effectiveMode, theme, themeChangeListeners])

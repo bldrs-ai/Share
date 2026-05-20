@@ -330,6 +330,55 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  it('falls back to direct fetch when OPFS download throws (resilience)', async () => {
+    // Regression: a Safari InvalidStateError (or any other OPFS failure)
+    // used to surface as "Failed to parse model" with no recovery, even
+    // though we still had a perfectly good URL to fetch from. Now OPFS is
+    // treated as a best-effort cache — on any error in that path, we fall
+    // through to the same axios fetch the non-OPFS branch uses.
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'https://raw.example.com/owner/repo/main/model.ifc',
+      'abc123sha',
+      false,
+      false,
+    ])
+    downloadModel.mockRejectedValue(
+      new Error('Error getting file handle for foo: InvalidStateError'))
+    axios.get.mockResolvedValue({data: new ArrayBuffer(64)})
+
+    // readModel will still fail on junk bytes; we're asserting the
+    // download attempt fell through to axios, not that the model parsed.
+    await expect(
+      load('https://github.com/owner/repo/blob/main/model.ifc',
+        viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(downloadModel).toHaveBeenCalledTimes(1)
+    expect(axios.get).toHaveBeenCalledTimes(1)
+    expect(axios.get.mock.calls[0][0]).toBe('https://raw.example.com/owner/repo/main/model.ifc')
+  })
+
+
+  it('still throws when an uploaded file fails in OPFS (no fallback URL)', async () => {
+    // Uploaded files only exist in OPFS — there's no remote URL to fall
+    // back to. The resilience fix MUST re-throw rather than try axios
+    // against a blob: URL that may already be revoked.
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockRejectedValue(new Error('OPFS read failed'))
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.stl', '', false, false,
+    ])
+
+    const uuidPath = '12345678-1234-4abc-9def-123456789abc.stl'
+
+    await expect(
+      load(uuidPath, viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow(/OPFS read failed/)
+
+    expect(axios.get).not.toHaveBeenCalled()
+  })
+
+
   it('reads an uploaded file out of OPFS via getModelFromOPFS', async () => {
     // A valid RFC-4122-ish UUID (3rd group starts with [1-5], 4th with
     // [89abAB]) triggers the "uploaded file" branch in load():

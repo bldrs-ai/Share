@@ -365,6 +365,52 @@ export async function computeGitBlobSha1FromFile(file) {
 
 
 /**
+ * Open a `FileSystemSyncAccessHandle`, with one self-healing retry if Safari
+ * refuses the first attempt with `InvalidStateError`.
+ *
+ * Safari's OPFS implementation can hold an internal handle reference to a
+ * file even across worker terminations / `clearOPFSCache()` calls, so a
+ * brand-new `createSyncAccessHandle()` against a file path the browser still
+ * thinks is "open" raises `InvalidStateError: The object is in an invalid
+ * state.` Removing the file (which forces Safari to drop the stale ref) and
+ * re-creating it usually clears the condition.
+ *
+ * @param {FileSystemDirectoryHandle} parentDirectory
+ * @param {FileSystemFileHandle} fileHandle - Pre-created file handle. Used
+ *   for the first attempt. If we have to recreate, `parentDirectory` +
+ *   `fileName` are how we get a fresh handle back.
+ * @param {string} fileName - Name to recreate the file under on retry.
+ * @return {Promise<{handle: FileSystemSyncAccessHandle, fileHandle: FileSystemFileHandle}>}
+ *   Updated `fileHandle` (different object if we recreated) and the open
+ *   sync access handle. Caller MUST close the access handle.
+ */
+async function openSyncAccessHandleWithRetry(parentDirectory, fileHandle, fileName) {
+  try {
+    const handle = await fileHandle.createSyncAccessHandle()
+    return {handle, fileHandle}
+  } catch (firstErr) {
+    const isInvalidState = firstErr && (
+      firstErr.name === 'InvalidStateError' ||
+      /invalid state/i.test(firstErr.message || ''))
+    if (!isInvalidState) {
+      throw firstErr
+    }
+    // Best-effort: drop Safari's stale internal reference by removing the
+    // entry, then recreate the file and try the handle once more.
+    try {
+      await parentDirectory.removeEntry(fileName)
+    } catch (_) {/* file may already be gone — that's fine */}
+    const freshHandle = await parentDirectory.getFileHandle(fileName, {create: true})
+    // If THIS throws too, we're out of options — let it propagate. The
+    // resilience fix in `Loader.js` will catch it and fall back to direct
+    // fetch so the user still gets their model.
+    const handle = await freshHandle.createSyncAccessHandle()
+    return {handle, fileHandle: freshHandle}
+  }
+}
+
+
+/**
  * Write temporary file to OPFS (Origin Private File System)
  *
  * @param {Response} response - The response from the request.
@@ -384,10 +430,12 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
     [modelDirectoryHandle, modelBlobFileHandle] = await
     retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false)
 
-    if (modelBlobFileHandle !== undefined) {
-      const blobFile = await modelBlobFileHandle.getFile()
-
-      self.postMessage({completed: true, event: 'download', file: blobFile})
+    if (modelBlobFileHandle !== undefined && modelBlobFileHandle !== null) {
+      // Caller is responsible for posting the terminal completed event after
+      // any rename/move. Posting an intermediate `download` event here would
+      // hand the caller a File reference that Safari invalidates as soon as
+      // the caller renames the underlying OPFS entry (WebKitBlobResource
+      // error 1 on the subsequent `arrayBuffer()`).
       return [modelDirectoryHandle, modelBlobFileHandle]
     }
   } catch (error) {
@@ -397,15 +445,29 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
 
   try {
     [modelDirectoryHandle, modelBlobFileHandle] = await writeFileToPath(opfsRoot, originalFilePath, _etag, null)
-    // Create FileSystemSyncAccessHandle on the file.
-    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+    // `openSyncAccessHandleWithRetry` handles Safari's stale-internal-ref
+    // case — InvalidStateError on a fresh file, even after clearOPFSCache().
+    // If the retry also fails, the throw propagates; the resilience fix in
+    // Loader.js catches it and falls back to direct fetch.
+    const opened = await openSyncAccessHandleWithRetry(
+      modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
+    blobAccessHandle = opened.handle
+    modelBlobFileHandle = opened.fileHandle
   } catch (error) {
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     self.postMessage({error: workerMessage})
     return
   }
 
   if (!response.body) {
+    try {
+      await blobAccessHandle.close()
+    } catch (_) {/* idempotent */}
     throw new Error('ReadableStream not supported in this browser.')
   }
 
@@ -433,8 +495,6 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
         }
       } catch (error) {
         const workerMessage = `Error writing to ${response.headers.etag}: ${error}.`
-        // Close the access handle when done
-        await blobAccessHandle.close()
         self.postMessage({error: workerMessage})
         return
       }
@@ -452,24 +512,22 @@ export async function writeTemporaryFileToOPFS(response, originalFilePath, _etag
     }
 
     if (isDone) {
-      // close blob handle
-      await blobAccessHandle.close()
-      // if done, the file should be written. Signal the worker has completed.
-      try {
-        const blobFile = await modelBlobFileHandle.getFile()
-
-        self.postMessage({completed: true, event: 'download', file: blobFile})
-
-        return [modelDirectoryHandle, modelBlobFileHandle]
-      } catch (error) {
-        const workerMessage = `Error Getting file handle: ${error}.`
-        self.postMessage({error: workerMessage})
-        return
-      }
+      // Caller posts the terminal completed event after rename; see above.
+      return [modelDirectoryHandle, modelBlobFileHandle]
     }
   } catch (error) {
     reader.cancel()
     self.postMessage({error: error})
+  } finally {
+    // Always close the sync access handle. Leaking it leaves the OPFS file
+    // in a state Safari refuses subsequent createSyncAccessHandle() calls
+    // on (`InvalidStateError: The object is in an invalid state.`), which
+    // we were observing on the Sculpture model after any prior failed load.
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
   }
 }
 
@@ -493,9 +551,8 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
     [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPathNew(opfsRoot, originalFilePath, _etag, null, false)
 
     if (modelBlobFileHandle !== null) {
-      const blobFile = await modelBlobFileHandle.getFile()
-
-      self.postMessage({completed: true, event: 'download', file: blobFile})
+      // Caller posts the terminal completed event after rename; see the
+      // sibling note in writeTemporaryFileToOPFS for the Safari rationale.
       return [modelDirectoryHandle, modelBlobFileHandle]
     }
   } catch (error) {
@@ -511,18 +568,17 @@ export async function writeTemporaryBase64BlobFileToOPFS(blob, originalFilePath,
     const arrayBuffer = await blob.arrayBuffer()
     await blobAccessHandle.write(arrayBuffer, {at: 0})
 
-    const blobFile = await modelBlobFileHandle.getFile()
-
-    self.postMessage({completed: true, event: 'download', file: blobFile})
-
     return [modelDirectoryHandle, modelBlobFileHandle]
   } catch (error) {
     const workerMessage = `Error writing file handle for ${originalFilePath}: ${error}`
-    // Close the access handle when done
-    if (blobAccessHandle) {
-      await blobAccessHandle.close()
-    }
     self.postMessage({error: workerMessage})
+  } finally {
+    // Always close — see note in writeTemporaryFileToOPFS.
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
   }
 }
 
@@ -579,6 +635,87 @@ export function base64ToBlob(base64, mimeType = 'application/octet-stream') {
 
 
 /**
+ * Fetch the latest commit hash, rename the OPFS entry to its final
+ * `<segment>.<shaHash>.<commitHash>` name, refresh the cache, and post a
+ * single terminal completed event with the post-rename File.
+ *
+ * Centralizes the "rename, then hand the caller a stable File" sequence
+ * that fixes Safari's WebKitBlobResource error 1: posting the pre-rename
+ * File and renaming afterwards invalidates that File's blob backing in
+ * WebKit, so `arrayBuffer()` on the caller side fails. Doing the rename
+ * before postMessage avoids the race entirely.
+ *
+ * If the commit-hash fetch or rename fails (e.g. offline, GitHub down,
+ * Safari rename glitch), we still post a `download` event with the
+ * original handle so the load completes — the user just doesn't get
+ * commit-pinning on this load.
+ *
+ * @param {FileSystemDirectoryHandle} modelDirectoryHandle
+ * @param {FileSystemFileHandle} modelBlobFileHandle Pre-rename handle.
+ * @param {string} originalFilePath
+ * @param {string} shaHash
+ * @param {string} cacheKey
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
+ * @param {string} accessToken
+ * @param {number|null} fallbackLastModified Last-modified from cache, used
+ *   when rename succeeds but commit-date didn't come back (legacy cache rows).
+ */
+export async function postFinalDownloadEventAfterRename(
+  modelDirectoryHandle,
+  modelBlobFileHandle,
+  originalFilePath,
+  shaHash,
+  cacheKey,
+  owner,
+  repo,
+  branch,
+  accessToken,
+  fallbackLastModified) {
+  let finalFileHandle = modelBlobFileHandle
+  let renamed = false
+  let lastModifiedGithub = fallbackLastModified
+
+  try {
+    const commitResult = await fetchLatestCommitHash(
+      ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
+    const _commitHash = commitResult && commitResult.hash
+    const _commitDate = commitResult && commitResult.date
+
+    if (_commitHash !== null && _commitHash !== undefined) {
+      const pathSegments = safePathSplit(originalFilePath)
+      const lastSegment = pathSegments[pathSegments.length - 1]
+      const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
+      const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
+
+      if (newResult !== null) {
+        const mockResponse = generateMockResponse(shaHash)
+        await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash, _commitDate)
+        finalFileHandle = newResult
+        renamed = true
+        if (_commitDate !== undefined && _commitDate !== null) {
+          lastModifiedGithub = _commitDate
+        }
+      }
+    }
+  } catch (_) {
+    // Fall through: post the un-renamed file. Don't fail the load over a
+    // GitHub commits-API hiccup or a Safari OPFS rename glitch — the user
+    // can still view the model, they just won't get commit-pinning.
+  }
+
+  const finalFile = await finalFileHandle.getFile()
+  self.postMessage({
+    completed: true,
+    event: renamed ? 'renamed' : 'download',
+    file: finalFile,
+    lastModifiedGithub: lastModifiedGithub,
+  })
+}
+
+
+/**
  * Write base64 model to OPFS (Origin Private File System)
  *
  * @param {string} content - The content to write to the file.
@@ -631,32 +768,22 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
       }
 
       if (modelBlobFileHandle !== null ) {
-        // Display model
-        const blobFile = await modelBlobFileHandle.getFile()
-
-        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile})
-
         if (commitHash !== null) {
+          // Commit hash already known — file in OPFS is at its final name.
+          // Single terminal event.
+          const blobFile = await modelBlobFileHandle.getFile()
+          self.postMessage({completed: true, event: 'exists', file: blobFile})
           return
         }
-        // get commit hash
-        const _commitHash = await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
-        if (_commitHash !== null) {
-          const pathSegments = safePathSplit(originalFilePath)
-          const lastSegment = pathSegments[pathSegments.length - 1]
-          const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
-          const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-          if (newResult !== null) {
-            const mockResponse = generateMockResponse(shaHash)
-            // Update cache with new data
-            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash)
-            const updatedBlobFile = await newResult.getFile()
-
-            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
-          }
-        }
+        // No commit hash — we'll fetch one and rename. Defer posting the
+        // terminal event until AFTER the rename so the File reference handed
+        // to the caller is the post-rename one (Safari invalidates the
+        // pre-rename File's blob backing → WebKitBlobResource error 1).
+        await postFinalDownloadEventAfterRename(
+          modelDirectoryHandle, modelBlobFileHandle,
+          originalFilePath, shaHash, cacheKey,
+          owner, repo, branch, accessToken, null /* lastModifiedGithub */)
       } else {
         // we don't have it stored and need to decode the base64 blob to file and write to OPFS
         const blob = base64ToBlob(content)
@@ -668,24 +795,13 @@ export async function writeBase64Model(content, shaHash, originalFilePath, owner
 
           await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
-          // get commit hash
-          const _commitHash = await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
-
-          if (_commitHash !== null) {
-            const pathSegments = safePathSplit(originalFilePath)
-            const lastSegment = pathSegments[pathSegments.length - 1]
-            const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
-            const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-            if (newResult !== null) {
-              // Update cache with new data
-              const clonedResponse = generateMockResponse(shaHash)
-              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash)
-              const updatedBlobFile = await newResult.getFile()
-
-              self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile})
-            }
-          }
+          // Caller (us) now posts the terminal event after rename. The
+          // helper falls back to a `download` event with the original file
+          // if commit-hash fetch or rename fails.
+          await postFinalDownloadEventAfterRename(
+            modelDirectoryHandle, modelBlobFileHandle,
+            originalFilePath, shaHash, cacheKey,
+            owner, repo, branch, accessToken, null /* lastModifiedGithub */)
         }
       }
     } catch (error) {
@@ -757,33 +873,20 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
       }
 
       if (modelBlobFileHandle !== null ) {
-        // Display model
-        const blobFile = await modelBlobFileHandle.getFile()
-
-        self.postMessage({completed: true, event: (commitHash === null ) ? 'download' : 'exists', file: blobFile, lastModifiedGithub})
-
         if (commitHash !== null) {
+          // Commit hash already known — file in OPFS is at its final name,
+          // single terminal event.
+          const blobFile = await modelBlobFileHandle.getFile()
+          self.postMessage({completed: true, event: 'exists', file: blobFile, lastModifiedGithub})
           return
         }
-        // get commit hash
-        const {hash: _commitHash, date: _commitDate} =
-          await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
 
-        if (_commitHash !== null) {
-          const pathSegments = safePathSplit(originalFilePath)
-          const lastSegment = pathSegments[pathSegments.length - 1]
-          const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
-          const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-          if (newResult !== null) {
-            const mockResponse = generateMockResponse(shaHash)
-            // Update cache with new data
-            await CacheModule.updateCacheRaw(cacheKey, mockResponse, _commitHash, _commitDate)
-            const updatedBlobFile = await newResult.getFile()
-
-            self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
-          }
-        }
+        // No commit hash yet — fetch and rename BEFORE posting the file.
+        // See postFinalDownloadEventAfterRename for the Safari rationale.
+        await postFinalDownloadEventAfterRename(
+          modelDirectoryHandle, modelBlobFileHandle,
+          originalFilePath, shaHash, cacheKey,
+          owner, repo, branch, accessToken, lastModifiedGithub)
       } else {
         // we don't have it and need to fetch
         const result = await fetchRGHUC(objectUrl)
@@ -791,33 +894,25 @@ export async function downloadModel(objectUrl, shaHash, originalFilePath, owner,
         if (result !== null) {
           [modelDirectoryHandle, modelBlobFileHandle] = await writeTemporaryFileToOPFS(result, cacheKey, shaHash, onProgress)
 
-          const mockResponse = generateMockResponse(shaHash)
+          if (modelBlobFileHandle) {
+            const mockResponse = generateMockResponse(shaHash)
+            await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
 
-          await CacheModule.updateCacheRaw(cacheKey, mockResponse, null)
-
-          // get commit hash
-          const {hash: _commitHash, date: _commitDate} =
-          await fetchLatestCommitHash(ghApiBase(accessToken), owner, repo, originalFilePath, accessToken, branch)
-
-          if (_commitHash !== null) {
-            const pathSegments = safePathSplit(originalFilePath)
-            const lastSegment = pathSegments[pathSegments.length - 1]
-            const newFileName = `${lastSegment}.${shaHash}.${_commitHash}`
-            const newResult = await renameFileInOPFS(modelDirectoryHandle, modelBlobFileHandle, newFileName)
-
-            if (newResult !== null) {
-              // Update cache with new data
-              const clonedResponse = generateMockResponse(shaHash)
-              await CacheModule.updateCacheRaw(cacheKey, clonedResponse, _commitHash, _commitDate)
-              const updatedBlobFile = await newResult.getFile()
-
-              self.postMessage({completed: true, event: 'renamed', file: updatedBlobFile, lastModifiedGithub: _commitDate})
-              return
-            }
+            await postFinalDownloadEventAfterRename(
+              modelDirectoryHandle, modelBlobFileHandle,
+              originalFilePath, shaHash, cacheKey,
+              owner, repo, branch, accessToken, lastModifiedGithub)
           }
         }
       }
     } catch (error) {
+      // Don't leave the listener hanging — surface the error so the caller's
+      // promise rejects instead of waiting forever for a terminal event.
+      // (Pre-fix this swallowed silently, which was fine when there was no
+      // single-terminal-event contract; with the new contract, the listener
+      // relies on either a `completed` or an `error` message.)
+      const workerMessage = `Error in downloadModel for ${cacheKey}: ${error}`
+      self.postMessage({error: workerMessage})
       return
     }
 
@@ -937,11 +1032,18 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     }
   }
   try {
-    // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, true)
-    // Create FileSystemSyncAccessHandle on the file.
-    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+    // Same Safari self-heal as in writeTemporaryFileToOPFS.
+    const opened = await openSyncAccessHandleWithRetry(
+      modelDirectoryHandle, modelBlobFileHandle, modelBlobFileHandle.name)
+    blobAccessHandle = opened.handle
+    modelBlobFileHandle = opened.fileHandle
   } catch (error) {
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     self.postMessage({error: workerMessage})
     return
@@ -950,6 +1052,9 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   const response = await fetch(objectUrl)
 
   if (!response.body) {
+    try {
+      await blobAccessHandle.close()
+    } catch (_) {/* idempotent */}
     throw new Error('ReadableStream not supported in this browser.')
   }
 
@@ -977,8 +1082,6 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
         }
       } catch (error) {
         const workerMessage = `Error writing to ${commitHash}: ${error}.`
-        // Close the access handle when done
-        await blobAccessHandle.close()
         self.postMessage({error: workerMessage})
         return
       }
@@ -1000,8 +1103,12 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
     }
 
     if (isDone) {
-      // close blob handle
-      await blobAccessHandle.close()
+      // Close before getFile() so Safari isn't holding a write lock when we
+      // hand the File back. (Idempotent — the finally block is the safety net
+      // for the error paths above; this is the happy-path close.)
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
       // if done, the file should be written. Write the metadata and signal the worker has completed.
       try {
         const blobFile = await modelBlobFileHandle.getFile()
@@ -1016,6 +1123,14 @@ export async function downloadModelToOPFS(objectUrl, commitHash, originalFilePat
   } catch (error) {
     reader.cancel()
     self.postMessage({error: error})
+  } finally {
+    // Always close the sync access handle. See writeTemporaryFileToOPFS for
+    // the rationale (Safari InvalidStateError on subsequent loads if leaked).
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
   }
 }
 
@@ -1241,6 +1356,16 @@ export async function writeModelToOPFSFromFile(modelFile, objectKey, originalFil
   } catch (error) {
     const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     self.postMessage({error: workerMessage})
+  } finally {
+    // writeFileToHandle closes the handle on success, but bails without
+    // closing if its own try fails — and there's no close at all if create
+    // succeeded but writeFileToHandle never ran (an await above threw).
+    // Defensive close so Safari doesn't refuse later loads of the same path.
+    if (blobAccessHandle) {
+      try {
+        await blobAccessHandle.close()
+      } catch (_) {/* idempotent */}
+    }
   }
 }
 
@@ -1574,20 +1699,26 @@ export async function writeModelToOPFS(objectUrl, objectKey) {
 
     const fileArrayBuffer = await fileBuffer.arrayBuffer()
 
+    let blobAccessHandle = null
     try {
       // Create FileSystemSyncAccessHandle on the file.
-      const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+      blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
       await blobAccessHandle.write(fileArrayBuffer, {at: 0})
-      // Close the access handle when done
-      await blobAccessHandle.close()
 
       self.postMessage({completed: true, event: 'write', fileName: objectKey})
     } catch (error) {
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
       self.postMessage({error: workerMessage})
       return
+    } finally {
+      // See writeTemporaryFileToOPFS for the Safari rationale.
+      if (blobAccessHandle) {
+        try {
+          await blobAccessHandle.close()
+        } catch (_) {/* idempotent */}
+      }
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
@@ -1664,14 +1795,13 @@ export async function writeFileToOPFS(objectUrl, fileName) {
 
     const fileArrayBuffer = await fileBuffer.arrayBuffer()
 
+    let accessHandle = null
     try {
       // Create FileSystemSyncAccessHandle on the file.
-      const accessHandle = await newFileHandle.createSyncAccessHandle()
+      accessHandle = await newFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
       const writeSize = await accessHandle.write(fileArrayBuffer, {at: 0})
-      // Close the access handle when done
-      await accessHandle.close()
 
       if (writeSize > 0) {
         self.postMessage({completed: true, event: 'write', fileName: fileName})
@@ -1683,6 +1813,13 @@ export async function writeFileToOPFS(objectUrl, fileName) {
       const workerMessage = `Error writing to ${fileName}: ${error}.`
       self.postMessage({error: workerMessage})
       return
+    } finally {
+      // See writeTemporaryFileToOPFS for the Safari rationale.
+      if (accessHandle) {
+        try {
+          await accessHandle.close()
+        } catch (_) {/* idempotent */}
+      }
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`

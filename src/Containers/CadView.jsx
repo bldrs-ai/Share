@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
@@ -32,11 +32,6 @@ import {initViewer} from './viewer'
 
 
 let count = 0
-// Tracks the theme-change listener registered by onModelPath() so we
-// can remove it before registering a new one on the next model load.
-// Otherwise each prior listener stays in the registry, capturing its
-// (now-disposed) viewer via closure and pinning it from GC.
-let previousThemeChangeCb = null
 
 /**
  * Only container for the app.  Hosts the IfcViewer as well as nav components.
@@ -81,6 +76,24 @@ export default function CadView({
   // AppSlice
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
+
+  // Tracks the theme-change listener registered by onModelPath() so we
+  // can remove it before registering a new one on the next model load.
+  // Otherwise each prior listener stays in the registry, capturing its
+  // (now-disposed) viewer via closure and pinning it from GC. A ref
+  // (not module-level state) so two CadView mounts in the same process —
+  // tests, multi-pane layouts — don't stomp each other.
+  const previousThemeChangeCbRef = useRef(null)
+
+  // Two useEffects below can each trigger `onViewer()` — the
+  // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
+  // [isAuthLoading, …]-dep effect fires (with an `!isViewerLoaded` guard) so
+  // a model whose initial `onViewer` returned early on auth-not-ready
+  // retries once auth settles. If auth settles WHILE the first onViewer is
+  // mid-`loadModel`, `isViewerLoaded` is still false (it's only set at the
+  // end), so both fire end-to-end → double load. This in-flight ref
+  // dedupes overlapping calls; whichever effect tick wins, the other skips.
+  const onViewerInFlightRef = useRef(false)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -148,10 +161,10 @@ export default function CadView({
     if (isModelReady) {
       resetState()
     }
-    if (previousThemeChangeCb) {
-      theme.removeThemeChangeListener(previousThemeChangeCb)
+    if (previousThemeChangeCbRef.current) {
+      theme.removeThemeChangeListener(previousThemeChangeCbRef.current)
     }
-    previousThemeChangeCb = initViewerCb
+    previousThemeChangeCbRef.current = initViewerCb
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }
@@ -177,6 +190,27 @@ export default function CadView({
       return
     }
 
+    // Past the early returns — we're actually going to load. The in-flight
+    // guard sits HERE (not at the effect-callback level) so two effect ticks
+    // whose onViewer would both return early — e.g. initial mount in
+    // Playwright where viewer is still null at the [auth]-effect's render —
+    // don't accidentally claim the slot and starve the eventual successful
+    // load from the [viewer] effect.
+    if (onViewerInFlightRef.current) {
+      debug().warn('CadView#onViewer: already in flight; skipping duplicate')
+      return
+    }
+    onViewerInFlightRef.current = true
+    try {
+      await onViewerInternal()
+    } finally {
+      onViewerInFlightRef.current = false
+    }
+  }
+
+
+  /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
+  async function onViewerInternal() {
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -697,6 +731,8 @@ export default function CadView({
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
       if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
         (async () => {
+          // onViewer's own in-flight guard dedupes when this races the
+          // [viewer]-effect during a mid-load auth resolution.
           await onViewer()
         })()
       }
@@ -715,6 +751,8 @@ export default function CadView({
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
+      // onViewer's own in-flight guard dedupes when this races the
+      // [auth]-state effect during a mid-load auth resolution.
       await onViewer()
     })()
   }, [viewer])

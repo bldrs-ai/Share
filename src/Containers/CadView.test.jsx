@@ -156,6 +156,67 @@ describe('CadView', () => {
   })
 
 
+  // Regression: two useEffects in CadView can each kick off `onViewer()` —
+  // the [viewer]-dep effect (after `onModelPath` calls `setViewer`) and the
+  // [isAuthLoading, …]-dep effect (retries when auth resolves after an
+  // earlier early-return). Pre-fix, `isViewerLoaded` was only set at the
+  // END of `onViewer`, so an auth-resolve mid-`loadModel` left
+  // `isViewerLoaded` false and both effects ran end-to-end — the Safari
+  // double-load (1.5–2s apart). The in-flight ref dedupes overlapping
+  // calls; this test exercises the case where auth resolves WHILE the
+  // first load is mid-flight and asserts `downloadToOPFS` only fires once.
+  it('does not double-load when auth resolves mid-load (Safari race)', async () => {
+    // The bug pre-fix: two useEffects in CadView could each kick off
+    // `onViewer()` — the [viewer]-dep one after `setViewer`, and the
+    // [isAuthLoading, …]-dep one when auth settled. The second's
+    // `!isViewerLoaded` guard was insufficient because `isViewerLoaded`
+    // is only flipped AT THE END of `onViewer`; if auth resolved while
+    // the first load was still inside `loadModel`, both ran end-to-end.
+    //
+    // To exercise the race in jsdom (where everything finishes too fast
+    // for the natural flow to trip it), we hold the OPFS download mid-
+    // flight with a manual deferred Promise, flip the auth flag during
+    // that pause, then release the load and count the `downloadToOPFS`
+    // calls. Pre-fix this counts 2; with the in-flight ref it counts 1.
+    const OPFSUtils = jest.requireMock('../OPFS/utils')
+    OPFSUtils.downloadToOPFS.mockClear()
+    const originalImpl = OPFSUtils.downloadToOPFS.getMockImplementation()
+    let releaseLoad
+    const loadInFlight = new Promise((resolve) => {
+      releaseLoad = resolve
+    })
+    OPFSUtils.downloadToOPFS.mockImplementation(async (...args) => {
+      await loadInFlight
+      return originalImpl(...args)
+    })
+
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setIsOpfsAvailable(true))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+
+    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+    await actAsyncFlush()
+
+    // First onViewer is now suspended inside downloadToOPFS, waiting on
+    // `loadInFlight`. Flip auth — pre-fix this fires the auth-effect's
+    // onViewer, which races the suspended one.
+    await act(() => {
+      result.current.setIsAuthResolved(true)
+    })
+    await actAsyncFlush()
+
+    // Release the suspended load. Now both pre-fix flows would proceed.
+    releaseLoad()
+    await waitFor(() => screen.getByTestId(aboutControlTestId))
+    await actAsyncFlush()
+
+    // Restore the mock for any subsequent tests.
+    OPFSUtils.downloadToOPFS.mockImplementation(originalImpl)
+
+    expect(OPFSUtils.downloadToOPFS).toHaveBeenCalledTimes(1)
+  })
+
+
   // Regression: the React effect `[selectedElements, selectedInstanceIds]`
   // dispatches `viewer.setInstanceSelection` whenever `selectedInstanceIds`
   // is non-empty. Pre-`ids.length > 0` guard, a stale `selectedInstanceIds`
