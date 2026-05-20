@@ -1,21 +1,24 @@
 # Skip the deploy preview when the only changes are documentation. The script
 # exits 0 to skip and 1 to build; logic and edge cases are documented inline.
 #
-# The build runs the SPA (yarn build → docs/), then the Next.js marketing
-# site (marketing/yarn install + yarn build → marketing/out/), then overlays
-# the marketing static files onto docs/ so the merged tree serves:
+# `yarn build` chains through build-share → build-marketing
+# (tools/marketing/build.js), which builds the Next.js marketing site and
+# overlays marketing/out/ onto docs/. Same script runs for `yarn serve`
+# locally, so dev and prod produce identical merged trees:
 #   /                  → SPA (docs/index.html — react-router → IFC homepage)
-#   /share/*           → SPA (_redirects /* /index.html 200 catches it)
+#   /share/*           → SPA (public/_redirects /share/* /index.html 200)
 #   /about/, /pricing/,
 #   /services/, /blog/,
-#   /privacy/, /tos/   → marketing static HTML (file match wins before _redirects)
+#   /privacy/, /tos/   → marketing static HTML (file-match wins before _redirects)
 #   /sitemap.xml,
 #   /robots.txt,
 #   /feed.xml          → marketing
-# `cp -r marketing/out/. docs/` merges contents; `out/` deliberately has no
-# index.html (page.tsx was removed) so the SPA's docs/index.html survives.
+# _redirects carries an explicit SPA allowlist so unknown paths 404 instead
+# of returning the SPA shell with HTTP 200 (soft-404 SEO trap). Marketing's
+# static export emits no out/index.html (root page.tsx removed), so the
+# overlay does not clobber the SPA's docs/index.html at /.
 [build]
-  command = "yarn build && cd marketing && yarn install --frozen-lockfile && yarn build && cd .. && cp -r marketing/out/. docs/"
+  command = "yarn build"
   publish = "docs"
   ignore = "bash tools/netlify/ignore-build.sh"
 
