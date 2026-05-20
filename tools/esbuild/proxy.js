@@ -3,6 +3,30 @@ import https from 'node:https'
 import fs from 'fs'
 import path from 'path'
 import {fileURLToPath} from 'url'
+import {loadSpaAllowlist, isSpaPath} from '../netlify/redirects.js'
+
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const REPO_ROOT = path.resolve(__dirname, '..', '..')
+const MARKETING_OUT = path.join(REPO_ROOT, 'marketing', 'out')
+
+// SPA fallback allowlist sourced from public/_redirects so dev mirrors what
+// Netlify enforces in prod. Loaded once at module init.
+const spaAllowlist = loadSpaAllowlist()
+
+// Marketing static export (Next.js `output: 'export'`) overlays onto docs/
+// at deploy time. In dev we read it from disk so file-match wins over the
+// SPA fallback, matching Netlify's resolution order. Without it, /about,
+// /pricing, /blog etc. would fall through to the old SPA pages.
+const marketingOutAvailable = fs.existsSync(MARKETING_OUT)
+if (!marketingOutAvailable) {
+  console.warn(
+    'proxy: marketing/out not found — /about, /pricing, /blog, etc. will\n' +
+    '       fall through to the SPA. Run `cd marketing && yarn build` to\n' +
+    '       enable the static marketing overlay.')
+}
+
 
 /**
  * @param {string} host The host to which traffic will be sent. E.g. localhost
@@ -13,9 +37,6 @@ import {fileURLToPath} from 'url'
  */
 export function createProxyServer(host, port, useHttps = false) {
   const requestModule = http
-  // Derive __dirname equivalent in ES Modules
-  const __filename = fileURLToPath(import.meta.url)
-  const __dirname = path.dirname(__filename)
 
   const serverOptions = useHttps ?
     {
@@ -35,6 +56,12 @@ export function createProxyServer(host, port, useHttps = false) {
   function handleRequest(req, res) {
     req.url = rewriteUrl(req.url)
 
+    // File-match wins (mirrors Netlify): if marketing/out has a static page
+    // for this path, serve it before forwarding to esbuild.
+    if (marketingOutAvailable && tryServeMarketing(req.url, res)) {
+      return
+    }
+
     const options = {
       hostname: host,
       port: port,
@@ -45,7 +72,11 @@ export function createProxyServer(host, port, useHttps = false) {
 
     const proxyReq = requestModule.request(options, (proxyResponse) => {
       if (proxyResponse.statusCode === HTTP_NOT_FOUND) {
-        serveNotFound(res)
+        if (isSpaPath(req.url, spaAllowlist)) {
+          serveSpaBounce(res)
+        } else {
+          serveNotFound(res)
+        }
         return
       }
 
@@ -104,17 +135,131 @@ export function createProxyServer(host, port, useHttps = false) {
   return server
 }
 
-const HTTP_FOUND = 200
+const HTTP_OK = 200
+const HTTP_MOVED_PERMANENTLY = 301
 const HTTP_NOT_FOUND = 404
 const HTTP_SERVER_ERROR = 500
 
+
 /**
- * Serve a 200 bounce page for missing resources.
+ * Serve a marketing static file if one exists for the request path. Mirrors
+ * Netlify's resolution order (file match > _redirects) so /about/, /blog/,
+ * /sitemap.xml etc. render their pre-rendered HTML instead of falling
+ * through to the SPA.
  *
- * @param {object} res - Response object
+ * @param {string} reqUrl Request URL (may include query/hash).
+ * @param {object} res Response object.
+ * @return {boolean} True if a marketing file was served.
  */
-const serveNotFound = (res) => {
-  res.writeHead(HTTP_FOUND, {
+function tryServeMarketing(reqUrl, res) {
+  const reqPath = reqUrl.split('?')[0].split('#')[0]
+
+  // Trailing-slash directory case: /about/ → marketing/out/about/index.html
+  if (reqPath.endsWith('/')) {
+    const indexHtml = safeJoin(MARKETING_OUT, `${reqPath}index.html`)
+    if (indexHtml && fs.existsSync(indexHtml)) {
+      return serveStatic(indexHtml, 'text/html; charset=UTF-8', res)
+    }
+    return false
+  }
+
+  // Bare path that maps to a marketing directory → 301 to slashed form.
+  // Mirrors Netlify Pretty URLs (which 301 /about → /about/ when /about/
+  // is a directory with index.html).
+  const dirIndex = safeJoin(MARKETING_OUT, `${reqPath}/index.html`)
+  if (dirIndex && fs.existsSync(dirIndex)) {
+    res.writeHead(HTTP_MOVED_PERMANENTLY, {Location: `${reqPath}/`})
+    res.end()
+    return true
+  }
+
+  // Direct asset (e.g. /sitemap.xml, /og-default.png).
+  const asset = safeJoin(MARKETING_OUT, reqPath)
+  if (asset && fs.existsSync(asset) && fs.statSync(asset).isFile()) {
+    return serveStatic(asset, marketingContentType(reqPath), res)
+  }
+  return false
+}
+
+
+/**
+ * Resolve a child path under root, returning null if it escapes root
+ * (defense-in-depth against path traversal in the dev proxy).
+ *
+ * @param {string} root Absolute root directory.
+ * @param {string} child Untrusted child path.
+ * @return {string|null} Resolved absolute path, or null if outside root.
+ */
+function safeJoin(root, child) {
+  const resolved = path.resolve(root, `.${child}`)
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    return null
+  }
+  return resolved
+}
+
+
+/**
+ * Stream a file from disk with the given content type.
+ *
+ * @param {string} filePath Absolute path to the file.
+ * @param {string} contentType MIME type to send.
+ * @param {object} res Response object.
+ * @return {boolean} True on success.
+ */
+function serveStatic(filePath, contentType, res) {
+  const body = fs.readFileSync(filePath)
+  res.writeHead(HTTP_OK, {
+    'Content-Type': contentType,
+    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  })
+  res.end(body)
+  return true
+}
+
+
+/**
+ * Content-Type for marketing static assets. Broader than getContentType()
+ * since the marketing build emits xml/txt/image files too.
+ *
+ * @param {string} p Request path.
+ * @return {string} MIME type.
+ */
+function marketingContentType(p) {
+  if (p.endsWith('.html')) {
+    return 'text/html; charset=UTF-8'
+  } else if (p.endsWith('.xml')) {
+    return 'application/xml'
+  } else if (p.endsWith('.txt')) {
+    return 'text/plain; charset=UTF-8'
+  } else if (p.endsWith('.png')) {
+    return 'image/png'
+  } else if (p.endsWith('.jpg') || p.endsWith('.jpeg')) {
+    return 'image/jpeg'
+  } else if (p.endsWith('.svg')) {
+    return 'image/svg+xml'
+  } else if (p.endsWith('.json')) {
+    return 'application/json'
+  } else if (p.endsWith('.css')) {
+    return 'text/css'
+  } else if (p.endsWith('.js')) {
+    return 'application/javascript'
+  }
+  return 'application/octet-stream'
+}
+
+
+/**
+ * Serve the gh-pages SPA-routing bounce page. Returns 200 with HTML that
+ * uses window.location.replace to encode the original path into the query
+ * string of /, where the SPA's index.html decoder restores it via
+ * history.replaceState. Used as the SPA fallback for paths in the
+ * _redirects allowlist (e.g. /share/*, /ipsum, /popup-auth).
+ *
+ * @param {object} res Response object.
+ */
+const serveSpaBounce = (res) => {
+  res.writeHead(HTTP_OK, {
     'Content-Type': 'text/html',
     'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
   })
@@ -137,6 +282,19 @@ const serveNotFound = (res) => {
     Resource not found. Redirecting...
   </body>
 </html>`)
+}
+
+
+/**
+ * Serve a real 404 — used for unknown paths that match neither a marketing
+ * file nor the SPA allowlist. Mirrors Netlify's default 404 behavior in
+ * prod so the dev server doesn't paper over soft-404 SEO issues.
+ *
+ * @param {object} res Response object.
+ */
+const serveNotFound = (res) => {
+  res.writeHead(HTTP_NOT_FOUND, {'Content-Type': 'text/plain; charset=UTF-8'})
+  res.end('Not Found\n')
 }
 
 /**
