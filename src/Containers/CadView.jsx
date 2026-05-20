@@ -190,6 +190,27 @@ export default function CadView({
       return
     }
 
+    // Past the early returns — we're actually going to load. The in-flight
+    // guard sits HERE (not at the effect-callback level) so two effect ticks
+    // whose onViewer would both return early — e.g. initial mount in
+    // Playwright where viewer is still null at the [auth]-effect's render —
+    // don't accidentally claim the slot and starve the eventual successful
+    // load from the [viewer] effect.
+    if (onViewerInFlightRef.current) {
+      debug().warn('CadView#onViewer: already in flight; skipping duplicate')
+      return
+    }
+    onViewerInFlightRef.current = true
+    try {
+      await onViewerInternal()
+    } finally {
+      onViewerInFlightRef.current = false
+    }
+  }
+
+
+  /** Inner load body — preconditions checked + in-flight flag managed by `onViewer`. */
+  async function onViewerInternal() {
     setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -705,17 +726,14 @@ export default function CadView({
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (!isViewerLoaded && !onViewerInFlightRef.current) {
+    if (!isViewerLoaded) {
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
       if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
-        onViewerInFlightRef.current = true
-        ;(async () => {
-          try {
-            await onViewer()
-          } finally {
-            onViewerInFlightRef.current = false
-          }
+        (async () => {
+          // onViewer's own in-flight guard dedupes when this races the
+          // [viewer]-effect during a mid-load auth resolution.
+          await onViewer()
         })()
       }
     }
@@ -732,18 +750,10 @@ export default function CadView({
 
   // Viewer changes in onModelPath (above)
   useEffect(() => {
-    if (onViewerInFlightRef.current) {
-      // The auth-state effect above already kicked off a load — skip so we
-      // don't run two `onViewer`s end-to-end (the Safari double-load).
-      return
-    }
-    onViewerInFlightRef.current = true
-    ;(async () => {
-      try {
-        await onViewer()
-      } finally {
-        onViewerInFlightRef.current = false
-      }
+    (async () => {
+      // onViewer's own in-flight guard dedupes when this races the
+      // [auth]-state effect during a mid-load auth resolution.
+      await onViewer()
     })()
   }, [viewer])
 
