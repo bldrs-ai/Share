@@ -211,45 +211,85 @@ describe('viewer/three/Clipper', () => {
   })
 
 
-  describe('property passthroughs', () => {
-    it('active getter returns true on GLB mode regardless of fork state', () => {
-      const fork = makeForkClipperStub()
-      fork.active = false
-      const clipper = new Clipper(makeViewerStub(), fork)
-      clipper.setModel(makeGlbModel())
-      expect(clipper.active).toBe(true)
-    })
-
-    it('active getter returns fork value on IFC mode', () => {
+  describe('cross-backend state (plugin-owned)', () => {
+    it('seeds initial state from the fork backend', () => {
       const fork = makeForkClipperStub()
       fork.active = true
+      fork.orthogonalY = true
+      fork.clickDrag = false
       const clipper = new Clipper(makeViewerStub(), fork)
-      clipper.setModel(makeIfcModel())
       expect(clipper.active).toBe(true)
+      expect(clipper.orthogonalY).toBe(true)
+      expect(clipper.clickDrag).toBe(false)
     })
 
-    it('active setter writes to fork (used by viewer.js init)', () => {
+    it('defaults all state to false when no fork backend is attached', () => {
+      const clipper = new Clipper(makeViewerStub(), null)
+      expect(clipper.active).toBe(false)
+      expect(clipper.orthogonalY).toBe(false)
+      expect(clipper.clickDrag).toBe(false)
+    })
+
+    it('getters read plugin state, not backend state (no mode-dependent surprise)', () => {
+      const fork = makeForkClipperStub()
+      const clipper = new Clipper(makeViewerStub(), fork)
+      clipper.setModel(makeGlbModel())
+      clipper.active = false
+      // Even on GLB mode, the getter returns whatever was last set —
+      // no hardcoded `true` short-circuit.
+      expect(clipper.active).toBe(false)
+    })
+
+    it('setters mutate plugin state', () => {
+      const clipper = new Clipper(makeViewerStub(), makeForkClipperStub())
+      clipper.active = true
+      clipper.orthogonalY = true
+      clipper.clickDrag = true
+      expect(clipper.active).toBe(true)
+      expect(clipper.orthogonalY).toBe(true)
+      expect(clipper.clickDrag).toBe(true)
+    })
+
+    it('setters sync the new state into the fork backend', () => {
       const fork = makeForkClipperStub()
       const clipper = new Clipper(makeViewerStub(), fork)
       clipper.active = true
       expect(fork.active).toBe(true)
-    })
-
-    it('clickDrag getter / setter forward to fork', () => {
-      const fork = makeForkClipperStub()
-      const clipper = new Clipper(makeViewerStub(), fork)
       clipper.clickDrag = true
       expect(fork.clickDrag).toBe(true)
-      expect(clipper.clickDrag).toBe(true)
-    })
-
-    it('orthogonalY getter / setter forward to fork', () => {
-      const fork = makeForkClipperStub()
-      const clipper = new Clipper(makeViewerStub(), fork)
       clipper.orthogonalY = true
       expect(fork.orthogonalY).toBe(true)
     })
 
+    it('setters no-op safely without a fork backend', () => {
+      const clipper = new Clipper(makeViewerStub(), null)
+      expect(() => {
+        clipper.active = true
+        clipper.orthogonalY = true
+        clipper.clickDrag = true
+      }).not.toThrow()
+      // State is still tracked even without backends.
+      expect(clipper.active).toBe(true)
+    })
+
+    it('setModel re-syncs plugin state to backends', () => {
+      const fork = makeForkClipperStub()
+      const clipper = new Clipper(makeViewerStub(), fork)
+      clipper.active = true
+      clipper.clickDrag = true
+      // Simulate a backend losing state — e.g., a future backend that
+      // gets re-constructed on model swap.
+      fork.active = false
+      fork.clickDrag = false
+      clipper.setModel(makeIfcModel())
+      // Plugin state survives the model swap and is re-pushed.
+      expect(fork.active).toBe(true)
+      expect(fork.clickDrag).toBe(true)
+    })
+  })
+
+
+  describe('plane / context accessors', () => {
     it('planes returns fork planes on IFC mode', () => {
       const fork = makeForkClipperStub()
       fork.planes = [{plane: {normal: 'x', constant: 1}}]

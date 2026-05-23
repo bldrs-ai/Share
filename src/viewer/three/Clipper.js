@@ -57,7 +57,23 @@ export default class Clipper {
     this.viewer = viewer
     this._forkClipper = forkClipper
     this._glbClipper = null
-    this._currentModel = null
+
+    // Plugin-owned cross-backend state. The plugin is the single
+    // source of truth — getters return this state, setters mutate it
+    // and then push to whichever backends consume the concept via
+    // `_syncStateToBackends`. Backends without an equivalent property
+    // silently ignore the sync. This decouples the property surface
+    // from any one backend's shape and lets future backends opt in
+    // by extending `_syncStateToBackends`.
+    //
+    // Initial values are seeded from the fork backend so reads
+    // before any explicit set return what the underlying backend
+    // already has — no behavior change on construction.
+    this._state = {
+      active: forkClipper?.active ?? false,
+      orthogonalY: forkClipper?.orthogonalY ?? false,
+      clickDrag: forkClipper?.clickDrag ?? false,
+    }
   }
 
 
@@ -79,10 +95,13 @@ export default class Clipper {
       this._glbClipper.dispose()
       this._glbClipper = null
     }
-    this._currentModel = model
     if (model && modelHasUnstructuredMeshClipper(model)) {
       this._glbClipper = new GlbClipper(this.viewer, model)
     }
+    // Push plugin state to backends so a newly-constructed backend
+    // (or one swapped in on model change) picks up whatever state
+    // the caller last set on the plugin.
+    this._syncStateToBackends()
   }
 
 
@@ -96,52 +115,68 @@ export default class Clipper {
   }
 
 
-  // ─── Property passthroughs (fork-only state) ───────────────────
+  // ─── Cross-backend state (plugin-owned) ────────────────────────
+
+  /**
+   * Push `this._state` to whichever attached backends consume each
+   * property. Backends with no equivalent silently ignore.
+   *
+   * Today's mapping: all three state fields map 1:1 to the fork's
+   * `IfcClipper.{active, orthogonalY, clickDrag}` properties. The
+   * GlbClipper has no equivalent concepts (it gates interaction via
+   * `setInteractionEnabled` and computes plane snapping per-drag).
+   * Future backends extend this method to opt in.
+   *
+   * @private
+   */
+  _syncStateToBackends() {
+    if (this._forkClipper) {
+      this._forkClipper.active = this._state.active
+      this._forkClipper.orthogonalY = this._state.orthogonalY
+      this._forkClipper.clickDrag = this._state.clickDrag
+    }
+    // GlbClipper: no equivalent properties today; add backend-specific
+    // sync here when a future backend wants any of these.
+  }
+
 
   /** @return {boolean} */
   get active() {
-    if (this.isUnstructuredMeshMode()) {
-      // GLB clipper is always "active" — the arrow-handle drag mode
-      // doesn't gate on this flag. Report true so call-sites reading
-      // `if (viewer.clipper.active)` see consistent state.
-      return true
-    }
-    return this._forkClipper?.active ?? false
+    return this._state.active
   }
 
   /** @param {boolean} v */
   set active(v) {
-    if (this._forkClipper) {
-      this._forkClipper.active = v
-    }
+    this._state.active = v
+    this._syncStateToBackends()
   }
 
 
   /** @return {boolean} */
   get orthogonalY() {
-    return this._forkClipper?.orthogonalY ?? false
+    return this._state.orthogonalY
   }
 
   /** @param {boolean} v */
   set orthogonalY(v) {
-    if (this._forkClipper) {
-      this._forkClipper.orthogonalY = v
-    }
+    this._state.orthogonalY = v
+    this._syncStateToBackends()
   }
 
 
   /** @return {boolean} */
   get clickDrag() {
-    return this._forkClipper?.clickDrag ?? false
+    return this._state.clickDrag
   }
 
   /** @param {boolean} v */
   set clickDrag(v) {
-    if (this._forkClipper) {
-      this._forkClipper.clickDrag = v
-    }
+    this._state.clickDrag = v
+    this._syncStateToBackends()
   }
 
+
+  // ─── Backend-specific accessors ────────────────────────────────
 
   /**
    * Active plane list. Per-impl plane data shape differs slightly

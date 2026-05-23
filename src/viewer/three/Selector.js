@@ -54,10 +54,12 @@ export default class Selector {
 
 
   /**
-   * @return {boolean} true when a fork selector is attached and at
-   *   least one of its main sub-objects exists. Call-sites that want
-   *   to skip legacy IFC selector work entirely (e.g. capabilities-
-   *   only paths) branch on this.
+   * @return {boolean} true when a fork selector object is attached.
+   *   Does NOT verify sub-objects (`.selection`, `.preselection`);
+   *   individual methods already null-safe-chain through those, so
+   *   this getter only answers "is there a fork to delegate to at
+   *   all?". Call-sites that want to skip legacy IFC selector work
+   *   entirely (e.g. capabilities-only paths) branch on this.
    */
   get hasForkSelector() {
     return Boolean(this._forkSelector)

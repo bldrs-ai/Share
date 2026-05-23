@@ -222,12 +222,13 @@ export default class GlbClipper {
    * @private
    */
   _syncClippingBindings() {
-    // NB: this writes to the fork's `IfcRenderer` wrapper object, not the
-    // underlying WebGLRenderer (clipping for GLB is driven by per-material
-    // `clippingPlanes`; the renderer-level `clippingPlanes` is the
-    // "global" pool that affects everything else). Goes away with the
-    // unified Clipper in design §3c.iv once ThreeContext owns the
-    // renderer directly.
+    // NB: this writes to the fork's `IfcRenderer` wrapper object, not
+    // the underlying WebGLRenderer — clipping for GLB is driven by
+    // per-material `clippingPlanes` (the renderer-level array is the
+    // "global" pool affecting everything else). The wrapper hop goes
+    // away in Phase 5 of design/new/viewer-replacement.md when
+    // `ThreeContext` owns the WebGLRenderer directly and we can write
+    // straight to its `clippingPlanes` slot.
     const renderer = this.viewer.context.getLegacyRendererWrapper()
     renderer.clippingPlanes = this._clippingPlanes
     renderer.localClippingEnabled = this._clippingPlanes.length > 0
