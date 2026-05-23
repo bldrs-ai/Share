@@ -73,11 +73,20 @@ export default function CutPlaneMenu() {
   // based on the model's `capabilities.useIfcClipper`. setModel is
   // synchronous — the planeHash effect below runs in the same render
   // cycle and sees the bound clipper.
+  //
+  // Capture the plugin instance in `clipper` so the cleanup can call
+  // `setModel(null)` after the fork's `IfcViewerAPI.dispose()` has
+  // already nulled `viewer.clipper`. Without this capture, the cleanup
+  // throws `TypeError: Cannot read properties of null (reading
+  // 'setModel')` during a viewer swap (theme change, model reload),
+  // which leaves the LoadingBackdrop stuck and blocks subsequent clicks.
+  // The plugin instance itself remains alive via the closure.
   useEffect(() => {
-    if (model && viewer?.clipper?.setModel) {
-      viewer.clipper.setModel(model)
+    const clipper = viewer?.clipper
+    if (model && clipper && typeof clipper.setModel === 'function') {
+      clipper.setModel(model)
       return () => {
-        viewer.clipper.setModel(null)
+        clipper.setModel(null)
       }
     }
     return undefined
