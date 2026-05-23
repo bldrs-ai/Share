@@ -261,6 +261,39 @@ describe('viewer/three/Clipper', () => {
       expect(fork.orthogonalY).toBe(true)
     })
 
+    it('skips no-op writes to the fork backend', () => {
+      // The fork's `set active(...)` is not idempotent — it runs
+      // `updateMaterials()` and toggles `postProduction.visible` as
+      // side effects. The plugin must not poke the fork's setter
+      // when the underlying value already matches. Regression for
+      // `clickDrag = true; clickDrag = false; ...` mouse churn
+      // re-triggering the fork's reactions on every event.
+      const fork = makeForkClipperStub()
+      let activeWrites = 0
+      Object.defineProperty(fork, 'active', {
+        get: () => fork._active,
+        set: (v) => {
+          fork._active = v
+          activeWrites++
+        },
+        configurable: true,
+      })
+      fork._active = true
+      const clipper = new Clipper(makeViewerStub(), fork)
+      // Construction seeded state from fork; no writes yet.
+      expect(activeWrites).toBe(0)
+      // Setter that doesn't change value: still no write.
+      clipper.active = true
+      expect(activeWrites).toBe(0)
+      // Mutating an unrelated field re-syncs; `active` is unchanged
+      // so it still must not write.
+      clipper.clickDrag = true
+      expect(activeWrites).toBe(0)
+      // Actually changing the value writes once.
+      clipper.active = false
+      expect(activeWrites).toBe(1)
+    })
+
     it('setters no-op safely without a fork backend', () => {
       const clipper = new Clipper(makeViewerStub(), null)
       expect(() => {

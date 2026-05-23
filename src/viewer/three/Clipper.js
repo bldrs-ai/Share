@@ -127,13 +127,28 @@ export default class Clipper {
    * `setInteractionEnabled` and computes plane snapping per-drag).
    * Future backends extend this method to opt in.
    *
+   * **Skip no-op writes.** The fork's `set active(...)` is not idempotent
+   * — it calls `updateMaterials()` (walks all loaded models, reassigns
+   * `clippingPlanes` on every material) and toggles `postProduction.visible`.
+   * Running that on every `clickDrag` mousedown/mouseup or every `setModel`
+   * call causes per-frame visual drift and visible postprocessing reshuffles.
+   * Each field is read back and only written when the plugin's state
+   * actually differs.
+   *
    * @private
    */
   _syncStateToBackends() {
-    if (this._forkClipper) {
-      this._forkClipper.active = this._state.active
-      this._forkClipper.orthogonalY = this._state.orthogonalY
-      this._forkClipper.clickDrag = this._state.clickDrag
+    const fork = this._forkClipper
+    if (fork) {
+      if (fork.active !== this._state.active) {
+        fork.active = this._state.active
+      }
+      if (fork.orthogonalY !== this._state.orthogonalY) {
+        fork.orthogonalY = this._state.orthogonalY
+      }
+      if (fork.clickDrag !== this._state.clickDrag) {
+        fork.clickDrag = this._state.clickDrag
+      }
     }
     // GlbClipper: no equivalent properties today; add backend-specific
     // sync here when a future backend wants any of these.
