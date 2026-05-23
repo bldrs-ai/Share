@@ -9,23 +9,26 @@ import {resolve} from 'path'
  * @param page - Playwright page object
  */
 export function logNetworkCalls({page}: {page: Page}) {
-  const skipGoogleAnalyticsRequests = (req: Request) => {
-    if (new URL(req.url()).hostname.endsWith('googletagmanager.com') ||
-      new URL(req.url()).hostname.endsWith('google-analytics.com')) {
+  const skipAdAndAnalyticsRequests = (req: Request) => {
+    const hostname = new URL(req.url()).hostname
+    if (hostname.endsWith('googletagmanager.com') ||
+        hostname.endsWith('google-analytics.com') ||
+        hostname.endsWith('googlesyndication.com') ||
+        hostname.endsWith('doubleclick.net')) {
       return true
     }
     return false
   }
 
   page.on('request', (req: Request) => {
-    if (skipGoogleAnalyticsRequests(req)) {
+    if (skipAdAndAnalyticsRequests(req)) {
       return
     }
     console.warn(`➡️  ${req.method()} ${req.url()}`)
   })
 
   page.on('response', (res) => {
-    if (skipGoogleAnalyticsRequests(res.request() as Request)) {
+    if (skipAdAndAnalyticsRequests(res.request() as Request)) {
       return
     }
     const status = res.status()
@@ -50,11 +53,12 @@ export async function clearState(context: BrowserContext) {
  * Hosts whose traffic carries data the SPA reads or writes (model files,
  * GitHub API responses, auth tokens, AI completions). Reaching these from
  * a test is the leak we *must* fail on — it can paper over a broken mock
- * and produce non-hermetic results. Analytics / tracking script hosts
- * (googletagmanager, google-analytics) are deliberately NOT in this list:
- * MSW handles them, but on the first page navigation a `<script>` tag for
- * gtag may fire before MSW's service worker takes control, and a hard
- * abort there only breaks page init without protecting any data.
+ * and produce non-hermetic results. Ad / analytics / tracking script
+ * hosts (googletagmanager, google-analytics, googlesyndication,
+ * doubleclick) are deliberately NOT in this list: MSW handles them, but
+ * on the first page navigation a `<script>` tag for gtag or adsbygoogle
+ * may fire before MSW's service worker takes control, and a hard abort
+ * there only breaks page init without protecting any data.
  */
 const REAL_NETWORK_HOST_DENYLIST = [
   // Real GitHub

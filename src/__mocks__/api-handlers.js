@@ -25,6 +25,7 @@ export function initHandlers(defines) {
   handlers.push(...subscribePageHandler())
   handlers.push(...stripePortalHandlers())
   handlers.push(...gaHandlers())
+  handlers.push(...adSenseHandlers())
   handlers.push(...apiHandlersOpenrouter(defines))
   handlers.push(...googleApisHandlers())
   // Pass through paths that are served by static assets or playwright fixtures
@@ -216,6 +217,35 @@ function gaHandlers() {
           headers: {'Content-Type': 'application/json'},
         },
       )
+    }),
+  ]
+}
+
+
+/**
+ * Mock to absorb AdSense traffic so no live requests escape tests.
+ *
+ * Both hosts must be intercepted: `googlesyndication.com` serves
+ * `adsbygoogle.js`, and once loaded the script chains follow-up requests to
+ * `doubleclick.net` for impression / measurement. Intercepting only
+ * googlesyndication would still leak doubleclick.
+ *
+ * See design/new/ads.md §"Test hermeticity" for why these hosts are not on
+ * the Playwright REAL_NETWORK_HOST_DENYLIST.
+ *
+ * @return {Array<object>} handlers
+ */
+function adSenseHandlers() {
+  return [
+    http.get('https://*.googlesyndication.com/*', () => {
+      return new Response('', {
+        status: HTTP_OK,
+        headers: {'Content-Type': 'application/javascript'},
+      })
+    }),
+
+    http.get('https://*.doubleclick.net/*', () => {
+      return new Response(null, {status: HTTP_OK})
     }),
   ]
 }
