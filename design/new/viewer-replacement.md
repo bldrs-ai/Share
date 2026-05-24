@@ -383,18 +383,65 @@ the per-vertex `expressID` attribute across child Meshes.
   rest. Worth a separate spike post-default-on. Captured here
   so the idea doesn't fall off the followup list.
 
-**Default-on gating:** isolate routing now done. Remaining blockers
-before flipping the `conwayDirectIfc` flag default-on:
+**Done — BLDRS_spatial_tree slice.** Landed 2026-05 (PR #1527).
+Resolves §3b.iii default-on blocker 1 below: cache-hit GLBs now
+hydrate the NavTree without a live IFC parser.
 
-1. **Portable IFC spatial hierarchy** — NavTree currently sources
-   `getSpatialStructure(...)` from `viewer.IFC.loader.ifcManager`,
-   which only has parser state on cache-miss IFC parses. Cache-hit
-   GLB needs `BLDRS_spatial_tree` (see `design/new/glb-model-sharing.md`
-   §"Extensions") written at export and read back on cache-hit.
+- `src/loader/injectGlbExtensions.js` — GLB post-processor (parse →
+  splice extensions + bufferViews → re-serialise). Chosen over a
+  GLTFExporter plugin so geometry export stays untouched and the
+  extension wiring lives in one well-tested seam. Returns
+  `{bytes, stats}`; collision-safe (won't overwrite an existing
+  entry); synthesises a BIN chunk on input with none.
+- `src/loader/bldrsSpatialTree.js` — `BLDRS_spatial_tree` extension
+  codec. Writer-side `captureBldrsSpatialTree(ifcManager, modelID)`
+  whitelists `{expressID, type, Name, LongName, children}` (drops
+  parser internals, depth-bounded via `MAX_TREE_DEPTH=100`).
+  Reader-side `BldrsSpatialTreeReader` GLTFLoader plugin decompresses
+  on `afterRoot`, validates shape (object + numeric expressID),
+  attaches to `gltf.scene.userData.bldrsSpatialTree`. Guards on
+  out-of-range bufferView index and absent default scene.
+- `src/loader/Loader.js#convertToShareModel` — promotes
+  `userData.bldrsSpatialTree` to a model-level
+  `model.getSpatialStructure(modelID, withProperties)` closure on
+  cache-hit. Live IFC parses don't ship the extension and fall
+  through to the legacy `ifcManager` path.
+- `src/loader/Loader.js#parseBldrsGlbContainer` — bubbles
+  `gltf.scene.userData` up to the merged Group so downstream
+  consumers see extension data on the returned root.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `capabilities.spatialStructure: true` when the userData payload
+  is present.
+- `src/Containers/CadView.jsx` — NavTree path discriminates on the
+  cache payload (`m.userData?.bldrsSpatialTree`). Method-existence
+  check would have collided with wit-three's prototype
+  `IFCModel.getSpatialStructure(): Promise<any>` (no args), silently
+  dropping `withProperties=true` on live IFC parses.
+- `src/loader/glbCacheKey.js` — schema bump `0.5.0` → `0.6.0` so
+  older cached artifacts read as miss; next miss rewrites with the
+  extension attached.
+
+Untrusted-input validation today is shape-only (object + numeric
+expressID + recursion-depth ceiling). Full validation per
+`design/new/glb-model-sharing.md` §"Validation and trust" — schema-
+version range, cross-reference integrity, size ceilings, HTML-strip
+on rendered strings — lands with the originator-side share flow
+(Phase 5+) when GLBs can arrive from arbitrary user browsers.
+File-header TODO points at the spec.
+
+**Default-on gating:** isolate routing done; spatial tree done.
+Remaining blockers before flipping the `conwayDirectIfc` flag
+default-on:
+
+1. ~~Portable IFC spatial hierarchy~~ — **done** (this slice).
 2. **Portable IFC properties / property sets** — ItemProperties
-   similarly currently sources from the ifcManager. Needs the
+   currently sources from the ifcManager. Needs the
    `BLDRS_element_properties` extension wired through the writer +
-   reader so the panel works on cache-hit too.
+   reader so the panel works on cache-hit too. Shape mirrors the
+   spatial-tree slice: capture at writer time, lazy-decompress on
+   first `model.getItemProperties` / `model.getPropertySets` call
+   (per glb-model-sharing.md the payload is large enough to want
+   lazy decode).
 
 Issues / comments can be done later (post-prod-flip).
 
