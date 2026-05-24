@@ -429,19 +429,71 @@ on rendered strings — lands with the originator-side share flow
 (Phase 5+) when GLBs can arrive from arbitrary user browsers.
 File-header TODO points at the spec.
 
-**Default-on gating:** isolate routing done; spatial tree done.
-Remaining blockers before flipping the `conwayDirectIfc` flag
-default-on:
+**Done — BLDRS_element_properties slice.** Landed 2026-05 (this PR).
+Resolves §3b.iii default-on blocker 2 below: cache-hit GLBs now
+hydrate the Properties panel without a live IFC parser.
 
-1. ~~Portable IFC spatial hierarchy~~ — **done** (this slice).
-2. **Portable IFC properties / property sets** — ItemProperties
-   currently sources from the ifcManager. Needs the
-   `BLDRS_element_properties` extension wired through the writer +
-   reader so the panel works on cache-hit too. Shape mirrors the
-   spatial-tree slice: capture at writer time, lazy-decompress on
-   first `model.getItemProperties` / `model.getPropertySets` call
-   (per glb-model-sharing.md the payload is large enough to want
-   lazy decode).
+- `src/loader/bldrsElementProperties.js` — `BLDRS_element_properties`
+  extension codec. Writer-side
+  `captureBldrsElementProperties(ifcManager, modelID, spatialTree)`
+  walks a BFS from spatial-tree expressIDs through the IFC reference
+  graph (`{type: 5, value: expressID}` shape), fetching shallow item
+  properties for each entity in the closure. Bounded by
+  `MAX_CLOSURE_SIZE = 1_000_000` and `MAX_VALUE_DEPTH = 100` for
+  defense against pathological inputs. Output shape:
+  `{itemProperties: {[id]: data}, propertySets: {[productId]: [psetId, ...]}}`
+  — psets are deduplicated by ID rather than inlined per product
+  (typical IFCs share Pset_WallCommon etc. across every wall;
+  inlining would 3-5× the payload). Reader-side
+  `BldrsElementPropertiesReader` GLTFLoader plugin is **lazy** —
+  `afterRoot` stores the compressed bytes + a `decode()` closure on
+  `gltf.scene.userData.bldrsElementProperties` and DOES NOT
+  decompress. First `model.getItemProperties` / `getPropertySets`
+  call triggers a one-shot `pako.ungzip` + `JSON.parse`, cached
+  internally. Loads that never open the Properties panel pay
+  nothing for the extension.
+- `src/loader/Loader.js#convertToShareModel` — promotes the lazy
+  payload to two model-level closures:
+    * `model.getItemProperties(expressID)` → `data.itemProperties[id]`
+    * `model.getPropertySets(expressID)` → array of pset objects,
+      built by looking up the propertySets index against the
+      itemProperties map.
+  Both take one arg (expressID), matching wit-three's
+  `IFCModel.getItemProperties(id)` / `getPropertySets(id)` shape —
+  the model's implicit modelID is baked in at write time (one IFC
+  per cached GLB). Returns undefined / [] for missing IDs so
+  consumer null-guards (e.g. `Properties.jsx#createPsetsList`,
+  `itemProperties.jsx#unpackHelper`) trigger cleanly.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `capabilities.typedProperties: true` when the userData payload
+  is present.
+- `src/loader/glbCacheKey.js` — schema bump `0.6.0` → `0.7.0`.
+  Older artifacts read as miss; next miss rewrites with both
+  extensions attached.
+
+Consumer surface unchanged. `Components/Properties/Properties.jsx`
+and `Components/Properties/itemProperties.jsx` already call
+`await model.getPropertySets(id)` / `await model.getItemProperties(id)`
+— the live-IFC path satisfies these via wit-three's IFCModel
+prototype methods; the cache-hit path now satisfies them via the
+closures attached in `convertToShareModel`. The consumer doesn't
+branch on which backend it's hitting; await on a plain value works
+identically to await on a Promise.
+
+Same untrusted-input caveat as the spatial-tree slice: shape
+validation is minimal today (object + nested object guards inside
+`makeLazyPayload`). Full validation per
+`design/new/glb-model-sharing.md` §"Validation and trust" — size
+ceilings (e.g. 100MB decompressed cap), HTML-strip on user-
+authored strings, cross-reference integrity — lands with
+originator-side share (Phase 5+).
+
+**Default-on gating:** isolate routing done; spatial tree done;
+element properties done. **No remaining blockers** — `conwayDirectIfc`
+flag is ready to flip default-on as a follow-up slice.
+
+1. ~~Portable IFC spatial hierarchy~~ — **done** (PR #1527).
+2. ~~Portable IFC properties / property sets~~ — **done** (this PR).
 
 Issues / comments can be done later (post-prod-flip).
 

@@ -225,6 +225,18 @@ export function inferModelCapabilities(model, opts = {}) {
   if (model.userData?.bldrsSpatialTree) {
     caps.spatialStructure = true
   }
+  // BLDRS_element_properties extension hydration (cache-hit GLBs only).
+  // `Loader.js#convertToShareModel` reads the lazy payload at
+  // `userData.bldrsElementProperties` and attaches
+  // `getItemProperties` / `getPropertySets` methods. Flip the
+  // capability so Properties-panel-driven code can branch on capability
+  // rather than checking for the method's existence at the call site.
+  // Live IFC parses don't ship the extension and use the legacy
+  // `ifcManager` path; the format-based default already has
+  // typedProperties on for them.
+  if (model.userData?.bldrsElementProperties) {
+    caps.typedProperties = true
+  }
   return caps
 }
 

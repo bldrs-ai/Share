@@ -27,6 +27,10 @@
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {
+  BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
+  captureBldrsElementProperties,
+} from './bldrsElementProperties'
+import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
@@ -133,12 +137,15 @@ function silenceGltfExporterMaterialWarnings() {
  * @param {object} args.cacheKeyArgs Output of one of the sourceCacheKey
  *   adapters: {ns1, ns2, ns3, sourcePath, sourceHash}.
  * @param {object} [args.ifcManager] IfcManager-like with
- *   `getSpatialStructure(modelID, withProperties)` — typically
- *   `viewer.IFC.loader.ifcManager`. When provided and the source is an
- *   IFC parse with live parser state, the spatial structure is captured
- *   and embedded as a `BLDRS_spatial_tree` extension so cache-hit GLBs
- *   render their NavTree without re-parsing. Pass `null` for non-IFC
- *   sources or when no live tree is available.
+ *   `getSpatialStructure`, `getItemProperties`, `getPropertySets`
+ *   — typically `viewer.IFC.loader.ifcManager`. When provided and the
+ *   source is an IFC parse with live parser state, the spatial
+ *   structure is captured as a `BLDRS_spatial_tree` extension AND the
+ *   element-properties closure (BFS through IFC references from
+ *   spatial-tree elements) is captured as `BLDRS_element_properties`
+ *   so cache-hit GLBs render NavTree and Properties panel without
+ *   re-parsing. Pass `null` for non-IFC sources or when no live
+ *   parser state is available.
  * @return {Promise<boolean>}
  */
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
@@ -160,9 +167,19 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // before it goes out of scope. We pass these through `injectGlbExtensions`
     // even when null/empty — the helper is a no-op for an empty list, so
     // the call-site stays unconditional.
-    const spatialTree = await captureBldrsSpatialTree(ifcManager, model?.modelID ?? 0)
+    //
+    // Element properties depend on the spatial tree (BFS seeds are the
+    // tree's expressIDs), so the two captures are sequential rather than
+    // parallel. The properties capture is the dominant cost in this
+    // block — O(closure) async calls to the ifcManager. Acceptable for
+    // a fire-and-forget warmup; revisit if it ever blocks main-thread.
+    const modelId = model?.modelID ?? 0
+    const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+    const elementProperties = await captureBldrsElementProperties(
+      ifcManager, modelId, spatialTree)
     const {bytes: withExtensions, stats: extStats} = injectGlbExtensions(rawBytes, [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
     ])
     if (extStats.addedExtensions > 0) {
       glbVerbose(

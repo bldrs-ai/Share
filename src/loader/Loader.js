@@ -36,6 +36,7 @@ import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
 import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {BldrsElementPropertiesReader} from './bldrsElementProperties'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
@@ -733,6 +734,51 @@ export function convertToShareModel(model, viewer) {
       'reader: hydrated NavTree from BLDRS_spatial_tree (' +
       `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
   }
+
+  // Cache-hit hydration for BLDRS_element_properties. The reader
+  // plugin parked a lazy-decode payload on
+  // `model.userData.bldrsElementProperties` (compressed bytes + a
+  // `decode()` closure). Promote it to `model.getItemProperties(id)`
+  // and `model.getPropertySets(id)` so the Properties panel
+  // (`Components/Properties/Properties.jsx`,
+  // `Components/Properties/itemProperties.jsx`) renders on cache-hit
+  // without touching the (shared, parser-stateless) `ifcManager`.
+  //
+  // First call to either method triggers the lazy `decode()` (one-shot
+  // pako.ungzip + JSON.parse, then cached). A load that never opens
+  // the Properties panel pays nothing.
+  //
+  // Signature note: the closures take one arg (expressID), matching
+  // `web-ifc-three.IFCModel.getItemProperties(id)` / `getPropertySets(id)`
+  // — NOT the underlying ifcManager's (modelID, expressID, ...) form.
+  // Consumers call `model.getItemProperties(refId)` directly; the
+  // modelID is implicit per cached artifact (one IFC per GLB).
+  //
+  // Capture wrote shallow item properties (refs as `{type:5, value:id}`).
+  // `getPropertySets` returns the array of pset objects looked up
+  // from the propertySets index, matching the existing consumer
+  // expectation in Properties.jsx#createPsetsList.
+  const elementProperties = model.userData?.bldrsElementProperties
+  if (elementProperties && typeof elementProperties.decode === 'function') {
+    model.getItemProperties = (expressID) => {
+      const data = elementProperties.decode()
+      return data.itemProperties[expressID]
+    }
+    model.getPropertySets = (expressID) => {
+      const data = elementProperties.decode()
+      const psetIds = data.propertySets[expressID]
+      if (!Array.isArray(psetIds) || psetIds.length === 0) {
+        return []
+      }
+      return psetIds
+        .map((pid) => data.itemProperties[pid])
+        .filter((p) => p !== null && p !== undefined)
+    }
+    glbInfo(
+      'reader: hydrated Properties panel from BLDRS_element_properties ' +
+      `(${elementProperties.compressed.byteLength}B compressed; ` +
+      'decode on first access)')
+  }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
   // expressID attribute on any mesh). When the model came from our IFC→
@@ -973,6 +1019,7 @@ function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
+  loader.register((parser) => new BldrsElementPropertiesReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')

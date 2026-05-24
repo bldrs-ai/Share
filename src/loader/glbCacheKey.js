@@ -15,6 +15,14 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.7.0 — added `BLDRS_element_properties` glTF extension carrying the
+ *         IFC item-properties + property-sets closure (BFS through the
+ *         reference graph from spatial-tree elements). Cache-hit GLBs
+ *         now hydrate the Properties panel without re-parsing the IFC.
+ *         Paired with the spatial tree extension (0.6.0), this is the
+ *         last piece of §3b.iii default-on gating for `conwayDirectIfc`.
+ *         Older 0.6.0 artifacts read as a miss; next miss rewrites with
+ *         both extensions.
  * 0.6.0 — added `BLDRS_spatial_tree` glTF extension carrying the IFC
  *         spatial hierarchy. Cache-hit GLBs now hydrate the NavTree
  *         without re-parsing the IFC (previously required the live
@@ -37,7 +45,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.6.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.7.0'
 
 
 /**
