@@ -26,11 +26,33 @@
 //
 // We never write this into `extensionsRequired` — a generic GLTF reader
 // should still be able to load the geometry; only the NavTree degrades.
+//
+// TODO(viewer-replacement Phase 5+): when originator-side share lands
+// (design/new/glb-model-sharing.md §"Pipelines/A. Originator"), this
+// reader will be ingesting GLBs produced by arbitrary user browsers —
+// not just our own writer. At that point §"Validation and trust" of the
+// glb-model-sharing doc applies in full: schema-version range check,
+// cross-reference integrity (every `expressID` in the tree must exist
+// on some primitive's `_EXPRESS_ID` attribute), tree depth + size
+// ceilings, HTML-strip on `Name.value` / `LongName.value` at the
+// NavTree consumer (untrusted strings become DOM text). Today's
+// validation is minimal (shape + recursion-depth guard) because the
+// writer is in-browser and trusted; the full pass lands with the share
+// flow.
 import * as pako from 'pako'
-import debug from '../utils/debug'
+import {glbInfo, glbVerbose} from './glbLog'
 
 
 export const BLDRS_SPATIAL_TREE_EXTENSION_NAME = 'BLDRS_spatial_tree'
+
+// Bound on `serializeNode` / decoded-tree recursion. IFC spatial
+// hierarchies in the wild are shallow (IfcProject → Site → Building
+// → Storey → Space → element, ~6 levels typical, ~10 worst-case).
+// The ceiling exists to keep a malicious (deeply-nested) cached
+// artifact from blowing the JS stack on read — capture is bounded
+// symmetrically so a malformed live tree can't poison a cache write
+// either. Walks past this depth are truncated with a single warning.
+const MAX_TREE_DEPTH = 100
 
 
 /**
@@ -43,11 +65,19 @@ export const BLDRS_SPATIAL_TREE_EXTENSION_NAME = 'BLDRS_spatial_tree'
  * unchanged. That property lets callers normalise once at capture and
  * skip a defensive copy at read time.
  *
+ * Bounded by `MAX_TREE_DEPTH` recursion levels — sub-trees past the
+ * ceiling are dropped from `children`. Real IFCs sit ~6 levels deep;
+ * the ceiling exists for defense against an adversarial source.
+ *
  * @param {object|null|undefined} node
+ * @param {number} [depth]
  * @return {object|null}
  */
-function serializeNode(node) {
+function serializeNode(node, depth = 0) {
   if (node === null || node === undefined || typeof node !== 'object') {
+    return null
+  }
+  if (depth >= MAX_TREE_DEPTH) {
     return null
   }
   const out = {
@@ -63,7 +93,7 @@ function serializeNode(node) {
   if (Array.isArray(node.children) && node.children.length > 0) {
     out.children = []
     for (const child of node.children) {
-      const serialized = serializeNode(child)
+      const serialized = serializeNode(child, depth + 1)
       if (serialized !== null) {
         out.children.push(serialized)
       }
@@ -72,6 +102,31 @@ function serializeNode(node) {
     out.children = []
   }
   return out
+}
+
+
+/**
+ * Minimal shape check on a decoded extension payload. Catches the
+ * "the cache file is malformed / from a future schema / hostile"
+ * cases that the GLB sharing doc §"Validation and trust" lists; does
+ * NOT do the full cross-reference walk that lands in Phase 5+. Returns
+ * the input tree on pass, `null` on fail (caller treats null as
+ * "extension not usable; degrade to empty NavTree").
+ *
+ * @param {*} tree decoded extension payload
+ * @return {object|null}
+ */
+function validateDecodedTree(tree) {
+  if (tree === null || tree === undefined || typeof tree !== 'object') {
+    return null
+  }
+  if (Array.isArray(tree)) {
+    return null
+  }
+  if (typeof tree.expressID !== 'number') {
+    return null
+  }
+  return tree
 }
 
 
@@ -100,9 +155,9 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     }
     return serializeNode(root)
   } catch (e) {
-    debug().warn(
-      `[${BLDRS_SPATIAL_TREE_EXTENSION_NAME}] capture failed; ` +
-      `cache-hit NavTree will be empty for this model:`, e)
+    glbInfo(
+      `${BLDRS_SPATIAL_TREE_EXTENSION_NAME}: capture failed; ` +
+      'cache-hit NavTree will be empty for this model:', e)
     return null
   }
 }
@@ -147,7 +202,8 @@ export class BldrsSpatialTreeReader {
       try {
         return pako.inflate(compressedData, {to: 'string'})
       } catch (deflateErr) {
-        console.error(`[${this.name}] pako failed (gzip & deflate)`, {gzipErr, deflateErr})
+        glbInfo(
+          `${this.name}: pako failed (gzip & deflate)`, {gzipErr, deflateErr})
         throw gzipErr
       }
     }
@@ -167,6 +223,21 @@ export class BldrsSpatialTreeReader {
     try {
       let tree = null
       if (ext.compressed && ext.bufferView !== undefined) {
+        // Validate the bufferView index BEFORE dereferencing. A
+        // malformed (or hostile) cache file with an out-of-range index
+        // would throw `Cannot read properties of undefined (reading 'buffer')`
+        // from the next line. We surface the corruption explicitly and
+        // skip the decode so the caller degrades to empty-NavTree
+        // rather than failing the whole GLB parse.
+        if (!Array.isArray(json.bufferViews) ||
+            !Number.isInteger(ext.bufferView) ||
+            ext.bufferView < 0 ||
+            ext.bufferView >= json.bufferViews.length) {
+          glbInfo(
+            `${this.name}: extension references out-of-range bufferView ` +
+            `${ext.bufferView} (have ${json.bufferViews?.length ?? 0}); skipping`)
+          return gltf
+        }
         const bv = json.bufferViews[ext.bufferView]
         const bufferIndex = bv.buffer
         const byteOffset = bv.byteOffset || 0
@@ -175,17 +246,40 @@ export class BldrsSpatialTreeReader {
         const compressed = new Uint8Array(arrayBuffer, byteOffset, byteLength)
         const decompressed = this.decompressData(compressed)
         tree = JSON.parse(decompressed)
-        debug().log(
-          `[${this.name}] decompressed tree (compressed ${compressed.byteLength}B → ` +
+        glbVerbose(
+          `${this.name}: decompressed tree (compressed ${compressed.byteLength}B → ` +
           `decompressed ${decompressed.length}B)`)
       } else if (ext.tree) {
         // Forward-compat slot for an uncompressed inline-JSON variant.
         tree = ext.tree
       }
-      this.spatialTree = tree
-      gltf.scene.userData.bldrsSpatialTree = tree
+
+      // Minimal shape validation before publishing to consumers. See
+      // the file-header TODO for the full validation pass we owe once
+      // user-originated GLBs are in scope. `validateDecodedTree`
+      // returns `null` on fail; the consumer (`convertToShareModel`)
+      // checks `userData.bldrsSpatialTree` for truthiness so null is
+      // the right "extension present but unusable" signal.
+      const validated = validateDecodedTree(tree)
+      if (validated === null && tree !== null) {
+        glbInfo(
+          `${this.name}: decoded payload failed shape validation ` +
+          '(missing expressID or non-object); skipping')
+      }
+      this.spatialTree = validated
+
+      // `gltf.scene` is the default scene per glTF spec; legal to be
+      // absent when the file has multiple scenes and no `scene` index
+      // is set. Skip the attach in that case rather than crash —
+      // consumers see the missing userData as "no cached tree" and
+      // degrade to empty NavTree.
+      if (gltf.scene) {
+        gltf.scene.userData.bldrsSpatialTree = validated
+      } else {
+        glbInfo(`${this.name}: gltf has no default scene; cannot attach spatial tree`)
+      }
     } catch (e) {
-      console.error(`[${this.name}] failed to decode spatial tree:`, e)
+      glbInfo(`${this.name}: failed to decode spatial tree:`, e)
     }
     return gltf
   }

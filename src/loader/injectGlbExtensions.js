@@ -32,6 +32,7 @@
 // buffer; the spec only requires alignment for accessor-typed bufferViews
 // but enforcing it everywhere keeps any future accessor reuse safe.
 import * as pako from 'pako'
+import {glbInfo} from './glbLog'
 
 
 const GLB_MAGIC = 0x46546C67 // "glTF" LE
@@ -191,18 +192,32 @@ export function serializeGlb(json, bin) {
  * both `captureBldrsSpatialTree` and `BldrsSpatialTreeReader`).
  *
  * Pass-through behavior: when `extensions` is empty (or every entry has
- * `data: null/undefined`), the input bytes are returned unmodified — the
- * caller can unconditionally route GLBs through this helper without
- * paying a re-serialise cost when nothing is being injected.
+ * `data: null/undefined`), the input bytes are returned unmodified (and
+ * `stats.addedExtensions === 0`) — the caller can unconditionally route
+ * GLBs through this helper without paying a re-serialise cost when
+ * nothing is being injected.
+ *
+ * Collision behavior: an extension whose `name` is already present in
+ * `json.extensions` is **skipped** — we log a warning and leave the
+ * existing entry intact rather than overwrite (which would orphan the
+ * old bufferView in the file). Today's writer only injects on fresh
+ * GLTFExporter output so this branch is defensive; it matters once
+ * we start handling user-originated GLBs.
  *
  * @param {Uint8Array} glbBytes
  * @param {Array} extensions list of `{name: string, data: object|null|undefined, compress?: boolean}`
- * @return {Uint8Array}
+ * @return {{bytes: Uint8Array, stats: {addedExtensions: number, addedBinBytes: number, skippedNames: Array<string>}}}
+ *   `bytes` is the modified GLB (or the input unchanged in pass-through);
+ *   `stats` describes what changed so callers can log delta metrics
+ *   without inspecting the byte stream.
  */
 export function injectGlbExtensions(glbBytes, extensions) {
   const active = (extensions ?? []).filter((e) => e && e.data !== null && e.data !== undefined)
   if (active.length === 0) {
-    return glbBytes
+    return {
+      bytes: glbBytes,
+      stats: {addedExtensions: 0, addedBinBytes: 0, skippedNames: []},
+    }
   }
 
   const {json, bin} = parseGlb(glbBytes)
@@ -219,6 +234,30 @@ export function injectGlbExtensions(glbBytes, extensions) {
   json.extensions = json.extensions ?? {}
   json.extensionsUsed = json.extensionsUsed ?? []
 
+  // Filter out extensions whose name is already present in the JSON's
+  // `extensions` map. Overwriting would silently orphan the existing
+  // bufferView (still in the file, no entry references it) — that's a
+  // silent corruption path on round-tripping a GLB that already carried
+  // an earlier `BLDRS_*` payload. Surface it as a warning and skip.
+  const skippedNames = []
+  const toInject = []
+  for (const ext of active) {
+    if (json.extensions[ext.name] !== undefined) {
+      skippedNames.push(ext.name)
+      glbInfo(
+        `injectGlbExtensions: ${ext.name} already present; skipping ` +
+        '(overwriting would orphan the existing bufferView)')
+      continue
+    }
+    toInject.push(ext)
+  }
+  if (toInject.length === 0) {
+    return {
+      bytes: glbBytes,
+      stats: {addedExtensions: 0, addedBinBytes: 0, skippedNames},
+    }
+  }
+
   // Lay out additions starting at the next 4-byte boundary after the
   // existing buffer data. Each addition is itself padded to 4 bytes so
   // subsequent bufferViews stay aligned. Track two cursors:
@@ -232,7 +271,7 @@ export function injectGlbExtensions(glbBytes, extensions) {
   let nextOffset = pad4(json.buffers[0].byteLength)
   let dataEnd = nextOffset
   const additions = []
-  for (const {name, data, compress = true} of active) {
+  for (const {name, data, compress = true} of toInject) {
     const jsonText = JSON.stringify(data)
     const raw = new TextEncoder().encode(jsonText)
     const payload = compress ? pako.gzip(raw) : raw
@@ -272,12 +311,12 @@ export function injectGlbExtensions(glbBytes, extensions) {
     }
   }
 
-  // Telemetry hook for callers wanting to log the growth: report the
-  // delta on the return value.
-  const out = serializeGlb(json, newBin)
-  out.injectGlbStats = {
-    addedExtensions: additions.length,
-    addedBinBytes: nextOffset - oldLen,
+  return {
+    bytes: serializeGlb(json, newBin),
+    stats: {
+      addedExtensions: additions.length,
+      addedBinBytes: nextOffset - oldLen,
+      skippedNames,
+    },
   }
-  return out
 }

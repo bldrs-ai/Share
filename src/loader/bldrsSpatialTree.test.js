@@ -165,7 +165,7 @@ describe('loader/bldrsSpatialTree', () => {
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
-      const withExt = injectGlbExtensions(baseGlb, [
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
         {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true},
       ])
 
@@ -193,6 +193,120 @@ describe('loader/bldrsSpatialTree', () => {
       expect(reader.name).toBe(BLDRS_SPATIAL_TREE_EXTENSION_NAME)
       expect(reader.name).toBe('BLDRS_spatial_tree')
     })
+
+    it('skips an out-of-range bufferView index without throwing', async () => {
+      // Hostile / malformed cache file: extension claims bufferView 99
+      // but only one bufferView exists. Without the guard, the next line
+      // would crash on `json.bufferViews[99].buffer`.
+      const json = {
+        asset: {version: '2.0'},
+        buffers: [{byteLength: 4}],
+        bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 4}],
+        extensionsUsed: [BLDRS_SPATIAL_TREE_EXTENSION_NAME],
+        extensions: {
+          [BLDRS_SPATIAL_TREE_EXTENSION_NAME]: {compressed: true, bufferView: 99},
+        },
+      }
+      const reader = new BldrsSpatialTreeReader({
+        json,
+        getDependency: () => Promise.reject(new Error('should not be called')),
+      })
+      const gltf = {scene: {userData: {}}}
+      await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
+      expect(gltf.scene.userData.bldrsSpatialTree).toBeUndefined()
+      expect(reader.spatialTree).toBeNull()
+    })
+
+    it('skips a non-integer bufferView index without throwing', async () => {
+      const json = {
+        asset: {version: '2.0'},
+        buffers: [{byteLength: 4}],
+        bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 4}],
+        extensions: {
+          [BLDRS_SPATIAL_TREE_EXTENSION_NAME]: {compressed: true, bufferView: 'one'},
+        },
+      }
+      const reader = new BldrsSpatialTreeReader({
+        json,
+        getDependency: () => Promise.reject(new Error('should not be called')),
+      })
+      await reader.afterRoot({scene: {userData: {}}})
+      expect(reader.spatialTree).toBeNull()
+    })
+
+    it('survives a gltf with no default scene (no attach, no throw)', async () => {
+      // Multi-scene glTF with no `scene` index is spec-legal. Without
+      // the null guard, `gltf.scene.userData = …` throws TypeError.
+      const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true},
+      ])
+      const reader = new BldrsSpatialTreeReader(parserFromGlb(withExt))
+      const gltf = {/* no .scene */}
+      await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
+      // The decoded tree still hangs off the reader instance so callers
+      // with a non-standard glTF shape can still recover it.
+      expect(reader.spatialTree).toEqual(tree)
+    })
+
+    it('rejects a decoded payload that is not an object', async () => {
+      // Hostile cache file: the payload decodes to a JSON array (or
+      // a primitive). `validateDecodedTree` returns null; reader leaves
+      // the userData unset.
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: [1, 2, 3]},
+      ])
+      const reader = new BldrsSpatialTreeReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      expect(gltf.scene.userData.bldrsSpatialTree).toBeNull()
+      expect(reader.spatialTree).toBeNull()
+    })
+
+    it('rejects a decoded payload missing expressID', async () => {
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: {type: 'IFCPROJECT'}},
+      ])
+      const reader = new BldrsSpatialTreeReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      expect(reader.spatialTree).toBeNull()
+    })
+  })
+
+  describe('serialization depth ceiling', () => {
+    it('truncates a tree past MAX_TREE_DEPTH to keep the JS stack safe', async () => {
+      // Build a 150-level deep linear chain — past the 100-level
+      // ceiling. The capture should succeed (no throw) and the
+      // resulting tree should be truncated to MAX_TREE_DEPTH levels.
+      let node = {expressID: 999, type: 'IFCSPACE', children: []}
+      for (let i = 998; i >= 0; i--) {
+        node = {expressID: i, type: 'IFCSPACE', children: [node]}
+      }
+      const mgr = {getSpatialStructure: () => node}
+      const captured = await captureBldrsSpatialTree(mgr, 0)
+      expect(captured).not.toBeNull()
+      // Walk the resulting tree, count depth.
+      let depth = 0
+      let cursor = captured
+      while (cursor && cursor.children && cursor.children.length > 0) {
+        cursor = cursor.children[0]
+        depth++
+      }
+      // Depth is 0-based; root is depth 0. Past 100 levels we truncate
+      // by dropping the recursive `children` push. Exact terminal
+      // depth depends on whether the leaf is included; cap at 100.
+      expect(depth).toBeLessThanOrEqual(100)
+    })
   })
 
   describe('end-to-end: capture → inject → reader', () => {
@@ -215,7 +329,7 @@ describe('loader/bldrsSpatialTree', () => {
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
-      const withExt = injectGlbExtensions(baseGlb, [
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
         {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: tree, compress: true},
       ])
 

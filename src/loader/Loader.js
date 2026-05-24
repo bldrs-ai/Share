@@ -718,6 +718,14 @@ export function convertToShareModel(model, viewer) {
   // shared-across-models) `viewer.IFC.loader.ifcManager` shim above.
   // Live IFC parses miss this branch — they have no extension in their
   // userData — and fall through to the legacy `ifcManager` path.
+  //
+  // The closure ignores both arguments because a cache artifact holds
+  // exactly one model's tree (one IFC per GLB; modelID is always 0 in
+  // the consumer at CadView.jsx; properties are pre-serialised into
+  // the tree at writer time so `withProperties` has no run-time effect).
+  // Args are kept on the signature so the call shape matches
+  // `ifcManager.getSpatialStructure(modelID, withProperties)` — callers
+  // don't branch on which backend they're hitting.
   const spatialTree = model.userData?.bldrsSpatialTree
   if (spatialTree) {
     model.getSpatialStructure = (_modelID, _withProperties) => spatialTree

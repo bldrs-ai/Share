@@ -86,23 +86,25 @@ describe('loader/injectGlbExtensions', () => {
   describe('injectGlbExtensions — no-op cases', () => {
     it('returns the input bytes unchanged when extensions list is empty', () => {
       const glb = makeMinimalGlb()
-      const out = injectGlbExtensions(glb, [])
-      expect(out).toBe(glb)
+      const {bytes, stats} = injectGlbExtensions(glb, [])
+      expect(bytes).toBe(glb)
+      expect(stats).toEqual({addedExtensions: 0, addedBinBytes: 0, skippedNames: []})
     })
 
     it('returns the input bytes unchanged when all entries have null data', () => {
       const glb = makeMinimalGlb()
-      const out = injectGlbExtensions(glb, [
+      const {bytes, stats} = injectGlbExtensions(glb, [
         {name: 'BLDRS_x', data: null},
         {name: 'BLDRS_y', data: undefined},
       ])
-      expect(out).toBe(glb)
+      expect(bytes).toBe(glb)
+      expect(stats.addedExtensions).toBe(0)
     })
 
     it('returns the input bytes unchanged when extensions is null/undefined', () => {
       const glb = makeMinimalGlb()
-      expect(injectGlbExtensions(glb, null)).toBe(glb)
-      expect(injectGlbExtensions(glb, undefined)).toBe(glb)
+      expect(injectGlbExtensions(glb, null).bytes).toBe(glb)
+      expect(injectGlbExtensions(glb, undefined).bytes).toBe(glb)
     })
   })
 
@@ -110,11 +112,11 @@ describe('loader/injectGlbExtensions', () => {
     it('appends a bufferView and extension entry with compressed payload', () => {
       const glb = makeMinimalGlb({binBytes: 16})
       const data = {hello: 'world', n: 42}
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data, compress: true},
       ])
 
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       expect(parsed.json.extensionsUsed).toContain('BLDRS_test')
       expect(parsed.json.extensions.BLDRS_test).toEqual({compressed: true, bufferView: 1})
 
@@ -136,10 +138,10 @@ describe('loader/injectGlbExtensions', () => {
 
     it('updates buffers[0].byteLength to cover the appended payload', () => {
       const glb = makeMinimalGlb({binBytes: 8})
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data: {a: 1}, compress: true},
       ])
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       const expectedMin = parsed.json.bufferViews[1].byteOffset +
                           parsed.json.bufferViews[1].byteLength
       expect(parsed.json.buffers[0].byteLength).toBe(expectedMin)
@@ -149,10 +151,10 @@ describe('loader/injectGlbExtensions', () => {
     it('supports an uncompressed payload', () => {
       const glb = makeMinimalGlb({binBytes: 4})
       const data = {raw: true}
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data, compress: false},
       ])
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       expect(parsed.json.extensions.BLDRS_test).toEqual({compressed: false, bufferView: 1})
       const bv = parsed.json.bufferViews[1]
       const payload = parsed.bin.subarray(bv.byteOffset, bv.byteOffset + bv.byteLength)
@@ -160,26 +162,26 @@ describe('loader/injectGlbExtensions', () => {
       expect(JSON.parse(text)).toEqual(data)
     })
 
-    it('annotates the output with injectGlbStats describing what changed', () => {
+    it('returns stats describing what changed', () => {
       const glb = makeMinimalGlb({binBytes: 8})
-      const out = injectGlbExtensions(glb, [
+      const {stats} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data: {x: 1}},
       ])
-      expect(out.injectGlbStats).toBeDefined()
-      expect(out.injectGlbStats.addedExtensions).toBe(1)
-      expect(out.injectGlbStats.addedBinBytes).toBeGreaterThan(0)
+      expect(stats.addedExtensions).toBe(1)
+      expect(stats.addedBinBytes).toBeGreaterThan(0)
+      expect(stats.skippedNames).toEqual([])
     })
   })
 
   describe('injectGlbExtensions — multiple extensions', () => {
     it('lays out each new bufferView at a 4-aligned offset, in order', () => {
       const glb = makeMinimalGlb({binBytes: 4})
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_a', data: {a: 1}},
         {name: 'BLDRS_b', data: {b: 2}},
         {name: 'BLDRS_c', data: {c: 3}},
       ])
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       expect(parsed.json.extensionsUsed).toEqual(
         expect.arrayContaining(['BLDRS_a', 'BLDRS_b', 'BLDRS_c']))
       const newBvs = parsed.json.bufferViews.slice(1)
@@ -193,6 +195,9 @@ describe('loader/injectGlbExtensions', () => {
     })
 
     it('does not duplicate names already in extensionsUsed', () => {
+      // Note this is a different shape from the "collision" case below:
+      // the name is in extensionsUsed but NOT in extensions{}, so the
+      // injection still runs and dedupes the extensionsUsed entry.
       const json = {
         asset: {version: '2.0'},
         buffers: [{byteLength: 4}],
@@ -200,11 +205,59 @@ describe('loader/injectGlbExtensions', () => {
         extensionsUsed: ['BLDRS_test'],
       }
       const glb = serializeGlb(json, new Uint8Array(4))
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data: {x: 1}},
       ])
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       expect(parsed.json.extensionsUsed.filter((n) => n === 'BLDRS_test')).toHaveLength(1)
+    })
+  })
+
+  describe('injectGlbExtensions — collision handling', () => {
+    it('skips an extension whose name is already in json.extensions, reports via stats', () => {
+      // Building a GLB that already carries an `extensions.BLDRS_test`
+      // entry. Re-injecting under the same name should NOT overwrite —
+      // that would silently orphan the existing bufferView, leaving a
+      // dead-data corruption path through cache round-trips. Instead we
+      // skip and surface the name via stats.skippedNames so the caller
+      // can log / metric.
+      const json = {
+        asset: {version: '2.0'},
+        buffers: [{byteLength: 4}],
+        bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 4}],
+        extensionsUsed: ['BLDRS_test'],
+        extensions: {BLDRS_test: {compressed: true, bufferView: 0}},
+      }
+      const glb = serializeGlb(json, new Uint8Array(4))
+      const {bytes, stats} = injectGlbExtensions(glb, [
+        {name: 'BLDRS_test', data: {x: 999}},
+      ])
+      expect(stats.addedExtensions).toBe(0)
+      expect(stats.skippedNames).toEqual(['BLDRS_test'])
+      // Pass-through: existing entry untouched.
+      expect(bytes).toBe(glb)
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.extensions.BLDRS_test).toEqual({compressed: true, bufferView: 0})
+    })
+
+    it('still injects siblings when one entry in the batch collides', () => {
+      const json = {
+        asset: {version: '2.0'},
+        buffers: [{byteLength: 4}],
+        bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 4}],
+        extensionsUsed: ['BLDRS_a'],
+        extensions: {BLDRS_a: {compressed: true, bufferView: 0}},
+      }
+      const glb = serializeGlb(json, new Uint8Array(4))
+      const {bytes, stats} = injectGlbExtensions(glb, [
+        {name: 'BLDRS_a', data: {a: 1}}, // collides — skipped
+        {name: 'BLDRS_b', data: {b: 2}}, // fresh — injected
+      ])
+      expect(stats.addedExtensions).toBe(1)
+      expect(stats.skippedNames).toEqual(['BLDRS_a'])
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.extensions.BLDRS_a).toEqual({compressed: true, bufferView: 0})
+      expect(parsed.json.extensions.BLDRS_b).toBeDefined()
     })
   })
 
@@ -212,10 +265,10 @@ describe('loader/injectGlbExtensions', () => {
     it('adds a BIN chunk if the source GLB has none', () => {
       const json = {asset: {version: '2.0'}}
       const glb = serializeGlb(json, null)
-      const out = injectGlbExtensions(glb, [
+      const {bytes} = injectGlbExtensions(glb, [
         {name: 'BLDRS_test', data: {x: 1}},
       ])
-      const parsed = parseGlb(out)
+      const parsed = parseGlb(bytes)
       expect(parsed.bin).not.toBeNull()
       expect(parsed.bin.byteLength).toBeGreaterThan(0)
       expect(parsed.json.buffers).toBeDefined()

@@ -161,14 +161,13 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // even when null/empty — the helper is a no-op for an empty list, so
     // the call-site stays unconditional.
     const spatialTree = await captureBldrsSpatialTree(ifcManager, model?.modelID ?? 0)
-    const withExtensions = injectGlbExtensions(rawBytes, [
+    const {bytes: withExtensions, stats: extStats} = injectGlbExtensions(rawBytes, [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
     ])
-    if (withExtensions !== rawBytes) {
+    if (extStats.addedExtensions > 0) {
       glbVerbose(
-        'writer: injected extensions, +' +
-        `${withExtensions.byteLength - rawBytes.byteLength}B ` +
-        `(${withExtensions.injectGlbStats?.addedExtensions ?? 0} extension(s))`)
+        `writer: injected ${extStats.addedExtensions} extension(s), ` +
+        `+${withExtensions.byteLength - rawBytes.byteLength}B`)
     }
     // Use the *actual* compression mode (compressGlb may fall back to
     // null on encoder failure) so the cached artifact lands in the
