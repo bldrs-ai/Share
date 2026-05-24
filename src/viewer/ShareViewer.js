@@ -2,9 +2,11 @@ import {IfcViewerAPI} from 'web-ifc-viewer'
 import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
+import Clipper from './three/Clipper'
 import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
+import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
@@ -119,6 +121,29 @@ export class ShareViewer extends IfcViewerAPI {
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
+    // Selector — §3c.iv slice 1 facade over the fork's `IFC.selector`.
+    // Every call-site that previously poked at `viewer.IFC.selector.X`
+    // now routes through `viewer.selector.X` instead. Keeps the fork
+    // selector as the underlying impl until Phase 5 swaps it for an
+    // IfcModelService-backed `Selection` plugin.
+    this.selector = new Selector(this.IFC?.selector)
+    // Clipper — §3c.iv slice 3 unified facade over the fork's
+    // `IfcClipper` + in-repo `GlbClipper`. Replaces `viewer.clipper`
+    // (set by IfcViewerAPI's super() call) with one object that
+    // dispatches per-model. Call-sites no longer branch on
+    // `viewer.IFC.type === 'glb'` — they call `viewer.clipper.X`
+    // and trust the plugin. The fork's clipper is captured here
+    // before being overwritten so the IFC backing impl is preserved.
+    //
+    // Guard for the test-singleton path: __mocks__/web-ifc-viewer.js
+    // reuses one `impl` across every `new ShareViewer()` call. Without
+    // the `instanceof Clipper` check, the second construction would
+    // capture the *previous* Clipper plugin as `_forkClipper`, losing
+    // the underlying fork clipper.
+    if (!(this.clipper instanceof Clipper)) {
+      this._forkClipper = this.clipper
+      this.clipper = new Clipper(this, this._forkClipper)
+    }
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
@@ -301,7 +326,7 @@ export class ShareViewer extends IfcViewerAPI {
       this.highlighter.setHighlighted(null)
       this._clearConwaySelectionSubsets()
       if (modelHasCapability(model, 'ifcSubsets')) {
-        this.IFC.selector.unpickIfcItems()
+        this.selector.unpick()
       } else if (typeof model.removeSubset === 'function') {
         model.removeSubset('selection')
       }
@@ -328,16 +353,16 @@ export class ShareViewer extends IfcViewerAPI {
         // edges.
         this._setConwaySelectionFromModel(model, (mesh) =>
           mesh.instanceMap.createSubsetMeshByParent(toBeSelected, {
-            material: this.IFC.selector?.selection?.material,
+            material: this.selector.getSelectionMaterial(),
           }))
       } else if (modelHasCapability(model, 'ifcSubsets')) {
         // Real-IFC path: web-ifc-three holds the parser state needed
         // by createSubset / SubsetCreator.
         const focusSelection2 = false // TODO(pablo): this was hardcoded as false below; why not using above
         const removePrevious = true
-        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, focusSelection2, removePrevious)
-        debug().log('ShareViewer#setSelection, meshes: ', this.IFC.selector.selection.meshes)
-        this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
+        await this.selector.pickByIds(modelID, toBeSelected, focusSelection2, removePrevious)
+        debug().log('ShareViewer#setSelection, meshes: ', this.selector.getSelectionMeshes())
+        this.highlighter.setHighlighted(this.selector.getSelectionMeshes())
       } else {
         // Per-vertex-element-ID path (today: cache-hit GLB). The model
         // owns `createSubset` (attached by attachElementSubsets at load
@@ -355,7 +380,7 @@ export class ShareViewer extends IfcViewerAPI {
           ids: toBeSelected,
           customID: 'selection',
           removePrevious: true,
-          material: this.IFC.selector?.selection?.material,
+          material: this.selector.getSelectionMaterial(),
         })
         const triCount = subsetMeshes.reduce(
           (n, m) => n + ((m.geometry?.getIndex()?.count ?? 0) / 3), 0)
@@ -413,7 +438,7 @@ export class ShareViewer extends IfcViewerAPI {
     // covers any of the requested instance IDs.
     this._setConwaySelectionFromModel(model, (mesh) =>
       mesh.instanceMap.createSubsetMeshByInstance(instanceIds, {
-        material: this.IFC.selector?.selection?.material,
+        material: this.selector.getSelectionMaterial(),
       }))
   }
 
@@ -623,7 +648,7 @@ export class ShareViewer extends IfcViewerAPI {
     let pool = this._conwayPreselectionPool
     if (!pool) {
       const geometry = new BufferGeometry()
-      const mesh = new Mesh(geometry, this.IFC.selector?.preselection?.material ?? null)
+      const mesh = new Mesh(geometry, this.selector.getPreselectionMaterial())
       // The pool sits in the scene tree once a hover lands it there.
       // Without raycast-invisible the pool would compete with source
       // meshes for picks (it's geometrically coplanar with whichever
@@ -703,7 +728,7 @@ export class ShareViewer extends IfcViewerAPI {
   async highlightIfcItem() {
     const found = this.context.castRayIfc()
     if (!found) {
-      this.IFC.selector.preselection.toggleVisibility(false)
+      this.selector.togglePreselectionVisibility(false)
       this._clearPreselectionForAllModels()
       return
     }
@@ -726,7 +751,7 @@ export class ShareViewer extends IfcViewerAPI {
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
-      await this.IFC.selector.preselection.pick(found)
+      await this.selector.preselectFromPick(found)
       this.highlightPreselection()
     } else if (typeof model.createSubset === 'function') {
       // Per-vertex-element-ID path: synthesise a preselection
@@ -742,7 +767,7 @@ export class ShareViewer extends IfcViewerAPI {
         ids: [id],
         customID: 'preselection',
         removePrevious: true,
-        material: this.IFC.selector?.preselection?.material,
+        material: this.selector.getPreselectionMaterial(),
       })
       for (const mesh of subsetMeshes) {
         this.highlighter.addToHighlighting(mesh)
@@ -753,7 +778,7 @@ export class ShareViewer extends IfcViewerAPI {
 
   /**
    * Drop any per-model preselection subset when the cursor leaves
-   * all geometry. Mirrors what `IFC.selector.preselection.toggleVisibility(false)`
+   * all geometry. Mirrors what `selector.togglePreselectionVisibility(false)`
    * does for the real-IFC path — preselection is hover-only and
    * should not linger off-model.
    *
@@ -825,7 +850,7 @@ export class ShareViewer extends IfcViewerAPI {
     const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
     debug().log('ShareViewer#preselectElementsByIds, filteredIds:', filteredIds)
     if (filteredIds.length) {
-      await this.IFC.selector.preselection.pickByID(modelId, filteredIds, false, true)
+      await this.selector.preselectByIds(modelId, filteredIds, false, true)
       this.highlightPreselection()
     }
   }
@@ -836,7 +861,7 @@ export class ShareViewer extends IfcViewerAPI {
   highlightPreselection() {
     // Deconstruct the preselection meshes set to get the first element in set
     // The preselection set always contains only one element or none
-    const [targetMesh] = this.IFC.selector.preselection.meshes
+    const [targetMesh] = this.selector.getPreselectionMeshes()
     this.highlighter.addToHighlighting(targetMesh)
   }
 

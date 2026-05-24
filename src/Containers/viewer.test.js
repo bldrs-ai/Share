@@ -54,7 +54,15 @@ function attachDisposeSpies(viewer) {
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
   }))
-  viewer.glbClipper = {dispose: jest.fn()}
+  // Make `viewer.clipper.dispose` a fresh spy so the test owns the
+  // assertion surface (the mock's clipper.dispose is shared across
+  // singleton calls otherwise).
+  const clipperDispose = jest.fn()
+  if (viewer.clipper) {
+    viewer.clipper.dispose = clipperDispose
+  } else {
+    viewer.clipper = {dispose: clipperDispose}
+  }
   viewer.dispose = jest.fn()
   viewer.highlightIfcItem = jest.fn()
   viewer._resizeObserver = {disconnect: jest.fn()}
@@ -64,7 +72,7 @@ function attachDisposeSpies(viewer) {
     meshGeometry,
     meshMaterial,
     textureMapSlots,
-    glbClipper: viewer.glbClipper,
+    clipperDispose,
     viewerDispose: viewer.dispose,
     resizeObserver: viewer._resizeObserver,
   }
@@ -91,7 +99,6 @@ describe('Containers/viewer', () => {
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
     }))
-    baseViewer.glbClipper = null
     delete baseViewer.dispose
     delete baseViewer._resizeObserver
   })
@@ -130,7 +137,7 @@ describe('Containers/viewer', () => {
       expect(spies.meshGeometry.dispose).toHaveBeenCalled()
       expect(spies.fakeRenderer.dispose).toHaveBeenCalled()
       expect(spies.fakeRenderer.forceContextLoss).toHaveBeenCalled()
-      expect(spies.glbClipper.dispose).toHaveBeenCalled()
+      expect(spies.clipperDispose).toHaveBeenCalled()
       expect(spies.viewerDispose).toHaveBeenCalled()
       expect(spies.resizeObserver.disconnect).toHaveBeenCalled()
     })
@@ -204,15 +211,14 @@ describe('Containers/viewer', () => {
       expect(() => disposeViewer()).not.toThrow()
     })
 
-    it('disconnects the ResizeObserver and nulls glbClipper', () => {
+    it('disconnects the ResizeObserver and disposes the unified clipper', () => {
       const viewer = initViewer('/share/v/p')
       const spies = attachDisposeSpies(viewer)
 
       disposeViewer()
 
       expect(spies.resizeObserver.disconnect).toHaveBeenCalledTimes(1)
-      expect(spies.glbClipper.dispose).toHaveBeenCalledTimes(1)
-      expect(viewer.glbClipper).toBeNull()
+      expect(spies.clipperDispose).toHaveBeenCalledTimes(1)
     })
 
     it('is idempotent — calling twice does not throw or double-dispose', () => {
