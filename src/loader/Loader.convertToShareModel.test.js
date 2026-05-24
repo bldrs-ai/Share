@@ -228,4 +228,44 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // web-ifc-three's IFC.selector.pickIfcItemsByID instead.
     expect(mesh.createSubset).toBeUndefined()
   })
+
+  it('cache-hit BLDRS_spatial_tree hydrates a model-level getSpatialStructure closure', () => {
+    // Mirrors what the BldrsSpatialTreeReader plugin parks on the
+    // scene root: a JSON-decoded IFC tree on userData. convertToShareModel
+    // should promote it to a `model.getSpatialStructure(modelID, withProps)`
+    // closure so CadView's NavTree path can read it without going through
+    // the shared `viewer.IFC.loader.ifcManager` shim.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsSpatialTree = {
+      expressID: 1,
+      type: 'IFCPROJECT',
+      Name: {value: 'Cached Project'},
+      children: [
+        {expressID: 2, type: 'IFCSITE', Name: {value: 'Site'}, children: []},
+      ],
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(typeof mesh.getSpatialStructure).toBe('function')
+    // The closure is sync-on-tree (no await internally) but signed as
+    // (modelID, withProperties) so it matches the legacy
+    // `ifcManager.getSpatialStructure` shape — the CadView caller awaits
+    // the result regardless. Pass the same args the live path uses.
+    const root = mesh.getSpatialStructure(0, true)
+    expect(root.expressID).toBe(1)
+    expect(root.Name.value).toBe('Cached Project')
+    expect(root.children).toHaveLength(1)
+  })
+
+  it('no BLDRS_spatial_tree on userData → no closure attached (live-IFC fallback path)', () => {
+    // Regression guard: an earlier iteration attached the closure
+    // unconditionally, which collided with `web-ifc-three.IFCModel`'s
+    // own prototype `getSpatialStructure(): Promise<any>` (no args).
+    // CadView discriminates on `userData.bldrsSpatialTree`; the model
+    // here must NOT carry a model-level method when the userData hook
+    // is absent.
+    const mesh = new Mesh(new BufferGeometry())
+    // userData.bldrsSpatialTree intentionally unset.
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getSpatialStructure).toBeUndefined()
+  })
 })

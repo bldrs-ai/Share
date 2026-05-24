@@ -445,7 +445,21 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      // Cache-hit GLBs that shipped a BLDRS_spatial_tree extension
+      // hydrate a `getSpatialStructure(modelID, withProperties)` closure
+      // on the model via `Loader.js#convertToShareModel`. We can't just
+      // test `m.getSpatialStructure` because wit-three's IFCModel
+      // inherits a `getSpatialStructure(): Promise<any>` on its
+      // prototype that calls `this.ifcManager.getSpatialStructure(this.modelID)`
+      // — no `includeProperties` arg — so taking that branch on a live
+      // IFC parse silently drops the property data, leaving NavTree
+      // leaves nameless. Discriminate on the cache payload directly.
+      const cachedTree = m.userData?.bldrsSpatialTree
+      if (cachedTree) {
+        rootElt = await m.getSpatialStructure(0, true)
+      } else {
+        rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      }
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')

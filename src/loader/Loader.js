@@ -36,6 +36,7 @@ import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
 import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
@@ -494,12 +495,18 @@ export async function load(
   // when the `glb` feature flag is on. Failures are logged but never
   // thrown — the source is already on screen; this is cache warm-up only.
   // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
+  // `ifcManager` is captured from the live IFC parser state so the
+  // writer can pull `getSpatialStructure(...)` into a BLDRS_spatial_tree
+  // glTF extension — without that, cache-hit GLBs have no NavTree
+  // (the cache-hit path has no IFC parser). Non-IFC sources have no
+  // manager and the writer captures nothing; cache miss/hit both work.
   if (glbExportContext) {
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
     exportAndCacheGlb({
       model,
       kindLabel: glbExportContext.kindLabel,
       cacheKeyArgs: glbExportContext.cacheKeyArgs,
+      ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
     })
   }
 
@@ -700,6 +707,31 @@ export function convertToShareModel(model, viewer) {
   model.ifcManager = viewer.IFC.loader.ifcManager
   model.ifcManager.getSpatialStructure = () => {
     return model
+  }
+
+  // Cache-hit hydration for BLDRS_spatial_tree. When the GLTFLoader
+  // plugin decoded the extension it parked the tree on
+  // `model.userData.bldrsSpatialTree`. Promote it to a model-level
+  // method so consumers (`Containers/CadView.jsx#onModel` etc.) can
+  // call `model.getSpatialStructure(modelID, withProperties)` and get
+  // the real IFC hierarchy without going through the (monkey-patched,
+  // shared-across-models) `viewer.IFC.loader.ifcManager` shim above.
+  // Live IFC parses miss this branch — they have no extension in their
+  // userData — and fall through to the legacy `ifcManager` path.
+  //
+  // The closure ignores both arguments because a cache artifact holds
+  // exactly one model's tree (one IFC per GLB; modelID is always 0 in
+  // the consumer at CadView.jsx; properties are pre-serialised into
+  // the tree at writer time so `withProperties` has no run-time effect).
+  // Args are kept on the signature so the call shape matches
+  // `ifcManager.getSpatialStructure(modelID, withProperties)` — callers
+  // don't branch on which backend they're hitting.
+  const spatialTree = model.userData?.bldrsSpatialTree
+  if (spatialTree) {
+    model.getSpatialStructure = (_modelID, _withProperties) => spatialTree
+    glbInfo(
+      'reader: hydrated NavTree from BLDRS_spatial_tree (' +
+      `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
   }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
@@ -940,6 +972,7 @@ async function findLoader(pathname, viewer) {
 function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
+  loader.register((parser) => new BldrsSpatialTreeReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')
@@ -1587,6 +1620,16 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
         reject(new Error(`Unhandled error parsing chunk ${i}: ${e}`))
       }
     })
+    // Bubble extension data parked on the chunk's scene by GLTFLoader
+    // plugins (`bldrsSpatialTree`, `bldrsPayload`, …) up to the merged
+    // wrapper. Otherwise `convertToShareModel` and
+    // `inferModelCapabilities` — which inspect `model.userData` on the
+    // root we return — would miss it. With multiple chunks the last
+    // one wins (per-chunk extensions clobber the merged userData in
+    // load order); today the writer only emits one chunk.
+    if (gltf.scene?.userData) {
+      Object.assign(merged.userData, gltf.scene.userData)
+    }
     if (gltf.scenes && gltf.scenes.length > 0) {
       for (const s of gltf.scenes) {
         merged.add(s)
