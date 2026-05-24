@@ -398,6 +398,30 @@ before flipping the `conwayDirectIfc` flag default-on:
 
 Issues / comments can be done later (post-prod-flip).
 
+**Pre-public-launch (one of the last gates).** The regression-testing
+framework (headless 4-angle screenshots + perf timing) will be extended
+to do **GLB extract + bit-level data snapshot comparison**. Each model
+in the fixture corpus gets a manually-evaluated GLB extract as the
+golden artifact — schema-version-pinned, byte-stable across runs given
+the same Conway + GLTFExporter versions. The harness reads the cached
+artifact, decodes each `BLDRS_*` extension payload, and deep-diffs
+against the golden. Catches:
+
+- Extension-format drift (a writer change that quietly alters payload
+  layout, e.g. adding a field that gets serialised even though no
+  consumer reads it yet).
+- Geometry/material drift through the GLB cache round-trip (the BIN
+  chunk's bytes shift even when the visible scene is identical, e.g.
+  Conway emits geometry in a different order between versions).
+- Schema-bump bugs (a bump should invalidate everything; a bug where
+  it doesn't would surface as the golden still being readable when it
+  shouldn't be).
+
+Order of operations: ship Conway-direct + extensions → bake goldens
+manually → wire bit-level diff into the regression harness → flip
+public-launch gate. Not on the critical path for the §3b.iii blockers
+above; tracked here so it doesn't fall off.
+
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
 
