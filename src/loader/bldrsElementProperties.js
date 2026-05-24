@@ -378,7 +378,13 @@ export function makeLazyPayload(compressed, tag = BLDRS_ELEMENT_PROPERTIES_EXTEN
           propertySets: (parsed.propertySets && typeof parsed.propertySets === 'object' && !Array.isArray(parsed.propertySets)) ?
             parsed.propertySets : {},
         }
-        glbVerbose(
+        // One-shot per cache hit — visible by default so user-reported
+        // "panel is empty" issues can be triaged from the console
+        // without flipping a feature flag. The entity/pset counts are
+        // the most useful diagnostic: a count of 0 means the writer
+        // captured nothing (likely no spatial tree on the source IFC);
+        // a non-zero count with empty panel points at consumer wiring.
+        glbInfo(
           `${tag}: decoded payload (${compressed.byteLength}B compressed → ` +
           `${text.length}B JSON, ` +
           `${Object.keys(cached.itemProperties).length} entities, ` +
