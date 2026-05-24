@@ -17,12 +17,18 @@ jest.mock('three/examples/jsm/exporters/GLTFExporter.js', () => ({
 
 // The real glbCompress lazy-imports @gltf-transform; in unit tests we
 // short-circuit it to a passthrough so the writer's behavior is testable
-// without standing up the wasm encoder pipeline.
+// without standing up the wasm encoder pipeline. The schemaVersionFor
+// mock reads through to the live `BLDRS_GLB_SCHEMA_VERSION` constant
+// (via `jest.requireActual`) so bumping the schema in `glbCacheKey.js`
+// doesn't break this mock.
 const mockActiveMode = jest.fn(() => null)
 const mockCompressGlb = jest.fn((bytes, mode) => Promise.resolve({bytes, mode: mode || null}))
 jest.mock('./glbCompress', () => ({
   activeGlbCompressionMode: () => mockActiveMode(),
-  schemaVersionFor: (mode) => (mode ? `0.5.0-${mode}` : '0.5.0'),
+  schemaVersionFor: (mode) => {
+    const {BLDRS_GLB_SCHEMA_VERSION: ver} = jest.requireActual('./glbCacheKey')
+    return mode ? `${ver}-${mode}` : ver
+  },
   compressGlb: (...args) => mockCompressGlb(...args),
 }))
 

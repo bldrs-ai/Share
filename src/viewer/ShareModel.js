@@ -215,6 +215,16 @@ export function inferModelCapabilities(model, opts = {}) {
   if (hasPerVertexInstanceIds) {
     caps.instancePicking = true
   }
+  // BLDRS_spatial_tree extension hydration (cache-hit GLBs only).
+  // `Loader.js#convertToShareModel` reads `userData.bldrsSpatialTree`
+  // and attaches a `getSpatialStructure` method to the model. Flip the
+  // capability so the NavTree branches on this rather than format.
+  // Live IFC parses don't ship the extension and use the legacy
+  // `ifcManager` path; the format-based default already has
+  // spatialStructure on for them.
+  if (model.userData?.bldrsSpatialTree) {
+    caps.spatialStructure = true
+  }
   return caps
 }
 

@@ -445,7 +445,14 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      // Prefer the model-level method when present — cache-hit GLBs that
+      // shipped a BLDRS_spatial_tree extension hydrate it via
+      // `Loader.js#convertToShareModel`. Falls back to the shared
+      // `ifcManager` path for live IFC parses (where the ifcManager
+      // still has live parser state). Once the cache covers every IFC
+      // load, the fallback goes away (along with the shared-manager shim).
+      const getTree = m.getSpatialStructure ?? m.ifcManager.getSpatialStructure?.bind(m.ifcManager)
+      rootElt = await getTree(0, true)
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')

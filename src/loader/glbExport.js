@@ -26,6 +26,10 @@
 // once the BLDRS_* extension story makes a custom writer worthwhile.
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
+import {
+  BLDRS_SPATIAL_TREE_EXTENSION_NAME,
+  captureBldrsSpatialTree,
+} from './bldrsSpatialTree'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -34,6 +38,7 @@ import {
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
+import {injectGlbExtensions} from './injectGlbExtensions'
 
 
 /**
@@ -127,9 +132,16 @@ function silenceGltfExporterMaterialWarnings() {
  *   (e.g. 'github', 'local', 'upload', 'external'). Not used as a cache key.
  * @param {object} args.cacheKeyArgs Output of one of the sourceCacheKey
  *   adapters: {ns1, ns2, ns3, sourcePath, sourceHash}.
+ * @param {object} [args.ifcManager] IfcManager-like with
+ *   `getSpatialStructure(modelID, withProperties)` — typically
+ *   `viewer.IFC.loader.ifcManager`. When provided and the source is an
+ *   IFC parse with live parser state, the spatial structure is captured
+ *   and embedded as a `BLDRS_spatial_tree` extension so cache-hit GLBs
+ *   render their NavTree without re-parsing. Pass `null` for non-IFC
+ *   sources or when no live tree is available.
  * @return {Promise<boolean>}
  */
-export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs}) {
+export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
   const startMs = Date.now()
   try {
     const filePath = cacheKeyArgs.sourcePath
@@ -144,12 +156,26 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs}) {
       return false
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
+    // Capture BLDRS_* extension payloads from the live IFC parser state
+    // before it goes out of scope. We pass these through `injectGlbExtensions`
+    // even when null/empty — the helper is a no-op for an empty list, so
+    // the call-site stays unconditional.
+    const spatialTree = await captureBldrsSpatialTree(ifcManager, model?.modelID ?? 0)
+    const withExtensions = injectGlbExtensions(rawBytes, [
+      {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
+    ])
+    if (withExtensions !== rawBytes) {
+      glbVerbose(
+        'writer: injected extensions, +' +
+        `${withExtensions.byteLength - rawBytes.byteLength}B ` +
+        `(${withExtensions.injectGlbStats?.addedExtensions ?? 0} extension(s))`)
+    }
     // Use the *actual* compression mode (compressGlb may fall back to
     // null on encoder failure) so the cached artifact lands in the
     // matching schema slot. Otherwise a -draco / -meshopt suffix on
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
-    const {bytes, mode} = await compressGlb(rawBytes, requestedMode)
+    const {bytes, mode} = await compressGlb(withExtensions, requestedMode)
     const schemaVer = schemaVersionFor(mode)
     const packed = packGlbChunks([bytes], mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})

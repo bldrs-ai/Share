@@ -15,6 +15,14 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.6.0 — added `BLDRS_spatial_tree` glTF extension carrying the IFC
+ *         spatial hierarchy. Cache-hit GLBs now hydrate the NavTree
+ *         without re-parsing the IFC (previously required the live
+ *         `viewer.IFC.loader.ifcManager` which only exists on cache-
+ *         miss IFC parses). Older artifacts read as a miss because the
+ *         schema version embeds in the filename; the next miss rewrites
+ *         with the extension attached. See
+ *         design/new/viewer-replacement.md §3b.iii default-on gating.
  * 0.5.0 — switched the writer from conway's GeometryAggregator to
  *         three.js GLTFExporter on the rendered IFCLoader model. Conway
  *         was filtering by CanonicalMeshType.BUFFER_GEOMETRY and
@@ -29,7 +37,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.5.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.6.0'
 
 
 /**
