@@ -497,6 +497,17 @@ flag is ready to flip default-on as a follow-up slice.
 
 Issues / comments can be done later (post-prod-flip).
 
+**E2E coverage on cache-hit GLB.** This PR adds
+`src/Components/Properties/Properties.cacheHit.spec.ts` — exercises
+the BLDRS_element_properties round-trip end-to-end (writer populates
+OPFS on first load; reader hydrates on reload; Properties panel
+renders the full IFC entity). **Follow-up still owed:** a parallel
+spec for **NavTree on cache-hit GLB** that asserts the spatial-tree
+rendering and element selection work after a reload — the writer +
+reader landed in PR #1527 but no e2e spec was added then. Same
+two-`page.goto` cache-populate-then-cache-hit pattern; assertions
+target the nav-tree DOM rather than the properties panel.
+
 **Pre-public-launch (one of the last gates).** The regression-testing
 framework (headless 4-angle screenshots + perf timing) will be extended
 to do **GLB extract + bit-level data snapshot comparison**. Each model

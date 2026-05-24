@@ -423,5 +423,97 @@ describe('loader/bldrsElementProperties', () => {
       expect(decoded.itemProperties).toEqual(captured.itemProperties)
       expect(decoded.propertySets).toEqual(captured.propertySets)
     })
+
+    it('preserves the wit-three IFC entity shape through write + read', async () => {
+      // Regression pin for the user-verified shape from PR #1528's
+      // deploy-preview console check: an IfcSite (expressID 621 in
+      // their model) came back with the wit-three-canonical layout —
+      // expressID + numeric `type` discriminant + typed primitives
+      // ({type:1, value:string}) for labels + IFC references
+      // ({type:5, value:expressID}) for OwnerHistory / ObjectPlacement /
+      // Representation. The reader-side closure must hand back the
+      // same shape so `@bldrs-ai/ifclib`'s `deref` can resolve refs.
+      const tree = {
+        expressID: 89, type: 'IFCPROJECT', children: [
+          {expressID: 621, type: 'IFCSITE', children: []},
+        ],
+      }
+      const ifcSiteEntity = {
+        expressID: 621,
+        type: 1095909175, // IFCSITE typeId from web-ifc-three; numeric
+        GlobalId: {type: 1, value: '02uD5Qe8H3mek2PYnMWHk1'},
+        OwnerHistory: {type: 5, value: 28},
+        Name: {type: 1, value: 'Together'},
+        Description: null,
+        ObjectType: null,
+        ObjectPlacement: {type: 5, value: 559},
+        Representation: {type: 5, value: 611},
+        Tag: {type: 1, value: '02E0D15A-A084-43C2-8B82-662C56811B81'},
+        PredefinedType: {type: 3, value: 'NOTDEFINED'},
+      }
+      const ownerHistory = {
+        expressID: 28,
+        type: 1207048766, // IFCOWNERHISTORY
+        OwningUser: {type: 5, value: 22},
+        OwningApplication: {type: 5, value: 25},
+      }
+      const entities = {
+        89: {expressID: 89, type: 103090709 /* IFCPROJECT */},
+        621: ifcSiteEntity,
+        28: ownerHistory,
+        22: {expressID: 22, type: 1, Name: {type: 1, value: 'Owner'}},
+        25: {expressID: 25, type: 1, Name: {type: 1, value: 'Bldrs'}},
+        559: {expressID: 559, type: 1, RelativePlacement: {type: 5, value: 22}},
+        611: {expressID: 611, type: 1, Representations: []},
+      }
+      const mgr = {
+        getItemProperties: (mid, id) => Promise.resolve(entities[id]),
+        getPropertySets: () => Promise.resolve([]),
+      }
+
+      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      // BFS must reach every entity referenced from 621 (and from
+      // anything 621 references, transitively).
+      expect(captured.itemProperties[621]).toEqual(ifcSiteEntity)
+      expect(captured.itemProperties[28]).toEqual(ownerHistory)
+      // Through the cycle 28 → 22 / 25, then 559 → 22 (already seen).
+      expect(captured.itemProperties[22]).toBeDefined()
+      expect(captured.itemProperties[25]).toBeDefined()
+      expect(captured.itemProperties[559]).toBeDefined()
+      expect(captured.itemProperties[611]).toBeDefined()
+
+      // Round-trip through compress + inject + parse + decode.
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: captured, compress: true},
+      ])
+      const {json, bin} = parseGlb(withExt)
+      const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
+      const reader = new BldrsElementPropertiesReader({
+        json,
+        getDependency: () => Promise.resolve(buffer),
+      })
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+
+      // Byte-for-byte (key-for-key) preservation of the IFC site shape,
+      // including null-valued fields, numeric `type` discriminant, and
+      // every typed-primitive / reference. This is the contract that
+      // `@bldrs-ai/ifclib`'s `deref` builds the Properties panel on.
+      const decodedSite = decoded.itemProperties[621]
+      expect(decodedSite).toEqual(ifcSiteEntity)
+      expect(decodedSite.GlobalId).toEqual({type: 1, value: '02uD5Qe8H3mek2PYnMWHk1'})
+      expect(decodedSite.OwnerHistory).toEqual({type: 5, value: 28})
+      expect(decodedSite.Description).toBeNull()
+      expect(decodedSite.PredefinedType).toEqual({type: 3, value: 'NOTDEFINED'})
+
+      // Following the OwnerHistory ref via the same decoded map must
+      // resolve — that's the deref chain the Properties panel walks.
+      const referenced = decoded.itemProperties[decodedSite.OwnerHistory.value]
+      expect(referenced).toEqual(ownerHistory)
+    })
   })
 })
