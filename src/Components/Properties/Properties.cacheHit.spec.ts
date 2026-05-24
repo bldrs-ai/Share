@@ -114,6 +114,18 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     await expect(propertiesTable).toBeVisible()
     await assertPropertyValue(propertiesPanel, 'Express Id', '621')
     await assertPropertyValue(propertiesPanel, 'Name', 'Together')
+    // GlobalId is the canary for "full entity rendered, not just the
+    // slim spatial-tree-node whitelist" — it's a typed-primitive field
+    // (`{type: 1, value: <string>}`) that the spatial-tree capture
+    // strips on write (the whitelist is `{expressID, type, Name,
+    // LongName, children}` — see `bldrsSpatialTree.js#serializeNode`),
+    // but the element-properties extension preserves verbatim. If the
+    // selection effect at `CadView.jsx`'s `selectedElements` watcher
+    // ever regresses back to setting `selectedElement` to the slim
+    // tree node (or to `null` because viewer.getProperties returned
+    // nothing on cache-hit), this assertion fails — caught before the
+    // bug ships.
+    await assertPropertyValue(propertiesPanel, 'GlobalId', '02uD5Qe8H3mek2PYnMWHk1')
   })
 })
 

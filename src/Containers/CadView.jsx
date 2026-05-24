@@ -836,7 +836,22 @@ export default function CadView({
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
         const lastId = selectedElements.slice(-1)[0]
-        const props = await viewer.getProperties(0, Number(lastId))
+        // Prefer the model-level `getItemProperties(id)` when present
+        // — for cache-hit GLB it's the closure attached by
+        // `Loader.js#convertToShareModel` from the
+        // BLDRS_element_properties cache (works without a live IFC
+        // parser); for cache-miss IFC it's wit-three's IFCModel
+        // prototype method (delegates to the same ifcManager that
+        // `viewer.getProperties` would hit). `viewer.getProperties`
+        // stays as the fallback for non-IFC models / pre-decoration
+        // ticks where the model-level method isn't attached yet.
+        let props = null
+        if (model && typeof model.getItemProperties === 'function') {
+          props = await model.getItemProperties(Number(lastId))
+        }
+        if (!props && typeof viewer.getProperties === 'function') {
+          props = await viewer.getProperties(0, Number(lastId))
+        }
         setSelectedElement(props)
         // Update the expanded elements in NavTreePanel
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
