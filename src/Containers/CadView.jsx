@@ -451,8 +451,19 @@ export default function CadView({
       // `ifcManager` path for live IFC parses (where the ifcManager
       // still has live parser state). Once the cache covers every IFC
       // load, the fallback goes away (along with the shared-manager shim).
-      const getTree = m.getSpatialStructure ?? m.ifcManager.getSpatialStructure?.bind(m.ifcManager)
-      rootElt = await getTree(0, true)
+      //
+      // Method-style call (`m.getSpatialStructure(...)`) is intentional:
+      // `web-ifc-three.IFCModel` inherits a `getSpatialStructure` on its
+      // prototype that internally reads `this.ifcManager` — extracting it
+      // to a variable and calling bare loses the `this` binding and
+      // throws "Cannot read properties of undefined (reading 'ifcManager')".
+      // For the cache-hit GLB case the closure we attach is `this`-free
+      // and works either way.
+      if (m.getSpatialStructure) {
+        rootElt = await m.getSpatialStructure(0, true)
+      } else {
+        rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      }
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')
