@@ -73,11 +73,39 @@ const MAX_CLOSURE_SIZE = 1_000_000
 // ceiling exists as JS-stack defense against adversarial inputs.
 const MAX_VALUE_DEPTH = 100
 
+// Field names whose ref-chains are NOT followed during the closure
+// BFS — these are the geometric / placement chains that bottom out
+// in IfcCartesianPoint / IfcDirection / IfcPolyloop etc. The
+// Properties panel skips these top-level fields entirely
+// (`itemProperties.jsx#prettyProps` returns null for them), so the
+// transitive entities behind them are dead weight in the cache.
+// Filtering here cuts Snowdon's captured set from ~2.7M entities
+// (every parsed IFC entity, dominated by geometric primitives) to
+// ~30-50k (IfcRoot products + their psets / quantities / materials
+// / classifications / owner history). Net cache impact: ~35MB
+// compressed → ~1MB compressed for the properties payload.
+//
+// Kept deliberately loose to avoid false negatives — these four
+// field names cover the geometric backbone but property-specific
+// chains (HasProperties, Quantities, NominalValue refs) are NOT
+// blocked, so the Properties panel surface stays complete.
+const GEOMETRIC_FIELD_NAMES = new Set([
+  'Representation',
+  'ObjectPlacement',
+  'RepresentationContexts',
+  'Representations',
+])
+
 
 /**
  * Walk an entity's value subtree and collect any IFC reference IDs
  * (`{type: 5, value: <expressID>}` shape). Returns a new array of
  * unique IDs found. Used by the BFS to extend the closure work queue.
+ *
+ * Skips the four geometric / placement field names — chasing those
+ * pulls in every IfcCartesianPoint / IfcDirection / IfcPolyloop in
+ * the file (millions of entities on real models) without any
+ * Properties-panel use case for the data.
  *
  * @param {*} value any subtree under an IFC entity's data
  * @param {Array<number>} acc accumulator for IDs found (mutated)
@@ -104,8 +132,16 @@ function collectRefIds(value, acc, depth = 0) {
     acc.push(value.value)
     return
   }
-  // Plain object — recurse into each value.
+  // Plain object — recurse into each value, except geometric chains.
+  // Top-level only: once we're INSIDE a non-geometric field, the
+  // sub-tree might still legally hold refs we care about (e.g. an
+  // IfcMaterialLayerSetUsage has nested refs). The skip is per-key
+  // at depth=0 in the entity's body where field names are
+  // meaningful, not inside arbitrary nested structures.
   for (const key of Object.keys(value)) {
+    if (depth === 0 && GEOMETRIC_FIELD_NAMES.has(key)) {
+      continue
+    }
     collectRefIds(value[key], acc, depth + 1)
   }
 }
@@ -293,12 +329,94 @@ function captureBldrsElementPropertiesFast(ifcManager, modelID) {
     return null
   }
 
+  // Filter to entities reachable from IfcRoot via non-geometric refs.
+  // The bulk iteration above captured every parsed entity (millions
+  // for big IFCs, mostly geometric primitives). The Properties panel
+  // only needs IfcRoot-derived entities (products, rels, psets — all
+  // have `GlobalId`) plus their non-geometric ref closure
+  // (HasProperties, Quantities, materials, classifications, owner
+  // history etc.). `collectRefIds` skips the geometric backbone
+  // (Representation / ObjectPlacement / RepresentationContexts /
+  // Representations) at the entity's top-level, so the BFS naturally
+  // stops at the geometric boundary. Reduces Snowdon's captured set
+  // from ~2.7M entities to ~50k; cache payload from ~35MB compressed
+  // to ~1MB compressed.
+  const filterStartMs = Date.now()
+  const {filtered, prunedCount} = filterReachableFromRoots(itemProperties)
+  const filteredCount = Object.keys(filtered).length
+
   glbInfo(
     `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: fast-path captured ${captured} entities ` +
     `(${psetRelCount} IfcRelDefinesByProperties → ${Object.keys(propertySets).length} ` +
-    `products with psets) in ${Date.now() - startMs}ms`)
+    `products with psets) in ${Date.now() - startMs}ms; ` +
+    `filtered to ${filteredCount} reachable-from-IfcRoot ` +
+    `(pruned ${prunedCount} geometric primitives) in ${Date.now() - filterStartMs}ms`)
 
-  return {itemProperties, propertySets}
+  return {itemProperties: filtered, propertySets}
+}
+
+
+/**
+ * BFS over the captured itemProperties map, keeping only entities
+ * reachable from `IfcRoot`-derived entities (those with `GlobalId`)
+ * via non-geometric refs. Unreachable entities — the geometric
+ * primitives hanging off Representation / ObjectPlacement chains —
+ * are dropped. The Properties panel never displays them; carrying
+ * them in the cache costs ~30× the necessary payload size.
+ *
+ * `collectRefIds` (shared with the slow path) already skips
+ * geometric field names at the entity's top level, so the BFS
+ * frontier never expands into the geometric backbone. Property-
+ * specific chains (HasProperties, Quantities, NominalValue refs,
+ * Material*, Classification*, OwnerHistory) ARE followed because
+ * those field names aren't in `GEOMETRIC_FIELD_NAMES`.
+ *
+ * @param {object} itemProperties the unfiltered map
+ * @return {object} `{filtered: object, prunedCount: number}`
+ */
+function filterReachableFromRoots(itemProperties) {
+  const reachable = new Set()
+  const queue = []
+
+  // Seed: entities with `GlobalId`. IfcRoot mandates it, so this is
+  // the canonical "selectable entity" test — no whitelist of types
+  // needed. Covers products, processes, controls, resources, actors,
+  // groups, ALL `IfcRelXxx`, `IfcPropertySetDefinition`-derived
+  // entities (which includes `IfcPropertySet` / `IfcElementQuantity`),
+  // and any future IFC schema additions automatically.
+  for (const idStr of Object.keys(itemProperties)) {
+    const props = itemProperties[idStr]
+    if (props && props.GlobalId !== undefined) {
+      const id = Number(idStr)
+      reachable.add(id)
+      queue.push(id)
+    }
+  }
+
+  // BFS via non-geometric refs.
+  while (queue.length > 0) {
+    const id = queue.shift()
+    const props = itemProperties[id]
+    if (!props) {
+      continue
+    }
+    const refs = []
+    collectRefIds(props, refs)
+    for (const refId of refs) {
+      if (!reachable.has(refId) && itemProperties[refId] !== undefined) {
+        reachable.add(refId)
+        queue.push(refId)
+      }
+    }
+  }
+
+  // Filter into a new map.
+  const filtered = {}
+  for (const id of reachable) {
+    filtered[id] = itemProperties[id]
+  }
+  const prunedCount = Object.keys(itemProperties).length - reachable.size
+  return {filtered, prunedCount}
 }
 
 

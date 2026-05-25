@@ -55,10 +55,26 @@ describe('loader/bldrsElementProperties', () => {
     }
 
     it('iterates all entities and produces the same itemProperties map', async () => {
+      // Entities need `GlobalId` to survive the IfcRoot-reachability
+      // filter — real IFC entities derived from IfcRoot (products,
+      // rels, psets) all have one. Non-root entities pass through
+      // only if reachable from a root via non-geometric refs.
       const entities = {
-        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall'}},
-        101: {expressID: 101, type: 3124254112, Name: {type: 1, value: 'Door'}},
-        102: {expressID: 102, type: 1660063152, Name: {type: 1, value: 'Pset_Common'}},
+        100: {
+          expressID: 100, type: 3124254112,
+          GlobalId: {type: 1, value: 'g100'},
+          Name: {type: 1, value: 'Wall'},
+        },
+        101: {
+          expressID: 101, type: 3124254112,
+          GlobalId: {type: 1, value: 'g101'},
+          Name: {type: 1, value: 'Door'},
+        },
+        102: {
+          expressID: 102, type: 1660063152,
+          GlobalId: {type: 1, value: 'g102'},
+          Name: {type: 1, value: 'Pset_Common'},
+        },
       }
       const mgr = makeFastMgr(entities)
       const captured = await captureBldrsElementProperties(mgr, 0, /* unused */ null)
@@ -87,6 +103,7 @@ describe('loader/bldrsElementProperties', () => {
       const relAB = new IfcRelDefinesByProperties({
         expressID: 999,
         type: 4186316022,
+        GlobalId: {type: 1, value: 'g999'},
         RelatedObjects: [
           {type: 5, value: 100},
           {type: 5, value: 101},
@@ -96,15 +113,21 @@ describe('loader/bldrsElementProperties', () => {
       const relC = new IfcRelDefinesByProperties({
         expressID: 998,
         type: 4186316022,
+        GlobalId: {type: 1, value: 'g998'},
         RelatedObjects: [{type: 5, value: 102}],
         RelatingPropertyDefinition: {type: 5, value: 501},
       })
+      // Walls + psets all have GlobalId (IfcRoot-derived). The
+      // post-iteration filter keeps anything with GlobalId plus
+      // anything reachable from those entities via non-geometric
+      // refs — psets 500 / 501 are reachable through the rels'
+      // RelatingPropertyDefinition refs, so they're kept too.
       const entities = {
-        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall A'}},
-        101: {expressID: 101, type: 3124254112, Name: {type: 1, value: 'Wall B'}},
-        102: {expressID: 102, type: 3124254112, Name: {type: 1, value: 'Wall C'}},
-        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset_WallCommon'}},
-        501: {expressID: 501, type: 1660063152, Name: {type: 1, value: 'Pset_QuantityTakeOff'}},
+        100: {expressID: 100, type: 3124254112, GlobalId: {type: 1, value: 'g100'}, Name: {type: 1, value: 'Wall A'}},
+        101: {expressID: 101, type: 3124254112, GlobalId: {type: 1, value: 'g101'}, Name: {type: 1, value: 'Wall B'}},
+        102: {expressID: 102, type: 3124254112, GlobalId: {type: 1, value: 'g102'}, Name: {type: 1, value: 'Wall C'}},
+        500: {expressID: 500, type: 1660063152, GlobalId: {type: 1, value: 'g500'}, Name: {type: 1, value: 'Pset_WallCommon'}},
+        501: {expressID: 501, type: 1660063152, GlobalId: {type: 1, value: 'g501'}, Name: {type: 1, value: 'Pset_QuantityTakeOff'}},
         998: relC,
         999: relAB,
       }
@@ -190,10 +213,13 @@ describe('loader/bldrsElementProperties', () => {
     })
 
     it('skips entities whose getLine returns undefined (sync error tolerance)', async () => {
+      // GlobalId added so survivors pass the IfcRoot-reachability
+      // filter (otherwise everything would prune and the assertion
+      // below would trivially pass for the wrong reason).
       const entities = {
-        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall'}},
+        100: {expressID: 100, type: 3124254112, GlobalId: {type: 1, value: 'g100'}, Name: {type: 1, value: 'Wall'}},
         // 101 deliberately missing → proxy.getLine(101) returns undefined.
-        102: {expressID: 102, type: 3124254112, Name: {type: 1, value: 'Door'}},
+        102: {expressID: 102, type: 3124254112, GlobalId: {type: 1, value: 'g102'}, Name: {type: 1, value: 'Door'}},
       }
       // Construct mgr that yields 101 even though entities[101] is missing.
       const stepModel = {
@@ -228,13 +254,48 @@ describe('loader/bldrsElementProperties', () => {
           if (id === 100) {
             throw new Error('boom')
           }
-          return {expressID: id, type: 3124254112}
+          // GlobalId needed to survive the IfcRoot-reachability
+          // filter — 101 is the entity we want to assert survives.
+          return {expressID: id, type: 3124254112, GlobalId: {type: 1, value: `g${id}`}}
         },
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
       const captured = await captureBldrsElementProperties(mgr, 0, null)
       expect(captured.itemProperties[100]).toBeUndefined()
       expect(captured.itemProperties[101]).toBeDefined()
+    })
+
+    it('prunes geometric primitives unreachable from any IfcRoot entity', async () => {
+      // Snowdon's fast-path capture without filtering pulls in ~2.7M
+      // entities (the IfcStepModel iterates EVERY parsed entity,
+      // dominated by IfcCartesianPoint / IfcDirection / IfcPolyloop
+      // hanging off Representation chains). The post-iteration filter
+      // keeps only entities reachable from IfcRoot-derived seeds
+      // (GlobalId-having) via non-geometric refs.
+      //
+      // This test pins the filter:
+      //   - 100 has GlobalId → seed → kept
+      //   - 500 reached from 100 via HasProperties → kept
+      //   - 999 has no GlobalId, no incoming non-geometric ref → pruned
+      //   - 1001 referenced from 100 only via Representation
+      //     (geometric chain) → pruned
+      const entities = {
+        100: {
+          expressID: 100, type: 3124254112,
+          GlobalId: {type: 1, value: 'g100'},
+          HasProperties: [{type: 5, value: 500}],
+          Representation: {type: 5, value: 1001}, // skipped: geometric
+        },
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset'}},
+        999: {expressID: 999, type: 1, Name: {type: 1, value: 'orphan'}},
+        1001: {expressID: 1001, type: 1, Name: {type: 1, value: 'IfcRepresentation'}},
+      }
+      const mgr = makeFastMgr(entities)
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.itemProperties[100]).toBeDefined() // root
+      expect(captured.itemProperties[500]).toBeDefined() // reached via HasProperties
+      expect(captured.itemProperties[999]).toBeUndefined() // orphan, pruned
+      expect(captured.itemProperties[1001]).toBeUndefined() // geometric, pruned
     })
 
     it('falls back to slow path when fast path yields zero entities', async () => {
@@ -734,15 +795,19 @@ describe('loader/bldrsElementProperties', () => {
       }
 
       const captured = await captureBldrsElementProperties(mgr, 0, tree)
-      // BFS must reach every entity referenced from 621 (and from
-      // anything 621 references, transitively).
+      // BFS reaches entities via OwnerHistory's `OwningUser` /
+      // `OwningApplication` refs — those field names aren't in
+      // `GEOMETRIC_FIELD_NAMES`. But `ObjectPlacement` (→559) and
+      // `Representation` (→611) ARE skipped, so 559 and 611 are
+      // intentionally NOT in the captured map.
       expect(captured.itemProperties[621]).toEqual(ifcSiteEntity)
       expect(captured.itemProperties[28]).toEqual(ownerHistory)
-      // Through the cycle 28 → 22 / 25, then 559 → 22 (already seen).
       expect(captured.itemProperties[22]).toBeDefined()
       expect(captured.itemProperties[25]).toBeDefined()
-      expect(captured.itemProperties[559]).toBeDefined()
-      expect(captured.itemProperties[611]).toBeDefined()
+      // Geometric chain entities — pruned by the geometric-field
+      // skip in `collectRefIds`. Properties panel never derefs these.
+      expect(captured.itemProperties[559]).toBeUndefined()
+      expect(captured.itemProperties[611]).toBeUndefined()
 
       // Round-trip through compress + inject + parse + decode.
       const baseGlb = serializeGlb(

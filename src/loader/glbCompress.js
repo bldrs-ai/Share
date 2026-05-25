@@ -103,28 +103,44 @@ export async function compressGlb(glbBytes, mode) {
   if (!mode) {
     return {bytes: glbBytes, mode: null}
   }
-  // DRACO quantization is incompatible with per-vertex integer
-  // attributes whose value range exceeds 16 bits. Our IFC cache
-  // path stores `expressID` and `instanceID` per vertex; on real
-  // models these go up to ~1M, well above DRACO's 65535 ceiling.
-  // Quantization collapses adjacent IDs onto the same value →
-  // pick-resolution maps to the wrong expressID → selection
-  // subset grabs unrelated triangles ("skirt" artefacts).
+  // DRACO and Meshopt both produce corrupt picking on per-vertex
+  // integer attributes that distinguish elements. The mechanisms
+  // differ but the failure mode is the same: a click on element A's
+  // surface ends up selecting element B's triangles too.
   //
-  // Skip DRACO entirely when detected — preserves picking correctness
-  // at the cost of compression. Hoisted before the gltf-transform
-  // dynamic imports so we don't pay the import cost for a no-op.
-  // Meshopt handles integer attributes natively (it filters by
-  // attribute type rather than quantising uniformly) so users wanting
-  // compression on IFC-cached GLBs should `?feature=glbMeshopt`
-  // instead.
-  if (mode === 'draco' && hasPerVertexIfcIds(glbBytes)) {
+  //   - DRACO normalises attribute values to [0, 1] then quantises
+  //     to 16 bits (max). For per-vertex expressIDs on Snowdon
+  //     (values 0-1M), the quantization step is ~15 → adjacent
+  //     expressIDs collapse onto the same value → picking returns
+  //     the wrong ID.
+  //   - Meshopt skips quantising integer attributes outside [-1,1]
+  //     (the "Skipping _EXPRESSID; out of [-1,1] range" warning),
+  //     so values are preserved exactly. BUT Meshopt's `weld()`
+  //     pass merges vertices at near-identical positions for
+  //     compression. Adjacent walls share corner vertices; weld
+  //     picks one element's expressID for the shared vertex; the
+  //     other element's triangles now reference that vertex too →
+  //     selection subset filtering by expressID grabs both walls'
+  //     triangles.
+  //
+  // Until the per-triangle-ID extension lands (see below), skip both
+  // compressors when per-vertex IFC IDs are present. Cost is a
+  // bigger cache file but correctness is preserved.
+  //
+  // FOLLOW-UP (per-triangle-ID extension): replace per-vertex
+  // `_EXPRESSID` / `_INSTANCEID` with a per-mesh-range (or per-
+  // triangle) lookup table stored in a `BLDRS_face_express_ids` glTF
+  // extension. The vertex attributes go away → compression is free
+  // to weld / quantize without corrupting picking. Reader rebuilds
+  // per-vertex IDs from the lookup on load. Bigger architectural
+  // change; tracked as a separate slice.
+  if ((mode === 'draco' || mode === 'meshopt') && hasPerVertexIfcIds(glbBytes)) {
     glbInfo(
-      'compress: DRACO skipped — GLB has per-vertex _EXPRESSID / ' +
-      '_INSTANCEID attributes whose value range exceeds DRACO\'s ' +
-      '16-bit quantization ceiling (max ~65535). Using uncompressed ' +
-      'storage to preserve picking correctness. Use `?feature=glbMeshopt` ' +
-      'for compression on IFC-cached GLBs.')
+      `compress: ${mode} skipped — GLB has per-vertex _EXPRESSID / ` +
+      '_INSTANCEID attributes. DRACO\'s 16-bit quantization ceiling ' +
+      'and Meshopt\'s vertex welding both corrupt picking on these. ' +
+      'Storing uncompressed to preserve correctness. Per-triangle-ID ' +
+      'extension is the unblock — tracked as a follow-up.')
     return {bytes: glbBytes, mode: null}
   }
   const startMs = Date.now()
