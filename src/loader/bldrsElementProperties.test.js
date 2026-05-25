@@ -14,6 +14,226 @@ import {
 
 
 describe('loader/bldrsElementProperties', () => {
+  describe('captureBldrsElementProperties — fast path via Conway adapter', () => {
+    // The fast path reaches into `ifcAPI.getPassthrough(modelID)` and
+    // iterates the upstream Conway `IfcStepModel` synchronously,
+    // calling `proxy.getLine(expressID)` per entity to convert raw
+    // STEP-tape data to the wit-three-shape object consumers expect.
+    // Pset extraction happens inline — `IfcRelDefinesByProperties`
+    // entities encountered during the walk build the
+    // product→psetIds index in one pass. No spatial tree needed.
+
+    /**
+     * Build a fake ifcManager that mimics the adapter surface:
+     *   manager.ifcAPI.getPassthrough(modelID) → proxy
+     *   proxy.model = [stepModel, ...]
+     *   stepModel[Symbol.iterator]() → yields entities
+     *   proxy.getLine(expressID) → entity-shape object
+     *
+     * @param {object} entitiesById flat map expressID → entity-shape
+     * @return {object}
+     */
+    function makeFastMgr(entitiesById) {
+      const ids = Object.keys(entitiesById).map(Number).sort((a, b) => a - b)
+      const stepModel = {
+        * [Symbol.iterator]() {
+          for (const id of ids) {
+            // Yield a minimal "Conway entity" — only expressID is
+            // accessed by the fast loop; everything else comes from
+            // proxy.getLine().
+            yield {expressID: id}
+          }
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (expressID) => entitiesById[expressID],
+      }
+      return {
+        ifcAPI: {getPassthrough: (mid) => (mid === 0 ? proxy : undefined)},
+      }
+    }
+
+    it('iterates all entities and produces the same itemProperties map', async () => {
+      const entities = {
+        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall'}},
+        101: {expressID: 101, type: 3124254112, Name: {type: 1, value: 'Door'}},
+        102: {expressID: 102, type: 1660063152, Name: {type: 1, value: 'Pset_Common'}},
+      }
+      const mgr = makeFastMgr(entities)
+      const captured = await captureBldrsElementProperties(mgr, 0, /* unused */ null)
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '101', '102'])
+      expect(captured.itemProperties[100]).toEqual(entities[100])
+      // Pset index is empty when no IfcRelDefinesByProperties entities exist.
+      expect(captured.propertySets).toEqual({})
+    })
+
+    it('builds propertySets from IfcRelDefinesByProperties entities encountered in the walk', async () => {
+      // Build a relation entity. wit-three's FromTape produces an
+      // instance whose `constructor.name === 'IfcRelDefinesByProperties'`;
+      // the fast path detects by that string. We mock with a named
+      // class so `constructor.name` matches.
+      /** Mimics `web-ifc`'s `IfcRelDefinesByProperties` class shape. */
+      class IfcRelDefinesByProperties {
+        /** @param {object} fields */
+        constructor(fields) {
+          Object.assign(this, fields)
+        }
+      }
+      const relAB = new IfcRelDefinesByProperties({
+        expressID: 999,
+        type: 4186316022,
+        RelatedObjects: [
+          {type: 5, value: 100},
+          {type: 5, value: 101},
+        ],
+        RelatingPropertyDefinition: {type: 5, value: 500},
+      })
+      const relC = new IfcRelDefinesByProperties({
+        expressID: 998,
+        type: 4186316022,
+        RelatedObjects: [{type: 5, value: 102}],
+        RelatingPropertyDefinition: {type: 5, value: 501},
+      })
+      const entities = {
+        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall A'}},
+        101: {expressID: 101, type: 3124254112, Name: {type: 1, value: 'Wall B'}},
+        102: {expressID: 102, type: 3124254112, Name: {type: 1, value: 'Wall C'}},
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset_WallCommon'}},
+        501: {expressID: 501, type: 1660063152, Name: {type: 1, value: 'Pset_QuantityTakeOff'}},
+        998: relC,
+        999: relAB,
+      }
+      const mgr = makeFastMgr(entities)
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      // Walls 100 and 101 share pset 500 (via the same rel). Wall 102
+      // gets pset 501 from a different rel. The pset entities
+      // themselves (500, 501) and the rel entities (998, 999) also
+      // land in itemProperties so the reader can deref them.
+      expect(captured.propertySets[100]).toEqual([500])
+      expect(captured.propertySets[101]).toEqual([500])
+      expect(captured.propertySets[102]).toEqual([501])
+      expect(captured.itemProperties[500]).toBeDefined()
+      expect(captured.itemProperties[998]).toBe(relC)
+      expect(captured.itemProperties[999]).toBe(relAB)
+    })
+
+    it('de-dupes psetIds when a product appears under the same rel twice', async () => {
+      /** Same shape mock as above; redefined per-test for isolation. */
+      class IfcRelDefinesByProperties {
+        /** @param {object} fields */
+        constructor(fields) {
+          Object.assign(this, fields)
+        }
+      }
+      // Defensive: malformed IFCs occasionally double-list a product
+      // under the same rel. We shouldn't push the pset id twice.
+      const rel = new IfcRelDefinesByProperties({
+        expressID: 999,
+        type: 4186316022,
+        RelatedObjects: [
+          {type: 5, value: 100},
+          {type: 5, value: 100}, // duplicate
+        ],
+        RelatingPropertyDefinition: {type: 5, value: 500},
+      })
+      const entities = {
+        100: {expressID: 100, type: 3124254112},
+        500: {expressID: 500, type: 1660063152},
+        999: rel,
+      }
+      const mgr = makeFastMgr(entities)
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.propertySets[100]).toEqual([500])
+    })
+
+    it('skips entities whose getLine returns undefined (sync error tolerance)', async () => {
+      const entities = {
+        100: {expressID: 100, type: 3124254112, Name: {type: 1, value: 'Wall'}},
+        // 101 deliberately missing → proxy.getLine(101) returns undefined.
+        102: {expressID: 102, type: 3124254112, Name: {type: 1, value: 'Door'}},
+      }
+      // Construct mgr that yields 101 even though entities[101] is missing.
+      const stepModel = {
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          yield {expressID: 101}
+          yield {expressID: 102}
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => entities[id],
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.itemProperties[100]).toBeDefined()
+      expect(captured.itemProperties[101]).toBeUndefined()
+      expect(captured.itemProperties[102]).toBeDefined()
+    })
+
+    it('swallows per-entity throws and continues the walk', async () => {
+      // A bad entry in proxy.getLine shouldn't abort the whole capture.
+      const stepModel = {
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          yield {expressID: 101}
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => {
+          if (id === 100) {
+            throw new Error('boom')
+          }
+          return {expressID: id, type: 3124254112}
+        },
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.itemProperties[100]).toBeUndefined()
+      expect(captured.itemProperties[101]).toBeDefined()
+    })
+
+    it('falls back to slow path when fast path yields zero entities', async () => {
+      // Empty stepModel — fast path returns null, slow path takes
+      // over (and itself returns null because no spatial tree given).
+      // Net result: null, exercising the fallback chain.
+      const proxy = {
+        model: [{
+          [Symbol.iterator]: () => ({next: () => ({done: true, value: undefined})}),
+        }],
+        getLine: () => undefined,
+      }
+      const mgr = {
+        ifcAPI: {getPassthrough: () => proxy},
+        // Slow-path API surface exists too so the chain runs to its
+        // null return rather than crashing.
+        getItemProperties: () => Promise.resolve({}),
+        getPropertySets: () => Promise.resolve([]),
+      }
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured).toBeNull()
+    })
+
+    it('falls back to slow path when adapter surface is absent (test stubs etc)', async () => {
+      // The existing slow-path tests rely on this: their ifcManager
+      // stubs don't have `.ifcAPI`, so the fast path is unreachable
+      // and the slow path takes over. Spatial tree gates the slow
+      // path, so providing one + a working getItemProperties stub
+      // yields a result.
+      const mgr = {
+        // No ifcAPI — fast path returns null.
+        getItemProperties: (_mid, id) => Promise.resolve({expressID: id, name: `e${id}`}),
+        getPropertySets: () => Promise.resolve([]),
+      }
+      const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
+      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      expect(captured).not.toBeNull()
+      expect(captured.itemProperties[1]).toBeDefined()
+    })
+  })
+
   describe('captureBldrsElementProperties — null paths', () => {
     it('returns null when ifcManager is missing', async () => {
       const tree = {expressID: 1, type: 'IFCPROJECT', children: []}

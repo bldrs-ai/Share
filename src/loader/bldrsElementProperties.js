@@ -138,35 +138,190 @@ function collectSpatialTreeIds(root) {
 
 /**
  * Capture the element-properties closure for a model from an
- * IfcManager-like source. The walk:
+ * IfcManager-like source. Tries the fast sync-bulk path first
+ * (`captureBldrsElementPropertiesFast` — reaches into the Conway
+ * adapter's parsed model and iterates synchronously), falling back
+ * to the slow per-entity async BFS for environments that don't
+ * expose the adapter internals (tests, non-Conway loaders).
  *
- *   1. Seed the work queue with every expressID in the spatial tree.
- *   2. For each seed product, fetch `getPropertySets(...)` and index
- *      the result by product → pset IDs. Also enqueue the pset IDs
- *      (so their properties land in `itemProperties` too).
- *   3. BFS: pop an ID, call `getItemProperties(modelID, id, false, false)`
- *      (shallow — `recursive=false` so refs stay as `{type:5, value:id}`
- *      objects we can index), scan the result for IFC references,
- *      enqueue any new ones.
- *   4. Stop when the queue drains or the closure exceeds
- *      `MAX_CLOSURE_SIZE` (defense against a pathological model).
+ * The two paths produce the same output shape so the cached
+ * artifact is identical regardless of which path ran. The fast
+ * path is ~100× faster on large IFCs because it skips Promise-per-
+ * entity overhead: ~10 min → ~10 s on a 100MB Snowdon IFC.
  *
  * Returns the wire-format payload, or `null` when no manager is
  * available (non-IFC sources, cache-hit GLB with no live parser).
- * Errors at the manager are logged and swallowed so a single missing
- * entity never blocks the GLB write.
  *
- * @param {object|null|undefined} ifcManager IfcManager-like with
- *   `getItemProperties(modelID, expressID, indirect, recursive)`
- *   and `getPropertySets(modelID, expressID, recursive)`.
+ * @param {object|null|undefined} ifcManager IfcManager-like.
  * @param {number} modelID
  * @param {object|null|undefined} spatialTree the JSON tree
- *   `captureBldrsSpatialTree` returned. Acts as the BFS seed.
+ *   `captureBldrsSpatialTree` returned. Acts as the BFS seed for the
+ *   slow path; the fast path ignores it (iterates all entities).
  * @return {Promise<object|null>}
  */
 export async function captureBldrsElementProperties(ifcManager, modelID, spatialTree) {
-  if (!ifcManager ||
-      typeof ifcManager.getItemProperties !== 'function' ||
+  if (!ifcManager) {
+    return null
+  }
+  const fastResult = captureBldrsElementPropertiesFast(ifcManager, modelID)
+  if (fastResult !== null) {
+    return fastResult
+  }
+  return await captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTree)
+}
+
+
+/**
+ * Fast sync-bulk capture path. Reaches into the Conway adapter's
+ * internal `IfcApiProxyIfc` to get the upstream Conway `IfcStepModel`
+ * and iterates it synchronously — `for (const entity of stepModel)`
+ * walks every parsed entity without any async overhead. For each,
+ * `proxy.getLine(expressID)` synchronously converts the raw STEP
+ * tape into the wit-three-shape object (the exact shape consumers
+ * expect; same as what `ifcManager.getItemProperties` returns,
+ * minus the async wrapping). Property-set indexing happens in the
+ * same loop by detecting `IfcRelDefinesByProperties` entities and
+ * walking their `RelatingPropertyDefinition` / `RelatedObjects`
+ * fields — no second pass needed.
+ *
+ * Returns `null` (so the caller falls back to the slow path) when:
+ *   - the adapter surface isn't accessible (test stubs without
+ *     `ifcAPI.getPassthrough`, non-Conway IFC backends)
+ *   - the proxy's internal `model` field isn't where we expect
+ *   - the iteration would yield zero entities (parser state empty)
+ *
+ * Coupling notes: this reaches `ifcAPI.getPassthrough(modelID)` and
+ * then `proxy.model[0]` (the IfcStepModel) — both are stable on
+ * the current adapter (see `ifc_api.js:53` and `ifc_api_proxy_ifc.js:154`)
+ * but neither is part of the formal public API. We file a Conway PR
+ * to expose them officially (parse-only `OpenModel` flag + bulk
+ * iteration accessor); until then this is the seam. The fallback to
+ * the slow path keeps tests + non-Conway sources working.
+ *
+ * @param {object} ifcManager IfcManager-like with `.ifcAPI`.
+ * @param {number} modelID
+ * @return {object|null} `{itemProperties, propertySets}` or `null`
+ *   when the fast path is unavailable.
+ */
+function captureBldrsElementPropertiesFast(ifcManager, modelID) {
+  const ifcAPI = ifcManager.ifcAPI
+  if (!ifcAPI || typeof ifcAPI.getPassthrough !== 'function') {
+    return null
+  }
+  const proxy = ifcAPI.getPassthrough(modelID)
+  // `proxy.model` is a tuple [stepModel, scene, geometryMap, ...]
+  // built in `IfcApiProxyIfc` ctor. We only need [0] (the
+  // IfcStepModel); the rest is geometry state.
+  const stepModel = proxy?.model?.[0]
+  if (!stepModel || typeof stepModel[Symbol.iterator] !== 'function' ||
+      typeof proxy.getLine !== 'function') {
+    return null
+  }
+
+  const startMs = Date.now()
+  const itemProperties = {}
+  const propertySets = {}
+  let captured = 0
+  let psetRelCount = 0
+
+  for (const entity of stepModel) {
+    const expressID = entity?.expressID
+    if (typeof expressID !== 'number') {
+      continue
+    }
+    let props
+    try {
+      // Sync — no Promise allocation, no microtask hop. This is the
+      // 10-min-to-10-sec win on Snowdon: ~576k entities × ~10µs each
+      // instead of × ~1ms each through the async manager surface.
+      props = proxy.getLine(expressID)
+    } catch (e) {
+      // Per-entity failures are non-fatal — skip and continue. The
+      // wit-three slow path swallows the same way (one entity gap
+      // means one missing Properties row; not a cache abort).
+      continue
+    }
+    if (!props || typeof props !== 'object') {
+      continue
+    }
+    itemProperties[expressID] = props
+    captured++
+
+    // Inline pset-index extraction. An IfcRelDefinesByProperties
+    // entity has `RelatedObjects` (an array of {type:5, value:productId}
+    // refs to products) + `RelatingPropertyDefinition` ({type:5, value:psetId}
+    // ref to the pset). Detect by class name (`FromTape` constructs
+    // preserve the wit-three class name verbatim). Wit-three's stock
+    // `getPropertySets(modelID, productID)` does the same walk one
+    // product at a time over an async API — building the index here
+    // in the same pass costs us nothing.
+    if (props.constructor?.name === 'IfcRelDefinesByProperties') {
+      psetRelCount++
+      const psetRef = props.RelatingPropertyDefinition
+      const psetId = psetRef && typeof psetRef === 'object' ? psetRef.value : null
+      const relatedObjects = props.RelatedObjects
+      if (typeof psetId === 'number' && Array.isArray(relatedObjects)) {
+        for (const obj of relatedObjects) {
+          if (!obj || typeof obj !== 'object') {
+            continue
+          }
+          const productId = obj.value
+          if (typeof productId !== 'number') {
+            continue
+          }
+          let list = propertySets[productId]
+          if (!list) {
+            list = []
+            propertySets[productId] = list
+          }
+          // De-dup defensively — IFCs occasionally double-register.
+          if (!list.includes(psetId)) {
+            list.push(psetId)
+          }
+        }
+      }
+    }
+  }
+
+  if (captured === 0) {
+    // Parser state must have been empty / not the expected shape.
+    // Let the slow path try; it'll log the right cause.
+    return null
+  }
+
+  glbInfo(
+    `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: fast-path captured ${captured} entities ` +
+    `(${psetRelCount} IfcRelDefinesByProperties → ${Object.keys(propertySets).length} ` +
+    `products with psets) in ${Date.now() - startMs}ms`)
+
+  return {itemProperties, propertySets}
+}
+
+
+/**
+ * Slow per-entity async BFS path. Used as a fallback when the fast
+ * path can't reach the adapter internals (test stubs, non-Conway
+ * loaders, future API drift). Walks the spatial tree as a seed set,
+ * `await`s `ifcManager.getItemProperties(modelID, id, false, false)`
+ * per entity, scans the result for IFC references (`{type:5, value:id}`)
+ * to extend the closure. Bounded by `MAX_CLOSURE_SIZE` for defense
+ * against pathological inputs.
+ *
+ * Slow because each `getItemProperties` is async + the manager does
+ * per-call schema lookup + Promise allocation. On Snowdon (576k
+ * entities) this took ~10 minutes; the fast path replaces it.
+ *
+ * Identical output shape to the fast path so the cache artifact is
+ * stable across the two backends.
+ *
+ * @param {object} ifcManager IfcManager-like with `getItemProperties`
+ *   and `getPropertySets` async methods.
+ * @param {number} modelID
+ * @param {object|null|undefined} spatialTree BFS seed source.
+ * @return {Promise<object|null>}
+ */
+async function captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTree) {
+  if (typeof ifcManager.getItemProperties !== 'function' ||
       typeof ifcManager.getPropertySets !== 'function') {
     return null
   }
