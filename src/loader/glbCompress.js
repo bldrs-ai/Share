@@ -29,6 +29,7 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {glbInfo, glbVerbose} from './glbLog'
+import {parseGlb} from './injectGlbExtensions'
 
 
 /** @typedef {'draco'|'meshopt'|null} GlbCompressionMode */
@@ -102,6 +103,30 @@ export async function compressGlb(glbBytes, mode) {
   if (!mode) {
     return {bytes: glbBytes, mode: null}
   }
+  // DRACO quantization is incompatible with per-vertex integer
+  // attributes whose value range exceeds 16 bits. Our IFC cache
+  // path stores `expressID` and `instanceID` per vertex; on real
+  // models these go up to ~1M, well above DRACO's 65535 ceiling.
+  // Quantization collapses adjacent IDs onto the same value →
+  // pick-resolution maps to the wrong expressID → selection
+  // subset grabs unrelated triangles ("skirt" artefacts).
+  //
+  // Skip DRACO entirely when detected — preserves picking correctness
+  // at the cost of compression. Hoisted before the gltf-transform
+  // dynamic imports so we don't pay the import cost for a no-op.
+  // Meshopt handles integer attributes natively (it filters by
+  // attribute type rather than quantising uniformly) so users wanting
+  // compression on IFC-cached GLBs should `?feature=glbMeshopt`
+  // instead.
+  if (mode === 'draco' && hasPerVertexIfcIds(glbBytes)) {
+    glbInfo(
+      'compress: DRACO skipped — GLB has per-vertex _EXPRESSID / ' +
+      '_INSTANCEID attributes whose value range exceeds DRACO\'s ' +
+      '16-bit quantization ceiling (max ~65535). Using uncompressed ' +
+      'storage to preserve picking correctness. Use `?feature=glbMeshopt` ' +
+      'for compression on IFC-cached GLBs.')
+    return {bytes: glbBytes, mode: null}
+  }
   const startMs = Date.now()
   try {
     const {WebIO} = await import('@gltf-transform/core')
@@ -154,6 +179,57 @@ let dracoEncoderPromise = null
  * `DracoEncoderModule` global. The returned object is what
  * `@gltf-transform`'s `draco()` transform expects under
  * `draco3d.encoder`.
+ *
+ * @return {Promise<object>} the instantiated encoder Module
+ */
+/**
+ * Detect whether a GLB carries per-vertex IFC identity attributes
+ * (`_EXPRESSID` or `_INSTANCEID`) that would be corrupted by DRACO's
+ * 16-bit quantization. These attributes encode integer expressIDs as
+ * per-vertex values; on real IFCs the IDs reach 100k–1M+, well above
+ * DRACO's 65535 ceiling. Quantization collapses adjacent IDs onto the
+ * same value → picking returns the wrong expressID → selection subset
+ * grabs unrelated triangles. We skip DRACO when detected.
+ *
+ * Best-effort: a parse failure returns `false` so the compression
+ * attempt proceeds; if the GLB is malformed, DRACO will fail anyway
+ * and `compressGlb`'s outer try/catch returns the original bytes.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {boolean}
+ */
+function hasPerVertexIfcIds(glbBytes) {
+  try {
+    const {json} = parseGlb(glbBytes)
+    if (!Array.isArray(json.meshes)) {
+      return false
+    }
+    for (const mesh of json.meshes) {
+      if (!Array.isArray(mesh.primitives)) {
+        continue
+      }
+      for (const prim of mesh.primitives) {
+        const attrs = prim.attributes
+        if (!attrs || typeof attrs !== 'object') {
+          continue
+        }
+        if ('_EXPRESSID' in attrs || '_INSTANCEID' in attrs) {
+          return true
+        }
+      }
+    }
+    return false
+  } catch (e) {
+    glbVerbose('compress: incompatibility probe failed; assuming false:', e)
+    return false
+  }
+}
+
+
+/**
+ * Lazy-load Google's draco3d encoder via a `<script>` injection.
+ * Cached at module scope so subsequent compressions reuse the same
+ * factory. Resolves with the instantiated encoder Module.
  *
  * @return {Promise<object>} the instantiated encoder Module
  */
