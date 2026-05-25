@@ -66,6 +66,22 @@ describe('FeatureFlags', () => {
       expect(isFeatureEnabled('GLBDRACO')).toBe(true)
     })
 
+    it('matches a URL value whose case diverges from the flag definition', () => {
+      // Regression pin: the conwayDirectIfc flag was defined with the
+      // canonical camelCase `conwayDirectIfc`, but URL-bar autocomplete
+      // / hand-typing variations like `conwayDirectIFC` (all-caps IFC)
+      // are common — and the user-typed form is what ends up in
+      // browser autocomplete memory. The static flag lookup +
+      // URL-value matching both lowercase before comparing, so any
+      // case variant in the URL resolves to the same flag.
+      window.location.search = '?feature=conwayDirectIFC'
+      expect(isFeatureEnabled('conwayDirectIfc')).toBe(true)
+      // And the reverse direction: URL canonical, caller variant.
+      window.location.search = '?feature=conwayDirectIfc'
+      expect(isFeatureEnabled('CONWAYDIRECTIFC')).toBe(true)
+      expect(isFeatureEnabled('conwaydirectifc')).toBe(true)
+    })
+
     it('trims whitespace around comma-separated values', () => {
       window.location.search = '?feature= glb , glbDraco '
       expect(isFeatureEnabled('glb')).toBe(true)
