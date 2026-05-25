@@ -49,6 +49,7 @@
 // DOM render, integrity check (every key in `propertySets` exists
 // as a product in `itemProperties`).
 import * as pako from 'pako'
+import {IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
 import {glbInfo, glbVerbose} from './glbLog'
 
 
@@ -250,12 +251,15 @@ function captureBldrsElementPropertiesFast(ifcManager, modelID) {
     // Inline pset-index extraction. An IfcRelDefinesByProperties
     // entity has `RelatedObjects` (an array of {type:5, value:productId}
     // refs to products) + `RelatingPropertyDefinition` ({type:5, value:psetId}
-    // ref to the pset). Detect by class name (`FromTape` constructs
-    // preserve the wit-three class name verbatim). Wit-three's stock
-    // `getPropertySets(modelID, productID)` does the same walk one
-    // product at a time over an async API — building the index here
-    // in the same pass costs us nothing.
-    if (props.constructor?.name === 'IfcRelDefinesByProperties') {
+    // ref to the pset). Detect by numeric `type` (the IFC type code
+    // — stable across wit-three's FromTape variants). An earlier
+    // version of this code used `constructor.name` which silently
+    // failed on Snowdon — `FromTape` does not always produce a
+    // class with a usable `name` property, so the check missed every
+    // rel. Wit-three's stock `getPropertySets(modelID, productID)`
+    // does the same walk one product at a time over an async API —
+    // building the index here in the same pass costs us nothing.
+    if (props.type === IFCRELDEFINESBYPROPERTIES) {
       psetRelCount++
       const psetRef = props.RelatingPropertyDefinition
       const psetId = psetRef && typeof psetRef === 'object' ? psetRef.value : null

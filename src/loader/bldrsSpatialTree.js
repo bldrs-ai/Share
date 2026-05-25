@@ -149,9 +149,28 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     return null
   }
   try {
-    const root = await ifcManager.getSpatialStructure(modelID, true)
+    // Prefer the bare-tree call (`includeProperties=false`) — Conway's
+    // legacy slow path fires "Including properties in
+    // getSpatialStructure with the JSON workflow disabled can lead to
+    // poor performance" when the manager calls `getItemProperties` per
+    // node inline. We don't need inline props in the spatial tree — we
+    // serialize only {expressID, type, Name, LongName, children}, and
+    // Name/LongName can be enriched sync via `proxy.getLine` (same
+    // fast surface the element-properties capture uses) in one walk
+    // over the typically-small tree (~6k nodes on Snowdon).
+    //
+    // Falls back to `includeProperties=true` when the adapter surface
+    // isn't reachable (test stubs, non-Conway loaders) — the warning
+    // fires there, but the codepath is otherwise unchanged.
+    const proxy = ifcManager.ifcAPI?.getPassthrough?.(modelID)
+    const canEnrichSync = proxy && typeof proxy.getLine === 'function'
+    const includeProperties = !canEnrichSync
+    const root = await ifcManager.getSpatialStructure(modelID, includeProperties)
     if (!root || root.expressID === undefined) {
       return null
+    }
+    if (canEnrichSync) {
+      enrichNodeNamesSync(root, proxy)
     }
     return serializeNode(root)
   } catch (e) {
@@ -159,6 +178,49 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
       `${BLDRS_SPATIAL_TREE_EXTENSION_NAME}: capture failed; ` +
       'cache-hit NavTree will be empty for this model:', e)
     return null
+  }
+}
+
+
+/**
+ * Walk a bare spatial tree (just `{expressID, type, children}` per
+ * node — the shape `getSpatialStructure(modelID, false)` returns) and
+ * fill in `Name` / `LongName` from `proxy.getLine(expressID)`. Sync
+ * end-to-end; the proxy's `getLine` is the same sync-bulk surface the
+ * element-properties capture uses. One call per node, no async hops.
+ *
+ * Mutates the input tree in place. Bounded by `MAX_TREE_DEPTH` (same
+ * recursion cap `serializeNode` uses).
+ *
+ * @param {object} node spatial-tree node, mutated
+ * @param {object} proxy IfcApiProxyIfc with sync `getLine`
+ * @param {number} [depth] recursion depth — bounded by `MAX_TREE_DEPTH`
+ */
+function enrichNodeNamesSync(node, proxy, depth = 0) {
+  if (!node || depth >= MAX_TREE_DEPTH) {
+    return
+  }
+  if (typeof node.expressID === 'number' && node.Name === undefined) {
+    try {
+      const line = proxy.getLine(node.expressID)
+      if (line) {
+        if (line.Name !== undefined) {
+          node.Name = line.Name
+        }
+        if (line.LongName !== undefined) {
+          node.LongName = line.LongName
+        }
+      }
+    } catch (e) {
+      // Per-node failure is non-fatal — node renders without Name.
+      // Don't log per-node; the parent capture's bookkeeping logs
+      // the aggregate.
+    }
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) {
+      enrichNodeNamesSync(child, proxy, depth + 1)
+    }
   }
 }
 

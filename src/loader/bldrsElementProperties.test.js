@@ -69,10 +69,14 @@ describe('loader/bldrsElementProperties', () => {
     })
 
     it('builds propertySets from IfcRelDefinesByProperties entities encountered in the walk', async () => {
-      // Build a relation entity. wit-three's FromTape produces an
-      // instance whose `constructor.name === 'IfcRelDefinesByProperties'`;
-      // the fast path detects by that string. We mock with a named
-      // class so `constructor.name` matches.
+      // Build a relation entity. The fast path detects
+      // `IfcRelDefinesByProperties` by the numeric `props.type` field
+      // (= `IFCRELDEFINESBYPROPERTIES` = 4186316022) — stable across
+      // wit-three's `FromTape` variants. An earlier iteration used
+      // `props.constructor.name` which failed silently on real Snowdon
+      // data (FromTape doesn't always produce a class with a usable
+      // `name`), so the regression is pinned by setting `type` here
+      // and verifying psets show up.
       /** Mimics `web-ifc`'s `IfcRelDefinesByProperties` class shape. */
       class IfcRelDefinesByProperties {
         /** @param {object} fields */
@@ -116,6 +120,44 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured.itemProperties[500]).toBeDefined()
       expect(captured.itemProperties[998]).toBe(relC)
       expect(captured.itemProperties[999]).toBe(relAB)
+    })
+
+    it('detects IfcRelDefinesByProperties by numeric type, not constructor.name', async () => {
+      // Regression pin for the Snowdon 0-psets bug. Real wit-three
+      // `FromTape` constructs sometimes produce plain objects (or
+      // class instances whose `constructor.name` got mangled by
+      // build-step minification / re-export). The fast path now
+      // matches on `props.type === IFCRELDEFINESBYPROPERTIES` so
+      // it's immune to either failure. We simulate by constructing
+      // the rel as a plain object (no class at all) — its
+      // `constructor.name === 'Object'`.
+      const relAsPlainObject = {
+        expressID: 999,
+        type: 4186316022, // IFCRELDEFINESBYPROPERTIES
+        RelatedObjects: [{type: 5, value: 100}],
+        RelatingPropertyDefinition: {type: 5, value: 500},
+      }
+      const entities = {
+        100: {expressID: 100, type: 3124254112},
+        500: {expressID: 500, type: 1660063152},
+        999: relAsPlainObject,
+      }
+      const stepModel = {
+        * [Symbol.iterator]() {
+          for (const id of [100, 500, 999]) {
+            yield {expressID: id}
+          }
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => entities[id],
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      // Pre-fix: this returned `{}` because `constructor.name` was
+      // 'Object'. Post-fix: type check matches, pset index built.
+      expect(captured.propertySets[100]).toEqual([500])
     })
 
     it('de-dupes psetIds when a product appears under the same rel twice', async () => {

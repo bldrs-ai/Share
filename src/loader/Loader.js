@@ -490,6 +490,57 @@ export async function load(
     }
   }
 
+  // BVH build for fast picking on cache-hit GLB. The Conway-direct
+  // cache-MISS path already does this inside `installConwayDirectGeometry`
+  // (line ~1480), but cache-HIT meshes come straight off GLTFLoader
+  // and never see a `computeBoundsTree()` call. Without a BVH, the
+  // per-frame hover raycast falls back to `Mesh.prototype.raycast`'s
+  // O(triangles) brute force — on a ~3M-tri Snowdon split into 85
+  // child meshes that drops hover-pick to ~1 FPS. With BVH, the same
+  // raycast is O(log N) per mesh and stays at 60 FPS.
+  //
+  // `BufferGeometry.prototype.computeBoundsTree` is the monkey-patch
+  // wit-three's `initializeMeshBVH` already installed at viewer init
+  // (`web-ifc-three/IFCLoader.js#initializeMeshBVH` writes it onto
+  // the prototype + replaces `Mesh.prototype.raycast` with
+  // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
+  // prototype but need their own `boundsTree` built per geometry.
+  //
+  // Gated on `cameFromGlbCache` so live IFC parses (which build
+  // their own BVH in `installConwayDirectGeometry` or via wit-three
+  // internals) don't double-build.
+  if (cameFromGlbCache) {
+    const bvhStartMs = Date.now()
+    let bvhBuilt = 0
+    let bvhTris = 0
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) {
+        return
+      }
+      // Skip if already has a BVH (defensive — shouldn't happen on
+      // cache-hit but won't rebuild if it does).
+      if (obj.geometry.boundsTree) {
+        return
+      }
+      if (typeof obj.geometry.computeBoundsTree !== 'function') {
+        return
+      }
+      try {
+        obj.geometry.computeBoundsTree()
+        bvhBuilt++
+        const idx = obj.geometry.index
+        bvhTris += idx ? (idx.count / 3) : 0
+      } catch (e) {
+        glbInfo(`reader: computeBoundsTree failed for one mesh; skipping:`, e)
+      }
+    })
+    if (bvhBuilt > 0) {
+      glbInfo(
+        `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
+        `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
+    }
+  }
+
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
   // Triggered for every source kind (github, local, upload, external)

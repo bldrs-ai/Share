@@ -164,34 +164,44 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
     // Capture BLDRS_* extension payloads from the live IFC parser state
-    // before it goes out of scope. We pass these through `injectGlbExtensions`
-    // even when null/empty — the helper is a no-op for an empty list, so
-    // the call-site stays unconditional.
+    // before it goes out of scope. Runs in parallel with `compressGlb`
+    // below to overlap the two costs (Conway sync iteration + DRACO/
+    // Meshopt encoder).
     //
-    // Element properties depend on the spatial tree (BFS seeds are the
-    // tree's expressIDs), so the two captures are sequential rather than
-    // parallel. The properties capture is the dominant cost in this
-    // block — O(closure) async calls to the ifcManager. Acceptable for
-    // a fire-and-forget warmup; revisit if it ever blocks main-thread.
+    // Element properties depend on the spatial tree (the slow-path BFS
+    // uses tree expressIDs as BFS seeds; the fast path ignores it), so
+    // the two captures are sequential rather than parallel.
     const modelId = model?.modelID ?? 0
-    const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
-    const elementProperties = await captureBldrsElementProperties(
-      ifcManager, modelId, spatialTree)
-    const {bytes: withExtensions, stats: extStats} = injectGlbExtensions(rawBytes, [
+    const capturePromise = (async () => {
+      const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+      const elementProperties = await captureBldrsElementProperties(
+        ifcManager, modelId, spatialTree)
+      return {spatialTree, elementProperties}
+    })()
+    // Compress FIRST, then inject. `@gltf-transform/core`'s `WebIO`
+    // (used inside `compressGlb`) parses the GLB into a Document and
+    // re-serialises it, which **silently drops any extension it
+    // doesn't have a registered handler for** — our `BLDRS_*`
+    // extensions vanish if injected before compression runs. Order
+    // matters: inject must come *after* compression so our extensions
+    // ride along untouched in the final BIN chunk.
+    //
+    // Use the *actual* compression mode (compressGlb may fall back to
+    // null on encoder failure) so the cached artifact lands in the
+    // matching schema slot. Otherwise a -draco / -meshopt suffix on
+    // uncompressed bytes would mislead a reader running with the same
+    // flag (it would expect compressed input on the next load).
+    const {bytes: compressedBytes, mode} = await compressGlb(rawBytes, requestedMode)
+    const {spatialTree, elementProperties} = await capturePromise
+    const {bytes, stats: extStats} = injectGlbExtensions(compressedBytes, [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
       {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
     ])
     if (extStats.addedExtensions > 0) {
       glbVerbose(
         `writer: injected ${extStats.addedExtensions} extension(s), ` +
-        `+${withExtensions.byteLength - rawBytes.byteLength}B`)
+        `+${bytes.byteLength - compressedBytes.byteLength}B (post-compress)`)
     }
-    // Use the *actual* compression mode (compressGlb may fall back to
-    // null on encoder failure) so the cached artifact lands in the
-    // matching schema slot. Otherwise a -draco / -meshopt suffix on
-    // uncompressed bytes would mislead a reader running with the same
-    // flag (it would expect compressed input on the next load).
-    const {bytes, mode} = await compressGlb(withExtensions, requestedMode)
     const schemaVer = schemaVersionFor(mode)
     const packed = packGlbChunks([bytes], mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
