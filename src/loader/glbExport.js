@@ -31,6 +31,11 @@ import {
   captureBldrsElementProperties,
 } from './bldrsElementProperties'
 import {
+  BLDRS_FACE_IDS_EXTENSION_NAME,
+  buildFaceIdsExtensionData,
+  capturePerTriangleIds,
+} from './bldrsFaceIds'
+import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
@@ -42,7 +47,7 @@ import {
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
-import {injectGlbExtensions} from './injectGlbExtensions'
+import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
 
 /**
@@ -172,6 +177,34 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // uses tree expressIDs as BFS seeds; the fast path ignores it), so
     // the two captures are sequential rather than parallel.
     const modelId = model?.modelID ?? 0
+    // Capture per-triangle element IDs from the pristine raw bytes
+    // BEFORE any compression. The vertex-level `_EXPRESSID` /
+    // `_INSTANCEID` attributes are still intact here; we read them
+    // and project to per-triangle (taking vertex 0's ID per
+    // triangle, matching `instanceMapFromGeometry`'s assumption that
+    // a triangle's 3 vertices share the same parent). The resulting
+    // per-triangle arrays will go into `BLDRS_face_ids` so the
+    // reader can rebuild `IfcInstanceMap` without trusting the
+    // post-compression per-vertex attributes (which DRACO would
+    // quantise-corrupt and Meshopt would weld-merge).
+    //
+    // Sync — parse + array read; no I/O. Safe to run before the
+    // parallel async captures below.
+    let faceIds = null
+    try {
+      const {json, bin} = parseGlb(rawBytes)
+      faceIds = capturePerTriangleIds(json, bin)
+      if (faceIds) {
+        const primCount = faceIds.perPrimitive.filter((p) => p).length
+        const triTotal = faceIds.perPrimitive.reduce(
+          (n, p) => n + (p?.expressIds?.length ?? 0), 0)
+        glbVerbose(
+          `writer: captured per-triangle IDs from ${primCount} primitive(s) — ` +
+          `${triTotal.toLocaleString()} triangles`)
+      }
+    } catch (e) {
+      glbVerbose('writer: parseGlb for face_ids capture threw; skipping face_ids:', e)
+    }
     const capturePromise = (async () => {
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
       const elementProperties = await captureBldrsElementProperties(
@@ -186,16 +219,28 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // matters: inject must come *after* compression so our extensions
     // ride along untouched in the final BIN chunk.
     //
+    // `preserveTriangleOrder` signals that the reader will use
+    // `BLDRS_face_ids` for picking — the IDs are per-triangle by
+    // pre-compression order, so compression must not reorder triangles.
+    // DRACO has a `sequential` mode that preserves order; we pass the
+    // flag through so compressGlb can pick the right encoder method.
+    // Meshopt's default pipeline reorders triangles for vertex-cache
+    // coherency without an off-switch we can find, so it stays
+    // skipped for face_ids-bearing GLBs.
+    //
     // Use the *actual* compression mode (compressGlb may fall back to
     // null on encoder failure) so the cached artifact lands in the
     // matching schema slot. Otherwise a -draco / -meshopt suffix on
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
-    const {bytes: compressedBytes, mode} = await compressGlb(rawBytes, requestedMode)
+    const {bytes: compressedBytes, mode} = await compressGlb(
+      rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
     const {spatialTree, elementProperties} = await capturePromise
+    const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
     const {bytes, stats: extStats} = injectGlbExtensions(compressedBytes, [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
       {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
+      {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ])
     if (extStats.addedExtensions > 0) {
       glbVerbose(

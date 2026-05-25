@@ -33,10 +33,11 @@ import {
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
 import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
-import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
+import {instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {BldrsElementPropertiesReader} from './bldrsElementProperties'
+import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
@@ -465,16 +466,67 @@ export async function load(
   // Skip when a mesh already has an instanceMap attached — the
   // Conway-direct cache-miss path attaches one directly during the
   // parse swap; this block is only for cache-hit restoration.
-  if (model.capabilities.instancePicking) {
+  // Cache-hit IfcInstanceMap restoration. Three sources, in order of
+  // preference:
+  //   1. BLDRS_face_ids extension (`userData.bldrsFaceIds.perPrimitive`)
+  //      — per-triangle expressID + instanceID arrays untouched by
+  //      compression. The source of truth when present; immune to
+  //      DRACO quantization and Meshopt vertex welding.
+  //   2. Per-vertex `_EXPRESSID` / `_INSTANCEID` attributes — the
+  //      legacy fallback for cache artifacts that predate face_ids.
+  //      Safe when no compression was applied (current default for
+  //      IFC GLBs); unreliable when DRACO/Meshopt ran.
+  //   3. Nothing — geometry-only model with no IFC IDs (drag-dropped
+  //      GLB / OBJ / etc.); skip the map.
+  //
+  // Walk meshes in traversal order. Match each Mesh to its face_ids
+  // perPrimitive entry by primitive index (writer's
+  // `capturePerTriangleIds` iterates `json.meshes[].primitives[]` in
+  // the same depth-first order GLTFLoader produces, so positional
+  // matching holds for both single-mesh and merged-container GLBs).
+  if (model.capabilities.instancePicking ||
+      model.userData?.bldrsFaceIds) {
+    const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    let meshIndex = 0
     let attached = 0
+    let viaFaceIds = 0
     let totalInstances = 0
     const allParents = new Set()
     model.traverse((obj) => {
-      if (!obj.isMesh || obj.instanceMap) {
+      if (!obj.isMesh) {
         return
       }
-      if (obj.geometry?.attributes?.instanceID?.count > 1) {
-        const map = instanceMapFromGeometry(obj.geometry)
+      if (obj.instanceMap) {
+        meshIndex++
+        return
+      }
+      let map = null
+      const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
+      if (faceIdsEntry && faceIdsEntry.expressIds) {
+        // Sanity: per-triangle array length must match the geometry's
+        // triangle count. Compression that REORDERED triangles
+        // (DRACO edgebreaker, Meshopt cache-coherency reorder) would
+        // also break the per-index alignment, but length stays the
+        // same — so a mismatch here means a different bug (writer
+        // missed a primitive, container merge changed the order),
+        // not silent corruption. Log and fall through to per-vertex.
+        const idxCount = obj.geometry?.index?.count ?? 0
+        const expectedTriCount = (idxCount / 3) | 0
+        if (faceIdsEntry.expressIds.length === expectedTriCount) {
+          map = instanceMapFromTriangleIds(
+            faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
+          viaFaceIds++
+        } else {
+          glbInfo(
+            `reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ` +
+            'falling back to per-vertex attributes')
+        }
+      }
+      if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
+        map = instanceMapFromGeometry(obj.geometry)
+      }
+      if (map) {
         obj.instanceMap = map
         attached++
         totalInstances += map.instanceCount
@@ -482,11 +534,13 @@ export async function load(
           allParents.add(pid)
         }
       }
+      meshIndex++
     })
     if (attached > 0) {
       glbInfo(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
-        `${totalInstances} instances under ${allParents.size} IFC products`)
+        `${totalInstances} instances under ${allParents.size} IFC products ` +
+        `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
     }
   }
 
@@ -1071,6 +1125,7 @@ function newGltfLoader() {
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
+  loader.register((parser) => new BldrsFaceIdsReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')

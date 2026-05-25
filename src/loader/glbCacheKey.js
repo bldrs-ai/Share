@@ -15,6 +15,16 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.8.0 — added `BLDRS_face_ids` glTF extension carrying per-triangle
+ *         `expressID` / `instanceID` arrays as a Base64-encoded JSON
+ *         payload, separate from the per-vertex attribute stream.
+ *         Decouples element-identity storage from geometry compression
+ *         — DRACO sequential mode now works (preserves triangle order),
+ *         Meshopt still skipped (reorders triangles). Cache-hit
+ *         `IfcInstanceMap` rebuilds from this extension when present,
+ *         bypassing DRACO/Meshopt corruption of per-vertex `_EXPRESSID`
+ *         / `_INSTANCEID`. Older 0.7.0 artifacts read as miss; next
+ *         miss rewrites with face_ids attached.
  * 0.7.0 — added `BLDRS_element_properties` glTF extension carrying the
  *         IFC item-properties + property-sets closure (BFS through the
  *         reference graph from spatial-tree elements). Cache-hit GLBs
@@ -45,7 +55,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.7.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.8.0'
 
 
 /**
