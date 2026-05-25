@@ -67,11 +67,29 @@ export const flags = [
 
 
 /**
+ * Implication graph: keyed by parent flag name (lower-case), value is
+ * the list of sub-flag names whose presence in the URL also activates
+ * the parent. Use this when a sub-option is meaningless without the
+ * parent (e.g. `glbDraco` and `glbMeshopt` configure GLB-cache
+ * compression — they have no effect when the GLB pipeline itself is
+ * off). Lets users write `?feature=glbDraco` instead of having to
+ * remember to add `glb` explicitly.
+ *
+ * Keep keys + values lower-cased; lookups go through the lowercased
+ * caller-supplied name in `isFeatureEnabled`.
+ */
+const FEATURE_IMPLICATIONS = {
+  glb: ['glbdraco', 'glbmeshopt', 'glbverbose'],
+}
+
+
+/**
  * Non-React feature-flag check. Mirrors `useExistInFeature` (in
  * src/hooks/useExistInFeature.js) but is usable from non-component modules
  * (loaders, services, etc.). A feature is enabled if its static flag has
  * `isActive: true` OR if the URL contains `?feature=<name>` (comma-separated
- * for multiple).
+ * for multiple) OR if any sub-flag that implies it is in the URL (see
+ * `FEATURE_IMPLICATIONS`).
  *
  * Reads `window.location.search` directly, so this is a snapshot at call
  * time. Components that need to react to URL changes should use
@@ -98,5 +116,17 @@ export function isFeatureEnabled(name) {
   if (!enabledFeatures) {
     return false
   }
-  return enabledFeatures.split(',').some((f) => f.trim().toLowerCase() === lowerName)
+  const urlFlags = enabledFeatures.split(',').map((f) => f.trim().toLowerCase())
+  if (urlFlags.includes(lowerName)) {
+    return true
+  }
+  // Implication check: any sub-flag in the URL activates its parent.
+  // `?feature=glbDraco` (compression sub-option) implies `?feature=glb`
+  // (cache pipeline) — without this the sub-option is silently
+  // ignored because the parent pipeline is gated separately.
+  const impliers = FEATURE_IMPLICATIONS[lowerName]
+  if (impliers && impliers.some((sub) => urlFlags.includes(sub))) {
+    return true
+  }
+  return false
 }

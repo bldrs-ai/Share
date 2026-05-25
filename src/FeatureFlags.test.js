@@ -66,6 +66,48 @@ describe('FeatureFlags', () => {
       expect(isFeatureEnabled('GLBDRACO')).toBe(true)
     })
 
+    it('implies glb when glbDraco is in the URL (compression sub-option)', () => {
+      // `glbDraco` configures compression for the GLB cache pipeline;
+      // it has no effect when the pipeline itself is off. Putting
+      // `glbDraco` in the URL without `glb` was a silent footgun —
+      // user reports "no GLB writer logs" and the sub-option is dead.
+      // Implication: any GLB sub-option turns the parent on too.
+      window.location.search = '?feature=glbDraco'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+      // Doesn't activate sibling sub-options.
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
+    })
+
+    it('implies glb when glbMeshopt is in the URL', () => {
+      window.location.search = '?feature=glbMeshopt'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(false)
+    })
+
+    it('implies glb when glbVerbose is in the URL', () => {
+      window.location.search = '?feature=glbVerbose'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbVerbose')).toBe(true)
+    })
+
+    it('implication is one-way — glb alone does NOT activate sub-options', () => {
+      window.location.search = '?feature=glb'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(false)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
+      expect(isFeatureEnabled('glbVerbose')).toBe(false)
+    })
+
+    it('implication works with case-insensitive sub-flag names too', () => {
+      // The user-typed `?feature=conwayDirectIFC,GLBDRACO` scenario:
+      // implication chains through the lowercased comparison.
+      window.location.search = '?feature=GLBDRACO'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+    })
+
     it('matches a URL value whose case diverges from the flag definition', () => {
       // Regression pin: the conwayDirectIfc flag was defined with the
       // canonical camelCase `conwayDirectIfc`, but URL-bar autocomplete
