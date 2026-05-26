@@ -364,3 +364,66 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     expect(mesh.getPropertySets).toBeUndefined()
   })
 })
+
+
+describe('Loader/convertToShareModel — cache-hit page title hydration', () => {
+  // Regression: before the title stamp landed, every cache-hit page
+  // title degraded to "${mimeType} model" ("glb model") because the
+  // GLB carried no project name. The writer now stamps the live
+  // model.name (Conway's statsApi.projectName, e.g. "Momentum") into
+  // `scenes[0].extras.bldrsTitle`; three.js GLTFLoader auto-promotes
+  // it to `model.userData.bldrsTitle`, and `convertToShareModel`
+  // hydrates `model.{Name,LongName,name}` from it BEFORE the
+  // `${mimeType} model` fallback would clobber them.
+
+  it('hydrates Name, LongName, and name from userData.bldrsTitle on cache-hit', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
+    expect(mesh.LongName.value).toBe('Momentum')
+  })
+
+  it('falls back to "${mimeType} model" when userData.bldrsTitle is absent', () => {
+    // Drag-dropped GLB / pre-title-stamp cached artifact: no title in
+    // userData → existing placeholder path runs unchanged.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores a non-string bldrsTitle (defensive against malformed cache extras)', () => {
+    // Untrusted-input guard: if a future writer or a hostile cache
+    // file puts a non-string at `userData.bldrsTitle`, we must not
+    // splice it into the page <title>. Fall through to the placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = {value: 'wrong shape'}
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores an empty-string bldrsTitle (same fall-through as absent)', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = ''
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('does not overwrite a pre-existing model.name (live-IFC path is untouched)', () => {
+    // Live IFC parse already sets model.name via statsApi.projectName.
+    // The hydration block must NOT clobber that — if it did, the live
+    // parse and cache-hit paths would diverge whenever the IFC root's
+    // Name differed from statsApi.projectName.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'From IFC parse'
+    mesh.userData.bldrsTitle = 'Stale Cache Title'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('From IFC parse')
+  })
+})

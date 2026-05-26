@@ -907,6 +907,28 @@ export function convertToShareModel(model, viewer) {
   // Override for root
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
+  // Cache-hit title hydration. The writer stamps the IFC project
+  // title (e.g. "Momentum") into `scenes[0].extras.bldrsTitle`;
+  // three.js GLTFLoader auto-copies scene extras into
+  // `scene.userData`, so a cache-hit GLB lands here with the title
+  // available at `model.userData.bldrsTitle`. Promote to
+  // `model.Name`/`model.LongName`/`model.name` BEFORE the
+  // `${mimeType} model` fallback below would clobber them — otherwise
+  // every cache-hit page title degrades to "glb model" even though
+  // the original IFC had a meaningful project name. Live IFC parses
+  // miss this branch (no extras on userData) and fall through to the
+  // existing Name/LongName logic, which is fed by the IFC parser
+  // upstream.
+  const cachedTitle = (typeof model.userData?.bldrsTitle === 'string' && model.userData.bldrsTitle) ?
+    model.userData.bldrsTitle :
+    null
+  if (cachedTitle) {
+    model.Name = model.Name || {value: cachedTitle}
+    model.LongName = model.LongName || {value: cachedTitle}
+    if (model.name === undefined || model.name === null || model.name === '') {
+      model.name = cachedTitle
+    }
+  }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}
   // This is used for page title and other areas that need a model name, so if it's not

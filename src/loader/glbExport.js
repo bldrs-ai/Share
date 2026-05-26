@@ -49,7 +49,16 @@ import {
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
-import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
+import {injectGlbExtensions, parseGlb, serializeGlb} from './injectGlbExtensions'
+
+
+// Key under `scenes[0].extras` carrying the IFC project title across
+// the GLB cache round-trip. three.js GLTFLoader auto-promotes
+// `scene.extras` to `scene.userData`, so the reader at
+// `convertToShareModel` finds it at `model.userData.bldrsTitle` with
+// no custom plugin needed. See `injectModelTitleIntoGlb` (write) and
+// `Loader.js#convertToShareModel` (read).
+export const BLDRS_TITLE_EXTRAS_KEY = 'bldrsTitle'
 
 
 /**
@@ -100,6 +109,56 @@ export function exportThreeModelAsGlb(model) {
       finish(null)
     }
   })
+}
+
+
+/**
+ * Stamp the IFC project title into `scenes[0].extras.bldrsTitle` on
+ * GLTFExporter's freshly-produced bytes so the cache-hit reader can
+ * restore it. Without this, `Loader.js#convertToShareModel` falls
+ * through to its `${mimeType} model` placeholder ("glb model") on
+ * every cache-hit page title — losing the original IFC's project name
+ * (e.g. "Momentum") that the live IFC parse populated via
+ * `statsApi.projectName` (IfcViewerAPIExtended.parse, Loader.js).
+ *
+ * We use `scenes[0].extras` (not a `BLDRS_*` extension, not
+ * `asset.extras`) for two reasons:
+ *   1. The payload is one short string — no need for a bufferView,
+ *      pako, or a custom reader plugin.
+ *   2. three.js GLTFLoader auto-copies `scene.extras` into
+ *      `scene.userData` (see `assignExtrasToUserData` in GLTFLoader),
+ *      so the reader gets the title at `model.userData.bldrsTitle`
+ *      without any plumbing. `asset.extras` would require a plugin
+ *      because three.js doesn't surface it on the resulting scene.
+ *
+ * Best-effort: any failure (parse error, missing scene array)
+ * returns the input bytes unchanged. The title is observability /
+ * UX; failure to inject must not block the cache write.
+ *
+ * @param {Uint8Array} bytes raw GLB from GLTFExporter
+ * @param {string|null|undefined} title model.name captured at write time
+ * @return {Uint8Array} possibly-modified bytes
+ */
+function injectModelTitleIntoGlb(bytes, title) {
+  if (!bytes || !title || typeof title !== 'string') {
+    return bytes
+  }
+  try {
+    const {json, bin} = parseGlb(bytes)
+    const sceneIdx = (typeof json.scene === 'number') ? json.scene : 0
+    if (!Array.isArray(json.scenes) || !json.scenes[sceneIdx]) {
+      // Spec-legal but degenerate: a GLB with no `scenes` array, no
+      // place to attach asset-level metadata three.js will surface.
+      // Skip; cache-hit will fall back to the placeholder title.
+      return bytes
+    }
+    json.scenes[sceneIdx].extras = json.scenes[sceneIdx].extras ?? {}
+    json.scenes[sceneIdx].extras[BLDRS_TITLE_EXTRAS_KEY] = title
+    return serializeGlb(json, bin)
+  } catch (e) {
+    glbInfo('writer: failed to inject model title; using bytes unchanged:', e)
+    return bytes
+  }
 }
 
 
@@ -164,12 +223,22 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    const rawBytes = await exportThreeModelAsGlb(model)
-    if (!rawBytes || rawBytes.byteLength === 0) {
+    const exportedBytes = await exportThreeModelAsGlb(model)
+    if (!exportedBytes || exportedBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
     }
-    glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
+    glbVerbose('writer: GLTFExporter produced', exportedBytes.byteLength, 'bytes')
+    // Stamp the IFC project title into the GLB so cache-hits restore
+    // the original page title (e.g. "Momentum") instead of falling
+    // through to the "${mimeType} model" placeholder. Captured from
+    // the live model — set by IfcViewerAPIExtended.parse from Conway's
+    // `statsApi.projectName`. Non-IFC sources (drag-dropped OBJ etc.)
+    // generally have no `name` and the helper is a no-op.
+    const rawBytes = injectModelTitleIntoGlb(exportedBytes, model?.name)
+    if (rawBytes !== exportedBytes) {
+      glbVerbose(`writer: stamped model title "${model.name}" into scenes[0].extras`)
+    }
     // Yield to the event loop between major phases so hover-pick /
     // camera-controls can interleave with the writer. Each `yieldToBrowser`
     // is a single macrotask boundary; the cost is one event-loop turn,

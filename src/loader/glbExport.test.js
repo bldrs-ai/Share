@@ -34,7 +34,27 @@ jest.mock('./glbCompress', () => ({
 
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
+
+
+/**
+ * Build a minimal-but-spec-valid GLB the title injector can parseGlb.
+ * Has the required `asset.version`, a single empty scene, and an empty
+ * buffer — enough for the writer's `parseGlb` → mutate → `serializeGlb`
+ * round-trip without standing up the real GLTFExporter pipeline.
+ *
+ * @return {Uint8Array}
+ */
+function makeValidEmptyGlb() {
+  const json = {
+    asset: {version: '2.0'},
+    scene: 0,
+    scenes: [{nodes: []}],
+    buffers: [{byteLength: 0}],
+  }
+  return serializeGlb(json, null)
+}
 
 
 describe('loader/glbExport', () => {
@@ -144,6 +164,57 @@ describe('loader/glbExport', () => {
       expect(ok).toBe(true)
       expect(mockCompressGlb).toHaveBeenCalledWith(
         expect.any(Uint8Array), null, expect.objectContaining({preserveTriangleOrder: expect.any(Boolean)}))
+    })
+  })
+
+
+  describe('exportAndCacheGlb — model title stamping (page-title cache-hit fix)', () => {
+    const cacheKeyArgs = gitHubCacheKey({
+      owner: 'bldrs-ai',
+      repo: 'share',
+      branch: 'main',
+      filePath: 'sub/dir/index.ifc',
+      shaHash: 'abc123',
+    })
+    const ctx = {kindLabel: 'github', cacheKeyArgs}
+
+    it('stamps model.name into scenes[0].extras.bldrsTitle so cache-hit page title survives the round-trip', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx})
+      expect(ok).toBe(true)
+
+      // compressGlb is mocked as a passthrough, so its first arg is the
+      // title-stamped bytes our injector produced. Parse and inspect.
+      expect(mockCompressGlb).toHaveBeenCalledTimes(1)
+      const stampedBytes = mockCompressGlb.mock.calls[0][0]
+      const {json} = parseGlb(stampedBytes)
+      expect(json.scenes[0].extras.bldrsTitle).toBe('Momentum')
+    })
+
+    it('leaves bytes unchanged when model.name is absent (drag-dropped GLB / OBJ etc.)', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {}, ...ctx})
+      expect(ok).toBe(true)
+
+      const passthrough = mockCompressGlb.mock.calls[0][0]
+      const {json} = parseGlb(passthrough)
+      expect(json.scenes[0].extras).toBeUndefined()
+    })
+
+    it('leaves bytes unchanged when model.name is the empty string', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: ''}, ...ctx})
+      expect(ok).toBe(true)
+
+      const passthrough = mockCompressGlb.mock.calls[0][0]
+      const {json} = parseGlb(passthrough)
+      expect(json.scenes[0].extras).toBeUndefined()
     })
   })
 })
