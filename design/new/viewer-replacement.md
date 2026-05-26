@@ -488,12 +488,89 @@ ceilings (e.g. 100MB decompressed cap), HTML-strip on user-
 authored strings, cross-reference integrity — lands with
 originator-side share (Phase 5+).
 
+**Done — BLDRS_face_ids slice.** Landed 2026-05 (this PR).
+Unblocks DRACO compression on IFC GLBs (74% size reduction on
+Snowdon, 144MB → 48MB on disk) without corrupting picking. Meshopt
+still skipped pending per-product mesh emission (see "long-term
+hide/pick architecture" note above).
+
+The problem: DRACO and Meshopt both silently corrupt per-vertex
+integer attributes that distinguish elements, by different
+mechanisms. **DRACO** normalises attribute values to [0, 1] then
+quantises to 16 bits max; on Snowdon (expressIDs 0–1M) the
+quantization step is ~15 → adjacent expressIDs collapse onto the
+same quantized level → clicking element A returns element B's
+triangles too. **Meshopt** preserves integer attribute values
+exactly (skipping the [-1, 1] quantization range), but its `weld()`
+pass merges vertices at near-identical positions for compression;
+adjacent walls share corner vertices; weld picks one element's
+expressID for the shared vertex; the other wall's triangles now
+reference that vertex → selection subset filtering grabs both walls.
+
+The fix: stop trusting per-vertex IDs post-compression. Store
+per-triangle expressID + instanceID in a separate JSON payload that
+neither compressor touches.
+
+- `src/loader/bldrsFaceIds.js` — `BLDRS_face_ids` extension codec.
+  Writer-side `capturePerTriangleIds(json, bin)` walks freshly-
+  exported GLB primitives, reads the index buffer + per-vertex
+  `_EXPRESSID` / `_INSTANCEID` accessors, and projects to per-
+  triangle arrays by taking vertex 0 of each triangle (matches the
+  Conway-direct assembler's "all 3 vertices share their parent's
+  ID" emission shape). `buildFaceIdsExtensionData` packs the arrays
+  as little-endian Base64 Uint32 for the JSON+gzip inject pipeline
+  (raw bufferViews are a follow-up optimisation; ~25% payload
+  reduction estimated). Reader-side `BldrsFaceIdsReader` GLTFLoader
+  plugin decompresses + Base64-decodes on `afterRoot`, attaches to
+  `gltf.scene.userData.bldrsFaceIds`. An **alignment canary**
+  (`firstExpressId`) is emitted per primitive and verified on read
+  — catches primitive-order divergence between writer
+  (`json.meshes[].primitives[]` flat scan) and reader (GLTFLoader
+  scene-graph traversal) that the length-only check could miss if
+  two meshes happen to share triangle counts.
+- `src/viewer/ifc/IfcInstanceMap.js#instanceMapFromTriangleIds` —
+  direct twin of `instanceMapFromGeometry` minus the per-vertex
+  indirection. Same output shape (`triangleIndexToInstanceId`,
+  `instanceIdToTriangleIndices`, etc.) so picking code doesn't
+  branch on which populator built the map.
+- `src/loader/Loader.js#convertToShareModel` — cache-hit decoration
+  prefers `BLDRS_face_ids` over per-vertex when present; falls back
+  to per-vertex only on uncompressed artifacts (gated by
+  `userData.bldrsCompressionMode`, stashed by
+  `parseBldrsGlbContainer`). Compressed artifacts with no face_ids
+  coverage skip picking on the affected mesh and log a warning
+  rather than silently use corrupted per-vertex IDs. Per-triangle
+  arrays are freed from `userData` after `IfcInstanceMap` is built
+  (~22MB reclaimed on Snowdon; the map owns its own typed copies).
+- `src/loader/glbCompress.js` — `preserveTriangleOrder` option
+  switches DRACO from `edgebreaker` (reorders for encoder
+  efficiency) to `sequential` (preserves input triangle order).
+  When set, the per-triangle indices remain aligned with post-
+  decompression triangle positions. Meshopt's default pipeline
+  reorders triangles for vertex-cache coherency without an exposed
+  off-switch — Meshopt stays skipped for IFC GLBs (the long-term
+  unblock is per-product mesh emission, which would remove the
+  per-vertex IDs entirely from the geometry stream).
+- `src/loader/glbExport.js` — captures face_ids on raw pre-
+  compression bytes (where per-vertex IDs are still intact), signals
+  `preserveTriangleOrder: !!faceIds` to compressGlb, injects after
+  compression. The capture path's catch block intentionally leaves
+  `faceIds = null` on failure, which cascades to compressGlb
+  skipping DRACO rather than running it with corrupted IDs.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `instancePicking` / `expressIdPicking` from the face_ids extension
+  presence (the per-vertex attrs still exist on compressed
+  artifacts but aren't trustworthy; face_ids is the source of truth).
+- `src/loader/glbCacheKey.js` — schema bump `0.7.0` → `0.8.0`.
+
 **Default-on gating:** isolate routing done; spatial tree done;
-element properties done. **No remaining blockers** — `conwayDirectIfc`
-flag is ready to flip default-on as a follow-up slice.
+element properties done; compression unblocked. **No remaining
+blockers** — `conwayDirectIfc` flag is ready to flip default-on as
+a follow-up slice.
 
 1. ~~Portable IFC spatial hierarchy~~ — **done** (PR #1527).
 2. ~~Portable IFC properties / property sets~~ — **done** (this PR).
+3. ~~Compression-safe per-element IDs (BLDRS_face_ids)~~ — **done** (this PR).
 
 Issues / comments can be done later (post-prod-flip).
 
@@ -957,7 +1034,7 @@ with Phase 5". Removing them is a four-line diff at that point.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Conway's spatial-structure / properties output isn't byte-equivalent to `web-ifc-three`'s | Medium | Breaks NavTree, Properties panel, search index | Phase 3 parity test against fixture IFCs; keep flag until parity confirmed |
-| `IfcModelService` reads per-instance expressID from the conway-supplied per-vertex buffer | High | Cache-hit picking collapses to shared-geometry granularity (observed Phase 2b.2 — 63 unique IDs / 2.1M verts on Momentum.ifc); breaks per-instance Hide/Isolate/Reveal too | Per §3b.ii, build `triangleIndexToExpressId` per-instance at parse — bypass conway's `getElementByLocalID(geometry.localID)` resolution. Persist via `BLDRS_per_triangle_express_ids` extension for cache parity. |
+| `IfcModelService` reads per-instance expressID from the conway-supplied per-vertex buffer | High | Cache-hit picking collapses to shared-geometry granularity (observed Phase 2b.2 — 63 unique IDs / 2.1M verts on Momentum.ifc); breaks per-instance Hide/Isolate/Reveal too | Per §3b.ii, build `triangleIndexToExpressId` per-instance at parse — bypass conway's `getElementByLocalID(geometry.localID)` resolution. Persisted via `BLDRS_face_ids` extension for cache parity (landed 2026-05 alongside DRACO unblock). |
 | Subset raycasting performance regression vs `web-ifc-three`'s native worker path | Medium | Hover-pick lag on big models | Add `three-mesh-bvh@^0.7` `acceleratedRaycast` from day one; measure on a >100MB IFC |
 | Outline highlight visual drift after color-management change | Low | Cosmetic | Snapshot tests in Cosmos; tune `OutlineEffect` colors if needed |
 | Hidden coupling between `web-ifc-viewer.IfcContext` and `IfcManager` we missed | Medium | Phase 4 cutover stalls | Phase 3's parallel-run flag means we discover this before deletion |

@@ -125,7 +125,15 @@ export class BldrsFaceIdsReader {
       if (!expressIds) {
         return null
       }
-      return {expressIds, instanceIds}
+      // `firstExpressId` is the alignment canary — preserved from
+      // the writer's pre-Base64 payload so the reader can verify
+      // that primitive ordering survived (GLTFLoader traversal
+      // matches `json.meshes[].primitives[]`). Loader.js compares
+      // this against `expressIds[0]` before trusting the array.
+      const firstExpressId = typeof entry.firstExpressId === 'number' ?
+        entry.firstExpressId :
+        null
+      return {expressIds, instanceIds, firstExpressId}
     })
 
     if (gltf.scene) {
@@ -276,6 +284,14 @@ export function buildFaceIdsExtensionData(captured) {
     const out = {
       expressIds: uint32ArrayToBase64(entry.expressIds),
       length: entry.expressIds.length,
+      // Alignment canary — first triangle's expressID. The reader
+      // verifies this against `expressIds[0]` after Base64-decode to
+      // catch primitive-order divergence between writer and reader
+      // (e.g. GLTFLoader walking the scene graph in a different
+      // order than `json.meshes[].primitives[]`). Cheap insurance
+      // against silent picking corruption; length-only check could
+      // pass on two meshes that happen to share triangle counts.
+      firstExpressId: entry.expressIds[0],
     }
     if (entry.instanceIds) {
       out.instanceIds = uint32ArrayToBase64(entry.instanceIds)

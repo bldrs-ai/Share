@@ -487,9 +487,19 @@ export async function load(
   if (model.capabilities.instancePicking ||
       model.userData?.bldrsFaceIds) {
     const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Per-vertex IDs are only trustworthy on uncompressed artifacts.
+    // DRACO quantises integer attributes and Meshopt welds shared
+    // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
+    // gate the legacy fallback on `bldrsCompressionMode == null`
+    // (set by parseBldrsGlbContainer above). When face_ids exists
+    // and fails its sanity check on a compressed artifact, we'd
+    // rather drop picking on that mesh than return wrong selections.
+    const compressionMode = model.userData?.bldrsCompressionMode ?? null
+    const perVertexTrusted = compressionMode === null
     let meshIndex = 0
     let attached = 0
     let viaFaceIds = 0
+    let skippedCompressedNoFaceIds = 0
     let totalInstances = 0
     const allParents = new Set()
     model.traverse((obj) => {
@@ -503,28 +513,44 @@ export async function load(
       let map = null
       const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
       if (faceIdsEntry && faceIdsEntry.expressIds) {
-        // Sanity: per-triangle array length must match the geometry's
-        // triangle count. Compression that REORDERED triangles
-        // (DRACO edgebreaker, Meshopt cache-coherency reorder) would
-        // also break the per-index alignment, but length stays the
-        // same — so a mismatch here means a different bug (writer
-        // missed a primitive, container merge changed the order),
-        // not silent corruption. Log and fall through to per-vertex.
+        // Sanity 1: per-triangle array length must match the geometry's
+        // triangle count.
+        // Sanity 2: alignment canary — `firstExpressId` recorded at
+        // capture time must match `expressIds[0]` after decode.
+        // Catches a primitive-order mismatch between writer and
+        // reader (e.g. GLTFLoader traversal diverging from
+        // `json.meshes[].primitives[]`) that the length check alone
+        // wouldn't flag if two meshes happen to share triangle counts.
         const idxCount = obj.geometry?.index?.count ?? 0
         const expectedTriCount = (idxCount / 3) | 0
-        if (faceIdsEntry.expressIds.length === expectedTriCount) {
+        const canaryOk = faceIdsEntry.firstExpressId === null ||
+          faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
           map = instanceMapFromTriangleIds(
             faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
           viaFaceIds++
+        } else if (!canaryOk) {
+          console.warn(
+            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
+            `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
+            `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
         } else {
-          glbInfo(
-            `reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
-            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ` +
-            'falling back to per-vertex attributes')
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
+          console.warn(
+            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
         }
       }
       if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
-        map = instanceMapFromGeometry(obj.geometry)
+        if (perVertexTrusted) {
+          map = instanceMapFromGeometry(obj.geometry)
+        } else if (!faceIdsEntry) {
+          // Compressed artifact with no face_ids entry — the per-vertex
+          // attrs exist but are corrupted by DRACO/Meshopt. Skip.
+          skippedCompressedNoFaceIds++
+        }
       }
       if (map) {
         obj.instanceMap = map
@@ -541,6 +567,19 @@ export async function load(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
         `${totalInstances} instances under ${allParents.size} IFC products ` +
         `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
+    }
+    if (skippedCompressedNoFaceIds > 0) {
+      console.warn(
+        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+        `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
+        'per-vertex IDs would be corrupted')
+    }
+    // Free the per-triangle ID arrays now that IfcInstanceMap owns its
+    // own copies. For a 2.84M-triangle Snowdon model this reclaims
+    // ~22MB of JS heap that would otherwise be held for the life of
+    // the scene.
+    if (model.userData?.bldrsFaceIds) {
+      delete model.userData.bldrsFaceIds
     }
   }
 
@@ -1762,6 +1801,14 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
     `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
     `mode=${mode || 'none'}`)
   const merged = new Group()
+  // Stash the compression mode on the merged userData so downstream
+  // decoration (`convertToShareModel`) can decide whether per-vertex
+  // `_EXPRESSID` / `_INSTANCEID` is trustworthy. DRACO quantises
+  // integer attributes (16-bit ceiling) and Meshopt welds shared
+  // vertices — both silently corrupt per-vertex IDs. The face_ids
+  // path bypasses both, but the legacy per-vertex fallback must NOT
+  // run on compressed artifacts.
+  merged.userData.bldrsCompressionMode = mode || null
   for (let i = 0; i < chunks.length; i++) {
     const chunkAb = chunks[i]
     const gltf = await new Promise((resolve, reject) => {

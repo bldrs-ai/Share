@@ -203,7 +203,16 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
           `${triTotal.toLocaleString()} triangles`)
       }
     } catch (e) {
-      glbVerbose('writer: parseGlb for face_ids capture threw; skipping face_ids:', e)
+      // Intentional: swallow + continue. If parseGlb threw on bytes
+      // we just got from GLTFExporter, we have bigger problems than
+      // face_ids — the cache write itself will catch it. The skip
+      // here also flows downstream: with `faceIds == null`,
+      // `preserveTriangleOrder` stays false, so compressGlb falls
+      // back to the per-vertex-IDs-detected skip (uncompressed
+      // write) rather than running DRACO with corrupted IDs.
+      console.warn(
+        '[glb] writer: parseGlb for face_ids capture threw; ' +
+        'skipping face_ids (DRACO will skip too):', e)
     }
     const capturePromise = (async () => {
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)

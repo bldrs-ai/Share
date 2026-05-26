@@ -235,6 +235,26 @@ describe('loader/bldrsFaceIds', () => {
       // expressIDs together.
       expect(Array.from(resolved.perPrimitive[0].expressIds)).toEqual([700000, 800000])
       expect(Array.from(resolved.perPrimitive[0].instanceIds)).toEqual([5, 9])
+      // Alignment canary survives round-trip and equals expressIds[0].
+      expect(resolved.perPrimitive[0].firstExpressId).toBe(700000)
+    })
+
+    it('emits firstExpressId canary that matches expressIds[0] after round-trip', async () => {
+      const indices = new Uint32Array([0, 1, 2, 3, 4, 5])
+      const expressIdsPerVertex = new Uint32Array([42, 42, 42, 99, 99, 99])
+      const glb = makeGlbWithIds({indices, expressIdsPerVertex})
+      const {json, bin} = parseGlb(glb)
+      const captured = capturePerTriangleIds(json, bin)
+      const extensionData = buildFaceIdsExtensionData(captured)
+      expect(extensionData.perPrimitive[0].firstExpressId).toBe(42)
+      const {bytes: withExt} = injectGlbExtensions(glb, [
+        {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: extensionData, compress: true},
+      ])
+      const reader = new BldrsFaceIdsReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      const entry = gltf.scene.userData.bldrsFaceIds.perPrimitive[0]
+      expect(entry.firstExpressId).toBe(entry.expressIds[0])
     })
 
     it('is a no-op when the GLB has no BLDRS_face_ids extension', async () => {
