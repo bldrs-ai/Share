@@ -17,7 +17,10 @@ export const flags = [
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
-  {name: 'glb', isActive: false},
+  // Default-on as of the Phase-5 prep landing — cache-hit GLB loads
+  // bypass wit-three entirely (spatial tree + properties + per-element
+  // picking all round-trip through BLDRS_* glTF extensions).
+  {name: 'glb', isActive: true},
   // DRACO compression for cached GLBs. Applies to BOTH write and read:
   // writer pipes the GLTFExporter output through @gltf-transform's
   // draco() transform; reader wires DRACOLoader into the GLTFLoader.
@@ -59,10 +62,15 @@ export const flags = [
   //     through the IFC→GLB→IFC cache automatically (GLTFExporter's
   //     `_INSTANCEID` rename + reader-side restore + capability
   //     inference + cache-hit IfcInstanceMap reconstruction).
-  // Test-phase flag — not yet on by default. Implies (turns on) the
-  // StreamAllMeshes capture wrapper; `ifcItemsMapParity` shares the
-  // same capture. Design: design/new/viewer-replacement.md §3b.
-  {name: 'conwayDirectIfc', isActive: false},
+  // Default-on as of the Phase-5 prep landing. The Conway-direct
+  // geometry assembler + per-instance picking are the production
+  // rendering path; live IFC parses still run wit-three to drive the
+  // FlatMesh stream (geometry is then replaced by the Conway-direct
+  // build). Cache-hit GLB loads bypass wit-three entirely.
+  // Implies (turns on) the StreamAllMeshes capture wrapper;
+  // `ifcItemsMapParity` shares the same capture.
+  // Design: design/new/viewer-replacement.md §3b.
+  {name: 'conwayDirectIfc', isActive: true},
 ]
 
 
