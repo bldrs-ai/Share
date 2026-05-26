@@ -54,7 +54,13 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     await clearOpfs(page)
   })
 
-  test('cache-hit GLB renders NavTree from BLDRS_spatial_tree extension', async ({page}) => {
+  // SKIP REASON: same as Properties.cacheHit.spec.ts —
+  // `OPFS_IS_ENABLED: true` in playwright vars isn't enough on its own
+  // because OPFS-worker fetches aren't intercepted by Playwright's
+  // `context.route(...)`; the first fetch races MSW SW activation.
+  // See the longer note in `Properties.cacheHit.spec.ts` and the
+  // followup list in design/new/viewer-replacement.md §"Followups".
+  test.fixme('cache-hit GLB renders NavTree from BLDRS_spatial_tree extension', async ({page}) => {
     // Two `page.goto` round-trips (cache-populate + cache-hit) plus
     // the writer's async element-properties BFS can easily exceed
     // Playwright's default 30s per-test budget on CI. Bump to 120s so
