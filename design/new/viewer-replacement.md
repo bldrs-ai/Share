@@ -565,12 +565,16 @@ neither compressor touches.
 
 **Default-on gating:** isolate routing done; spatial tree done;
 element properties done; compression unblocked. **No remaining
-blockers** — `conwayDirectIfc` flag is ready to flip default-on as
-a follow-up slice.
+blockers** — `conwayDirectIfc` flag flipped default-on **2026-05**.
 
 1. ~~Portable IFC spatial hierarchy~~ — **done** (PR #1527).
-2. ~~Portable IFC properties / property sets~~ — **done** (this PR).
-3. ~~Compression-safe per-element IDs (BLDRS_face_ids)~~ — **done** (this PR).
+2. ~~Portable IFC properties / property sets~~ — **done** (PR #1528).
+3. ~~Compression-safe per-element IDs (BLDRS_face_ids)~~ — **done** (PR #1528).
+4. ~~Flip the flag default-on~~ — **done** (this PR).
+   Pairs with `glb` (cache writer/reader) also default-on. Together:
+   first-load runs Conway-direct geometry + per-instance picking and
+   schedules a post-parse GLB writer; subsequent loads of the same
+   source hit the cache and bypass wit-three's IFC parser entirely.
 
 Issues / comments can be done later (post-prod-flip).
 
@@ -822,12 +826,60 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
   recompile).
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
-- Remove `web-ifc-viewer-1.0.209-bldrs-7.tgz` and the `web-ifc-viewer` dep.
-- Remove the nested `web-ifc-three` (gone with it).
-- Bump `three` to current stable. Update `@types/three` to match.
-- Hand-fix the small set of API drifts in `src/`: `outputColorSpace`, raycaster signatures, `BufferGeometryUtils.mergeVertices` import path, etc. (see §6).
-- Update `tools/esbuild` config — no more wasm copy from `web-ifc/`; only Conway's wasm.
-- Update `__mocks__/web-ifc-viewer.js` → `__mocks__/ShareViewer.js`.
+
+**Slice 5a — flag default-on (done 2026-05).** This PR. Flips
+`conwayDirectIfc` and `glb` to `isActive: true`; removes the
+now-dead `if (isFeatureEnabled('conwayDirectIfc'))` branches in
+`Loader.js`. Production cache-hit loads now bypass wit-three's IFC
+parser entirely; cache-miss loads still call `this.loader.parse(...)`
+(wit-three's `IFCLoader.parse`) and then swap the rendered geometry
+for the Conway-direct assembler's output.
+
+**Slice 5b — Conway-direct parse (todo).** The cache-miss path
+still goes through wit-three's `IFCLoader.parse` purely to drive
+Conway under the hood, then we throw away its assembled geometry
+and rebuild with our Conway-direct assembler. Cleanest replacement:
+
+```js
+const modelID = ifcAPI.OpenModel(new Uint8Array(buffer))
+const captured = []
+ifcAPI.StreamAllMeshes(modelID, (fm) => captured.push(fm))
+const {mesh: ifcModel} = buildConwayIfcModel(captured, ifcAPI, modelID)
+ifcModel.modelID = modelID
+// property reads route through ifcAPI.properties.* directly
+```
+
+Conway's adapter exposes the full property + spatial surface natively
+(`properties.getItemProperties`, `properties.getSpatialStructure`,
+`properties.getAllItemsOfType`) — the wit-three `ifcManager` wrapper
+is decorative on top. Lifting the parse out of wit-three removes the
+last load-path dep on the fork.
+
+**Slice 5c — ShareViewer composition (todo).** Today
+`ShareViewer extends IfcViewerAPI`. Replacing the `extends` with
+composition needs to stand up the same property surface
+(`this.IFC`, `this.context`, `this.clipper`) from scratch using the
+existing local plugins (`ThreeContext`, `Clipper`, `Selector`,
+`Picker`, `Highlighter`, `Isolator`, `Postprocessor`) plus a new
+`IfcManager`-shaped wrapper around the Conway IfcAPI (Slice 5b's
+surface). Once `ShareViewer` no longer inherits from the fork, the
+fork dep can be dropped from `package.json` and the
+`threeJsmCompatPlugin` esbuild rewrites in `tools/esbuild/plugins.js`
+can go with it.
+
+**Slice 5d — three / postprocessing / three-mesh-bvh bumps (todo).**
+After 5b+5c land — drop the fork pin, bump `three` to current stable,
+update `@types/three` to match, drop the `threeJsmCompatPlugin` rewrites,
+drop the `BLDRS_face_ids` per-vertex fallback's wit-three checks, etc.
+
+**Slice 5e — wasm + build scripts (todo).** Drop
+`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, and
+`isWebIfcShimEnabled` from `tools/esbuild`. The `webIfcShimAliasPlugin`
+goes away — there are no more `web-ifc` imports to alias.
+
+**Slice 5f — mocks (todo).** Rename `__mocks__/web-ifc-viewer.js` →
+`__mocks__/ShareViewer.js`; update the three test files that
+`jest.mock('web-ifc-viewer')` to mock the new path.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.

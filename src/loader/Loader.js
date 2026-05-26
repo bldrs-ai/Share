@@ -256,25 +256,41 @@ export async function load(
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd
       // read for parse below; reading it twice is cheap (OPFS).
+      //
+      // Self-contained try/catch: if the hash or cache lookup fails (e.g.
+      // `window.crypto.subtle` absent in some jsdom test envs, OPFS sync-
+      // handle hiccup partway through the lookup), we must NOT lose the
+      // file we already downloaded. Falling through to the outer catch
+      // would discard `file` and force an axios refetch, which then fails
+      // under tests that don't mock the outbound URL. The user-visible
+      // behavior on this failure path is "cache miss" — exactly what we'd
+      // do anyway if the lookup returned null.
       if (wantGlb && !cacheKeyArgs && file) {
-        const sourceBytes = await file.arrayBuffer()
-        const contentSha = await sha1Hex(sourceBytes)
-        cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
-        if (cacheKeyArgs) {
-          glbInfo(
-            `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
-          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
-          if (glbFile) {
+        try {
+          const sourceBytes = await file.arrayBuffer()
+          const contentSha = await sha1Hex(sourceBytes)
+          cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
+          if (cacheKeyArgs) {
             glbInfo(
-              `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
-            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
-            file = glbFile
-            cameFromGlbCache = true
-          } else {
-            glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+              `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+            `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
+            glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            if (glbFile) {
+              glbInfo(
+                `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
+              ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+              file = glbFile
+              cameFromGlbCache = true
+            } else {
+              glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+            }
           }
+        } catch (cacheLookupError) {
+          glbInfo(
+            `reader: ${kindLabel} cache lookup failed; treating as MISS and continuing:`,
+            cacheLookupError)
+          cacheKeyArgs = null
         }
       }
 
@@ -1212,16 +1228,14 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
-      // Phase-3 prep: capture Conway's FlatMesh stream during the live
-      // parse so the diagnostics below can read the original
-      // per-instance data without a second StreamAllMeshes walk.
-      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
-      // Both flags share the capture wrapper.
-      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
-        isFeatureEnabled('conwayDirectIfc')
-      const parityCapture = captureEnabled ?
-        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
-        null
+      // Capture Conway's FlatMesh stream during the live parse so the
+      // Conway-direct install (and the `ifcItemsMapParity` diagnostic,
+      // when enabled) can read the original per-instance data without a
+      // second StreamAllMeshes walk. See runIfcItemsMapParityCheck for
+      // why a second walk is unsafe. `installFlatMeshCapture` no-ops
+      // gracefully when the IfcAPI doesn't expose StreamAllMeshes (test
+      // mocks, alternative parsers).
+      const parityCapture = installFlatMeshCapture(this.loader.ifcManager.ifcAPI)
 
       if (onProgress) {
         onProgress('Parsing model geometry...')
@@ -1230,7 +1244,7 @@ function newIfcLoader(viewer) {
       try {
         ifcModel = await this.loader.parse(buffer, onProgress)
       } finally {
-        parityCapture?.restore()
+        parityCapture.restore()
       }
       this.addIfcModel(ifcModel)
 
@@ -1269,24 +1283,22 @@ function newIfcLoader(viewer) {
         onProgress('Model loaded successfully!')
       }
 
-      // Phase-3 prep: parallel-run the new IfcItemsMap populators
-      // against the live model and log the diff. Diagnostic only —
-      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
-      // See design/new/viewer-replacement.md §3b.ii for the
-      // per-vertex-vs-per-instance story this check exposes.
-      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
+      // Parallel-run the new IfcItemsMap populators against the live
+      // model and log the diff. Diagnostic only — no behavior change.
+      // Toggle via `?feature=ifcItemsMapParity`. See
+      // design/new/viewer-replacement.md §3b.ii for the per-vertex-vs-
+      // per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
-      // Phase-3 cut-over: replace web-ifc-three's geometry with the
-      // Conway-direct merged buffer + attach an IfcInstanceMap. The
-      // IFC manager (properties, spatial tree, typed search) stays —
-      // only the rendered triangles + the picking source of truth
-      // change. Toggle via `?feature=conwayDirectIfc`.
-      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
-        installConwayDirectGeometry(
-          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
-      }
+      // Replace wit-three's rendered geometry with the Conway-direct
+      // merged buffer + per-instance picking map. The IFC manager
+      // (properties, spatial tree, typed search) stays in place —
+      // only the rendered triangles + picking source of truth change.
+      // Defensive against empty captures (see installConwayDirectGeometry).
+      installConwayDirectGeometry(
+        this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
 
       return ifcModel
     } catch (err) {
@@ -1359,6 +1371,19 @@ function newIfcLoader(viewer) {
  */
 function installFlatMeshCapture(ifcAPI) {
   const captured = []
+  // Defensive: not every IfcAPI exposes `StreamAllMeshes` (test stubs,
+  // future Conway versions, alternative parsers). The capture wrapper
+  // is purely additive — the parse below still works on the un-wrapped
+  // API. A no-op stub keeps the flag-on code path indistinguishable
+  // from the flag-off behavior the codebase relied on for years.
+  if (typeof ifcAPI?.StreamAllMeshes !== 'function') {
+    return {
+      captured,
+      restore: () => {
+        // no-op — nothing was wrapped, nothing to unwrap.
+      },
+    }
+  }
   const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
   ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
     return orig(modelID, (flatMesh) => {
@@ -1557,9 +1582,18 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
 export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
   try {
     if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
-      console.warn(
+      // No-op when the capture wrapper saw zero FlatMeshes. Real causes:
+      // (a) the IfcAPI mock used in some test harnesses doesn't expose
+      // `StreamAllMeshes`, so `installFlatMeshCapture` returned its
+      // stub-and-no-op shape; (b) the parse completed but emitted no
+      // geometry (degenerate or empty IFC). Either way, leaving
+      // wit-three's rendered geometry in place is the right fallback;
+      // logged at info level so it stays discoverable in real prod
+      // logs without polluting tests.
+      // eslint-disable-next-line no-console
+      console.info(
         '[conwayDirect] no FlatMesh capture from parse — ' +
-        'skipping Conway-direct install')
+        'leaving wit-three geometry in place')
       return
     }
     const t0 = (typeof performance !== 'undefined' && performance.now) ?

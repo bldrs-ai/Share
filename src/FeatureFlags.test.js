@@ -19,13 +19,27 @@ describe('FeatureFlags', () => {
     })
   })
 
-  it('declares glb and glbDraco flags, both inactive by default', () => {
+  it('declares glb active by default and glbDraco off (sub-option)', () => {
+    // glb went default-on in the Phase-5 prep landing — cache-hit GLB
+    // loads bypass wit-three entirely. glbDraco stays opt-in because
+    // compression adds 100-300ms per cache write and the size win
+    // varies by model; users opt in via `?feature=glbDraco`.
     const glb = flags.find((f) => f.name === 'glb')
     const glbDraco = flags.find((f) => f.name === 'glbDraco')
     expect(glb).toBeDefined()
-    expect(glb.isActive).toBe(false)
+    expect(glb.isActive).toBe(true)
     expect(glbDraco).toBeDefined()
     expect(glbDraco.isActive).toBe(false)
+  })
+
+  it('declares conwayDirectIfc active by default', () => {
+    // The Conway-direct geometry assembler + per-instance picking is
+    // the production rendering path. Off-switching is via a code change
+    // (no URL escape hatch); the wit-three fallback is on its way out
+    // entirely in the follow-up fork-removal slice.
+    const conwayDirect = flags.find((f) => f.name === 'conwayDirectIfc')
+    expect(conwayDirect).toBeDefined()
+    expect(conwayDirect.isActive).toBe(true)
   })
 
   describe('isFeatureEnabled', () => {
@@ -44,14 +58,15 @@ describe('FeatureFlags', () => {
     })
 
     it('returns false for an isActive: false flag when URL has no feature param', () => {
-      expect(isFeatureEnabled('glb')).toBe(false)
+      // glbDraco stays off by default (opt-in compression sub-option).
       expect(isFeatureEnabled('glbDraco')).toBe(false)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
     })
 
     it('enables a flag listed in ?feature=', () => {
-      window.location.search = '?feature=glb'
-      expect(isFeatureEnabled('glb')).toBe(true)
-      expect(isFeatureEnabled('glbDraco')).toBe(false)
+      window.location.search = '?feature=glbDraco'
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
     })
 
     it('enables multiple flags via comma-separated ?feature=', () => {
