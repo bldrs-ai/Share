@@ -35,6 +35,15 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
   })
 
   test('cache-hit GLB renders Properties panel with full IFC entity fields', async ({page}) => {
+    // Two `page.goto` round-trips (cache-populate + cache-hit) plus the
+    // writer's async element-properties BFS can easily exceed
+    // Playwright's default 30s per-test budget on CI. Bump to 120s so
+    // the writer has room without the test being killed mid-flight.
+    // The per-`waitForFunction` timeouts below (CACHE_TIMEOUT,
+    // DECODE_TIMEOUT) still cap the individual waits — this is the
+    // overall budget, not a wait extension.
+    const TEST_TIMEOUT = 120_000
+    test.setTimeout(TEST_TIMEOUT)
     // Capture the GLB pipeline's `[glb]` log lines so we can assert on
     // observable state transitions (cache MISS / HIT, writer wrote,
     // reader decoded) rather than racing on timing alone.
@@ -53,11 +62,23 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     const CACHE_TIMEOUT = 30_000
     await page.goto('/share/v/p/index.ifc?feature=glb')
     await waitForModelReady(page)
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    try {
+      await page.waitForFunction(
+        ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
+        {logs: glbLogs},
+        {timeout: CACHE_TIMEOUT},
+      )
+    } catch (e) {
+      // Diagnostic dump: which [glb] lines DID fire before the wait
+      // timed out? Most useful failure mode is `writer: skipped (threw)`
+      // — surfaces a writer-side exception that would otherwise be
+      // invisible (the outer try/catch in exportAndCacheGlb swallows
+      // the throw and only logs).
+      const indented = glbLogs.map((l) => `  ${l}`).join('\n')
+      console.error(
+        `[cacheHit.spec] writer:wrote never fired in ${CACHE_TIMEOUT}ms; captured ${glbLogs.length} [glb] line(s):\n${indented}`)
+      throw e
+    }
     expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
 
     // Second load — same path + element permalink — to trigger a cache
