@@ -33,9 +33,11 @@ import {
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
 import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
-import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
+import {instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {BldrsElementPropertiesReader} from './bldrsElementProperties'
+import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {exportAndCacheGlb} from './glbExport'
@@ -464,16 +466,93 @@ export async function load(
   // Skip when a mesh already has an instanceMap attached — the
   // Conway-direct cache-miss path attaches one directly during the
   // parse swap; this block is only for cache-hit restoration.
-  if (model.capabilities.instancePicking) {
+  // Cache-hit IfcInstanceMap restoration. Three sources, in order of
+  // preference:
+  //   1. BLDRS_face_ids extension (`userData.bldrsFaceIds.perPrimitive`)
+  //      — per-triangle expressID + instanceID arrays untouched by
+  //      compression. The source of truth when present; immune to
+  //      DRACO quantization and Meshopt vertex welding.
+  //   2. Per-vertex `_EXPRESSID` / `_INSTANCEID` attributes — the
+  //      legacy fallback for cache artifacts that predate face_ids.
+  //      Safe when no compression was applied (current default for
+  //      IFC GLBs); unreliable when DRACO/Meshopt ran.
+  //   3. Nothing — geometry-only model with no IFC IDs (drag-dropped
+  //      GLB / OBJ / etc.); skip the map.
+  //
+  // Walk meshes in traversal order. Match each Mesh to its face_ids
+  // perPrimitive entry by primitive index (writer's
+  // `capturePerTriangleIds` iterates `json.meshes[].primitives[]` in
+  // the same depth-first order GLTFLoader produces, so positional
+  // matching holds for both single-mesh and merged-container GLBs).
+  if (model.capabilities.instancePicking ||
+      model.userData?.bldrsFaceIds) {
+    const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Per-vertex IDs are only trustworthy on uncompressed artifacts.
+    // DRACO quantises integer attributes and Meshopt welds shared
+    // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
+    // gate the legacy fallback on `bldrsCompressionMode == null`
+    // (set by parseBldrsGlbContainer above). When face_ids exists
+    // and fails its sanity check on a compressed artifact, we'd
+    // rather drop picking on that mesh than return wrong selections.
+    const compressionMode = model.userData?.bldrsCompressionMode ?? null
+    const perVertexTrusted = compressionMode === null
+    let meshIndex = 0
     let attached = 0
+    let viaFaceIds = 0
+    let skippedCompressedNoFaceIds = 0
     let totalInstances = 0
     const allParents = new Set()
     model.traverse((obj) => {
-      if (!obj.isMesh || obj.instanceMap) {
+      if (!obj.isMesh) {
         return
       }
-      if (obj.geometry?.attributes?.instanceID?.count > 1) {
-        const map = instanceMapFromGeometry(obj.geometry)
+      if (obj.instanceMap) {
+        meshIndex++
+        return
+      }
+      let map = null
+      const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
+      if (faceIdsEntry && faceIdsEntry.expressIds) {
+        // Sanity 1: per-triangle array length must match the geometry's
+        // triangle count.
+        // Sanity 2: alignment canary — `firstExpressId` recorded at
+        // capture time must match `expressIds[0]` after decode.
+        // Catches a primitive-order mismatch between writer and
+        // reader (e.g. GLTFLoader traversal diverging from
+        // `json.meshes[].primitives[]`) that the length check alone
+        // wouldn't flag if two meshes happen to share triangle counts.
+        const idxCount = obj.geometry?.index?.count ?? 0
+        const expectedTriCount = (idxCount / 3) | 0
+        const canaryOk = faceIdsEntry.firstExpressId === null ||
+          faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
+          map = instanceMapFromTriangleIds(
+            faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
+          viaFaceIds++
+        } else if (!canaryOk) {
+          console.warn(
+            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
+            `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
+            `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
+        } else {
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
+          console.warn(
+            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
+        }
+      }
+      if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
+        if (perVertexTrusted) {
+          map = instanceMapFromGeometry(obj.geometry)
+        } else if (!faceIdsEntry) {
+          // Compressed artifact with no face_ids entry — the per-vertex
+          // attrs exist but are corrupted by DRACO/Meshopt. Skip.
+          skippedCompressedNoFaceIds++
+        }
+      }
+      if (map) {
         obj.instanceMap = map
         attached++
         totalInstances += map.instanceCount
@@ -481,11 +560,77 @@ export async function load(
           allParents.add(pid)
         }
       }
+      meshIndex++
     })
     if (attached > 0) {
       glbInfo(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
-        `${totalInstances} instances under ${allParents.size} IFC products`)
+        `${totalInstances} instances under ${allParents.size} IFC products ` +
+        `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
+    }
+    if (skippedCompressedNoFaceIds > 0) {
+      console.warn(
+        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+        `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
+        'per-vertex IDs would be corrupted')
+    }
+    // Free the per-triangle ID arrays now that IfcInstanceMap owns its
+    // own copies. For a 2.84M-triangle Snowdon model this reclaims
+    // ~22MB of JS heap that would otherwise be held for the life of
+    // the scene.
+    if (model.userData?.bldrsFaceIds) {
+      delete model.userData.bldrsFaceIds
+    }
+  }
+
+  // BVH build for fast picking on cache-hit GLB. The Conway-direct
+  // cache-MISS path already does this inside `installConwayDirectGeometry`
+  // (line ~1480), but cache-HIT meshes come straight off GLTFLoader
+  // and never see a `computeBoundsTree()` call. Without a BVH, the
+  // per-frame hover raycast falls back to `Mesh.prototype.raycast`'s
+  // O(triangles) brute force — on a ~3M-tri Snowdon split into 85
+  // child meshes that drops hover-pick to ~1 FPS. With BVH, the same
+  // raycast is O(log N) per mesh and stays at 60 FPS.
+  //
+  // `BufferGeometry.prototype.computeBoundsTree` is the monkey-patch
+  // wit-three's `initializeMeshBVH` already installed at viewer init
+  // (`web-ifc-three/IFCLoader.js#initializeMeshBVH` writes it onto
+  // the prototype + replaces `Mesh.prototype.raycast` with
+  // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
+  // prototype but need their own `boundsTree` built per geometry.
+  //
+  // Gated on `cameFromGlbCache` so live IFC parses (which build
+  // their own BVH in `installConwayDirectGeometry` or via wit-three
+  // internals) don't double-build.
+  if (cameFromGlbCache) {
+    const bvhStartMs = Date.now()
+    let bvhBuilt = 0
+    let bvhTris = 0
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) {
+        return
+      }
+      // Skip if already has a BVH (defensive — shouldn't happen on
+      // cache-hit but won't rebuild if it does).
+      if (obj.geometry.boundsTree) {
+        return
+      }
+      if (typeof obj.geometry.computeBoundsTree !== 'function') {
+        return
+      }
+      try {
+        obj.geometry.computeBoundsTree()
+        bvhBuilt++
+        const idx = obj.geometry.index
+        bvhTris += idx ? (idx.count / 3) : 0
+      } catch (e) {
+        glbInfo(`reader: computeBoundsTree failed for one mesh; skipping:`, e)
+      }
+    })
+    if (bvhBuilt > 0) {
+      glbInfo(
+        `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
+        `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
     }
   }
 
@@ -733,6 +878,51 @@ export function convertToShareModel(model, viewer) {
       'reader: hydrated NavTree from BLDRS_spatial_tree (' +
       `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
   }
+
+  // Cache-hit hydration for BLDRS_element_properties. The reader
+  // plugin parked a lazy-decode payload on
+  // `model.userData.bldrsElementProperties` (compressed bytes + a
+  // `decode()` closure). Promote it to `model.getItemProperties(id)`
+  // and `model.getPropertySets(id)` so the Properties panel
+  // (`Components/Properties/Properties.jsx`,
+  // `Components/Properties/itemProperties.jsx`) renders on cache-hit
+  // without touching the (shared, parser-stateless) `ifcManager`.
+  //
+  // First call to either method triggers the lazy `decode()` (one-shot
+  // pako.ungzip + JSON.parse, then cached). A load that never opens
+  // the Properties panel pays nothing.
+  //
+  // Signature note: the closures take one arg (expressID), matching
+  // `web-ifc-three.IFCModel.getItemProperties(id)` / `getPropertySets(id)`
+  // — NOT the underlying ifcManager's (modelID, expressID, ...) form.
+  // Consumers call `model.getItemProperties(refId)` directly; the
+  // modelID is implicit per cached artifact (one IFC per GLB).
+  //
+  // Capture wrote shallow item properties (refs as `{type:5, value:id}`).
+  // `getPropertySets` returns the array of pset objects looked up
+  // from the propertySets index, matching the existing consumer
+  // expectation in Properties.jsx#createPsetsList.
+  const elementProperties = model.userData?.bldrsElementProperties
+  if (elementProperties && typeof elementProperties.decode === 'function') {
+    model.getItemProperties = (expressID) => {
+      const data = elementProperties.decode()
+      return data.itemProperties[expressID]
+    }
+    model.getPropertySets = (expressID) => {
+      const data = elementProperties.decode()
+      const psetIds = data.propertySets[expressID]
+      if (!Array.isArray(psetIds) || psetIds.length === 0) {
+        return []
+      }
+      return psetIds
+        .map((pid) => data.itemProperties[pid])
+        .filter((p) => p !== null && p !== undefined)
+    }
+    glbInfo(
+      'reader: hydrated Properties panel from BLDRS_element_properties ' +
+      `(${elementProperties.compressed.byteLength}B compressed; ` +
+      'decode on first access)')
+  }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
   // expressID attribute on any mesh). When the model came from our IFC→
@@ -973,6 +1163,8 @@ function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
+  loader.register((parser) => new BldrsElementPropertiesReader(parser))
+  loader.register((parser) => new BldrsFaceIdsReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')
@@ -1609,6 +1801,14 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
     `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
     `mode=${mode || 'none'}`)
   const merged = new Group()
+  // Stash the compression mode on the merged userData so downstream
+  // decoration (`convertToShareModel`) can decide whether per-vertex
+  // `_EXPRESSID` / `_INSTANCEID` is trustworthy. DRACO quantises
+  // integer attributes (16-bit ceiling) and Meshopt welds shared
+  // vertices — both silently corrupt per-vertex IDs. The face_ids
+  // path bypasses both, but the legacy per-vertex fallback must NOT
+  // run on compressed artifacts.
+  merged.userData.bldrsCompressionMode = mode || null
   for (let i = 0; i < chunks.length; i++) {
     const chunkAb = chunks[i]
     const gltf = await new Promise((resolve, reject) => {

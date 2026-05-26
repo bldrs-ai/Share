@@ -124,7 +124,73 @@ describe('loader/bldrsSpatialTree', () => {
         })),
       }
       await captureBldrsSpatialTree(mgr, 42)
+      // Falls back to `includeProperties=true` because no
+      // adapter surface is exposed by the bare stub.
       expect(mgr.getSpatialStructure).toHaveBeenCalledWith(42, true)
+    })
+
+    it('uses bare-tree call + sync enrich when adapter surface is reachable', async () => {
+      // When `ifcAPI.getPassthrough(modelID)` returns a proxy with
+      // sync `getLine`, the capture switches to the fast path:
+      // bare `getSpatialStructure(modelID, false)` (no Conway "JSON
+      // workflow disabled" warning) + per-node sync `getLine` for
+      // Name/LongName enrichment. The serialized tree must still
+      // carry Name/LongName so cache-hit NavTree renders correctly.
+      const bareTree = {
+        expressID: 1, type: 'IFCPROJECT', children: [
+          {expressID: 2, type: 'IFCSITE', children: []},
+        ],
+      }
+      const proxy = {
+        getLine: jest.fn((id) => {
+          if (id === 1) {
+            return {Name: {value: 'Project'}, LongName: {value: 'My Project'}}
+          }
+          if (id === 2) {
+            return {Name: {value: 'Site'}, LongName: {value: 'My Site'}}
+          }
+          return undefined
+        }),
+      }
+      const mgr = {
+        getSpatialStructure: jest.fn(() => bareTree),
+        ifcAPI: {getPassthrough: () => proxy},
+      }
+      const captured = await captureBldrsSpatialTree(mgr, 0)
+      // Bare-tree call: false, not true.
+      expect(mgr.getSpatialStructure).toHaveBeenCalledWith(0, false)
+      // Names enriched into the serialized output.
+      expect(captured.Name).toEqual({value: 'Project'})
+      expect(captured.LongName).toEqual({value: 'My Project'})
+      expect(captured.children[0].Name).toEqual({value: 'Site'})
+      expect(captured.children[0].LongName).toEqual({value: 'My Site'})
+      // Two sync getLine calls — one per node.
+      expect(proxy.getLine).toHaveBeenCalledTimes(2)
+    })
+
+    it('tolerates a getLine call that throws on one node (rest still enriched)', async () => {
+      const bareTree = {
+        expressID: 1, type: 'IFCPROJECT', children: [
+          {expressID: 2, type: 'IFCSITE', children: []},
+          {expressID: 3, type: 'IFCBUILDING', children: []},
+        ],
+      }
+      const proxy = {
+        getLine: (id) => {
+          if (id === 2) {
+            throw new Error('parse error on node 2')
+          }
+          return {Name: {value: `e${id}`}}
+        },
+      }
+      const mgr = {
+        getSpatialStructure: () => bareTree,
+        ifcAPI: {getPassthrough: () => proxy},
+      }
+      const captured = await captureBldrsSpatialTree(mgr, 0)
+      expect(captured.Name).toEqual({value: 'e1'})
+      expect(captured.children[0].Name).toBeUndefined() // throw → no name
+      expect(captured.children[1].Name).toEqual({value: 'e3'})
     })
   })
 

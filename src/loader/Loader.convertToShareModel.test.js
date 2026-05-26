@@ -268,4 +268,99 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getSpatialStructure).toBeUndefined()
   })
+
+  it('cache-hit BLDRS_element_properties hydrates getItemProperties and getPropertySets', () => {
+    // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
+    // `{compressed, decode}` lazy payload. The hydration block in
+    // convertToShareModel attaches closures that read the maps for
+    // entity / pset lookups via the payload's `decode()` (which caches
+    // internally — see makeLazyPayload). Each closure call hits
+    // `decode()` but the gzip / JSON.parse work happens once.
+    const decoded = {
+      itemProperties: {
+        100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
+        500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
+      },
+      propertySets: {100: [500]},
+    }
+    // Realistic mock: decode() returns the same object every time
+    // (proves the closures use the cached payload, not re-parse).
+    const mesh = new Mesh(new BufferGeometry())
+    let decodeReturns = 0
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode() {
+        decodeReturns++
+        return decoded
+      },
+    }
+    convertToShareModel(mesh, makeViewerStub())
+
+    expect(typeof mesh.getItemProperties).toBe('function')
+    expect(typeof mesh.getPropertySets).toBe('function')
+    // No decode happens at hydration time — closures defer the work.
+    expect(decodeReturns).toBe(0)
+
+    // Each closure invocation calls decode() but the real
+    // makeLazyPayload caches internally so the actual decompress +
+    // parse happens once. Our mock returns the same object reference
+    // each time; that's what we assert.
+    const wall = mesh.getItemProperties(100)
+    expect(wall.Name.value).toBe('Wall A')
+    const pset = mesh.getItemProperties(500)
+    expect(pset.Name.value).toBe('Pset_WallCommon')
+
+    // getPropertySets returns the array of pset objects (not IDs) —
+    // matching the Properties.jsx consumer contract.
+    const psets = mesh.getPropertySets(100)
+    expect(psets).toHaveLength(1)
+    expect(psets[0]).toEqual(decoded.itemProperties[500])
+
+    // Caching invariant: every decode() call returned the same object
+    // ref (i.e. the closures consume the payload's cached form rather
+    // than asking for a fresh parse). That's what makes the lazy
+    // wrapper a one-shot decompress instead of one-per-lookup.
+    expect(decodeReturns).toBeGreaterThan(0)
+  })
+
+  it('cache-hit Properties: getPropertySets returns [] for a product with no psets', () => {
+    const decoded = {itemProperties: {100: {expressID: 100}}, propertySets: {}}
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode: () => decoded,
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getPropertySets(100)).toEqual([])
+    // Also for an expressID that isn't in the index at all.
+    expect(mesh.getPropertySets(9999)).toEqual([])
+  })
+
+  it('cache-hit Properties: getItemProperties returns undefined for missing IDs', () => {
+    // Real-world: consumer's `deref` calls `getItemProperties(refId)`
+    // for arbitrary refIds it encounters. If a ref isn't in the cached
+    // closure (BFS missed it; or the cache is stale), returning
+    // undefined lets the consumer's null-guard kick in. Critical: no
+    // throw on lookup miss.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode: () => ({itemProperties: {1: {x: 1}}, propertySets: {}}),
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getItemProperties(1)).toEqual({x: 1})
+    expect(mesh.getItemProperties(9999)).toBeUndefined()
+  })
+
+  it('no BLDRS_element_properties on userData → no closures attached', () => {
+    // Symmetric to the spatial-tree regression guard above. Live IFC
+    // parses don't ship the payload — the model must NOT carry the
+    // model-level methods so consumers fall through to whatever the
+    // live ifcManager exposes.
+    const mesh = new Mesh(new BufferGeometry())
+    // userData.bldrsElementProperties intentionally unset.
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getItemProperties).toBeUndefined()
+    expect(mesh.getPropertySets).toBeUndefined()
+  })
 })

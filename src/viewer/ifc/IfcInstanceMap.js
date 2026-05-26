@@ -484,6 +484,106 @@ export function instanceMapFromGeometry(geometry) {
 
 
 /**
+ * Per-triangle populator. Built for the `BLDRS_face_ids` cache-hit
+ * path where per-element IDs are stored as separate per-triangle
+ * arrays in a glTF extension (rather than as per-vertex attributes
+ * that compression can corrupt).
+ *
+ * Direct twin of `instanceMapFromGeometry` minus the per-vertex
+ * indirection: where that function reads
+ * `instanceIDs[index[t * 3]]` to recover triangle t's instance ID,
+ * this one reads `instanceIdsPerTriangle[t]` directly. Same
+ * downstream output shape (`triangleIndexToInstanceId`,
+ * `instanceIdToTriangleIndices`, `instanceIdToParentExpressId`,
+ * `parentExpressIdToInstanceIds`) so consumers (`ShareViewer`'s
+ * selection routing, picking via `getInstanceIdByTriangle`) don't
+ * branch on which populator built the map.
+ *
+ * `instanceIdsPerTriangle` may be null when the source primitive
+ * had no `_INSTANCEID` (some legacy GLBs). In that case every
+ * triangle gets instance 0 — the IfcInstanceMap surface still
+ * functions, just with one instance per parent expressID.
+ *
+ * @param {Uint32Array} expressIdsPerTriangle length = triangleCount;
+ *   each entry is the parent IFC expressID for that triangle.
+ * @param {Uint32Array|null} instanceIdsPerTriangle length =
+ *   triangleCount (when not null); each entry is the synthetic
+ *   instance ID for that triangle.
+ * @param {object} [opts]
+ * @param {object} [opts.geometry] the source BufferGeometry, stashed
+ *   on the returned map as `sourceGeometry` for raycast-side
+ *   convenience (parity with `instanceMapFromGeometry`).
+ * @return {IfcInstanceMap}
+ */
+export function instanceMapFromTriangleIds(
+  expressIdsPerTriangle,
+  instanceIdsPerTriangle,
+  opts = {},
+) {
+  if (!expressIdsPerTriangle || !expressIdsPerTriangle.length) {
+    throw new Error(
+      'instanceMapFromTriangleIds: expressIdsPerTriangle is required + non-empty')
+  }
+  if (instanceIdsPerTriangle &&
+      instanceIdsPerTriangle.length !== expressIdsPerTriangle.length) {
+    throw new Error(
+      `instanceMapFromTriangleIds: length mismatch — expressIds ` +
+      `${expressIdsPerTriangle.length}, instanceIds ${instanceIdsPerTriangle.length}`)
+  }
+  const triCount = expressIdsPerTriangle.length
+  // Pass 1: per-triangle instance ID + collect tri lists per instance.
+  // If no instance data, every triangle is instance 0 (single-instance
+  // semantics — picker can still resolve parent expressID).
+  const triangleIndexToInstanceId = new Uint32Array(triCount)
+  const trisByInstance = new Map()
+  let maxInstance = 0
+  for (let t = 0; t < triCount; t++) {
+    const inst = instanceIdsPerTriangle ? instanceIdsPerTriangle[t] : 0
+    triangleIndexToInstanceId[t] = inst
+    let list = trisByInstance.get(inst)
+    if (!list) {
+      list = []
+      trisByInstance.set(inst, list)
+    }
+    list.push(t)
+    if (inst > maxInstance) {
+      maxInstance = inst
+    }
+  }
+  const instanceCount = maxInstance + 1
+  const instanceIdToTriangleIndices = new Map()
+  for (const [inst, tris] of trisByInstance) {
+    instanceIdToTriangleIndices.set(inst, Uint32Array.from(tris))
+  }
+  // Pass 2: parent expressID per instance + parent → instances list.
+  // Read parent ID from any triangle of the instance (all carry it).
+  const instanceIdToParentExpressId = new Uint32Array(instanceCount)
+  const instancesByParent = new Map()
+  for (const [inst, tris] of trisByInstance) {
+    const parent = expressIdsPerTriangle[tris[0]]
+    instanceIdToParentExpressId[inst] = parent
+    let plist = instancesByParent.get(parent)
+    if (!plist) {
+      plist = []
+      instancesByParent.set(parent, plist)
+    }
+    plist.push(inst)
+  }
+  const parentExpressIdToInstanceIds = new Map()
+  for (const [pid, list] of instancesByParent) {
+    parentExpressIdToInstanceIds.set(pid, Uint32Array.from(list))
+  }
+  return new IfcInstanceMap({
+    triangleIndexToInstanceId,
+    instanceIdToTriangleIndices,
+    instanceIdToParentExpressId,
+    parentExpressIdToInstanceIds,
+    sourceGeometry: opts.geometry,
+  })
+}
+
+
+/**
  * Conway-direct populator. Walks a captured FlatMesh source and
  * emits one synthetic instance per PlacedGeometry, tagged with the
  * parent `FlatMesh.expressID`.

@@ -142,7 +142,8 @@ describe('loader/glbExport', () => {
 
       const ok = await exportAndCacheGlb({model: {}, ...ctx})
       expect(ok).toBe(true)
-      expect(mockCompressGlb).toHaveBeenCalledWith(expect.any(Uint8Array), null)
+      expect(mockCompressGlb).toHaveBeenCalledWith(
+        expect.any(Uint8Array), null, expect.objectContaining({preserveTriangleOrder: expect.any(Boolean)}))
     })
   })
 })

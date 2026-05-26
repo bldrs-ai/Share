@@ -28,8 +28,33 @@ export default function Properties() {
   useEffect(() => {
     (async () => {
       if (model && element) {
-        setPropTable(await createPropertyTable(model, element))
-        setPsetsList(await createPsetsList(model, element, expandAll))
+        // Resolve `element` to the full IFC entity before rendering.
+        // `selectedElement` is a spatial-tree node — for cache-miss
+        // IFC it carries full IFC properties (wit-three's
+        // `getSpatialStructure(0, true)` inlines them); for cache-hit
+        // GLB it's the slim whitelist {expressID, type, Name,
+        // LongName, children} captured by `bldrsSpatialTree.js`.
+        // `model.getItemProperties(expressID)` returns the full entity
+        // in both cases (wit-three's IFCModel prototype on cache-miss;
+        // the cached BLDRS_element_properties closure on cache-hit),
+        // so we route through it to keep the panel identical across
+        // backends.
+        let fullElement = element
+        if (typeof model.getItemProperties === 'function' &&
+            element.expressID !== undefined) {
+          try {
+            const fetched = await model.getItemProperties(element.expressID)
+            if (fetched) {
+              fullElement = fetched
+            }
+          } catch (e) {
+            // Fall back to the spatial-tree node — better than a
+            // crash if the cached payload is missing this id.
+            console.warn('Properties: getItemProperties failed; using selected element directly', e)
+          }
+        }
+        setPropTable(await createPropertyTable(model, fullElement))
+        setPsetsList(await createPsetsList(model, fullElement, expandAll))
       }
     })()
   }, [model, element, expandAll])

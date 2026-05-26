@@ -27,6 +27,15 @@
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
 import {
+  BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
+  captureBldrsElementProperties,
+} from './bldrsElementProperties'
+import {
+  BLDRS_FACE_IDS_EXTENSION_NAME,
+  buildFaceIdsExtensionData,
+  capturePerTriangleIds,
+} from './bldrsFaceIds'
+import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
@@ -38,7 +47,7 @@ import {
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
-import {injectGlbExtensions} from './injectGlbExtensions'
+import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
 
 /**
@@ -133,12 +142,15 @@ function silenceGltfExporterMaterialWarnings() {
  * @param {object} args.cacheKeyArgs Output of one of the sourceCacheKey
  *   adapters: {ns1, ns2, ns3, sourcePath, sourceHash}.
  * @param {object} [args.ifcManager] IfcManager-like with
- *   `getSpatialStructure(modelID, withProperties)` — typically
- *   `viewer.IFC.loader.ifcManager`. When provided and the source is an
- *   IFC parse with live parser state, the spatial structure is captured
- *   and embedded as a `BLDRS_spatial_tree` extension so cache-hit GLBs
- *   render their NavTree without re-parsing. Pass `null` for non-IFC
- *   sources or when no live tree is available.
+ *   `getSpatialStructure`, `getItemProperties`, `getPropertySets`
+ *   — typically `viewer.IFC.loader.ifcManager`. When provided and the
+ *   source is an IFC parse with live parser state, the spatial
+ *   structure is captured as a `BLDRS_spatial_tree` extension AND the
+ *   element-properties closure (BFS through IFC references from
+ *   spatial-tree elements) is captured as `BLDRS_element_properties`
+ *   so cache-hit GLBs render NavTree and Properties panel without
+ *   re-parsing. Pass `null` for non-IFC sources or when no live
+ *   parser state is available.
  * @return {Promise<boolean>}
  */
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
@@ -157,24 +169,93 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
     // Capture BLDRS_* extension payloads from the live IFC parser state
-    // before it goes out of scope. We pass these through `injectGlbExtensions`
-    // even when null/empty — the helper is a no-op for an empty list, so
-    // the call-site stays unconditional.
-    const spatialTree = await captureBldrsSpatialTree(ifcManager, model?.modelID ?? 0)
-    const {bytes: withExtensions, stats: extStats} = injectGlbExtensions(rawBytes, [
-      {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
-    ])
-    if (extStats.addedExtensions > 0) {
-      glbVerbose(
-        `writer: injected ${extStats.addedExtensions} extension(s), ` +
-        `+${withExtensions.byteLength - rawBytes.byteLength}B`)
+    // before it goes out of scope. Runs in parallel with `compressGlb`
+    // below to overlap the two costs (Conway sync iteration + DRACO/
+    // Meshopt encoder).
+    //
+    // Element properties depend on the spatial tree (the slow-path BFS
+    // uses tree expressIDs as BFS seeds; the fast path ignores it), so
+    // the two captures are sequential rather than parallel.
+    const modelId = model?.modelID ?? 0
+    // Capture per-triangle element IDs from the pristine raw bytes
+    // BEFORE any compression. The vertex-level `_EXPRESSID` /
+    // `_INSTANCEID` attributes are still intact here; we read them
+    // and project to per-triangle (taking vertex 0's ID per
+    // triangle, matching `instanceMapFromGeometry`'s assumption that
+    // a triangle's 3 vertices share the same parent). The resulting
+    // per-triangle arrays will go into `BLDRS_face_ids` so the
+    // reader can rebuild `IfcInstanceMap` without trusting the
+    // post-compression per-vertex attributes (which DRACO would
+    // quantise-corrupt and Meshopt would weld-merge).
+    //
+    // Sync — parse + array read; no I/O. Safe to run before the
+    // parallel async captures below.
+    let faceIds = null
+    try {
+      const {json, bin} = parseGlb(rawBytes)
+      faceIds = capturePerTriangleIds(json, bin)
+      if (faceIds) {
+        const primCount = faceIds.perPrimitive.filter((p) => p).length
+        const triTotal = faceIds.perPrimitive.reduce(
+          (n, p) => n + (p?.expressIds?.length ?? 0), 0)
+        glbVerbose(
+          `writer: captured per-triangle IDs from ${primCount} primitive(s) — ` +
+          `${triTotal.toLocaleString()} triangles`)
+      }
+    } catch (e) {
+      // Intentional: swallow + continue. If parseGlb threw on bytes
+      // we just got from GLTFExporter, we have bigger problems than
+      // face_ids — the cache write itself will catch it. The skip
+      // here also flows downstream: with `faceIds == null`,
+      // `preserveTriangleOrder` stays false, so compressGlb falls
+      // back to the per-vertex-IDs-detected skip (uncompressed
+      // write) rather than running DRACO with corrupted IDs.
+      console.warn(
+        '[glb] writer: parseGlb for face_ids capture threw; ' +
+        'skipping face_ids (DRACO will skip too):', e)
     }
+    const capturePromise = (async () => {
+      const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+      const elementProperties = await captureBldrsElementProperties(
+        ifcManager, modelId, spatialTree)
+      return {spatialTree, elementProperties}
+    })()
+    // Compress FIRST, then inject. `@gltf-transform/core`'s `WebIO`
+    // (used inside `compressGlb`) parses the GLB into a Document and
+    // re-serialises it, which **silently drops any extension it
+    // doesn't have a registered handler for** — our `BLDRS_*`
+    // extensions vanish if injected before compression runs. Order
+    // matters: inject must come *after* compression so our extensions
+    // ride along untouched in the final BIN chunk.
+    //
+    // `preserveTriangleOrder` signals that the reader will use
+    // `BLDRS_face_ids` for picking — the IDs are per-triangle by
+    // pre-compression order, so compression must not reorder triangles.
+    // DRACO has a `sequential` mode that preserves order; we pass the
+    // flag through so compressGlb can pick the right encoder method.
+    // Meshopt's default pipeline reorders triangles for vertex-cache
+    // coherency without an off-switch we can find, so it stays
+    // skipped for face_ids-bearing GLBs.
+    //
     // Use the *actual* compression mode (compressGlb may fall back to
     // null on encoder failure) so the cached artifact lands in the
     // matching schema slot. Otherwise a -draco / -meshopt suffix on
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
-    const {bytes, mode} = await compressGlb(withExtensions, requestedMode)
+    const {bytes: compressedBytes, mode} = await compressGlb(
+      rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
+    const {spatialTree, elementProperties} = await capturePromise
+    const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
+    const {bytes, stats: extStats} = injectGlbExtensions(compressedBytes, [
+      {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
+      {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
+    ])
+    if (extStats.addedExtensions > 0) {
+      glbVerbose(
+        `writer: injected ${extStats.addedExtensions} extension(s), ` +
+        `+${bytes.byteLength - compressedBytes.byteLength}B (post-compress)`)
+    }
     const schemaVer = schemaVersionFor(mode)
     const packed = packGlbChunks([bytes], mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
