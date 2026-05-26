@@ -48,6 +48,7 @@ import {
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
+import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
 
@@ -259,18 +260,46 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     const {spatialTree, elementProperties} = await capturePromise
     await yieldToBrowser()
     const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
-    const {bytes, stats: extStats} = injectGlbExtensions(compressedBytes, [
+    // Dispatch the JSON.stringify + pako.gzip + extension injection +
+    // container packing to the GlbWriter worker. On Schependomlaan-
+    // class IFCs the element-properties payload is multi-MB; running
+    // its `JSON.stringify` + `pako.gzip` on the main thread costs
+    // ~300-500ms of frozen hover-pick. Moving them to the worker
+    // eliminates that block — the main thread only pays the
+    // structured-clone cost across postMessage (~50ms on a
+    // Schependomlaan payload, scales sublinearly with size).
+    //
+    // The fallback path runs everything inline (no worker) — used
+    // when the worker fails to construct (Safari edge cases,
+    // module-worker support detection failure). Same result either
+    // way; the only observable difference is main-thread freeze
+    // duration.
+    const extensionsForInject = [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
       {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
-    ])
+    ]
+    let packed
+    let extStats
+    try {
+      const workerResult = await injectAndPackInWorker({
+        bytes: compressedBytes,
+        mode,
+        extensions: extensionsForInject,
+      })
+      packed = workerResult.bytes
+      extStats = workerResult.extStats
+    } catch (workerErr) {
+      glbInfo('writer: worker dispatch failed, running inline on main thread:', workerErr)
+      const inline = injectGlbExtensions(compressedBytes, extensionsForInject)
+      extStats = inline.stats
+      packed = packGlbChunks([inline.bytes], mode)
+    }
     if (extStats.addedExtensions > 0) {
       glbVerbose(
-        `writer: injected ${extStats.addedExtensions} extension(s), ` +
-        `+${bytes.byteLength - compressedBytes.byteLength}B (post-compress)`)
+        `writer: injected ${extStats.addedExtensions} extension(s)`)
     }
     const schemaVer = schemaVersionFor(mode)
-    const packed = packGlbChunks([bytes], mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)
