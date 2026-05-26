@@ -191,11 +191,11 @@ export function serializeGlb(json, bin) {
  * helper that produces it (e.g. src/loader/bldrsSpatialTree.js exports
  * both `captureBldrsSpatialTree` and `BldrsSpatialTreeReader`).
  *
- * Pass-through behavior: when `extensions` is empty (or every entry has
- * `data: null/undefined`), the input bytes are returned unmodified (and
- * `stats.addedExtensions === 0`) — the caller can unconditionally route
- * GLBs through this helper without paying a re-serialise cost when
- * nothing is being injected.
+ * Pass-through behavior: when `extensions` is empty AND `sceneExtras`
+ * is empty/null, the input bytes are returned unmodified (and
+ * `stats.addedExtensions === 0`) — the caller can unconditionally
+ * route GLBs through this helper without paying a re-serialise cost
+ * when nothing is being injected.
  *
  * Collision behavior: an extension whose `name` is already present in
  * `json.extensions` is **skipped** — we log a warning and leave the
@@ -204,23 +204,74 @@ export function serializeGlb(json, bin) {
  * GLTFExporter output so this branch is defensive; it matters once
  * we start handling user-originated GLBs.
  *
+ * **sceneExtras**: callers can also stamp small string-keyed metadata
+ * into `json.scenes[json.scene ?? 0].extras` in the same pass. Used
+ * for tiny payloads where a full `BLDRS_*` extension would be
+ * overkill (e.g. the IFC project title — see `glbExport.js`'s
+ * `BLDRS_TITLE_EXTRAS_KEY`). three.js GLTFLoader auto-copies scene
+ * extras into `scene.userData`, so no reader plugin is needed.
+ * Existing extras keys are preserved; provided keys merge in (and
+ * overwrite on collision — keep keys disjoint across callers if you
+ * don't want last-write-wins behavior). If `sceneExtras` is the only
+ * non-empty input, we still parse+serialize so the new keys land in
+ * the output.
+ *
  * @param {Uint8Array} glbBytes
  * @param {Array} extensions list of `{name: string, data: object|null|undefined, compress?: boolean}`
- * @return {{bytes: Uint8Array, stats: {addedExtensions: number, addedBinBytes: number, skippedNames: Array<string>}}}
- *   `bytes` is the modified GLB (or the input unchanged in pass-through);
+ * @param {object} [sceneExtras] optional `{key: value, ...}` to merge
+ *   into `scenes[json.scene ?? 0].extras`. Each value must be a
+ *   JSON-serialisable scalar / object; entries with `null`/`undefined`
+ *   values are skipped (so callers can opt-out per-key by passing nullish).
+ * @return {{
+ *   bytes: Uint8Array,
+ *   stats: {
+ *     addedExtensions: number,
+ *     addedBinBytes: number,
+ *     addedSceneExtras: number,
+ *     skippedNames: Array<string>,
+ *   },
+ * }} `bytes` is the modified GLB (or the input unchanged in pass-through);
  *   `stats` describes what changed so callers can log delta metrics
  *   without inspecting the byte stream.
  */
-export function injectGlbExtensions(glbBytes, extensions) {
+export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
   const active = (extensions ?? []).filter((e) => e && e.data !== null && e.data !== undefined)
-  if (active.length === 0) {
+  const sceneExtraEntries = sceneExtras ?
+    Object.entries(sceneExtras).filter(([, v]) => v !== null && v !== undefined) :
+    []
+  if (active.length === 0 && sceneExtraEntries.length === 0) {
     return {
       bytes: glbBytes,
-      stats: {addedExtensions: 0, addedBinBytes: 0, skippedNames: []},
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: []},
     }
   }
 
   const {json, bin} = parseGlb(glbBytes)
+
+  // Stamp scene.extras BEFORE the bufferView-appending path so we
+  // can early-return cleanly when only sceneExtras was provided.
+  // `json.scene` is the default-scene index; per glTF spec it's
+  // optional but conventionally 0 when present. Fall back to scene 0
+  // for the (extremely rare) GLBs that omit the field.
+  let addedSceneExtras = 0
+  if (sceneExtraEntries.length > 0) {
+    const sceneIdx = (typeof json.scene === 'number') ? json.scene : 0
+    if (Array.isArray(json.scenes) && json.scenes[sceneIdx]) {
+      json.scenes[sceneIdx].extras = json.scenes[sceneIdx].extras ?? {}
+      for (const [key, value] of sceneExtraEntries) {
+        json.scenes[sceneIdx].extras[key] = value
+        addedSceneExtras++
+      }
+    } else {
+      // Spec-legal but degenerate: a GLB with no scenes array has no
+      // place to attach scene-level metadata. Skip silently — the
+      // sceneExtras path is best-effort metadata; failure to stamp
+      // must not block the rest of the inject.
+      glbInfo(
+        'injectGlbExtensions: sceneExtras provided but no scenes[] array; ' +
+        'skipping scene-level metadata stamp')
+    }
+  }
 
   // We always reference buffer 0 (the implicit GLB BIN chunk). If the
   // input had no BIN chunk (geometry-only-via-URI is rare in practice
@@ -252,9 +303,18 @@ export function injectGlbExtensions(glbBytes, extensions) {
     toInject.push(ext)
   }
   if (toInject.length === 0) {
+    // No top-level extensions to add. If sceneExtras was the only
+    // input, the JSON mutation above already happened — we still need
+    // to serialise. Otherwise return the input bytes unchanged.
+    if (addedSceneExtras > 0) {
+      return {
+        bytes: serializeGlb(json, bin),
+        stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras, skippedNames},
+      }
+    }
     return {
       bytes: glbBytes,
-      stats: {addedExtensions: 0, addedBinBytes: 0, skippedNames},
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames},
     }
   }
 
@@ -316,6 +376,7 @@ export function injectGlbExtensions(glbBytes, extensions) {
     stats: {
       addedExtensions: additions.length,
       addedBinBytes: nextOffset - oldLen,
+      addedSceneExtras,
       skippedNames,
     },
   }

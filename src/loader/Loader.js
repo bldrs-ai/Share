@@ -40,7 +40,7 @@ import {BldrsElementPropertiesReader} from './bldrsElementProperties'
 import {BldrsFaceIdsReader} from './bldrsFaceIds'
 import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
-import {exportAndCacheGlb} from './glbExport'
+import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
@@ -802,6 +802,58 @@ async function axiosDownload(path, isFormatText, onProgress) {
 }
 
 
+// Hard cap on the length of a cache-hit title we'll accept. The
+// title flows from `scenes[0].extras.bldrsTitle` → `model.userData` →
+// `model.name` → React Helmet `<title>`. Even though Helmet escapes
+// text, an absurdly long title is a DoS-lite (jitter on title-bar
+// rendering, log noise). 200 chars comfortably covers real IFC
+// project names without giving the cache file room to misbehave.
+const MAX_CACHED_TITLE_LENGTH = 200
+
+
+// Pattern matching characters we strip from a cache-hit title before
+// promoting it. Defense-in-depth — the rendering layer (React Helmet
+// → `document.title`) already escapes text, but cached files come
+// from a write boundary we don't fully trust (see
+// design/new/glb-model-sharing.md §"Validation and trust"). Filter:
+//   - ASCII control characters (U+0000–U+001F, U+007F): nulls,
+//     newlines, tabs; could break log lines or other consumers that
+//     render the title in non-escaped contexts.
+//   - Bidi-override characters (U+202A–U+202E, U+2066–U+2069): used
+//     in spoofing attacks ("looks-like-ProjectA.ifc-but-is-evil.exe").
+//   - `<` and `>`: belt-and-suspenders against any consumer that
+//     forgets to escape; lets the title still read as plain text.
+// eslint-disable-next-line no-control-regex
+const BLDRS_TITLE_STRIP_PATTERN = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/g
+
+
+/**
+ * Return a cache-hit title safe for promotion to `model.name`. Strips
+ * control / bidi / markup characters, caps length, treats empty and
+ * non-string inputs as "no usable title" by returning null.
+ *
+ * @param {*} raw value from `model.userData.bldrsTitle`
+ * @return {string|null}
+ */
+function sanitizeCachedTitle(raw) {
+  if (typeof raw !== 'string' || raw === '') {
+    return null
+  }
+  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '')
+  if (stripped === '') {
+    return null
+  }
+  return stripped.length > MAX_CACHED_TITLE_LENGTH ?
+    stripped.slice(0, MAX_CACHED_TITLE_LENGTH) :
+    stripped
+}
+
+
+// Exported for tests so they can exercise the sanitizer surface
+// without going through the full convertToShareModel path.
+export {sanitizeCachedTitle as __sanitizeCachedTitleForTest}
+
+
 /**
  * TODO(pablo): this is a temporary harness to add some stubs to the loaded mesh
  * to have it not crash helpers for the main viewer.
@@ -908,10 +960,13 @@ export function convertToShareModel(model, viewer) {
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
   // Cache-hit title hydration. The writer stamps the IFC project
-  // title (e.g. "Momentum") into `scenes[0].extras.bldrsTitle`;
+  // title (e.g. "Momentum") into `scenes[0].extras[BLDRS_TITLE_EXTRAS_KEY]`;
   // three.js GLTFLoader auto-copies scene extras into
   // `scene.userData`, so a cache-hit GLB lands here with the title
-  // available at `model.userData.bldrsTitle`. Promote to
+  // available at `model.userData[BLDRS_TITLE_EXTRAS_KEY]`. We sanitize
+  // (strip control / bidi / markup chars, cap length — see
+  // `sanitizeCachedTitle`) because the cache file is an untrusted
+  // boundary in the originator-share design, then promote to
   // `model.Name`/`model.LongName`/`model.name` BEFORE the
   // `${mimeType} model` fallback below would clobber them — otherwise
   // every cache-hit page title degrades to "glb model" even though
@@ -919,15 +974,20 @@ export function convertToShareModel(model, viewer) {
   // miss this branch (no extras on userData) and fall through to the
   // existing Name/LongName logic, which is fed by the IFC parser
   // upstream.
-  const cachedTitle = (typeof model.userData?.bldrsTitle === 'string' && model.userData.bldrsTitle) ?
-    model.userData.bldrsTitle :
-    null
-  if (cachedTitle) {
+  //
+  // Precedence: if the IFC parser already set `model.name` (the live-
+  // parse path does, via `statsApi.projectName`), THAT wins — we leave
+  // every title-related field as-is. Filling only Name/LongName from
+  // a stale `userData.bldrsTitle` while keeping a different
+  // `model.name` would split the source of truth between the page
+  // title (`name`) and other consumers reading `LongName.value`. A
+  // pre-set `model.name` means upstream already decided; trust it.
+  const cachedTitle = sanitizeCachedTitle(model.userData?.[BLDRS_TITLE_EXTRAS_KEY])
+  const liveNameAlreadySet = (typeof model.name === 'string' && model.name !== '')
+  if (cachedTitle && !liveNameAlreadySet) {
     model.Name = model.Name || {value: cachedTitle}
     model.LongName = model.LongName || {value: cachedTitle}
-    if (model.name === undefined || model.name === null || model.name === '') {
-      model.name = cachedTitle
-    }
+    model.name = cachedTitle
   }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}
