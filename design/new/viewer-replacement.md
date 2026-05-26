@@ -835,25 +835,52 @@ parser entirely; cache-miss loads still call `this.loader.parse(...)`
 (wit-three's `IFCLoader.parse`) and then swap the rendered geometry
 for the Conway-direct assembler's output.
 
-**Slice 5b — Conway-direct parse (todo).** The cache-miss path
-still goes through wit-three's `IFCLoader.parse` purely to drive
-Conway under the hood, then we throw away its assembled geometry
-and rebuild with our Conway-direct assembler. Cleanest replacement:
+**Slice 5b — Conway-direct parse (done 2026-05).** Replaces
+wit-three's `IFCLoader.parse(buffer)` on the cache-miss path. The
+old flow went `applyWebIfcConfig` → `loader.parse` → wit-three
+built throw-away geometry → `installConwayDirectGeometry` rebuilt
+via Conway-direct assembler + swapped. The new flow opens the model
+with Conway directly and builds the renderable Mesh in one pass:
 
 ```js
-const modelID = ifcAPI.OpenModel(new Uint8Array(buffer))
-const captured = []
-ifcAPI.StreamAllMeshes(modelID, (fm) => captured.push(fm))
+const {modelID, captured} = parseIfcWithConway(buffer, ifcAPI)
 const {mesh: ifcModel} = buildConwayIfcModel(captured, ifcAPI, modelID)
-ifcModel.modelID = modelID
-// property reads route through ifcAPI.properties.* directly
+decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+// property reads route through ifcAPI.properties.* via method
+// closures attached by `decorateConwayDirectIfcModel`
 ```
 
-Conway's adapter exposes the full property + spatial surface natively
-(`properties.getItemProperties`, `properties.getSpatialStructure`,
-`properties.getAllItemsOfType`) — the wit-three `ifcManager` wrapper
-is decorative on top. Lifting the parse out of wit-three removes the
-last load-path dep on the fork.
+New module: `src/viewer/ifc/conwayDirectIfcLoader.js`.
+
+- `parseIfcWithConway(buffer, ifcAPI, settings?)` → `{modelID, captured}`
+  Conway `OpenModel` + `StreamAllMeshes` in one sync call. Defaults
+  the settings to `{COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}`
+  to preserve the wit-three baseline. Throws on OpenModel failure
+  (returns -1) or when the IfcAPI lacks the required methods.
+
+- `decorateConwayDirectIfcModel(model, ifcAPI, modelID, opts?)` —
+  post-build decoration: `computeBoundingBox`/`Sphere`, BVH
+  (`computeBoundsTree` reorders the index buffer in place),
+  IfcInstanceMap from the post-reorder attributes, capability flips
+  (`ifcSubsets: false`, `instancePicking: true`, `expressIdPicking:
+  true`), `attachInstanceMapSubsets` for the createSubset method,
+  and four property-method closures: `getItemProperties`,
+  `getPropertySets`, `getSpatialStructure`, `getIfcType`. All four
+  route through `ifcAPI.properties.*` and bind the model's modelID;
+  `getSpatialStructure` accepts both calling conventions used
+  across the codebase (the manager-shape `(modelID, withProps)` and
+  the cache-hit-closure shape `(withProps)`).
+
+What's deleted: `installFlatMeshCapture`, `installConwayDirectGeometry`,
+and the latter's unit test file. The wit-three-parse + post-swap
+flow they implemented is replaced by `parseIfcWithConway` +
+`buildConwayIfcModel` + `decorateConwayDirectIfcModel`.
+
+What still goes through wit-three: `viewer.IFC.addIfcModel` (pushes
+to `context.items.ifcModels` + scene-add), the `viewer.IFC.context`
+itself (renderer/scene/camera), `viewer.IFC.loader.ifcManager.ifcAPI`
+as the path to reach Conway. Slice 5c drops these by replacing
+`ShareViewer extends IfcViewerAPI` with composition.
 
 **Slice 5c — ShareViewer composition (todo).** Today
 `ShareViewer extends IfcViewerAPI`. Replacing the `extends` with

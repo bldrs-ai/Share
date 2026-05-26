@@ -110,7 +110,14 @@ const impl = {
       ifcManager: {
         applyWebIfcConfig: jest.fn(),
         ifcAPI: {
-          GetCoordinationMatrix: jest.fn(),
+          // Slice 5b: Conway-direct parse calls OpenModel +
+          // StreamAllMeshes directly. The empty-StreamAllMeshes
+          // path produces an empty Conway-direct Mesh, which is
+          // enough for unit tests that only verify the load
+          // pipeline shape (not the actual geometry).
+          OpenModel: jest.fn(() => 0),
+          StreamAllMeshes: jest.fn(() => {}),
+          GetCoordinationMatrix: jest.fn(() => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
           getConwayVersion: jest.fn(),
           getStatistics: jest.fn(() => {
             return {
@@ -124,6 +131,16 @@ const impl = {
               getVersion: jest.fn(),
             }
           }),
+          // Conway's `properties` namespace — the Conway-direct
+          // model methods route reads through here. Stubs return
+          // empty so tests that don't probe properties still pass;
+          // tests that DO probe should mock per-test.
+          properties: {
+            getItemProperties: jest.fn(),
+            getPropertySets: jest.fn(),
+            getSpatialStructure: jest.fn(),
+            getIfcType: jest.fn(),
+          },
         },
         parser: {},
         setupCoordinationMatrix: jest.fn(),

@@ -2613,67 +2613,177 @@ exports[`Loader loads a PDB model 1`] = `
 
 exports[`Loader loads a STEP model 1`] = `
 {
-  "capabilities": {
-    "expressIdPicking": true,
-    "ifcSubsets": true,
-    "instancePicking": false,
-    "spatialStructure": true,
-    "typedProperties": true,
-    "useIfcClipper": true,
+  "geometries": [
+    {
+      "data": {
+        "attributes": {
+          "expressID": {
+            "array": [],
+            "itemSize": 1,
+            "normalized": false,
+            "type": "Uint32Array",
+          },
+          "instanceID": {
+            "array": [],
+            "itemSize": 1,
+            "normalized": false,
+            "type": "Uint32Array",
+          },
+          "normal": {
+            "array": [],
+            "itemSize": 3,
+            "normalized": false,
+            "type": "Float32Array",
+          },
+          "position": {
+            "array": [],
+            "itemSize": 3,
+            "normalized": false,
+            "type": "Float32Array",
+          },
+        },
+        "boundingSphere": {
+          "center": [
+            0,
+            0,
+            0,
+          ],
+          "radius": 0,
+        },
+        "index": {
+          "array": [],
+          "type": "Uint32Array",
+        },
+      },
+      "type": "BufferGeometry",
+      "uuid": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
+    },
+  ],
+  "metadata": {
+    "generator": "Object3D.toJSON",
+    "type": "Object",
+    "version": 4.7,
   },
-  "children": [],
-  "format": "step",
-  "geometry": undefined,
-  "isObject3D": true,
-  "isUploadedFile": false,
-  "loadStats": {
-    "geometryMemory": 1024,
-    "geometryTime": 100,
-    "ifcVersion": "IFC4",
-    "loadStatus": "SUCCESS",
-    "loaderVersion": "1.0.0",
-    "originatingSystem": "Test",
-    "parseTime": 50,
-    "preprocessorVersion": "1.0",
-    "totalTime": 150,
+  "object": {
+    "geometry": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
+    "layers": 1,
+    "material": [],
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ],
+    "matrixAutoUpdate": false,
+    "name": undefined,
+    "type": "step",
+    "up": [
+      0,
+      1,
+      0,
+    ],
+    "uuid": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
   },
-  "mimeType": "step",
-  "modelID": 0,
-  "name": undefined,
-  "type": "step",
 }
 `;
 
 exports[`Loader loads an IFC model 1`] = `
 {
-  "capabilities": {
-    "expressIdPicking": true,
-    "ifcSubsets": true,
-    "instancePicking": false,
-    "spatialStructure": true,
-    "typedProperties": true,
-    "useIfcClipper": true,
+  "geometries": [
+    {
+      "data": {
+        "attributes": {
+          "expressID": {
+            "array": [],
+            "itemSize": 1,
+            "normalized": false,
+            "type": "Uint32Array",
+          },
+          "instanceID": {
+            "array": [],
+            "itemSize": 1,
+            "normalized": false,
+            "type": "Uint32Array",
+          },
+          "normal": {
+            "array": [],
+            "itemSize": 3,
+            "normalized": false,
+            "type": "Float32Array",
+          },
+          "position": {
+            "array": [],
+            "itemSize": 3,
+            "normalized": false,
+            "type": "Float32Array",
+          },
+        },
+        "boundingSphere": {
+          "center": [
+            0,
+            0,
+            0,
+          ],
+          "radius": 0,
+        },
+        "index": {
+          "array": [],
+          "type": "Uint32Array",
+        },
+      },
+      "type": "BufferGeometry",
+      "uuid": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
+    },
+  ],
+  "metadata": {
+    "generator": "Object3D.toJSON",
+    "type": "Object",
+    "version": 4.7,
   },
-  "children": [],
-  "format": "ifc",
-  "geometry": undefined,
-  "isObject3D": true,
-  "isUploadedFile": false,
-  "loadStats": {
-    "geometryMemory": 1024,
-    "geometryTime": 100,
-    "ifcVersion": "IFC4",
-    "loadStatus": "SUCCESS",
-    "loaderVersion": "1.0.0",
-    "originatingSystem": "Test",
-    "parseTime": 50,
-    "preprocessorVersion": "1.0",
-    "totalTime": 150,
+  "object": {
+    "geometry": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
+    "layers": 1,
+    "material": [],
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ],
+    "matrixAutoUpdate": false,
+    "name": undefined,
+    "type": "ifc",
+    "up": [
+      0,
+      1,
+      0,
+    ],
+    "uuid": "ffffff7f-ffff-4f7f-bfff-ff7fffffff7f",
   },
-  "mimeType": "ifc",
-  "modelID": 0,
-  "name": undefined,
-  "type": "ifc",
 }
 `;
 

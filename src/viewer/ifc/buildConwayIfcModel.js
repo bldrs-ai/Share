@@ -64,12 +64,17 @@ export function buildConwayIfcModel(capturedFlatMeshes, api, modelID, opts = {})
   // (model.ifcManager) — the wiring around it is the caller's
   // concern.
   mesh.instanceMap = instanceMap
+  // Optional-chained reads: tests that `jest.mock('three')` get auto-
+  // mocked `BufferGeometry` shapes whose `getAttribute` returns
+  // `undefined`. The stats numbers are diagnostics — falling back to 0
+  // keeps the assembler usable in those test paths without changing
+  // production behavior (real BufferGeometry always returns an attr).
   const stats = {
-    vertexCount: assembled.geometry.getAttribute('position').count,
+    vertexCount: assembled.geometry?.getAttribute?.('position')?.count ?? 0,
     triangleCount: instanceMap.triangleCount,
     instanceCount: instanceMap.instanceCount,
     parentCount: instanceMap.parentCount,
-    materialCount: assembled.materials.length,
+    materialCount: assembled.materials?.length ?? 0,
     skippedFlatMeshes: assembled.skippedFlatMeshes,
     skippedPlacedGeometries: assembled.skippedPlacedGeometries,
   }

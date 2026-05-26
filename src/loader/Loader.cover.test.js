@@ -414,9 +414,14 @@ describe('load() error/edge paths with OPFS enabled', () => {
   // sniffing based. The refactor should confirm the OOM shapes it looks
   // for still match the engines (Conway, web-ifc) we're actually using.
   it('tags out-of-memory errors from the IFC loader with isOutOfMemory', async () => {
-    // Build a viewer with an IFC loader whose inner parse throws an OOM.
-    // newIfcLoader's hot-patched parse catches, tags, and rethrows. The
-    // error message must match one of the heuristics in src/utils/oom.js.
+    // Build a viewer with a Conway IfcAPI whose OpenModel throws an
+    // OOM. newIfcLoader's hot-patched parse catches, tags, and
+    // rethrows. The error message must match one of the heuristics
+    // in src/utils/oom.js.
+    //
+    // Slice 5b moved the parse off wit-three's `loader.parse` and
+    // onto Conway's `ifcAPI.OpenModel` — the OOM throw site moved
+    // with it.
     const oomErr = new RangeError('WebAssembly: out of memory')
     const ifcViewer = {
       IFC: {
@@ -430,6 +435,10 @@ describe('load() error/edge paths with OPFS enabled', () => {
             applyWebIfcConfig: jest.fn().mockResolvedValue(),
             setupCoordinationMatrix: jest.fn(),
             ifcAPI: {
+              OpenModel: jest.fn(() => {
+                throw oomErr
+              }),
+              StreamAllMeshes: jest.fn(),
               GetCoordinationMatrix: jest.fn().mockResolvedValue(new Array(16).fill(0)),
               getStatistics: jest.fn().mockReturnValue({
                 getGeometryMemory: () => 0,
