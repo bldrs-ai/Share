@@ -893,6 +893,104 @@ goes away — there are no more `web-ifc` imports to alias.
 
 ---
 
+## 4b. Followups (post-PR #1531)
+
+Captured during the writer-worker landing — the items that fell out
+of the freeze-fix work but aren't on the critical path for default-on.
+
+### 4b.1. GLTFExporter is the residual main-thread freeze
+
+After PR #1531 the writer's three big phases are:
+
+| Phase | Where | Cost on Schependomlaan |
+|---|---|---|
+| `GLTFExporter.parse` | main thread | ~500ms-1s (irreducible without scene-graph worker serialization) |
+| Property capture | main thread, chunked w/ yields | ~500ms-1s split into ~6-10 ms-scale chunks; hover-pick interleaves |
+| `injectGlbExtensions` + pack | `GlbWriter.worker.js` | 0ms main thread (worker), ~50ms structured-clone cost |
+
+`GLTFExporter` is the last sync block on the main thread. Three
+viable strategies (in increasing scope):
+
+1. **Defer GLTFExporter to the next idle window** — wrap the
+   `exporter.parse(...)` call in its own `requestIdleCallback`
+   beyond the outer one in `Loader.js`. Doesn't reduce the block,
+   but at least guarantees it doesn't fire mid-interaction.
+2. **Transferable-array extraction** — walk the scene on main
+   thread, extract `positions`/`indices`/per-vertex attributes into
+   typed arrays (already cheap, no JSON), `postMessage` to a new
+   `GlbExporter.worker.js` along with a flat materials manifest,
+   rebuild minimal three.js objects in the worker, run GLTFExporter
+   there. Doubles memory temporarily but main thread stays fully
+   responsive.
+3. **Custom streaming exporter** — fork GLTFExporter (or write a
+   minimal replacement keyed to the BLDRS Conway-direct shape) that
+   walks the scene in chunks with `await yieldToBrowser()` between.
+   Most invasive; tightest integration with our extension pipeline.
+
+Recommendation: try (1) first as a one-line change, then evaluate
+whether (2) is worth the memory hit. (3) only if neither lands the
+remaining responsiveness budget.
+
+### 4b.2. Cache-hit Playwright specs need OPFS-worker fetch routing
+
+`Properties.cacheHit.spec.ts` + `NavTree.cacheHit.spec.ts` are
+`test.fixme`'d as of PR #1531. The flag flip (`OPFS_IS_ENABLED: true`
+in `vars.playwright.js`) is in place but the specs time out waiting
+for `writer: wrote` because **`downloadToOPFS` runs inside the OPFS
+Worker, and worker-context fetches are not intercepted by
+Playwright's `context.route(...)`**. Three viable un-skip paths:
+
+1. **MSW handler for `/index.ifc`** that fulfils worker-context
+   fetches. MSW's service worker DOES intercept worker fetches once
+   it's controlling the page; the gap is the race window before
+   activation.
+2. **Gate the first `page.goto` on `waitForServiceWorker`** so MSW
+   is guaranteed in place before any fetch (worker or main).
+3. **Pre-seed OPFS via `page.evaluate`** before the first goto so
+   the test doesn't need a download at all — the reader path
+   exercises against pre-staged bytes.
+
+(2) is the smallest change and probably the right first try. (1)
+makes the specs portable to environments where SW activation is
+slower. (3) is the most deterministic but loses the writer-side
+coverage.
+
+The cache-hit round-trip is currently validated manually on deploy
+preview (Snowdon, Schependomlaan).
+
+### 4b.3. Other recommendations from PR #1531 review
+
+Captured here so they don't fall off:
+
+- **Measure structured-clone + `ENTITIES_PER_YIELD` overhead** on
+  real loads. Both costs were estimated, not measured. If the
+  structured clone of the element-properties payload exceeds
+  ~100-150ms on Schependomlaan-class IFCs, that becomes the next
+  bottleneck — attack with chunked serialization (start writing
+  partial output before the full object is built) or a
+  `SharedArrayBuffer` pipe.
+- **Stabilize cache-hit specs' fixture coupling.** The specs depend
+  on `expressID=621, Name="Together"` from `testdata/models/ifc/
+  index.ifc`. Move those to a shared `fixtures/index.ifc.constants.ts`
+  so future fixture updates have one place to touch.
+- **`prefers-reduced-motion` for `CacheWriteAffordance`.** The
+  pulsing dot animation in `Properties.jsx` runs unconditionally;
+  small a11y nit.
+- **Worker error backoff.** `GlbWriterService.js`'s `error` handler
+  nulls `workerRef` so the next call rebuilds — but with no
+  `MAX_RESPAWNS` cap, a repeatedly-crashing worker thrashes the
+  same way every call. Low priority; failure mode is rare.
+- **`clearOpfs` typing.** Uses `: any` for `FileSystemDirectoryHandle`
+  async iterator + `removeEntry({recursive: true})` because the
+  stage-3 proposals aren't in our TS lib yet. Remove the cast
+  once `@types/dom` catches up.
+- **Explicit unit tests** for the cache-lookup `try/catch` in
+  `Loader.js` and the `installFlatMeshCapture` no-op path (review
+  followup from PR #1529). Both are currently exercised via
+  integration tests but not asserted explicitly.
+
+---
+
 ## 5. New layout
 
 The original sketch grouped plugins under per-concern subdirectories

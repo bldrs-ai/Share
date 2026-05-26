@@ -57,8 +57,37 @@ import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
+import useStore from '../store/useStore'
 import {sha1Hex} from '../utils/contentHash'
 import {isOutOfMemoryError} from '../utils/oom'
+
+
+// Defer to the browser's idle period when supported, otherwise to the
+// next macrotask. The GLB writer is the only caller today and the
+// reason: it must not run inline with the post-parse return path
+// (would block the first paint + hover-pick on the freshly-rendered
+// model). With `requestIdleCallback`, the writer also yields to
+// camera-controls and hover-pick events during the wait. The
+// `setTimeout` fallback gives us a single deferred tick; per-phase
+// yields inside the writer itself still need their own awaits.
+//
+// `timeout` cap on `requestIdleCallback` ensures the writer eventually
+// runs even on a continuously-busy main thread (a user who rotates
+// the camera nonstop). 5s is past the point where a returning visitor
+// would notice "cache hasn't warmed yet."
+const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
+
+
+/**
+ * @param {Function} fn
+ */
+function scheduleIdleWork(fn) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, {timeout: SCHEDULE_IDLE_TIMEOUT_MS})
+    return
+  }
+  setTimeout(fn, 0)
+}
 
 
 /**
@@ -661,14 +690,39 @@ export async function load(
   // glTF extension — without that, cache-hit GLBs have no NavTree
   // (the cache-hit path has no IFC parser). Non-IFC sources have no
   // manager and the writer captures nothing; cache miss/hit both work.
+  //
+  // **Scheduling.** The writer is deferred to a macrotask (and then
+  // `requestIdleCallback` when available) so it doesn't run inline with
+  // the post-parse return path. Without the defer, the GLTFExporter +
+  // property-capture phases would block the main thread immediately
+  // before the user can rotate/zoom/hover on the freshly-rendered
+  // model — and on big IFCs that block extends past the first hover
+  // tick. With the defer, the next paint + the user's first frame of
+  // interaction land before the writer kicks off; the writer then runs
+  // when the browser is idle (or, on older browsers without
+  // requestIdleCallback, on the next macrotask).
+  //
+  // **In-flight flag.** `isCacheWriteInFlight` is observable from React
+  // (see Properties.jsx) so the UI can render a "Caching for next
+  // load…" affordance. The flag captures the entire writer lifetime
+  // (set before scheduling, cleared after the writer settles either
+  // way) — clears only when the actual write finishes, not when the
+  // call returns. Failures clear the flag too; the writer's `.finally`
+  // is the source of truth.
   if (glbExportContext) {
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
-    exportAndCacheGlb({
-      model,
-      kindLabel: glbExportContext.kindLabel,
-      cacheKeyArgs: glbExportContext.cacheKeyArgs,
-      ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
-    })
+    useStore.getState().setIsCacheWriteInFlight(true)
+    const runWriter = () => {
+      exportAndCacheGlb({
+        model,
+        kindLabel: glbExportContext.kindLabel,
+        cacheKeyArgs: glbExportContext.cacheKeyArgs,
+        ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
+      }).finally(() => {
+        useStore.getState().setIsCacheWriteInFlight(false)
+      })
+    }
+    scheduleIdleWork(runWriter)
   }
 
   return model

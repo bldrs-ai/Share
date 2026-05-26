@@ -1,12 +1,13 @@
 import {Locator, expect, test} from '@playwright/test'
 import {
+  clearOpfs,
   homepageSetup,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
 
 
-const {beforeEach, describe} = test
+const {afterEach, beforeEach, describe} = test
 
 
 /**
@@ -34,20 +35,47 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     await setIsReturningUser(page.context())
   })
 
-  // SKIP REASON: this spec requires the GLB writer to populate OPFS on
-  // the first load, then verifies the reader hydrates Properties from
-  // the cached extension on the second load. But the playwright build
-  // (`tools/esbuild/vars.playwright.js`) sets `OPFS_IS_ENABLED: false`
-  // — no historical reason recorded, but flipping it could leak cache
-  // state between tests. With OPFS off, `Loader.js`'s cache-key block
-  // (line ~149 `if (isOpfsAvailable)`) is skipped entirely:
-  // `cacheKeyArgs` stays null, `glbExportContext` stays null, the
-  // writer never fires, and the test times out waiting for
-  // `writer: wrote`. The cache-hit round-trip IS verified manually on
-  // deploy preview (Snowdon 144MB → 48MB DRACO, validated 2026-05-25)
-  // — see PR #1528 thread. TODO: enable OPFS in playwright with
-  // per-test cleanup (clear OPFS in homepageSetup / afterEach), then
-  // remove the .fixme.
+  // Belt-and-suspenders: each test's BrowserContext is per-test under
+  // `fullyParallel: true`, so OPFS is naturally fresh — but if a test
+  // run is interrupted mid-write (kill -9, CI timeout), the next run
+  // on the same worker could see a half-written artifact. Clearing
+  // after every test in this describe block makes the populate→hit
+  // pattern's first-half always start from a known-empty state.
+  afterEach(async ({page}) => {
+    await clearOpfs(page)
+  })
+
+  // RE-SKIP REASON (un-fixme'd earlier in PR #1531 then put back on CI
+  // timeout — `writer: wrote` never fired within 30s in either spec).
+  // OPFS_IS_ENABLED is now `true` in vars.playwright.js, but flipping
+  // the env var alone isn't sufficient: `downloadToOPFS` runs inside
+  // the OPFS Worker, and **worker-context fetches are not intercepted
+  // by Playwright's `context.route(...)` interceptor** — those routes
+  // only apply to the main page context. MSW's service worker
+  // (`mockServiceWorker.js`) CAN intercept worker fetches once it's
+  // controlling the page, but the cacheHit spec doesn't gate on
+  // `waitForServiceWorker` before its first `page.goto` so the
+  // first OPFS fetch can race the SW activation. When the OPFS fetch
+  // misses the MSW intercept, it hits the local dev server's
+  // fixture-less `index.ifc` path and either 404s or times out,
+  // causing the OPFS `try` block in `Loader.js#load` to fall through
+  // to its outer catch which sets `glbExportContext = null` — at
+  // which point the writer is bypassed entirely and the test waits
+  // forever for a log line that will never fire.
+  //
+  // Fix path tracked in design/new/viewer-replacement.md §"Followups":
+  //   1. Add an MSW handler that fulfils OPFS-worker fetches for
+  //      `/index.ifc` (today the dev server serves it directly; the
+  //      handler would route through the test fixture).
+  //   2. Gate the cacheHit specs' first `page.goto` on
+  //      `waitForServiceWorker` so MSW is guaranteed to be
+  //      controlling the page before any fetch (worker or main).
+  //   3. Or: bypass the OPFS-worker download path entirely for these
+  //      specs by pre-seeding OPFS via `page.evaluate` before the
+  //      first goto.
+  //
+  // The cache-hit round-trip remains validated manually on deploy
+  // preview (Snowdon, Schependomlaan) until one of (1)/(2)/(3) lands.
   test.fixme('cache-hit GLB renders Properties panel with full IFC entity fields', async ({page}) => {
     // Two `page.goto` round-trips (cache-populate + cache-hit) plus the
     // writer's async element-properties BFS can easily exceed
@@ -69,12 +97,12 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
       }
     })
 
-    // First load with ?feature=glb: cache MISS, writer populates OPFS.
-    // The writer is fire-and-forget at the call site; we wait on the
-    // "writer: wrote" log to know it actually finished before the
-    // reload.
+    // First load: cache MISS, writer populates OPFS. The writer is
+    // fire-and-forget at the call site; we wait on the "writer: wrote"
+    // log to know it actually finished before the reload. `glb` is
+    // default-on as of the Phase-5a flip; no `?feature=` needed.
     const CACHE_TIMEOUT = 30_000
-    await page.goto('/share/v/p/index.ifc?feature=glb')
+    await page.goto('/share/v/p/index.ifc')
     await waitForModelReady(page)
     try {
       await page.waitForFunction(
@@ -100,7 +128,7 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     // to render. Reset log buffer so the second-load assertions don't
     // see the first load's lines.
     glbLogs.length = 0
-    await page.goto('/share/v/p/index.ifc/81/621?feature=glb')
+    await page.goto('/share/v/p/index.ifc/81/621')
     await waitForModelReady(page)
     await page.waitForFunction(
       ({logs}) => logs.some((l: string) => l.includes('cache HIT')),

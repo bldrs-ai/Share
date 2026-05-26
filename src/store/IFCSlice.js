@@ -20,6 +20,19 @@ export default function createIFCSlice(set, get) {
     isModelReady: false,
     setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),
 
+    // True while the post-IFC-parse GLB cache writer is running. Set by
+    // `Loader.js`'s wrapper around `exportAndCacheGlb` and consumed by
+    // `Properties.jsx` to render a "Caching for next load…" affordance.
+    // Default behavior of the writer is fire-and-forget, but the
+    // compression + extension-injection pass blocks the main thread
+    // (GLTFExporter + property-capture BFS in particular), so the UI
+    // tells the user *why* hover-pick / camera-controls might feel laggy
+    // immediately post-load. Clears regardless of writer success/fail.
+    // See design/new/viewer-replacement.md §3b.iii for the next slice
+    // (moving the heavy phases to a worker).
+    isCacheWriteInFlight: false,
+    setIsCacheWriteInFlight: (inFlight) => set(() => ({isCacheWriteInFlight: inFlight})),
+
     elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
 
