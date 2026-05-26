@@ -1228,16 +1228,14 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
-      // Phase-3 prep: capture Conway's FlatMesh stream during the live
-      // parse so the diagnostics below can read the original
-      // per-instance data without a second StreamAllMeshes walk.
-      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
-      // Both flags share the capture wrapper.
-      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
-        isFeatureEnabled('conwayDirectIfc')
-      const parityCapture = captureEnabled ?
-        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
-        null
+      // Capture Conway's FlatMesh stream during the live parse so the
+      // Conway-direct install (and the `ifcItemsMapParity` diagnostic,
+      // when enabled) can read the original per-instance data without a
+      // second StreamAllMeshes walk. See runIfcItemsMapParityCheck for
+      // why a second walk is unsafe. `installFlatMeshCapture` no-ops
+      // gracefully when the IfcAPI doesn't expose StreamAllMeshes (test
+      // mocks, alternative parsers).
+      const parityCapture = installFlatMeshCapture(this.loader.ifcManager.ifcAPI)
 
       if (onProgress) {
         onProgress('Parsing model geometry...')
@@ -1246,7 +1244,7 @@ function newIfcLoader(viewer) {
       try {
         ifcModel = await this.loader.parse(buffer, onProgress)
       } finally {
-        parityCapture?.restore()
+        parityCapture.restore()
       }
       this.addIfcModel(ifcModel)
 
@@ -1285,24 +1283,22 @@ function newIfcLoader(viewer) {
         onProgress('Model loaded successfully!')
       }
 
-      // Phase-3 prep: parallel-run the new IfcItemsMap populators
-      // against the live model and log the diff. Diagnostic only —
-      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
-      // See design/new/viewer-replacement.md §3b.ii for the
-      // per-vertex-vs-per-instance story this check exposes.
-      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
+      // Parallel-run the new IfcItemsMap populators against the live
+      // model and log the diff. Diagnostic only — no behavior change.
+      // Toggle via `?feature=ifcItemsMapParity`. See
+      // design/new/viewer-replacement.md §3b.ii for the per-vertex-vs-
+      // per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
-      // Phase-3 cut-over: replace web-ifc-three's geometry with the
-      // Conway-direct merged buffer + attach an IfcInstanceMap. The
-      // IFC manager (properties, spatial tree, typed search) stays —
-      // only the rendered triangles + the picking source of truth
-      // change. Toggle via `?feature=conwayDirectIfc`.
-      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
-        installConwayDirectGeometry(
-          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
-      }
+      // Replace wit-three's rendered geometry with the Conway-direct
+      // merged buffer + per-instance picking map. The IFC manager
+      // (properties, spatial tree, typed search) stays in place —
+      // only the rendered triangles + picking source of truth change.
+      // Defensive against empty captures (see installConwayDirectGeometry).
+      installConwayDirectGeometry(
+        this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
 
       return ifcModel
     } catch (err) {
