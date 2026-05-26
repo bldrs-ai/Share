@@ -1352,7 +1352,15 @@ function newIfcLoader(viewer) {
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
       }
-      glbVerbose(
+      // Always-on integration-boundary log. `conwayDirect.spec.ts`
+      // (and the deploy-preview smoke checks) gate on `[conwayDirect]
+      // parsed modelID=…` firing — it's the single observable signal
+      // that the Conway-direct parse + assembly path completed
+      // successfully on a real model. Kept at info level (not gated
+      // on glbVerbose) so the signal is visible in production logs
+      // without the user opting in to the verbose channel.
+      // eslint-disable-next-line no-console
+      console.info(
         `[conwayDirect] parsed modelID=${modelID} — ` +
         `vertices=${buildStats.vertexCount} triangles=${buildStats.triangleCount} ` +
         `instances=${buildStats.instanceCount} parents=${buildStats.parentCount} ` +
