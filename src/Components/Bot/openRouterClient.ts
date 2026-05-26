@@ -14,6 +14,9 @@ export async function askLLM({
 }: AskLlmOptions): Promise<string> {
   const openrouterBaseUrl = process.env.OPENROUTER_BASE_URL
   assertDefined(openrouterBaseUrl, 'OPENROUTER_BASE_URL is required')
+  if (!openrouterBaseUrl.startsWith('https://')) {
+    throw new Error('OPENROUTER_BASE_URL must use HTTPS')
+  }
   const url = `${openrouterBaseUrl}/api/v1/chat/completions`
 
   const body = {
