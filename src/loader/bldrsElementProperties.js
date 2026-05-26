@@ -50,10 +50,21 @@
 // as a product in `itemProperties`).
 import * as pako from 'pako'
 import {IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
+import {yieldToBrowser} from '../utils/scheduling'
 import {glbInfo, glbVerbose} from './glbLog'
 
 
 export const BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME = 'BLDRS_element_properties'
+
+// Cooperative-yield interval for the fast-path entity walk + the
+// reachability BFS. The fast path iterates every parsed IFC entity
+// (millions for big models, mostly geometric primitives); without a
+// yield the main thread blocks the user's hover-pick / camera-
+// controls for the full duration. 5000 entities per yield trades
+// ~5-10 macrotask hops on a mid-size IFC for a freeze-free write —
+// the perf overhead of the await + setTimeout(0) is in the
+// microseconds range per yield, well below what's perceptible.
+const ENTITIES_PER_YIELD = 5000
 
 // IFC reference-value type discriminant. `web-ifc-three` (and Conway
 // at the same layer) serialise references between entities as
@@ -200,7 +211,7 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
   if (!ifcManager) {
     return null
   }
-  const fastResult = captureBldrsElementPropertiesFast(ifcManager, modelID)
+  const fastResult = await captureBldrsElementPropertiesFast(ifcManager, modelID)
   if (fastResult !== null) {
     return fastResult
   }
@@ -240,7 +251,7 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
  * @return {object|null} `{itemProperties, propertySets}` or `null`
  *   when the fast path is unavailable.
  */
-function captureBldrsElementPropertiesFast(ifcManager, modelID) {
+async function captureBldrsElementPropertiesFast(ifcManager, modelID) {
   const ifcAPI = ifcManager.ifcAPI
   if (!ifcAPI || typeof ifcAPI.getPassthrough !== 'function') {
     return null
@@ -260,8 +271,22 @@ function captureBldrsElementPropertiesFast(ifcManager, modelID) {
   const propertySets = {}
   let captured = 0
   let psetRelCount = 0
+  // Cooperative-yield counter — see ENTITIES_PER_YIELD comment.
+  // Counted on every iteration (not just kept entities) so the yield
+  // cadence is independent of the percentage filtered out.
+  let iterCount = 0
 
   for (const entity of stepModel) {
+    if (++iterCount % ENTITIES_PER_YIELD === 0) {
+      // Yield to the browser between chunks. The fast-path scan is
+      // pure JS object construction (no I/O, no Promise per entity),
+      // so without explicit yields it would block the main thread for
+      // the entire ~10s walk on a 100MB IFC. The user feels this as a
+      // hover-pick freeze immediately post-render. yieldToBrowser =
+      // setTimeout(0) wrapped in a Promise — one event-loop turn per
+      // yield, ~ms-scale overhead in aggregate.
+      await yieldToBrowser()
+    }
     const expressID = entity?.expressID
     if (typeof expressID !== 'number') {
       continue
@@ -342,7 +367,7 @@ function captureBldrsElementPropertiesFast(ifcManager, modelID) {
   // from ~2.7M entities to ~50k; cache payload from ~35MB compressed
   // to ~1MB compressed.
   const filterStartMs = Date.now()
-  const {filtered, prunedCount} = filterReachableFromRoots(itemProperties)
+  const {filtered, prunedCount} = await filterReachableFromRoots(itemProperties)
   const filteredCount = Object.keys(filtered).length
 
   glbInfo(
@@ -374,7 +399,7 @@ function captureBldrsElementPropertiesFast(ifcManager, modelID) {
  * @param {object} itemProperties the unfiltered map
  * @return {object} `{filtered: object, prunedCount: number}`
  */
-function filterReachableFromRoots(itemProperties) {
+async function filterReachableFromRoots(itemProperties) {
   const reachable = new Set()
   const queue = []
 
@@ -384,7 +409,11 @@ function filterReachableFromRoots(itemProperties) {
   // groups, ALL `IfcRelXxx`, `IfcPropertySetDefinition`-derived
   // entities (which includes `IfcPropertySet` / `IfcElementQuantity`),
   // and any future IFC schema additions automatically.
+  let seedIter = 0
   for (const idStr of Object.keys(itemProperties)) {
+    if (++seedIter % ENTITIES_PER_YIELD === 0) {
+      await yieldToBrowser()
+    }
     const props = itemProperties[idStr]
     if (props && props.GlobalId !== undefined) {
       const id = Number(idStr)
@@ -394,7 +423,11 @@ function filterReachableFromRoots(itemProperties) {
   }
 
   // BFS via non-geometric refs.
+  let bfsIter = 0
   while (queue.length > 0) {
+    if (++bfsIter % ENTITIES_PER_YIELD === 0) {
+      await yieldToBrowser()
+    }
     const id = queue.shift()
     const props = itemProperties[id]
     if (!props) {
