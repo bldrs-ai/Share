@@ -55,6 +55,14 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * `StreamAllMeshes` is also sync and invokes its callback once per
  * FlatMesh during the call — no async work to await.
  *
+ * **Init dance:** pre-Slice-5b wit-three's `IFCLoader.parse` lazily
+ * initialised Conway's wasm module on first call
+ * (`if (this.state.api.wasmModule === undefined) await this.state.api.Init()`).
+ * Slice 5b dropped that call path, so we re-do the lazy Init here —
+ * without it `OpenModel` returns -1 on the very first cache-miss
+ * load of any session. Detected by `ifcAPI.wasmModule === undefined`
+ * (the same probe wit-three used).
+ *
  * Settings default to the same shape wit-three's `applyWebIfcConfig`
  * was setting at the call site (origin-coordinating + boolean-faster).
  *
@@ -64,14 +72,19 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {object} [settings] OpenModel settings — defaults to
  *   `{COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}` to match
  *   the wit-three baseline.
- * @return {{modelID: number, captured: Array}}
+ * @return {Promise<{modelID: number, captured: Array}>}
  */
-export function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
+export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
   if (typeof ifcAPI.StreamAllMeshes !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.StreamAllMeshes is unavailable')
+  }
+  // Lazy wasm init — see the `Init dance` note above.
+  if (ifcAPI.wasmModule === undefined && typeof ifcAPI.Init === 'function') {
+    // eslint-disable-next-line new-cap
+    await ifcAPI.Init()
   }
   const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
   const openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}

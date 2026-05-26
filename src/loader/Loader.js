@@ -1285,7 +1285,7 @@ function newIfcLoader(viewer) {
         onProgress('Parsing model geometry...')
       }
       const ifcAPI = this.loader.ifcManager.ifcAPI
-      const {modelID, captured} = parseIfcWithConway(buffer, ifcAPI)
+      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI)
 
       if (onProgress) {
         onProgress('Building model...')
