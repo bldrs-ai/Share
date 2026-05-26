@@ -26,6 +26,7 @@
 // once the BLDRS_* extension story makes a custom writer worthwhile.
 import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import {writeGlbBytesToOPFS} from '../OPFS/utils'
+import {yieldToBrowser} from '../utils/scheduling'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
   captureBldrsElementProperties,
@@ -168,6 +169,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       return false
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
+    // Yield to the event loop between major phases so hover-pick /
+    // camera-controls can interleave with the writer. Each `yieldToBrowser`
+    // is a single macrotask boundary; the cost is one event-loop turn,
+    // the benefit is the main thread gets a chance to render + respond
+    // to pointer events between phases. GLTFExporter (above) and DRACO
+    // encoding (below, when active) still block synchronously inside —
+    // those are the next slice's worker-move targets.
+    await yieldToBrowser()
     // Capture BLDRS_* extension payloads from the live IFC parser state
     // before it goes out of scope. Runs in parallel with `compressGlb`
     // below to overlap the two costs (Conway sync iteration + DRACO/
@@ -214,8 +223,10 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         '[glb] writer: parseGlb for face_ids capture threw; ' +
         'skipping face_ids (DRACO will skip too):', e)
     }
+    await yieldToBrowser()
     const capturePromise = (async () => {
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+      await yieldToBrowser()
       const elementProperties = await captureBldrsElementProperties(
         ifcManager, modelId, spatialTree)
       return {spatialTree, elementProperties}
@@ -244,7 +255,9 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // flag (it would expect compressed input on the next load).
     const {bytes: compressedBytes, mode} = await compressGlb(
       rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
+    await yieldToBrowser()
     const {spatialTree, elementProperties} = await capturePromise
+    await yieldToBrowser()
     const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
     const {bytes, stats: extStats} = injectGlbExtensions(compressedBytes, [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},

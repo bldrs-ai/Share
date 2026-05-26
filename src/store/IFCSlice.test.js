@@ -26,6 +26,14 @@ describe('store/IFCSlice', () => {
       expect(state.isModelReady).toBe(false)
     })
 
+    it('starts with isCacheWriteInFlight=false', () => {
+      // Default-false: the writer only runs after the first cache-miss
+      // IFC parse, so initial state must be off — otherwise the
+      // Properties panel's affordance would flash on every fresh page
+      // load before any model has even been touched.
+      expect(makeStore().getState().isCacheWriteInFlight).toBe(false)
+    })
+
     it('starts with an empty elementTypesMap', () => {
       expect(makeStore().getState().elementTypesMap).toEqual([])
     })
@@ -65,6 +73,14 @@ describe('store/IFCSlice', () => {
       const store = makeStore()
       store.getState().setIsModelReady(true)
       expect(store.getState().isModelReady).toBe(true)
+    })
+
+    it('setIsCacheWriteInFlight flips cache-write flag both ways', () => {
+      const store = makeStore()
+      store.getState().setIsCacheWriteInFlight(true)
+      expect(store.getState().isCacheWriteInFlight).toBe(true)
+      store.getState().setIsCacheWriteInFlight(false)
+      expect(store.getState().isCacheWriteInFlight).toBe(false)
     })
 
     it('setElementTypesMap replaces the array', () => {
