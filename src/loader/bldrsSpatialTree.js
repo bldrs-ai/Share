@@ -145,7 +145,24 @@ function validateDecodedTree(tree) {
  * @return {Promise<object|null>}
  */
 export async function captureBldrsSpatialTree(ifcManager, modelID) {
-  if (!ifcManager || typeof ifcManager.getSpatialStructure !== 'function') {
+  if (!ifcManager) {
+    return null
+  }
+  // Prefer Conway's `ifcAPI.properties.getSpatialStructure` over
+  // wit-three's `ifcManager.getSpatialStructure`. Slice 5b of
+  // viewer-replacement.md replaced wit-three's IFCLoader.parse with
+  // a direct `OpenModel` + `StreamAllMeshes` call — wit-three's
+  // `state.models[modelID]` is no longer populated, so its
+  // `getSpatialStructure → getSpatialNode → getNodeType` chain
+  // throws on the empty `state.models[modelID].types` lookup. Conway
+  // doesn't have that dependency.
+  //
+  // Falls back to wit-three's `ifcManager.getSpatialStructure` when
+  // the Conway path isn't reachable (test stubs, non-Conway loaders).
+  const conwayProperties = ifcManager.ifcAPI?.properties
+  const useConway = conwayProperties &&
+    typeof conwayProperties.getSpatialStructure === 'function'
+  if (!useConway && typeof ifcManager.getSpatialStructure !== 'function') {
     return null
   }
   try {
@@ -165,7 +182,9 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     const proxy = ifcManager.ifcAPI?.getPassthrough?.(modelID)
     const canEnrichSync = proxy && typeof proxy.getLine === 'function'
     const includeProperties = !canEnrichSync
-    const root = await ifcManager.getSpatialStructure(modelID, includeProperties)
+    const root = useConway ?
+      await conwayProperties.getSpatialStructure(modelID, includeProperties) :
+      await ifcManager.getSpatialStructure(modelID, includeProperties)
     if (!root || root.expressID === undefined) {
       return null
     }

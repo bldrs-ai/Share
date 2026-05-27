@@ -214,6 +214,16 @@ export function inferModelCapabilities(model, opts = {}) {
   // builds the map from this attribute and attaches it.
   if (hasPerVertexInstanceIds) {
     caps.instancePicking = true
+    // Conway-direct geometry replaces wit-three's per-element subset
+    // path. Wit-three's `SubsetCreator` reads from `state.models[modelID].mesh`
+    // (populated by its IFCParser), which Slice 5b doesn't populate
+    // since we bypass wit-three's parse entirely. Leaving
+    // `ifcSubsets: true` (the IFC format default in
+    // `capabilitiesForFormat`) would route `ShareViewer.setSelection`
+    // through `selector.pickByIds` → empty subset → no highlight.
+    // The presence of per-vertex `instanceID` is the Conway-direct
+    // signature; flip the IFC subset path off when seen.
+    caps.ifcSubsets = false
   }
   // BLDRS_face_ids extension also signals instance picking — the
   // per-triangle data is what Loader.js#convertToShareModel rebuilds

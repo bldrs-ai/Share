@@ -27,6 +27,38 @@ jest.mock('axios')
 jest.mock('@bldrs-ai/ifclib')
 jest.mock('../Filetype')
 jest.mock('../search/SearchIndex')
+// Slice 5b of design/new/viewer-replacement.md: the IFC parse path
+// goes through `parseIfcWithConway` + `buildConwayIfcModel` instead
+// of wit-three's `IFCLoader.parse`. The web-ifc-viewer mock
+// auto-mocks `three`, which leaves `BufferGeometry` + `Mesh` without
+// their real methods — production `buildConwayIfcModel` produces a
+// broken Mesh under that mock. We short-circuit the Conway-direct
+// module pair to feed the load pipeline `viewer._loadedModel` (the
+// wit-three-shape fake the rest of the CadView assertions expect).
+// Scoped to this test file because production unit tests for
+// `buildConwayIfcModel` need the real implementation.
+jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
+  parseIfcWithConway: () => ({modelID: 0, captured: []}),
+  decorateConwayDirectIfcModel: () => {},
+}))
+jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
+  buildConwayIfcModel: () => {
+    const {__getShareViewerMockSingleton} = require('web-ifc-viewer')
+    return {
+      mesh: __getShareViewerMockSingleton()._loadedModel,
+      materials: [],
+      stats: {
+        vertexCount: 0,
+        triangleCount: 0,
+        instanceCount: 0,
+        parentCount: 0,
+        materialCount: 0,
+        skippedFlatMeshes: 0,
+        skippedPlacedGeometries: 0,
+      },
+    }
+  },
+}))
 jest.mock('../OPFS/utils', () => {
   const actualUtils = jest.requireActual('../OPFS/utils')
   const fs = jest.requireActual('fs')
