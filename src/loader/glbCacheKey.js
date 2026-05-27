@@ -15,6 +15,16 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.9.0 — Conway-direct parse (Slice 5b of viewer-replacement.md §4).
+ *         Cache-write side: `captureBldrsSpatialTree` now routes
+ *         through Conway's `ifcAPI.properties.getSpatialStructure`
+ *         directly (wit-three's `state.models[modelID]` is no longer
+ *         populated since we bypass its parse). Schema bump
+ *         invalidates 0.8.0 artifacts written during the broken
+ *         Slice-5b window where the writer called the wit-three path
+ *         and silently dropped the `BLDRS_spatial_tree` extension —
+ *         users with stale caches get a fresh write with a valid
+ *         spatial tree on next load, no manual OPFS clear needed.
  * 0.8.0 — added `BLDRS_face_ids` glTF extension carrying per-triangle
  *         `expressID` / `instanceID` arrays as a Base64-encoded JSON
  *         payload, separate from the per-vertex attribute stream.
@@ -55,7 +65,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.8.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.9.0'
 
 
 /**
