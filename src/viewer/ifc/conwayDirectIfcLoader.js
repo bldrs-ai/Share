@@ -29,11 +29,16 @@
 //   - `model.getItemProperties(expressID, recursive = false)`
 //   - `model.getPropertySets(expressID, recursive = false)`
 //   - `model.getSpatialStructure(_modelID, withProperties = false)`
-//   - `model.getIfcType(expressID)` — async; resolves the IFC entity
-//     type string ('IFCWALL' etc.) by reading the entity's properties
-//     and mapping the numeric type code via Conway's
-//     `properties.getIfcType` (no extra dep needed; Conway's adapter
-//     re-exports the `IfcTypesMap` we'd otherwise import directly).
+//   - `model.getIfcType(eltType)` — identity. Matches the cache-hit
+//     closure shape (`Loader.js#convertToShareModel`). SearchIndex
+//     reaches this via `Ifc.getType(model, elt)` →
+//     `model.properties.getIfcType(elt.type)`, and Conway's
+//     `properties.getSpatialStructure` already returns nodes with
+//     `.type` set to the IFC string (e.g. `'IFCWALL'`), so passing it
+//     through unchanged is the right behaviour. (The wit-three pre-5b
+//     path expected a numeric type code here because wit-three's
+//     spatial-tree nodes carried `.type` as a number; that shape
+//     vanished with Slice 5b.)
 //
 // All four ignore the modelID arg (when consumers pass one) and use
 // the model's own bound modelID. Mirrors the cache-hit closure
@@ -279,27 +284,15 @@ function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
   ifcModel.getPropertySets = (expressID, recursive = false) => {
     return ifcAPI.properties.getPropertySets(modelID, expressID, recursive)
   }
-  // getIfcType: wit-three's surface returned the string type name
-  // (e.g., 'IFCWALL') by looking up `state.models[modelID].types[id]`.
-  // We resolve via getItemProperties + Conway's properties.getIfcType
-  // (which is just an IfcTypesMap[] lookup under the hood). Cached
-  // on first hit per expressID so the bot's bulk-property reads
-  // don't re-trigger N property fetches.
-  const typeCache = new Map()
-  ifcModel.getIfcType = async (expressID) => {
-    if (typeCache.has(expressID)) {
-      return typeCache.get(expressID)
-    }
-    try {
-      const props = await ifcAPI.properties.getItemProperties(modelID, expressID, false)
-      const typeName = typeof props?.type === 'number' ?
-        ifcAPI.properties.getIfcType(props.type) ?? null :
-        null
-      typeCache.set(expressID, typeName)
-      return typeName
-    } catch (e) {
-      typeCache.set(expressID, null)
-      return null
-    }
-  }
+  // getIfcType: identity. SearchIndex (`src/search/SearchIndex.js`)
+  // reaches this through `Ifc.getType(model, elt)` →
+  // `model.properties.getIfcType(elt.type)`, where the wrapping
+  // `{properties: m}` makes `m.getIfcType` the lookup. Conway's
+  // `properties.getSpatialStructure` already gives every node a
+  // string `.type` ('IFCWALL', etc.), so we just hand it back. Matches
+  // `Loader.js#convertToShareModel`'s cache-hit closure shape
+  // (`model.getIfcType = (eltType) => eltType`). An async / Promise-
+  // returning impl here breaks SearchIndex's downstream
+  // `key.toLowerCase()` — see the cross-ref in that file.
+  ifcModel.getIfcType = (eltType) => eltType
 }

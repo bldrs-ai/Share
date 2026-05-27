@@ -191,39 +191,20 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
     })
 
-    it('getIfcType resolves the entity\'s type via getItemProperties + Conway\'s type map', async () => {
+    it('getIfcType is an identity over the spatial-tree node\'s string type', () => {
+      // Regression pin: SearchIndex (`src/search/SearchIndex.js#indexElement`)
+      // calls `Ifc.getType(model, elt)` → `model.properties.getIfcType(elt.type)`
+      // where `model = {properties: m}` and `elt` is a spatial-tree node.
+      // Conway's `properties.getSpatialStructure` returns nodes with `.type`
+      // already set to the IFC string (e.g. 'IFCWALL'), so the model-level
+      // `getIfcType` is the identity — matches Loader.js#convertToShareModel's
+      // cache-hit closure shape. An async / Promise-returning impl here would
+      // crash SearchIndex's `key.toLowerCase()`.
       const ifcAPI = makeIfcAPI()
-      const IFCWALL_TYPE_CODE = 2391406946
-      ifcAPI.properties.getItemProperties.mockResolvedValue({type: IFCWALL_TYPE_CODE})
-      ifcAPI.properties.getIfcType.mockImplementation(
-        (code) => (code === IFCWALL_TYPE_CODE ? 'IFCWALL' : null))
       const ifcModel = new Mesh()
       decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      const typeName = await ifcModel.getIfcType(42)
-      expect(typeName).toBe('IFCWALL')
-    })
-
-    it('getIfcType caches per-expressID so bulk reads don\'t re-fetch', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getItemProperties.mockResolvedValue({type: 1})
-      ifcAPI.properties.getIfcType.mockReturnValue('IFCTYPE')
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      await ifcModel.getIfcType(42)
-      await ifcModel.getIfcType(42)
-      await ifcModel.getIfcType(42)
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledTimes(1)
-    })
-
-    it('getIfcType returns null + caches when getItemProperties throws', async () => {
-      const ifcAPI = makeIfcAPI()
-      ifcAPI.properties.getItemProperties.mockRejectedValue(new Error('parse error'))
-      const ifcModel = new Mesh()
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
-      expect(await ifcModel.getIfcType(42)).toBe(null)
-      // Cached — subsequent calls don't re-throw.
-      expect(await ifcModel.getIfcType(42)).toBe(null)
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledTimes(1)
+      expect(ifcModel.getIfcType('IFCWALL')).toBe('IFCWALL')
+      expect(ifcModel.getIfcType('IFCBUILDINGSTOREY')).toBe('IFCBUILDINGSTOREY')
     })
 
     it('sets capabilities flips: ifcSubsets false, instancePicking + expressIdPicking true', () => {
