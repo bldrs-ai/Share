@@ -331,7 +331,10 @@ describe('CadView', () => {
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
     const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
     expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
-    const createPlanMock = viewer.clipper.createFromNormalAndCoplanarPoint
+    // ShareViewer wraps the fork's `IFC.clipper` in a Clipper plugin;
+    // the IFC-mode `createFromNormalAndCoplanarPoint` delegates to the
+    // fork clipper, captured at construction time as `_forkClipper`.
+    const createPlanMock = viewer._forkClipper.createFromNormalAndCoplanarPoint
     expect(createPlanMock).toHaveBeenCalled()
     await actAsyncFlush()
   })
@@ -357,7 +360,8 @@ describe('CadView', () => {
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    // Clipper plugin delegates IFC-mode deleteAllPlanes to _forkClipper.
+    const callDeletePlanes = viewer._forkClipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)

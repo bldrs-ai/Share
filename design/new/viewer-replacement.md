@@ -383,20 +383,235 @@ the per-vertex `expressID` attribute across child Meshes.
   rest. Worth a separate spike post-default-on. Captured here
   so the idea doesn't fall off the followup list.
 
-**Default-on gating:** isolate routing now done. Remaining blockers
-before flipping the `conwayDirectIfc` flag default-on:
+**Done — BLDRS_spatial_tree slice.** Landed 2026-05 (PR #1527).
+Resolves §3b.iii default-on blocker 1 below: cache-hit GLBs now
+hydrate the NavTree without a live IFC parser.
 
-1. **Portable IFC spatial hierarchy** — NavTree currently sources
-   `getSpatialStructure(...)` from `viewer.IFC.loader.ifcManager`,
-   which only has parser state on cache-miss IFC parses. Cache-hit
-   GLB needs `BLDRS_spatial_tree` (see `design/new/glb-model-sharing.md`
-   §"Extensions") written at export and read back on cache-hit.
-2. **Portable IFC properties / property sets** — ItemProperties
-   similarly currently sources from the ifcManager. Needs the
-   `BLDRS_element_properties` extension wired through the writer +
-   reader so the panel works on cache-hit too.
+- `src/loader/injectGlbExtensions.js` — GLB post-processor (parse →
+  splice extensions + bufferViews → re-serialise). Chosen over a
+  GLTFExporter plugin so geometry export stays untouched and the
+  extension wiring lives in one well-tested seam. Returns
+  `{bytes, stats}`; collision-safe (won't overwrite an existing
+  entry); synthesises a BIN chunk on input with none.
+- `src/loader/bldrsSpatialTree.js` — `BLDRS_spatial_tree` extension
+  codec. Writer-side `captureBldrsSpatialTree(ifcManager, modelID)`
+  whitelists `{expressID, type, Name, LongName, children}` (drops
+  parser internals, depth-bounded via `MAX_TREE_DEPTH=100`).
+  Reader-side `BldrsSpatialTreeReader` GLTFLoader plugin decompresses
+  on `afterRoot`, validates shape (object + numeric expressID),
+  attaches to `gltf.scene.userData.bldrsSpatialTree`. Guards on
+  out-of-range bufferView index and absent default scene.
+- `src/loader/Loader.js#convertToShareModel` — promotes
+  `userData.bldrsSpatialTree` to a model-level
+  `model.getSpatialStructure(modelID, withProperties)` closure on
+  cache-hit. Live IFC parses don't ship the extension and fall
+  through to the legacy `ifcManager` path.
+- `src/loader/Loader.js#parseBldrsGlbContainer` — bubbles
+  `gltf.scene.userData` up to the merged Group so downstream
+  consumers see extension data on the returned root.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `capabilities.spatialStructure: true` when the userData payload
+  is present.
+- `src/Containers/CadView.jsx` — NavTree path discriminates on the
+  cache payload (`m.userData?.bldrsSpatialTree`). Method-existence
+  check would have collided with wit-three's prototype
+  `IFCModel.getSpatialStructure(): Promise<any>` (no args), silently
+  dropping `withProperties=true` on live IFC parses.
+- `src/loader/glbCacheKey.js` — schema bump `0.5.0` → `0.6.0` so
+  older cached artifacts read as miss; next miss rewrites with the
+  extension attached.
+
+Untrusted-input validation today is shape-only (object + numeric
+expressID + recursion-depth ceiling). Full validation per
+`design/new/glb-model-sharing.md` §"Validation and trust" — schema-
+version range, cross-reference integrity, size ceilings, HTML-strip
+on rendered strings — lands with the originator-side share flow
+(Phase 5+) when GLBs can arrive from arbitrary user browsers.
+File-header TODO points at the spec.
+
+**Done — BLDRS_element_properties slice.** Landed 2026-05 (this PR).
+Resolves §3b.iii default-on blocker 2 below: cache-hit GLBs now
+hydrate the Properties panel without a live IFC parser.
+
+- `src/loader/bldrsElementProperties.js` — `BLDRS_element_properties`
+  extension codec. Writer-side
+  `captureBldrsElementProperties(ifcManager, modelID, spatialTree)`
+  walks a BFS from spatial-tree expressIDs through the IFC reference
+  graph (`{type: 5, value: expressID}` shape), fetching shallow item
+  properties for each entity in the closure. Bounded by
+  `MAX_CLOSURE_SIZE = 1_000_000` and `MAX_VALUE_DEPTH = 100` for
+  defense against pathological inputs. Output shape:
+  `{itemProperties: {[id]: data}, propertySets: {[productId]: [psetId, ...]}}`
+  — psets are deduplicated by ID rather than inlined per product
+  (typical IFCs share Pset_WallCommon etc. across every wall;
+  inlining would 3-5× the payload). Reader-side
+  `BldrsElementPropertiesReader` GLTFLoader plugin is **lazy** —
+  `afterRoot` stores the compressed bytes + a `decode()` closure on
+  `gltf.scene.userData.bldrsElementProperties` and DOES NOT
+  decompress. First `model.getItemProperties` / `getPropertySets`
+  call triggers a one-shot `pako.ungzip` + `JSON.parse`, cached
+  internally. Loads that never open the Properties panel pay
+  nothing for the extension.
+- `src/loader/Loader.js#convertToShareModel` — promotes the lazy
+  payload to two model-level closures:
+    * `model.getItemProperties(expressID)` → `data.itemProperties[id]`
+    * `model.getPropertySets(expressID)` → array of pset objects,
+      built by looking up the propertySets index against the
+      itemProperties map.
+  Both take one arg (expressID), matching wit-three's
+  `IFCModel.getItemProperties(id)` / `getPropertySets(id)` shape —
+  the model's implicit modelID is baked in at write time (one IFC
+  per cached GLB). Returns undefined / [] for missing IDs so
+  consumer null-guards (e.g. `Properties.jsx#createPsetsList`,
+  `itemProperties.jsx#unpackHelper`) trigger cleanly.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `capabilities.typedProperties: true` when the userData payload
+  is present.
+- `src/loader/glbCacheKey.js` — schema bump `0.6.0` → `0.7.0`.
+  Older artifacts read as miss; next miss rewrites with both
+  extensions attached.
+
+Consumer surface unchanged. `Components/Properties/Properties.jsx`
+and `Components/Properties/itemProperties.jsx` already call
+`await model.getPropertySets(id)` / `await model.getItemProperties(id)`
+— the live-IFC path satisfies these via wit-three's IFCModel
+prototype methods; the cache-hit path now satisfies them via the
+closures attached in `convertToShareModel`. The consumer doesn't
+branch on which backend it's hitting; await on a plain value works
+identically to await on a Promise.
+
+Same untrusted-input caveat as the spatial-tree slice: shape
+validation is minimal today (object + nested object guards inside
+`makeLazyPayload`). Full validation per
+`design/new/glb-model-sharing.md` §"Validation and trust" — size
+ceilings (e.g. 100MB decompressed cap), HTML-strip on user-
+authored strings, cross-reference integrity — lands with
+originator-side share (Phase 5+).
+
+**Done — BLDRS_face_ids slice.** Landed 2026-05 (this PR).
+Unblocks DRACO compression on IFC GLBs (74% size reduction on
+Snowdon, 144MB → 48MB on disk) without corrupting picking. Meshopt
+still skipped pending per-product mesh emission (see "long-term
+hide/pick architecture" note above).
+
+The problem: DRACO and Meshopt both silently corrupt per-vertex
+integer attributes that distinguish elements, by different
+mechanisms. **DRACO** normalises attribute values to [0, 1] then
+quantises to 16 bits max; on Snowdon (expressIDs 0–1M) the
+quantization step is ~15 → adjacent expressIDs collapse onto the
+same quantized level → clicking element A returns element B's
+triangles too. **Meshopt** preserves integer attribute values
+exactly (skipping the [-1, 1] quantization range), but its `weld()`
+pass merges vertices at near-identical positions for compression;
+adjacent walls share corner vertices; weld picks one element's
+expressID for the shared vertex; the other wall's triangles now
+reference that vertex → selection subset filtering grabs both walls.
+
+The fix: stop trusting per-vertex IDs post-compression. Store
+per-triangle expressID + instanceID in a separate JSON payload that
+neither compressor touches.
+
+- `src/loader/bldrsFaceIds.js` — `BLDRS_face_ids` extension codec.
+  Writer-side `capturePerTriangleIds(json, bin)` walks freshly-
+  exported GLB primitives, reads the index buffer + per-vertex
+  `_EXPRESSID` / `_INSTANCEID` accessors, and projects to per-
+  triangle arrays by taking vertex 0 of each triangle (matches the
+  Conway-direct assembler's "all 3 vertices share their parent's
+  ID" emission shape). `buildFaceIdsExtensionData` packs the arrays
+  as little-endian Base64 Uint32 for the JSON+gzip inject pipeline
+  (raw bufferViews are a follow-up optimisation; ~25% payload
+  reduction estimated). Reader-side `BldrsFaceIdsReader` GLTFLoader
+  plugin decompresses + Base64-decodes on `afterRoot`, attaches to
+  `gltf.scene.userData.bldrsFaceIds`. An **alignment canary**
+  (`firstExpressId`) is emitted per primitive and verified on read
+  — catches primitive-order divergence between writer
+  (`json.meshes[].primitives[]` flat scan) and reader (GLTFLoader
+  scene-graph traversal) that the length-only check could miss if
+  two meshes happen to share triangle counts.
+- `src/viewer/ifc/IfcInstanceMap.js#instanceMapFromTriangleIds` —
+  direct twin of `instanceMapFromGeometry` minus the per-vertex
+  indirection. Same output shape (`triangleIndexToInstanceId`,
+  `instanceIdToTriangleIndices`, etc.) so picking code doesn't
+  branch on which populator built the map.
+- `src/loader/Loader.js#convertToShareModel` — cache-hit decoration
+  prefers `BLDRS_face_ids` over per-vertex when present; falls back
+  to per-vertex only on uncompressed artifacts (gated by
+  `userData.bldrsCompressionMode`, stashed by
+  `parseBldrsGlbContainer`). Compressed artifacts with no face_ids
+  coverage skip picking on the affected mesh and log a warning
+  rather than silently use corrupted per-vertex IDs. Per-triangle
+  arrays are freed from `userData` after `IfcInstanceMap` is built
+  (~22MB reclaimed on Snowdon; the map owns its own typed copies).
+- `src/loader/glbCompress.js` — `preserveTriangleOrder` option
+  switches DRACO from `edgebreaker` (reorders for encoder
+  efficiency) to `sequential` (preserves input triangle order).
+  When set, the per-triangle indices remain aligned with post-
+  decompression triangle positions. Meshopt's default pipeline
+  reorders triangles for vertex-cache coherency without an exposed
+  off-switch — Meshopt stays skipped for IFC GLBs (the long-term
+  unblock is per-product mesh emission, which would remove the
+  per-vertex IDs entirely from the geometry stream).
+- `src/loader/glbExport.js` — captures face_ids on raw pre-
+  compression bytes (where per-vertex IDs are still intact), signals
+  `preserveTriangleOrder: !!faceIds` to compressGlb, injects after
+  compression. The capture path's catch block intentionally leaves
+  `faceIds = null` on failure, which cascades to compressGlb
+  skipping DRACO rather than running it with corrupted IDs.
+- `src/viewer/ShareModel.js#inferModelCapabilities` — flips
+  `instancePicking` / `expressIdPicking` from the face_ids extension
+  presence (the per-vertex attrs still exist on compressed
+  artifacts but aren't trustworthy; face_ids is the source of truth).
+- `src/loader/glbCacheKey.js` — schema bump `0.7.0` → `0.8.0`.
+
+**Default-on gating:** isolate routing done; spatial tree done;
+element properties done; compression unblocked. **No remaining
+blockers** — `conwayDirectIfc` flag flipped default-on **2026-05**.
+
+1. ~~Portable IFC spatial hierarchy~~ — **done** (PR #1527).
+2. ~~Portable IFC properties / property sets~~ — **done** (PR #1528).
+3. ~~Compression-safe per-element IDs (BLDRS_face_ids)~~ — **done** (PR #1528).
+4. ~~Flip the flag default-on~~ — **done** (this PR).
+   Pairs with `glb` (cache writer/reader) also default-on. Together:
+   first-load runs Conway-direct geometry + per-instance picking and
+   schedules a post-parse GLB writer; subsequent loads of the same
+   source hit the cache and bypass wit-three's IFC parser entirely.
 
 Issues / comments can be done later (post-prod-flip).
+
+**E2E coverage on cache-hit GLB.** This PR adds
+`src/Components/Properties/Properties.cacheHit.spec.ts` — exercises
+the BLDRS_element_properties round-trip end-to-end (writer populates
+OPFS on first load; reader hydrates on reload; Properties panel
+renders the full IFC entity). **Follow-up still owed:** a parallel
+spec for **NavTree on cache-hit GLB** that asserts the spatial-tree
+rendering and element selection work after a reload — the writer +
+reader landed in PR #1527 but no e2e spec was added then. Same
+two-`page.goto` cache-populate-then-cache-hit pattern; assertions
+target the nav-tree DOM rather than the properties panel.
+
+**Pre-public-launch (one of the last gates).** The regression-testing
+framework (headless 4-angle screenshots + perf timing) will be extended
+to do **GLB extract + bit-level data snapshot comparison**. Each model
+in the fixture corpus gets a manually-evaluated GLB extract as the
+golden artifact — schema-version-pinned, byte-stable across runs given
+the same Conway + GLTFExporter versions. The harness reads the cached
+artifact, decodes each `BLDRS_*` extension payload, and deep-diffs
+against the golden. Catches:
+
+- Extension-format drift (a writer change that quietly alters payload
+  layout, e.g. adding a field that gets serialised even though no
+  consumer reads it yet).
+- Geometry/material drift through the GLB cache round-trip (the BIN
+  chunk's bytes shift even when the visible scene is identical, e.g.
+  Conway emits geometry in a different order between versions).
+- Schema-bump bugs (a bump should invalidate everything; a bug where
+  it doesn't would surface as the golden still being readable when it
+  shouldn't be).
+
+Order of operations: ship Conway-direct + extensions → bake goldens
+manually → wire bit-level diff into the regression harness → flip
+public-launch gate. Not on the critical path for the §3b.iii blockers
+above; tracked here so it doesn't fall off.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
@@ -407,6 +622,144 @@ Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a
 - `Postprocessor` — `src/Infrastructure/CustomPostProcessor.js` lives here unchanged after a `postprocessing@^7` bump.
 - `Highlighter` — `src/Infrastructure/IfcHighlighter.js` lives here unchanged.
 - `Isolator` — `src/Infrastructure/IfcIsolator.js` lives here unchanged. Only its dep on `IfcContext` from `web-ifc-viewer/dist/components` becomes `ThreeContext` (a type-only swap).
+
+#### 3c.iv. Plugin migration progress (2026-05)
+
+Phase 2-3 landed five of the six plugins under a **flat** `src/viewer/three/`
+namespace rather than the per-concern subdirectories sketched in §5
+(`picker/`, `postprocess/`, `isolator/`, etc.). The flat layout matches
+the existing co-located test convention and keeps the cross-references
+between Picker / Highlighter / Isolator / Postprocessor on relative
+imports without `../` hops. The per-concern subdirs in §5 are
+descriptive of *what the plugins are*, not where they live; the actual
+filesystem layout is the flatter shape below.
+
+**Done:**
+
+| Plugin | Source location | Notes |
+|---|---|---|
+| `ThreeContext` | `src/viewer/three/ThreeContext.js` | Wraps the fork's `IfcContext`; will be standalone in Phase 5. |
+| `Picker` | `src/viewer/three/Picker.js` | Moved from `src/view/Picker.js`. |
+| `Postprocessor` | `src/viewer/three/CustomPostProcessor.js` | Moved from `Infrastructure/`. |
+| `Highlighter` | `src/viewer/three/IfcHighlighter.js` | Moved from `Infrastructure/`. |
+| `Isolator` | `src/viewer/three/IfcIsolator.js` | Moved from `Infrastructure/`; isolate routing through `IfcInstanceMap` landed in PR #1518. |
+| `Selector` | `src/viewer/three/Selector.js` | Facade over the fork's `IFC.selector` — landed in the slice that opened §3c.iv. ~16 call-sites now route through `viewer.selector.X`. |
+| `GlbClipper` + `CutPlaneArrowHelper` | `src/viewer/three/` | Relocated from `Infrastructure/` — landed alongside the Selector facade. |
+| `Clipper` | `src/viewer/three/Clipper.js` | Unified facade over the fork's `IfcClipper` + the in-repo `GlbClipper`. Mounts as `viewer.clipper`, dispatches per-model via `setModel(model)`. Erases the `modelHasUnstructuredMeshClipper` branch from `CutPlaneMenu.jsx`. |
+
+**Selector facade — landed (recap).**
+Wraps the fork's `IFC.selector` behind a stable local API
+(`viewer.selector.X`). Pure refactor; no behavior change. The §3c
+"Selection" plugin's eventual contract (backed by
+`IfcModelService.createSubset` + `postprocessing.OutlineEffect`)
+stays the destination; the facade gives us a single seam to swap
+the impl in Phase 5 without churning every call-site again. API
+surface mirrors what was read on the fork today: materials
+get/set, meshes accessors, pickByIds / unpick / preselectFromPick
+/ preselectByIds / togglePreselectionVisibility / clearSelection /
+clearPreselection.
+
+**Unified Clipper — landed (this slice).**
+One `viewer.clipper` object dispatching per-loaded-model between the
+fork's `IfcClipper` and the in-repo `GlbClipper`. Call-sites
+(`CutPlaneMenu.jsx`, `viewer.js`, `shortcutKeys.js`,
+`hashState.js`) no longer branch on `modelHasUnstructuredMeshClipper`
+— they call `viewer.clipper.X` and trust the plugin. The fork
+clipper is captured at `ShareViewer` construction as
+`viewer._forkClipper` so the IFC backing impl is preserved. Model
+binding happens via `viewer.clipper.setModel(model)`, called from
+`CutPlaneMenu`'s existing model-watching effect.
+
+**Clipper API surface:**
+```js
+viewer.clipper.setModel(model)
+viewer.clipper.active / orthogonalY / clickDrag       // fork-only state (passthrough)
+viewer.clipper.planes                                 // unified plane list
+viewer.clipper.context                                // legacy escape (fork only)
+viewer.clipper.createFromNormalAndCoplanarPoint(n, p, direction?, offset?)
+viewer.clipper.createPlane()                          // IFC keyboard shortcut (Q)
+viewer.clipper.deletePlane()                          // IFC keyboard shortcut (W)
+viewer.clipper.deleteAllPlanes()
+viewer.clipper.setInteractionEnabled(enabled)         // GLB-only arrow drag handlers
+viewer.clipper.dispose()
+```
+
+**Perf wins folded into the GlbClipper refactor**
+(`framerate has always been too slow` — addressed in-flight):
+
+  1. **Clipping planes bound to materials ONCE per add/remove.** The
+     previous impl re-walked the scene tree + set `material.needsUpdate
+     = true` on every drag mousemove, forcing a shader recompile per
+     affected material per tick. On a 1000-mesh model that was tens of
+     ms per frame for the entire drag duration. New impl mutates the
+     existing `Plane` in place (normal/constant); Three.js re-reads
+     plane uniforms each frame for free without rebind.
+  2. **`needsUpdate` only on plane-count change.** Three.js compiles
+     a shader variant per clipping-plane *count*; plane-value mutations
+     re-use the existing shader. The plugin tracks the last bound
+     count and skips the tree walk + needsUpdate when unchanged.
+  3. **Stable `_clippingPlanes` array reference.** Bound once at first
+     `createPlane()` to both `renderer.clippingPlanes` and each
+     `material.clippingPlanes`. Subsequent add/remove mutates in place;
+     no rebind needed.
+  4. **Scratch `Vector3` / `Plane` preallocation** in mouse handlers.
+     ~5 allocations/event eliminated; cumulative GC win at 60Hz drag.
+  5. **Bug fix while refactoring.** `Ray.intersectPlane(plane, target)`
+     returns `null` on a parallel-ray miss, not a sentinel value in
+     `target`. The previous code checked `if (intersectionPoint)`
+     against the always-truthy target object — never detected misses.
+     New code checks the return value.
+
+**Open perf items (deferred):**
+
+  - **On-demand rendering.** The fork's `IfcContext.render` runs
+    `requestAnimationFrame(this.render)` *unconditionally* — 60 frames/
+    second even when the scene is idle (no camera move, no hover, no
+    selection change). Switching to a dirty-flag policy (render only
+    when camera-controls fires `change`, or when one of the plugins
+    mutates the scene) is the single biggest framerate win available.
+    Requires hooking the render loop, which means owning
+    `ThreeContext.render` instead of forwarding it to the fork — most
+    naturally falls out of Phase 5 when the fork is dropped. A
+    transitional implementation could replace
+    `ThreeContext._legacy.render` with a dirty-aware wrapper, but the
+    fork's animator + camera-controls integration would need careful
+    re-plumbing. Tracked here for the Phase 5 PR.
+  - **Hover-pick throttling tightening.** Today `viewer.js` throttles
+    `highlightIfcItem` to ~30Hz (`PICK_INTERVAL = 33`). On big models
+    even 30Hz is too aggressive — the actual raycast cost dominates
+    over the throttle interval. Worth measuring with a real model and
+    raising the interval (e.g. 50ms) if the visual impact is
+    imperceptible.
+
+**Remaining §3c.iv slices:**
+
+1. **`IfcViewsManager` deletion** *(per §8.1)*. Single referenced
+   site is the `view=ch.sia380-1.heatmap` URL-parameter branch in
+   `ShareViewer.js` lines 3, 56–61. Drop together with
+   `Infrastructure/IfcElementsStyleManager.js`,
+   `Infrastructure/ViewRulesCompiler.js`,
+   `Infrastructure/IfcColor.js`,
+   `Infrastructure/ColorHelperFunctions.js`,
+   `Infrastructure/IfcCustomViewSettings.js` (last one is also used
+   by `WidgetApi/event-handlers/ChangeViewSettingsEventHandler.js`
+   — that call site needs to migrate to a `ShareModel`-level
+   post-build hook before the file can go).
+
+2. **`PlaceMark` relocation** *(post-Phase-5)*. Moves from
+   `Infrastructure/PlaceMark.js` to `src/viewer/three/PlaceMark.js`
+   alongside the markers' DOM-overlay code in `Components/Markers/`.
+   Low priority — the file is self-contained and the move is purely
+   organisational.
+
+3. **`useIfcClipper` capability cleanup** *(small, post-Clipper)*.
+   The capability is no longer read by any call-site outside of the
+   Clipper plugin's internal `modelHasUnstructuredMeshClipper` helper.
+   Could be dropped from `ShareModel.capabilities` once the unified
+   Clipper has been in production long enough that no external code
+   relies on it (currently zero in-tree consumers besides the plugin
+   itself — but the field is on every ShareModel and visible to
+   embedders).
 
 ### 3d. `ShareViewer` facade
 The only construct that `Containers/viewer.js#initViewer` instantiates. It composes the layers above and exposes the **same property names** the rest of the code already uses:
@@ -456,16 +809,77 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ### Phase 4 — cut over `IfcViewerAPIExtended` → `ShareViewer`
 - New module `src/viewer/ShareViewer.js` exporting the facade in §3d.
-- Update `Containers/viewer.js` to import `ShareViewer` instead of `IfcViewerAPIExtended`. The property surface is identical, so call-sites don't change.
-- Delete `Infrastructure/IfcViewerAPIExtended.js`.
+  *(2026-05: done; the class lives here and still extends the fork's
+  `IfcViewerAPI` until Phase 5.)*
+- Update `Containers/viewer.js` to import `ShareViewer` instead of `IfcViewerAPIExtended`. The property surface is identical, so call-sites don't change. *(2026-05: done.)*
+- Delete `Infrastructure/IfcViewerAPIExtended.js`. *(2026-05: done.)*
+- Land the **Selector facade** (§3c.iv slice 1) so the fork's
+  `IFC.selector` is reached only through `viewer.selector`. Pure
+  refactor; no behavior change. Sets up the Phase 5 impl swap.
+- Land the **GlbClipper relocation** (§3c.iv slice 2) — moves
+  `GlbClipper` + `CutPlaneArrowHelper` to `src/viewer/three/`.
+- Land the **unified Clipper** (§3c.iv slice 3) — one `viewer.clipper`
+  facade dispatching per-model; folds the `modelHasUnstructuredMeshClipper`
+  branch out of `CutPlaneMenu.jsx`. Includes a perf refactor of the
+  GLB drag-time path (bind clipping planes to materials once;
+  in-place plane mutation on drag rather than per-tick rebind + shader
+  recompile).
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
-- Remove `web-ifc-viewer-1.0.209-bldrs-7.tgz` and the `web-ifc-viewer` dep.
-- Remove the nested `web-ifc-three` (gone with it).
-- Bump `three` to current stable. Update `@types/three` to match.
-- Hand-fix the small set of API drifts in `src/`: `outputColorSpace`, raycaster signatures, `BufferGeometryUtils.mergeVertices` import path, etc. (see §6).
-- Update `tools/esbuild` config — no more wasm copy from `web-ifc/`; only Conway's wasm.
-- Update `__mocks__/web-ifc-viewer.js` → `__mocks__/ShareViewer.js`.
+
+**Slice 5a — flag default-on (done 2026-05).** This PR. Flips
+`conwayDirectIfc` and `glb` to `isActive: true`; removes the
+now-dead `if (isFeatureEnabled('conwayDirectIfc'))` branches in
+`Loader.js`. Production cache-hit loads now bypass wit-three's IFC
+parser entirely; cache-miss loads still call `this.loader.parse(...)`
+(wit-three's `IFCLoader.parse`) and then swap the rendered geometry
+for the Conway-direct assembler's output.
+
+**Slice 5b — Conway-direct parse (todo).** The cache-miss path
+still goes through wit-three's `IFCLoader.parse` purely to drive
+Conway under the hood, then we throw away its assembled geometry
+and rebuild with our Conway-direct assembler. Cleanest replacement:
+
+```js
+const modelID = ifcAPI.OpenModel(new Uint8Array(buffer))
+const captured = []
+ifcAPI.StreamAllMeshes(modelID, (fm) => captured.push(fm))
+const {mesh: ifcModel} = buildConwayIfcModel(captured, ifcAPI, modelID)
+ifcModel.modelID = modelID
+// property reads route through ifcAPI.properties.* directly
+```
+
+Conway's adapter exposes the full property + spatial surface natively
+(`properties.getItemProperties`, `properties.getSpatialStructure`,
+`properties.getAllItemsOfType`) — the wit-three `ifcManager` wrapper
+is decorative on top. Lifting the parse out of wit-three removes the
+last load-path dep on the fork.
+
+**Slice 5c — ShareViewer composition (todo).** Today
+`ShareViewer extends IfcViewerAPI`. Replacing the `extends` with
+composition needs to stand up the same property surface
+(`this.IFC`, `this.context`, `this.clipper`) from scratch using the
+existing local plugins (`ThreeContext`, `Clipper`, `Selector`,
+`Picker`, `Highlighter`, `Isolator`, `Postprocessor`) plus a new
+`IfcManager`-shaped wrapper around the Conway IfcAPI (Slice 5b's
+surface). Once `ShareViewer` no longer inherits from the fork, the
+fork dep can be dropped from `package.json` and the
+`threeJsmCompatPlugin` esbuild rewrites in `tools/esbuild/plugins.js`
+can go with it.
+
+**Slice 5d — three / postprocessing / three-mesh-bvh bumps (todo).**
+After 5b+5c land — drop the fork pin, bump `three` to current stable,
+update `@types/three` to match, drop the `threeJsmCompatPlugin` rewrites,
+drop the `BLDRS_face_ids` per-vertex fallback's wit-three checks, etc.
+
+**Slice 5e — wasm + build scripts (todo).** Drop
+`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, and
+`isWebIfcShimEnabled` from `tools/esbuild`. The `webIfcShimAliasPlugin`
+goes away — there are no more `web-ifc` imports to alias.
+
+**Slice 5f — mocks (todo).** Rename `__mocks__/web-ifc-viewer.js` →
+`__mocks__/ShareViewer.js`; update the three test files that
+`jest.mock('web-ifc-viewer')` to mock the new path.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.
@@ -479,35 +893,142 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ---
 
+## 4b. Followups (post-PR #1531)
+
+Captured during the writer-worker landing — the items that fell out
+of the freeze-fix work but aren't on the critical path for default-on.
+
+### 4b.1. GLTFExporter is the residual main-thread freeze
+
+After PR #1531 the writer's three big phases are:
+
+| Phase | Where | Cost on Schependomlaan |
+|---|---|---|
+| `GLTFExporter.parse` | main thread | ~500ms-1s (irreducible without scene-graph worker serialization) |
+| Property capture | main thread, chunked w/ yields | ~500ms-1s split into ~6-10 ms-scale chunks; hover-pick interleaves |
+| `injectGlbExtensions` + pack | `GlbWriter.worker.js` | 0ms main thread (worker), ~50ms structured-clone cost |
+
+`GLTFExporter` is the last sync block on the main thread. Three
+viable strategies (in increasing scope):
+
+1. **Defer GLTFExporter to the next idle window** — wrap the
+   `exporter.parse(...)` call in its own `requestIdleCallback`
+   beyond the outer one in `Loader.js`. Doesn't reduce the block,
+   but at least guarantees it doesn't fire mid-interaction.
+2. **Transferable-array extraction** — walk the scene on main
+   thread, extract `positions`/`indices`/per-vertex attributes into
+   typed arrays (already cheap, no JSON), `postMessage` to a new
+   `GlbExporter.worker.js` along with a flat materials manifest,
+   rebuild minimal three.js objects in the worker, run GLTFExporter
+   there. Doubles memory temporarily but main thread stays fully
+   responsive.
+3. **Custom streaming exporter** — fork GLTFExporter (or write a
+   minimal replacement keyed to the BLDRS Conway-direct shape) that
+   walks the scene in chunks with `await yieldToBrowser()` between.
+   Most invasive; tightest integration with our extension pipeline.
+
+Recommendation: try (1) first as a one-line change, then evaluate
+whether (2) is worth the memory hit. (3) only if neither lands the
+remaining responsiveness budget.
+
+### 4b.2. Cache-hit Playwright specs need OPFS-worker fetch routing
+
+`Properties.cacheHit.spec.ts` + `NavTree.cacheHit.spec.ts` are
+`test.fixme`'d as of PR #1531. The flag flip (`OPFS_IS_ENABLED: true`
+in `vars.playwright.js`) is in place but the specs time out waiting
+for `writer: wrote` because **`downloadToOPFS` runs inside the OPFS
+Worker, and worker-context fetches are not intercepted by
+Playwright's `context.route(...)`**. Three viable un-skip paths:
+
+1. **MSW handler for `/index.ifc`** that fulfils worker-context
+   fetches. MSW's service worker DOES intercept worker fetches once
+   it's controlling the page; the gap is the race window before
+   activation.
+2. **Gate the first `page.goto` on `waitForServiceWorker`** so MSW
+   is guaranteed in place before any fetch (worker or main).
+3. **Pre-seed OPFS via `page.evaluate`** before the first goto so
+   the test doesn't need a download at all — the reader path
+   exercises against pre-staged bytes.
+
+(2) is the smallest change and probably the right first try. (1)
+makes the specs portable to environments where SW activation is
+slower. (3) is the most deterministic but loses the writer-side
+coverage.
+
+The cache-hit round-trip is currently validated manually on deploy
+preview (Snowdon, Schependomlaan).
+
+### 4b.3. Other recommendations from PR #1531 review
+
+Captured here so they don't fall off:
+
+- **Measure structured-clone + `ENTITIES_PER_YIELD` overhead** on
+  real loads. Both costs were estimated, not measured. If the
+  structured clone of the element-properties payload exceeds
+  ~100-150ms on Schependomlaan-class IFCs, that becomes the next
+  bottleneck — attack with chunked serialization (start writing
+  partial output before the full object is built) or a
+  `SharedArrayBuffer` pipe.
+- **Stabilize cache-hit specs' fixture coupling.** The specs depend
+  on `expressID=621, Name="Together"` from `testdata/models/ifc/
+  index.ifc`. Move those to a shared `fixtures/index.ifc.constants.ts`
+  so future fixture updates have one place to touch.
+- **`prefers-reduced-motion` for `CacheWriteAffordance`.** The
+  pulsing dot animation in `Properties.jsx` runs unconditionally;
+  small a11y nit.
+- **Worker error backoff.** `GlbWriterService.js`'s `error` handler
+  nulls `workerRef` so the next call rebuilds — but with no
+  `MAX_RESPAWNS` cap, a repeatedly-crashing worker thrashes the
+  same way every call. Low priority; failure mode is rare.
+- **`clearOpfs` typing.** Uses `: any` for `FileSystemDirectoryHandle`
+  async iterator + `removeEntry({recursive: true})` because the
+  stage-3 proposals aren't in our TS lib yet. Remove the cast
+  once `@types/dom` catches up.
+- **Explicit unit tests** for the cache-lookup `try/catch` in
+  `Loader.js` and the `installFlatMeshCapture` no-op path (review
+  followup from PR #1529). Both are currently exercised via
+  integration tests but not asserted explicitly.
+
+---
+
 ## 5. New layout
+
+The original sketch grouped plugins under per-concern subdirectories
+(`picker/`, `selection/`, `clipper/`, etc.). The implementation
+converged on a **flat `src/viewer/three/`** namespace — the per-plugin
+files cross-reference each other heavily (Highlighter ↔ Postprocessor,
+Selector ↔ Highlighter, Isolator ↔ Highlighter + Selector + Picker),
+and the flat shape keeps those imports on `./X` rather than `../Y/Z`.
+Co-located `*.test.js` files use the same convention.
+
+Actual layout (current state — top): destination layout (post-Phase 5
+— bottom):
 
 ```
 src/viewer/
   ShareViewer.js              ← facade, replaces IfcViewerAPIExtended
+  ShareModel.js               ← capability + format decoration (§8.2)
   three/
-    ThreeContext.js           ← replaces web-ifc-viewer/components/context
-    fitToFrame.js
-    dispose.js                ← extracted from Containers/viewer.js
+    ThreeContext.js           ← extracted Phase 2; standalone in Phase 5
+    Picker.js                 ← moved from view/Picker.js
+    CustomPostProcessor.js    ← moved from Infrastructure/
+    IfcHighlighter.js         ← moved from Infrastructure/
+    IfcIsolator.js            ← moved from Infrastructure/
+    Selector.js               ← §3c.iv slice 1 — facade over IFC.selector
+    GlbClipper.js             ← §3c.iv slice 2 — moved from Infrastructure/
+    CutPlaneArrowHelper.ts    ← §3c.iv slice 2 — moved from Infrastructure/
+    Clipper.js                ← §3c.iv slice 3 — unified clipper facade
+    elementSubsets.js         ← shared subset helpers (legacy + Conway-direct)
   ifc/
-    IfcModelService.js        ← replaces web-ifc-three + IFC.loader.ifcManager
-    IfcModel.js               ← extends Mesh; subsets live here
     flatMeshToBufferGeometry.js
-    IfcViewsManager.js        ← moved from Infrastructure
-  picker/
-    Picker.js                 ← moved + tightened from view/Picker.js
-  selection/
-    Selector.js               ← replaces IFC.selector
-  clipper/
-    Clipper.js                ← merges Clipper + GlbClipper into one
-    CutPlaneArrowHelper.ts    ← moved from Infrastructure
-  postprocess/
-    Postprocessor.js          ← moved from Infrastructure/CustomPostProcessor.js
-    Highlighter.js            ← moved from Infrastructure/IfcHighlighter.js
-  isolator/
-    Isolator.js               ← moved from Infrastructure/IfcIsolator.js
+    IfcItemsMap.js            ← per-IFC-product table (§3b.ii)
+    IfcInstanceMap.js         ← per-PlacedGeometry table (§3b.ii)
+    buildConwayIfcModel.js
+    IfcModelService.js        ← Phase 5 — replaces IFC.loader.ifcManager
+    IfcModel.js               ← Phase 5 — extends Mesh; subsets live here
 ```
 
-Tests live next to source as today.
+Tests live next to source.
 
 ---
 
@@ -663,7 +1184,7 @@ with Phase 5". Removing them is a four-line diff at that point.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Conway's spatial-structure / properties output isn't byte-equivalent to `web-ifc-three`'s | Medium | Breaks NavTree, Properties panel, search index | Phase 3 parity test against fixture IFCs; keep flag until parity confirmed |
-| `IfcModelService` reads per-instance expressID from the conway-supplied per-vertex buffer | High | Cache-hit picking collapses to shared-geometry granularity (observed Phase 2b.2 — 63 unique IDs / 2.1M verts on Momentum.ifc); breaks per-instance Hide/Isolate/Reveal too | Per §3b.ii, build `triangleIndexToExpressId` per-instance at parse — bypass conway's `getElementByLocalID(geometry.localID)` resolution. Persist via `BLDRS_per_triangle_express_ids` extension for cache parity. |
+| `IfcModelService` reads per-instance expressID from the conway-supplied per-vertex buffer | High | Cache-hit picking collapses to shared-geometry granularity (observed Phase 2b.2 — 63 unique IDs / 2.1M verts on Momentum.ifc); breaks per-instance Hide/Isolate/Reveal too | Per §3b.ii, build `triangleIndexToExpressId` per-instance at parse — bypass conway's `getElementByLocalID(geometry.localID)` resolution. Persisted via `BLDRS_face_ids` extension for cache parity (landed 2026-05 alongside DRACO unblock). |
 | Subset raycasting performance regression vs `web-ifc-three`'s native worker path | Medium | Hover-pick lag on big models | Add `three-mesh-bvh@^0.7` `acceleratedRaycast` from day one; measure on a >100MB IFC |
 | Outline highlight visual drift after color-management change | Low | Cosmetic | Snapshot tests in Cosmos; tune `OutlineEffect` colors if needed |
 | Hidden coupling between `web-ifc-viewer.IfcContext` and `IfcManager` we missed | Medium | Phase 4 cutover stalls | Phase 3's parallel-run flag means we discover this before deletion |

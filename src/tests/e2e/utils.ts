@@ -9,23 +9,26 @@ import {resolve} from 'path'
  * @param page - Playwright page object
  */
 export function logNetworkCalls({page}: {page: Page}) {
-  const skipGoogleAnalyticsRequests = (req: Request) => {
-    if (new URL(req.url()).hostname.endsWith('googletagmanager.com') ||
-      new URL(req.url()).hostname.endsWith('google-analytics.com')) {
+  const skipAdAndAnalyticsRequests = (req: Request) => {
+    const hostname = new URL(req.url()).hostname
+    if (hostname.endsWith('googletagmanager.com') ||
+        hostname.endsWith('google-analytics.com') ||
+        hostname.endsWith('googlesyndication.com') ||
+        hostname.endsWith('doubleclick.net')) {
       return true
     }
     return false
   }
 
   page.on('request', (req: Request) => {
-    if (skipGoogleAnalyticsRequests(req)) {
+    if (skipAdAndAnalyticsRequests(req)) {
       return
     }
     console.warn(`➡️  ${req.method()} ${req.url()}`)
   })
 
   page.on('response', (res) => {
-    if (skipGoogleAnalyticsRequests(res.request() as Request)) {
+    if (skipAdAndAnalyticsRequests(res.request() as Request)) {
       return
     }
     const status = res.status()
@@ -47,14 +50,62 @@ export async function clearState(context: BrowserContext) {
 
 
 /**
+ * Clear the page's OPFS root directory. Belt-and-suspenders cleanup
+ * for tests: Playwright's `fullyParallel: true` config already gives
+ * each test a fresh `BrowserContext` with its own OPFS slot, so leaks
+ * across tests shouldn't happen — but a leftover entry from a
+ * previous run (browser-process reuse, a context that was
+ * unexpectedly pooled) would silently produce a cache HIT on a test
+ * that expects MISS. Clearing here makes the assertion deterministic.
+ *
+ * Safe to call before any navigation has happened: the iterator is a
+ * no-op on an empty root. `getDirectory()` is the OPFS entry point;
+ * `removeEntry({recursive: true})` deletes a subtree.
+ *
+ * Best-effort: if the page has no origin yet (e.g., called before any
+ * `page.goto`), `navigator.storage` may throw — the catch swallows
+ * the error so test setup keeps moving.
+ *
+ * @param page - Playwright page object
+ */
+export async function clearOpfs(page: Page) {
+  await page.evaluate(async () => {
+    try {
+      // OPFS supports `for await` iteration over directory entries;
+      // collect first, then remove, so we don't mutate the iterator
+      // mid-walk (some Chromium versions error on concurrent
+      // mutation). `as any` because lib.dom.d.ts in our TS version
+      // doesn't yet type the async iterator + `recursive` option on
+      // FileSystemDirectoryHandle — both are stage-3 and ship in
+      // Chromium.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const root: any = await navigator.storage.getDirectory()
+      const entries: string[] = []
+      for await (const [name] of root.entries()) {
+        entries.push(name)
+      }
+      for (const name of entries) {
+        await root.removeEntry(name, {recursive: true})
+      }
+    } catch (e) {
+      // No origin yet (about:blank), OPFS unsupported in the test
+      // browser, quota error — none should block test setup.
+      console.warn('clearOpfs: skipped:', e)
+    }
+  })
+}
+
+
+/**
  * Hosts whose traffic carries data the SPA reads or writes (model files,
  * GitHub API responses, auth tokens, AI completions). Reaching these from
  * a test is the leak we *must* fail on — it can paper over a broken mock
- * and produce non-hermetic results. Analytics / tracking script hosts
- * (googletagmanager, google-analytics) are deliberately NOT in this list:
- * MSW handles them, but on the first page navigation a `<script>` tag for
- * gtag may fire before MSW's service worker takes control, and a hard
- * abort there only breaks page init without protecting any data.
+ * and produce non-hermetic results. Ad / analytics / tracking script
+ * hosts (googletagmanager, google-analytics, googlesyndication,
+ * doubleclick) are deliberately NOT in this list: MSW handles them, but
+ * on the first page navigation a `<script>` tag for gtag or adsbygoogle
+ * may fire before MSW's service worker takes control, and a hard abort
+ * there only breaks page init without protecting any data.
  */
 const REAL_NETWORK_HOST_DENYLIST = [
   // Real GitHub

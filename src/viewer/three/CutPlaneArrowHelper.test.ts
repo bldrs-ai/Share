@@ -3,7 +3,7 @@ import {Group, Mesh, Vector3, MeshBasicMaterial} from 'three'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 
 
-describe('Infrastructure/CutPlaneArrowHelper', () => {
+describe('viewer/three/CutPlaneArrowHelper', () => {
   describe('construction', () => {
     it('extends Group', () => {
       const arrow = new CutPlaneArrowHelper(new Vector3(0, 1, 0))

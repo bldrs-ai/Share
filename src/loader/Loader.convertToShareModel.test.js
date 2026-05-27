@@ -6,7 +6,7 @@
 // (mesh-level / no per-vertex IDs) paths must continue to behave as before.
 
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
-import {convertToShareModel} from './Loader'
+import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
@@ -227,5 +227,311 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // No model.createSubset attached — real-IFC routes through
     // web-ifc-three's IFC.selector.pickIfcItemsByID instead.
     expect(mesh.createSubset).toBeUndefined()
+  })
+
+  it('cache-hit BLDRS_spatial_tree hydrates a model-level getSpatialStructure closure', () => {
+    // Mirrors what the BldrsSpatialTreeReader plugin parks on the
+    // scene root: a JSON-decoded IFC tree on userData. convertToShareModel
+    // should promote it to a `model.getSpatialStructure(modelID, withProps)`
+    // closure so CadView's NavTree path can read it without going through
+    // the shared `viewer.IFC.loader.ifcManager` shim.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsSpatialTree = {
+      expressID: 1,
+      type: 'IFCPROJECT',
+      Name: {value: 'Cached Project'},
+      children: [
+        {expressID: 2, type: 'IFCSITE', Name: {value: 'Site'}, children: []},
+      ],
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(typeof mesh.getSpatialStructure).toBe('function')
+    // The closure is sync-on-tree (no await internally) but signed as
+    // (modelID, withProperties) so it matches the legacy
+    // `ifcManager.getSpatialStructure` shape — the CadView caller awaits
+    // the result regardless. Pass the same args the live path uses.
+    const root = mesh.getSpatialStructure(0, true)
+    expect(root.expressID).toBe(1)
+    expect(root.Name.value).toBe('Cached Project')
+    expect(root.children).toHaveLength(1)
+  })
+
+  it('no BLDRS_spatial_tree on userData → no closure attached (live-IFC fallback path)', () => {
+    // Regression guard: an earlier iteration attached the closure
+    // unconditionally, which collided with `web-ifc-three.IFCModel`'s
+    // own prototype `getSpatialStructure(): Promise<any>` (no args).
+    // CadView discriminates on `userData.bldrsSpatialTree`; the model
+    // here must NOT carry a model-level method when the userData hook
+    // is absent.
+    const mesh = new Mesh(new BufferGeometry())
+    // userData.bldrsSpatialTree intentionally unset.
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getSpatialStructure).toBeUndefined()
+  })
+
+  it('cache-hit BLDRS_element_properties hydrates getItemProperties and getPropertySets', () => {
+    // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
+    // `{compressed, decode}` lazy payload. The hydration block in
+    // convertToShareModel attaches closures that read the maps for
+    // entity / pset lookups via the payload's `decode()` (which caches
+    // internally — see makeLazyPayload). Each closure call hits
+    // `decode()` but the gzip / JSON.parse work happens once.
+    const decoded = {
+      itemProperties: {
+        100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
+        500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
+      },
+      propertySets: {100: [500]},
+    }
+    // Realistic mock: decode() returns the same object every time
+    // (proves the closures use the cached payload, not re-parse).
+    const mesh = new Mesh(new BufferGeometry())
+    let decodeReturns = 0
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode() {
+        decodeReturns++
+        return decoded
+      },
+    }
+    convertToShareModel(mesh, makeViewerStub())
+
+    expect(typeof mesh.getItemProperties).toBe('function')
+    expect(typeof mesh.getPropertySets).toBe('function')
+    // No decode happens at hydration time — closures defer the work.
+    expect(decodeReturns).toBe(0)
+
+    // Each closure invocation calls decode() but the real
+    // makeLazyPayload caches internally so the actual decompress +
+    // parse happens once. Our mock returns the same object reference
+    // each time; that's what we assert.
+    const wall = mesh.getItemProperties(100)
+    expect(wall.Name.value).toBe('Wall A')
+    const pset = mesh.getItemProperties(500)
+    expect(pset.Name.value).toBe('Pset_WallCommon')
+
+    // getPropertySets returns the array of pset objects (not IDs) —
+    // matching the Properties.jsx consumer contract.
+    const psets = mesh.getPropertySets(100)
+    expect(psets).toHaveLength(1)
+    expect(psets[0]).toEqual(decoded.itemProperties[500])
+
+    // Caching invariant: every decode() call returned the same object
+    // ref (i.e. the closures consume the payload's cached form rather
+    // than asking for a fresh parse). That's what makes the lazy
+    // wrapper a one-shot decompress instead of one-per-lookup.
+    expect(decodeReturns).toBeGreaterThan(0)
+  })
+
+  it('cache-hit Properties: getPropertySets returns [] for a product with no psets', () => {
+    const decoded = {itemProperties: {100: {expressID: 100}}, propertySets: {}}
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode: () => decoded,
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getPropertySets(100)).toEqual([])
+    // Also for an expressID that isn't in the index at all.
+    expect(mesh.getPropertySets(9999)).toEqual([])
+  })
+
+  it('cache-hit Properties: getItemProperties returns undefined for missing IDs', () => {
+    // Real-world: consumer's `deref` calls `getItemProperties(refId)`
+    // for arbitrary refIds it encounters. If a ref isn't in the cached
+    // closure (BFS missed it; or the cache is stale), returning
+    // undefined lets the consumer's null-guard kick in. Critical: no
+    // throw on lookup miss.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsElementProperties = {
+      compressed: new Uint8Array([0]),
+      decode: () => ({itemProperties: {1: {x: 1}}, propertySets: {}}),
+    }
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getItemProperties(1)).toEqual({x: 1})
+    expect(mesh.getItemProperties(9999)).toBeUndefined()
+  })
+
+  it('no BLDRS_element_properties on userData → no closures attached', () => {
+    // Symmetric to the spatial-tree regression guard above. Live IFC
+    // parses don't ship the payload — the model must NOT carry the
+    // model-level methods so consumers fall through to whatever the
+    // live ifcManager exposes.
+    const mesh = new Mesh(new BufferGeometry())
+    // userData.bldrsElementProperties intentionally unset.
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.getItemProperties).toBeUndefined()
+    expect(mesh.getPropertySets).toBeUndefined()
+  })
+})
+
+
+describe('Loader/convertToShareModel — cache-hit page title hydration', () => {
+  // Regression: before the title stamp landed, every cache-hit page
+  // title degraded to "${mimeType} model" ("glb model") because the
+  // GLB carried no project name. The writer now stamps the live
+  // model.name (Conway's statsApi.projectName, e.g. "Momentum") into
+  // `scenes[0].extras.bldrsTitle`; three.js GLTFLoader auto-promotes
+  // it to `model.userData.bldrsTitle`, and `convertToShareModel`
+  // hydrates `model.{Name,LongName,name}` from it BEFORE the
+  // `${mimeType} model` fallback would clobber them.
+
+  it('hydrates Name, LongName, and name from userData.bldrsTitle on cache-hit', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
+    expect(mesh.LongName.value).toBe('Momentum')
+  })
+
+  it('falls back to "${mimeType} model" when userData.bldrsTitle is absent', () => {
+    // Drag-dropped GLB / pre-title-stamp cached artifact: no title in
+    // userData → existing placeholder path runs unchanged.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores a non-string bldrsTitle (defensive against malformed cache extras)', () => {
+    // Untrusted-input guard: if a future writer or a hostile cache
+    // file puts a non-string at `userData.bldrsTitle`, we must not
+    // splice it into the page <title>. Fall through to the placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = {value: 'wrong shape'}
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores an empty-string bldrsTitle (same fall-through as absent)', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = ''
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('does not overwrite a pre-existing model.name (live-IFC path is untouched)', () => {
+    // Live IFC parse already sets model.name via statsApi.projectName.
+    // The hydration block must NOT clobber that — if it did, the live
+    // parse and cache-hit paths would diverge whenever the IFC root's
+    // Name differed from statsApi.projectName.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'From IFC parse'
+    mesh.userData.bldrsTitle = 'Stale Cache Title'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('From IFC parse')
+  })
+
+  it('leaves Name and LongName consistent with model.name when a pre-set name takes precedence', () => {
+    // Reviewer-flagged inconsistency: previously, if model.name was
+    // pre-set AND userData.bldrsTitle was set, model.name kept its
+    // pre-existing value but model.{Name,LongName} got filled from
+    // the stale cached title — splitting the source of truth.
+    // The hydration block now treats a pre-set model.name as a hard
+    // signal that upstream decided, so it skips all three writes and
+    // lets the existing `${mimeType} model` fallback fill Name/
+    // LongName consistently with the placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'From IFC parse'
+    mesh.userData.bldrsTitle = 'Stale Cache Title'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('From IFC parse')
+    // Name/LongName fall through to the `${mimeType} model`
+    // placeholder rather than picking up the stale cache title.
+    // (If you want them to mirror model.name, plumb that through at
+    // the IFC parse site — convertToShareModel only reasons about
+    // model.userData on the cache-hit path.)
+    expect(mesh.Name.value).toBe('glb model')
+    expect(mesh.LongName.value).toBe('glb model')
+  })
+})
+
+
+describe('Loader/sanitizeCachedTitle — untrusted-input scrubbing', () => {
+  // The cached title is an untrusted-input boundary in the
+  // originator-share design (see design/new/glb-model-sharing.md
+  // §"Validation and trust"). Defense-in-depth: even though React
+  // Helmet escapes the text it places in `<title>`, we strip the
+  // characters most likely to break non-escaping consumers and
+  // spoofing-prone bidi overrides at the read boundary.
+
+  it('returns null for non-string input', () => {
+    expect(__sanitizeCachedTitleForTest(undefined)).toBeNull()
+    expect(__sanitizeCachedTitleForTest(null)).toBeNull()
+    expect(__sanitizeCachedTitleForTest(42)).toBeNull()
+    expect(__sanitizeCachedTitleForTest({})).toBeNull()
+    expect(__sanitizeCachedTitleForTest([])).toBeNull()
+  })
+
+  it('returns null for the empty string', () => {
+    expect(__sanitizeCachedTitleForTest('')).toBeNull()
+  })
+
+  it('passes a clean ASCII title through unchanged', () => {
+    expect(__sanitizeCachedTitleForTest('Momentum')).toBe('Momentum')
+    expect(__sanitizeCachedTitleForTest('Bldrs Plaza 2024')).toBe('Bldrs Plaza 2024')
+  })
+
+  it('passes clean Unicode through unchanged', () => {
+    // Real IFC project names from non-English locales must round-trip.
+    expect(__sanitizeCachedTitleForTest('Seestrasse 12')).toBe('Seestrasse 12')
+    expect(__sanitizeCachedTitleForTest('Bürohaus München')).toBe('Bürohaus München')
+    expect(__sanitizeCachedTitleForTest('東京タワー')).toBe('東京タワー')
+  })
+
+  it('strips ASCII control characters (NUL, newlines, tabs, U+007F)', () => {
+    expect(__sanitizeCachedTitleForTest('Bldrs\u0000Plaza')).toBe('BldrsPlaza')
+    expect(__sanitizeCachedTitleForTest('Line1\nLine2')).toBe('Line1Line2')
+    expect(__sanitizeCachedTitleForTest('Col1\tCol2')).toBe('Col1Col2')
+    expect(__sanitizeCachedTitleForTest('Title\u007F')).toBe('Title')
+  })
+
+  it('strips bidi-override characters (U+202A-U+202E, U+2066-U+2069)', () => {
+    // RLO (U+202E) is the classic "evil.txt" → "txt.lave" spoof trick.
+    expect(__sanitizeCachedTitleForTest('Project‮Reversed')).toBe('ProjectReversed')
+    expect(__sanitizeCachedTitleForTest('‪StartLRE')).toBe('StartLRE')
+    expect(__sanitizeCachedTitleForTest('⁦isolate⁩')).toBe('isolate')
+  })
+
+  it('strips `<` and `>` as defense-in-depth against unescaped renderers', () => {
+    expect(__sanitizeCachedTitleForTest('<script>alert(1)</script>')).toBe('scriptalert(1)/script')
+    expect(__sanitizeCachedTitleForTest('a<b>c')).toBe('abc')
+  })
+
+  it('caps very long titles at 200 characters', () => {
+    const longTitle = 'A'.repeat(300)
+    const result = __sanitizeCachedTitleForTest(longTitle)
+    expect(result).toHaveLength(200)
+    expect(result).toBe('A'.repeat(200))
+  })
+
+  it('returns null when stripping reduces the title to empty', () => {
+    // A title made entirely of stripped characters has no signal to
+    // keep — same outcome as not having a title at all.
+    expect(__sanitizeCachedTitleForTest('\u0000\u0001\u202E<>')).toBeNull()
+  })
+
+  it('cache-hit hydration integrates the sanitizer', () => {
+    // End-to-end through convertToShareModel: a title with control
+    // characters + tags + bidi overrides should land as plain text.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = '<b>Bld\u0000rs\u202E Plaza</b>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('bBldrs Plaza/b')
+  })
+
+  it('a title that becomes empty after sanitization falls through to the placeholder', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = '\u202E\u0000<>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
   })
 })

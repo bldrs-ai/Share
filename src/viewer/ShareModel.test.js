@@ -182,6 +182,48 @@ describe('viewer/ShareModel', () => {
       expect(caps.expressIdPicking).toBeUndefined()
       expect(caps.instancePicking).toBeUndefined()
     })
+
+    it('promotes spatialStructure when userData carries a BLDRS_spatial_tree payload', () => {
+      // Mirrors what `BldrsSpatialTreeReader#afterRoot` (the cache-hit
+      // path) attaches: a decoded IFC tree on the model's root userData.
+      // `Loader.js#convertToShareModel` then hangs `model.getSpatialStructure`
+      // off it. `inferModelCapabilities` doesn't need the consumer wiring
+      // to be in place to flip the flag — the presence of the payload
+      // alone is the signal.
+      const root = new Group()
+      root.userData.bldrsSpatialTree = {
+        expressID: 1, type: 'IFCPROJECT', Name: {value: 'P'}, children: [],
+      }
+      const caps = inferModelCapabilities(root)
+      expect(caps.spatialStructure).toBe(true)
+    })
+
+    it('leaves spatialStructure undefined when no BLDRS_spatial_tree is present', () => {
+      const root = new Group()
+      const caps = inferModelCapabilities(root)
+      expect(caps.spatialStructure).toBeUndefined()
+    })
+
+    it('promotes typedProperties when userData carries a BLDRS_element_properties payload', () => {
+      // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
+      // `{compressed, decode}` lazy-decode object on userData.
+      // `Loader.js#convertToShareModel` hangs `getItemProperties` /
+      // `getPropertySets` off it. Capability flip is independent of
+      // the consumer wiring — presence of the payload is the signal.
+      const root = new Group()
+      root.userData.bldrsElementProperties = {
+        compressed: new Uint8Array([0]),
+        decode: () => ({itemProperties: {}, propertySets: {}}),
+      }
+      const caps = inferModelCapabilities(root)
+      expect(caps.typedProperties).toBe(true)
+    })
+
+    it('leaves typedProperties undefined when no BLDRS_element_properties is present', () => {
+      const root = new Group()
+      const caps = inferModelCapabilities(root)
+      expect(caps.typedProperties).toBeUndefined()
+    })
   })
 
   describe('modelHasUnstructuredMeshClipper', () => {

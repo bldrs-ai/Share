@@ -29,6 +29,7 @@
 import {isFeatureEnabled} from '../FeatureFlags'
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {glbInfo, glbVerbose} from './glbLog'
+import {parseGlb} from './injectGlbExtensions'
 
 
 /** @typedef {'draco'|'meshopt'|null} GlbCompressionMode */
@@ -96,10 +97,69 @@ export function activeSchemaVersion() {
  *
  * @param {Uint8Array} glbBytes uncompressed GLB binary
  * @param {GlbCompressionMode} mode
+ * @param {object} [options]
+ * @param {boolean} [options.preserveTriangleOrder] when true and
+ *   `mode === 'draco'`, switches DRACO to its `sequential` encoding
+ *   (preserves input triangle order at the cost of slightly worse
+ *   compression). Required when the caller will attach a
+ *   `BLDRS_face_ids` extension that indexes face IDs by post-
+ *   decompression triangle position.
  * @return {Promise<{bytes:Uint8Array, mode:GlbCompressionMode}>}
  */
-export async function compressGlb(glbBytes, mode) {
+export async function compressGlb(glbBytes, mode, options = {}) {
   if (!mode) {
+    return {bytes: glbBytes, mode: null}
+  }
+  const {preserveTriangleOrder = false} = options
+  // DRACO and Meshopt both have correctness issues with per-vertex
+  // integer attributes that distinguish elements, by different
+  // mechanisms:
+  //   - DRACO normalises attribute values to [0, 1] then quantises
+  //     to 16 bits (max). For per-vertex expressIDs on Snowdon
+  //     (values 0-1M), the quantization step is ~15 → adjacent
+  //     expressIDs collapse onto the same value → wrong pick.
+  //   - Meshopt's `weld()` pass merges vertices at near-identical
+  //     positions for compression. Adjacent walls share corner
+  //     vertices; weld picks one element's expressID for the shared
+  //     vertex; the other element's triangles now reference that
+  //     vertex too → selection subset grabs both walls' triangles.
+  //
+  // **Mitigation: the `BLDRS_face_ids` extension** (companion to
+  // this writer) stores per-triangle IDs in a separate JSON payload
+  // that compression doesn't touch. The reader rebuilds
+  // `IfcInstanceMap` from per-triangle data on cache-hit, bypassing
+  // both quantization and welding. Triangle ORDER must be preserved
+  // for the per-triangle indices to remain aligned post-compression:
+  //   - DRACO has a `sequential` method that preserves input
+  //     triangle order (the default `edgebreaker` reorders for the
+  //     encoder). We switch to sequential when face_ids is present.
+  //   - Meshopt's default pipeline reorders triangles for vertex-
+  //     cache coherency without an exposed off-switch. We don't have
+  //     a way to make face_ids survive Meshopt yet — Meshopt stays
+  //     skipped for IFC GLBs.
+  //
+  // `preserveTriangleOrder` is the signal that the caller will be
+  // attaching face_ids. When false (or when the GLB has per-vertex
+  // IFC IDs but face_ids capture failed), we fall back to the
+  // previous skip-with-warning behavior to preserve picking
+  // correctness at the cost of compression.
+  if (mode === 'meshopt' && hasPerVertexIfcIds(glbBytes)) {
+    glbInfo(
+      'compress: meshopt skipped — GLB has per-vertex _EXPRESSID / ' +
+      '_INSTANCEID attributes. Meshopt\'s vertex welding corrupts ' +
+      'picking on these, and its triangle reordering breaks the ' +
+      'BLDRS_face_ids workaround. Storing uncompressed. Per-product ' +
+      'mesh emission (design/new/viewer-replacement.md §3b.iii) is ' +
+      'the long-term unblock for Meshopt.')
+    return {bytes: glbBytes, mode: null}
+  }
+  if (mode === 'draco' && hasPerVertexIfcIds(glbBytes) && !preserveTriangleOrder) {
+    glbInfo(
+      'compress: draco skipped — GLB has per-vertex _EXPRESSID / ' +
+      '_INSTANCEID attributes but the caller didn\'t pass ' +
+      'preserveTriangleOrder. Without that signal (and the matching ' +
+      'BLDRS_face_ids extension), DRACO\'s 16-bit quantization ' +
+      'corrupts picking. Storing uncompressed.')
     return {bytes: glbBytes, mode: null}
   }
   const startMs = Date.now()
@@ -115,7 +175,14 @@ export async function compressGlb(glbBytes, mode) {
       const {draco} = await import('@gltf-transform/functions')
       io.registerExtensions([KHRDracoMeshCompression])
         .registerDependencies({'draco3d.encoder': encoderModule})
-      transformOp = draco({method: 'edgebreaker'})
+      // DRACO's `edgebreaker` reorders triangles for encoder
+      // efficiency; `sequential` preserves input order at the cost
+      // of slightly worse compression. When `BLDRS_face_ids` is
+      // active (signalled via `preserveTriangleOrder`), the reader
+      // indexes face IDs by post-decompression triangle position, so
+      // the order MUST match the writer's pre-compression order.
+      const dracoMethod = preserveTriangleOrder ? 'sequential' : 'edgebreaker'
+      transformOp = draco({method: dracoMethod})
     } else if (mode === 'meshopt') {
       const {MeshoptEncoder} = await import('meshoptimizer/encoder')
       await MeshoptEncoder.ready
@@ -154,6 +221,57 @@ let dracoEncoderPromise = null
  * `DracoEncoderModule` global. The returned object is what
  * `@gltf-transform`'s `draco()` transform expects under
  * `draco3d.encoder`.
+ *
+ * @return {Promise<object>} the instantiated encoder Module
+ */
+/**
+ * Detect whether a GLB carries per-vertex IFC identity attributes
+ * (`_EXPRESSID` or `_INSTANCEID`) that would be corrupted by DRACO's
+ * 16-bit quantization. These attributes encode integer expressIDs as
+ * per-vertex values; on real IFCs the IDs reach 100k–1M+, well above
+ * DRACO's 65535 ceiling. Quantization collapses adjacent IDs onto the
+ * same value → picking returns the wrong expressID → selection subset
+ * grabs unrelated triangles. We skip DRACO when detected.
+ *
+ * Best-effort: a parse failure returns `false` so the compression
+ * attempt proceeds; if the GLB is malformed, DRACO will fail anyway
+ * and `compressGlb`'s outer try/catch returns the original bytes.
+ *
+ * @param {Uint8Array} glbBytes
+ * @return {boolean}
+ */
+function hasPerVertexIfcIds(glbBytes) {
+  try {
+    const {json} = parseGlb(glbBytes)
+    if (!Array.isArray(json.meshes)) {
+      return false
+    }
+    for (const mesh of json.meshes) {
+      if (!Array.isArray(mesh.primitives)) {
+        continue
+      }
+      for (const prim of mesh.primitives) {
+        const attrs = prim.attributes
+        if (!attrs || typeof attrs !== 'object') {
+          continue
+        }
+        if ('_EXPRESSID' in attrs || '_INSTANCEID' in attrs) {
+          return true
+        }
+      }
+    }
+    return false
+  } catch (e) {
+    glbVerbose('compress: incompatibility probe failed; assuming false:', e)
+    return false
+  }
+}
+
+
+/**
+ * Lazy-load Google's draco3d encoder via a `<script>` injection.
+ * Cached at module scope so subsequent compressions reuse the same
+ * factory. Resolves with the instantiated encoder Module.
  *
  * @return {Promise<object>} the instantiated encoder Module
  */

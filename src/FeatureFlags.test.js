@@ -19,13 +19,27 @@ describe('FeatureFlags', () => {
     })
   })
 
-  it('declares glb and glbDraco flags, both inactive by default', () => {
+  it('declares glb active by default and glbDraco off (sub-option)', () => {
+    // glb went default-on in the Phase-5 prep landing — cache-hit GLB
+    // loads bypass wit-three entirely. glbDraco stays opt-in because
+    // compression adds 100-300ms per cache write and the size win
+    // varies by model; users opt in via `?feature=glbDraco`.
     const glb = flags.find((f) => f.name === 'glb')
     const glbDraco = flags.find((f) => f.name === 'glbDraco')
     expect(glb).toBeDefined()
-    expect(glb.isActive).toBe(false)
+    expect(glb.isActive).toBe(true)
     expect(glbDraco).toBeDefined()
     expect(glbDraco.isActive).toBe(false)
+  })
+
+  it('declares conwayDirectIfc active by default', () => {
+    // The Conway-direct geometry assembler + per-instance picking is
+    // the production rendering path. Off-switching is via a code change
+    // (no URL escape hatch); the wit-three fallback is on its way out
+    // entirely in the follow-up fork-removal slice.
+    const conwayDirect = flags.find((f) => f.name === 'conwayDirectIfc')
+    expect(conwayDirect).toBeDefined()
+    expect(conwayDirect.isActive).toBe(true)
   })
 
   describe('isFeatureEnabled', () => {
@@ -44,14 +58,15 @@ describe('FeatureFlags', () => {
     })
 
     it('returns false for an isActive: false flag when URL has no feature param', () => {
-      expect(isFeatureEnabled('glb')).toBe(false)
+      // glbDraco stays off by default (opt-in compression sub-option).
       expect(isFeatureEnabled('glbDraco')).toBe(false)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
     })
 
     it('enables a flag listed in ?feature=', () => {
-      window.location.search = '?feature=glb'
-      expect(isFeatureEnabled('glb')).toBe(true)
-      expect(isFeatureEnabled('glbDraco')).toBe(false)
+      window.location.search = '?feature=glbDraco'
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
     })
 
     it('enables multiple flags via comma-separated ?feature=', () => {
@@ -64,6 +79,64 @@ describe('FeatureFlags', () => {
       window.location.search = '?feature=GLB,GlbDraco'
       expect(isFeatureEnabled('glb')).toBe(true)
       expect(isFeatureEnabled('GLBDRACO')).toBe(true)
+    })
+
+    it('implies glb when glbDraco is in the URL (compression sub-option)', () => {
+      // `glbDraco` configures compression for the GLB cache pipeline;
+      // it has no effect when the pipeline itself is off. Putting
+      // `glbDraco` in the URL without `glb` was a silent footgun —
+      // user reports "no GLB writer logs" and the sub-option is dead.
+      // Implication: any GLB sub-option turns the parent on too.
+      window.location.search = '?feature=glbDraco'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+      // Doesn't activate sibling sub-options.
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
+    })
+
+    it('implies glb when glbMeshopt is in the URL', () => {
+      window.location.search = '?feature=glbMeshopt'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(false)
+    })
+
+    it('implies glb when glbVerbose is in the URL', () => {
+      window.location.search = '?feature=glbVerbose'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbVerbose')).toBe(true)
+    })
+
+    it('implication is one-way — glb alone does NOT activate sub-options', () => {
+      window.location.search = '?feature=glb'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(false)
+      expect(isFeatureEnabled('glbMeshopt')).toBe(false)
+      expect(isFeatureEnabled('glbVerbose')).toBe(false)
+    })
+
+    it('implication works with case-insensitive sub-flag names too', () => {
+      // The user-typed `?feature=conwayDirectIFC,GLBDRACO` scenario:
+      // implication chains through the lowercased comparison.
+      window.location.search = '?feature=GLBDRACO'
+      expect(isFeatureEnabled('glb')).toBe(true)
+      expect(isFeatureEnabled('glbDraco')).toBe(true)
+    })
+
+    it('matches a URL value whose case diverges from the flag definition', () => {
+      // Regression pin: the conwayDirectIfc flag was defined with the
+      // canonical camelCase `conwayDirectIfc`, but URL-bar autocomplete
+      // / hand-typing variations like `conwayDirectIFC` (all-caps IFC)
+      // are common — and the user-typed form is what ends up in
+      // browser autocomplete memory. The static flag lookup +
+      // URL-value matching both lowercase before comparing, so any
+      // case variant in the URL resolves to the same flag.
+      window.location.search = '?feature=conwayDirectIFC'
+      expect(isFeatureEnabled('conwayDirectIfc')).toBe(true)
+      // And the reverse direction: URL canonical, caller variant.
+      window.location.search = '?feature=conwayDirectIfc'
+      expect(isFeatureEnabled('CONWAYDIRECTIFC')).toBe(true)
+      expect(isFeatureEnabled('conwaydirectifc')).toBe(true)
     })
 
     it('trims whitespace around comma-separated values', () => {

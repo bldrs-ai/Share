@@ -314,14 +314,17 @@ describe('loader/installConwayDirectGeometry', () => {
   it('safely no-ops on an empty FlatMesh capture (defensive guard)', () => {
     const ifcModel = makeIfcModel()
     const placeholderGeom = ifcModel.geometry
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    // Now logged at info level (was warn) — the empty-capture branch is
+    // hit by test harnesses whose IfcAPI mock omits StreamAllMeshes, not
+    // a real runtime failure. Still asserted: the log fires + says why.
+    const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
     installConwayDirectGeometry({}, ifcModel, [])
     // Geometry unchanged, no swap happened, no crash.
     expect(ifcModel.geometry).toBe(placeholderGeom)
     expect(ifcModel.instanceMap).toBeUndefined()
     expect(ifcModel.capabilities.ifcSubsets).toBe(true)
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/no FlatMesh capture/))
-    warnSpy.mockRestore()
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringMatching(/no FlatMesh capture/))
+    infoSpy.mockRestore()
   })
 
   it('emits a stats log line with vertex / triangle counts and Conway-vs-wit comparison', () => {

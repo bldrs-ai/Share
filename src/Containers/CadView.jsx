@@ -226,9 +226,9 @@ export default function CadView({
       depthTest: true,
     })
 
-    if (viewer.IFC.selector) {
-      viewer.IFC.selector.preselection.material = preselectMat
-      viewer.IFC.selector.selection.material = selectMat
+    if (viewer.selector?.hasForkSelector) {
+      viewer.selector.setPreselectionMaterial(preselectMat)
+      viewer.selector.setSelectionMaterial(selectMat)
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
@@ -445,7 +445,21 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      // Cache-hit GLBs that shipped a BLDRS_spatial_tree extension
+      // hydrate a `getSpatialStructure(modelID, withProperties)` closure
+      // on the model via `Loader.js#convertToShareModel`. We can't just
+      // test `m.getSpatialStructure` because wit-three's IFCModel
+      // inherits a `getSpatialStructure(): Promise<any>` on its
+      // prototype that calls `this.ifcManager.getSpatialStructure(this.modelID)`
+      // — no `includeProperties` arg — so taking that branch on a live
+      // IFC parse silently drops the property data, leaving NavTree
+      // leaves nameless. Discriminate on the cache payload directly.
+      const cachedTree = m.userData?.bldrsSpatialTree
+      if (cachedTree) {
+        rootElt = await m.getSpatialStructure(0, true)
+      } else {
+        rootElt = await m.ifcManager.getSpatialStructure(0, true)
+      }
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
       captureException(e, 'Could not read full model structure')
@@ -822,7 +836,22 @@ export default function CadView({
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
         const lastId = selectedElements.slice(-1)[0]
-        const props = await viewer.getProperties(0, Number(lastId))
+        // Prefer the model-level `getItemProperties(id)` when present
+        // — for cache-hit GLB it's the closure attached by
+        // `Loader.js#convertToShareModel` from the
+        // BLDRS_element_properties cache (works without a live IFC
+        // parser); for cache-miss IFC it's wit-three's IFCModel
+        // prototype method (delegates to the same ifcManager that
+        // `viewer.getProperties` would hit). `viewer.getProperties`
+        // stays as the fallback for non-IFC models / pre-decoration
+        // ticks where the model-level method isn't attached yet.
+        let props = null
+        if (model && typeof model.getItemProperties === 'function') {
+          props = await model.getItemProperties(Number(lastId))
+        }
+        if (!props && typeof viewer.getProperties === 'function') {
+          props = await viewer.getProperties(0, Number(lastId))
+        }
         setSelectedElement(props)
         // Update the expanded elements in NavTreePanel
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))

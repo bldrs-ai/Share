@@ -15,32 +15,54 @@ const mainBuild = esbuild.build({
   entryPoints: [indexFile, subscribeFile],
 })
 
-// Worker
-const workerFile = path.resolve(repoRoot, 'src', 'OPFS', 'OPFS.worker.js')
+// Workers
+//
+// Each worker entry produces TWO bundles: ESM (preferred, used when
+// the browser supports module workers) + classic IIFE (fallback for
+// old iOS, Samsung Internet, quirky Chromes). The service wrappers
+// (`OPFSService.js`, `GlbWriterService.js`) feature-detect at
+// runtime and pick the right URL.
 const buildDir = path.resolve(repoRoot, 'docs')
-const outfileBase = path.join(buildDir, 'OPFS.worker')
 
-// ESM worker
-const workerBuildESM = esbuild.build({
-  ...config,
-  entryPoints: [workerFile],
-  outdir: undefined,
-  outfile: `${outfileBase}.js`,
-  format: 'esm',
-})
+/**
+ * Stand up the ESM + classic-IIFE bundles for a worker source file.
+ *
+ * @param {string} sourceRelPath path relative to `src/`, e.g. `'OPFS/OPFS.worker.js'`
+ * @param {string} bundleBaseName basename of the output, e.g. `'OPFS.worker'`
+ *   — produces `<buildDir>/<bundleBaseName>.js` + `.classic.js`
+ * @return {Array<Promise>} two esbuild build Promises
+ */
+function workerBuilds(sourceRelPath, bundleBaseName) {
+  const sourceFile = path.resolve(repoRoot, 'src', sourceRelPath)
+  const outBase = path.join(buildDir, bundleBaseName)
+  return [
+    esbuild.build({
+      ...config,
+      entryPoints: [sourceFile],
+      outdir: undefined,
+      outfile: `${outBase}.js`,
+      format: 'esm',
+    }),
+    esbuild.build({
+      ...config,
+      entryPoints: [sourceFile],
+      outdir: undefined,
+      outfile: `${outBase}.classic.js`,
+      format: 'iife',
+    }),
+  ]
+}
 
-// old iOS, Samsung Internet, quirky Chromes
-const workerBuildClassic = esbuild.build({
-  ...config,
-  entryPoints: [workerFile],
-  outdir: undefined,
-  outfile: `${outfileBase}.classic.js`,
-  format: 'iife',
-})
+const opfsBuilds = workerBuilds('OPFS/OPFS.worker.js', 'OPFS.worker')
+// GlbWriter worker — runs JSON.stringify + pako.gzip + extension
+// injection + Bldrs container packing off the main thread so
+// hover-pick / camera-controls stay responsive during the post-IFC-
+// parse write. See `src/loader/GlbWriter.worker.js`.
+const glbWriterBuilds = workerBuilds('loader/GlbWriter.worker.js', 'GlbWriter.worker')
 
 
-// Wait for both builds to complete
-Promise.all([mainBuild, workerBuildESM, workerBuildClassic])
+// Wait for every build to complete
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {

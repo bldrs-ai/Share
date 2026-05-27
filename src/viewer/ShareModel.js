@@ -215,6 +215,45 @@ export function inferModelCapabilities(model, opts = {}) {
   if (hasPerVertexInstanceIds) {
     caps.instancePicking = true
   }
+  // BLDRS_face_ids extension also signals instance picking — the
+  // per-triangle data is what Loader.js#convertToShareModel rebuilds
+  // IfcInstanceMap from. When face_ids is present with any
+  // instanceIds entry, instance picking is on regardless of whether
+  // the per-vertex attributes survived compression. (DRACO with
+  // sequential mode preserves triangle order but can still corrupt
+  // per-vertex attribute values via quantization; the per-vertex
+  // attrs exist but aren't trustworthy. face_ids is the truth.)
+  const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive
+  if (Array.isArray(faceIdsPerPrimitive) &&
+      faceIdsPerPrimitive.some((e) => e?.instanceIds)) {
+    caps.instancePicking = true
+  }
+  if (Array.isArray(faceIdsPerPrimitive) &&
+      faceIdsPerPrimitive.some((e) => e?.expressIds)) {
+    caps.expressIdPicking = true
+  }
+  // BLDRS_spatial_tree extension hydration (cache-hit GLBs only).
+  // `Loader.js#convertToShareModel` reads `userData.bldrsSpatialTree`
+  // and attaches a `getSpatialStructure` method to the model. Flip the
+  // capability so the NavTree branches on this rather than format.
+  // Live IFC parses don't ship the extension and use the legacy
+  // `ifcManager` path; the format-based default already has
+  // spatialStructure on for them.
+  if (model.userData?.bldrsSpatialTree) {
+    caps.spatialStructure = true
+  }
+  // BLDRS_element_properties extension hydration (cache-hit GLBs only).
+  // `Loader.js#convertToShareModel` reads the lazy payload at
+  // `userData.bldrsElementProperties` and attaches
+  // `getItemProperties` / `getPropertySets` methods. Flip the
+  // capability so Properties-panel-driven code can branch on capability
+  // rather than checking for the method's existence at the call site.
+  // Live IFC parses don't ship the extension and use the legacy
+  // `ifcManager` path; the format-based default already has
+  // typedProperties on for them.
+  if (model.userData?.bldrsElementProperties) {
+    caps.typedProperties = true
+  }
   return caps
 }
 

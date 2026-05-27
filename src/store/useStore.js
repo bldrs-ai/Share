@@ -44,4 +44,16 @@ const useStore = create((set, get) => ({
   ...createVersionsSlice(set, get),
 }))
 
+// Expose the store on `window` for console-based debugging of user-
+// reported issues — `window.useStore.getState().viewer`,
+// `window.useStore.getState().model.getItemProperties(<id>)`, etc.
+// Zustand stores are safe to expose: `getState()` is read-only on the
+// returned snapshot, and direct mutation via `setState` is already
+// reachable through the React tree anyway. Skipped under jsdom so
+// unit tests don't accidentally leak state across files.
+if (typeof window !== 'undefined' && typeof window.document !== 'undefined' &&
+    !(typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent))) {
+  window.useStore = useStore
+}
+
 export default useStore

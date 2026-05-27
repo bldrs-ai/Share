@@ -284,8 +284,8 @@ export default class IfcIsolator {
   initHideOperationsSubset(includedIds, removeModel = true) {
     if (removeModel) {
       this._removeSubsetFromScene(this.ifcModel)
-      this.viewer.IFC.selector.selection.unpick()
-      this.viewer.IFC.selector.preselection.unpick()
+      this.viewer.selector?.clearSelection()
+      this.viewer.selector?.clearPreselection()
     }
     // Conway-direct: also clear the hover preselection pool. It
     // lives on ShareViewer (not the IFC selector), tracks the last-

@@ -33,11 +33,14 @@ import {
   itemsMapFromPerVertexAttribute,
 } from '../viewer/ifc/IfcItemsMap'
 import {buildConwayIfcModel} from '../viewer/ifc/buildConwayIfcModel'
-import {instanceMapFromGeometry} from '../viewer/ifc/IfcInstanceMap'
+import {instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
+import {BldrsElementPropertiesReader} from './bldrsElementProperties'
+import {BldrsFaceIdsReader} from './bldrsFaceIds'
+import {BldrsSpatialTreeReader} from './bldrsSpatialTree'
 import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
-import {exportAndCacheGlb} from './glbExport'
+import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
@@ -54,8 +57,37 @@ import pdbToThree from './pdb'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
+import useStore from '../store/useStore'
 import {sha1Hex} from '../utils/contentHash'
 import {isOutOfMemoryError} from '../utils/oom'
+
+
+// Defer to the browser's idle period when supported, otherwise to the
+// next macrotask. The GLB writer is the only caller today and the
+// reason: it must not run inline with the post-parse return path
+// (would block the first paint + hover-pick on the freshly-rendered
+// model). With `requestIdleCallback`, the writer also yields to
+// camera-controls and hover-pick events during the wait. The
+// `setTimeout` fallback gives us a single deferred tick; per-phase
+// yields inside the writer itself still need their own awaits.
+//
+// `timeout` cap on `requestIdleCallback` ensures the writer eventually
+// runs even on a continuously-busy main thread (a user who rotates
+// the camera nonstop). 5s is past the point where a returning visitor
+// would notice "cache hasn't warmed yet."
+const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
+
+
+/**
+ * @param {Function} fn
+ */
+function scheduleIdleWork(fn) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, {timeout: SCHEDULE_IDLE_TIMEOUT_MS})
+    return
+  }
+  setTimeout(fn, 0)
+}
 
 
 /**
@@ -253,25 +285,41 @@ export async function load(
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd
       // read for parse below; reading it twice is cheap (OPFS).
+      //
+      // Self-contained try/catch: if the hash or cache lookup fails (e.g.
+      // `window.crypto.subtle` absent in some jsdom test envs, OPFS sync-
+      // handle hiccup partway through the lookup), we must NOT lose the
+      // file we already downloaded. Falling through to the outer catch
+      // would discard `file` and force an axios refetch, which then fails
+      // under tests that don't mock the outbound URL. The user-visible
+      // behavior on this failure path is "cache miss" — exactly what we'd
+      // do anyway if the lookup returned null.
       if (wantGlb && !cacheKeyArgs && file) {
-        const sourceBytes = await file.arrayBuffer()
-        const contentSha = await sha1Hex(sourceBytes)
-        cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
-        if (cacheKeyArgs) {
-          glbInfo(
-            `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
-          `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
-          glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
-          const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
-          if (glbFile) {
+        try {
+          const sourceBytes = await file.arrayBuffer()
+          const contentSha = await sha1Hex(sourceBytes)
+          cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
+          if (cacheKeyArgs) {
             glbInfo(
-              `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
-            ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
-            file = glbFile
-            cameFromGlbCache = true
-          } else {
-            glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+              `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
+            `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
+            glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
+            const glbFile = await tryLoadCachedGlb(cacheKeyArgs)
+            if (glbFile) {
+              glbInfo(
+                `reader: ${kindLabel} cache HIT (${glbFile.size}B); swapping to GLB loader`)
+              ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
+              file = glbFile
+              cameFromGlbCache = true
+            } else {
+              glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
+            }
           }
+        } catch (cacheLookupError) {
+          glbInfo(
+            `reader: ${kindLabel} cache lookup failed; treating as MISS and continuing:`,
+            cacheLookupError)
+          cacheKeyArgs = null
         }
       }
 
@@ -463,16 +511,93 @@ export async function load(
   // Skip when a mesh already has an instanceMap attached — the
   // Conway-direct cache-miss path attaches one directly during the
   // parse swap; this block is only for cache-hit restoration.
-  if (model.capabilities.instancePicking) {
+  // Cache-hit IfcInstanceMap restoration. Three sources, in order of
+  // preference:
+  //   1. BLDRS_face_ids extension (`userData.bldrsFaceIds.perPrimitive`)
+  //      — per-triangle expressID + instanceID arrays untouched by
+  //      compression. The source of truth when present; immune to
+  //      DRACO quantization and Meshopt vertex welding.
+  //   2. Per-vertex `_EXPRESSID` / `_INSTANCEID` attributes — the
+  //      legacy fallback for cache artifacts that predate face_ids.
+  //      Safe when no compression was applied (current default for
+  //      IFC GLBs); unreliable when DRACO/Meshopt ran.
+  //   3. Nothing — geometry-only model with no IFC IDs (drag-dropped
+  //      GLB / OBJ / etc.); skip the map.
+  //
+  // Walk meshes in traversal order. Match each Mesh to its face_ids
+  // perPrimitive entry by primitive index (writer's
+  // `capturePerTriangleIds` iterates `json.meshes[].primitives[]` in
+  // the same depth-first order GLTFLoader produces, so positional
+  // matching holds for both single-mesh and merged-container GLBs).
+  if (model.capabilities.instancePicking ||
+      model.userData?.bldrsFaceIds) {
+    const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Per-vertex IDs are only trustworthy on uncompressed artifacts.
+    // DRACO quantises integer attributes and Meshopt welds shared
+    // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
+    // gate the legacy fallback on `bldrsCompressionMode == null`
+    // (set by parseBldrsGlbContainer above). When face_ids exists
+    // and fails its sanity check on a compressed artifact, we'd
+    // rather drop picking on that mesh than return wrong selections.
+    const compressionMode = model.userData?.bldrsCompressionMode ?? null
+    const perVertexTrusted = compressionMode === null
+    let meshIndex = 0
     let attached = 0
+    let viaFaceIds = 0
+    let skippedCompressedNoFaceIds = 0
     let totalInstances = 0
     const allParents = new Set()
     model.traverse((obj) => {
-      if (!obj.isMesh || obj.instanceMap) {
+      if (!obj.isMesh) {
         return
       }
-      if (obj.geometry?.attributes?.instanceID?.count > 1) {
-        const map = instanceMapFromGeometry(obj.geometry)
+      if (obj.instanceMap) {
+        meshIndex++
+        return
+      }
+      let map = null
+      const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
+      if (faceIdsEntry && faceIdsEntry.expressIds) {
+        // Sanity 1: per-triangle array length must match the geometry's
+        // triangle count.
+        // Sanity 2: alignment canary — `firstExpressId` recorded at
+        // capture time must match `expressIds[0]` after decode.
+        // Catches a primitive-order mismatch between writer and
+        // reader (e.g. GLTFLoader traversal diverging from
+        // `json.meshes[].primitives[]`) that the length check alone
+        // wouldn't flag if two meshes happen to share triangle counts.
+        const idxCount = obj.geometry?.index?.count ?? 0
+        const expectedTriCount = (idxCount / 3) | 0
+        const canaryOk = faceIdsEntry.firstExpressId === null ||
+          faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
+          map = instanceMapFromTriangleIds(
+            faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
+          viaFaceIds++
+        } else if (!canaryOk) {
+          console.warn(
+            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
+            `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
+            `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
+        } else {
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
+          console.warn(
+            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
+        }
+      }
+      if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
+        if (perVertexTrusted) {
+          map = instanceMapFromGeometry(obj.geometry)
+        } else if (!faceIdsEntry) {
+          // Compressed artifact with no face_ids entry — the per-vertex
+          // attrs exist but are corrupted by DRACO/Meshopt. Skip.
+          skippedCompressedNoFaceIds++
+        }
+      }
+      if (map) {
         obj.instanceMap = map
         attached++
         totalInstances += map.instanceCount
@@ -480,11 +605,77 @@ export async function load(
           allParents.add(pid)
         }
       }
+      meshIndex++
     })
     if (attached > 0) {
       glbInfo(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
-        `${totalInstances} instances under ${allParents.size} IFC products`)
+        `${totalInstances} instances under ${allParents.size} IFC products ` +
+        `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
+    }
+    if (skippedCompressedNoFaceIds > 0) {
+      console.warn(
+        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+        `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
+        'per-vertex IDs would be corrupted')
+    }
+    // Free the per-triangle ID arrays now that IfcInstanceMap owns its
+    // own copies. For a 2.84M-triangle Snowdon model this reclaims
+    // ~22MB of JS heap that would otherwise be held for the life of
+    // the scene.
+    if (model.userData?.bldrsFaceIds) {
+      delete model.userData.bldrsFaceIds
+    }
+  }
+
+  // BVH build for fast picking on cache-hit GLB. The Conway-direct
+  // cache-MISS path already does this inside `installConwayDirectGeometry`
+  // (line ~1480), but cache-HIT meshes come straight off GLTFLoader
+  // and never see a `computeBoundsTree()` call. Without a BVH, the
+  // per-frame hover raycast falls back to `Mesh.prototype.raycast`'s
+  // O(triangles) brute force — on a ~3M-tri Snowdon split into 85
+  // child meshes that drops hover-pick to ~1 FPS. With BVH, the same
+  // raycast is O(log N) per mesh and stays at 60 FPS.
+  //
+  // `BufferGeometry.prototype.computeBoundsTree` is the monkey-patch
+  // wit-three's `initializeMeshBVH` already installed at viewer init
+  // (`web-ifc-three/IFCLoader.js#initializeMeshBVH` writes it onto
+  // the prototype + replaces `Mesh.prototype.raycast` with
+  // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
+  // prototype but need their own `boundsTree` built per geometry.
+  //
+  // Gated on `cameFromGlbCache` so live IFC parses (which build
+  // their own BVH in `installConwayDirectGeometry` or via wit-three
+  // internals) don't double-build.
+  if (cameFromGlbCache) {
+    const bvhStartMs = Date.now()
+    let bvhBuilt = 0
+    let bvhTris = 0
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) {
+        return
+      }
+      // Skip if already has a BVH (defensive — shouldn't happen on
+      // cache-hit but won't rebuild if it does).
+      if (obj.geometry.boundsTree) {
+        return
+      }
+      if (typeof obj.geometry.computeBoundsTree !== 'function') {
+        return
+      }
+      try {
+        obj.geometry.computeBoundsTree()
+        bvhBuilt++
+        const idx = obj.geometry.index
+        bvhTris += idx ? (idx.count / 3) : 0
+      } catch (e) {
+        glbInfo(`reader: computeBoundsTree failed for one mesh; skipping:`, e)
+      }
+    })
+    if (bvhBuilt > 0) {
+      glbInfo(
+        `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
+        `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
     }
   }
 
@@ -494,13 +685,44 @@ export async function load(
   // when the `glb` feature flag is on. Failures are logged but never
   // thrown — the source is already on screen; this is cache warm-up only.
   // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
+  // `ifcManager` is captured from the live IFC parser state so the
+  // writer can pull `getSpatialStructure(...)` into a BLDRS_spatial_tree
+  // glTF extension — without that, cache-hit GLBs have no NavTree
+  // (the cache-hit path has no IFC parser). Non-IFC sources have no
+  // manager and the writer captures nothing; cache miss/hit both work.
+  //
+  // **Scheduling.** The writer is deferred to a macrotask (and then
+  // `requestIdleCallback` when available) so it doesn't run inline with
+  // the post-parse return path. Without the defer, the GLTFExporter +
+  // property-capture phases would block the main thread immediately
+  // before the user can rotate/zoom/hover on the freshly-rendered
+  // model — and on big IFCs that block extends past the first hover
+  // tick. With the defer, the next paint + the user's first frame of
+  // interaction land before the writer kicks off; the writer then runs
+  // when the browser is idle (or, on older browsers without
+  // requestIdleCallback, on the next macrotask).
+  //
+  // **In-flight flag.** `isCacheWriteInFlight` is observable from React
+  // (see Properties.jsx) so the UI can render a "Caching for next
+  // load…" affordance. The flag captures the entire writer lifetime
+  // (set before scheduling, cleared after the writer settles either
+  // way) — clears only when the actual write finishes, not when the
+  // call returns. Failures clear the flag too; the writer's `.finally`
+  // is the source of truth.
   if (glbExportContext) {
     glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
-    exportAndCacheGlb({
-      model,
-      kindLabel: glbExportContext.kindLabel,
-      cacheKeyArgs: glbExportContext.cacheKeyArgs,
-    })
+    useStore.getState().setIsCacheWriteInFlight(true)
+    const runWriter = () => {
+      exportAndCacheGlb({
+        model,
+        kindLabel: glbExportContext.kindLabel,
+        cacheKeyArgs: glbExportContext.cacheKeyArgs,
+        ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
+      }).finally(() => {
+        useStore.getState().setIsCacheWriteInFlight(false)
+      })
+    }
+    scheduleIdleWork(runWriter)
   }
 
   return model
@@ -578,6 +800,58 @@ async function axiosDownload(path, isFormatText, onProgress) {
     throw new Error('Failed to fetch model data')
   }
 }
+
+
+// Hard cap on the length of a cache-hit title we'll accept. The
+// title flows from `scenes[0].extras.bldrsTitle` → `model.userData` →
+// `model.name` → React Helmet `<title>`. Even though Helmet escapes
+// text, an absurdly long title is a DoS-lite (jitter on title-bar
+// rendering, log noise). 200 chars comfortably covers real IFC
+// project names without giving the cache file room to misbehave.
+const MAX_CACHED_TITLE_LENGTH = 200
+
+
+// Pattern matching characters we strip from a cache-hit title before
+// promoting it. Defense-in-depth — the rendering layer (React Helmet
+// → `document.title`) already escapes text, but cached files come
+// from a write boundary we don't fully trust (see
+// design/new/glb-model-sharing.md §"Validation and trust"). Filter:
+//   - ASCII control characters (U+0000–U+001F, U+007F): nulls,
+//     newlines, tabs; could break log lines or other consumers that
+//     render the title in non-escaped contexts.
+//   - Bidi-override characters (U+202A–U+202E, U+2066–U+2069): used
+//     in spoofing attacks ("looks-like-ProjectA.ifc-but-is-evil.exe").
+//   - `<` and `>`: belt-and-suspenders against any consumer that
+//     forgets to escape; lets the title still read as plain text.
+// eslint-disable-next-line no-control-regex
+const BLDRS_TITLE_STRIP_PATTERN = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069<>]/g
+
+
+/**
+ * Return a cache-hit title safe for promotion to `model.name`. Strips
+ * control / bidi / markup characters, caps length, treats empty and
+ * non-string inputs as "no usable title" by returning null.
+ *
+ * @param {*} raw value from `model.userData.bldrsTitle`
+ * @return {string|null}
+ */
+function sanitizeCachedTitle(raw) {
+  if (typeof raw !== 'string' || raw === '') {
+    return null
+  }
+  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '')
+  if (stripped === '') {
+    return null
+  }
+  return stripped.length > MAX_CACHED_TITLE_LENGTH ?
+    stripped.slice(0, MAX_CACHED_TITLE_LENGTH) :
+    stripped
+}
+
+
+// Exported for tests so they can exercise the sanitizer surface
+// without going through the full convertToShareModel path.
+export {sanitizeCachedTitle as __sanitizeCachedTitleForTest}
 
 
 /**
@@ -685,6 +959,36 @@ export function convertToShareModel(model, viewer) {
   // Override for root
   debug().log('Overriding project root name')
   model.type = model.type || 'IFCPROJECT'
+  // Cache-hit title hydration. The writer stamps the IFC project
+  // title (e.g. "Momentum") into `scenes[0].extras[BLDRS_TITLE_EXTRAS_KEY]`;
+  // three.js GLTFLoader auto-copies scene extras into
+  // `scene.userData`, so a cache-hit GLB lands here with the title
+  // available at `model.userData[BLDRS_TITLE_EXTRAS_KEY]`. We sanitize
+  // (strip control / bidi / markup chars, cap length — see
+  // `sanitizeCachedTitle`) because the cache file is an untrusted
+  // boundary in the originator-share design, then promote to
+  // `model.Name`/`model.LongName`/`model.name` BEFORE the
+  // `${mimeType} model` fallback below would clobber them — otherwise
+  // every cache-hit page title degrades to "glb model" even though
+  // the original IFC had a meaningful project name. Live IFC parses
+  // miss this branch (no extras on userData) and fall through to the
+  // existing Name/LongName logic, which is fed by the IFC parser
+  // upstream.
+  //
+  // Precedence: if the IFC parser already set `model.name` (the live-
+  // parse path does, via `statsApi.projectName`), THAT wins — we leave
+  // every title-related field as-is. Filling only Name/LongName from
+  // a stale `userData.bldrsTitle` while keeping a different
+  // `model.name` would split the source of truth between the page
+  // title (`name`) and other consumers reading `LongName.value`. A
+  // pre-set `model.name` means upstream already decided; trust it.
+  const cachedTitle = sanitizeCachedTitle(model.userData?.[BLDRS_TITLE_EXTRAS_KEY])
+  const liveNameAlreadySet = (typeof model.name === 'string' && model.name !== '')
+  if (cachedTitle && !liveNameAlreadySet) {
+    model.Name = model.Name || {value: cachedTitle}
+    model.LongName = model.LongName || {value: cachedTitle}
+    model.name = cachedTitle
+  }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}
   // This is used for page title and other areas that need a model name, so if it's not
@@ -700,6 +1004,76 @@ export function convertToShareModel(model, viewer) {
   model.ifcManager = viewer.IFC.loader.ifcManager
   model.ifcManager.getSpatialStructure = () => {
     return model
+  }
+
+  // Cache-hit hydration for BLDRS_spatial_tree. When the GLTFLoader
+  // plugin decoded the extension it parked the tree on
+  // `model.userData.bldrsSpatialTree`. Promote it to a model-level
+  // method so consumers (`Containers/CadView.jsx#onModel` etc.) can
+  // call `model.getSpatialStructure(modelID, withProperties)` and get
+  // the real IFC hierarchy without going through the (monkey-patched,
+  // shared-across-models) `viewer.IFC.loader.ifcManager` shim above.
+  // Live IFC parses miss this branch — they have no extension in their
+  // userData — and fall through to the legacy `ifcManager` path.
+  //
+  // The closure ignores both arguments because a cache artifact holds
+  // exactly one model's tree (one IFC per GLB; modelID is always 0 in
+  // the consumer at CadView.jsx; properties are pre-serialised into
+  // the tree at writer time so `withProperties` has no run-time effect).
+  // Args are kept on the signature so the call shape matches
+  // `ifcManager.getSpatialStructure(modelID, withProperties)` — callers
+  // don't branch on which backend they're hitting.
+  const spatialTree = model.userData?.bldrsSpatialTree
+  if (spatialTree) {
+    model.getSpatialStructure = (_modelID, _withProperties) => spatialTree
+    glbInfo(
+      'reader: hydrated NavTree from BLDRS_spatial_tree (' +
+      `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
+  }
+
+  // Cache-hit hydration for BLDRS_element_properties. The reader
+  // plugin parked a lazy-decode payload on
+  // `model.userData.bldrsElementProperties` (compressed bytes + a
+  // `decode()` closure). Promote it to `model.getItemProperties(id)`
+  // and `model.getPropertySets(id)` so the Properties panel
+  // (`Components/Properties/Properties.jsx`,
+  // `Components/Properties/itemProperties.jsx`) renders on cache-hit
+  // without touching the (shared, parser-stateless) `ifcManager`.
+  //
+  // First call to either method triggers the lazy `decode()` (one-shot
+  // pako.ungzip + JSON.parse, then cached). A load that never opens
+  // the Properties panel pays nothing.
+  //
+  // Signature note: the closures take one arg (expressID), matching
+  // `web-ifc-three.IFCModel.getItemProperties(id)` / `getPropertySets(id)`
+  // — NOT the underlying ifcManager's (modelID, expressID, ...) form.
+  // Consumers call `model.getItemProperties(refId)` directly; the
+  // modelID is implicit per cached artifact (one IFC per GLB).
+  //
+  // Capture wrote shallow item properties (refs as `{type:5, value:id}`).
+  // `getPropertySets` returns the array of pset objects looked up
+  // from the propertySets index, matching the existing consumer
+  // expectation in Properties.jsx#createPsetsList.
+  const elementProperties = model.userData?.bldrsElementProperties
+  if (elementProperties && typeof elementProperties.decode === 'function') {
+    model.getItemProperties = (expressID) => {
+      const data = elementProperties.decode()
+      return data.itemProperties[expressID]
+    }
+    model.getPropertySets = (expressID) => {
+      const data = elementProperties.decode()
+      const psetIds = data.propertySets[expressID]
+      if (!Array.isArray(psetIds) || psetIds.length === 0) {
+        return []
+      }
+      return psetIds
+        .map((pid) => data.itemProperties[pid])
+        .filter((p) => p !== null && p !== undefined)
+    }
+    glbInfo(
+      'reader: hydrated Properties panel from BLDRS_element_properties ' +
+      `(${elementProperties.compressed.byteLength}B compressed; ` +
+      'decode on first access)')
   }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
@@ -940,6 +1314,9 @@ async function findLoader(pathname, viewer) {
 function newGltfLoader() {
   const loader = new GLTFLoader()
   loader.register((parser) => new ExtBldrsPropertiesPayload(parser))
+  loader.register((parser) => new BldrsSpatialTreeReader(parser))
+  loader.register((parser) => new BldrsElementPropertiesReader(parser))
+  loader.register((parser) => new BldrsFaceIdsReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')
@@ -987,16 +1364,14 @@ function newIfcLoader(viewer) {
         USE_FAST_BOOLS: true,
       })
 
-      // Phase-3 prep: capture Conway's FlatMesh stream during the live
-      // parse so the diagnostics below can read the original
-      // per-instance data without a second StreamAllMeshes walk.
-      // See runIfcItemsMapParityCheck for why a second walk is unsafe.
-      // Both flags share the capture wrapper.
-      const captureEnabled = isFeatureEnabled('ifcItemsMapParity') ||
-        isFeatureEnabled('conwayDirectIfc')
-      const parityCapture = captureEnabled ?
-        installFlatMeshCapture(this.loader.ifcManager.ifcAPI) :
-        null
+      // Capture Conway's FlatMesh stream during the live parse so the
+      // Conway-direct install (and the `ifcItemsMapParity` diagnostic,
+      // when enabled) can read the original per-instance data without a
+      // second StreamAllMeshes walk. See runIfcItemsMapParityCheck for
+      // why a second walk is unsafe. `installFlatMeshCapture` no-ops
+      // gracefully when the IfcAPI doesn't expose StreamAllMeshes (test
+      // mocks, alternative parsers).
+      const parityCapture = installFlatMeshCapture(this.loader.ifcManager.ifcAPI)
 
       if (onProgress) {
         onProgress('Parsing model geometry...')
@@ -1005,7 +1380,7 @@ function newIfcLoader(viewer) {
       try {
         ifcModel = await this.loader.parse(buffer, onProgress)
       } finally {
-        parityCapture?.restore()
+        parityCapture.restore()
       }
       this.addIfcModel(ifcModel)
 
@@ -1044,24 +1419,22 @@ function newIfcLoader(viewer) {
         onProgress('Model loaded successfully!')
       }
 
-      // Phase-3 prep: parallel-run the new IfcItemsMap populators
-      // against the live model and log the diff. Diagnostic only —
-      // no behavior change. Toggle via `?feature=ifcItemsMapParity`.
-      // See design/new/viewer-replacement.md §3b.ii for the
-      // per-vertex-vs-per-instance story this check exposes.
-      if (isFeatureEnabled('ifcItemsMapParity') && parityCapture) {
+      // Parallel-run the new IfcItemsMap populators against the live
+      // model and log the diff. Diagnostic only — no behavior change.
+      // Toggle via `?feature=ifcItemsMapParity`. See
+      // design/new/viewer-replacement.md §3b.ii for the per-vertex-vs-
+      // per-instance story this check exposes.
+      if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(
           this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
       }
-      // Phase-3 cut-over: replace web-ifc-three's geometry with the
-      // Conway-direct merged buffer + attach an IfcInstanceMap. The
-      // IFC manager (properties, spatial tree, typed search) stays —
-      // only the rendered triangles + the picking source of truth
-      // change. Toggle via `?feature=conwayDirectIfc`.
-      if (isFeatureEnabled('conwayDirectIfc') && parityCapture) {
-        installConwayDirectGeometry(
-          this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
-      }
+      // Replace wit-three's rendered geometry with the Conway-direct
+      // merged buffer + per-instance picking map. The IFC manager
+      // (properties, spatial tree, typed search) stays in place —
+      // only the rendered triangles + picking source of truth change.
+      // Defensive against empty captures (see installConwayDirectGeometry).
+      installConwayDirectGeometry(
+        this.loader.ifcManager.ifcAPI, ifcModel, parityCapture.captured)
 
       return ifcModel
     } catch (err) {
@@ -1134,6 +1507,19 @@ function newIfcLoader(viewer) {
  */
 function installFlatMeshCapture(ifcAPI) {
   const captured = []
+  // Defensive: not every IfcAPI exposes `StreamAllMeshes` (test stubs,
+  // future Conway versions, alternative parsers). The capture wrapper
+  // is purely additive — the parse below still works on the un-wrapped
+  // API. A no-op stub keeps the flag-on code path indistinguishable
+  // from the flag-off behavior the codebase relied on for years.
+  if (typeof ifcAPI?.StreamAllMeshes !== 'function') {
+    return {
+      captured,
+      restore: () => {
+        // no-op — nothing was wrapped, nothing to unwrap.
+      },
+    }
+  }
   const orig = ifcAPI.StreamAllMeshes.bind(ifcAPI)
   ifcAPI.StreamAllMeshes = function patchedStreamAllMeshes(modelID, cb) {
     return orig(modelID, (flatMesh) => {
@@ -1332,9 +1718,18 @@ function runIfcItemsMapParityCheck(ifcAPI, ifcModel, capturedFlatMeshes) {
 export function installConwayDirectGeometry(ifcAPI, ifcModel, capturedFlatMeshes) {
   try {
     if (!Array.isArray(capturedFlatMeshes) || capturedFlatMeshes.length === 0) {
-      console.warn(
+      // No-op when the capture wrapper saw zero FlatMeshes. Real causes:
+      // (a) the IfcAPI mock used in some test harnesses doesn't expose
+      // `StreamAllMeshes`, so `installFlatMeshCapture` returned its
+      // stub-and-no-op shape; (b) the parse completed but emitted no
+      // geometry (degenerate or empty IFC). Either way, leaving
+      // wit-three's rendered geometry in place is the right fallback;
+      // logged at info level so it stays discoverable in real prod
+      // logs without polluting tests.
+      // eslint-disable-next-line no-console
+      console.info(
         '[conwayDirect] no FlatMesh capture from parse — ' +
-        'skipping Conway-direct install')
+        'leaving wit-three geometry in place')
       return
     }
     const t0 = (typeof performance !== 'undefined' && performance.now) ?
@@ -1576,6 +1971,14 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
     `reader: unpacked Bldrs container v${version} — ${chunks.length} GLB chunk(s), ` +
     `mode=${mode || 'none'}`)
   const merged = new Group()
+  // Stash the compression mode on the merged userData so downstream
+  // decoration (`convertToShareModel`) can decide whether per-vertex
+  // `_EXPRESSID` / `_INSTANCEID` is trustworthy. DRACO quantises
+  // integer attributes (16-bit ceiling) and Meshopt welds shared
+  // vertices — both silently corrupt per-vertex IDs. The face_ids
+  // path bypasses both, but the legacy per-vertex fallback must NOT
+  // run on compressed artifacts.
+  merged.userData.bldrsCompressionMode = mode || null
   for (let i = 0; i < chunks.length; i++) {
     const chunkAb = chunks[i]
     const gltf = await new Promise((resolve, reject) => {
@@ -1587,6 +1990,16 @@ async function parseBldrsGlbContainer(loader, containerBytes) {
         reject(new Error(`Unhandled error parsing chunk ${i}: ${e}`))
       }
     })
+    // Bubble extension data parked on the chunk's scene by GLTFLoader
+    // plugins (`bldrsSpatialTree`, `bldrsPayload`, …) up to the merged
+    // wrapper. Otherwise `convertToShareModel` and
+    // `inferModelCapabilities` — which inspect `model.userData` on the
+    // root we return — would miss it. With multiple chunks the last
+    // one wins (per-chunk extensions clobber the merged userData in
+    // load order); today the writer only emits one chunk.
+    if (gltf.scene?.userData) {
+      Object.assign(merged.userData, gltf.scene.userData)
+    }
     if (gltf.scenes && gltf.scenes.length > 0) {
       for (const s of gltf.scenes) {
         merged.add(s)
