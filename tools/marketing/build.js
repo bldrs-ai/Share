@@ -45,6 +45,24 @@ if (!existsSync(DOCS)) {
 
 // eslint-disable-next-line no-console
 console.log(`marketing: overlaying ${path.relative(REPO_ROOT, MARKETING_OUT)} → ${path.relative(REPO_ROOT, DOCS)}`)
-cpSync(MARKETING_OUT, DOCS, {recursive: true, force: true})
+
+// Skip marketing's 404 outputs during overlay so the SPA's docs/404.html
+// (the spa-github-pages bounce script) survives. `npx http-server docs`
+// serves whatever 404.html lives in the root as the 404 response body —
+// the bounce captures unknown paths like /share/v/p/index.ifc and
+// redirects them through the SPA, which is what Playwright's flows
+// depend on. Netlify resolves _redirects before 404.html, so keeping the
+// SPA bounce here doesn't reintroduce the soft-404 trap on prod: unknown
+// URLs still return HTTP 404, just with the SPA's body instead of the
+// marketing one.
+const SKIP = new Set([
+  path.join(MARKETING_OUT, '404.html'),
+  path.join(MARKETING_OUT, '404'),
+])
+cpSync(MARKETING_OUT, DOCS, {
+  recursive: true,
+  force: true,
+  filter: (src) => !SKIP.has(src),
+})
 // eslint-disable-next-line no-console
 console.log('marketing: done')
