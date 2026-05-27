@@ -52,6 +52,18 @@ import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
 
+// Key under `scenes[0].extras` carrying the IFC project title across
+// the GLB cache round-trip. three.js GLTFLoader auto-promotes
+// `scene.extras` to `scene.userData`, so the reader at
+// `Loader.js#convertToShareModel` finds it at
+// `model.userData.bldrsTitle` with no custom plugin needed.
+//
+// Both call sites import this constant — writer stamps under it,
+// reader reads from it. Single source of truth; bumping the key here
+// flips both ends atomically.
+export const BLDRS_TITLE_EXTRAS_KEY = 'bldrsTitle'
+
+
 /**
  * Serialize a Three.js Object3D (typically the IFCLoader-produced model)
  * to a single GLB ArrayBuffer. Resolves to null on failure rather than
@@ -170,6 +182,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       return false
     }
     glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
+    // IFC project title captured at write time — set by
+    // IfcViewerAPIExtended.parse from Conway's `statsApi.projectName`
+    // (e.g. "Momentum"). Passed to the inject step below so it lands
+    // in `scenes[0].extras.bldrsTitle` in the SAME parse/serialize
+    // pass that handles BLDRS_* extensions — no extra round-trip on
+    // the raw bytes. Non-IFC sources (drag-dropped OBJ etc.)
+    // generally have no `.name`; the inject step no-ops on nullish.
+    const titleForExtras = (typeof model?.name === 'string' && model.name) ? model.name : null
     // Yield to the event loop between major phases so hover-pick /
     // camera-controls can interleave with the writer. Each `yieldToBrowser`
     // is a single macrotask boundary; the cost is one event-loop turn,
@@ -279,6 +299,13 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ]
+    // Scene-level metadata that rides along in the same inject pass
+    // — no extra parse/serialize. Today: just the project title under
+    // `BLDRS_TITLE_EXTRAS_KEY`. Set to null when no title is
+    // available so `injectGlbExtensions` no-ops the scene mutation.
+    const sceneExtrasForInject = titleForExtras ?
+      {[BLDRS_TITLE_EXTRAS_KEY]: titleForExtras} :
+      null
     let packed
     let extStats
     try {
@@ -286,18 +313,23 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         bytes: compressedBytes,
         mode,
         extensions: extensionsForInject,
+        sceneExtras: sceneExtrasForInject,
       })
       packed = workerResult.bytes
       extStats = workerResult.extStats
     } catch (workerErr) {
       glbInfo('writer: worker dispatch failed, running inline on main thread:', workerErr)
-      const inline = injectGlbExtensions(compressedBytes, extensionsForInject)
+      const inline = injectGlbExtensions(compressedBytes, extensionsForInject, sceneExtrasForInject)
       extStats = inline.stats
       packed = packGlbChunks([inline.bytes], mode)
     }
     if (extStats.addedExtensions > 0) {
       glbVerbose(
         `writer: injected ${extStats.addedExtensions} extension(s)`)
+    }
+    if (extStats.addedSceneExtras > 0) {
+      glbVerbose(
+        `writer: stamped ${extStats.addedSceneExtras} scene.extras key(s) (title="${titleForExtras}")`)
     }
     const schemaVer = schemaVersionFor(mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})

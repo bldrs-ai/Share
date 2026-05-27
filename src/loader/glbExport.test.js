@@ -32,9 +32,44 @@ jest.mock('./glbCompress', () => ({
   compressGlb: (...args) => mockCompressGlb(...args),
 }))
 
+// The worker dispatch fails synchronously in jsdom (no Worker
+// constructor), so `exportAndCacheGlb` takes the inline-fallback path
+// — calling `injectGlbExtensions` directly. We spy on that to assert
+// the writer passed the right `sceneExtras` shape into the consolidated
+// inject pass. Real `injectGlbExtensions` is also exported in
+// `requireActual` so callers can decide whether to delegate or stub.
+const mockInjectGlbExtensions = jest.fn()
+jest.mock('./injectGlbExtensions', () => {
+  const actual = jest.requireActual('./injectGlbExtensions')
+  return {
+    ...actual,
+    injectGlbExtensions: (...args) => mockInjectGlbExtensions(...args),
+  }
+})
+
 import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
-import {exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
+import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
+
+
+/**
+ * Build a minimal-but-spec-valid GLB the inject step can parseGlb.
+ * Has the required `asset.version`, a single empty scene, and an empty
+ * buffer — enough for the writer's `parseGlb` → mutate → `serializeGlb`
+ * round-trip without standing up the real GLTFExporter pipeline.
+ *
+ * @return {Uint8Array}
+ */
+function makeValidEmptyGlb() {
+  const json = {
+    asset: {version: '2.0'},
+    scene: 0,
+    scenes: [{nodes: []}],
+    buffers: [{byteLength: 0}],
+  }
+  return serializeGlb(json, null)
+}
 
 
 describe('loader/glbExport', () => {
@@ -43,6 +78,13 @@ describe('loader/glbExport', () => {
     mockExporterParse.mockReset()
     mockActiveMode.mockReset().mockReturnValue(null)
     mockCompressGlb.mockReset().mockImplementation((bytes, mode) => Promise.resolve({bytes, mode: mode || null}))
+    // Default the inject spy to a passthrough; per-test cases override
+    // to capture arguments. The real shape would be `{bytes, stats}`;
+    // we return the input bytes so downstream `packGlbChunks` succeeds.
+    mockInjectGlbExtensions.mockReset().mockImplementation((bytes) => ({
+      bytes,
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: []},
+    }))
   })
 
   describe('exportThreeModelAsGlb', () => {
@@ -144,6 +186,93 @@ describe('loader/glbExport', () => {
       expect(ok).toBe(true)
       expect(mockCompressGlb).toHaveBeenCalledWith(
         expect.any(Uint8Array), null, expect.objectContaining({preserveTriangleOrder: expect.any(Boolean)}))
+    })
+  })
+
+
+  describe('exportAndCacheGlb — model title stamping (page-title cache-hit fix)', () => {
+    const cacheKeyArgs = gitHubCacheKey({
+      owner: 'bldrs-ai',
+      repo: 'share',
+      branch: 'main',
+      filePath: 'sub/dir/index.ifc',
+      shaHash: 'abc123',
+    })
+    const ctx = {kindLabel: 'github', cacheKeyArgs}
+
+    it('passes the title to injectGlbExtensions via sceneExtras (no separate parse/serialize pass)', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx})
+      expect(ok).toBe(true)
+
+      // The writer should consolidate the title injection into the
+      // existing BLDRS_* inject pass — one parse/serialize, not two.
+      expect(mockInjectGlbExtensions).toHaveBeenCalledTimes(1)
+      const [, extensionsArg, sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(Array.isArray(extensionsArg)).toBe(true)
+      expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+    })
+
+    it('passes sceneExtras: null when model.name is absent (drag-dropped GLB / OBJ etc.)', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {}, ...ctx})
+      expect(ok).toBe(true)
+
+      expect(mockInjectGlbExtensions).toHaveBeenCalledTimes(1)
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toBeNull()
+    })
+
+    it('passes sceneExtras: null when model.name is the empty string', async () => {
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: ''}, ...ctx})
+      expect(ok).toBe(true)
+
+      expect(mockInjectGlbExtensions).toHaveBeenCalledTimes(1)
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toBeNull()
+    })
+
+    it('passes sceneExtras: null when model.name is non-string', async () => {
+      // Defensive: `Object3D.name` defaults to '' but a hostile caller
+      // could pass anything. The writer should coerce non-string to
+      // null rather than serialize garbage into scenes[0].extras.
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 42}, ...ctx})
+      expect(ok).toBe(true)
+
+      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      expect(sceneExtrasArg).toBeNull()
+    })
+
+    it('end-to-end: title round-trips through injectGlbExtensions into scenes[0].extras', async () => {
+      // Integration test: run with the REAL injectGlbExtensions (no
+      // mock) so we verify the consolidated pass actually writes the
+      // title to scenes[0].extras. The mock spy default would swallow
+      // sceneExtras silently, hiding writer bugs.
+      const actual = jest.requireActual('./injectGlbExtensions')
+      mockInjectGlbExtensions.mockImplementation(actual.injectGlbExtensions)
+
+      const validGlb = makeValidEmptyGlb()
+      mockExporterParse.mockImplementation((_input, onDone) => onDone(validGlb.buffer))
+
+      const ok = await exportAndCacheGlb({model: {name: 'Momentum'}, ...ctx})
+      expect(ok).toBe(true)
+
+      // The injected bytes (returned from `injectGlbExtensions` to the
+      // writer) carry the title. Grab them from the mock's return value.
+      const injectResult = mockInjectGlbExtensions.mock.results[0].value
+      const {json} = parseGlb(injectResult.bytes)
+      expect(json.scenes[0].extras[BLDRS_TITLE_EXTRAS_KEY]).toBe('Momentum')
+      expect(injectResult.stats.addedSceneExtras).toBe(1)
     })
   })
 })

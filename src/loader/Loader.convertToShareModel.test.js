@@ -6,7 +6,7 @@
 // (mesh-level / no per-vertex IDs) paths must continue to behave as before.
 
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
-import {convertToShareModel} from './Loader'
+import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
@@ -362,5 +362,176 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getItemProperties).toBeUndefined()
     expect(mesh.getPropertySets).toBeUndefined()
+  })
+})
+
+
+describe('Loader/convertToShareModel — cache-hit page title hydration', () => {
+  // Regression: before the title stamp landed, every cache-hit page
+  // title degraded to "${mimeType} model" ("glb model") because the
+  // GLB carried no project name. The writer now stamps the live
+  // model.name (Conway's statsApi.projectName, e.g. "Momentum") into
+  // `scenes[0].extras.bldrsTitle`; three.js GLTFLoader auto-promotes
+  // it to `model.userData.bldrsTitle`, and `convertToShareModel`
+  // hydrates `model.{Name,LongName,name}` from it BEFORE the
+  // `${mimeType} model` fallback would clobber them.
+
+  it('hydrates Name, LongName, and name from userData.bldrsTitle on cache-hit', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
+    expect(mesh.LongName.value).toBe('Momentum')
+  })
+
+  it('falls back to "${mimeType} model" when userData.bldrsTitle is absent', () => {
+    // Drag-dropped GLB / pre-title-stamp cached artifact: no title in
+    // userData → existing placeholder path runs unchanged.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores a non-string bldrsTitle (defensive against malformed cache extras)', () => {
+    // Untrusted-input guard: if a future writer or a hostile cache
+    // file puts a non-string at `userData.bldrsTitle`, we must not
+    // splice it into the page <title>. Fall through to the placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = {value: 'wrong shape'}
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('ignores an empty-string bldrsTitle (same fall-through as absent)', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = ''
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
+  })
+
+  it('does not overwrite a pre-existing model.name (live-IFC path is untouched)', () => {
+    // Live IFC parse already sets model.name via statsApi.projectName.
+    // The hydration block must NOT clobber that — if it did, the live
+    // parse and cache-hit paths would diverge whenever the IFC root's
+    // Name differed from statsApi.projectName.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'From IFC parse'
+    mesh.userData.bldrsTitle = 'Stale Cache Title'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('From IFC parse')
+  })
+
+  it('leaves Name and LongName consistent with model.name when a pre-set name takes precedence', () => {
+    // Reviewer-flagged inconsistency: previously, if model.name was
+    // pre-set AND userData.bldrsTitle was set, model.name kept its
+    // pre-existing value but model.{Name,LongName} got filled from
+    // the stale cached title — splitting the source of truth.
+    // The hydration block now treats a pre-set model.name as a hard
+    // signal that upstream decided, so it skips all three writes and
+    // lets the existing `${mimeType} model` fallback fill Name/
+    // LongName consistently with the placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'From IFC parse'
+    mesh.userData.bldrsTitle = 'Stale Cache Title'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('From IFC parse')
+    // Name/LongName fall through to the `${mimeType} model`
+    // placeholder rather than picking up the stale cache title.
+    // (If you want them to mirror model.name, plumb that through at
+    // the IFC parse site — convertToShareModel only reasons about
+    // model.userData on the cache-hit path.)
+    expect(mesh.Name.value).toBe('glb model')
+    expect(mesh.LongName.value).toBe('glb model')
+  })
+})
+
+
+describe('Loader/sanitizeCachedTitle — untrusted-input scrubbing', () => {
+  // The cached title is an untrusted-input boundary in the
+  // originator-share design (see design/new/glb-model-sharing.md
+  // §"Validation and trust"). Defense-in-depth: even though React
+  // Helmet escapes the text it places in `<title>`, we strip the
+  // characters most likely to break non-escaping consumers and
+  // spoofing-prone bidi overrides at the read boundary.
+
+  it('returns null for non-string input', () => {
+    expect(__sanitizeCachedTitleForTest(undefined)).toBeNull()
+    expect(__sanitizeCachedTitleForTest(null)).toBeNull()
+    expect(__sanitizeCachedTitleForTest(42)).toBeNull()
+    expect(__sanitizeCachedTitleForTest({})).toBeNull()
+    expect(__sanitizeCachedTitleForTest([])).toBeNull()
+  })
+
+  it('returns null for the empty string', () => {
+    expect(__sanitizeCachedTitleForTest('')).toBeNull()
+  })
+
+  it('passes a clean ASCII title through unchanged', () => {
+    expect(__sanitizeCachedTitleForTest('Momentum')).toBe('Momentum')
+    expect(__sanitizeCachedTitleForTest('Bldrs Plaza 2024')).toBe('Bldrs Plaza 2024')
+  })
+
+  it('passes clean Unicode through unchanged', () => {
+    // Real IFC project names from non-English locales must round-trip.
+    expect(__sanitizeCachedTitleForTest('Seestrasse 12')).toBe('Seestrasse 12')
+    expect(__sanitizeCachedTitleForTest('Bürohaus München')).toBe('Bürohaus München')
+    expect(__sanitizeCachedTitleForTest('東京タワー')).toBe('東京タワー')
+  })
+
+  it('strips ASCII control characters (NUL, newlines, tabs, U+007F)', () => {
+    expect(__sanitizeCachedTitleForTest('Bldrs\u0000Plaza')).toBe('BldrsPlaza')
+    expect(__sanitizeCachedTitleForTest('Line1\nLine2')).toBe('Line1Line2')
+    expect(__sanitizeCachedTitleForTest('Col1\tCol2')).toBe('Col1Col2')
+    expect(__sanitizeCachedTitleForTest('Title\u007F')).toBe('Title')
+  })
+
+  it('strips bidi-override characters (U+202A-U+202E, U+2066-U+2069)', () => {
+    // RLO (U+202E) is the classic "evil.txt" → "txt.lave" spoof trick.
+    expect(__sanitizeCachedTitleForTest('Project‮Reversed')).toBe('ProjectReversed')
+    expect(__sanitizeCachedTitleForTest('‪StartLRE')).toBe('StartLRE')
+    expect(__sanitizeCachedTitleForTest('⁦isolate⁩')).toBe('isolate')
+  })
+
+  it('strips `<` and `>` as defense-in-depth against unescaped renderers', () => {
+    expect(__sanitizeCachedTitleForTest('<script>alert(1)</script>')).toBe('scriptalert(1)/script')
+    expect(__sanitizeCachedTitleForTest('a<b>c')).toBe('abc')
+  })
+
+  it('caps very long titles at 200 characters', () => {
+    const longTitle = 'A'.repeat(300)
+    const result = __sanitizeCachedTitleForTest(longTitle)
+    expect(result).toHaveLength(200)
+    expect(result).toBe('A'.repeat(200))
+  })
+
+  it('returns null when stripping reduces the title to empty', () => {
+    // A title made entirely of stripped characters has no signal to
+    // keep — same outcome as not having a title at all.
+    expect(__sanitizeCachedTitleForTest('\u0000\u0001\u202E<>')).toBeNull()
+  })
+
+  it('cache-hit hydration integrates the sanitizer', () => {
+    // End-to-end through convertToShareModel: a title with control
+    // characters + tags + bidi overrides should land as plain text.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = '<b>Bld\u0000rs\u202E Plaza</b>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('bBldrs Plaza/b')
+  })
+
+  it('a title that becomes empty after sanitization falls through to the placeholder', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = '\u202E\u0000<>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('glb model')
   })
 })

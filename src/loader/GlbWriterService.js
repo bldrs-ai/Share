@@ -87,9 +87,12 @@ function getWorker() {
  * @param {string|null} args.mode container mode tag — draco/meshopt/null
  * @param {Array<object>} args.extensions extension payloads to inject;
  *   each entry is `{name, data, compress?}` matching `injectGlbExtensions`
+ * @param {object} [args.sceneExtras] optional small string-keyed
+ *   metadata merged into `scenes[0].extras` in the same inject pass
+ *   (see `injectGlbExtensions`)
  * @return {Promise<{bytes: Uint8Array, extStats: object}>}
  */
-export function injectAndPackInWorker({bytes, mode, extensions}) {
+export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras}) {
   return new Promise((resolve, reject) => {
     const worker = getWorker()
     const id = nextRequestId
@@ -103,6 +106,7 @@ export function injectAndPackInWorker({bytes, mode, extensions}) {
           bytes,
           mode,
           extensions,
+          sceneExtras: sceneExtras ?? null,
         },
         [bytes.buffer],
       )

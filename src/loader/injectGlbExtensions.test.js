@@ -88,7 +88,9 @@ describe('loader/injectGlbExtensions', () => {
       const glb = makeMinimalGlb()
       const {bytes, stats} = injectGlbExtensions(glb, [])
       expect(bytes).toBe(glb)
-      expect(stats).toEqual({addedExtensions: 0, addedBinBytes: 0, skippedNames: []})
+      expect(stats).toEqual({
+        addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: [],
+      })
     })
 
     it('returns the input bytes unchanged when all entries have null data', () => {
@@ -275,6 +277,144 @@ describe('loader/injectGlbExtensions', () => {
       expect(parsed.json.buffers[0].byteLength).toBe(parsed.bin.byteLength)
       expect(parsed.json.bufferViews).toHaveLength(1)
       expect(parsed.json.extensions.BLDRS_test).toBeDefined()
+    })
+  })
+
+
+  describe('injectGlbExtensions — sceneExtras', () => {
+    /**
+     * Build a minimal GLB that includes a scenes[] array so the
+     * scene-extras path has somewhere to attach. The default
+     * `makeMinimalGlb` omits `scenes`, which lets us test the
+     * degenerate "no scenes" branch separately.
+     *
+     * @return {Uint8Array}
+     */
+    function makeGlbWithScene() {
+      const json = {
+        asset: {version: '2.0'},
+        scene: 0,
+        scenes: [{nodes: []}],
+        buffers: [{byteLength: 0}],
+      }
+      return serializeGlb(json, null)
+    }
+
+    it('merges scene extras into json.scenes[json.scene].extras', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(glb, [], {bldrsTitle: 'Momentum'})
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].extras.bldrsTitle).toBe('Momentum')
+      expect(stats.addedSceneExtras).toBe(1)
+      expect(stats.addedExtensions).toBe(0)
+    })
+
+    it('targets json.scene index when it differs from 0', () => {
+      const json = {
+        asset: {version: '2.0'},
+        scene: 1,
+        scenes: [{nodes: []}, {nodes: []}],
+        buffers: [{byteLength: 0}],
+      }
+      const glb = serializeGlb(json, null)
+      const {bytes} = injectGlbExtensions(glb, [], {bldrsTitle: 'Project'})
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[1].extras.bldrsTitle).toBe('Project')
+      expect(parsed.json.scenes[0].extras).toBeUndefined()
+    })
+
+    it('preserves pre-existing extras keys and overwrites colliding ones', () => {
+      const json = {
+        asset: {version: '2.0'},
+        scene: 0,
+        scenes: [{nodes: [], extras: {keepMe: 'untouched', bldrsTitle: 'old'}}],
+        buffers: [{byteLength: 0}],
+      }
+      const glb = serializeGlb(json, null)
+      const {bytes} = injectGlbExtensions(glb, [], {bldrsTitle: 'new'})
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].extras).toEqual({
+        keepMe: 'untouched',
+        bldrsTitle: 'new',
+      })
+    })
+
+    it('skips entries with null / undefined values (per-key opt-out)', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(glb, [], {
+        bldrsTitle: 'kept',
+        nullKey: null,
+        undefKey: undefined,
+      })
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].extras).toEqual({bldrsTitle: 'kept'})
+      expect(stats.addedSceneExtras).toBe(1)
+    })
+
+    it('returns input unchanged when both extensions and sceneExtras are empty', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(glb, [], {})
+      expect(bytes).toBe(glb)
+      expect(stats.addedSceneExtras).toBe(0)
+    })
+
+    it('returns input unchanged when sceneExtras has only nullish values', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(glb, [], {a: null, b: undefined})
+      expect(bytes).toBe(glb)
+      expect(stats.addedSceneExtras).toBe(0)
+    })
+
+    it('runs in the same parse/serialize pass as a BLDRS_* extension', () => {
+      // Consolidated pipeline check: one inject call adds both a
+      // top-level BLDRS extension AND scene-level extras with no extra
+      // GLB parse cycle. Stats report both deltas.
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(
+        glb,
+        [{name: 'BLDRS_test', data: {payload: 'hi'}, compress: true}],
+        {bldrsTitle: 'Combined'},
+      )
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.extensions.BLDRS_test).toBeDefined()
+      expect(parsed.json.scenes[0].extras.bldrsTitle).toBe('Combined')
+      expect(stats.addedExtensions).toBe(1)
+      expect(stats.addedSceneExtras).toBe(1)
+      expect(stats.addedBinBytes).toBeGreaterThan(0)
+    })
+
+    it('defaults to scene index 0 when json.scene is absent', () => {
+      // Spec: `json.scene` is the default-scene index but is optional.
+      // Convention is to use scene 0 when omitted; the helper mirrors
+      // that so GLTFExporter output (which sometimes omits `scene`)
+      // still gets stamped.
+      const json = {
+        asset: {version: '2.0'},
+        scenes: [{nodes: []}],
+        buffers: [{byteLength: 0}],
+      }
+      const glb = serializeGlb(json, null)
+      const {bytes} = injectGlbExtensions(glb, [], {bldrsTitle: 'Defaulted'})
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].extras.bldrsTitle).toBe('Defaulted')
+    })
+
+    it('no-ops the scene-extras path on a GLB with no scenes array', () => {
+      // Spec-legal but degenerate: no scenes[] means nowhere to attach
+      // scene-level metadata. Top-level extensions still apply; the
+      // scene-extras path silently no-ops.
+      const json = {asset: {version: '2.0'}, buffers: [{byteLength: 0}]}
+      const glb = serializeGlb(json, null)
+      const {bytes, stats} = injectGlbExtensions(
+        glb,
+        [{name: 'BLDRS_test', data: {x: 1}, compress: true}],
+        {bldrsTitle: 'ignored'},
+      )
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.extensions.BLDRS_test).toBeDefined()
+      expect(parsed.json.scenes).toBeUndefined()
+      expect(stats.addedExtensions).toBe(1)
+      expect(stats.addedSceneExtras).toBe(0)
     })
   })
 })

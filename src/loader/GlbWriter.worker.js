@@ -42,6 +42,10 @@
 //       {name: 'BLDRS_element_properties', data: object|null, compress: true},
 //       {name: 'BLDRS_face_ids',          data: object|null, compress: true},
 //     ],
+//     sceneExtras: {                  // optional small string-keyed
+//       bldrsTitle: 'Project Name',   // metadata merged into
+//       ...                           // scenes[0].extras for auto-
+//     } | null,                       // promotion to scene.userData
 //   }
 //
 // Reply (success — packed final container bytes, transferable):
@@ -60,9 +64,10 @@ self.addEventListener('message', (event) => {
   if (!data || data.command !== 'inject-and-pack') {
     return
   }
-  const {id, bytes, mode, extensions} = data
+  const {id, bytes, mode, extensions, sceneExtras} = data
   try {
-    const {bytes: withExtensions, stats: extStats} = injectGlbExtensions(bytes, extensions)
+    const {bytes: withExtensions, stats: extStats} =
+      injectGlbExtensions(bytes, extensions, sceneExtras)
     const packed = packGlbChunks([withExtensions], mode)
     // Transfer the final bytes back zero-copy. The Uint8Array's
     // underlying ArrayBuffer is in the transferables list, so the
