@@ -3,24 +3,22 @@ import cypress from './vars.cypress.js'
 
 export default {
   ...cypress,
-  // OPFS used to be off in playwright because the cypress baseline kept
-  // it off and we hadn't audited specs for cross-test leak risk.
-  // Re-enabled to unblock the `Properties.cacheHit.spec.ts` round-trip
-  // (writer → OPFS → reader → BLDRS_element_properties), which needs
-  // OPFS available so the cache-key path actually executes in
-  // `Loader.js#load`.
+  // OPFS_IS_ENABLED reverted to false (was flipped to true in PR #1531
+  // to unblock `Properties.cacheHit.spec.ts`). With it on, the
+  // loader's first IFC fetch goes through the OPFS worker
+  // (`downloadToOPFS` → `OPFS.worker.js` → `fetch(objectUrl)`); that
+  // worker-context fetch races MSW's service-worker activation, and
+  // when MSW isn't yet controlling the page the fetch fails to match
+  // the page-level `waitForResponse` listener in
+  // `visitHomepageWaitForModel` — ALL tests that wait for the model
+  // to load (≈80 specs) then time out at the 30s budget.
   //
-  // Per-test isolation: Playwright's `fullyParallel: true` config
-  // creates a fresh `BrowserContext` per test, each with its own OPFS
-  // slot. The cacheHit spec deliberately uses two `page.goto()` calls
-  // within ONE test (populate → reload) to round-trip through the
-  // same OPFS state — that pattern keeps working because the same
-  // Page/Context is reused across both gotos.
-  //
-  // Belt-and-suspenders cleanup runs in `homepageSetup` via
-  // `clearOpfs` — clears any OPFS entries that survived a previous
-  // test's BrowserContext (shouldn't happen in normal operation but
-  // defends against unexpected context-pool reuse / browser bugs).
-  OPFS_IS_ENABLED: true,
+  // The cacheHit specs that needed OPFS are still `test.fixme`'d
+  // (the OPFS-worker / MSW-SW interaction needs the proper fix
+  // tracked in design/new/viewer-replacement.md §4b.2 — gate the
+  // first `page.goto` on `waitForServiceWorker`, or add an MSW
+  // handler that fulfils worker-context fetches). Until that lands,
+  // flipping the flag is pure regression.
+  OPFS_IS_ENABLED: false,
   THEME_IS_ENABLED: true,
 }
