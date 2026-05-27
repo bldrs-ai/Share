@@ -138,6 +138,20 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
   const {scene = null} = opts
   ifcModel.modelID = modelID
 
+  // `ifcManager` shim. Several call-sites discriminate "is this an
+  // IFC model?" by checking `if (!m.ifcManager) { ... return }`
+  // (see `CadView.jsx#onModel:438`); without this property, the
+  // Conway-direct mesh is treated as a non-IFC model and the
+  // model-loaded effects (NavTree population, search index, etc.)
+  // are skipped entirely.
+  //
+  // Other call-sites reach into `ifcModel.ifcManager.getSpatialStructure(0, false)`
+  // (IfcIsolator) and `ifcModel.ifcManager.ifcAPI` (Loader.js GLB
+  // writer / various capture sites). The shim provides the small
+  // surface those need, all backed by Conway directly. Methods
+  // ignore the leading modelID arg and use the bound one.
+  ifcModel.ifcManager = makeConwayDirectIfcManager(ifcAPI, modelID)
+
   // Bounds for fitToFrame + clipper. BufferGeometry would lazy-
   // compute on first access, but several consumers read bounds
   // eagerly (CutPlaneMenu, fitModelToFrame); explicit is cheaper
@@ -194,6 +208,40 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
   attachInstanceMapSubsets(ifcModel, scene)
 
   attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID)
+}
+
+
+/**
+ * Build a minimal wit-three-`IFCManager`-shaped shim backed by
+ * Conway. Provides just the surface call-sites read on
+ * `model.ifcManager`:
+ *
+ *   - `getSpatialStructure(modelID, withProperties)` —
+ *     `IfcIsolator.js` reads this. The leading modelID arg is
+ *     ignored; the closure uses the modelID bound at decorate time.
+ *   - `getItemProperties(modelID, expressID, recursive)` — used by
+ *     downstream property capture if it falls through the
+ *     model.getItemProperties path.
+ *   - `getPropertySets(modelID, expressID, recursive)` — same.
+ *   - `ifcAPI` — `Loader.js`'s GLB writer reads
+ *     `viewer.IFC.loader.ifcManager.ifcAPI` to reach Conway directly;
+ *     mirroring that reference here keeps the same shape work for
+ *     any code that reaches via `model.ifcManager.ifcAPI`.
+ *
+ * @param {object} ifcAPI Conway IfcAPI
+ * @param {number} modelID
+ * @return {object} the shim
+ */
+function makeConwayDirectIfcManager(ifcAPI, modelID) {
+  return {
+    ifcAPI,
+    getSpatialStructure: (_modelIDArg, withProperties = false) =>
+      ifcAPI.properties.getSpatialStructure(modelID, withProperties),
+    getItemProperties: (_modelIDArg, expressID, recursive = false) =>
+      ifcAPI.properties.getItemProperties(modelID, expressID, recursive),
+    getPropertySets: (_modelIDArg, expressID, recursive = false) =>
+      ifcAPI.properties.getPropertySets(modelID, expressID, recursive),
+  }
 }
 
 

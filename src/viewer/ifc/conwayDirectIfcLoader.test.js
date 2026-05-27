@@ -241,5 +241,41 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       decorateConwayDirectIfcModel(ifcModel, ifcAPI, 17)
       expect(ifcModel.modelID).toBe(17)
     })
+
+    it('attaches an ifcManager shim — passes the !m.ifcManager IFC-discriminator check', () => {
+      // Regression pin: `CadView.jsx#onModel` early-returns when
+      // `!m.ifcManager`. Without this shim, the Conway-direct mesh
+      // would be treated as a non-IFC model and `setRootElement`
+      // would never fire — NavTree stays empty + selection effects
+      // skip.
+      const ifcAPI = makeIfcAPI()
+      const ifcModel = new Mesh()
+      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
+      expect(ifcModel.ifcManager).toBeTruthy()
+      expect(ifcModel.ifcManager.ifcAPI).toBe(ifcAPI)
+    })
+
+    it('ifcManager shim routes getSpatialStructure to Conway with the bound modelID', async () => {
+      const ifcAPI = makeIfcAPI()
+      ifcAPI.properties.getSpatialStructure.mockResolvedValue({expressID: 100})
+      const ifcModel = new Mesh()
+      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 5)
+      // IfcIsolator.js shape: `model.ifcManager.getSpatialStructure(0, false)`.
+      // The leading arg is ignored; the bound modelID (5) flows through.
+      await ifcModel.ifcManager.getSpatialStructure(0, false)
+      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(5, false)
+    })
+
+    it('ifcManager shim routes getItemProperties + getPropertySets to Conway', async () => {
+      const ifcAPI = makeIfcAPI()
+      ifcAPI.properties.getItemProperties.mockResolvedValue({Name: {value: 'X'}})
+      ifcAPI.properties.getPropertySets.mockResolvedValue([])
+      const ifcModel = new Mesh()
+      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 3)
+      await ifcModel.ifcManager.getItemProperties(0, 42, false)
+      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(3, 42, false)
+      await ifcModel.ifcManager.getPropertySets(0, 42, false)
+      expect(ifcAPI.properties.getPropertySets).toHaveBeenCalledWith(3, 42, false)
+    })
   })
 })
