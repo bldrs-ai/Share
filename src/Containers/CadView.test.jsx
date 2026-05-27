@@ -164,7 +164,10 @@ describe('CadView', () => {
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
   beforeEach(() => {
     viewer = new ShareViewer()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    // Post-slice-5c: `_loadedModel` is a mock-side test helper that
+    // lives on the singleton impl (now reached via `_fork`), not on
+    // the ShareViewer instance.
+    viewer._fork._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
@@ -258,6 +261,12 @@ describe('CadView', () => {
   // The guard makes the effect skip `setInstanceSelection` when the
   // parent-level ids are empty. This test exercises that path.
   it('useEffect skips setInstanceSelection when selectedElements is empty', async () => {
+    // Post-slice-5c: ShareViewer composes the fork rather than extending
+    // it, so each `new ShareViewer()` is a fresh instance. Spy on the
+    // prototype so both the test's local `viewer` and CadView's own
+    // `initViewer()` instance route through the same Jest mock.
+    const setInstanceSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setInstanceSelection')
+      .mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -266,11 +275,11 @@ describe('CadView', () => {
     // Set ONLY selectedInstanceIds — leave selectedElements at its
     // empty-array default. The effect runs on the dep change; the
     // guard should swallow it.
-    viewer.setInstanceSelection.mockClear()
+    setInstanceSelectionSpy.mockClear()
     const STALE_INSTANCE_ID = 42
     await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
     await actAsyncFlush()
-    expect(viewer.setInstanceSelection).not.toHaveBeenCalled()
+    expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
   })
 
 
@@ -457,6 +466,12 @@ describe('CadView', () => {
 
 
   it('can highlight some elements based on state change', async () => {
+    // Post-slice-5c: ShareViewer composes the fork rather than extending
+    // it, so each `new ShareViewer()` is a fresh instance. Spy on the
+    // prototype so both the test's local `viewer` and CadView's own
+    // `initViewer()` instance route through the same Jest mock.
+    const preselectSpy = jest.spyOn(ShareViewer.prototype, 'preselectElementsByIds')
+      .mockImplementation(() => {})
     const highlightedIdsAsString = ['0', '1']
     const modelId = 0
     const elementCount = 2
@@ -470,8 +485,7 @@ describe('CadView', () => {
       result.current.setPreselectedElementIds(highlightedIdsAsString)
     })
     expect(result.current.preselectedElementIds).toHaveLength(elementCount)
-    expect(viewer.preselectElementsByIds)
-      .toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
+    expect(preselectSpy).toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
     await actAsyncFlush()
   })
 
