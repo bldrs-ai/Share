@@ -96,6 +96,44 @@ describe('shouldSendSentryEvent', () => {
     }
     expect(shouldSendSentryEvent(event)).toBe(true)
   })
+
+  /*
+   * Sentry represents `caused by` chains as additional entries in
+   * `exception.values[]`. If the wrapping exception isn't third-party
+   * noise but the cause is, we should still drop — the wrapped error
+   * doesn't make the noise actionable.
+   */
+  it('drops events when the cause-chain has a RUM exception even if the top one does not', () => {
+    const event = {
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            value: 'Wrapped failure',
+            stacktrace: {frames: [{filename: 'src/Containers/CadView.jsx'}]},
+          },
+          {
+            type: 'TypeError',
+            value: 'Failed to fetch',
+            stacktrace: {frames: [{filename: '/.netlify/scripts/rum'}]},
+          },
+        ],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(false)
+  })
+
+  it('keeps events when every entry in the cause-chain is first-party', () => {
+    const event = {
+      exception: {
+        values: [
+          {stacktrace: {frames: [{filename: 'src/Containers/CadView.jsx'}]}},
+          {stacktrace: {frames: [{filename: 'src/loader/Loader.js'}]}},
+        ],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(true)
+  })
 })
 
 

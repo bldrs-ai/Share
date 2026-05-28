@@ -77,18 +77,28 @@ export function _resetSentryFilterStateForTests() {
  * @return {boolean} true to send, false to drop
  */
 export function shouldSendSentryEvent(event) {
-  const frames = event?.exception?.values?.[0]?.stacktrace?.frames
-  if (!Array.isArray(frames) || frames.length === 0) {
+  const exceptions = event?.exception?.values
+  if (!Array.isArray(exceptions) || exceptions.length === 0) {
     return true
   }
-  for (const frame of frames) {
-    if (typeof frame?.filename !== 'string') {
+  // Walk every exception in the chain (caused-by exceptions appear as
+  // additional entries in `values[]`), not just the top one — RUM
+  // beacons typically surface as a single exception, but a wrapped /
+  // chained exception with RUM as the cause should still be dropped.
+  for (const exception of exceptions) {
+    const frames = exception?.stacktrace?.frames
+    if (!Array.isArray(frames) || frames.length === 0) {
       continue
     }
-    for (const {pattern, gaEventName} of THIRD_PARTY_NOISE_PATTERNS) {
-      if (pattern.test(frame.filename)) {
-        emitOncePerSession(gaEventName)
-        return false
+    for (const frame of frames) {
+      if (typeof frame?.filename !== 'string') {
+        continue
+      }
+      for (const {pattern, gaEventName} of THIRD_PARTY_NOISE_PATTERNS) {
+        if (pattern.test(frame.filename)) {
+          emitOncePerSession(gaEventName)
+          return false
+        }
       }
     }
   }
