@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
 import {NotFoundError} from '../loader/Loader'
@@ -25,7 +25,17 @@ export default function AlertDialog({onClose}) {
   // it from an effect keyed on the alert value so it fires once per
   // distinct alert. `console.error` for generic errors lives here too —
   // logging from render would multiply the same way.
+  //
+  // The ref-gated dedup below covers React StrictMode's intentional
+  // double-invocation of effects in dev — without it a dev session
+  // would double-count every alert in Sentry + GA. Production isn't
+  // affected (StrictMode is a no-op there) but the guard is cheap.
+  const lastTrackedAlertRef = useRef(null)
   useEffect(() => {
+    if (alert === lastTrackedAlertRef.current) {
+      return
+    }
+    lastTrackedAlertRef.current = alert
     if (alert === null) {
       return
     }

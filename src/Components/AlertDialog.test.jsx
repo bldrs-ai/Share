@@ -166,4 +166,24 @@ describe('AlertDialog — trackAlert side effects', () => {
     render(<AlertDialog onClose={onClose}/>, {wrapper: StoreRouteThemeCtx})
     expect(trackAlert).not.toHaveBeenCalled()
   })
+
+  /*
+   * StrictMode invokes effects twice in dev. The ref-gated dedup inside
+   * AlertDialog should suppress the second invocation so trackAlert
+   * fires exactly once per real alert change, even under StrictMode.
+   * Simulating that here by wrapping the render in <React.StrictMode>.
+   */
+  it('does not double-fire trackAlert under React StrictMode', () => {
+    const onClose = jest.fn()
+    act(() => {
+      useStore.getState().setAlert('Failed to parse model')
+    })
+    render(
+      <React.StrictMode>
+        <AlertDialog onClose={onClose}/>
+      </React.StrictMode>,
+      {wrapper: StoreRouteThemeCtx},
+    )
+    expect(trackAlert).toHaveBeenCalledTimes(1)
+  })
 })

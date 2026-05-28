@@ -36,8 +36,16 @@ const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 
 /**
  * Resolve the PR number for the current build. Netlify deploy
- * previews set REVIEW_ID; main builds fall back to parsing the most
- * recent "Merge pull request #NNNN ..." commit reachable from HEAD.
+ * previews set REVIEW_ID; main builds fall back to parsing it out
+ * of the commit history. Both GitHub merge styles are supported:
+ *  - "Create merge commit" → subject starts with "Merge pull request #NNNN"
+ *  - "Squash and merge"    → subject ends with "(#NNNN)"
+ *
+ * We check HEAD's own subject first (covers main right after a
+ * squash-merge, where HEAD is the squash commit with no merge
+ * parents), then walk back to the most recent merge ancestor as a
+ * fallback (covers builds whose HEAD is a non-PR chore commit
+ * landed directly on main between merges).
  *
  * @return {number} PR number, or 0 if none can be determined
  */
@@ -48,6 +56,24 @@ function detectPrNumber() {
       return reviewId
     }
   }
+  // Inspect HEAD's subject for either merge style.
+  try {
+    const headSubject = execSync(
+      'git log -1 --pretty=%s',
+      {stdio: ['ignore', 'pipe', 'ignore']},
+    ).toString().trim()
+    const mergeMatch = headSubject.match(/^Merge pull request #(\d+)/)
+    if (mergeMatch) {
+      return parseInt(mergeMatch[1], 10)
+    }
+    const squashMatch = headSubject.match(/\(#(\d+)\)\s*$/)
+    if (squashMatch) {
+      return parseInt(squashMatch[1], 10)
+    }
+  } catch {
+    // git not available — fall through
+  }
+  // Fallback: latest merge-commit ancestor (Create-merge-commit style).
   try {
     const subject = execSync(
       'git log -1 --merges --grep=^"Merge pull request #" --pretty=%s',
@@ -58,7 +84,7 @@ function detectPrNumber() {
       return parseInt(match[1], 10)
     }
   } catch {
-    // git not available or no matching ancestor — fall through to 0
+    // no matching ancestor — fall through to 0
   }
   return 0
 }

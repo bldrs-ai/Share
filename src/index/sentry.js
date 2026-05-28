@@ -1,7 +1,9 @@
 import {init, reactRouterV6BrowserTracingIntegration} from '@sentry/react'
 import {useEffect} from 'react'
 import {useLocation, useNavigationType, createRoutesFromChildren, matchRoutes} from 'react-router-dom'
-import PkgJson from '../../package.json'
+// Named import (rather than `import pkg from '../../package.json'`) so
+// esbuild can prune the rest of the JSON — we only care about `version`.
+import {version as pkgVersion} from '../../package.json'
 
 
 /**
@@ -16,7 +18,7 @@ export default function setupSentry() {
     // it is what lets Sentry triage map a crash back to the PR that
     // shipped it. Prefix with the project slug so the same Sentry org can
     // host multiple bldrs apps without release-tag collisions.
-    release: `bldrs-share@${PkgJson.version}`,
+    release: `bldrs-share@${pkgVersion}`,
     integrations: [
       reactRouterV6BrowserTracingIntegration({
         useEffect,
