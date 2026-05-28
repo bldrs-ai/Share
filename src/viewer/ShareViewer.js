@@ -7,6 +7,7 @@ import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
+import ShareIfcLoader from './ifc/ShareIfcLoader'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
@@ -115,6 +116,18 @@ export class ShareViewer {
     // the same instance the singleton mock returns.
     this._fork = new IfcViewerAPI(options)
     this.IFC = this._fork.IFC
+    // Slice 5d.1: replace fork's `IFCLoader` (web-ifc-three) with our
+    // ShareIfcLoader. The fork's IFC manager + selector + context
+    // remain (replaced in later slices), but `viewer.IFC.loader` —
+    // which holds the IFC parse entry point + `ifcManager` for
+    // property / spatial reads — is now ours, backed directly by
+    // Conway's IfcAPI. The Conway IfcAPI handle is sourced from the
+    // fork's IFCManager during this transitional slice; later slices
+    // instantiate Conway directly.
+    const conwayIfcAPI = this._fork.IFC.loader?.ifcManager?.ifcAPI
+    if (conwayIfcAPI) {
+      this.IFC.loader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
+    }
     // Wrap the fork's `IfcContext` in our ThreeContext layer. The fork's
     // IfcManager / IfcClipper retained their own private references to
     // the original context inside `new IfcViewerAPI(...)`, so the
