@@ -196,3 +196,108 @@ describe('shouldSendSentryEvent — once-per-session GA signal', () => {
     expect(shouldSendSentryEvent(rumEvent())).toBe(false)
   })
 })
+
+
+describe('shouldSendSentryEvent — anonymous onerror heuristic (SHARE-152 / SHARE-153)', () => {
+  /*
+   * Mirror the actual SHARE-152 / SHARE-153 event shape: mechanism
+   * `onerror`, single-frame stack at `<anonymous>:1:60`. Both issues
+   * shared the same trace_id from a single Chrome Mobile WebView 76
+   * device running an injected script that fails on our DOM.
+   */
+  const anonymousOnerrorEvent = (message) => ({
+    exception: {
+      values: [{
+        type: 'TypeError',
+        value: message,
+        mechanism: {type: 'onerror', handled: false},
+        stacktrace: {
+          frames: [{filename: '<anonymous>'}],
+        },
+      }],
+    },
+  })
+
+  it('drops events with mechanism=onerror and an all-anonymous stack', () => {
+    expect(shouldSendSentryEvent(
+      anonymousOnerrorEvent(`Cannot read properties of null (reading 'querySelector')`),
+    )).toBe(false)
+  })
+
+  it('drops when every frame is anonymous/unknown/missing, even with several frames', () => {
+    const event = {
+      exception: {
+        values: [{
+          mechanism: {type: 'onerror'},
+          stacktrace: {
+            frames: [
+              {filename: '<anonymous>'},
+              {filename: '<unknown>'},
+              {filename: null},
+              {/* missing */},
+            ],
+          },
+        }],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(false)
+  })
+
+  it('keeps onerror events that have any first-party frame in the stack', () => {
+    const event = {
+      exception: {
+        values: [{
+          mechanism: {type: 'onerror'},
+          stacktrace: {
+            frames: [
+              {filename: '<anonymous>'},
+              {filename: 'src/Containers/CadView.jsx'},
+            ],
+          },
+        }],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(true)
+  })
+
+  it('keeps anonymous-only stacks when the mechanism is NOT onerror', () => {
+    const event = {
+      exception: {
+        values: [{
+          // e.g. caught via Sentry.captureException directly, not via window.onerror
+          mechanism: {type: 'generic'},
+          stacktrace: {frames: [{filename: '<anonymous>'}]},
+        }],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(true)
+  })
+
+  it('fires gtagEvent("anonymous_injected_error") on the first drop', () => {
+    expect(shouldSendSentryEvent(anonymousOnerrorEvent('x'))).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('anonymous_injected_error', {})
+  })
+
+  it('does not re-fire gtagEvent on subsequent drops in the same session', () => {
+    shouldSendSentryEvent(anonymousOnerrorEvent('x'))
+    shouldSendSentryEvent(anonymousOnerrorEvent('y'))
+    shouldSendSentryEvent(anonymousOnerrorEvent('z'))
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('tracks the two noise sources independently — RUM and anonymous each fire once', () => {
+    const rumEvent = {
+      exception: {
+        values: [{stacktrace: {frames: [{filename: '/.netlify/scripts/rum'}]}}],
+      },
+    }
+    shouldSendSentryEvent(rumEvent)
+    shouldSendSentryEvent(anonymousOnerrorEvent('x'))
+    shouldSendSentryEvent(rumEvent)
+    shouldSendSentryEvent(anonymousOnerrorEvent('y'))
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+    expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
+    expect(gtagEvent).toHaveBeenCalledWith('anonymous_injected_error', {})
+  })
+})

@@ -11,7 +11,7 @@ import {version as pkgVersion} from '../../package.json'
  * Stack-frame URLs matching any of these patterns mark the event as
  * "third-party noise" — we drop them in `beforeSend` below before
  * they reach Sentry. We add to this list when triage finds a class
- * of events with no actionable first-party signal.
+ * of events whose stack identifies a script we can't action.
  *
  * Current entries:
  *
@@ -44,6 +44,67 @@ const THIRD_PARTY_NOISE_PATTERNS = [
 
 
 /*
+ * Whole-event shape heuristics for noise that can't be identified by
+ * a script URL — typically injected scripts from custom WebViews or
+ * userscripts where the browser only reports `<anonymous>` for the
+ * source. Each entry pairs a `match(event)` predicate with the GA
+ * event name fired on the first per-session detection.
+ *
+ * Current entries:
+ *
+ *   isAnonymousOnerrorEvent  →  gaEventName: 'anonymous_injected_error'
+ *     SHARE-152 and SHARE-153 (2 users / ~2,200 events combined,
+ *     same trace_id / IP / Chrome Mobile WebView 76 on a Pixel
+ *     Android 10) presented as `TypeError: Cannot read properties of
+ *     null (reading 'querySelector' | 'src')` with `mechanism: onerror`
+ *     and a single-frame stack `<anonymous>:1:60`. That's the
+ *     fingerprint of an injected script (likely a userscript in a
+ *     customized Android WebView) hitting our DOM with the wrong
+ *     selectors. We can't fix THEIR script; we can stop showing
+ *     ourselves as the culprit. The two issues share the same
+ *     trace_id because each tick of the injected script throws both
+ *     errors back-to-back.
+ */
+const HEURISTIC_NOISE_MATCHERS = [
+  {
+    match: isAnonymousOnerrorEvent,
+    gaEventName: 'anonymous_injected_error',
+  },
+]
+
+
+/**
+ * True when every frame of the top exception has no identifiable
+ * source AND the exception was caught via `window.onerror`. That's
+ * the signature of an injected/eval'd script from a third party we
+ * can't inspect — Chrome Mobile WebView userscripts, in-app browser
+ * helpers, malicious overlays, etc. Restricted to values[0] (the
+ * outermost catch) so a chained exception with a legitimate
+ * application-frame top doesn't get suppressed by a noise cause.
+ *
+ * @param {object} event Sentry event payload
+ * @return {boolean}
+ */
+function isAnonymousOnerrorEvent(event) {
+  const exception = event?.exception?.values?.[0]
+  if (!exception) {
+    return false
+  }
+  if (exception.mechanism?.type !== 'onerror') {
+    return false
+  }
+  const frames = exception.stacktrace?.frames
+  if (!Array.isArray(frames) || frames.length === 0) {
+    return false
+  }
+  return frames.every((frame) => {
+    const filename = frame?.filename
+    return !filename || filename === '<anonymous>' || filename === '<unknown>'
+  })
+}
+
+
+/*
  * Per-pattern "have we already reported this in this session?" flags.
  * Module-level so they persist across multiple beforeSend calls on
  * the same page load, and reset on full page reload (which is the
@@ -64,11 +125,13 @@ export function _resetSentryFilterStateForTests() {
 
 
 /**
- * Returns false for Sentry events whose stack is rooted in a script
- * we've marked as third-party noise (see THIRD_PARTY_NOISE_PATTERNS).
- * On the first detection per session for each pattern, fires the
- * configured GA event so the "this client has telemetry blocking"
- * statistic isn't lost when we drop the Sentry event.
+ * Returns false for Sentry events we've classified as third-party
+ * noise — either by stack-frame URL pattern
+ * (THIRD_PARTY_NOISE_PATTERNS) or by whole-event shape heuristic
+ * (HEURISTIC_NOISE_MATCHERS). On the first detection per session
+ * for each pattern / heuristic, fires the configured GA event so
+ * the "this client has X" statistic isn't lost when we drop the
+ * Sentry event.
  *
  * Exported so it can be unit-tested with synthetic events — the
  * `setupSentry` call below is one-shot and not test-friendly.
@@ -81,10 +144,11 @@ export function shouldSendSentryEvent(event) {
   if (!Array.isArray(exceptions) || exceptions.length === 0) {
     return true
   }
-  // Walk every exception in the chain (caused-by exceptions appear as
-  // additional entries in `values[]`), not just the top one — RUM
-  // beacons typically surface as a single exception, but a wrapped /
-  // chained exception with RUM as the cause should still be dropped.
+  // Filename-pattern pass: walk every exception in the chain
+  // (caused-by exceptions appear as additional entries in values[]),
+  // not just the top — RUM beacons typically surface as a single
+  // exception, but a wrapped / chained exception with RUM as the
+  // cause should still be dropped.
   for (const exception of exceptions) {
     const frames = exception?.stacktrace?.frames
     if (!Array.isArray(frames) || frames.length === 0) {
@@ -100,6 +164,15 @@ export function shouldSendSentryEvent(event) {
           return false
         }
       }
+    }
+  }
+  // Shape-heuristic pass: each matcher inspects the whole event
+  // (e.g. mechanism + stack shape). Cheaper after the URL pass
+  // because we've already excluded most matches.
+  for (const {match, gaEventName} of HEURISTIC_NOISE_MATCHERS) {
+    if (match(event)) {
+      emitOncePerSession(gaEventName)
+      return false
     }
   }
   return true
