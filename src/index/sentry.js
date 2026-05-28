@@ -65,12 +65,6 @@ const THIRD_PARTY_NOISE_PATTERNS = [
  *     trace_id because each tick of the injected script throws both
  *     errors back-to-back.
  */
-const HEURISTIC_NOISE_MATCHERS = [
-  {
-    match: isAnonymousOnerrorEvent,
-    gaEventName: 'anonymous_injected_error',
-  },
-]
 
 
 /**
@@ -102,6 +96,14 @@ function isAnonymousOnerrorEvent(event) {
     return !filename || filename === '<anonymous>' || filename === '<unknown>'
   })
 }
+
+
+const HEURISTIC_NOISE_MATCHERS = [
+  {
+    match: isAnonymousOnerrorEvent,
+    gaEventName: 'anonymous_injected_error',
+  },
+]
 
 
 /*

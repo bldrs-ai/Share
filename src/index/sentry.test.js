@@ -273,6 +273,30 @@ describe('shouldSendSentryEvent — anonymous onerror heuristic (SHARE-152 / SHA
     expect(shouldSendSentryEvent(event)).toBe(true)
   })
 
+  /*
+   * The heuristic is intentionally restricted to values[0] — a
+   * chained exception with a legitimate first-party top frame
+   * should NOT be suppressed just because the cause happens to be
+   * an anonymous onerror. Locks the JSDoc-documented behavior in.
+   */
+  it('keeps chained exceptions where the wrapper is first-party even if the cause is anonymous-onerror', () => {
+    const event = {
+      exception: {
+        values: [
+          {
+            mechanism: {type: 'generic'},
+            stacktrace: {frames: [{filename: 'src/Containers/CadView.jsx'}]},
+          },
+          {
+            mechanism: {type: 'onerror'},
+            stacktrace: {frames: [{filename: '<anonymous>'}]},
+          },
+        ],
+      },
+    }
+    expect(shouldSendSentryEvent(event)).toBe(true)
+  })
+
   it('fires gtagEvent("anonymous_injected_error") on the first drop', () => {
     expect(shouldSendSentryEvent(anonymousOnerrorEvent('x'))).toBe(false)
     expect(gtagEvent).toHaveBeenCalledTimes(1)
