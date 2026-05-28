@@ -1,16 +1,16 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.1 — initial reconciliation
+**Status:** Draft v0.2 — initial reconciliation
 **Date:** 2026-05-28
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
-extract preserved in this commit's history; key Epic list inlined in §3.
+extract preserved in this commit's history; key Epic list inlined in §4.
 
 This doc normalizes the legacy Epic list against ~2 years of execution since the last
 top-down review, surfaces the work that landed without story tracking, and lays out the
 **Pro/billing-ready MVP** plan plus the loveable backlog beyond it.
 
-It is the single source of truth for Epic/Story/Task structure. The wiki page
+It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
 disagree, this doc wins and the others get updated.
 
@@ -28,8 +28,9 @@ disagree, this doc wins and the others get updated.
   cross-references them but doesn't duplicate their content.
 
 The original PDF interleaved capability lists and implementation notes. This doc keeps
-them split: §3 is the Epic catalogue, §4 is the Track catalogue, §5 is the Pro-MVP
-sequencing across both, §6 is what's loveable but post-MVP.
+them split: §3 is the master overview (one row per Epic and Track), §4 is the Epic
+catalogue, §5 is the Track catalogue, §6 is the Pro-MVP sequencing across both, §7 is
+what's loveable but post-MVP.
 
 
 ## 2. Status legend
@@ -43,18 +44,96 @@ sequencing across both, §6 is what's loveable but post-MVP.
 | 🔒 | Pro gated — free users can see it exists but can't use the full capability. |
 
 Per the PDF: 🥉 = MVP, 🥇 = MLP (Minimum Loveable Product), ❤️ = personal MLP. I preserve
-those markers in §3 next to the original ranking so we don't lose the people-attached
+those markers in §4 next to the original ranking so we don't lose the people-attached
 intent. New work added since the PDF is marked `(NEW)`.
 
+**Pro-MVP column legend** (used in §3 and §5):
 
-## 3. Normalized Epic catalogue
+- **A–E** = phase in the Pro-MVP plan (§6). A = stabilise viewer, B = identity +
+  multi-account, C = sharing v1, D = subscribe + ads, E = launch checklist.
+- **—** = already shipped; no Pro-MVP work pending.
+- **Post** = held in §7 Post-MVP backlog.
+
+
+## 3. Status overview
+
+The master tables. Each Epic and Track lists status, Pro-MVP phase, and the
+cross-references that connect them. The detailed bodies live in §4 (Epics) and §5
+(Tracks).
+
+### 3.1 Epics
+
+| Verb | ID | Name | Status | Pro-MVP | Tracks |
+|---|---|---|---|---|---|
+| Open | `open-100` | Open from local file system | ✔ | — | — |
+| Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
+| Open | `open-120` | Open from Google Drive | ✔ | — | — |
+| Open | `open-130` | Multi-account Sources tab | 🟡 | B | T3 |
+| Open | `open-140` | Open multiple IFCs in one session | ⬜ | Post | — |
+| Open | `open-150` | Recents reliability | 🟡 | E | T5 |
+| View | `view-100` | 3D + NavTree + Properties | ✔ | — | T1, T2 |
+| View | `view-110` | Cut planes | ✔ | — | T1 |
+| View | `view-120` | Shareable camera position | ✔ | — | — |
+| View | `view-130` | Persistent visibility / Isolate | 🟡 | Post | T1 |
+| View | `view-140` | Selection-based camera + measurement | ⬜ | Post | — |
+| View | `view-150` | Performance + large-model viewing | 🟡 | A | T1, T2 |
+| View | `view-160` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
+| View | `view-170` | Common view ops (nav-cube, explode, undo, IDS) | ⬜ | Post | — |
+| View | `view-180` | Maps-style view of issues (🥇) | 🔮 | Post | T6 |
+| Share | `share-100` | Share link to current view | ✔ | — | — |
+| Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
+| Share | `share-120` | Private link sharing + visibility chip | 🟡 | C | T4 |
+| Share | `share-130` | Grant/revoke per-principal sharing | 🟡 | C | T4 |
+| Share | `share-140` | Folder-scoped boundaries | ⬜ | Post | T4 |
+| Share | `share-150` | Extended Share/Login flow (#1421) | 🟡 | C, D | — |
+| Notes | `notes-100` | Anchored notes (GitHub-backed) | ✔ | — | — |
+| Notes | `notes-110` | BCF round-trip | ⬜ | Post | — |
+| Notes | `notes-120` | Drive-backed notes (NotesProvider) | 🔮 | Post | T4, T6 |
+| Versions | `versions-100` | Show specific version + branch/commit nav | 🟡 | — | — |
+| Versions | `versions-110` | Diff between versions | ⬜ | Post | — |
+| Versions | `versions-120` | Portable versions for Drive | 🔮 | Post | T6 |
+| Search | `search-100` | Search current model | 🟡 | — | — |
+| Search | `search-110` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
+| Search | `search-120` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | Post | — |
+| Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
+| Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
+| Identity | `identity-120` | Auth disambiguation (#1422) | 🟡 | B | — |
+| Identity | `identity-130` | Profile drawer + multi-account picker | ⬜ | B | T3 |
+| Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
+| Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
+| Apps | `apps-120` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | Post | — |
+| Apps | `apps-130` | v1.0 Public API + IDE (🥇) | 🔮 | Post | — |
+| Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
+| Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
+| Community | `community-120` | Bug report w/ screenshot + session state | ⬜ | Post | — |
+| Community | `community-130` | AEC outreach (🥇) | 🔮 | Post | — |
+| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | ⬜ | D | T8 |
+| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ⬜ | D | T8 |
+| Subscribe | `subscribe-120` | Quota tracking (NEW) | ⬜ | D | T8, T3 |
+| Subscribe | `subscribe-130` | Ads on free tier | 🟡 | D | T7 |
+
+### 3.2 Tracks
+
+| ID | Name | Status | Pro-MVP | Unblocks |
+|---|---|---|---|---|
+| T1 | Viewer Replacement | 🟡 | A (launch gate) | `view-100`, `view-110`, `view-130`, `view-150`, `view-160`, T2 |
+| T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `notes-120`, `view-150` |
+| T3 | Identity Decoupling | 🟡 | B (PR2 + PR3) | `identity-110`, `identity-120`, `identity-130`, `open-130`, `share-130`, `subscribe-120`, T4 PR3 |
+| T4 | Multi-User Sharing | 🟡 | C (PR2 + PR3) | `share-120`, `share-130`, `share-140`, `notes-120`, `versions-120` |
+| T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-150` |
+| T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-110`, `notes-120`, `versions-120` |
+| T7 | Ads | 🟡 | D | `subscribe-130` |
+| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120` |
+
+
+## 4. Normalized Epic catalogue
 
 Each Epic block: heading with stable ID; one-sentence purpose; status; legacy reference
 in italics; closed stories (with GH numbers); open stories; gaps relevant to the
-Pro-MVP; relevant tracks from §4.
+Pro-MVP; relevant tracks from §5.
 
 
-### 3.1 Open
+### 4.1 Open
 
 User can open a model from local, cloud, or shared link, with format breadth and
 multi-model composition.
@@ -96,7 +175,7 @@ original list; landed via `googleDrive` flag now default-on).
 - Story to file: `open-150: Recents show typed unreachable alert + remove-recent`.
 
 
-### 3.2 View
+### 4.2 View
 
 User can inspect the model in 3D with the navigation, properties, search-by-element,
 slice, and isolation controls expected of a BIM viewer.
@@ -165,7 +244,7 @@ multi-worker; etc.*
   once notes carry richer anchor + tag data.
 
 
-### 3.3 Share (split out of legacy Collab)
+### 4.3 Share (split out of legacy Collab)
 
 User shares a model, a view, a note, or a region with another user — privately or
 publicly — and the recipient sees what was intended.
@@ -209,7 +288,7 @@ publicly — and the recipient sees what was intended.
 - **Required for Pro-MVP** (it's where the upgrade prompt lives).
 
 
-### 3.4 Notes & Versions (split out of legacy Collab)
+### 4.4 Notes & Versions (split out of legacy Collab)
 
 User leaves comments anchored to model elements, replies in a thread, and can revisit
 a specific version of the model.
@@ -250,7 +329,7 @@ a specific version of the model.
 - **Post-MVP.**
 
 
-### 3.5 Search
+### 4.5 Search
 
 User finds elements in the current model, across their repos, or across the building
 data graph.
@@ -274,7 +353,7 @@ data graph.
 - **Post-MVP loveable.** Johannes is the design partner.
 
 
-### 3.6 Identity & Account (NEW Epic group — implicit in PDF "Federated authentication")
+### 4.6 Identity & Account (NEW Epic group — implicit in PDF "Federated authentication")
 
 User signs in, links data sources, and the system honors that even across primary-auth
 changes (Google → GitHub or vice versa).
@@ -302,7 +381,7 @@ changes (Google → GitHub or vice versa).
   (`identity-decoupling-decisions.md` §Q4).
 
 
-### 3.7 Apps
+### 4.7 Apps
 
 Third-party (and dogfooded) apps add capabilities to Share via a stable API.
 
@@ -325,7 +404,7 @@ Third-party (and dogfooded) apps add capabilities to Share via a stable API.
 - **Post-MVP loveable.**
 
 
-### 3.8 Community & Onboarding
+### 4.8 Community & Onboarding
 
 User finds out about Bldrs, gets oriented, leaves feedback, and finds product help.
 
@@ -350,7 +429,7 @@ User finds out about Bldrs, gets oriented, leaves feedback, and finds product he
 - Out of repo scope. Tracked here for completeness.
 
 
-### 3.9 Subscribe (NEW Epic group)
+### 4.9 Subscribe (NEW Epic group)
 
 User upgrades from free to Pro, the system tracks quota, and Pro-only features become
 available.
@@ -385,90 +464,109 @@ the quota-tracking notes in `identity-decoupling-decisions.md`.*
 - **Required for Pro-MVP** — the free tier monetisation path.
 
 
-## 4. Cross-cutting Tracks
+## 5. Cross-cutting Tracks
 
 Each track has its own long-form design doc. This section is the one-paragraph
-overview + status + Epic linkage; details live in the linked docs.
+overview + status + Epic linkage; details live in the linked docs. Each entry uses the
+same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
+
 
 ### Track T1: Viewer Replacement
-**Doc:** `design/new/viewer-replacement.md`.
-**What:** Replace `web-ifc-viewer` + `web-ifc-three`. Cuts the three.js 0.135 anchor;
-ships Conway-direct IFC parse, per-instance picking, unified Clipper.
-**Status:** Phases 0–4 + 5a + 5b landed. `conwayDirectIfc` + `glb` default-on. Remaining:
-Phase 5 cleanup (drop wit-three entirely), perf items (on-demand rendering, hover-pick
-throttle), per-product mesh emission spike, **public-launch test gate** (4-angle
-screenshots + GLB bit-level diff harness).
-**Unblocks:** `view-100`, `view-150`, `view-130`, all GLB-backed work in T2.
-**Pro-MVP impact:** Required — public-launch gate.
+
+- **What:** Replace `web-ifc-viewer` + `web-ifc-three`. Cuts the three.js 0.135 anchor;
+  ships Conway-direct IFC parse, per-instance picking, unified Clipper.
+- **Status:** Phases 0–4 + 5a + 5b landed. `conwayDirectIfc` + `glb` default-on.
+  Remaining: Phase 5 cleanup (drop wit-three entirely), perf items (on-demand
+  rendering, hover-pick throttle), per-product mesh emission spike, **public-launch
+  test gate** (4-angle screenshots + GLB bit-level diff harness).
+- **Unblocks:** `view-100`, `view-110`, `view-130`, `view-150`, `view-160`, T2.
+- **Pro-MVP impact:** Required — public-launch gate.
+- **Doc:** `design/new/viewer-replacement.md`.
+
 
 ### Track T2: GLB Model Sharing
-**Doc:** `design/new/glb-model-sharing.md`.
-**What:** Content-addressed GLB cache + originator-side share. Phases 0–3 (cache key,
-extension split, picker fix, BLDRS_* extensions) landed.
-**Status:** Phases 4 (Notes + view-states v0.1 round-trip), 5 (originator share flow),
-6 (shared cache tier — Drive/Firebase) open.
-**Unblocks:** `share-110`, `notes-120`, `view-150` perf wins.
-**Pro-MVP impact:** Phase 5 (originator share flow) — required. Phase 4 — required (so
-notes survive cache hits). Phase 6 — post-MVP optimisation.
+
+- **What:** Content-addressed GLB cache + originator-side share. Phases 0–3 (cache
+  key, extension split, picker fix, BLDRS_* extensions) landed.
+- **Status:** Phases 4 (Notes + view-states v0.1 round-trip), 5 (originator share
+  flow), 6 (shared cache tier — Drive/Firebase) open.
+- **Unblocks:** `share-110`, `notes-120`, `view-150` perf wins.
+- **Pro-MVP impact:** Phase 5 (originator share flow) — required. Phase 4 — required
+  (so notes survive cache hits). Phase 6 — post-MVP optimisation.
+- **Doc:** `design/new/glb-model-sharing.md`.
+
 
 ### Track T3: Identity Decoupling
-**Docs:** `design/new/identity-decoupling.md` + `identity-decoupling-decisions.md`.
-**What:** GitHub as `ConnectionProvider` peer of Drive. Two Netlify Functions for the
-OAuth code/refresh exchange; multi-account GitHub support; legacy Auth0-federated path
-retained for migration.
-**Status:** PR1 (provider scaffolding + Functions) merged. PR2 (SourcesTab UI
-integration, recents migration) + PR3 (switchover + flag retire) open.
-**Unblocks:** `identity-110`, `identity-120`, `identity-130`, `open-130`,
-`share-130`, `subscribe-120` (quota keying), and T4 PR3 (GH sharing).
-**Pro-MVP impact:** PR2 + PR3 required.
+
+- **What:** GitHub as `ConnectionProvider` peer of Drive. Two Netlify Functions for
+  the OAuth code/refresh exchange; multi-account GitHub support; legacy
+  Auth0-federated path retained for migration.
+- **Status:** PR1 (provider scaffolding + Functions) merged. PR2 (SourcesTab UI
+  integration, recents migration) + PR3 (switchover + flag retire) open.
+- **Unblocks:** `identity-110`, `identity-120`, `identity-130`, `open-130`,
+  `share-130`, `subscribe-120` (quota keying), and T4 PR3 (GH sharing).
+- **Pro-MVP impact:** PR2 + PR3 required.
+- **Docs:** `design/new/identity-decoupling.md` + `identity-decoupling-decisions.md`.
+
 
 ### Track T4: Multi-User Sharing
-**Doc:** `design/new/multi-user-sharing.md` + `design/new/sharing-pr3-github.md`.
-**What:** Grants/revoke, visibility, folder-scoped routes; consistent across Drive +
-GitHub. Stretch: portable sidecar formats for Notes + Versions, round-trippers to git.
-**Status:** PR1 (provider scaffolding) merged. PR2 (Drive Share dialog UI), PR3 (GH
-sharing adapter), PR4 (folder boundary routes) open. PR5 (GH token-health parity) and
-PR6 (flag retire) follow.
-**Unblocks:** `share-120`, `share-130`, `share-140`, `notes-120`, `versions-120`.
-**Pro-MVP impact:** PR2 + PR3 required (private sharing is a paid feature). PR4
-post-MVP. PR5 nice-to-have.
+
+- **What:** Grants/revoke, visibility, folder-scoped routes; consistent across Drive
+  + GitHub. Stretch: portable sidecar formats for Notes + Versions, round-trippers to
+  git.
+- **Status:** PR1 (provider scaffolding) merged. PR2 (Drive Share dialog UI), PR3 (GH
+  sharing adapter), PR4 (folder boundary routes) open. PR5 (GH token-health parity)
+  and PR6 (flag retire) follow.
+- **Unblocks:** `share-120`, `share-130`, `share-140`, `notes-120`, `versions-120`.
+- **Pro-MVP impact:** PR2 + PR3 required (private sharing is a paid feature). PR4
+  post-MVP. PR5 nice-to-have.
+- **Docs:** `design/new/multi-user-sharing.md` + `design/new/sharing-pr3-github.md`.
+
 
 ### Track T5: Drive Recents HEAD-check
-**Doc:** `design/new/drive-recents-head-check.md`.
-**What:** Pre-flight Drive metadata check on recents click; typed `FileUnreachable`
-alert variants.
-**Status:** Proposed. Not started.
-**Unblocks:** `open-150`. Pattern reusable for GH recents once `githubAsSource` lands.
-**Pro-MVP impact:** Polish; not strictly required for paid launch but the support cost
-of "Failed to parse model" on dead recents is real.
+
+- **What:** Pre-flight Drive metadata check on recents click; typed `FileUnreachable`
+  alert variants.
+- **Status:** Proposed. Not started.
+- **Unblocks:** `open-150`. Pattern reusable for GH recents once `githubAsSource`
+  lands.
+- **Pro-MVP impact:** Polish; not strictly required for paid launch but the support
+  cost of "Failed to parse model" on dead recents is real.
+- **Doc:** `design/new/drive-recents-head-check.md`.
+
 
 ### Track T6: Notes & Versions sidecar formats
-**Doc:** `multi-user-sharing.md` §Stretch (Q1–Q4).
-**What:** Provider-neutral JSON sidecar formats for notes + versions, round-tripping
-between Drive snapshots and git issues/commits.
-**Status:** Not started.
-**Unblocks:** `notes-120`, `notes-110` (BCF can be derived), `versions-120`.
-**Pro-MVP impact:** Post-MVP. Quarter-scale work.
+
+- **What:** Provider-neutral JSON sidecar formats for notes + versions, round-tripping
+  between Drive snapshots and git issues/commits.
+- **Status:** Not started.
+- **Unblocks:** `notes-120`, `notes-110` (BCF can be derived), `versions-120`.
+- **Pro-MVP impact:** Post-MVP. Quarter-scale work.
+- **Doc:** `multi-user-sharing.md` §Stretch (Q1–Q4).
+
 
 ### Track T7: Ads
-**Doc:** `design/new/ads.md` + epic #1524.
-**What:** AdSense free-tier monetisation without Auto-ads on viewer routes.
-**Status:** Phase 1 activation in flight (#1523). Phases 2–4 outlined.
-**Unblocks:** `subscribe-130`.
-**Pro-MVP impact:** Phase 1 required (activate publisher account). Phases 2–3 should
-land before public launch but can lag a beat.
+
+- **What:** AdSense free-tier monetisation without Auto-ads on viewer routes.
+- **Status:** Phase 1 activation in flight (#1523). Phases 2–4 outlined.
+- **Unblocks:** `subscribe-130`.
+- **Pro-MVP impact:** Phase 1 required (activate publisher account). Phases 2–3
+  should land before public launch but can lag a beat.
+- **Doc:** `design/new/ads.md` + epic #1524.
+
 
 ### Track T8: Pro/Billing (NEW track)
-**Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
-**What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
-plumbing throughout the app.
-**Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
-`netlify/functions/unlink-identity.js` (pattern reuse).
-**Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`.
-**Pro-MVP impact:** Required end-to-end.
+
+- **What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
+  plumbing throughout the app.
+- **Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
+  `netlify/functions/unlink-identity.js` (pattern reuse).
+- **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`.
+- **Pro-MVP impact:** Required end-to-end.
+- **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
 
 
-## 5. Pro-MVP plan
+## 6. Pro-MVP plan
 
 Goal: ship the **paid tier** publicly. Free + Pro coexist; anonymous use stays
 possible; private sharing + multi-account + quota are paid; ads run on free.
@@ -554,7 +652,7 @@ text routes only.
 **Exit:** Pro launch announcement.
 
 
-## 6. Post-MVP backlog (loveable)
+## 7. Post-MVP backlog (loveable)
 
 Held over for after Phase E. Order roughly reflects current product-pull:
 
@@ -583,17 +681,17 @@ Held over for after Phase E. Order roughly reflects current product-pull:
 18. **PDF "Social Updates" (ActivityPub federation)** — interesting; no current pull.
 
 
-## 7. Migration to GH issues + wiki
+## 8. Migration to GH issues + wiki
 
 Once this doc lands, the backfill order:
 
 1. **GitHub issues — Epics first.**
-   For each Epic in §3 with status 🟡 or ⬜ and `Pro-MVP impact: required`, create an
+   For each Epic in §4 with status 🟡 or ⬜ and `Pro-MVP impact: required`, create an
    `epic`-labeled GH issue with the body content from the Epic block. Stable ID
    becomes the issue title prefix (e.g. `epic: open-130: SourcesTab with parallel GH +
    Drive accounts`). One pass; expect ~12–15 new Epic issues.
 2. **GitHub issues — Stories under Epics.**
-   For each open story already in #§ (e.g. #1421, #1422, #1250, #1251, #1254, #850,
+   For each open story already in §3.1 (e.g. #1421, #1422, #1250, #1251, #1254, #850,
    #890, #892), use `mcp__github__sub_issue_write` to attach them under the right
    Epic. Re-title for consistency where useful.
 3. **GitHub issues — backfill missing stories.**
@@ -601,20 +699,19 @@ Once this doc lands, the backfill order:
    per acceptance criterion. Stories enter the queue with the corresponding `epic`
    sub-issue parent.
 4. **Wiki rewrite.**
-   Replace `Planning:-Requirements` with a public-facing summary derived from §3 of
+   Replace `Planning:-Requirements` with a public-facing summary derived from §4 of
    this doc. Strip the implementation links and `Pro-MVP impact` rows; keep the
    Epic-by-Epic structure with status. The wiki page becomes the user-facing roadmap.
 5. **CLAUDE.md router row.**
-   Add a row for this doc to the routing table in `CLAUDE.md` so future assistants
-   find it.
+   Added in this commit so future assistants find this doc.
 
 I'll draft each batch and review with you before creating GH issues — won't bulk-create
 without sign-off.
 
 
-## 8. Open questions
+## 9. Open questions
 
-- **Pro tier feature gate definition.** §3.9 sketches `subscribe-100` but the actual
+- **Pro tier feature gate definition.** §4.9 sketches `subscribe-100` but the actual
   list of "this is Pro" features needs your call. Working hypothesis: private link
   sharing, ad-free, multi-account, larger model cache retention, quota uplift. Confirm
   before T8 design doc.
@@ -626,22 +723,22 @@ without sign-off.
   resolved before Phase D quota tracking ships (the quota key is meaningless if the
   functions are anonymous).
 - **BCF priority.** Industry-credibility win vs. cost. If we want it for Pro-MVP it
-  becomes Phase C scope; otherwise it slips to post-MVP per §6 item 7.
+  becomes Phase C scope; otherwise it slips to post-MVP per §7 item 7.
 - **Maintenance of this doc.** Cadence: bump on every Epic state change? Or quarterly
   rollup? My recommendation: amend per-PR when an Epic moves status; quarterly review
   to catch drift.
 
 
-## 9. Doc maintenance
+## 10. Doc maintenance
 
-- **When an Epic ships:** update its block in §3 from 🟡 → ✔. Move it out of the
-  Pro-MVP phase list in §5 if it was there.
+- **When an Epic ships:** update its row in §3.1 and its block in §4 from 🟡 → ✔.
+  Move it out of the Pro-MVP phase list in §6 if it was there.
 - **When a story closes:** add it to the Closed list under its Epic; PR description
   should reference `roadmap.md` if the change moves an Epic state.
-- **When a track lands a slice:** update the Status line of the track in §4. If the
-  track is "done" it becomes a one-line entry pointing at its design doc.
-- **When a new Epic emerges:** add it to §3 under the appropriate verb group with a
-  stable ID one above the highest existing in that group (e.g. `open-160`). Don't
-  renumber existing IDs.
-- **Don't delete done Epics.** They stay in §3 as the historical record of what
-  shipped, which is what §6 "Post-MVP backlog" is measured against.
+- **When a track lands a slice:** update the Status line of the track in §3.2 and §5.
+  If the track is "done" it becomes a one-line entry pointing at its design doc.
+- **When a new Epic emerges:** add it to §4 under the appropriate verb group with a
+  stable ID one above the highest existing in that group (e.g. `open-160`), and add
+  the matching row to §3.1. Don't renumber existing IDs.
+- **Don't delete done Epics.** They stay in §4 as the historical record of what
+  shipped, which is what §7 "Post-MVP backlog" is measured against.
