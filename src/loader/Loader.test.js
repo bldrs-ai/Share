@@ -79,16 +79,13 @@ describe('Loader', () => {
         },
       },
     }
-    // Slice 5d.1: production wires `viewer.IFC.loader` to a
+    // Slice 5d.1: production wires `viewer.ifcLoader` to a
     // ShareIfcLoader during ShareViewer construction. This test
     // builds its own viewer stub (not via __mocks__/web-ifc-viewer),
-    // so we install a real ShareIfcLoader here so `loader.parse`
-    // runs the Conway-direct flow against the mock ifcAPI. The
-    // previous `loader.parse: jest.fn().mockResolvedValue(...)` stub
-    // was overridden by `newIfcLoader` pre-5d.1 — it's vestigial
-    // now and kept only for any test that still grabs `parse` off
-    // the inner ifcManager via legacy reads.
-    mockViewer.IFC.loader = new ShareIfcLoader({
+    // so we install a real ShareIfcLoader here so the IFC `case`
+    // arm in `findLoader` finds it and `loader.parse` runs the
+    // Conway-direct flow against the mock ifcAPI.
+    mockViewer.ifcLoader = new ShareIfcLoader({
       ifcAPI: mockViewer.IFC.loader.ifcManager.ifcAPI,
       ifc: mockViewer.IFC,
     })

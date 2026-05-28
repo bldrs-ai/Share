@@ -34,7 +34,9 @@ jest.mock('./urls', () => ({
 /**
  * Build a minimal viewer stub that satisfies the non-IFC path through
  * load(): `viewer.IFC.addIfcModel`, `viewer.IFC.loader.ifcManager.state.models`,
- * and a `.type` slot for the loader to tag.
+ * a `.type` slot for the loader to tag, and a `viewer.ifcLoader`
+ * placeholder so `findLoader`'s `case 'ifc'` arm can set `.type` on it
+ * before any IFC-specific test wires a real ShareIfcLoader.
  *
  * @return {object}
  */
@@ -47,6 +49,7 @@ function makeViewerStub() {
         ifcManager: {state: {models: []}},
       },
     },
+    ifcLoader: {type: null},
   }
 }
 
@@ -463,11 +466,12 @@ describe('load() error/edge paths with OPFS enabled', () => {
         },
       },
     }
-    // Slice 5d.1: install ShareIfcLoader. The OOM-throwing OpenModel
-    // is on `ifcViewer.IFC.loader.ifcManager.ifcAPI` (set above);
+    // Slice 5d.1: install ShareIfcLoader at the viewer-level slot.
+    // The OOM-throwing OpenModel is on
+    // `ifcViewer.IFC.loader.ifcManager.ifcAPI` (set above);
     // ShareIfcLoader.parse calls into it and surfaces the OOM the
     // same way `newIfcLoader.parse` did pre-5d.1.
-    ifcViewer.IFC.loader = new ShareIfcLoader({
+    ifcViewer.ifcLoader = new ShareIfcLoader({
       ifcAPI: ifcViewer.IFC.loader.ifcManager.ifcAPI,
       ifc: ifcViewer.IFC,
     })
@@ -528,11 +532,12 @@ describe('load() error/edge paths with OPFS enabled', () => {
       },
     }
     const primedViewer = {IFC: ifcLoaderBase}
-    // Slice 5d.1: install ShareIfcLoader. The "model already present"
-    // guard lives inside ShareIfcLoader.parse — it inspects
+    // Slice 5d.1: install ShareIfcLoader at the viewer-level slot.
+    // The "model already present" guard lives inside
+    // ShareIfcLoader.parse — it inspects
     // `context.items.ifcModels.length`, which we've pre-populated
     // above so the guard fires immediately.
-    primedViewer.IFC.loader = new ShareIfcLoader({
+    primedViewer.ifcLoader = new ShareIfcLoader({
       ifcAPI: primedViewer.IFC.loader.ifcManager.ifcAPI,
       ifc: primedViewer.IFC,
     })

@@ -1218,10 +1218,14 @@ async function findLoader(pathname, viewer) {
     case 'stp':
     case 'ifc': {
       // ShareIfcLoader (`src/viewer/ifc/ShareIfcLoader.js`) is wired
-      // up as `viewer.IFC.loader` at viewer construction (see
+      // up as `viewer.ifcLoader` at viewer construction (see
       // `src/viewer/ShareViewer.js`). It owns the Conway-direct parse
-      // entry point that `readModel` invokes below.
-      loader = viewer.IFC.loader
+      // entry point that `readModel` invokes below. The fork's
+      // wit-three IFCLoader at `viewer.IFC.loader` is left untouched
+      // because fork-side consumers (IfcClipper, ClippingEdges, fills,
+      // glTF exporter) still reach for `.loader.ifcManager.{subsets,
+      // createSubset, parser.optionalCategories, state}`.
+      loader = viewer.ifcLoader
       isLoaderAsync = true
       // TODO(pablo): true should work but currently causes IFCLoader to fail
       isFormatText = false
