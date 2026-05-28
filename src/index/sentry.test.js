@@ -1,4 +1,14 @@
-import {shouldSendSentryEvent} from './sentry'
+import {gtagEvent} from '../privacy/analytics'
+import {shouldSendSentryEvent, _resetSentryFilterStateForTests} from './sentry'
+
+
+jest.mock('../privacy/analytics', () => ({gtagEvent: jest.fn()}))
+
+
+beforeEach(() => {
+  jest.clearAllMocks()
+  _resetSentryFilterStateForTests()
+})
 
 
 describe('shouldSendSentryEvent', () => {
@@ -85,5 +95,66 @@ describe('shouldSendSentryEvent', () => {
       },
     }
     expect(shouldSendSentryEvent(event)).toBe(true)
+  })
+})
+
+
+describe('shouldSendSentryEvent — once-per-session GA signal', () => {
+  const rumEvent = () => ({
+    exception: {
+      values: [{
+        stacktrace: {
+          frames: [{filename: '/.netlify/scripts/rum'}],
+        },
+      }],
+    },
+  })
+
+  /*
+   * The point of the GA emission isn't to spam — we want one signal
+   * per session that "this client blocks RUM", paired with dropping
+   * the Sentry events. The first drop fires gtagEvent; subsequent
+   * drops for the same pattern must be silent on the GA side too.
+   */
+  it('fires gtagEvent on the first drop of a third-party-noise event', () => {
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    expect(gtagEvent).toHaveBeenCalledWith('netlify_rum_blocked', {})
+  })
+
+  it('does not re-fire gtagEvent on subsequent drops of the same pattern', () => {
+    shouldSendSentryEvent(rumEvent())
+    shouldSendSentryEvent(rumEvent())
+    shouldSendSentryEvent(rumEvent())
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire gtagEvent for first-party events', () => {
+    const firstPartyEvent = {
+      exception: {
+        values: [{
+          stacktrace: {
+            frames: [{filename: 'src/Containers/CadView.jsx'}],
+          },
+        }],
+      },
+    }
+    expect(shouldSendSentryEvent(firstPartyEvent)).toBe(true)
+    expect(gtagEvent).not.toHaveBeenCalled()
+  })
+
+  it('refires gtagEvent after _resetSentryFilterStateForTests — proves test isolation works', () => {
+    shouldSendSentryEvent(rumEvent())
+    expect(gtagEvent).toHaveBeenCalledTimes(1)
+    _resetSentryFilterStateForTests()
+    shouldSendSentryEvent(rumEvent())
+    expect(gtagEvent).toHaveBeenCalledTimes(2)
+  })
+
+  it('still drops Sentry events when gtagEvent throws — best-effort GA capture', () => {
+    gtagEvent.mockImplementationOnce(() => {
+      throw new Error('gtag blew up')
+    })
+    expect(shouldSendSentryEvent(rumEvent())).toBe(false)
   })
 })
