@@ -241,6 +241,18 @@ multi-worker; etc.*
 loveable maps-style filtering visualization will sit. The PDF treats them as one
 Epic and we keep that pairing here.*
 
+The placemark primitive has two creation modes:
+- **Transient** — created in-app, lives only in the URL hash (`#m:x,y,z`), no
+  backing storage. Sharable as a bare permalink. This mode is why Placemarks
+  belongs under `view-180` rather than `notes-*` — the primitive doesn't require
+  Notes (or any storage layer) to exist.
+- **Anchored to a Note** — persisted via the GitHub Issue store; the note's
+  share-URL carries the placemark hash so the recipient lands on the pin with
+  the discussion open.
+
+Many future features will cross-cut both modes (filtering, clustering, search-by-
+placemark, etc.).
+
 The Epic splits into two layers — the primitive (substantial work landed) and the
 visualization on top (post-MVP loveable):
 
