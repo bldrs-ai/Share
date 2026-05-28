@@ -96,6 +96,15 @@ const impl = {
     // IfcContext; only `viewer.context` is the ThreeContext wrapper.
     context: legacyContextMock,
     setWasmPath: jest.fn(),
+    // Post-slice-5c: ShareViewer.getProperties delegates to
+    // `this.IFC.getProperties`. Pre-5c the convenience method came
+    // from `IfcViewerAPI.prototype.getProperties` via `extends`, and
+    // the singleton mock shadowed it with the top-level
+    // `impl.getProperties` below — composition severs that shadow, so
+    // we mirror the production shape here too.
+    getProperties: jest.fn((modelId, eltId) => {
+      return loadedModel.ifcManager.getProperties(eltId)
+    }),
     selector: {
       unpickIfcItems: jest.fn(),
       selection: {
