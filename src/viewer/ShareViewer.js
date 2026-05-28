@@ -7,6 +7,7 @@ import IfcHighlighter from './three/IfcHighlighter'
 import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
+import ShareIfcLoader from './ifc/ShareIfcLoader'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
@@ -64,13 +65,28 @@ const viewRules = {
 }
 /* eslint-disable jsdoc/no-undefined-types */
 /**
- * ShareViewer — the top-level viewer facade for Bldrs Share. Today still
- * extends `IfcViewerAPI` from the `web-ifc-viewer` fork; per
- * design/new/viewer-replacement.md §3, downstream code should depend on
- * this class rather than on the fork directly. When the fork is removed
- * (Phase 5), ShareViewer's surface stays — only its internals swap.
+ * ShareViewer — the top-level viewer facade for Bldrs Share.
+ *
+ * Slice 5c of design/new/viewer-replacement.md flipped this from
+ * `extends IfcViewerAPI` to composition. The fork's `IfcViewerAPI` is
+ * still instantiated internally (as `this._fork`) — we depend on it
+ * for `IfcContext` (Scene/Camera/Renderer + render loop), `IfcManager`
+ * (the parser / ifcAPI / property reads), and `IfcClipper` (IFC
+ * clipping plane interaction) — but ShareViewer is no longer
+ * `instanceof IfcViewerAPI`. Downstream code depends on this class,
+ * not the fork. When the fork's pieces get replaced piece-by-piece in
+ * later slices, `this._fork` shrinks until it can be deleted entirely
+ * (the dep gets dropped from package.json then).
+ *
+ * Property surface (kept identical to pre-5c so consumers don't churn):
+ *   - `this.IFC` — fork's IfcManager (selector, loader.ifcManager, …)
+ *   - `this.context` — ThreeContext wrapping the fork's IfcContext
+ *   - `this.clipper` — local `Clipper` facade dispatching per-model
+ *   - `this.selector` — local `Selector` facade over `IFC.selector`
+ *   - `this.isolator`, `this.highlighter`, `this.postProcessor`,
+ *     `this.viewsManager` — local plugins constructed here.
  */
-export class ShareViewer extends IfcViewerAPI {
+export class ShareViewer {
   // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -90,17 +106,40 @@ export class ShareViewer extends IfcViewerAPI {
    * @param {object} options - Configuration options
    */
   constructor(options) {
-    super(options)
-    // Replace the fork's `IfcContext` reference on this.context with our
-    // layered wrapper. The fork's IfcManager / clipper / etc. were
-    // constructed in `super()` with the original IfcContext and keep
-    // their own private reference to it, so the fork side is unaffected.
-    // Our code reads `viewer.context.X` through the wrapper. Guarded so
-    // mocks that pre-wrap (see __mocks__/web-ifc-viewer.js) don't get
-    // double-wrapped.
-    if (!(this.context instanceof ThreeContext)) {
-      this.context = new ThreeContext(this.context)
+    // Composition (was `super(options)` before slice 5c). The fork
+    // viewer's constructor builds IfcContext, IfcManager, IfcClipper,
+    // plus a heap of components we never use (Grid, Axes, GLTF,
+    // ShadowDropper, Edges, DXF, PDF, SelectionWindow, …) — those
+    // bundle-cost stays put for now; subsequent slices replace the
+    // pieces we DO use and `_fork` shrinks. Held as a private member
+    // so `dispose()` can delegate fork teardown and tests can reach
+    // the same instance the singleton mock returns.
+    this._fork = new IfcViewerAPI(options)
+    this.IFC = this._fork.IFC
+    // Slice 5d.1: install our `ShareIfcLoader` alongside the fork's
+    // IFCLoader (which stays at `viewer.IFC.loader`). The fork's
+    // IfcClipper / ClippingEdges / fills / plan-manager / glTF
+    // exporter all reach for `this.ifc.loader.ifcManager.{subsets,
+    // parser.optionalCategories, createSubset, state, …}` after
+    // construction — replacing `viewer.IFC.loader` would break them.
+    // Instead `viewer.ifcLoader` is a NEW top-level slot owned by
+    // ShareViewer; `Loader.js#findLoader` reads from there for the
+    // `case 'ifc'` arm. The Conway IfcAPI handle is sourced from the
+    // fork's IFCManager during this transitional slice; later slices
+    // instantiate Conway directly.
+    const conwayIfcAPI = this._fork.IFC.loader?.ifcManager?.ifcAPI
+    if (conwayIfcAPI) {
+      this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
+    // Wrap the fork's `IfcContext` in our ThreeContext layer. The fork's
+    // IfcManager / IfcClipper retained their own private references to
+    // the original context inside `new IfcViewerAPI(...)`, so the
+    // wrapper here only affects `this.context.X` reads from our code.
+    // Guarded so mocks that pre-wrap (see __mocks__/web-ifc-viewer.js)
+    // don't get double-wrapped.
+    this.context = this._fork.context instanceof ThreeContext ?
+      this._fork.context :
+      new ThreeContext(this._fork.context)
     const renderer = this.context.getRenderer()
     // Partner to the top-level `ColorManagement.enabled = false`: that
     // disables the *input* side (auto sRGB→linear conversions on
@@ -124,27 +163,82 @@ export class ShareViewer extends IfcViewerAPI {
     // Selector — §3c.iv slice 1 facade over the fork's `IFC.selector`.
     // Every call-site that previously poked at `viewer.IFC.selector.X`
     // now routes through `viewer.selector.X` instead. Keeps the fork
-    // selector as the underlying impl until Phase 5 swaps it for an
-    // IfcModelService-backed `Selection` plugin.
+    // selector as the underlying impl until later in Phase 5 swaps it
+    // for an IfcModelService-backed `Selection` plugin.
     this.selector = new Selector(this.IFC?.selector)
     // Clipper — §3c.iv slice 3 unified facade over the fork's
-    // `IfcClipper` + in-repo `GlbClipper`. Replaces `viewer.clipper`
-    // (set by IfcViewerAPI's super() call) with one object that
-    // dispatches per-model. Call-sites no longer branch on
-    // `viewer.IFC.type === 'glb'` — they call `viewer.clipper.X`
-    // and trust the plugin. The fork's clipper is captured here
-    // before being overwritten so the IFC backing impl is preserved.
-    //
-    // Guard for the test-singleton path: __mocks__/web-ifc-viewer.js
-    // reuses one `impl` across every `new ShareViewer()` call. Without
-    // the `instanceof Clipper` check, the second construction would
-    // capture the *previous* Clipper plugin as `_forkClipper`, losing
-    // the underlying fork clipper.
-    if (!(this.clipper instanceof Clipper)) {
-      this._forkClipper = this.clipper
-      this.clipper = new Clipper(this, this._forkClipper)
-    }
+    // `IfcClipper` + in-repo `GlbClipper`. The fork constructed an
+    // IfcClipper on `_fork.clipper`; we capture that as the IFC backing
+    // impl and wrap with our Clipper. Call-sites no longer branch on
+    // `viewer.IFC.type === 'glb'` — they call `viewer.clipper.X` and
+    // trust the plugin.
+    this._forkClipper = this._fork.clipper
+    this.clipper = new Clipper(this, this._forkClipper)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
+  }
+
+
+  /**
+   * Tear down the composed viewer.
+   *
+   * Order matters: local plugins first (they hold direct refs to the
+   * fork's scene / IFC manager and would crash if those die first),
+   * then delegate to `_fork.dispose()` for IfcContext + IfcManager
+   * teardown (renderer.dispose, scene.dispose, IFC.dispose). The
+   * grid/axes/GLTF/etc. dispose chain inside the fork is no-op for our
+   * usage but cheap to leave running.
+   *
+   * `Containers/viewer.js#disposeViewer` already handles scene-traversal
+   * + renderer.forceContextLoss before calling this method; we don't
+   * double up on that work here.
+   *
+   * @return {Promise<void>}
+   */
+  async dispose() {
+    // Local plugins. Each is null-safe individually so partial-init
+    // teardown (e.g. constructor throw mid-build) still works.
+    try {
+      this.viewsManager?.dispose?.()
+    } catch (e) {
+      console.warn('viewsManager.dispose failed:', e)
+    }
+    try {
+      this.isolator?.dispose?.()
+    } catch (e) {
+      console.warn('isolator.dispose failed:', e)
+    }
+    try {
+      this.highlighter?.dispose?.()
+    } catch (e) {
+      console.warn('highlighter.dispose failed:', e)
+    }
+    try {
+      this.postProcessor?.dispose?.()
+    } catch (e) {
+      console.warn('postProcessor.dispose failed:', e)
+    }
+    // Clipper.dispose handles both the fork's IfcClipper (the IFC
+    // backing impl) and the GlbClipper (interaction handlers); we DO
+    // NOT call _forkClipper.dispose directly afterwards because
+    // _fork.dispose would call it again and the second call throws on
+    // a torn-down clipper.
+    try {
+      this.clipper?.dispose?.()
+    } catch (e) {
+      console.warn('clipper.dispose failed:', e)
+    }
+    // Fork teardown. Stub out the clipper before delegating so
+    // `_fork.dispose()` doesn't double-dispose what `this.clipper`
+    // just tore down. IfcContext + IFC.dispose are the load-bearing
+    // pieces this delegation buys us.
+    if (this._fork) {
+      this._fork.clipper = {dispose: () => {/* already torn down */}}
+      try {
+        await this._fork.dispose?.()
+      } catch (e) {
+        console.warn('_fork.dispose failed:', e)
+      }
+    }
   }
 
   /**
@@ -251,6 +345,23 @@ export class ShareViewer extends IfcViewerAPI {
 
     return elementIDs
   }
+
+  /**
+   * Fetch item properties. Carries over the deprecated convenience
+   * method from `IfcViewerAPI.getProperties` — `extends IfcViewerAPI`
+   * used to inherit this; post-slice-5c composition we re-publish it
+   * here so call-sites (`CadView.jsx#convertElement`) don't churn.
+   *
+   * @param {number} modelID
+   * @param {number} id Express ID.
+   * @param {boolean} [indirect] If true, also returns psets, qsets and type properties.
+   * @param {boolean} [recursive]
+   * @return {Promise<any>}
+   */
+  getProperties(modelID, id, indirect, recursive) {
+    return this.IFC.getProperties(modelID, id, indirect, recursive)
+  }
+
 
   /**
    * Loads the given IFC in the current scene.

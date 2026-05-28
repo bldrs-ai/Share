@@ -88,6 +88,21 @@ function makeMockViewer() {
         fitToFrame: jest.fn(),
       },
     },
+    // Slice 5d.1: production wires `viewer.ifcLoader` to a
+    // ShareIfcLoader. This test exercises the GitHub-fetch /
+    // lastModified plumbing — not the IFC parse itself — so a
+    // ShareIfcLoader-shaped stub with a settable `.type` and a
+    // `.parse` that resolves the loadedModel shape is enough.
+    ifcLoader: {
+      type: null,
+      parse: jest.fn().mockResolvedValue({
+        modelID: 0,
+        loadStats: {},
+        children: [],
+        geometry: undefined,
+        isObject3D: true,
+      }),
+    },
   }
 }
 

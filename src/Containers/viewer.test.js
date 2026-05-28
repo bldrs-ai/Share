@@ -237,9 +237,16 @@ describe('Containers/viewer', () => {
 
 
   describe('singleton fixture sanity', () => {
-    it('initViewer returns the same singleton object the test mock exposes', () => {
+    it('initViewer returns a ShareViewer wrapping the singleton fork mock', () => {
+      // Post-slice-5c: ShareViewer composes the fork instead of extending
+      // it. `viewer` is a ShareViewer; `viewer._fork` is the
+      // IfcViewerAPI mock singleton the rest of the tests share state
+      // through (e.g. `viewer.IFC === singleton.IFC` still holds because
+      // the constructor wires `this.IFC = this._fork.IFC`).
       const viewer = initViewer('/share/v/p')
-      expect(viewer).toBe(__getShareViewerMockSingleton())
+      const singleton = __getShareViewerMockSingleton()
+      expect(viewer._fork).toBe(singleton)
+      expect(viewer.IFC).toBe(singleton.IFC)
     })
   })
 })
