@@ -25,6 +25,31 @@ module.exports = {
         'no-empty-function': ['error', {allow: ['arrowFunctions']}],
       },
     },
+    // Vendored IfcContext family (`src/viewer/three/context/**`) — code
+    // copied from `web-ifc-viewer/dist/components/context/*` in slice
+    // 5d.3. Kept intentionally close to the upstream shape so future
+    // fork-side bug fixes are easy to re-apply; loosens jsdoc /
+    // magic-number / require-jsdoc rules that would otherwise force a
+    // massive cosmetic rewrite. The two intentional patches (Clock
+    // shim, light-intensity ×π, Postproduction stub) are inline.
+    {
+      files: ['src/viewer/three/context/**/*.js'],
+      rules: {
+        'require-jsdoc': 'off',
+        'no-magic-numbers': 'off',
+        'jsdoc/require-jsdoc': 'off',
+        'jsdoc/require-param-description': 'off',
+        'jsdoc/require-returns-description': 'off',
+        'jsdoc/require-returns': 'off',
+        'valid-jsdoc': 'off',
+        'max-len': 'off',
+        'no-console': 'off',
+        'no-mixed-operators': 'off',
+        'no-unused-expressions': 'off',
+        'no-var': 'off',
+        'no-shadow': 'off',
+      },
+    },
     // --- TS / TSX
     {
       files: ['*.ts', '*.tsx'],

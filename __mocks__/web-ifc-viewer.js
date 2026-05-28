@@ -2,6 +2,33 @@ jest.mock('three')
 jest.mock('../src/viewer/three/IfcHighlighter')
 jest.mock('../src/viewer/three/IfcIsolator')
 jest.mock('../src/viewer/three/CustomPostProcessor')
+// Slice 5d.3: ShareViewer now instantiates `IfcContext` (vendored at
+// `src/viewer/three/context/`) and `makeForkIfc(ifcContext)` directly
+// (was `new IfcViewerAPI(options)`). The auto-mock-on-`from
+// 'web-ifc-viewer'`-import flow this file uses doesn't cover those
+// source modules; mock them here too. Load order is: ShareViewer.js
+// does `import 'web-ifc-viewer'` FIRST, which triggers this file
+// to load, which registers the jest.mock factories below. By the time
+// ShareViewer's later `import {IfcContext} from './three/context'`
+// resolves, the factory is registered and Jest uses it.
+//
+// The factories route through `globalThis` rather than capturing
+// `impl` / `legacyContextMock` directly because babel-plugin-jest-hoist
+// places the factory bodies in a separate lexical scope. Capturing the
+// consts produced a second `impl` reference and broke the singleton
+// invariant `viewer.IFC === __getShareViewerMockSingleton().IFC`.
+// Routing via `globalThis` ensures both this file's exports and the
+// factory closures resolve to the same backing objects.
+jest.mock('../src/viewer/three/context', () => ({
+  IfcContext: jest.fn().mockImplementation(
+    () => globalThis.__BLDRS_MOCK_LEGACY_CTX__),
+}))
+jest.mock('../src/viewer/three/forkIfcComposition', () => ({
+  makeForkIfc: jest.fn(() => ({
+    IFC: globalThis.__BLDRS_MOCK_IMPL__.IFC,
+    clipper: globalThis.__BLDRS_MOCK_IMPL__.clipper,
+  })),
+}))
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 const ThreeContext = require('../src/viewer/three/ThreeContext').default
 
@@ -36,11 +63,15 @@ const legacyContextMock = {
   getClippingPlanes: jest.fn(() => {
     return []
   }),
-  getDomElement: jest.fn(() => ({
-    setAttribute: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-  })),
+  // Slice 5d.3: every ShareViewer instance now wraps the same
+  // legacyContextMock in its own ThreeContext, so reaching for
+  // `viewer.context.getDomElement` from one ShareViewer no longer
+  // affects another. Return a real `<div>` so callers that touch
+  // `.style.touchAction` (PlaceMark) or `.dispatchEvent` (drag-drop)
+  // see a usable DOM element straight from the singleton mock.
+  getDomElement: jest.fn(() => (typeof document !== 'undefined' ?
+    document.createElement('div') :
+    {setAttribute: () => {}, addEventListener: () => {}, removeEventListener: () => {}, style: {}})),
   getRenderer: jest.fn(),
   getScene: jest.fn(() => {
     return {
@@ -203,12 +234,55 @@ const impl = {
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)
 
+// This file loads more than once per test run (auto-mock invocation
+// plus the explicit `import 'web-ifc-viewer'` from ShareViewer go
+// through separate module instances). Without dedup, each load builds
+// a new `impl` and stomps `globalThis.__BLDRS_MOCK_IMPL__`, so the
+// jest.mock factories at the top would resolve to a different `impl`
+// than `__getShareViewerMockSingleton()` returns — breaking the
+// invariant `viewer.IFC === singleton.IFC`. Keep only the first load's
+// impl/legacy on globalThis.
+if (!globalThis.__BLDRS_MOCK_IMPL__) {
+  globalThis.__BLDRS_MOCK_IMPL__ = impl
+  globalThis.__BLDRS_MOCK_LEGACY_CTX__ = legacyContextMock
+}
+
 
 /**
- * @return {object} The single mock instance of ShareViewer.
+ * Deferred accessors for the `jest.mock(...)` factories at the top of
+ * this file. The `mock` name prefix is required by babel-plugin-jest-
+ * hoist: the factory closures get hoisted above the `impl` /
+ * `legacyContextMock` const declarations, so they can't capture those
+ * consts directly — only `mock`-prefixed identifiers are allow-listed
+ * for out-of-scope reference. These function declarations ARE hoisted
+ * (JS function hoisting), and by the time a factory actually runs (when
+ * ShareViewer first requires `./three/context` etc.) the consts are
+ * populated.
+ *
+ * @return {object} the singleton mock `impl`.
+ */
+function mockGetImpl() {
+  return impl
+}
+
+
+/**
+ * @return {object} the raw fork-style IfcContext mock (pre-ThreeContext-wrap).
+ */
+function mockGetLegacyContext() {
+  return legacyContextMock
+}
+
+
+/**
+ * @return {object} The single mock instance of ShareViewer. Routes
+ *   through `globalThis.__BLDRS_MOCK_IMPL__` for the same load-dedup
+ *   reason as the jest.mock factories above (this file loads more than
+ *   once per test run; only the first load's `impl` lives on
+ *   globalThis, and we want every consumer to converge on it).
  */
 function __getShareViewerMockSingleton() {
-  return impl
+  return globalThis.__BLDRS_MOCK_IMPL__ ?? impl
 }
 
 

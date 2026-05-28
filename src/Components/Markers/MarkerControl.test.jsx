@@ -111,10 +111,13 @@ describe('MarkerControl', () => {
   // need to move this after fixing that issue
   beforeEach(() => {
     viewer = new ShareViewer()
-    // Post-slice-5c: `_loadedModel` is a mock-side test helper that
-    // lives on the singleton impl (now reached via `_fork`), not on
-    // the ShareViewer instance.
-    viewer._fork._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    // Slice 5d.3: `_loadedModel` lives on the singleton fork mock that
+    // `__mocks__/web-ifc-viewer.js` exposes via `__getShareViewerMockSingleton`.
+    // Pre-5d.3 this was reached via `viewer._fork`, but the `_fork`
+    // composition pointer is gone now that ShareViewer instantiates
+    // IfcContext + IfcManager + IfcClipper directly.
+    const {__getShareViewerMockSingleton: getSingleton} = require('web-ifc-viewer')
+    getSingleton()._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
