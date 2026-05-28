@@ -1,4 +1,4 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {Link} from '@mui/material'
 import {ErrorOutline as ErrorOutlineIcon} from '@mui/icons-material'
 import {NotFoundError} from '../loader/Loader'
@@ -17,6 +17,44 @@ import Dialog from './Dialog'
 export default function AlertDialog({onClose}) {
   const alert = useStore((state) => state.alert)
   const setAlert = useStore((state) => state.setAlert)
+
+  // Sentry + GA tracking must NOT run from inside the render (it used to
+  // sit inside `createAlertReport`, called from JSX, so a load failure
+  // produced one Sentry event per re-render of the dialog — Sentry's
+  // SHARE-N5 had ~2.7× SHARE-RS's events for exactly this reason). Drive
+  // it from an effect keyed on the alert value so it fires once per
+  // distinct alert. `console.error` for generic errors lives here too —
+  // logging from render would multiply the same way.
+  //
+  // The ref-gated dedup below covers React StrictMode's intentional
+  // double-invocation of effects in dev — without it a dev session
+  // would double-count every alert in Sentry + GA. Production isn't
+  // affected (StrictMode is a no-op there) but the guard is cheap.
+  const lastTrackedAlertRef = useRef(null)
+  useEffect(() => {
+    if (alert === lastTrackedAlertRef.current) {
+      return
+    }
+    lastTrackedAlertRef.current = alert
+    if (alert === null) {
+      return
+    }
+    if (typeof alert === 'string') {
+      trackAlert(alert)
+      return
+    }
+    if (typeof alert !== 'object') {
+      return
+    }
+    if (alert.type === 'oom' || alert.type === 'needsReconnect') {
+      trackAlert(alert.message, alert)
+    } else if (alert instanceof NotFoundError || alert instanceof Error) {
+      if (!(alert instanceof NotFoundError)) {
+        console.error('General error:', alert)
+      }
+      trackAlert(alert.message, alert)
+    }
+  }, [alert])
 
   const onCloseInner = () => {
     setAlert(null)
@@ -103,29 +141,25 @@ export default function AlertDialog({onClose}) {
 
 
 /**
+ * Pure formatter for the alert display. Side effects (Sentry capture,
+ * GA tracking, console.error) live in the AlertDialog useEffect above —
+ * calling them from here would re-fire on every render.
+ *
  * @param {object} a
- * @return {ReactElement}
+ * @return {ReactElement|string}
  */
 function createAlertReport(a) {
   if (a === null) {
     return ''
   }
   if (typeof a === 'string') {
-    trackAlert(a)
     return a
   } else if (typeof a === 'object') {
-    if (a && a.type === 'oom') {
-      trackAlert(a.message, a)
-      return a.message
-    } else if (a && a.type === 'needsReconnect') {
-      trackAlert(a.message, a)
+    if (a && (a.type === 'oom' || a.type === 'needsReconnect')) {
       return a.message
     } else if (a instanceof NotFoundError) {
-      trackAlert(a.message, a)
       return displayPathAlert(a)
     } else if (a instanceof Error) {
-      console.error('General error:', a)
-      trackAlert(a.message, a)
       return `${a}`
     }
   }

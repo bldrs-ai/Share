@@ -368,18 +368,18 @@ export default function CadView({
     } catch (error) {
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
-        throw error
       }
-      // Bubble NeedsReconnect up to onViewer's catch so it can render the
-      // typed Reconnect overlay. Without this re-throw the inner catch
-      // swallowed it, set the alert as a generic Error, and the outer
-      // !tmpModelRef branch then overwrote it with "Failed to parse model".
-      if (error instanceof NeedsReconnectError) {
-        throw error
-      }
-
-      setAlert(error)
-      return
+      // Bubble every loader error up to onViewerInternal's catch so it can
+      // (1) set the alert once with the actual Error and (2) capture it
+      // once via its captureException call. Previously generic errors
+      // were swallowed here with setAlert(error)+return — and then the
+      // outer `if (!tmpModelRef && !isOOM)` branch overwrote the alert
+      // with the string "Failed to parse model", producing a second
+      // Sentry issue (SHARE-N5) for every real loader failure already
+      // tracked as SHARE-RS. The previous code already re-threw the
+      // typed OOM and NeedsReconnect cases for the same reason; this
+      // generalises that pattern to every loader error.
+      throw error
     } finally {
       setIsModelLoading(false)
     }
