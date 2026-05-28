@@ -107,10 +107,11 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
 | Community | `community-120` | Bug report w/ screenshot + session state | ⬜ | Post | — |
 | Community | `community-130` | AEC outreach (🥇) | 🔮 | Post | — |
-| Subscribe | `subscribe-100` | Pricing tiers + feature manager (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ⬜ | D | T8 |
-| Subscribe | `subscribe-120` | Quota tracking (NEW) | ⬜ | D | T8, T3 |
-| Subscribe | `subscribe-130` | Ads on free tier | 🟡 | D | T7 |
+| Subscribe | `subscribe-100` | Pricing tiers + capability map | 🟡 | D | T8 |
+| Subscribe | `subscribe-110` | Stripe checkout + portal + webhook hardening | 🟡 | D | T8 |
+| Subscribe | `subscribe-115` | Decouple billing from OAuth scope | 🟡 | D | T8 |
+| Subscribe | `subscribe-120` | Quota tracking + enforcement | ⬜ | D | T8, T3 |
+| Subscribe | `subscribe-130` | Ads on free tier (capability-gated) | 🟡 | D | T7, T8 |
 
 ### 3.2 Tracks
 
@@ -123,7 +124,7 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-150` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-110`, `notes-120`, `versions-120` |
 | T7 | Ads | 🟡 | D | `subscribe-130` |
-| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120` |
+| T8 | Pro/Billing | 🟡 | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, `subscribe-130` |
 
 
 ## 4. Normalized Epic catalogue
@@ -487,30 +488,51 @@ User finds out about Bldrs, gets oriented, leaves feedback, and finds product he
 ### 4.9 Subscribe (NEW Epic group)
 
 User upgrades from free to Pro, the system tracks quota, and Pro-only features become
-available.
+available. Full design in [`design/new/pro-billing.md`](new/pro-billing.md) (Track T8).
 
-*Nothing in the original PDF except scattered "paid?" annotations on save destinations
-(p.3 "To GitHub (paid?)", "To private server (paid)"). The Pro tier is mostly invented
-here from the existing `Mock Share Dialog B` in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> ("Pro Subscription ($25/mo)") and
-the quota-tracking notes in `identity-decoupling-decisions.md`.*
+*Not in the original PDF except scattered "paid?" annotations on save destinations.
+Pro bundle decided in the Phase D discussion (pro-billing.md §2): **private link sharing
++ ad-free + larger quotas**, flat single Pro price. Multi-account Sources stays free
+(symmetry with Drive; rationale in pro-billing.md §2 D2).*
 
-**Epic `subscribe-100`: Pricing tiers + feature manager** ⬜ (NEW)
-- Tasks: enumerate features per tier; ship a `tier`-aware capability map; UI in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>
-  mock dialog form.
+**Epic `subscribe-100`: Pricing tiers + capability map** 🟡 (NEW)
+*Today: one tier (Pro) with one capability (GitHub `repo` scope at post-checkout reauth).
+No `tier`-aware reader in code; `ProfileControl.jsx` consults `stripeCustomerId` truthy
+as a proxy.*
+- Designed: full capability map shape + per-capability consumer matrix in pro-billing.md
+  §3. `useIsPro()` + `useCapability(key)` hooks become the canonical readers.
+- Open: PR1 of the T8 sequence — ship the map + hooks; refactor existing
+  `stripeCustomerId` reads to `useIsPro()`.
 - **Required for Pro-MVP.**
 
-**Epic `subscribe-110`: Stripe checkout + portal** ⬜ (NEW)
-- Tasks: `create-portal-session` Netlify Function exists already (per identity
-  decoupling decisions doc — model pattern for new functions). Add
-  `create-checkout-session`; webhook for status changes; persist Pro flag against
-  Auth0 `sub`.
+**Epic `subscribe-110`: Stripe checkout + portal + webhook hardening** 🟡 (NEW)
+*Today: `create-portal-session` works (security-correct server-side `cus_…` lookup).
+Checkout via Stripe-hosted pricing table works but inflexible. Webhook handles only
+`subscription.{created,deleted}` events; user lookup is email-based and fragile.*
+- Designed: `create-checkout-session` Netlify Function with Auth0 `sub` propagated as
+  Stripe customer metadata; full event-set webhook (`updated`/`payment_failed`/
+  `payment_succeeded`/`trial_will_end`); idempotency via Netlify Blobs (or fallback);
+  env-driven Stripe IDs. See pro-billing.md §5 + §6.
+- Open: PR2 of the T8 sequence.
 - **Required for Pro-MVP.**
 
-**Epic `subscribe-120`: Quota tracking** ⬜ (NEW)
-- Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
-  §Q4 Open Question on "Quota tracking"); enforcement points in (a) GLB writer
-  Phase-5 share upload, (b) per-connection refresh-token mint, (c) public-share
-  retention sweep.
+**Epic `subscribe-115`: Decouple billing from OAuth scope** 🟡 (NEW)
+*Today: `app_metadata.subscriptionStatus` conflates billing + GitHub scope grant. The
+`*PendingReauth` modal fires on any tier change, even when scopes don't need to change.*
+- Designed: split into `tier` (billing) + `githubScopes` (OAuth) + `tierPendingReauth`
+  flag; modal fires only when scopes actually need to change. Dual-write migration for
+  one release. See pro-billing.md §4.
+- Open: PR3 of the T8 sequence (depends on PR1's hooks landing first).
+- **Required for Pro-MVP** — Pro features without scope change (ad-free, share quotas)
+  break the current coupling.
+
+**Epic `subscribe-120`: Quota tracking + enforcement** ⬜ (NEW)
+*Today: nothing.*
+- Designed: three enforcement points per pro-billing.md §7 — (a) GLB share-upload size
+  (T2 Phase 5 dep), (b) refresh-token mint rate at `gh-oauth-refresh.js` (T3 PR1 dep,
+  exists), (c) public-share retention sweep (scheduled Netlify Function). Per-Auth0-`sub`
+  counters in Netlify Blobs.
+- Open: PR6 of the T8 sequence; some dependent on T2 Phase 5.
 - **Required for Pro-MVP.**
 
 **Epic `subscribe-130`: Ads on free tier** 🟡
@@ -610,15 +632,18 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **Doc:** `design/new/ads.md` + epic <a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>.
 
 
-### Track T8: Pro/Billing (NEW track)
+### Track T8: Pro/Billing
 
-- **What:** Tier definitions, Stripe integration, quota infrastructure, feature-gate
-  plumbing throughout the app.
-- **Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
-  `netlify/functions/unlink-identity.js` (pattern reuse).
-- **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`.
+- **What:** Tier definitions, capability map, Stripe checkout + portal + hardened
+  webhook, decoupled billing-vs-OAuth-scope claims, quota infrastructure + enforcement,
+  pricing UI consolidation, upsell surfaces.
+- **Status:** Design doc landed (2026-05-28). Existing prod code: `create-portal-session`
+  (good — keep), `stripe-webhook` (handles 2 events only; rewrite per design §5),
+  Stripe-hosted pricing table (works but inflexible). 7-PR sequence planned (design §9).
+- **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-115`, `subscribe-120`,
+  `subscribe-130`.
 - **Pro-MVP impact:** Required end-to-end.
-- **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
+- **Doc:** `design/new/pro-billing.md`.
 
 
 ## 6. Pro-MVP plan
@@ -677,17 +702,21 @@ teammate opens the link in <2s.
 
 
 ### Phase D: Subscribe
-**Goal:** the Pro tier exists and bills.
-- T8 design doc (`design/new/pro-billing.md`) drafted first — locks in tier
-  definitions before code.
-- `subscribe-100` pricing tiers + feature-gate map.
-- `subscribe-110` Stripe checkout + portal Netlify Functions. Pattern from
-  `unlink-identity.js`.
-- `subscribe-120` quota tracking — instrument the three enforcement points (GLB
-  upload, refresh-token mint, public-share retention).
-- T7 Phase 2 + 3 ad slots on `/about`, `/privacy`, `/tos`, `/blog/*`.
-- `subscribe-130` ads wired to free-tier-only gate.
-- `share-150` Extended Share dialog (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) wires Pro upsell into the share flow.
+**Goal:** the Pro tier exists and bills. **Pro bundle:** private link sharing +
+ad-free + larger quotas (decisions D1–D5 in pro-billing.md §2).
+- ✔ T8 design doc landed (`design/new/pro-billing.md`).
+- 7-PR sequence per pro-billing.md §9:
+  - PR1 — `subscribe-100` capability map + `useIsPro()`/`useCapability()` hooks.
+  - PR2 — `subscribe-110` `create-checkout-session` + webhook hardening + env-driven
+    Stripe IDs.
+  - PR3 — `subscribe-115` decouple billing from OAuth scope (`tier` + `githubScopes`
+    + `tierPendingReauth`). Backfill script for existing test customers.
+  - PR4 — pricing UI consolidation (D5): wire `PricingDialog`, delete `src/subscribe/`.
+  - PR5 — upsells in share dialog (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) + generic `QuotaWallModal`.
+  - PR6 — `subscribe-120` quota infrastructure + the three enforcement points (GLB
+    upload, refresh-token mint, public-share retention sweep).
+  - PR7 — `subscribe-130` ads gating on `useCapability('experience.adFree')`.
+- T7 Phase 2 + 3 ad slots ship in parallel (T7's track); PR7 wires the tier gate.
 
 **Exit:** a free user hits a quota wall and can upgrade in two clicks; ads serve on
 text routes only.
@@ -769,13 +798,13 @@ without sign-off.
 
 ## 9. Open questions
 
-- **Pro tier feature gate definition.** §4.9 sketches `subscribe-100` but the actual
-  list of "this is Pro" features needs your call. Working hypothesis: private link
-  sharing, ad-free, multi-account, larger model cache retention, quota uplift. Confirm
-  before T8 design doc.
-- **Free-tier quota numbers.** Public anonymous share TTL (3 days? 5 days?), public
-  hosting size ceiling (PDF <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> says <10MB), refresh-token-mint rate. Needs a call
-  before `subscribe-120`.
+- ✔ **Pro tier feature gate definition** — resolved 2026-05-28. Pro bundle = private
+  link sharing + ad-free + larger quotas; multi-account stays free. Captured in
+  pro-billing.md §2 D1–D5.
+- **Free-tier quota numbers.** Concrete TTL / size / refresh-rate values still
+  placeholders in pro-billing.md §11. Working hypothesis: 5 days / 10 MB / 30 mints
+  per day Free vs 365 days / 200 MB / 600 mints Pro. Confirm before subscribe-120
+  PR6 lands.
 - **Auth0 enforcement on Netlify Functions.** Flagged in
   `identity-decoupling-decisions.md` §Open Implementation Details. Needs to be
   resolved before Phase D quota tracking ships (the quota key is meaningless if the
