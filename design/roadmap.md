@@ -79,7 +79,7 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | View | `view-150` | Performance + large-model viewing | 🟡 | A | T1, T2 |
 | View | `view-160` | ETL / Table view (❤️ Markus) | 🔮 | Post | T1 |
 | View | `view-170` | Common view ops (nav-cube, explode, undo, IDS) | ⬜ | Post | — |
-| View | `view-180` | Maps-style view of issues (🥇) | 🔮 | Post | T6 |
+| View | `view-180` | Placemarks + maps-style issues w/filtering (🥇) | 🟡 | C, Post | T1, T6 |
 | Share | `share-100` | Share link to current view | ✔ | — | — |
 | Share | `share-110` | Save model to user's hosting (originator share) | 🟡 | C | T2 |
 | Share | `share-120` | Private link sharing + visibility chip | 🟡 | C | T4 |
@@ -236,12 +236,53 @@ multi-worker; etc.*
 - IDS (was MVD) — quality-check rules for the IFC. Discussed in PDF page 4–5.
 - **Post-MVP.** IDS is a non-trivial spec implementation.
 
-**Epic `view-180`: Maps-style view of issues w/filtering** 🔮
-*PDF View.4 (🥇 MLP).*
-- Never started. Per-issue lat/long-like coordinates on the model + filter chips +
-  cluster rendering.
-- **Post-MVP loveable.** Slots naturally next to T6 (Comments/Versions sidecar formats)
-  once notes carry richer anchor + tag data.
+**Epic `view-180`: Placemarks + maps-style view of issues w/filtering** 🟡
+*PDF View.4 (🥇 MLP). Placemarks are the in-scene-pin primitive on which the
+loveable maps-style filtering visualization will sit. The PDF treats them as one
+Epic and we keep that pairing here.*
+
+The Epic splits into two layers — the primitive (substantial work landed) and the
+visualization on top (post-MVP loveable):
+
+- **Placemark primitive — 🟡 substantial work landed.** In-scene icon at `x,y,z`
+  with hash-token `#m:x,y,z` carrying through permalinks; multiple placemarks
+  supported, one active at a time. Wired into Notes for anchored discussions.
+  Lives at `src/Infrastructure/PlaceMark.js` (~317 LOC) +
+  `src/Components/Markers/` (~620 LOC). Behind `?feature=placemark` flag
+  (not default-on). Wiki: [Design:URLs §placemark-token](https://github.com/bldrs-ai/Share/wiki/Design:-URLs#placemark-token).
+  - Closed: #599 PR1 (in-scene placemark + state token); cleanup waves since.
+  - Open polish issues — all 🟡, mostly Note-anchor + URL-sync correctness:
+    - #928 Review existing Placemark code.
+    - #929 Placemark activation (sync placemark ↔ selected note).
+    - #930 Share a note with a placemark (URL-sync bug — scene group out of
+      sync when hash-shared link is opened cold).
+    - #931 Delete a placemark from a note.
+    - #932 Store placemark info in note footer (limit one per note; parse from
+      body on create).
+    - #942 Story: Research existing Placemarks code.
+    - #985 Drop placemark to correct location when cut-plane active (today picks
+      exterior surface even when interior is exposed).
+    - #998 Centralize element-deselection functionality — placemark mode needs
+      to deselect the current element because position is URL-driven; the
+      deselection method is buried in CadView and breaks at depth.
+  - Open consumer story: #892 Notes 200 Anchor a note to an element — the
+    Notes-side UI flow for binding a placemark to a note (data path works,
+    UI flow doesn't).
+  - Track dependency: T1 follow-up — `PlaceMark.js` relocation to
+    `src/viewer/three/PlaceMark.js` alongside `Components/Markers/`
+    (organisational, low priority) per `viewer-replacement.md` §3c.iv slice 2.
+- **Maps-style filtering UI on top — ⬜ not started.** The Google-Maps-ish
+  filter chips + cluster rendering when there are many placemarks. Pre-condition:
+  the placemark polish issues above closed + richer issue metadata (tags /
+  categories on Notes) so filtering has meaningful axes. Pairs with T6 (notes
+  sidecar formats) once notes carry richer anchor + tag data.
+
+**Pro-MVP**: split.
+- Placemark polish (#929/#930/#931/#932/#985/#998/#892) is candidate for
+  **Phase C** alongside Notes work in the share flow — sharing a model with a
+  pin-anchored discussion is a strong demo, and the URL-sync bug (#930) blocks
+  the share-a-note flow today.
+- Maps-style filtering UI itself is **Post-MVP loveable** (§7 item 10).
 
 
 ### 4.3 Share (split out of legacy Collab)
@@ -298,8 +339,10 @@ a specific version of the model.
 - Closed: #1054 Access list, #1055 Select note, #1057 Edit, #1058 Delete, #1059
   Create, #1056 GH-issue link, #978 Comments on a note, #1071 Share a note, #1072
   Access shared note.
-- Open: #892 Notes 200 Anchor a note to an element — UI flow not landed yet (placemark
-  on click); the data path works.
+- Open: #892 Notes 200 Anchor a note to an element — the Notes-side flow for
+  binding a placemark to a note; data path works. The Placemark primitive and
+  its open polish issues (#928/#929/#930/#931/#932/#985/#998) are tracked under
+  `view-180`.
 
 **Epic `notes-110`: BCF round-trip** ⬜
 *PDF Collab.2 — "GitHub then BCF at some point".*
@@ -668,7 +711,10 @@ Held over for after Phase E. Order roughly reflects current product-pull:
 8. **T6 Stretch Q1–Q4 portable notes/versions** for Drive parity with GH.
 9. **`view-170` Common view ops**: nav-cube, explode, undo/redo. IDS validation
    separately.
-10. **`view-180` Maps-style issues w/filtering** 🔮 — pairs with T6 Q1.
+10. **`view-180` Maps-style filtering UI on top of Placemarks** 🔮 — Placemark
+    primitive itself is 🟡 with polish slated for Phase C (see Epic). The filter
+    chips + cluster rendering visualization on top is the post-MVP loveable.
+    Pairs with T6 Q1.
 11. **`search-110` Cross-repo search** 🔮 (❤️ Oleg).
 12. **`apps-120` Bldrs Integrate (CI server-side IDS)**.
 13. **`apps-130` v1.0 Public API + IDE** 🔮.
