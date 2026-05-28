@@ -48,6 +48,7 @@ module.exports = {
         'no-unused-expressions': 'off',
         'no-var': 'off',
         'no-shadow': 'off',
+        'no-tabs': 'off',
       },
     },
     // --- TS / TSX
