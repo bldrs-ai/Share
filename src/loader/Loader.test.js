@@ -1,5 +1,6 @@
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {load, readModel} from './Loader'
 
 
@@ -78,6 +79,16 @@ describe('Loader', () => {
         },
       },
     }
+    // Slice 5d.1: production wires `viewer.ifcLoader` to a
+    // ShareIfcLoader during ShareViewer construction. This test
+    // builds its own viewer stub (not via __mocks__/web-ifc-viewer),
+    // so we install a real ShareIfcLoader here so the IFC `case`
+    // arm in `findLoader` finds it and `loader.parse` runs the
+    // Conway-direct flow against the mock ifcAPI.
+    mockViewer.ifcLoader = new ShareIfcLoader({
+      ifcAPI: mockViewer.IFC.loader.ifcManager.ifcAPI,
+      ifc: mockViewer.IFC,
+    })
   })
   afterEach(() => mathRandomSpy.mockRestore())
 
