@@ -4,7 +4,7 @@ import fs from 'fs'
 
 
 /**
- * Rewrites package.json version to `<major>.<PR>.<commit>`:
+ * Rewrites package.json version to `<major>.<PR>.<short-sha>`:
  *  - <major>: preserved from package.json — bumped manually via a
  *    package.json edit.
  *  - <PR>: PR number — `REVIEW_ID` from Netlify deploy-preview builds,
@@ -13,23 +13,26 @@ import fs from 'fs'
  *    repo's merge style is "Create merge commit" with the standard
  *    "Merge pull request #NNNN ..." subject), else 0 for local/dev
  *    builds with no merge ancestor.
- *  - <commit>: `git rev-list HEAD --count + 1`, same monotonic
- *    counter the patch slot used previously.
+ *  - <short-sha>: `git rev-parse --short HEAD` — the abbreviated
+ *    commit hash. Git auto-grows it if a 7-char prefix is ambiguous
+ *    (very rare), so the field width is not fixed. Chosen over a
+ *    commit *count* because the count depends on clone depth — both
+ *    Netlify CI and our sandboxes do shallow clones, so the count
+ *    underreports and isn't stable across environments.
  *
  * The point of folding PR# into the version is that the version
  * is also our Sentry release tag — so a crash report's release can
  * be mapped back to the PR that shipped it without a separate
- * lookup. <commit> still moves forward on every build so two builds
- * of the same PR remain distinguishable.
+ * lookup. The short SHA gives the same trick for the build slot:
+ * paste it straight into `git show` to land on the exact commit.
  *
  * Usage: `./tools/updateVersion.mjs`
  *
- * @see git rev-list HEAD --count
+ * @see git rev-parse --short HEAD
  * @see https://semver.org/
  */
 
-const revisionCount = parseInt(execSync('git rev-list HEAD --count').toString().trim())
-const commitNumber = revisionCount + 1
+const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
 
 /**
  * Resolve the PR number for the current build. Netlify deploy
@@ -77,9 +80,13 @@ function rewriteVersion(filename, versionPattern, replaceWithGroups) {
 
 // Rewrite line like:
 //
-//   "version": "1.1522.233",
+//   "version": "1.1522.b0617df",
+//
+// The third slot accepts both the new alphanumeric short-SHA form
+// and the legacy numeric counter so the regex still matches a
+// just-checked-out package.json after this script ships.
 rewriteVersion(
   'package.json',
-  /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.\d+\.\d+"\s*(?<trailingComma>,)?$/m,
-  `$<indent>"version": "$<major>.${prNumber}.${commitNumber}"$<trailingComma>`,
+  /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.\d+\.[A-Za-z0-9]+"\s*(?<trailingComma>,)?$/m,
+  `$<indent>"version": "$<major>.${prNumber}.${commitHash}"$<trailingComma>`,
 )
