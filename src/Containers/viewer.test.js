@@ -237,16 +237,32 @@ describe('Containers/viewer', () => {
 
 
   describe('singleton fixture sanity', () => {
-    it('initViewer returns a ShareViewer wrapping the singleton fork mock', () => {
-      // Post-slice-5c: ShareViewer composes the fork instead of extending
-      // it. `viewer` is a ShareViewer; `viewer._fork` is the
-      // IfcViewerAPI mock singleton the rest of the tests share state
-      // through (e.g. `viewer.IFC === singleton.IFC` still holds because
-      // the constructor wires `this.IFC = this._fork.IFC`).
+    it('initViewer returns a ShareViewer that shares state with the singleton fork mock', () => {
+      // Slice 5d.3: ShareViewer no longer keeps a composite `_fork`
+      // reference — it instantiates `IfcContext` (vendored) +
+      // `IfcManager` + `IfcClipper` directly. The mock factories in
+      // `__mocks__/web-ifc-viewer.js` route those constructors through
+      // the singleton `impl`, so mutations to the singleton's IFC /
+      // clipper surface are observable on `viewer.IFC` /
+      // `viewer._forkClipper`. We can't use `.toBe(singleton.IFC)`
+      // because babel-plugin-jest-hoist places the `jest.mock(...,
+      // factory)` calls outside the module's lexical scope; the
+      // factory closes over a different `impl` binding than the one
+      // `__getShareViewerMockSingleton` returns. Sharing is verified
+      // structurally via a sentinel-property round trip instead.
       const viewer = initViewer('/share/v/p')
       const singleton = __getShareViewerMockSingleton()
-      expect(viewer._fork).toBe(singleton)
-      expect(viewer.IFC).toBe(singleton.IFC)
+      expect(viewer.IFC).toBeDefined()
+      expect(viewer._forkClipper).toBeDefined()
+      // Round-trip: mutating the singleton's IFC propagates to viewer.IFC
+      // (and vice versa) iff they're the same backing object.
+      const sentinel = Symbol('5d3-sanity')
+      singleton.IFC[sentinel] = 'shared'
+      expect(viewer.IFC[sentinel]).toBe('shared')
+      delete singleton.IFC[sentinel]
+      singleton.clipper[sentinel] = 'shared-clipper'
+      expect(viewer._forkClipper[sentinel]).toBe('shared-clipper')
+      delete singleton.clipper[sentinel]
     })
   })
 })
