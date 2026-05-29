@@ -1,5 +1,6 @@
 import React, {useContext} from 'react'
 import {useAuth0 as useAuth0Original} from '@auth0/auth0-react'
+import {STORAGE_AVAILABLE} from './storage'
 
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
@@ -178,11 +179,17 @@ export const MockAuth0Context = React.createContext({
 export const useAuth0 = () => {
   const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
 
-  if (useMock) {
+  // Three modes:
+  //   - useMock (cypresstestaudience build)
+  //   - storage unavailable in prod build — Auth0ProviderProxy renders
+  //     MockAuth0Context.Provider with the inert
+  //     DEGRADED_AUTH0_CONTEXT_VALUE; route consumers there too so
+  //     they see `isAuthenticated: false` etc.
+  //   - normal prod path
+  if (useMock || !STORAGE_AVAILABLE) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useContext(MockAuth0Context)
-  } else {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useAuth0Original()
   }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useAuth0Original()
 }
