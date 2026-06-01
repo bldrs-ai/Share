@@ -532,21 +532,24 @@ export default function CadView({
         if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        // Always set parent expressID as the "selection" so the
-        // properties panel / nav tree / search highlight respond
-        // normally. The per-instance highlight is layered on top via
-        // selectedInstanceIds.
-        setSelectedElements([`${parentExpressId}`])
-        setSelectedInstanceIds(event.shiftKey ? [] : [instanceId])
+        // Route through selectItemsInScene (the single selection
+        // funnel) so a scene pick gets the same treatment as every
+        // other source: store update + element-path permalink in the
+        // URL. Previously this set the store directly and skipped the
+        // funnel, so scene selections never produced a shareable
+        // permalink. The parent expressID is always the "selection" so
+        // the properties panel / nav tree / search respond normally;
+        // `instanceIds` only narrows what the OutlineEffect draws.
+        // Shift = the whole IFC element (every instance) → no
+        // per-instance restriction; no-shift = just this PlacedGeometry.
+        const instanceIds = event.shiftKey ? [] : [instanceId]
+        selectItemsInScene([parentExpressId], true, instanceIds)
         return
       }
-      // Non-instance branch: clear any stale per-instance highlight
-      // so a Conway-click followed by a click on a non-Conway mesh
-      // doesn't leave the old single-instance subset stuck on the
-      // OutlineEffect.
-      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0) {
-        setSelectedInstanceIds([])
-      }
+      // Non-instance branch: elementSelection funnels through
+      // selectItemsInScene, which resets selectedInstanceIds, so a
+      // Conway pick followed by a click on a non-Conway mesh no longer
+      // leaves the old single-instance subset stuck on the OutlineEffect.
       if (mesh.expressID !== undefined) {
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
@@ -652,12 +655,25 @@ export default function CadView({
 
 
   /**
-   * Pick the given items in the scene.
+   * Pick the given items in the scene. This is the single funnel for
+   * EVERY selection source — scene pick, NavTree click, search,
+   * keyboard, and URL/permalink — so it owns the full store-side
+   * selection contract: the parent-level `selectedElements`, the
+   * Conway-direct per-instance `selectedInstanceIds`, and (optionally)
+   * the element-path permalink in the URL. Routing every source
+   * through here is what keeps the scene and NavTree in sync in both
+   * directions.
    *
    * @param {Array} resultIDs Array of expressIDs
    * @param {boolean} updateNavigation Whether to update navigation
+   * @param {Array<number>} instanceIds Conway-direct per-instance highlight
+   *   restriction. Empty (the default) clears any prior per-instance
+   *   highlight — required so a selection arriving from a non-scene
+   *   source (NavTree, search, permalink) doesn't inherit the instance
+   *   subset left behind by an earlier scene pick. Only the Conway
+   *   scene-pick path passes a non-empty value.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true) {
+  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = []) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -666,6 +682,7 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
+      setSelectedInstanceIds(instanceIds)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
@@ -707,8 +724,20 @@ export default function CadView({
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
-      const selectedInViewer = viewer.getSelectedIds()
-      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
+      // Skip re-selecting when this element is already the active
+      // selection. We consult the store (selectItemsInScene updates it
+      // synchronously) and not only viewer.getSelectedIds(), because this
+      // also runs from the location-watch effect — which fires on the
+      // SELF-INDUCED navigation a selection just made, and runs BEFORE
+      // the selection effect has pushed the pick into the viewer, so
+      // getSelectedIds() is still stale. Without the store check the
+      // re-selection would funnel through selectItemsInScene again and
+      // reset selectedInstanceIds, widening a Conway per-instance scene
+      // pick to the whole element.
+      const alreadySelected =
+        useStore.getState().selectedElements.includes(`${targetId}`) ||
+        viewer.getSelectedIds().includes(targetId)
+      if (isFinite(targetId) && !alreadySelected) {
         selectItemsInScene([targetId], false)
       }
     }
@@ -906,8 +935,18 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressId) => {
-            elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
+          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds) => {
+            // The element-types tree passes an array (every element of a
+            // type) to select the group at once; the spatial tree and
+            // the scene pass a single expressID. elementSelection is
+            // single-id (shift toggle + descendants); the group case
+            // replaces the selection wholesale, like a search result, so
+            // it goes straight to the funnel with no permalink.
+            if (Array.isArray(expressIdOrIds)) {
+              selectItemsInScene(expressIdOrIds, false)
+            } else {
+              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+            }
           }}
           deselectItems={deselectItems}
         />

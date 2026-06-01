@@ -286,6 +286,43 @@ describe('CadView', () => {
   })
 
 
+  // Regression (nav→scene sync): `selectItemsInScene` is the single
+  // selection funnel and must own BOTH `selectedElements` and the
+  // Conway-direct per-instance `selectedInstanceIds`. Pre-fix only the
+  // scene-pick handler ever set/cleared `selectedInstanceIds`, so a
+  // selection arriving from any other source (NavTree click, search,
+  // keyboard deselect) left a STALE per-instance highlight behind that
+  // the `[selectedElements, selectedInstanceIds]` effect re-applied over
+  // the new/empty selection — the scene stopped following the tree.
+  // Deselecting via the funnel (Clear) must now also clear the instance
+  // highlight. Reuses the render + Clear mechanics of the unselect test.
+  it('deselect clears a stale per-instance highlight (funnel owns selectedInstanceIds)', async () => {
+    const testTree = makeTestTree()
+    const targetEltId = testTree.children[0].expressID
+    const STALE_INSTANCE_ID = 42
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath({filepath: `/index.ifc`})
+      result.current.setSelectedElement(targetEltId)
+      result.current.setSelectedElements([`${targetEltId}`])
+      // Simulate the residue of a prior Conway-direct scene pick.
+      result.current.setSelectedInstanceIds([STALE_INSTANCE_ID])
+    })
+
+    const {getByTestId} =
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+
+    const eltGrp = getByTestId('element-group')
+    const clearSelection = within(eltGrp).getByTitle('Clear')
+    await act(async () => {
+      await fireEvent.click(clearSelection)
+    })
+    expect(result.current.selectedElements).toHaveLength(0)
+    expect(result.current.selectedInstanceIds).toHaveLength(0)
+    await actAsyncFlush()
+  })
+
+
   // TODO(nickcastel50): See Issue #956
   it.skip('renders and selects the element ID from URL', async () => {
     const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/89'}
