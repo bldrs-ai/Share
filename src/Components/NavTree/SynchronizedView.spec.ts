@@ -1,73 +1,168 @@
-import {expect, test, Route} from '@playwright/test'
-import {readFile} from 'fs/promises'
-import path from 'path'
+import {expect, test, Page} from '@playwright/test'
 import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
-import {expectScreen} from '../../tests/screens'
 
 
 const {beforeEach, describe} = test
 
+
+type StoreState = {
+  selectedElements: string[]
+  selectedInstanceIds: number[]
+  setSelectedInstanceIds: (ids: number[]) => void
+  viewer?: {getSelectedIds?: () => number[]}
+}
+type WindowWithStore = Window & {store?: {getState: () => StoreState}}
+
+
 /**
- * Migrated from cypress/e2e/view-100/synchronized-view-and-navtree.cy.js
+ * The parent-level selection the store currently holds (stringified
+ * expressIDs).
+ *
+ * @param page Playwright page
+ * @return selectedElements
+ */
+function getSelectedElements(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    (window as unknown as WindowWithStore).store?.getState().selectedElements ?? [])
+}
+
+/**
+ * The expressIDs actually highlighted in the 3D scene, read straight off
+ * the viewer — the real proof the scene followed the selection.
+ *
+ * @param page Playwright page
+ * @return selected expressIDs in the scene
+ */
+function getSceneSelectedIds(page: Page): Promise<number[]> {
+  return page.evaluate(() =>
+    (window as unknown as WindowWithStore).store?.getState().viewer?.getSelectedIds?.() ?? [])
+}
+
+/**
+ * The Conway-direct per-instance highlight ids.
+ *
+ * @param page Playwright page
+ * @return selectedInstanceIds
+ */
+function getSelectedInstanceIds(page: Page): Promise<number[]> {
+  return page.evaluate(() =>
+    (window as unknown as WindowWithStore).store?.getState().selectedInstanceIds ?? [])
+}
+
+/**
+ * Walk the known index.ifc hierarchy down to its leaf elements. Selecting
+ * a node auto-expands its ancestor path (CadView's selection effect), so
+ * clicking labels in sequence reveals the next level — the same route the
+ * IframeIntegration spec relies on. Leaves the `Together` leaves visible.
+ *
+ * @param page Playwright page
+ */
+async function openNavTreeToLeaves(page: Page) {
+  await page.getByTestId('control-button-navigation').click()
+  await page.getByText('Bldrs').click()
+  await page.getByText('Build').click()
+  await page.getByText('Every').click()
+  await page.getByText('Thing').click()
+}
+
+
+/**
+ * Bidirectional scene ↔ NavTree selection sync + element-path permalinks.
+ *
+ * Migrated and de-screenshotted from
+ * cypress/e2e/view-100/synchronized-view-and-navtree.cy.js — it now
+ * asserts observable store + URL state (via `window.store`) instead of
+ * pixels, so it runs without golden images and pins the actual behaviour
+ * the bug touched rather than a rendering snapshot.
+ *
+ * Epic view-100 (3D + NavTree + Properties), story #1046 Synchronized
+ * View+NavTree. The permalink half is the selection slice of search-100
+ * #1180 (Permalinks).
  *
  * @see https://github.com/bldrs-ai/Share/issues/1046
  */
-describe.skip('View 100: Synchronized View and NavTree', () => {
+describe('View 100: Synchronized View and NavTree', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
   })
 
-  describe('User visits homepage, Open NavTree > select item', () => {
-    beforeEach(async ({page}) => {
-      await visitHomepageWaitForModel(page)
-      await page.getByTestId('control-button-navigation').click()
+  // The regressed direction: a NavTree click must drive the 3D scene.
+  test('NavTree selection highlights the element in the scene and writes the element-path permalink', async ({page}) => {
+    await visitHomepageWaitForModel(page)
+    await openNavTreeToLeaves(page)
+    await page.getByText('Together').first().click()
 
-      // Navigate through the tree structure
-      await page.getByText('Bldrs').click()
-      await page.getByText('Build').click()
-      await page.getByText('Every').click()
-      await page.getByText('Thing').click()
+    // The tree click drove a selection into the store...
+    await expect.poll(async () => (await getSelectedElements(page)).length).toBeGreaterThan(0)
+    const selected = await getSelectedElements(page)
 
-      // Click through multiple "Together" items
-      const togetherItems = page.getByText('Together')
-      for (let i = 0; i < 7; i++) {
-        await togetherItems.nth(i).click()
-      }
-    })
+    // ...the scene highlight followed it (nav → scene)...
+    await expect.poll(async () => (await getSceneSelectedIds(page)).length).toBeGreaterThan(0)
+    const sceneIds = (await getSceneSelectedIds(page)).map(String)
+    expect(sceneIds).toEqual(expect.arrayContaining([selected[0]]))
 
-    test('Item highlighted in tree and scene - Screen', async ({page}) => {
-      await expectScreen(page, 'SynchronizedView-item-highlighted.png')
-    })
+    // ...and the element path is now in the URL as a shareable permalink.
+    expect(page.url()).toMatch(/\/index\.ifc\/\d+/)
   })
 
-  describe('Visits permalink to selected element', () => {
-    beforeEach(async ({page}) => {
-      // TODO(pablo): root id selection doesn't work after search state working.  Also move this to a helper
-      await page.route('**/share/v/p/index.ifc/81/621', async (route: Route) => {
-        const fixturePath = path.resolve(process.cwd(), 'src/tests/fixtures/404.html')
-        const fixtureBuffer = await readFile(fixturePath)
+  // Regression for the reported bug: a per-instance highlight left behind
+  // by a prior scene pick must not survive a later NavTree selection.
+  // Pre-fix the stale `selectedInstanceIds` was re-applied over the new
+  // element, so the scene kept showing the old pick — the tree stopped
+  // driving the scene.
+  test('a NavTree selection clears a stale per-instance highlight from a prior scene pick', async ({page}) => {
+    await visitHomepageWaitForModel(page)
+    await openNavTreeToLeaves(page)
 
-        await route.fulfill({
-          status: 200,
-          body: fixtureBuffer,
-          headers: {'content-type': 'text/html'},
-        })
-      })
+    // Simulate the residue of a Conway-direct scene pick AFTER navigating
+    // (the navigation clicks above would otherwise have cleared it).
+    const STALE_INSTANCE_ID = 999999
+    await page.evaluate((id) => {
+      (window as unknown as WindowWithStore).store?.getState().setSelectedInstanceIds([id])
+    }, STALE_INSTANCE_ID)
 
-      await page.goto('/share/v/p/index.ifc/81/621')
-      await waitForModelReady(page)
-    })
+    await page.getByText('Together').first().click()
 
-    test('Item highlighted in scene - Screen', async ({page}) => {
-      // Check that nav-tree-root doesn't exist (no tree visible)
-      await expect(page.getByTestId('PanelBox-Navigation')).toHaveCount(0)
-      await expectScreen(page, 'SynchronizedView-permalink-highlighted.png')
-    })
+    // The selection funnel reset the per-instance highlight...
+    await expect.poll(async () => (await getSelectedInstanceIds(page)).length).toBe(0)
+    // ...so the scene reflects the newly-selected element, not the stale one.
+    const selected = await getSelectedElements(page)
+    const sceneIds = (await getSceneSelectedIds(page)).map(String)
+    expect(sceneIds).toEqual(expect.arrayContaining([selected[0]]))
+  })
+
+  // A scene pick is the other half of "set its path as part of the link":
+  // selecting in the scene must also produce a shareable permalink.
+  test('a scene pick writes the element-path permalink', async ({page}) => {
+    await visitHomepageWaitForModel(page)
+
+    // index.ifc is fit-to-frame and centered, so a center double-click
+    // lands on geometry. The Conway-direct pick routes through the same
+    // selection funnel as the NavTree, which writes the element path.
+    await page.locator('canvas').first().dblclick()
+
+    await expect.poll(async () => (await getSelectedElements(page)).length).toBeGreaterThan(0)
+    expect(page.url()).toMatch(/\/index\.ifc\/\d+/)
+  })
+
+  // The reverse: opening a permalink pre-selects the element in both the
+  // scene and the store (and, by extension, the NavTree, which renders
+  // from the same selectedElements).
+  test('opening an element permalink selects it in the scene and store', async ({page}) => {
+    // A known element path in the index.ifc fixture (shared with the
+    // Conway-direct and Properties permalink specs): parent 81, leaf 621.
+    const LEAF_ID = 621
+    await page.goto(`/share/v/p/index.ifc/81/${LEAF_ID}`)
+    await waitForModelReady(page)
+
+    await expect.poll(() => getSelectedElements(page)).toContain(`${LEAF_ID}`)
+    const sceneIds = await getSceneSelectedIds(page)
+    expect(sceneIds).toContain(LEAF_ID)
   })
 })

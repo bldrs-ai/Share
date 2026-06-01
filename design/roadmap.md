@@ -186,6 +186,14 @@ slice, and isolation controls expected of a BIM viewer.
   reset, <a href="https://github.com/bldrs-ai/Share/issues/1242" target="_blank" rel="noopener noreferrer">#1242</a> Access properties of selected element, <a href="https://github.com/bldrs-ai/Share/issues/1048" target="_blank" rel="noopener noreferrer">#1048</a> Navigate by hierarchy.
 - Open follow-up: NavTree on cache-hit GLB E2E spec (called out in
   `design/new/viewer-replacement.md` §3b.iii).
+- Regression fixed (viewer-replacement era): scene↔NavTree selection sync +
+  element-path permalinks. The default-on Conway-direct scene pick set store state
+  directly, bypassing the `selectItemsInScene` funnel — so a NavTree selection inherited
+  a stale per-instance highlight (scene stopped following the tree) and scene picks wrote
+  no permalink. Fixed by funnelling every selection source through `selectItemsInScene`
+  (now owns `selectedInstanceIds` + the URL path). Reactivated the `SynchronizedView` E2E
+  (was `describe.skip`). Stories: <a href="https://github.com/bldrs-ai/Share/issues/1046" target="_blank" rel="noopener noreferrer">#1046</a> (sync) +
+  <a href="https://github.com/bldrs-ai/Share/issues/1180" target="_blank" rel="noopener noreferrer">#1180</a> (permalinks).
 
 **Epic `view-110`: Cut planes** ✔
 *PDF View.3 — Cut sub-item ✔.*
