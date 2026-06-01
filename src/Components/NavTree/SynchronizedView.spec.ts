@@ -60,14 +60,21 @@ function getSelectedInstanceIds(page: Page): Promise<number[]> {
  * clicking labels in sequence reveals the next level — the same route the
  * IframeIntegration spec relies on. Leaves the `Together` leaves visible.
  *
+ * Clicks are scoped to the Navigation panel: unscoped `getByText('Bldrs')`
+ * also matches the `BLDRS.AI` page title (case-insensitive substring),
+ * tripping Playwright strict mode.
+ *
  * @param page Playwright page
+ * @return the Navigation panel locator, for scoping leaf clicks
  */
 async function openNavTreeToLeaves(page: Page) {
   await page.getByTestId('control-button-navigation').click()
-  await page.getByText('Bldrs').click()
-  await page.getByText('Build').click()
-  await page.getByText('Every').click()
-  await page.getByText('Thing').click()
+  const navPanel = page.getByTestId('SideDrawerPanel-Paper-Navigation')
+  await navPanel.getByText('Bldrs').click()
+  await navPanel.getByText('Build').click()
+  await navPanel.getByText('Every').click()
+  await navPanel.getByText('Thing').click()
+  return navPanel
 }
 
 
@@ -95,8 +102,8 @@ describe('View 100: Synchronized View and NavTree', () => {
   // The regressed direction: a NavTree click must drive the 3D scene.
   test('NavTree selection highlights the element in the scene and writes the element-path permalink', async ({page}) => {
     await visitHomepageWaitForModel(page)
-    await openNavTreeToLeaves(page)
-    await page.getByText('Together').first().click()
+    const navPanel = await openNavTreeToLeaves(page)
+    await navPanel.getByText('Together').first().click()
 
     // The tree click drove a selection into the store...
     await expect.poll(async () => (await getSelectedElements(page)).length).toBeGreaterThan(0)
@@ -118,7 +125,7 @@ describe('View 100: Synchronized View and NavTree', () => {
   // driving the scene.
   test('a NavTree selection clears a stale per-instance highlight from a prior scene pick', async ({page}) => {
     await visitHomepageWaitForModel(page)
-    await openNavTreeToLeaves(page)
+    const navPanel = await openNavTreeToLeaves(page)
 
     // Simulate the residue of a Conway-direct scene pick AFTER navigating
     // (the navigation clicks above would otherwise have cleared it).
@@ -127,7 +134,7 @@ describe('View 100: Synchronized View and NavTree', () => {
       (window as unknown as WindowWithStore).store?.getState().setSelectedInstanceIds([id])
     }, STALE_INSTANCE_ID)
 
-    await page.getByText('Together').first().click()
+    await navPanel.getByText('Together').first().click()
 
     // The selection funnel reset the per-instance highlight...
     await expect.poll(async () => (await getSelectedInstanceIds(page)).length).toBe(0)
