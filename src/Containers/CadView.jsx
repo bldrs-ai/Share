@@ -724,8 +724,20 @@ export default function CadView({
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
-      const selectedInViewer = viewer.getSelectedIds()
-      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
+      // Skip re-selecting when this element is already the active
+      // selection. We consult the store (selectItemsInScene updates it
+      // synchronously) and not only viewer.getSelectedIds(), because this
+      // also runs from the location-watch effect — which fires on the
+      // SELF-INDUCED navigation a selection just made, and runs BEFORE
+      // the selection effect has pushed the pick into the viewer, so
+      // getSelectedIds() is still stale. Without the store check the
+      // re-selection would funnel through selectItemsInScene again and
+      // reset selectedInstanceIds, widening a Conway per-instance scene
+      // pick to the whole element.
+      const alreadySelected =
+        useStore.getState().selectedElements.includes(`${targetId}`) ||
+        viewer.getSelectedIds().includes(targetId)
+      if (isFinite(targetId) && !alreadySelected) {
         selectItemsInScene([targetId], false)
       }
     }

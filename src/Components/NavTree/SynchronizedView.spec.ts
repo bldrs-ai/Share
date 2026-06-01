@@ -138,8 +138,11 @@ describe('View 100: Synchronized View and NavTree', () => {
   })
 
   // A scene pick is the other half of "set its path as part of the link":
-  // selecting in the scene must also produce a shareable permalink.
-  test('a scene pick writes the element-path permalink', async ({page}) => {
+  // selecting in the scene must also produce a shareable permalink — and
+  // the no-shift pick's per-instance highlight must survive the
+  // self-induced navigation (the location-watch effect must not re-select
+  // the element and reset selectedInstanceIds).
+  test('a no-shift scene pick writes the permalink and keeps the per-instance highlight', async ({page}) => {
     await visitHomepageWaitForModel(page)
 
     // index.ifc is fit-to-frame and centered, so a center double-click
@@ -149,6 +152,10 @@ describe('View 100: Synchronized View and NavTree', () => {
 
     await expect.poll(async () => (await getSelectedElements(page)).length).toBeGreaterThan(0)
     expect(page.url()).toMatch(/\/index\.ifc\/\d+/)
+    // The no-shift pick narrows the highlight to ONE PlacedGeometry; that
+    // restriction must not be widened back to the whole element by the
+    // navigation it just triggered.
+    await expect.poll(async () => (await getSelectedInstanceIds(page)).length).toBe(1)
   })
 
   // The reverse: opening a permalink pre-selects the element in both the
