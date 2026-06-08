@@ -638,7 +638,7 @@ filesystem layout is the flatter shape below.
 
 | Plugin | Source location | Notes |
 |---|---|---|
-| `ThreeContext` | `src/viewer/three/ThreeContext.js` | Wraps the fork's `IfcContext`; will be standalone in Phase 5. |
+| `ThreeContext` | `src/viewer/three/ThreeContext.js` | Wraps `IfcContext`. As of 5d.3 the wrapped object is the in-repo vendored `src/viewer/three/context/` copy, not the `web-ifc-viewer` node-module. The wrapper's public surface is unchanged. |
 | `Picker` | `src/viewer/three/Picker.js` | Moved from `src/view/Picker.js`. |
 | `Postprocessor` | `src/viewer/three/CustomPostProcessor.js` | Moved from `Infrastructure/`. |
 | `Highlighter` | `src/viewer/three/IfcHighlighter.js` | Moved from `Infrastructure/`. |
@@ -669,6 +669,15 @@ clipper is captured at `ShareViewer` construction as
 `viewer._forkClipper` so the IFC backing impl is preserved. Model
 binding happens via `viewer.clipper.setModel(model)`, called from
 `CutPlaneMenu`'s existing model-watching effect.
+
+> **The fork `IfcClipper` is still the IFC backing impl** — the
+> facade unified the *call-sites*, not the backend. Replacing the
+> fork backend is slice 5d.2 (deferred; see Phase 5). Until then,
+> `viewer._forkClipper` is a real `web-ifc-viewer` `IfcClipper`
+> (instantiated in `forkIfcComposition.js#makeForkIfc` since 5d.3).
+> The IFC-only Q/W cursor shortcuts (`createPlane` / `deletePlane`)
+> are the part with no `GlbClipper` equivalent — that's the crux of
+> the 5d.2 decision.
 
 **Clipper API surface:**
 ```js
@@ -827,6 +836,17 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
 
+**Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.3 are merged. The
+remaining work to fully drop the fork is **5d.2** (replace fork
+`IfcClipper` — deferred, needs a decision) → **5d.4** (delete
+`forkIfcComposition.js` + the `web-ifc-viewer` dep + the
+`threeJsmCompatPlugin` rewrites) → then **5e** (bump `three`), **5f**
+(wasm/build-script cleanup), **5g** (rename the mock). What still
+imports `web-ifc-viewer` today: `src/viewer/three/forkIfcComposition.js`
+(production — `IfcManager` + `IfcClipper`) and 6 test files via
+`jest.mock('web-ifc-viewer')`. The slice numbering below matches the
+`5d.N` tags in the committed source comments (`grep -rn "5d\." src/`).
+
 **Slice 5a — flag default-on (done 2026-05).** This PR. Flips
 `conwayDirectIfc` and `glb` to `isActive: true`; removes the
 now-dead `if (isFeatureEnabled('conwayDirectIfc'))` branches in
@@ -882,38 +902,135 @@ itself (renderer/scene/camera), `viewer.IFC.loader.ifcManager.ifcAPI`
 as the path to reach Conway. Slice 5c drops these by replacing
 `ShareViewer extends IfcViewerAPI` with composition.
 
-**Slice 5c — ShareViewer composition (todo).** Today
-`ShareViewer extends IfcViewerAPI`. Replacing the `extends` with
-composition needs to stand up the same property surface
-(`this.IFC`, `this.context`, `this.clipper`) from scratch using the
-existing local plugins (`ThreeContext`, `Clipper`, `Selector`,
-`Picker`, `Highlighter`, `Isolator`, `Postprocessor`) plus a new
-`IfcManager`-shaped wrapper around the Conway IfcAPI (Slice 5b's
-surface). Once `ShareViewer` no longer inherits from the fork, the
-fork dep can be dropped from `package.json` and the
-`threeJsmCompatPlugin` esbuild rewrites in `tools/esbuild/plugins.js`
-can go with it.
+**Slice 5c — ShareViewer composition (done 2026-05, PR #1534).**
+Replaced `ShareViewer extends IfcViewerAPI` with composition. The
+fork's `IfcViewerAPI` was still instantiated internally (as
+`this._fork`) and `this.IFC` / `this.context` / `this.clipper` were
+wired from it, but `ShareViewer` stopped being `instanceof
+IfcViewerAPI` and downstream code depends on this class, not the
+fork. This is the pivot that made the fork's pieces individually
+replaceable: each subsequent 5d sub-slice swaps one `this._fork.X`
+for an in-repo construct until `_fork` itself is gone.
 
-**Slice 5d — three / postprocessing / three-mesh-bvh bumps (todo).**
-After 5b+5c land — drop the fork pin, bump `three` to current stable,
-update `@types/three` to match, drop the `threeJsmCompatPlugin` rewrites,
-drop the `BLDRS_face_ids` per-vertex fallback's wit-three checks, etc.
+**Slice 5d — replace the fork surface, piece by piece.** With
+composition in place, 5d swaps the fork's load-bearing constructs
+(`IFCLoader`, `IfcContext`, `IfcManager`, `IfcClipper`) for in-repo
+equivalents, one reviewable PR at a time. The umbrella is **done when
+nothing imports `web-ifc-viewer`** — at which point the dep, the
+`threeJsmCompatPlugin` esbuild rewrites, and the `webIfcShimAlias`
+plugin can all be deleted together (that final cut is slice 5d.4).
+Sub-slices use the `5d.N` numbering that landed in the committed code
+comments (`grep "5d\." src/`).
 
-**Slice 5e — wasm + build scripts (todo).** Drop
+- **5d.1 — ShareIfcLoader + ShareIfcManager (done 2026-05, PR #1536).**
+  Two in-repo classes wrap Conway's `IfcAPI` directly and take over
+  the live consumer paths that used to read the fork's
+  `viewer.IFC.loader` (web-ifc-three `IFCLoader`) and
+  `viewer.IFC.loader.ifcManager` (web-ifc-three `IFCManager`):
+    - `src/viewer/ifc/ShareIfcManager.js` — minimal IFC-manager
+      surface (`ifcAPI`, `getExpressId`, `getSpatialStructure`,
+      `getItemProperties`, `getPropertySets`, `getIfcType`,
+      `idsByType`, plus `state.models` + a `parser` stub for
+      `IfcViewsManager`). Methods the fork exposed but live code no
+      longer needs are intentionally absent — failures are loud.
+    - `src/viewer/ifc/ShareIfcLoader.js` — owns the Conway-direct
+      `parse(buffer, …)` entry point `Loader.js#readModel` invokes;
+      holds a `ShareIfcManager` as `loader.ifcManager`.
+    - `src/viewer/ifc/ifcItemsMapParity.js` — `runIfcItemsMapParityCheck`
+      extracted from `Loader.js` to live next to the parse it
+      diagnoses.
+  **Key gotcha (cost a CI round):** ShareIfcLoader is installed at a
+  NEW slot `viewer.ifcLoader`, NOT `viewer.IFC.loader`. Fork-side
+  consumers (`IfcClipper`, `ClippingEdges`, `fills`, `plan-manager`,
+  `glTF` exporter) still reach into `viewer.IFC.loader.ifcManager.{
+  subsets, createSubset, parser.optionalCategories, state}` — which
+  `ShareIfcManager` does not have — so `viewer.IFC.loader` must keep
+  pointing at the wit-three IFCLoader until those consumers are gone.
+  `Loader.js#findLoader`'s `case 'ifc'` reads `viewer.ifcLoader`.
+
+- **5d.2 — Clipper unification / drop fork `IfcClipper` (deferred).**
+  Deferred by decision (2026-05): the fork's `IfcClipper` supports
+  the IFC-only Q/W keyboard shortcuts (create/delete plane at cursor,
+  wired in `utils/shortcutKeys.js` → `viewer.clipper.createPlane()` /
+  `deletePlane()`) that `GlbClipper` has no equivalent for. Dropping
+  it means either (a) accepting that UX regression by routing all
+  clipping through `GlbClipper`, or (b) vendoring `clipper.js` +
+  `clipping-edges.js` + `planes.js` (~678 lines, the
+  `IfcPlane`/`ClippingEdges` family) into `src/viewer/three/`.
+  Prerequisite for 5d.4 (IfcClipper is the last fork construct
+  ShareViewer instantiates besides IfcManager). Pick (a) or (b) when
+  this slice is picked up.
+
+- **5d.3 — vendor IfcContext, drop `new IfcViewerAPI()` (done 2026-05,
+  PR #1539).** ShareViewer stopped calling `new IfcViewerAPI(options)`.
+  Vendored `web-ifc-viewer/dist/components/context/*` (~1550 lines
+  incl. real Postproduction + CustomOutlinePass) into
+  `src/viewer/three/context/`, and now builds the three pieces it
+  needs itself:
+    - `new IfcContext(options)` — our vendored copy (render loop,
+      scene, camera, renderer, raycaster, mouse, animator,
+      postproduction). Fork-side `IfcGrid` / `IfcAxes` / `PlanManager`
+      / `SectionFillManager` / `IfcDimensions` / `Edges` /
+      `ShadowDropper` / `EdgeProjector` / `DXF` / `PDF` / `GLTFManager`
+      / `SelectionWindow` — built-but-unused before — no longer get
+      constructed (modest bundle win).
+    - `makeForkIfc(ifcContext)` (`src/viewer/three/forkIfcComposition.js`)
+      — the single re-export point for the fork pieces still alive
+      (`IfcManager`, `IfcClipper`). Centralises the deep imports so
+      test mocking has one seam. Shrinks to zero callers after
+      5d.2 + 5d.4.
+  Two `threeJsmCompatPlugin` patches were inlined into the vendored
+  copies (Clock shim in `context.js`; light intensities × Math.PI in
+  `scene.js`). `ThreeContext` still wraps `IfcContext`, but the
+  wrapped object is now in-repo. **Gotcha (cost two CI rounds):** a
+  no-op Postproduction stub broke cut-plane edge rendering (12% pixel
+  diff) AND the cut-plane-permalink load path (fork's
+  `IfcClipper.active` setter dives into `postProduction.composer` /
+  `outlineUniforms`); vendoring the *real* Postproduction fixed both.
+  Test-mock plumbing notes live in `__mocks__/web-ifc-viewer.js` (the
+  jest.mock-for-local-modules + `globalThis` singleton dedup is subtle
+  — read the comments there before touching it).
+
+- **5d.4 — drop the last fork imports + the dep (todo).** Depends on
+  5d.2. After both `IfcManager` and `IfcClipper` have in-repo
+  replacements (the former needs a small `ShareIfcManager`-style
+  standalone of `selector` + `properties` + `units`; the latter is
+  5d.2), delete `src/viewer/three/forkIfcComposition.js`, remove
+  `web-ifc-viewer` from `package.json`, and delete the
+  `threeJsmCompatPlugin` rewrites in `tools/esbuild/plugins.js` (the
+  `BufferGeometryUtils` / `TransformControls` / `scene.js` /
+  `context.js` hooks all target fork-vendored files that no longer
+  load). The vendored `src/viewer/three/context/*` keeps the inlined
+  patches, so the build-time rewrites are pure dead weight after this.
+
+**Slice 5e — three / postprocessing / three-mesh-bvh bumps (todo).**
+After 5d completes (fork dep gone) — the fork pin no longer constrains
+`three`. Bump `three` to current stable, update `@types/three` to
+match, drop the `BLDRS_face_ids` per-vertex fallback's wit-three
+checks, re-evaluate the `?feature=perf` baseline, etc. (Note: 5d.3
+already vendored the context against the *current* pinned `three`, so
+the API-drift surface here is smaller than when this slice was first
+written — see §6.)
+
+**Slice 5f — wasm + build scripts (todo).** Drop
 `build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, and
 `isWebIfcShimEnabled` from `tools/esbuild`. The `webIfcShimAliasPlugin`
-goes away — there are no more `web-ifc` imports to alias.
+goes away — there are no more `web-ifc` imports to alias. (Some of
+this overlaps 5d.4; whichever lands first does the shared part.)
 
-**Slice 5f — mocks (todo).** Rename `__mocks__/web-ifc-viewer.js` →
-`__mocks__/ShareViewer.js`; update the three test files that
-`jest.mock('web-ifc-viewer')` to mock the new path.
+**Slice 5g — mocks (todo).** Rename `__mocks__/web-ifc-viewer.js` →
+`__mocks__/ShareViewer.js`; update the test files that
+`jest.mock('web-ifc-viewer')` to mock the new path. Blocked on 5d.4
+(while `web-ifc-viewer` is still imported, the manual mock has to keep
+its current name). The `globalThis`-singleton + load-dedup machinery
+added in 5d.3 moves with it.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.
-- Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.
+- ~~Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.~~ Done — `IfcIsolator` moved to `src/viewer/three/` and no longer imports the fork's `IfcContext`.
 - Delete the §8.3 deprecation shim once the GLB-scene PR has cut over.
 - Update `DESIGN.md` and `CLAUDE.md` to point at `src/viewer/`.
-- Drop `web-ifc` from build scripts (`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, etc. in `package.json`). The `useWebifcShim` branch can go entirely.
+- Drop `web-ifc` from build scripts (`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, etc. in `package.json`). The `useWebifcShim` branch can go entirely. (Overlaps slice 5f.)
 
 ### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
 - Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.
@@ -1036,7 +1153,7 @@ src/viewer/
   ShareViewer.js              ← facade, replaces IfcViewerAPIExtended
   ShareModel.js               ← capability + format decoration (§8.2)
   three/
-    ThreeContext.js           ← extracted Phase 2; standalone in Phase 5
+    ThreeContext.js           ← extracted Phase 2; wraps the vendored IfcContext (5d.3)
     Picker.js                 ← moved from view/Picker.js
     CustomPostProcessor.js    ← moved from Infrastructure/
     IfcHighlighter.js         ← moved from Infrastructure/
@@ -1045,15 +1162,39 @@ src/viewer/
     GlbClipper.js             ← §3c.iv slice 2 — moved from Infrastructure/
     CutPlaneArrowHelper.ts    ← §3c.iv slice 2 — moved from Infrastructure/
     Clipper.js                ← §3c.iv slice 3 — unified clipper facade
+    forkIfcComposition.js     ← 5d.3 — sole re-export of fork IfcManager + IfcClipper (deleted in 5d.4)
     elementSubsets.js         ← shared subset helpers (legacy + Conway-direct)
+    context/                  ← 5d.3 — vendored from web-ifc-viewer/dist/components/context/*
+      context.js              ←   IfcContext (render loop) + inlined Clock shim
+      scene.js                ←   IfcScene + inlined light-intensity ×π patch
+      renderer/
+        renderer.js
+        postproduction.js     ←   real EffectComposer outline pipeline (cut-plane edges)
+        custom-outline-pass.js
+      camera/
+        camera.js, projection-manager.js
+        controls/             ←   orbit-control (real) + first-person/plan (no-op stubs)
+      raycaster.js, mouse.js, ifcEvent.js, animator.js
+      base-types.js           ←   IfcComponent + NavigationModes/CameraProjections enums
+      LiteEvent.js            ←   fork's tiny pub/sub
+      index.js                ←   barrel re-export
   ifc/
     flatMeshToBufferGeometry.js
     IfcItemsMap.js            ← per-IFC-product table (§3b.ii)
     IfcInstanceMap.js         ← per-PlacedGeometry table (§3b.ii)
     buildConwayIfcModel.js
-    IfcModelService.js        ← Phase 5 — replaces IFC.loader.ifcManager
-    IfcModel.js               ← Phase 5 — extends Mesh; subsets live here
+    conwayDirectIfcLoader.js  ← 5b — parseIfcWithConway + decorateConwayDirectIfcModel
+    ShareIfcLoader.js         ← 5d.1 — Conway-direct parse entry (viewer.ifcLoader)
+    ShareIfcManager.js        ← 5d.1 — minimal IFC-manager surface over Conway IfcAPI
+    ifcItemsMapParity.js      ← 5d.1 — diagnostic parity check (?feature=ifcItemsMapParity)
 ```
+
+`IfcModelService` / `IfcModel` from the original sketch never
+materialised as separate files — the "service" surface is split
+across `ShareIfcManager` (manager-shape reads) and the property-method
+closures `decorateConwayDirectIfcModel` attaches to each model
+(§3b). That's a naming divergence from §3b's prose, not a missing
+piece.
 
 Tests live next to source.
 
@@ -1201,8 +1342,12 @@ A reasonable target sequence:
   pipeline.
 
 The compat-path code is a single docblock in `ShareViewer.js` + the
-esbuild plugin's lights rewrite — both already commented "goes away
-with Phase 5". Removing them is a four-line diff at that point.
+esbuild plugin's lights rewrite. The lights rewrite (`scaleLightIntensities`
+on `scene.js`) became dead for the active code path in 5d.3 — the ×π
+patch is now inlined in the vendored `src/viewer/three/context/scene.js`;
+the esbuild hook only still fires on the unused fork-vendored
+`scene.js` and gets deleted in 5d.4. Re-tuning to the modern pipeline
+edits the vendored copy directly now, not the build rewrite.
 
 ---
 
