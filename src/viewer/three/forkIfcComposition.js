@@ -1,42 +1,42 @@
-// forkIfcComposition — composition root for the fork pieces we still
+// forkIfcComposition — composition root for the fork piece we still
 // need: `IfcManager` (web-ifc-three IFCLoader + IfcSelector + IfcProperties
-// + IfcUnits behind one constructor) and `IfcClipper` (IFC clipping
-// planes + ClippingEdges).
+// + IfcUnits behind one constructor).
 //
 // Slice 5d.3 of design/new/viewer-replacement.md Phase 5. ShareViewer
-// used to call `new IfcViewerAPI(options)` for these; 5d.3 swapped to
-// our vendored `IfcContext` (`src/viewer/three/context/`) and direct
-// `new IfcManager(context)` / `new IfcClipper(context, IFC)`. This
-// module centralises those deep imports — `__mocks__/web-ifc-viewer.js`
-// can stay the single mock surface for the fork (vs. having to mock
-// each deep `web-ifc-viewer/dist/components/...` path separately).
+// used to call `new IfcViewerAPI(options)` for the fork pieces; 5d.3
+// swapped to our vendored `IfcContext` (`src/viewer/three/context/`) and
+// direct `new IfcManager(context)`. This module centralises the deep
+// import so `__mocks__/web-ifc-viewer.js` can stay the single mock
+// surface for the fork (vs. having to mock each deep
+// `web-ifc-viewer/dist/components/...` path separately).
 //
-// Lifetime: the values returned here have references inside fork-side
+// Slice 5d.2 dropped the fork's `IfcClipper` — all clipping now runs
+// through the in-repo `MeshClipper` (see `src/viewer/three/Clipper.js`),
+// so this module no longer constructs it. `IfcManager` is the last fork
+// construct ShareViewer instantiates; replacing it with a standalone
+// `ShareIfcManager`-style surface (selector + properties + units) is the
+// remaining work before 5d.4 can delete this module + the `web-ifc-viewer`
+// dependency entirely.
+//
+// Lifetime: the value returned here has references inside fork-side
 // objects (IfcSelector captures `loader`, IfcProperties captures
-// `loader`, ClippingEdges captures `ifc.loader.ifcManager`, …) — once
-// constructed they outlive any temporary holder. Don't reuse a single
-// `makeForkIfc` return across viewer disposes; build a new one per
-// ShareViewer.
-//
-// 5d.2 (clipper unification) and a later slice replacing fork's
-// IfcManager surface will reduce this to one or zero callers; the
-// module goes away when both are done.
+// `loader`, …) — once constructed it outlives any temporary holder.
+// Don't reuse a single `makeForkIfc` return across viewer disposes; build
+// a new one per ShareViewer.
 
 import {IfcManager} from 'web-ifc-viewer/dist/components/ifc/ifc-manager'
-import {IfcClipper} from 'web-ifc-viewer/dist/components/display/clipping-planes/clipper'
 
 
 /**
- * Build fork-side IfcManager + IfcClipper against our vendored IfcContext.
+ * Build the fork-side IfcManager against our vendored IfcContext.
  *
  * @param {object} ifcContext our vendored `IfcContext` (the fork
- *   construct its sub-objects with the same `context.addComponent`
+ *   constructs its sub-objects with the same `context.addComponent`
  *   / `context.items` / `context.castRayIfc` surface our IfcContext
  *   provides — identical because we vendored from the fork).
- * @return {{IFC: object, clipper: object}}
+ * @return {{IFC: object}}
  */
 export function makeForkIfc(ifcContext) {
   const IFC = new IfcManager(ifcContext)
-  const clipper = new IfcClipper(ifcContext, IFC)
-  return {IFC, clipper}
+  return {IFC}
 }

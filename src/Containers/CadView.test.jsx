@@ -9,6 +9,7 @@ import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {ShareViewer} from '../viewer/ShareViewer'
+import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
@@ -158,6 +159,19 @@ describe('CadView', () => {
       }
     })
     // jest.spyOn(Loader, 'readModel').mockReturnValue({})
+
+    // Slice 5d.2: `viewer.clipper.setModel(model)` (called by
+    // CutPlaneMenu on model load) now builds a real per-model
+    // `MeshClipper`, which reads model bounds via three's
+    // `Box3.setFromObject` — a path the auto-mocked three here doesn't
+    // support (its mocks don't chain / lack instance fields). CadView's
+    // clipping tests verify orchestration (that the cut-plane menu calls
+    // `createFromNormalAndCoplanarPoint` / `deleteAllPlanes`), not the
+    // MeshClipper internals (covered by MeshClipper.test.js with real
+    // three). Stub setModel to a no-op so `_meshClipper` is never built;
+    // every other Clipper method then short-circuits via `_meshClipper?.`
+    // and stays a safe no-op the prototype spies below can observe.
+    jest.spyOn(Clipper.prototype, 'setModel').mockImplementation(() => {})
   })
 
 
@@ -399,6 +413,12 @@ describe('CadView', () => {
       hash: `#${HASH_PREFIX_CAMERA}:1,2,3,4,5,6;${HASH_PREFIX_CUT_PLANE}:x=0`,
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+    // The cut-plane menu drives clipping through `viewer.clipper` (a
+    // `Clipper` instance). Spy at the prototype so the assertion catches
+    // the call regardless of which ShareViewer/Clipper instance CadView's
+    // `initViewer` builds. `setModel` is stubbed (beforeAll), so this
+    // just records the orchestration call.
+    const createPlaneSpy = jest.spyOn(Clipper.prototype, 'createFromNormalAndCoplanarPoint')
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setIsOpfsAvailable(false))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
@@ -412,11 +432,7 @@ describe('CadView', () => {
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
     const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
     expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
-    // ShareViewer wraps the fork's `IFC.clipper` in a Clipper plugin;
-    // the IFC-mode `createFromNormalAndCoplanarPoint` delegates to the
-    // fork clipper, captured at construction time as `_forkClipper`.
-    const createPlanMock = viewer._forkClipper.createFromNormalAndCoplanarPoint
-    expect(createPlanMock).toHaveBeenCalled()
+    expect(createPlaneSpy).toHaveBeenCalled()
     await actAsyncFlush()
   })
 
@@ -424,6 +440,11 @@ describe('CadView', () => {
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
+    // Clearing the selection routes through `removePlanes(viewer)` →
+    // `viewer.clipper.deleteAllPlanes()`. Spy at the prototype so the
+    // assertion catches the call on whichever Clipper instance CadView's
+    // `initViewer` built.
+    const deleteAllSpy = jest.spyOn(Clipper.prototype, 'deleteAllPlanes')
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setModelPath({filepath: `/index.ifc`})
@@ -438,12 +459,12 @@ describe('CadView', () => {
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
     const clearSelection = within(eltGrp).getByTitle('Clear')
+    // Scope the assertion to the clear action, not any setup-time calls.
+    deleteAllSpy.mockClear()
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
-    // Clipper plugin delegates IFC-mode deleteAllPlanes to _forkClipper.
-    const callDeletePlanes = viewer._forkClipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
+    expect(deleteAllSpy).toHaveBeenCalled()
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
     // TODO(pablo): hack after refactor, was 0, but UI looks right

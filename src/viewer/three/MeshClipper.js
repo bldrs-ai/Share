@@ -1,12 +1,30 @@
-import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere} from 'three'
+import {Vector3, Plane, Raycaster, Vector2, Box3, Sphere, Matrix3} from 'three'
 import {getMeshMaterials} from '../ShareModel'
 import debug from '../../utils/debug'
 import CutPlaneArrowHelper from './CutPlaneArrowHelper'
 
 
 /**
- * Manages clipping planes with interactive drag controls for GLB
- * (and other unstructured-mesh) models.
+ * Manages clipping planes with interactive drag controls for any
+ * mesh-based model — IFC, GLB/GLTF, STL, OBJ, etc. Renamed from
+ * `GlbClipper` in slice 5d.2 of design/new/viewer-replacement.md when
+ * it became the sole in-repo clipper, taking over the IFC path the
+ * fork's `IfcClipper` used to drive. The implementation is format-
+ * agnostic: clipping is applied by binding the renderer's clipping-
+ * plane array onto every material under the model, which works
+ * regardless of how the geometry was produced.
+ *
+ * Model-shape note: the model root may be a single `Mesh` (Conway-
+ * direct cache-miss IFC — one Mesh, array material) or a `Group` of
+ * child Meshes (cache-hit GLB — one Mesh per material group). The
+ * material binding (`_bindClippingPlanesToMaterials`) walks from the
+ * root inclusive, so both shapes are covered.
+ *
+ * The Q/W keyboard shortcuts (`createPlaneAtCursor` / `deletePlaneAtCursor`)
+ * carry over the fork `IfcClipper`'s cursor-driven plane authoring:
+ * Q raycasts the model under the pointer and drops a plane on the hit
+ * face; W raycasts the existing plane arrows and removes the one under
+ * the pointer.
  *
  * Perf notes (relevant when dragging an arrow at 60Hz):
  *
@@ -33,7 +51,7 @@ import CutPlaneArrowHelper from './CutPlaneArrowHelper'
  *    5+ allocations per dragged mousemove event. Cumulative GC pressure
  *    fix; small per-event but compounds at 60Hz.
  */
-export default class GlbClipper {
+export default class MeshClipper {
   /**
    * @param {object} viewer - The viewer instance
    * @param {object} model - The 3D model to apply clipping to
@@ -126,7 +144,7 @@ export default class GlbClipper {
     // plane *count* changed — see _syncClippingBindings).
     this._syncClippingBindings()
 
-    debug().log('GlbClipper: Created plane', planeData)
+    debug().log('MeshClipper: Created plane', planeData)
     return planeData
   }
 
@@ -183,7 +201,85 @@ export default class GlbClipper {
     this._clippingPlanes.length = 0
     this._syncClippingBindings()
 
-    debug().log('GlbClipper: Deleted all planes')
+    debug().log('MeshClipper: Deleted all planes')
+  }
+
+
+  /**
+   * Remove a single clipping plane — its arrow from the scene and its
+   * `Plane` from the bound array. Re-syncs material bindings so the
+   * shader variant matches the new (lower) plane count.
+   *
+   * @param {object} planeData an entry from `this.planes`.
+   */
+  deletePlane(planeData) {
+    const index = this.planes.indexOf(planeData)
+    if (index === -1) {
+      return
+    }
+    this.viewer.context.getScene().remove(planeData.arrow)
+    this.planes.splice(index, 1)
+    const planeIndex = this._clippingPlanes.indexOf(planeData.plane)
+    if (planeIndex !== -1) {
+      this._clippingPlanes.splice(planeIndex, 1)
+    }
+    this._syncClippingBindings()
+    debug().log('MeshClipper: Deleted plane', planeData)
+  }
+
+
+  /**
+   * Create a clipping plane on the model face under the pointer (Q key).
+   *
+   * Carries over the fork `IfcClipper`'s cursor-driven authoring:
+   * raycast the loaded model with the current pointer, take the hit
+   * point + face normal (transformed to world space), and drop a plane
+   * there. The normal is negated so the kept half-space is the side the
+   * camera looks from — the same convention the fork used. Interaction
+   * is enabled so the new plane's arrow is immediately draggable (the
+   * Q shortcut, unlike the cut-plane menu, doesn't call
+   * `setInteractionEnabled` itself).
+   *
+   * No-op when the pointer isn't over the model.
+   *
+   * @return {object|null} the created plane data, or null on a miss.
+   */
+  createPlaneAtCursor() {
+    const hit = this.viewer.context.castRayIfc()
+    if (!hit || !hit.point || !hit.face) {
+      return null
+    }
+    // Face normal is in the hit object's local space; bring it to world
+    // via the object's normal matrix before building the plane.
+    const normalMatrix = new Matrix3().getNormalMatrix(hit.object.matrixWorld)
+    const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize().negate()
+    const planeData = this.createPlane(worldNormal, hit.point.clone())
+    this.setInteractionEnabled(true)
+    return planeData
+  }
+
+
+  /**
+   * Delete the clipping plane whose arrow is under the pointer (W key).
+   *
+   * Raycasts the existing plane arrows using the current pointer (the
+   * shared context raycaster tracks the live cursor position) and
+   * removes the matching plane. No-op when no arrow is under the pointer.
+   */
+  deletePlaneAtCursor() {
+    if (this.planes.length === 0) {
+      return
+    }
+    const arrows = this.planes.map((pd) => pd.arrow)
+    const hits = this.viewer.context.castRay(arrows)
+    if (!hits || hits.length === 0) {
+      return
+    }
+    const hitObject = hits[0].object
+    const planeData = this.planes.find((pd) => isSelfOrDescendant(hitObject, pd.arrow))
+    if (planeData) {
+      this.deletePlane(planeData)
+    }
   }
 
 
@@ -275,9 +371,12 @@ export default class GlbClipper {
         }
       }
     }
-    for (const child of this.model.children) {
-      bind(child)
-    }
+    // Bind from the root inclusive: a Conway-direct cache-miss IFC model
+    // is a single Mesh that carries the material on the root itself
+    // (no child meshes), while a cache-hit GLB is a Group whose child
+    // Meshes hold the materials. `bind(root)` covers both — it binds the
+    // root's own materials, then recurses into any children.
+    bind(this.model)
   }
 
 
@@ -344,7 +443,7 @@ export default class GlbClipper {
         if (dragControls) {
           dragControls.enabled = false
         }
-        debug().log('GlbClipper: Started dragging arrow for direction', planeData.direction)
+        debug().log('MeshClipper: Started dragging arrow for direction', planeData.direction)
         break
       }
     }
@@ -441,7 +540,7 @@ export default class GlbClipper {
     if (!this.draggingArrow) {
       return
     }
-    debug().log('GlbClipper: Stopped dragging arrow')
+    debug().log('MeshClipper: Stopped dragging arrow')
     this.setArrowColor(this.draggingArrow.arrow, this.draggingArrow.arrow.userData.defaultColor)
     this.draggingArrow = null
     const releaseControls = this.viewer.context.getCameraControls()
@@ -468,3 +567,25 @@ const MAX_ARROW_SCALE = 40
 const ARROW_RENDER_ORDER = 999
 const ARROW_COLOR_DEFAULT = 0x00ff00
 const ARROW_COLOR_HIGHLIGHT = 0xffff00
+
+
+/**
+ * Walk an Object3D's ancestor chain to test membership under `ancestor`.
+ * A recursive raycast against an arrow returns the hit on one of the
+ * arrow's child meshes (shaft / head / tail), so mapping a hit back to
+ * its arrow means checking self-or-ancestor rather than identity.
+ *
+ * @param {object} obj the raycast hit object.
+ * @param {object} ancestor the arrow Group to test against.
+ * @return {boolean}
+ */
+function isSelfOrDescendant(obj, ancestor) {
+  let cursor = obj
+  while (cursor) {
+    if (cursor === ancestor) {
+      return true
+    }
+    cursor = cursor.parent
+  }
+  return false
+}
