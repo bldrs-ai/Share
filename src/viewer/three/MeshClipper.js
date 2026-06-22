@@ -565,7 +565,12 @@ const ARROW_SCALE_RATIO = 0.25
 const MIN_ARROW_SCALE = 2
 const MAX_ARROW_SCALE = 40
 const ARROW_RENDER_ORDER = 999
-const ARROW_COLOR_DEFAULT = 0x00ff00
+// Cut-plane arrow colors. Blue is deliberate (not a theme color): the
+// arrows must read against the model, and green arrows washed out on
+// green models — the Bldrs logo is a common test case. This restores
+// the high-contrast blue + large heads of the pre-5d.2 fork clipper's
+// gizmo. Highlight stays yellow (hover), which reads on both.
+const ARROW_COLOR_DEFAULT = 0x0000ff
 const ARROW_COLOR_HIGHLIGHT = 0xffff00
 
 
