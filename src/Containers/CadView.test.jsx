@@ -8,6 +8,12 @@ import ShareMock from '../ShareMock'
 import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+// Slice 5d.4: ShareViewer no longer self-imports the fork to trigger the
+// Jest harness, so load it explicitly here — before the first import
+// that pulls in ShareViewer (→ IfcContext / ShareIfc) — so the harness's
+// jest.mock() registrations land first. The lazy `require('web-ifc-viewer')`
+// calls in the test bodies below read its singleton.
+import 'web-ifc-viewer'
 import {ShareViewer} from '../viewer/ShareViewer'
 import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'

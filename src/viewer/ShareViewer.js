@@ -1,13 +1,9 @@
-// Load-order-critical: keep `web-ifc-viewer` as the FIRST import.
-// In Jest, the root manual mock `__mocks__/web-ifc-viewer.js`
-// auto-applies when this node-module is first imported, and it
-// registers `jest.mock()`s for our source modules (`./three/context`,
-// `./three/forkIfcComposition`, IfcHighlighter, …). Importing it first
-// guarantees those registrations land before the modules they mock are
-// pulled in below. In production this just loads the fork index (whose
-// subpaths we use via `forkIfcComposition` anyway), so it's a no-op
-// cost. See `__mocks__/web-ifc-viewer.js` for the full rationale.
-import 'web-ifc-viewer'
+// Slice 5d.4 removed the `web-ifc-viewer` fork: the IFC namespace
+// (`this.IFC`) is now the in-repo Conway-backed `ShareIfc`, so no bare
+// fork import remains. The Jest harness registers its sub-mocks
+// (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
+// files that import it before the component under test — see
+// `__mocks__/web-ifc-viewer.js` for the load-order rationale.
 import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
@@ -17,8 +13,8 @@ import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
 import ShareIfcLoader from './ifc/ShareIfcLoader'
+import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
-import {makeForkIfc} from './three/forkIfcComposition'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
@@ -84,18 +80,18 @@ const viewRules = {
  *
  *   1. `IfcContext` — vendored at `src/viewer/three/context/` (was
  *      `web-ifc-viewer/dist/components/context/context.js`).
- *   2. `IfcManager` — still imported from `web-ifc-viewer` because
- *      fork-side consumers (clipping-edges / fills / glTF) reach into
- *      `IFC.loader.ifcManager.*` and would break without the full
- *      wit-three surface. This is the last fork construct ShareViewer
- *      instantiates; a standalone manager surface replaces it in a later
- *      slice, after which 5d.4 drops the dependency.
+ *   2. `ShareIfc` — the in-repo Conway-backed IFC namespace (slice
+ *      5d.4, replaced the fork's `IfcManager`). Constructs Conway's
+ *      `IfcAPI` directly and exposes the `loader.ifcManager` /
+ *      `selector` / `getProperties` / `addIfcModel` surface live code
+ *      reads off `this.IFC`. Dropping it removed the last
+ *      `web-ifc-viewer` import.
  *
  * Clipping no longer touches the fork — slice 5d.2 routed every model
  * (IFC + GLB) through the in-repo `MeshClipper` behind `this.clipper`.
  *
  * Property surface (stable since slice 5c):
- *   - `this.IFC` — standalone fork IfcManager
+ *   - `this.IFC` — in-repo `ShareIfc` (Conway-backed IFC namespace)
  *   - `this.context` — ThreeContext wrapping our vendored IfcContext
  *   - `this.clipper` — in-repo `Clipper` (MeshClipper-backed)
  *   - `this.selector` — local `Selector` facade over `IFC.selector`
@@ -134,11 +130,11 @@ export class ShareViewer {
     //      `Edges` / `ShadowDropper` / `EdgeProjector` / `DXFWriter` /
     //      `PDFWriter` / `GLTFManager` / `SelectionWindow` — built but
     //      unused before — are gone from the bundle.
-    //   2. `IfcManager` (still from `web-ifc-viewer` for now). Holds
-    //      `IFC.loader` (wit-three IFCLoader), `IFC.selector`,
-    //      `IFC.properties`, `IFC.units`. Fork-side clipping-edges +
-    //      fills + glTF still reach into `IFC.loader.ifcManager.*` —
-    //      fork dep stays until those consumers are dropped or replaced.
+    //   2. `ShareIfc` — in-repo Conway-backed IFC namespace (slice 5d.4,
+    //      was the fork's `IfcManager`). Holds `IFC.loader.ifcManager`
+    //      (a `ShareIfcManager` over Conway's IfcAPI), a material-slot
+    //      `IFC.selector`, plus `getProperties` / `addIfcModel` /
+    //      `setWasmPath` / `dispose`. No `web-ifc-viewer` import remains.
     //
     // Slice 5d.2 dropped the fork's `IfcClipper`: clipping now runs
     // through the in-repo `MeshClipper` (via `this.clipper`), so the
@@ -150,15 +146,15 @@ export class ShareViewer {
     // node_modules IfcContext, now our vendored copy).
     const ifcContext = new IfcContext(options)
     this.context = new ThreeContext(ifcContext)
-    const {IFC} = makeForkIfc(ifcContext)
-    this.IFC = IFC
-    // Slice 5d.1: install our `ShareIfcLoader` alongside the fork's
-    // IFCLoader (which stays at `viewer.IFC.loader`). Fork-side
-    // consumers (clipper / clipping-edges / fills / plan-manager /
-    // glTF) reach for `this.ifc.loader.ifcManager.{subsets, …}` —
-    // replacing `viewer.IFC.loader` would break them.
-    // `viewer.ifcLoader` is the new top-level slot;
-    // `Loader.js#findLoader` reads from there for `case 'ifc'`.
+    // Slice 5d.4: in-repo Conway-backed IFC namespace (was the fork's
+    // `IfcManager` via `makeForkIfc(ifcContext)`).
+    this.IFC = new ShareIfc(ifcContext)
+    // Install `ShareIfcLoader` at the top-level `viewer.ifcLoader` slot
+    // (slice 5d.1). It owns the Conway-direct `parse(buffer)` entry point
+    // `Loader.js#findLoader` reads for `case 'ifc'`, and shares ShareIfc's
+    // Conway IfcAPI handle (`viewer.IFC.loader.ifcManager.ifcAPI`). Kept
+    // distinct from `viewer.IFC.loader` — which since 5d.4 is ShareIfc's
+    // own `ShareIfcManager` (Conway-backed), not a wit-three IFCLoader.
     const conwayIfcAPI = this.IFC.loader?.ifcManager?.ifcAPI
     if (conwayIfcAPI) {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
@@ -183,11 +179,12 @@ export class ShareViewer {
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
-    // Selector — §3c.iv slice 1 facade over the fork's `IFC.selector`.
-    // Every call-site that previously poked at `viewer.IFC.selector.X`
-    // now routes through `viewer.selector.X` instead. Keeps the fork
-    // selector as the underlying impl until later in Phase 5 swaps it
-    // for an IfcModelService-backed `Selection` plugin.
+    // Selector — §3c.iv facade over `IFC.selector`. Every call-site that
+    // poked at `viewer.IFC.selector.X` routes through `viewer.selector.X`.
+    // Since 5d.4 the backing `IFC.selector` is ShareIfc's material-slot
+    // stub (the live remnant of the fork selector — the two shared
+    // overlay materials); picking runs through IfcInstanceMap. Phase 5's
+    // IfcModelService-backed `Selection` plugin is the destination.
     this.selector = new Selector(this.IFC?.selector)
     // Clipper — the in-repo cut-plane plugin. Slice 5d.2 dropped the
     // fork's `IfcClipper`; every model (IFC + GLB) now clips through the

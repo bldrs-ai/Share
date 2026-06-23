@@ -22,6 +22,14 @@ jest.mock('three', () => jest.requireActual('three'))
 // real code path. They lock in the contract that the ShareViewer ↔
 // ThreeContext seam routes raycasting correctly.
 
+// Slice 5d.4: load the Jest harness for its side effects — it registers
+// `jest.mock()` for ShareViewer's heavy deps (`./ifc/ShareIfc`,
+// `./three/context`, IfcHighlighter, …). ShareViewer no longer
+// self-imports the fork to trigger this, so the `raycast routing` tests
+// below that construct `new ShareViewer()` need the harness loaded here,
+// before `./ShareViewer` resolves those deps. The hoisted
+// `jest.mock('three', requireActual)` above still wins for three.
+import 'web-ifc-viewer'
 import {BufferAttribute, BufferGeometry, Group, Mesh, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
 import {instanceMapFromGeometry} from './ifc/IfcInstanceMap'
