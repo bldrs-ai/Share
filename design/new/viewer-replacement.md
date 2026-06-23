@@ -644,8 +644,8 @@ filesystem layout is the flatter shape below.
 | `Highlighter` | `src/viewer/three/IfcHighlighter.js` | Moved from `Infrastructure/`. |
 | `Isolator` | `src/viewer/three/IfcIsolator.js` | Moved from `Infrastructure/`; isolate routing through `IfcInstanceMap` landed in PR #1518. |
 | `Selector` | `src/viewer/three/Selector.js` | Facade over the fork's `IFC.selector` — landed in the slice that opened §3c.iv. ~16 call-sites now route through `viewer.selector.X`. |
-| `GlbClipper` + `CutPlaneArrowHelper` | `src/viewer/three/` | Relocated from `Infrastructure/` — landed alongside the Selector facade. |
-| `Clipper` | `src/viewer/three/Clipper.js` | Unified facade over the fork's `IfcClipper` + the in-repo `GlbClipper`. Mounts as `viewer.clipper`, dispatches per-model via `setModel(model)`. Erases the `modelHasUnstructuredMeshClipper` branch from `CutPlaneMenu.jsx`. |
+| `MeshClipper` + `CutPlaneArrowHelper` | `src/viewer/three/` | `MeshClipper` (renamed from `GlbClipper` in 5d.2) is the sole in-repo clipper — clips any mesh model (IFC + GLB), with the Q/W cursor shortcuts. |
+| `Clipper` | `src/viewer/three/Clipper.js` | Mounts as `viewer.clipper`; builds a `MeshClipper` per `setModel(model)`. Since 5d.2 it has a single backend (no fork dispatch). Erases the `modelHasUnstructuredMeshClipper` branch from `CutPlaneMenu.jsx`. |
 
 **Selector facade — landed (recap).**
 Wraps the fork's `IFC.selector` behind a stable local API
@@ -670,26 +670,26 @@ clipper is captured at `ShareViewer` construction as
 binding happens via `viewer.clipper.setModel(model)`, called from
 `CutPlaneMenu`'s existing model-watching effect.
 
-> **The fork `IfcClipper` is still the IFC backing impl** — the
-> facade unified the *call-sites*, not the backend. Replacing the
-> fork backend is slice 5d.2 (deferred; see Phase 5). Until then,
-> `viewer._forkClipper` is a real `web-ifc-viewer` `IfcClipper`
-> (instantiated in `forkIfcComposition.js#makeForkIfc` since 5d.3).
-> The IFC-only Q/W cursor shortcuts (`createPlane` / `deletePlane`)
-> are the part with no `GlbClipper` equivalent — that's the crux of
-> the 5d.2 decision.
+> **Update (5d.2, done 2026-06): the fork backend is gone.** The
+> facade now builds a single in-repo `MeshClipper` (renamed from
+> `GlbClipper`) for every model; `viewer._forkClipper` no longer
+> exists, and `forkIfcComposition.makeForkIfc` no longer constructs
+> `IfcClipper`. The Q/W cursor shortcuts were carried over to
+> `MeshClipper` as `createPlaneAtCursor` / `deletePlaneAtCursor`, so
+> no UX regressed. The recap above describes the slice-3 two-backend
+> dispatch, now historical.
 
-**Clipper API surface:**
+**Clipper API surface (post-5d.2):**
 ```js
 viewer.clipper.setModel(model)
-viewer.clipper.active / orthogonalY / clickDrag       // fork-only state (passthrough)
-viewer.clipper.planes                                 // unified plane list
-viewer.clipper.context                                // legacy escape (fork only)
+viewer.clipper.active / orthogonalY / clickDrag       // plain session state
+viewer.clipper.planes                                 // MeshClipper plane list
+viewer.clipper.context                                // undefined (fork escape hatch gone)
 viewer.clipper.createFromNormalAndCoplanarPoint(n, p, direction?, offset?)
-viewer.clipper.createPlane()                          // IFC keyboard shortcut (Q)
-viewer.clipper.deletePlane()                          // IFC keyboard shortcut (W)
+viewer.clipper.createPlane()                          // keyboard shortcut (Q) — plane at cursor
+viewer.clipper.deletePlane()                          // keyboard shortcut (W) — plane at cursor
 viewer.clipper.deleteAllPlanes()
-viewer.clipper.setInteractionEnabled(enabled)         // GLB-only arrow drag handlers
+viewer.clipper.setInteractionEnabled(enabled)         // arrow drag handlers
 viewer.clipper.dispose()
 ```
 
@@ -836,16 +836,17 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
 
-**Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.3 are merged. The
-remaining work to fully drop the fork is **5d.2** (replace fork
-`IfcClipper` — deferred, needs a decision) → **5d.4** (delete
+**Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.2, 5d.3 are merged. The
+remaining work to fully drop the fork is **5d.4** (give the fork
+`IfcManager` an in-repo replacement, then delete
 `forkIfcComposition.js` + the `web-ifc-viewer` dep + the
 `threeJsmCompatPlugin` rewrites) → then **5e** (bump `three`), **5f**
 (wasm/build-script cleanup), **5g** (rename the mock). What still
 imports `web-ifc-viewer` today: `src/viewer/three/forkIfcComposition.js`
-(production — `IfcManager` + `IfcClipper`) and 6 test files via
-`jest.mock('web-ifc-viewer')`. The slice numbering below matches the
-`5d.N` tags in the committed source comments (`grep -rn "5d\." src/`).
+(production — `IfcManager` only, since 5d.2 dropped `IfcClipper`) and 6
+test files via `jest.mock('web-ifc-viewer')`. The slice numbering below
+matches the `5d.N` tags in the committed source comments
+(`grep -rn "5d\." src/`).
 
 **Slice 5a — flag default-on (done 2026-05).** This PR. Flips
 `conwayDirectIfc` and `glb` to `isActive: true`; removes the
@@ -948,18 +949,43 @@ comments (`grep "5d\." src/`).
   pointing at the wit-three IFCLoader until those consumers are gone.
   `Loader.js#findLoader`'s `case 'ifc'` reads `viewer.ifcLoader`.
 
-- **5d.2 — Clipper unification / drop fork `IfcClipper` (deferred).**
-  Deferred by decision (2026-05): the fork's `IfcClipper` supports
-  the IFC-only Q/W keyboard shortcuts (create/delete plane at cursor,
-  wired in `utils/shortcutKeys.js` → `viewer.clipper.createPlane()` /
-  `deletePlane()`) that `GlbClipper` has no equivalent for. Dropping
-  it means either (a) accepting that UX regression by routing all
-  clipping through `GlbClipper`, or (b) vendoring `clipper.js` +
-  `clipping-edges.js` + `planes.js` (~678 lines, the
-  `IfcPlane`/`ClippingEdges` family) into `src/viewer/three/`.
-  Prerequisite for 5d.4 (IfcClipper is the last fork construct
-  ShareViewer instantiates besides IfcManager). Pick (a) or (b) when
-  this slice is picked up.
+- **5d.2 — drop fork `IfcClipper`, unify on the in-repo clipper (done
+  2026-06).** Chose option (a) of the deferred decision — route every
+  model through the single in-repo clipper rather than vendor the fork's
+  ~678-line `IfcPlane`/`ClippingEdges` family. Changes:
+    - `GlbClipper` → renamed `MeshClipper` (`src/viewer/three/MeshClipper.js`)
+      and generalised to clip IFC models too. Two fixes for the IFC path:
+      (i) `_bindClippingPlanesToMaterials` now binds from the model root
+      inclusive, so the single-Mesh Conway-direct cache-miss shape
+      (material on the root, no child meshes) gets clipped — the old
+      `model.children`-only walk skipped it; (ii) `createPlaneAtCursor` /
+      `deletePlaneAtCursor` carry over the fork's Q/W cursor-authoring
+      shortcuts (raycast the model / the plane arrows under the pointer
+      via `ThreeContext.castRayIfc` / `castRay`).
+    - `Clipper` (`src/viewer/three/Clipper.js`) dropped its fork backend:
+      no per-model-type dispatch, builds a `MeshClipper` for any model on
+      `setModel`, routes `createPlane`/`deletePlane` to the cursor
+      methods, and keeps `active`/`orthogonalY`/`clickDrag` as plain
+      session state (`viewer.js` writes them; nothing syncs to a fork).
+      `viewer.clipper.context` is now always `undefined`; the fork
+      global-clipping-registry scrub in `CutPlaneMenu.removePlanes` is
+      gone (`MeshClipper.deleteAllPlanes` already unbinds renderer +
+      materials).
+    - `ShareViewer` / `forkIfcComposition.makeForkIfc` no longer
+      construct `IfcClipper`; `viewer._forkClipper` is gone.
+
+  **Not restored:** the fork's section-cut edges (`ClippingEdges`, the
+  black outline at the cut) were already non-functional on the default
+  Conway-direct path — they build on wit-three's `createSubset` /
+  `getAllItemsOfType`, which the Conway-direct parse never populates — so
+  dropping them matched production rather than regressing it. Re-adding
+  section edges against Conway-direct geometry (the model already carries
+  a BVH + per-vertex `expressID`, so a `three-mesh-bvh` shapecast can
+  generate them directly) is a separate visual-quality follow-up, not a
+  fork dependency.
+
+  `IfcManager` is now the only fork construct `ShareViewer` instantiates
+  (see 5d.4).
 
 - **5d.3 — vendor IfcContext, drop `new IfcViewerAPI()` (done 2026-05,
   PR #1539).** ShareViewer stopped calling `new IfcViewerAPI(options)`.
@@ -991,11 +1017,12 @@ comments (`grep "5d\." src/`).
   jest.mock-for-local-modules + `globalThis` singleton dedup is subtle
   — read the comments there before touching it).
 
-- **5d.4 — drop the last fork imports + the dep (todo).** Depends on
-  5d.2. After both `IfcManager` and `IfcClipper` have in-repo
-  replacements (the former needs a small `ShareIfcManager`-style
-  standalone of `selector` + `properties` + `units`; the latter is
-  5d.2), delete `src/viewer/three/forkIfcComposition.js`, remove
+- **5d.4 — drop the last fork imports + the dep (todo).** With 5d.2
+  done (`IfcClipper` gone), `IfcManager` is the only remaining fork
+  construct `ShareViewer` instantiates. Give it an in-repo replacement
+  — a small `ShareIfcManager`-style standalone of `selector` +
+  `properties` + `units` — then delete
+  `src/viewer/three/forkIfcComposition.js`, remove
   `web-ifc-viewer` from `package.json`, and delete the
   `threeJsmCompatPlugin` rewrites in `tools/esbuild/plugins.js` (the
   `BufferGeometryUtils` / `TransformControls` / `scene.js` /
@@ -1159,10 +1186,10 @@ src/viewer/
     IfcHighlighter.js         ← moved from Infrastructure/
     IfcIsolator.js            ← moved from Infrastructure/
     Selector.js               ← §3c.iv slice 1 — facade over IFC.selector
-    GlbClipper.js             ← §3c.iv slice 2 — moved from Infrastructure/
+    MeshClipper.js            ← §3c.iv slice 2 as GlbClipper; 5d.2 generalised + renamed → sole in-repo clipper
     CutPlaneArrowHelper.ts    ← §3c.iv slice 2 — moved from Infrastructure/
-    Clipper.js                ← §3c.iv slice 3 — unified clipper facade
-    forkIfcComposition.js     ← 5d.3 — sole re-export of fork IfcManager + IfcClipper (deleted in 5d.4)
+    Clipper.js                ← §3c.iv slice 3 — clipper facade; single MeshClipper backend since 5d.2
+    forkIfcComposition.js     ← 5d.3 — sole re-export of fork IfcManager (IfcClipper dropped in 5d.2; file deleted in 5d.4)
     elementSubsets.js         ← shared subset helpers (legacy + Conway-direct)
     context/                  ← 5d.3 — vendored from web-ifc-viewer/dist/components/context/*
       context.js              ←   IfcContext (render loop) + inlined Clock shim

@@ -85,16 +85,19 @@ const viewRules = {
  *   1. `IfcContext` — vendored at `src/viewer/three/context/` (was
  *      `web-ifc-viewer/dist/components/context/context.js`).
  *   2. `IfcManager` — still imported from `web-ifc-viewer` because
- *      fork-side consumers (clipper / clipping-edges / fills / glTF)
- *      reach into `IFC.loader.ifcManager.*` and would break without
- *      the full wit-three surface. Replaced piecewise in later slices.
- *   3. `IfcClipper` — still imported from `web-ifc-viewer`; the
- *      clipper unification (5d.2) was explicitly deferred.
+ *      fork-side consumers (clipping-edges / fills / glTF) reach into
+ *      `IFC.loader.ifcManager.*` and would break without the full
+ *      wit-three surface. This is the last fork construct ShareViewer
+ *      instantiates; a standalone manager surface replaces it in a later
+ *      slice, after which 5d.4 drops the dependency.
+ *
+ * Clipping no longer touches the fork — slice 5d.2 routed every model
+ * (IFC + GLB) through the in-repo `MeshClipper` behind `this.clipper`.
  *
  * Property surface (stable since slice 5c):
  *   - `this.IFC` — standalone fork IfcManager
  *   - `this.context` — ThreeContext wrapping our vendored IfcContext
- *   - `this.clipper` — local `Clipper` facade dispatching per-model
+ *   - `this.clipper` — in-repo `Clipper` (MeshClipper-backed)
  *   - `this.selector` — local `Selector` facade over `IFC.selector`
  *   - `this.ifcLoader` — `ShareIfcLoader` (Conway-direct IFC parse)
  *   - `this.isolator`, `this.highlighter`, `this.postProcessor`,
@@ -133,13 +136,13 @@ export class ShareViewer {
     //      unused before — are gone from the bundle.
     //   2. `IfcManager` (still from `web-ifc-viewer` for now). Holds
     //      `IFC.loader` (wit-three IFCLoader), `IFC.selector`,
-    //      `IFC.properties`, `IFC.units`. Fork-side clipper +
-    //      clipping-edges + fills + glTF still reach into
-    //      `IFC.loader.ifcManager.*` — fork dep stays until those
-    //      consumers are dropped or replaced.
-    //   3. `IfcClipper` (still from `web-ifc-viewer`). 5d.2 (the
-    //      clipper unification) was explicitly deferred — IFC users
-    //      keep the Q/W shortcut + click-drag UX until then.
+    //      `IFC.properties`, `IFC.units`. Fork-side clipping-edges +
+    //      fills + glTF still reach into `IFC.loader.ifcManager.*` —
+    //      fork dep stays until those consumers are dropped or replaced.
+    //
+    // Slice 5d.2 dropped the fork's `IfcClipper`: clipping now runs
+    // through the in-repo `MeshClipper` (via `this.clipper`), so the
+    // Q/W shortcut + drag UX no longer depend on the fork.
     //
     // ThreeContext continues to wrap IfcContext (the consumer-facing
     // surface — `getScene`, `getCameraControls`, `getNormalizedMouse…`,
@@ -147,9 +150,8 @@ export class ShareViewer {
     // node_modules IfcContext, now our vendored copy).
     const ifcContext = new IfcContext(options)
     this.context = new ThreeContext(ifcContext)
-    const {IFC, clipper: forkClipper} = makeForkIfc(ifcContext)
+    const {IFC} = makeForkIfc(ifcContext)
     this.IFC = IFC
-    this._forkClipper = forkClipper
     // Slice 5d.1: install our `ShareIfcLoader` alongside the fork's
     // IFCLoader (which stays at `viewer.IFC.loader`). Fork-side
     // consumers (clipper / clipping-edges / fills / plan-manager /
@@ -187,13 +189,11 @@ export class ShareViewer {
     // selector as the underlying impl until later in Phase 5 swaps it
     // for an IfcModelService-backed `Selection` plugin.
     this.selector = new Selector(this.IFC?.selector)
-    // Clipper — §3c.iv slice 3 unified facade over the fork's
-    // `IfcClipper` + in-repo `GlbClipper`. `this._forkClipper` is the
-    // IfcClipper instantiated above (5d.3 wired it standalone); the
-    // Clipper plugin wraps it as the IFC backing impl. Call-sites no
-    // longer branch on `viewer.IFC.type === 'glb'` — they call
-    // `viewer.clipper.X` and trust the plugin.
-    this.clipper = new Clipper(this, this._forkClipper)
+    // Clipper — the in-repo cut-plane plugin. Slice 5d.2 dropped the
+    // fork's `IfcClipper`; every model (IFC + GLB) now clips through the
+    // single `MeshClipper` this facade builds per `setModel`. Call-sites
+    // call `viewer.clipper.X` and never branch on model type.
+    this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
@@ -237,20 +237,17 @@ export class ShareViewer {
     } catch (e) {
       console.warn('postProcessor.dispose failed:', e)
     }
-    // Clipper.dispose handles both the fork's IfcClipper (the IFC
-    // backing impl) and the GlbClipper (interaction handlers); we DO
-    // NOT call _forkClipper.dispose directly afterwards because
-    // _fork.dispose would call it again and the second call throws on
-    // a torn-down clipper.
+    // Clipper.dispose tears down the bound MeshClipper (its arrows +
+    // canvas listeners). Idempotent, so the viewer.js disposeViewer
+    // call and this one don't conflict.
     try {
       this.clipper?.dispose?.()
     } catch (e) {
       console.warn('clipper.dispose failed:', e)
     }
     // Slice 5d.3: with `new IfcViewerAPI(options)` gone, there's no
-    // composite-viewer dispose to delegate to. Tear down the three
-    // pieces we own directly. `this.clipper.dispose()` already called
-    // `_forkClipper.dispose()` above, so we don't repeat it here.
+    // composite-viewer dispose to delegate to. Tear down the pieces we
+    // own directly (the clipper was already disposed just above).
     if (this.IFC) {
       try {
         await this.IFC.dispose?.()

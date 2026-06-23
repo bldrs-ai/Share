@@ -26,7 +26,6 @@ jest.mock('../src/viewer/three/context', () => ({
 jest.mock('../src/viewer/three/forkIfcComposition', () => ({
   makeForkIfc: jest.fn(() => ({
     IFC: globalThis.__BLDRS_MOCK_IMPL__.IFC,
-    clipper: globalThis.__BLDRS_MOCK_IMPL__.clipper,
   })),
 }))
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
@@ -189,22 +188,27 @@ const impl = {
       parse: jest.fn(() => loadedModel),
     },
   },
-  // Mirrors the surface of `viewer/three/Clipper.js` — the unified
-  // facade that wraps the fork's `IfcClipper` + the in-repo
-  // `GlbClipper`. The methods below are no-op stubs sized to what
-  // CutPlaneMenu / viewer.js / shortcutKeys consume.
+  // Mirrors the surface of `viewer/three/Clipper.js` — the in-repo
+  // cut-plane plugin (slice 5d.2 dropped the fork's `IfcClipper`; the
+  // plugin builds a `MeshClipper` per model). The methods below are
+  // no-op stubs sized to what CutPlaneMenu / viewer.js / shortcutKeys
+  // consume.
   clipper: {
     active: false,
-    setActive: jest.fn(),
+    orthogonalY: false,
+    clickDrag: false,
     deleteAllPlanes: jest.fn(() => {
       return 'cutPlane'
     }),
     setInteractionEnabled: jest.fn(),
     setModel: jest.fn(),
+    createPlane: jest.fn(),
+    deletePlane: jest.fn(),
     dispose: jest.fn(),
-    context: {
-      clippingPlanes: [],
-    },
+    // The real Clipper's `context` getter is always undefined now (the
+    // fork escape hatch is gone); kept so `CutPlaneMenu.removePlanes`
+    // reads a defined slot.
+    context: undefined,
     createFromNormalAndCoplanarPoint: jest.fn(() => {
       return 'createFromNormalAndCoplanarPoint'
     }),

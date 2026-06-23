@@ -68,19 +68,18 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
-  // Bind the unified clipper to the current model. The plugin picks
-  // the right backing impl (fork IFC clipper vs. in-repo GlbClipper)
-  // based on the model's `capabilities.useIfcClipper`. setModel is
+  // Bind the clipper to the current model. The clipper builds a fresh
+  // per-model `MeshClipper` (any mesh format — IFC, GLB, …). setModel is
   // synchronous — the planeHash effect below runs in the same render
   // cycle and sees the bound clipper.
   //
   // Capture the plugin instance in `clipper` so the cleanup can call
-  // `setModel(null)` after the fork's `IfcViewerAPI.dispose()` has
-  // already nulled `viewer.clipper`. Without this capture, the cleanup
-  // throws `TypeError: Cannot read properties of null (reading
-  // 'setModel')` during a viewer swap (theme change, model reload),
-  // which leaves the LoadingBackdrop stuck and blocks subsequent clicks.
-  // The plugin instance itself remains alive via the closure.
+  // `setModel(null)` even after a viewer swap has replaced
+  // `viewer.clipper`. Without this capture, the cleanup throws
+  // `TypeError: Cannot read properties of null (reading 'setModel')`
+  // during a viewer swap (theme change, model reload), which leaves the
+  // LoadingBackdrop stuck and blocks subsequent clicks. The plugin
+  // instance itself remains alive via the closure.
   useEffect(() => {
     const clipper = viewer?.clipper
     if (model && clipper && typeof clipper.setModel === 'function') {
@@ -240,13 +239,12 @@ export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
 /**
  * Deletes all section planes from the viewer.
  *
- * Routes through the unified `viewer.clipper`. On the fork-clipper
- * path the plugin's `deleteAllPlanes()` only empties the plugin-
- * level plane list — the underlying renderer-context retains its
- * own global clipping registry which needs explicit scrubbing here.
- * On the GLB-clipper path the plugin's `deleteAllPlanes()` already
- * unbinds the renderer + materials, so the second loop is a no-op
- * (`viewer.clipper.context` returns undefined and the guard skips).
+ * `viewer.clipper.deleteAllPlanes()` removes every plane's arrow and
+ * unbinds the renderer + materials, so there's nothing left to scrub.
+ * (Pre-5d.2 the fork clipper kept a separate global clipping registry on
+ * `viewer.clipper.context` that needed explicit clearing here; the
+ * in-repo `MeshClipper` owns its own binding and that escape hatch is
+ * gone — `viewer.clipper.context` is now always undefined.)
  *
  * @param {object} viewer
  */
@@ -255,12 +253,6 @@ export function removePlanes(viewer) {
     return
   }
   viewer.clipper.deleteAllPlanes()
-  const ctx = viewer.clipper.context
-  if (ctx?.clippingPlanes && typeof ctx.removeClippingPlane === 'function') {
-    for (const plane of ctx.clippingPlanes) {
-      ctx.removeClippingPlane(plane)
-    }
-  }
 }
 
 

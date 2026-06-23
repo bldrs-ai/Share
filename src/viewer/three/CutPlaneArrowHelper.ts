@@ -25,11 +25,18 @@ export default class CutPlaneArrowHelper extends Group {
    */
   constructor(
     direction: Vector3,
-    color = 0x00ff00,
-    length = 1,
-    headLength = 0.1,
-    headWidth = 0.05,
-    shaftRadius = 0.012,
+    color = 0x0000ff,
+    // length 2 (was 1): a longer arrow is easier to grab and matches the
+    // pre-5d.2 fork gizmo's reach. The shaft auto-fits between the heads
+    // (shaftHeight = length - 2*headLength), so doubling length lengthens
+    // the shaft while the heads keep their absolute size.
+    length = 2,
+    // Large, chunky heads (relative to the thin shaft) for visibility —
+    // restores the pre-5d.2 fork-gizmo look. headLength/headWidth were
+    // 0.1/0.05 ("too small arrow ends").
+    headLength = 0.25,
+    headWidth = 0.16,
+    shaftRadius = 0.02,
   ) {
     super()
     this.name = 'CutPlaneArrowHelper'
