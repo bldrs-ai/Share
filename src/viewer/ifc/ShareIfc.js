@@ -143,7 +143,7 @@ export default class ShareIfc {
    * @param {string} path relative wasm directory (e.g. `'./static/js/'`)
    */
   setWasmPath(path) {
-    // eslint-disable-next-line new-cap
+    // eslint-disable-next-line new-cap -- Conway IfcAPI methods are PascalCase, not constructors
     this.loader?.ifcManager?.ifcAPI?.SetWasmPath?.(path)
   }
 
@@ -205,7 +205,7 @@ export default class ShareIfc {
     if (models && typeof models.keys === 'function' && typeof ifcAPI.CloseModel === 'function') {
       try {
         for (const modelID of Array.from(models.keys())) {
-          // eslint-disable-next-line new-cap
+          // eslint-disable-next-line new-cap -- Conway IfcAPI methods are PascalCase, not constructors
           ifcAPI.CloseModel(modelID)
         }
       } catch (e) {
