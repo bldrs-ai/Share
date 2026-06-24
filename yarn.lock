@@ -18349,7 +18349,7 @@ wcwidth@^1.0.1:
   dependencies:
     defaults "^1.0.3"
 
-web-ifc@^0.0.35:
+web-ifc@0.0.35, web-ifc@^0.0.35:
   version "0.0.35"
   resolved "https://registry.npmjs.org/web-ifc/-/web-ifc-0.0.35.tgz"
   integrity sha512-if/L9RiJAD+jJ1oWtHj44+o2NG6K6azK0otE9Pbppr5hNBnouYfJQNmnHZ+Ya+wZeaByo9KeU64D60Y6lFnT4w==

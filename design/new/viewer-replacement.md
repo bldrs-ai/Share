@@ -1093,19 +1093,31 @@ to run the old fork against modern `three`, now that the fork is gone:
 side-by-side while Conway proves out. `web-ifc` proper is *not* being
 removed here. Eventual removal of the shim is a **product call** (once
 Conway is confidently shown to fully supersede web-ifc), not blocked on
-imports. Two correctness gaps to make the web-ifc engine a first-class,
-trustworthy flag:
+imports.
 
-  1. **Promote `web-ifc` to a direct dependency.** It currently survives
-     only transitively via `@bldrs-ai/ifclib` (one lockfile requester); a
-     supported engine shouldn't depend on ifclib happening to pull it.
-  2. **Verify `build-webifc` still *renders*.** The IFC load path is
-     engine-agnostic in code (`ShareIfcLoader` → `parseIfcWithConway` →
-     `ifcAPI.OpenModel` / `StreamAllMeshes`), and `ifcAPI` is whatever the
-     shim resolves to — so real web-ifc *should* feed it. But that path was
-     built + tested against Conway's FlatMesh shape and hasn't been
-     exercised against real web-ifc since the Conway-direct rewrite (5b).
-     It may build clean yet render wrong; smoke-test before relying on it.
+  **Done (2026-06).** The flag was secretly *dead*: `isWebIfcShimEnabled`
+  in `tools/esbuild/defines.js` was hardcoded `true` (`// TODO: kill
+  this`), so the `web-ifc → conway` alias was always applied and
+  `build-webifc`'s `USE_WEBIFC_SHIM=false` was ignored — it built Conway
+  (logged `Engine: conway (via web-ifc shim)`). Fixed:
+  `isWebIfcShimEnabled` now reads `parse(process.env.USE_WEBIFC_SHIM) ??
+  true` — default stays Conway, and `USE_WEBIFC_SHIM=false` now logs
+  `Engine: web-ifc` and **builds the real web-ifc engine cleanly** (no
+  esbuild resolution errors). `web-ifc` is also promoted to a direct
+  `package.json` dependency (`0.0.35`) — was only transitive via
+  `@bldrs-ai/ifclib`.
+
+  **Remaining — *runtime* render verification.** The build succeeds, but
+  the Conway-direct load path (`ShareIfcLoader` → `parseIfcWithConway` →
+  `ifcAPI.OpenModel` / `StreamAllMeshes`) hasn't been exercised against
+  real web-ifc in a browser since the Conway-direct rewrite (5b). The
+  geometry assembler (`flatMeshToBufferGeometry`) uses only the core
+  web-ifc IfcAPI surface and stamps per-vertex `expressID` / `instanceID`
+  itself (engine-agnostic), so geometry + picking *should* work; the open
+  risk is the properties / NavTree path, which goes through
+  `ifcAPI.properties.*` — web-ifc 0.0.35's properties API may differ from
+  Conway's adapter. Load a model under a `USE_WEBIFC_SHIM=false` build and
+  check geometry + NavTree + selection before trusting side-by-side.
 
   The three `web-ifc` *constant* imports (`IfcElementsStyleManager`,
   `ViewRulesCompiler`, `bldrsElementProperties`) resolve through the shim

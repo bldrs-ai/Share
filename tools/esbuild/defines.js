@@ -77,5 +77,12 @@ switch (process.env.SHARE_CONFIG) {
 // What we're here for
 export default zipEnvWithConfig(config)
 
-// TODO(pablo): kill this
-export const isWebIfcShimEnabled = true
+// Build-time engine switch: when true, the `webIfcShimAlias` esbuild
+// plugin rewrites `web-ifc` imports to the Conway adapter (Conway
+// engine); when false, `web-ifc` resolves to the real package (web-ifc
+// engine). Reads `USE_WEBIFC_SHIM` from the env via `parse`, defaulting
+// to `true` so the default build — and anything that doesn't set it —
+// stays on Conway. The `build-webifc` / `serve-share-webifc` scripts set
+// `USE_WEBIFC_SHIM=false` to bundle real web-ifc for side-by-side render
+// comparison (Phase 5 §5f of design/new/viewer-replacement.md).
+export const isWebIfcShimEnabled = parse(process.env.USE_WEBIFC_SHIM) ?? true
