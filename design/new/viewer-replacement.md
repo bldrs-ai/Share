@@ -838,11 +838,15 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 **Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.2, 5d.3, **5d.4** are merged
 — **the `web-ifc-viewer` fork is gone** (dep + `.tgz` removed; nothing in
-`src/` imports it). Remaining: **5e** (bump `three` — now unblocked),
-**5f** (wasm/build-script cleanup), **5g** (rename the test mock off the
-`web-ifc-viewer` name — 5d.4 left it in place behind a jest
-`moduleNameMapper`; see below). The slice numbering below matches the
-`5d.N` tags in the committed source comments (`grep -rn "5d\." src/`).
+`src/` imports it). `three` is **already on 0.184.0** (current stable),
+forced tree-wide via `resolutions` — so the original "bump `three`" goal
+is met; what remains under **5e** is shedding the fork-era color/lighting
+compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
+the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
+deletion target. **5g** renames the test mock off the `web-ifc-viewer`
+name (5d.4 parked it behind a jest `moduleNameMapper`). The slice
+numbering below matches the `5d.N` tags in the committed source comments
+(`grep -rn "5d\." src/`).
 
 **Slice 5a — flag default-on (done 2026-05).** This PR. Flips
 `conwayDirectIfc` and `glb` to `isActive: true`; removes the
@@ -1048,20 +1052,70 @@ comments (`grep "5d\." src/`).
     harness still resolves under its `web-ifc-viewer` name via a jest
     `moduleNameMapper` — the rename to a non-fork name is slice 5g.
 
-**Slice 5e — three / postprocessing / three-mesh-bvh bumps (todo).**
-After 5d completes (fork dep gone) — the fork pin no longer constrains
-`three`. Bump `three` to current stable, update `@types/three` to
-match, drop the `BLDRS_face_ids` per-vertex fallback's wit-three
-checks, re-evaluate the `?feature=perf` baseline, etc. (Note: 5d.3
-already vendored the context against the *current* pinned `three`, so
-the API-drift surface here is smaller than when this slice was first
-written — see §6.)
+**Slice 5e — shed fork-era three-compat scaffolding (todo; rescoped
+2026-06).** The version bump is already *done*: `three@0.184.0` +
+`@types/three@0.184.1`, forced tree-wide via `resolutions`. So this slice
+is no longer "bump `three`" — it's removing the compat layers that existed
+to run the old fork against modern `three`, now that the fork is gone:
 
-**Slice 5f — wasm + build scripts (todo).** Drop
-`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, and
-`isWebIfcShimEnabled` from `tools/esbuild`. The `webIfcShimAliasPlugin`
-goes away — there are no more `web-ifc` imports to alias. (Some of
-this overlaps 5d.4; whichever lands first does the shared part.)
+  1. **Color / lighting forward step (§6b steps 2, 3, 5 + re-tune the
+     inlined lights).** Re-enable `ColorManagement.enabled = true` and
+     `renderer.outputColorSpace = SRGBColorSpace`, set a tone mapper
+     (`ACESFilmicToneMapping`), and re-tune the `×π` light intensities now
+     inlined in the vendored `src/viewer/three/context/scene.js` (5d.3) —
+     they were tuned against the broken legacy path. Goal: reclaim control
+     of the color pipeline now that we own the scene. This is the one
+     genuinely *visual* change and **may not fully land** (the legacy look
+     may be hard to reproduce under managed color) — gate it on a
+     side-by-side render check and snapshot a fresh Cosmos baseline before
+     committing. `ColorManagement.enabled = false` lives at
+     `ShareViewer.js:67` today.
+  2. **Drop the `BLDRS_face_ids` per-vertex fallback's wit-three-specific
+     checks** — wit-three's parse-state assumptions no longer apply.
+  3. **Re-evaluate the `?feature=perf` baseline** now the fork (and its
+     render path) is gone.
+  4. **Keep** the `three/examples/jsm/*` `.js`-append esbuild resolve hook
+     — modern `three`'s `package.json#exports` map still requires it; it's
+     engine-agnostic, not fork compat.
+
+  *Not in this slice — the `resolutions.three` override.* It force-upgrades
+  Conway's `three@^0.173.0` request to `0.184.0` (hence the `incompatible`
+  warning on `yarn install`) and keeps `three` a singleton. Conway's
+  `three` range is being widened in the Conway repo on a separate thread;
+  once that lands the override + warning can drop. Until then it stays and
+  is load-bearing (removing it risks a dual-`three` tree).
+
+**Slice 5f — keep `web-ifc` as the engine flag (reframed 2026-06; was
+"delete the shim").** Direction change: `USE_WEBIFC_SHIM` /
+`isWebIfcShimEnabled` / `webIfcShimAlias` / `build-webifc` /
+`serve-share-webifc` / `build-share-copy-wasm-webifc` are the supported
+**Conway ↔ web-ifc engine switch** — kept so renders can be compared
+side-by-side while Conway proves out. `web-ifc` proper is *not* being
+removed here. Eventual removal of the shim is a **product call** (once
+Conway is confidently shown to fully supersede web-ifc), not blocked on
+imports. Two correctness gaps to make the web-ifc engine a first-class,
+trustworthy flag:
+
+  1. **Promote `web-ifc` to a direct dependency.** It currently survives
+     only transitively via `@bldrs-ai/ifclib` (one lockfile requester); a
+     supported engine shouldn't depend on ifclib happening to pull it.
+  2. **Verify `build-webifc` still *renders*.** The IFC load path is
+     engine-agnostic in code (`ShareIfcLoader` → `parseIfcWithConway` →
+     `ifcAPI.OpenModel` / `StreamAllMeshes`), and `ifcAPI` is whatever the
+     shim resolves to — so real web-ifc *should* feed it. But that path was
+     built + tested against Conway's FlatMesh shape and hasn't been
+     exercised against real web-ifc since the Conway-direct rewrite (5b).
+     It may build clean yet render wrong; smoke-test before relying on it.
+
+  The three `web-ifc` *constant* imports (`IfcElementsStyleManager`,
+  `ViewRulesCompiler`, `bldrsElementProperties`) resolve through the shim
+  today; they fall away with the `IfcViewsManager` deletion (§8.1) + the
+  properties-path cleanup, independent of the engine flag.
+
+  Build-time vs runtime: today the switch is *build-time* (two builds, two
+  tabs). A true one-session runtime toggle would need both engines + both
+  wasms bundled with runtime dispatch — a real refactor, deferred unless
+  the side-by-side workflow demands it.
 
 **Slice 5g — mocks (todo; unblocked by 5d.4).** The harness now resolves
 under the `web-ifc-viewer` name only through a jest `moduleNameMapper`
@@ -1077,7 +1131,7 @@ rename.
 - ~~Delete `src/Infrastructure/IfcIsolator.js`'s `IfcContext` import.~~ Done — `IfcIsolator` moved to `src/viewer/three/` and no longer imports the fork's `IfcContext`.
 - Delete the §8.3 deprecation shim once the GLB-scene PR has cut over.
 - Update `DESIGN.md` and `CLAUDE.md` to point at `src/viewer/`.
-- Drop `web-ifc` from build scripts (`build-share-copy-wasm-webifc`, `USE_WEBIFC_SHIM`, etc. in `package.json`). The `useWebifcShim` branch can go entirely. (Overlaps slice 5f.)
+- ~~Drop `web-ifc` from build scripts.~~ **Superseded by the reframed slice 5f:** the `web-ifc` shim is kept as the Conway↔web-ifc engine flag; its eventual removal is a product call once Conway fully supersedes web-ifc, not a mechanical cleanup.
 
 ### Phase 7 — OffscreenCanvas render worker (separate spec, post-merge)
 - Per §8.4 Move B. Becomes tractable only once the viewer is wholly under `src/viewer/`, because the worker boundary corresponds exactly to the `ShareViewer` facade. Out of scope for this doc; will get its own design.
@@ -1379,14 +1433,14 @@ land, so we have a stable reference point for material tuning.
 
 A reasonable target sequence:
 
-- Phase 5 (today's Phase 5 from §4): drop fork; on the same PR, take
-  steps 2–3 (re-enable Managed mode + sRGB output) and step 5 (set
-  `toneMapping = ACESFilmicToneMapping`). Tune one set of `ambient` +
-  `directional` light values to look right against the new pipeline.
-  Snapshot the new baseline in Cosmos.
+- Phase 5: the fork drop (5d.4) landed *without* the color steps — kept
+  deliberately mechanical. The color/lighting forward step (steps 2–3 +
+  step 5 + re-tuning the now-vendored lights) is **slice 5e**, a separate
+  PR on top of the merged fork removal. Tune one set of `ambient` +
+  `directional` values against the new pipeline; snapshot a fresh Cosmos
+  baseline. May not fully reproduce the legacy look — accepted risk.
 - Phase 6+: step 1 (material colorSpace tagging) + step 4 (PBR + env
-  map). Standalone visual-quality PR; ships against the post-Phase-5
-  pipeline.
+  map). Standalone visual-quality PR; ships against the post-5e pipeline.
 
 The compat-path code is a single docblock in `ShareViewer.js` + the
 esbuild plugin's lights rewrite. The lights rewrite (`scaleLightIntensities`
