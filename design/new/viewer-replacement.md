@@ -836,17 +836,13 @@ Each phase ends with `yarn lint && yarn test && yarn test-flows` green and a wor
 
 ### Phase 5 — drop `web-ifc-viewer` and bump `three`
 
-**Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.2, 5d.3 are merged. The
-remaining work to fully drop the fork is **5d.4** (give the fork
-`IfcManager` an in-repo replacement, then delete
-`forkIfcComposition.js` + the `web-ifc-viewer` dep + the
-`threeJsmCompatPlugin` rewrites) → then **5e** (bump `three`), **5f**
-(wasm/build-script cleanup), **5g** (rename the mock). What still
-imports `web-ifc-viewer` today: `src/viewer/three/forkIfcComposition.js`
-(production — `IfcManager` only, since 5d.2 dropped `IfcClipper`) and 6
-test files via `jest.mock('web-ifc-viewer')`. The slice numbering below
-matches the `5d.N` tags in the committed source comments
-(`grep -rn "5d\." src/`).
+**Status (2026-06):** 5a, 5b, 5c, 5d.1, 5d.2, 5d.3, **5d.4** are merged
+— **the `web-ifc-viewer` fork is gone** (dep + `.tgz` removed; nothing in
+`src/` imports it). Remaining: **5e** (bump `three` — now unblocked),
+**5f** (wasm/build-script cleanup), **5g** (rename the test mock off the
+`web-ifc-viewer` name — 5d.4 left it in place behind a jest
+`moduleNameMapper`; see below). The slice numbering below matches the
+`5d.N` tags in the committed source comments (`grep -rn "5d\." src/`).
 
 **Slice 5a — flag default-on (done 2026-05).** This PR. Flips
 `conwayDirectIfc` and `glb` to `isActive: true`; removes the
@@ -1017,18 +1013,40 @@ comments (`grep "5d\." src/`).
   jest.mock-for-local-modules + `globalThis` singleton dedup is subtle
   — read the comments there before touching it).
 
-- **5d.4 — drop the last fork imports + the dep (todo).** With 5d.2
-  done (`IfcClipper` gone), `IfcManager` is the only remaining fork
-  construct `ShareViewer` instantiates. Give it an in-repo replacement
-  — a small `ShareIfcManager`-style standalone of `selector` +
-  `properties` + `units` — then delete
-  `src/viewer/three/forkIfcComposition.js`, remove
-  `web-ifc-viewer` from `package.json`, and delete the
-  `threeJsmCompatPlugin` rewrites in `tools/esbuild/plugins.js` (the
-  `BufferGeometryUtils` / `TransformControls` / `scene.js` /
-  `context.js` hooks all target fork-vendored files that no longer
-  load). The vendored `src/viewer/three/context/*` keeps the inlined
-  patches, so the build-time rewrites are pure dead weight after this.
+- **5d.4 — drop the last fork imports + the dep (done 2026-06, this
+  slice).** `IfcManager` was the only remaining fork construct
+  `ShareViewer` instantiated. Replaced by the in-repo
+  `src/viewer/ifc/ShareIfc.js` — a Conway-backed IFC namespace that
+  constructs Conway's `IfcAPI` directly (`new IfcAPI()` from the
+  `web-ifc` shim) and exposes exactly the surface live code reads off
+  `viewer.IFC`: `loader.ifcManager` (a `ShareIfcManager`), a
+  material-slot `selector` (the only live remnant of the fork
+  `IfcSelector` — the two shared overlay materials; picking runs through
+  `IfcInstanceMap`), `getProperties`, `addIfcModel`, `setWasmPath`,
+  `dispose`, `context`, `type`, `ifcLastError`. `properties` / `units`
+  were dropped (no consumer). Wasm `Init` stays lazy in
+  `parseIfcWithConway`, so `setWasmPath` only records the path.
+  - **BVH ownership moved.** The fork `IfcManager` globally installed
+    `three-mesh-bvh`'s `computeBoundsTree` / `disposeBoundsTree` /
+    `acceleratedRaycast` (via `setupThreeMeshBVH`); `ShareIfc` now does
+    this at module load. `three-mesh-bvh`, `camera-controls` (vendored
+    context camera), and `gsap` (vendored context animator) were
+    fork-transitive deps that in-repo code uses directly — promoted to
+    direct `package.json` dependencies so the prune doesn't orphan them.
+  - **Deleted:** `src/viewer/three/forkIfcComposition.js`, the
+    `web-ifc-viewer` dep + `.tgz`, the four fork-targeted
+    `threeJsmCompatPlugin` onLoad rewrites + their helpers (and the now-
+    purposeless `tools/esbuild/plugins.test.js`). Kept: the
+    engine-agnostic `three/examples/jsm/*` `.js`-append resolve hook (5e
+    needs it) and `webIfcShimAlias` (5f). `web-ifc` itself survives via
+    `@bldrs-ai/ifclib`; `web-ifc-three` had no real `src/` import.
+  - **Test harness:** ShareViewer no longer self-imports the fork to
+    trigger `__mocks__/web-ifc-viewer.js`, so the viewer-stack tests
+    that relied on that self-trigger (`ShareViewer.test.js`,
+    `CadView.test.jsx`, `MarkerControl.test.jsx`, `Share.test.jsx`) now
+    load the harness explicitly before the component-under-test. The
+    harness still resolves under its `web-ifc-viewer` name via a jest
+    `moduleNameMapper` — the rename to a non-fork name is slice 5g.
 
 **Slice 5e — three / postprocessing / three-mesh-bvh bumps (todo).**
 After 5d completes (fork dep gone) — the fork pin no longer constrains
@@ -1045,12 +1063,14 @@ written — see §6.)
 goes away — there are no more `web-ifc` imports to alias. (Some of
 this overlaps 5d.4; whichever lands first does the shared part.)
 
-**Slice 5g — mocks (todo).** Rename `__mocks__/web-ifc-viewer.js` →
-`__mocks__/ShareViewer.js`; update the test files that
-`jest.mock('web-ifc-viewer')` to mock the new path. Blocked on 5d.4
-(while `web-ifc-viewer` is still imported, the manual mock has to keep
-its current name). The `globalThis`-singleton + load-dedup machinery
-added in 5d.3 moves with it.
+**Slice 5g — mocks (todo; unblocked by 5d.4).** The harness now resolves
+under the `web-ifc-viewer` name only through a jest `moduleNameMapper`
+(`tools/jest/jest.config.js`) — the dep itself is gone. Remaining
+cosmetic work: rename `__mocks__/web-ifc-viewer.js` to a ShareViewer-named
+harness, update the ~10 test files that import it, and drop the
+`moduleNameMapper` entry. The `globalThis`-singleton + load-dedup
+machinery moves with it. No production coupling remains — pure test-tree
+rename.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.
@@ -1371,10 +1391,11 @@ A reasonable target sequence:
 The compat-path code is a single docblock in `ShareViewer.js` + the
 esbuild plugin's lights rewrite. The lights rewrite (`scaleLightIntensities`
 on `scene.js`) became dead for the active code path in 5d.3 — the ×π
-patch is now inlined in the vendored `src/viewer/three/context/scene.js`;
-the esbuild hook only still fires on the unused fork-vendored
-`scene.js` and gets deleted in 5d.4. Re-tuning to the modern pipeline
-edits the vendored copy directly now, not the build rewrite.
+patch is now inlined in the vendored `src/viewer/three/context/scene.js`
+— and the esbuild hook (along with the other three fork rewrites) was
+deleted in 5d.4 once the fork `scene.js` stopped loading. Re-tuning to
+the modern pipeline edits the vendored copy directly now, not a build
+rewrite.
 
 ---
 

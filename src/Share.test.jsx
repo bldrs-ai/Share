@@ -2,6 +2,11 @@ import React from 'react'
 import {render} from '@testing-library/react'
 import {MockComponent} from './__mocks__/MockComponent'
 import MockRoutes from './BaseRoutesMock.test'
+// Slice 5d.4: Share renders the app, which loads ShareViewer (→
+// IfcContext / ShareIfc). ShareViewer no longer self-imports the fork to
+// trigger the Jest harness, so load it explicitly before `./Share` so
+// the harness's dep mocks register first.
+import 'web-ifc-viewer'
 import Share from './Share'
 
 

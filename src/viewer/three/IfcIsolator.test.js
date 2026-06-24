@@ -23,7 +23,8 @@ import IfcIsolator from './IfcIsolator'
 
 
 // Mock the heavy dependencies so the constructor doesn't crash.
-jest.mock('web-ifc-viewer/dist/components', () => ({}))
+// (Slice 5d.4 dropped the dead `web-ifc-viewer/dist/components` mock —
+// IfcIsolator no longer imports the fork.)
 jest.mock('../ShareViewer', () => ({}))
 jest.mock('postprocessing', () => ({
   BlendFunction: {SCREEN: 1},
