@@ -59,6 +59,10 @@
     "test-flows-build": "yarn clean && SHARE_CONFIG=playwright yarn build-share-conway && shx mkdir -p docs/__test_fixtures__ && shx cp -r src/tests/fixtures/github/* docs/__test_fixtures__/",
     "test-flows-build-and-serve": "yarn test-flows-build && yarn test-flows-serve",
     "test-flows-serve": "npx http-server docs -c-1 -p",
+    "test-flows-webifc": "playwright test --config=tools/playwright.webifc.config.js",
+    "test-flows-build-webifc": "yarn clean && SHARE_CONFIG=playwright yarn build-share-webifc && shx mkdir -p docs/__test_fixtures__ && shx cp -r src/tests/fixtures/github/* docs/__test_fixtures__/",
+    "test-flows-serve-isolated": "node tools/esbuild/serveStaticIsolated.mjs docs",
+    "test-flows-build-and-serve-webifc": "yarn test-flows-build-webifc && yarn test-flows-serve-isolated",
     "typecheck": "tsc",
     "update-version": "./tools/updateVersion.mjs"
   },

@@ -1107,17 +1107,35 @@ imports.
   `package.json` dependency (`0.0.35`) — was only transitive via
   `@bldrs-ai/ifclib`.
 
-  **Remaining — *runtime* render verification.** The build succeeds, but
-  the Conway-direct load path (`ShareIfcLoader` → `parseIfcWithConway` →
-  `ifcAPI.OpenModel` / `StreamAllMeshes`) hasn't been exercised against
-  real web-ifc in a browser since the Conway-direct rewrite (5b). The
-  geometry assembler (`flatMeshToBufferGeometry`) uses only the core
-  web-ifc IfcAPI surface and stamps per-vertex `expressID` / `instanceID`
-  itself (engine-agnostic), so geometry + picking *should* work; the open
-  risk is the properties / NavTree path, which goes through
-  `ifcAPI.properties.*` — web-ifc 0.0.35's properties API may differ from
-  Conway's adapter. Load a model under a `USE_WEBIFC_SHIM=false` build and
-  check geometry + NavTree + selection before trusting side-by-side.
+  **Remaining — *runtime* render verification (in progress via CI).** The
+  build succeeds, but loading a model under real web-ifc surfaced a wasm
+  init failure. Root cause: web-ifc 0.0.35's glue picks its engine at
+  import time — `if (self.crossOriginIsolated) WebIFCWasm =
+  require_web_ifc_mt() else require_web_ifc()` (web-ifc-api.js:52713). The
+  app runs cross-origin isolated (a `SharedArrayBuffer` service worker, for
+  Conway's *own* MT wasm), so web-ifc selects its **multi-threaded** module
+  (`web-ifc-mt.wasm`, which *imports* a shared memory at `"a"."a"`), and a
+  pthread worker comes up without `Module.wasmMemory` → `Import #123 "a"
+  "a": memory import must be a WebAssembly.Memory object`. The single-
+  threaded `web-ifc.wasm` (memory *exported* at `"$"`) is self-consistent;
+  the MT worker bootstrap is what's broken under esbuild bundling
+  (`Module.mainScriptUrlOrBlob` / `_scriptDir`, web-ifc-api.js:1082).
+
+  Decision (2026-06): run web-ifc **multi-threaded** for a fair perf
+  comparison with Conway (not force single-threaded). The verification
+  needs a cross-origin-isolated browser, which the dev sandbox can't run,
+  so the fix loop is driven through CI: a dedicated **`playwright-webifc-run`**
+  job (`.github/workflows/test-flows.yml`) builds `USE_WEBIFC_SHIM=false`,
+  serves it isolated (`tools/esbuild/serveStaticIsolated.mjs` — COOP
+  `same-origin` + COEP `require-corp`; kept off the default/prod servers
+  because COEP breaks the Drive Picker), and runs
+  `src/tests/e2e/webIfcEngine.webifc.spec.ts` — a smoke that loads
+  `index.ifc`, asserts `crossOriginIsolated`, and forwards the browser
+  console so the isolated-runtime error is legible without a local browser.
+  **Expected red** until the worker bootstrap is fixed. (The default Conway
+  `playwright-run` job ignores `*.webifc.spec.ts`.) Downstream risk once MT
+  inits: the properties / NavTree path through `ifcAPI.properties.*`, where
+  web-ifc 0.0.35 may differ from Conway's adapter.
 
   The three `web-ifc` *constant* imports (`IfcElementsStyleManager`,
   `ViewRulesCompiler`, `bldrsElementProperties`) resolve through the shim
