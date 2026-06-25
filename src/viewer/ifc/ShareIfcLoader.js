@@ -139,20 +139,28 @@ export default class ShareIfcLoader {
       if (onProgress) {
         onProgress('Gathering model statistics...')
       }
-      const statsApi = ifcAPI.getStatistics(modelID)
-      ifcModel.name = statsApi.projectName ?? undefined
-      const loadStats = {
-        loaderVersion: ifcAPI.getConwayVersion(),
-        geometryMemory: statsApi.getGeometryMemory(),
-        geometryTime: statsApi.getGeometryTime(),
-        ifcVersion: statsApi.getVersion(),
-        loadStatus: statsApi.getLoadStatus(),
-        originatingSystem: statsApi.getOriginatingSystem(),
-        preprocessorVersion: statsApi.getPreprocessorVersion(),
-        parseTime: statsApi.getParseTime(),
-        totalTime: statsApi.getTotalTime(),
+      // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
+      // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
+      // doesn't expose them. The model mesh is already built + added above,
+      // so per-load stats are best-effort diagnostics — skip them when the
+      // engine lacks the API rather than letting a missing method throw and
+      // discard a successful load. `CadView` already guards on
+      // `loadedModel.loadStats` before reading it.
+      if (typeof ifcAPI.getStatistics === 'function') {
+        const statsApi = ifcAPI.getStatistics(modelID)
+        ifcModel.name = statsApi.projectName ?? undefined
+        ifcModel.loadStats = {
+          loaderVersion: ifcAPI.getConwayVersion?.(),
+          geometryMemory: statsApi.getGeometryMemory(),
+          geometryTime: statsApi.getGeometryTime(),
+          ifcVersion: statsApi.getVersion(),
+          loadStatus: statsApi.getLoadStatus(),
+          originatingSystem: statsApi.getOriginatingSystem(),
+          preprocessorVersion: statsApi.getPreprocessorVersion(),
+          parseTime: statsApi.getParseTime(),
+          totalTime: statsApi.getTotalTime(),
+        }
       }
-      ifcModel.loadStats = loadStats
 
       if (onProgress) {
         onProgress('Model loaded successfully!')

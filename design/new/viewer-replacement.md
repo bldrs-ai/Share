@@ -1150,9 +1150,17 @@ imports.
   smoke that loads `index.ifc`, asserts `crossOriginIsolated`, and forwards
   the browser console so isolated-runtime errors are legible without a local
   browser. The job is **advisory** (a standalone, non-required check).
-  Downstream risk for the properties / NavTree path through
-  `ifcAPI.properties.*`, where web-ifc 0.0.35 may differ from Conway's
-  adapter, remains for a later slice.
+
+  Engine API divergence (found via the same CI loop): the Conway-direct
+  loader's *geometry* path (`OpenModel` / `StreamAllMeshes` /
+  `GetCoordinationMatrix`) runs on stock web-ifc, but its post-load stats
+  gather called Conway-only `getStatistics` / `getConwayVersion`, which
+  threw `TypeError: …getStatistics is not a function` and discarded an
+  otherwise-successful load. Now guarded in `ShareIfcLoader.parse` — the
+  stats are best-effort diagnostics, skipped when the engine lacks the API
+  (`CadView` already guards on `loadedModel.loadStats`). The deeper
+  divergence on the properties / NavTree path through `ifcAPI.properties.*`
+  remains for a later slice.
 
   The three `web-ifc` *constant* imports (`IfcElementsStyleManager`,
   `ViewRulesCompiler`, `bldrsElementProperties`) resolve through the shim
