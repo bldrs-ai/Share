@@ -1,12 +1,12 @@
 /* eslint-disable no-magic-numbers */
 // The Conway-direct selection / preselection tests below need real
 // three.js classes (real `Mesh.userData`, real `Object3D.traverse`,
-// real parenting). The __mocks__/web-ifc-viewer.js loader does
+// real parenting). The shareViewerTestHarness loader does
 // `jest.mock('three')` at module top, which Jest hoists to every
 // file that loads the mock. Override with an explicit factory that
 // re-exports the actual three module, restoring full behaviour for
 // this test file. ShareViewer's super() chain still works because
-// the web-ifc-viewer mock itself doesn't depend on three's
+// the harness itself doesn't depend on three's
 // auto-mocking — its viewer-API surface lives on `this.IFC` /
 // `this.context` which the mock builds independently.
 jest.mock('three', () => jest.requireActual('three'))
@@ -29,7 +29,7 @@ jest.mock('three', () => jest.requireActual('three'))
 // below that construct `new ShareViewer()` need the harness loaded here,
 // before `./ShareViewer` resolves those deps. The hoisted
 // `jest.mock('three', requireActual)` above still wins for three.
-import 'web-ifc-viewer'
+import '../../__mocks__/shareViewerTestHarness'
 import {BufferAttribute, BufferGeometry, Group, Mesh, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
 import {instanceMapFromGeometry} from './ifc/IfcInstanceMap'

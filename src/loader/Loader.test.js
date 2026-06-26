@@ -81,7 +81,7 @@ describe('Loader', () => {
     }
     // Slice 5d.1: production wires `viewer.ifcLoader` to a
     // ShareIfcLoader during ShareViewer construction. This test
-    // builds its own viewer stub (not via __mocks__/web-ifc-viewer),
+    // builds its own viewer stub (not via __mocks__/shareViewerTestHarness),
     // so we install a real ShareIfcLoader here so the IFC `case`
     // arm in `findLoader` finds it and `loader.parse` runs the
     // Conway-direct flow against the mock ifcAPI.

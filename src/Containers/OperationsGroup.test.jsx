@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
 import {act, render, fireEvent, renderHook} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
@@ -9,7 +9,7 @@ import OperationsGroup from './OperationsGroup'
 window.HTMLElement.prototype.scrollIntoView = jest.fn()
 
 // Instantiates ImagineControl which uses viewer's screenshot function
-// jest.mock('web-ifc-viewer')
+// (viewer deps are mocked via the shareViewerTestHarness import above)
 
 
 describe('OperationsGroup', () => {
