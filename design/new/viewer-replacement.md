@@ -843,8 +843,8 @@ forced tree-wide via `resolutions` — so the original "bump `three`" goal
 is met; what remains under **5e** is shedding the fork-era color/lighting
 compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
 the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
-deletion target. **5g** renames the test mock off the `web-ifc-viewer`
-name (5d.4 parked it behind a jest `moduleNameMapper`). The slice
+deletion target. **5g** renamed the test mock off the `web-ifc-viewer`
+name (5d.4 had parked it behind a jest `moduleNameMapper`). The slice
 numbering below matches the `5d.N` tags in the committed source comments
 (`grep -rn "5d\." src/`).
 
