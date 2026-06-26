@@ -1,8 +1,9 @@
 // IfcScene — vendored from `web-ifc-viewer/dist/components/context/scene.js`
-// in slice 5d.3. The light intensity values (DirectionalLight 0.8,
-// AmbientLight 0.25) are scaled by Math.PI inline to match the
-// pre-r157 visual under three's `useLegacyLights=false` default —
-// previously applied by `tools/esbuild/plugins.js#scaleLightIntensities`.
+// in slice 5d.3. Light intensities re-tuned in slice 5e for three r184's
+// managed-color + ACES-tone-mapped pipeline (see ShareViewer.js). The old
+// `× Math.PI` legacy-compat scaling (which matched the pre-r157
+// `useLegacyLights` look) is dropped; these values are a first pass for
+// the new pipeline — tune against the deploy preview.
 
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
@@ -49,13 +50,13 @@ export class IfcScene extends IfcComponent {
     this.scene.background = (options === null || options === void 0 ? void 0 : options.backgroundColor) || this.defaultBackgroundColor
   }
   setupLights() {
-    const light1 = new DirectionalLight(0xffeeff, 0.8 * Math.PI)
+    const light1 = new DirectionalLight(0xffeeff, 2.5)
     light1.position.set(1, 1, 1)
     this.scene.add(light1)
-    const light2 = new DirectionalLight(0xffffff, 0.8 * Math.PI)
+    const light2 = new DirectionalLight(0xffffff, 2.5)
     light2.position.set(-1, 0.5, -1)
     this.scene.add(light2)
-    const ambientLight = new AmbientLight(0xffffee, 0.25 * Math.PI)
+    const ambientLight = new AmbientLight(0xffffee, 0.8)
     this.scene.add(ambientLight)
   }
 }

@@ -1053,24 +1053,26 @@ comments (`grep "5d\." src/`).
     `shareViewerTestHarness.js` and dropped the `moduleNameMapper` it had
     resolved through.)
 
-**Slice 5e — shed fork-era three-compat scaffolding (todo; rescoped
-2026-06).** The version bump is already *done*: `three@0.184.0` +
+**Slice 5e — shed fork-era three-compat scaffolding (in progress;
+rescoped 2026-06).** The version bump is already *done*: `three@0.184.0` +
 `@types/three@0.184.1`, forced tree-wide via `resolutions`. So this slice
 is no longer "bump `three`" — it's removing the compat layers that existed
 to run the old fork against modern `three`, now that the fork is gone:
 
   1. **Color / lighting forward step (§6b steps 2, 3, 5 + re-tune the
-     inlined lights).** Re-enable `ColorManagement.enabled = true` and
-     `renderer.outputColorSpace = SRGBColorSpace`, set a tone mapper
-     (`ACESFilmicToneMapping`), and re-tune the `×π` light intensities now
-     inlined in the vendored `src/viewer/three/context/scene.js` (5d.3) —
-     they were tuned against the broken legacy path. Goal: reclaim control
-     of the color pipeline now that we own the scene. This is the one
-     genuinely *visual* change and **may not fully land** (the legacy look
-     may be hard to reproduce under managed color) — gate it on a
-     side-by-side render check and snapshot a fresh Cosmos baseline before
-     committing. `ColorManagement.enabled = false` lives at
-     `ShareViewer.js:67` today.
+     inlined lights) — first pass landed, pending visual sign-off.**
+     Dropped the r135-compat hold: removed `ColorManagement.enabled =
+     false` (now left at the r184 default — enabled) and the
+     `outputColorSpace = LinearSRGBColorSpace` override (now left at the
+     default `SRGBColorSpace`); added `renderer.toneMapping =
+     ACESFilmicToneMapping` (exposure left at the default 1); and de-scaled
+     the `×π` light intensities in the vendored
+     `src/viewer/three/context/scene.js` to equivalent magnitudes
+     (`2.5 / 2.5 / 0.8`) as a first pass — so the before/after isolates the
+     pipeline change ahead of any artistic light re-tune. This is the one
+     genuinely *visual* change and **may not fully reproduce the legacy
+     look** (accepted risk) — review the deploy-preview before/after and
+     re-tune lights / `toneMappingExposure` against it before merge.
   2. **Drop the `BLDRS_face_ids` per-vertex fallback's wit-three-specific
      checks** — wit-three's parse-state assumptions no longer apply.
   3. **Re-evaluate the `?feature=perf` baseline** now the fork (and its

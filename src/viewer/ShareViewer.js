@@ -4,7 +4,7 @@
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
-import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
+import {ACESFilmicToneMapping, BufferAttribute, BufferGeometry, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import Clipper from './three/Clipper'
@@ -38,29 +38,6 @@ function nextPow2(n) {
   return p
 }
 import {areDefinedAndNotNull} from '../utils/assert'
-
-
-// Disable three.js r152+ automatic linear-sRGB color management
-// (a.k.a. "Managed" color mode). With it enabled, three converts sRGB
-// values to linear before lighting and back to sRGB on output — the
-// physically-correct path. The fork (web-ifc-viewer) and our material
-// setup were tuned in the r135 era against the *legacy* regime where
-// material colors are used as-is and the rendered framebuffer flows
-// straight through the monitor's sRGB curve. Under managed mode the
-// Schependomlaan baseline renders washed out / overly bright.
-//
-// Setting this to `false` at module load (before any three object is
-// constructed, including the fork's renderer/scene/materials inside
-// `new IfcViewerAPI(...)`) restores r135-identical visual output. It
-// also reverts the r157 `useLegacyLights = false` default's effect for
-// most practical purposes — light intensities tuned for r135 (e.g.,
-// the fork's hardcoded `0.8` / `0.25` in scene.js) match the r135
-// visual without per-light π scaling.
-//
-// Goes away with Phase 5 of design/new/viewer-replacement.md, when
-// ShareViewer owns its scene and we re-enable Managed mode as the new
-// baseline.
-ColorManagement.enabled = false
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -160,19 +137,21 @@ export class ShareViewer {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
-    // Partner to the top-level `ColorManagement.enabled = false`: that
-    // disables the *input* side (auto sRGB→linear conversions on
-    // materials / textures); this disables the *output* side. r184's
-    // `WebGLRenderer.outputColorSpace` default is `SRGBColorSpace`,
-    // which gamma-encodes the rendered framebuffer. r135's default was
-    // `LinearEncoding` (no gamma encoding) — the modern equivalent is
-    // `LinearSRGBColorSpace`. Postprocessing's `EffectComposer.initialize`
-    // also keys off this property: when it sees SRGB it tags its render
-    // target as sRGB and applies its own encoding. We need both off to
-    // match r135 pixel-for-pixel. Guard for tests where the mock's
-    // getRenderer() returns undefined.
+    // Slice 5e (design/new/viewer-replacement.md): move to three r184's
+    // managed-color pipeline. The r135-compat hold is dropped — we no
+    // longer set `ColorManagement.enabled = false` (left at the r184
+    // default: enabled, auto sRGB↔linear) nor force
+    // `outputColorSpace = LinearSRGBColorSpace` (left at the default
+    // `SRGBColorSpace`, so the framebuffer is gamma-encoded). We add ACES
+    // filmic tone mapping for the standard post-r152 look. Postprocessing's
+    // `EffectComposer.initialize` keys off `outputColorSpace`, so the
+    // renderer state is set before `new CustomPostProcessor()` below.
+    // Light intensities are re-tuned for this pipeline in
+    // `three/context/scene.js`; `toneMappingExposure` is left at its
+    // default (1) — calibrate against the deploy preview if needed.
+    // Guarded for tests where the mock's getRenderer() returns undefined.
     if (renderer) {
-      renderer.outputColorSpace = LinearSRGBColorSpace
+      renderer.toneMapping = ACESFilmicToneMapping
     }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
