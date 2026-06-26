@@ -52,11 +52,12 @@
  *     (`?feature=conwayDirectIfc`) replaces the rendered geometry; the
  *     map lives on `model.instanceMap`.
  * @property {boolean} useIfcClipper
- *     True when the legacy `viewer.clipper` (web-ifc clipper, tied to
- *     `pickableIfcModels`) is the right cut-plane implementation. False
- *     for unstructured meshes (GLB/STL/OBJ/etc.), which use the in-repo
- *     `GlbClipper` 3-axis arrow-handle clipper. The §3c unified Clipper
- *     erases this flag.
+ *     Historical flag from when two cut-plane implementations co-existed
+ *     (the fork's web-ifc clipper for IFC, the in-repo arrow-handle
+ *     clipper for unstructured meshes). Slice 5d.2 unified clipping onto
+ *     the single in-repo `MeshClipper`, so no runtime code reads this
+ *     anymore; it's retained on the capability shape pending the §3c.iv
+ *     "useIfcClipper cleanup" follow-up.
  */
 
 
@@ -128,22 +129,15 @@ export function decorateShareModel(model, format) {
 
 
 /**
- * Today's `CutPlaneMenu` branches between the in-repo `GlbClipper` (3-axis
- * arrow handles) and the legacy `web-ifc-viewer` clipper on the literal
- * `viewer.IFC.type === 'glb' || === 'gltf'` test. The two implementations
- * exist because the IFC clipper is wired into `pickableIfcModels` raycast,
- * which only the IFC pipeline populates.
+ * Historical helper from when `CutPlaneMenu` branched between the in-repo
+ * arrow-handle clipper (GLB/GLTF) and the fork's `web-ifc-viewer` clipper
+ * (IFC) on the literal `viewer.IFC.type === 'glb' || === 'gltf'` test.
  *
- * This helper preserves that exact format-narrow semantic (GLB/GLTF only,
- * not STL/OBJ/etc.) so the migration off `viewer.IFC.type` is a literal
- * rewrite.
- *
- * Asymmetry note: a model decorated with `useIfcClipper: false` will not
- * necessarily route to GlbClipper here — STL/OBJ/PDB/XYZ/FBX/BLD all sit
- * in the unhandled middle today. That mirrors pre-PR behavior (those
- * formats fall through both branches in `removePlanes`). The unified
- * Clipper from §3c of the design erases both this helper and the
- * asymmetry.
+ * Slice 5d.2 dropped the fork clipper and routed every model through the
+ * single in-repo `MeshClipper`, so `CutPlaneMenu` no longer branches and
+ * nothing in production calls this. It's retained (with its tests) until
+ * the §3c.iv "useIfcClipper cleanup" follow-up removes the capability and
+ * this helper together.
  *
  * @param {object|null|undefined} model
  * @return {boolean}
@@ -214,6 +208,16 @@ export function inferModelCapabilities(model, opts = {}) {
   // builds the map from this attribute and attaches it.
   if (hasPerVertexInstanceIds) {
     caps.instancePicking = true
+    // Conway-direct geometry replaces wit-three's per-element subset
+    // path. Wit-three's `SubsetCreator` reads from `state.models[modelID].mesh`
+    // (populated by its IFCParser), which Slice 5b doesn't populate
+    // since we bypass wit-three's parse entirely. Leaving
+    // `ifcSubsets: true` (the IFC format default in
+    // `capabilitiesForFormat`) would route `ShareViewer.setSelection`
+    // through `selector.pickByIds` → empty subset → no highlight.
+    // The presence of per-vertex `instanceID` is the Conway-direct
+    // signature; flip the IFC subset path off when seen.
+    caps.ifcSubsets = false
   }
   // BLDRS_face_ids extension also signals instance picking — the
   // per-triangle data is what Loader.js#convertToShareModel rebuilds

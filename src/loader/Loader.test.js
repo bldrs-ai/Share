@@ -1,5 +1,6 @@
 import {Object3D, Mesh, BufferGeometry, Material, BufferAttribute} from 'three'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
+import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {load, readModel} from './Loader'
 
 
@@ -41,6 +42,14 @@ describe('Loader', () => {
             }),
             setupCoordinationMatrix: jest.fn(),
             ifcAPI: {
+              // Slice 5b: Conway-direct parse calls OpenModel +
+              // StreamAllMeshes directly. The empty-StreamAllMeshes
+              // path produces an empty Mesh, which is enough for the
+              // load-pipeline shape these tests verify (geometry
+              // contents are exercised in flatMeshToBufferGeometry +
+              // buildConwayIfcModel unit tests).
+              OpenModel: jest.fn(() => 0),
+              StreamAllMeshes: jest.fn(() => {}),
               GetCoordinationMatrix: jest.fn().mockResolvedValue([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
               getStatistics: jest.fn().mockReturnValue({
                 getGeometryMemory: jest.fn().mockReturnValue(1024), // eslint-disable-line no-magic-numbers
@@ -53,6 +62,12 @@ describe('Loader', () => {
                 getTotalTime: jest.fn().mockReturnValue(150), // eslint-disable-line no-magic-numbers
               }),
               getConwayVersion: jest.fn().mockReturnValue('1.0.0'),
+              properties: {
+                getItemProperties: jest.fn(),
+                getPropertySets: jest.fn(),
+                getSpatialStructure: jest.fn(),
+                getIfcType: jest.fn(),
+              },
             },
           },
         },
@@ -64,6 +79,16 @@ describe('Loader', () => {
         },
       },
     }
+    // Slice 5d.1: production wires `viewer.ifcLoader` to a
+    // ShareIfcLoader during ShareViewer construction. This test
+    // builds its own viewer stub (not via __mocks__/web-ifc-viewer),
+    // so we install a real ShareIfcLoader here so the IFC `case`
+    // arm in `findLoader` finds it and `loader.parse` runs the
+    // Conway-direct flow against the mock ifcAPI.
+    mockViewer.ifcLoader = new ShareIfcLoader({
+      ifcAPI: mockViewer.IFC.loader.ifcManager.ifcAPI,
+      ifc: mockViewer.IFC,
+    })
   })
   afterEach(() => mathRandomSpy.mockRestore())
 
@@ -322,15 +347,25 @@ describe('Loader', () => {
         expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
         expect(progressCalls).toContain('Reading model data...')
-        expect(progressCalls).toContain('Configuring loader...')
+        // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
+        // progress beat from the old wit-three parse path) is gone —
+        // Conway-direct parse settings ride on OpenModel directly.
+        // The new "Building model..." beat captures the post-parse
+        // assembly step (buildConwayIfcModel + decorate).
         expect(progressCalls).toContain('Parsing model geometry...')
+        expect(progressCalls).toContain('Building model...')
         expect(progressCalls).toContain('Setting up coordinate system...')
         expect(progressCalls).toContain('Fitting model to frame...')
         expect(progressCalls).toContain('Gathering model statistics...')
         expect(progressCalls).toContain('Model loaded successfully!')
 
-        // Ensure onProgress was called multiple times
-        expect(onProgress).toHaveBeenCalledTimes(9)
+        // Ensure onProgress was called multiple times.
+        // Count: Determining file type, Preparing file download,
+        // Reading model data, Parsing model geometry, Building model,
+        // Setting up coordinate system, Fitting model to frame,
+        // Gathering model statistics, Model loaded successfully.
+        const EXPECTED_PROGRESS_BEATS = 9
+        expect(onProgress).toHaveBeenCalledTimes(EXPECTED_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
       }
@@ -351,15 +386,21 @@ describe('Loader', () => {
         expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
         expect(progressCalls).toContain('Reading model data...')
-        expect(progressCalls).toContain('Configuring loader...')
+        // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
+        // progress beat from the old wit-three parse path) is gone —
+        // Conway-direct parse settings ride on OpenModel directly.
+        // The new "Building model..." beat captures the post-parse
+        // assembly step (buildConwayIfcModel + decorate).
         expect(progressCalls).toContain('Parsing model geometry...')
+        expect(progressCalls).toContain('Building model...')
         expect(progressCalls).toContain('Setting up coordinate system...')
         expect(progressCalls).toContain('Fitting model to frame...')
         expect(progressCalls).toContain('Gathering model statistics...')
         expect(progressCalls).toContain('Model loaded successfully!')
 
         // Verify that progress was called multiple times for IFC-type loading
-        expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(9)
+        const MIN_PROGRESS_BEATS = 9
+        expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(MIN_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
       }

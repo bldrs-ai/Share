@@ -70,3 +70,59 @@ jobs:
       GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
       GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
       MSW_IS_ENABLED: true
+
+  # web-ifc ENGINE smoke: builds with USE_WEBIFC_SHIM=false (real web-ifc,
+  # not the Conway shim) and serves it cross-origin isolated, then loads
+  # index.ifc in the browser. Separate job from playwright-run because it
+  # needs a different build + an isolated static server. web-ifc is pinned
+  # to its single-threaded engine (0.0.35's MT build is unshippable as
+  # packaged — see webIfcSingleThreadPlugin in tools/esbuild/plugins.js);
+  # this job is advisory and expected GREEN. It forwards the browser
+  # console so any isolated-runtime failure is legible without a local
+  # browser (see design/new/viewer-replacement.md §5f).
+  playwright-webifc-run:
+    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
+    container: mcr.microsoft.com/playwright:v1.54.2-jammy
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - run: yarn install --frozen-lockfile --prefer-offline
+
+      - name: Playwright Info
+        run: npx playwright --version
+
+      - name: Run web-ifc engine Playwright smoke
+        run: yarn test-flows-webifc --reporter=github,list,html --workers=1
+
+      - name: Upload web-ifc Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-webifc
+          path: playwright-report-webifc
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload web-ifc Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-webifc
+          path: test-results
+          retention-days: 7
+          if-no-files-found: warn
+
+    env:
+      GITHUB_BASE_URL: https://git.bldrs.dev.pw/p/gh
+      GITHUB_BASE_URL_UNAUTHENTICATED: https://api.github.com.pw
+      MSW_IS_ENABLED: true

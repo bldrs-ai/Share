@@ -201,16 +201,27 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
   /**
    * map the spatial nodes
    *
+   * Children with undefined `expressID` are filtered out (they can't
+   * be addressed by URL / selection anyway). Spotted on a deploy-
+   * preview cache-hit GLB whose `BLDRS_spatial_tree` extension was
+   * written during a transient capture failure; rather than crashing
+   * the whole panel with `Cannot read properties of undefined`, the
+   * tree renders without the malformed nodes and the user can still
+   * interact with the rest of the hierarchy.
+   *
    * @param {object} node - The node to map
    * @return {object} node
    */
   function mapSpatialNode(node) {
+    const childArray = Array.isArray(node.children) ?
+      node.children.filter((c) => c && c.expressID !== undefined) :
+      []
     return {
       nodeId: node.expressID.toString(),
       label: reifyName({properties: model}, node),
       expressID: node.expressID,
-      hasChildren: node.children && node.children.length > 0,
-      children: node.children ? node.children.map(mapSpatialNode) : [],
+      hasChildren: childArray.length > 0,
+      children: childArray.map(mapSpatialNode),
     }
   }
 

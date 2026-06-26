@@ -3,6 +3,11 @@ import {act, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
 import MarkerControl from './MarkerControl'
+// Slice 5d.4: load the Jest harness before CadView (→ ShareViewer →
+// IfcContext / ShareIfc) so its dep mocks register; ShareViewer no
+// longer self-triggers it. The `require('web-ifc-viewer')` in the test
+// body below reads the singleton.
+import 'web-ifc-viewer'
 import CadView from '../../Containers/CadView'
 import {MOCK_MARKERS} from './Marker.fixture'
 import {ShareViewer} from '../../viewer/ShareViewer'
@@ -111,7 +116,13 @@ describe('MarkerControl', () => {
   // need to move this after fixing that issue
   beforeEach(() => {
     viewer = new ShareViewer()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    // Slice 5d.3: `_loadedModel` lives on the singleton fork mock that
+    // `__mocks__/web-ifc-viewer.js` exposes via `__getShareViewerMockSingleton`.
+    // Pre-5d.3 this was reached via `viewer._fork`, but the `_fork`
+    // composition pointer is gone now that ShareViewer instantiates
+    // IfcContext + IfcManager + IfcClipper directly.
+    const {__getShareViewerMockSingleton: getSingleton} = require('web-ifc-viewer')
+    getSingleton()._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })

@@ -8,7 +8,14 @@ import ShareMock from '../ShareMock'
 import {testId as aboutControlTestId} from '../Components/About/AboutControl'
 import {HASH_PREFIX_CUT_PLANE} from '../Components/CutPlane/hashState'
 import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
+// Slice 5d.4: ShareViewer no longer self-imports the fork to trigger the
+// Jest harness, so load it explicitly here — before the first import
+// that pulls in ShareViewer (→ IfcContext / ShareIfc) — so the harness's
+// jest.mock() registrations land first. The lazy `require('web-ifc-viewer')`
+// calls in the test bodies below read its singleton.
+import 'web-ifc-viewer'
 import {ShareViewer} from '../viewer/ShareViewer'
+import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
@@ -27,6 +34,38 @@ jest.mock('axios')
 jest.mock('@bldrs-ai/ifclib')
 jest.mock('../Filetype')
 jest.mock('../search/SearchIndex')
+// Slice 5b of design/new/viewer-replacement.md: the IFC parse path
+// goes through `parseIfcWithConway` + `buildConwayIfcModel` instead
+// of wit-three's `IFCLoader.parse`. The web-ifc-viewer mock
+// auto-mocks `three`, which leaves `BufferGeometry` + `Mesh` without
+// their real methods — production `buildConwayIfcModel` produces a
+// broken Mesh under that mock. We short-circuit the Conway-direct
+// module pair to feed the load pipeline `viewer._loadedModel` (the
+// wit-three-shape fake the rest of the CadView assertions expect).
+// Scoped to this test file because production unit tests for
+// `buildConwayIfcModel` need the real implementation.
+jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
+  parseIfcWithConway: () => ({modelID: 0, captured: []}),
+  decorateConwayDirectIfcModel: () => {},
+}))
+jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
+  buildConwayIfcModel: () => {
+    const {__getShareViewerMockSingleton} = require('web-ifc-viewer')
+    return {
+      mesh: __getShareViewerMockSingleton()._loadedModel,
+      materials: [],
+      stats: {
+        vertexCount: 0,
+        triangleCount: 0,
+        instanceCount: 0,
+        parentCount: 0,
+        materialCount: 0,
+        skippedFlatMeshes: 0,
+        skippedPlacedGeometries: 0,
+      },
+    }
+  },
+}))
 jest.mock('../OPFS/utils', () => {
   const actualUtils = jest.requireActual('../OPFS/utils')
   const fs = jest.requireActual('fs')
@@ -126,13 +165,32 @@ describe('CadView', () => {
       }
     })
     // jest.spyOn(Loader, 'readModel').mockReturnValue({})
+
+    // Slice 5d.2: `viewer.clipper.setModel(model)` (called by
+    // CutPlaneMenu on model load) now builds a real per-model
+    // `MeshClipper`, which reads model bounds via three's
+    // `Box3.setFromObject` — a path the auto-mocked three here doesn't
+    // support (its mocks don't chain / lack instance fields). CadView's
+    // clipping tests verify orchestration (that the cut-plane menu calls
+    // `createFromNormalAndCoplanarPoint` / `deleteAllPlanes`), not the
+    // MeshClipper internals (covered by MeshClipper.test.js with real
+    // three). Stub setModel to a no-op so `_meshClipper` is never built;
+    // every other Clipper method then short-circuits via `_meshClipper?.`
+    // and stays a safe no-op the prototype spies below can observe.
+    jest.spyOn(Clipper.prototype, 'setModel').mockImplementation(() => {})
   })
 
 
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
   beforeEach(() => {
     viewer = new ShareViewer()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    // Slice 5d.3: `_loadedModel` lives on the singleton fork mock that
+    // `__mocks__/web-ifc-viewer.js` exposes via `__getShareViewerMockSingleton`.
+    // Pre-5d.3 this was reached via `viewer._fork`, but the `_fork`
+    // composition pointer is gone now that ShareViewer instantiates
+    // IfcContext + IfcManager + IfcClipper directly.
+    const {__getShareViewerMockSingleton: getSingleton} = require('web-ifc-viewer')
+    getSingleton()._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
@@ -226,6 +284,12 @@ describe('CadView', () => {
   // The guard makes the effect skip `setInstanceSelection` when the
   // parent-level ids are empty. This test exercises that path.
   it('useEffect skips setInstanceSelection when selectedElements is empty', async () => {
+    // Post-slice-5c: ShareViewer composes the fork rather than extending
+    // it, so each `new ShareViewer()` is a fresh instance. Spy on the
+    // prototype so both the test's local `viewer` and CadView's own
+    // `initViewer()` instance route through the same Jest mock.
+    const setInstanceSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setInstanceSelection')
+      .mockImplementation(() => {})
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -234,11 +298,48 @@ describe('CadView', () => {
     // Set ONLY selectedInstanceIds — leave selectedElements at its
     // empty-array default. The effect runs on the dep change; the
     // guard should swallow it.
-    viewer.setInstanceSelection.mockClear()
+    setInstanceSelectionSpy.mockClear()
     const STALE_INSTANCE_ID = 42
     await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
     await actAsyncFlush()
-    expect(viewer.setInstanceSelection).not.toHaveBeenCalled()
+    expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+  })
+
+
+  // Regression (nav→scene sync): `selectItemsInScene` is the single
+  // selection funnel and must own BOTH `selectedElements` and the
+  // Conway-direct per-instance `selectedInstanceIds`. Pre-fix only the
+  // scene-pick handler ever set/cleared `selectedInstanceIds`, so a
+  // selection arriving from any other source (NavTree click, search,
+  // keyboard deselect) left a STALE per-instance highlight behind that
+  // the `[selectedElements, selectedInstanceIds]` effect re-applied over
+  // the new/empty selection — the scene stopped following the tree.
+  // Deselecting via the funnel (Clear) must now also clear the instance
+  // highlight. Reuses the render + Clear mechanics of the unselect test.
+  it('deselect clears a stale per-instance highlight (funnel owns selectedInstanceIds)', async () => {
+    const testTree = makeTestTree()
+    const targetEltId = testTree.children[0].expressID
+    const STALE_INSTANCE_ID = 42
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath({filepath: `/index.ifc`})
+      result.current.setSelectedElement(targetEltId)
+      result.current.setSelectedElements([`${targetEltId}`])
+      // Simulate the residue of a prior Conway-direct scene pick.
+      result.current.setSelectedInstanceIds([STALE_INSTANCE_ID])
+    })
+
+    const {getByTestId} =
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+
+    const eltGrp = getByTestId('element-group')
+    const clearSelection = within(eltGrp).getByTitle('Clear')
+    await act(async () => {
+      await fireEvent.click(clearSelection)
+    })
+    expect(result.current.selectedElements).toHaveLength(0)
+    expect(result.current.selectedInstanceIds).toHaveLength(0)
+    await actAsyncFlush()
   })
 
 
@@ -318,6 +419,12 @@ describe('CadView', () => {
       hash: `#${HASH_PREFIX_CAMERA}:1,2,3,4,5,6;${HASH_PREFIX_CUT_PLANE}:x=0`,
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+    // The cut-plane menu drives clipping through `viewer.clipper` (a
+    // `Clipper` instance). Spy at the prototype so the assertion catches
+    // the call regardless of which ShareViewer/Clipper instance CadView's
+    // `initViewer` builds. `setModel` is stubbed (beforeAll), so this
+    // just records the orchestration call.
+    const createPlaneSpy = jest.spyOn(Clipper.prototype, 'createFromNormalAndCoplanarPoint')
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setIsOpfsAvailable(false))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
@@ -331,11 +438,7 @@ describe('CadView', () => {
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
     const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
     expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
-    // ShareViewer wraps the fork's `IFC.clipper` in a Clipper plugin;
-    // the IFC-mode `createFromNormalAndCoplanarPoint` delegates to the
-    // fork clipper, captured at construction time as `_forkClipper`.
-    const createPlanMock = viewer._forkClipper.createFromNormalAndCoplanarPoint
-    expect(createPlanMock).toHaveBeenCalled()
+    expect(createPlaneSpy).toHaveBeenCalled()
     await actAsyncFlush()
   })
 
@@ -343,6 +446,11 @@ describe('CadView', () => {
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
+    // Clearing the selection routes through `removePlanes(viewer)` →
+    // `viewer.clipper.deleteAllPlanes()`. Spy at the prototype so the
+    // assertion catches the call on whichever Clipper instance CadView's
+    // `initViewer` built.
+    const deleteAllSpy = jest.spyOn(Clipper.prototype, 'deleteAllPlanes')
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setModelPath({filepath: `/index.ifc`})
@@ -357,12 +465,12 @@ describe('CadView', () => {
     const eltGrp = getByTestId('element-group')
     expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
     const clearSelection = within(eltGrp).getByTitle('Clear')
+    // Scope the assertion to the clear action, not any setup-time calls.
+    deleteAllSpy.mockClear()
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
-    // Clipper plugin delegates IFC-mode deleteAllPlanes to _forkClipper.
-    const callDeletePlanes = viewer._forkClipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
+    expect(deleteAllSpy).toHaveBeenCalled()
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
     // TODO(pablo): hack after refactor, was 0, but UI looks right
@@ -425,6 +533,12 @@ describe('CadView', () => {
 
 
   it('can highlight some elements based on state change', async () => {
+    // Post-slice-5c: ShareViewer composes the fork rather than extending
+    // it, so each `new ShareViewer()` is a fresh instance. Spy on the
+    // prototype so both the test's local `viewer` and CadView's own
+    // `initViewer()` instance route through the same Jest mock.
+    const preselectSpy = jest.spyOn(ShareViewer.prototype, 'preselectElementsByIds')
+      .mockImplementation(() => {})
     const highlightedIdsAsString = ['0', '1']
     const modelId = 0
     const elementCount = 2
@@ -438,8 +552,7 @@ describe('CadView', () => {
       result.current.setPreselectedElementIds(highlightedIdsAsString)
     })
     expect(result.current.preselectedElementIds).toHaveLength(elementCount)
-    expect(viewer.preselectElementsByIds)
-      .toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
+    expect(preselectSpy).toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
     await actAsyncFlush()
   })
 

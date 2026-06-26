@@ -1,11 +1,12 @@
 import React from 'react'
 import {fireEvent, render, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx, RouteThemeCtx} from '../../Share.fixture'
+// ImagineControl uses the viewer's screenshot; load the Jest harness for
+// its dep mocks before importing ImagineControl. Side-effect import (was
+// `jest.mock('web-ifc-viewer')`, which under the slice-5d.4 moduleNameMapper
+// would auto-mock the harness module itself instead of loading it).
+import 'web-ifc-viewer'
 import ImagineControl from './ImagineControl'
-
-
-// ImagineControl uses viewer's screenshot
-jest.mock('web-ifc-viewer')
 
 
 describe('ImagineControl', () => {

@@ -57,6 +57,11 @@ function makeMockViewer() {
           }),
           setupCoordinationMatrix: jest.fn(),
           ifcAPI: {
+            // Slice 5b: parse routes through Conway directly. Empty
+            // OpenModel + no-op StreamAllMeshes is enough for the
+            // load-pipeline shape these tests verify.
+            OpenModel: jest.fn(() => 0),
+            StreamAllMeshes: jest.fn(() => {}),
             GetCoordinationMatrix: jest.fn().mockResolvedValue([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
             getStatistics: jest.fn().mockReturnValue({
               getGeometryMemory: jest.fn().mockReturnValue(1024), // eslint-disable-line no-magic-numbers
@@ -69,6 +74,12 @@ function makeMockViewer() {
               getTotalTime: jest.fn().mockReturnValue(150), // eslint-disable-line no-magic-numbers
             }),
             getConwayVersion: jest.fn().mockReturnValue('1.0.0'),
+            properties: {
+              getItemProperties: jest.fn(),
+              getPropertySets: jest.fn(),
+              getSpatialStructure: jest.fn(),
+              getIfcType: jest.fn(),
+            },
           },
         },
       },
@@ -76,6 +87,21 @@ function makeMockViewer() {
         items: {ifcModels: []},
         fitToFrame: jest.fn(),
       },
+    },
+    // Slice 5d.1: production wires `viewer.ifcLoader` to a
+    // ShareIfcLoader. This test exercises the GitHub-fetch /
+    // lastModified plumbing — not the IFC parse itself — so a
+    // ShareIfcLoader-shaped stub with a settable `.type` and a
+    // `.parse` that resolves the loadedModel shape is enough.
+    ifcLoader: {
+      type: null,
+      parse: jest.fn().mockResolvedValue({
+        modelID: 0,
+        loadStats: {},
+        children: [],
+        geometry: undefined,
+        isObject3D: true,
+      }),
     },
   }
 }

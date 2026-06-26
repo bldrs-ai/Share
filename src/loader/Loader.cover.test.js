@@ -7,6 +7,7 @@
 
 import axios from 'axios'
 import {downloadToOPFS, downloadModel, getModelFromOPFS} from '../OPFS/utils'
+import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {constructUploadedBlobPath, load, NotFoundError} from './Loader'
 import {dereferenceAndProxyDownloadContents} from './urls'
 
@@ -33,7 +34,9 @@ jest.mock('./urls', () => ({
 /**
  * Build a minimal viewer stub that satisfies the non-IFC path through
  * load(): `viewer.IFC.addIfcModel`, `viewer.IFC.loader.ifcManager.state.models`,
- * and a `.type` slot for the loader to tag.
+ * a `.type` slot for the loader to tag, and a `viewer.ifcLoader`
+ * placeholder so `findLoader`'s `case 'ifc'` arm can set `.type` on it
+ * before any IFC-specific test wires a real ShareIfcLoader.
  *
  * @return {object}
  */
@@ -46,6 +49,7 @@ function makeViewerStub() {
         ifcManager: {state: {models: []}},
       },
     },
+    ifcLoader: {type: null},
   }
 }
 
@@ -414,9 +418,14 @@ describe('load() error/edge paths with OPFS enabled', () => {
   // sniffing based. The refactor should confirm the OOM shapes it looks
   // for still match the engines (Conway, web-ifc) we're actually using.
   it('tags out-of-memory errors from the IFC loader with isOutOfMemory', async () => {
-    // Build a viewer with an IFC loader whose inner parse throws an OOM.
-    // newIfcLoader's hot-patched parse catches, tags, and rethrows. The
-    // error message must match one of the heuristics in src/utils/oom.js.
+    // Build a viewer with a Conway IfcAPI whose OpenModel throws an
+    // OOM. newIfcLoader's hot-patched parse catches, tags, and
+    // rethrows. The error message must match one of the heuristics
+    // in src/utils/oom.js.
+    //
+    // Slice 5b moved the parse off wit-three's `loader.parse` and
+    // onto Conway's `ifcAPI.OpenModel` — the OOM throw site moved
+    // with it.
     const oomErr = new RangeError('WebAssembly: out of memory')
     const ifcViewer = {
       IFC: {
@@ -424,12 +433,18 @@ describe('load() error/edge paths with OPFS enabled', () => {
         ifcLastError: null,
         addIfcModel: jest.fn(),
         loader: {
+          // Replaced below with a real ShareIfcLoader so the OOM
+          // throw from `OpenModel` flows through our parse path.
           parse: jest.fn().mockRejectedValue(oomErr),
           ifcManager: {
             state: {models: []},
             applyWebIfcConfig: jest.fn().mockResolvedValue(),
             setupCoordinationMatrix: jest.fn(),
             ifcAPI: {
+              OpenModel: jest.fn(() => {
+                throw oomErr
+              }),
+              StreamAllMeshes: jest.fn(),
               GetCoordinationMatrix: jest.fn().mockResolvedValue(new Array(16).fill(0)),
               getStatistics: jest.fn().mockReturnValue({
                 getGeometryMemory: () => 0,
@@ -451,6 +466,15 @@ describe('load() error/edge paths with OPFS enabled', () => {
         },
       },
     }
+    // Slice 5d.1: install ShareIfcLoader at the viewer-level slot.
+    // The OOM-throwing OpenModel is on
+    // `ifcViewer.IFC.loader.ifcManager.ifcAPI` (set above);
+    // ShareIfcLoader.parse calls into it and surfaces the OOM the
+    // same way `newIfcLoader.parse` did pre-5d.1.
+    ifcViewer.ifcLoader = new ShareIfcLoader({
+      ifcAPI: ifcViewer.IFC.loader.ifcManager.ifcAPI,
+      ifc: ifcViewer.IFC,
+    })
 
     dereferenceAndProxyDownloadContents.mockResolvedValue([
       'https://example.com/model.ifc',
@@ -508,6 +532,15 @@ describe('load() error/edge paths with OPFS enabled', () => {
       },
     }
     const primedViewer = {IFC: ifcLoaderBase}
+    // Slice 5d.1: install ShareIfcLoader at the viewer-level slot.
+    // The "model already present" guard lives inside
+    // ShareIfcLoader.parse — it inspects
+    // `context.items.ifcModels.length`, which we've pre-populated
+    // above so the guard fires immediately.
+    primedViewer.ifcLoader = new ShareIfcLoader({
+      ifcAPI: primedViewer.IFC.loader.ifcManager.ifcAPI,
+      ifc: primedViewer.IFC,
+    })
 
     dereferenceAndProxyDownloadContents.mockResolvedValue([
       'https://example.com/model.ifc',

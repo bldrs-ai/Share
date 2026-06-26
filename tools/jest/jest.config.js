@@ -27,6 +27,13 @@ export default {
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
+    // Slice 5d.4 removed the `web-ifc-viewer` dependency. The Jest harness
+    // that mocks ShareViewer's heavy deps still lives at
+    // `__mocks__/web-ifc-viewer.js` (renamed to a ShareViewer harness in
+    // slice 5g); map the bare specifier to it so the viewer-stack tests
+    // that `import … from 'web-ifc-viewer'` keep resolving without the
+    // package installed.
+    '^web-ifc-viewer$': '<rootDir>/__mocks__/web-ifc-viewer.js',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'node'],
   // Coverage is opt-in via `yarn test-src --coverage` (or the dedicated

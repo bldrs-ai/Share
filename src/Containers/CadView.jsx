@@ -368,18 +368,18 @@ export default function CadView({
     } catch (error) {
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
-        throw error
       }
-      // Bubble NeedsReconnect up to onViewer's catch so it can render the
-      // typed Reconnect overlay. Without this re-throw the inner catch
-      // swallowed it, set the alert as a generic Error, and the outer
-      // !tmpModelRef branch then overwrote it with "Failed to parse model".
-      if (error instanceof NeedsReconnectError) {
-        throw error
-      }
-
-      setAlert(error)
-      return
+      // Bubble every loader error up to onViewerInternal's catch so it can
+      // (1) set the alert once with the actual Error and (2) capture it
+      // once via its captureException call. Previously generic errors
+      // were swallowed here with setAlert(error)+return — and then the
+      // outer `if (!tmpModelRef && !isOOM)` branch overwrote the alert
+      // with the string "Failed to parse model", producing a second
+      // Sentry issue (SHARE-N5) for every real loader failure already
+      // tracked as SHARE-RS. The previous code already re-threw the
+      // typed OOM and NeedsReconnect cases for the same reason; this
+      // generalises that pattern to every loader error.
+      throw error
     } finally {
       setIsModelLoading(false)
     }
@@ -445,17 +445,24 @@ export default function CadView({
     // if we can't read the full model structure.
     let rootElt
     try {
-      // Cache-hit GLBs that shipped a BLDRS_spatial_tree extension
-      // hydrate a `getSpatialStructure(modelID, withProperties)` closure
-      // on the model via `Loader.js#convertToShareModel`. We can't just
-      // test `m.getSpatialStructure` because wit-three's IFCModel
-      // inherits a `getSpatialStructure(): Promise<any>` on its
-      // prototype that calls `this.ifcManager.getSpatialStructure(this.modelID)`
-      // — no `includeProperties` arg — so taking that branch on a live
-      // IFC parse silently drops the property data, leaving NavTree
-      // leaves nameless. Discriminate on the cache payload directly.
-      const cachedTree = m.userData?.bldrsSpatialTree
-      if (cachedTree) {
+      // Three sources, in preference order:
+      //   1. Model's own `getSpatialStructure` (instance method) — attached
+      //      by `decorateConwayDirectIfcModel` on cache-miss Conway-direct
+      //      parses (routes to `ifcAPI.properties.getSpatialStructure`),
+      //      or by `convertToShareModel` on cache-hit GLBs that carry the
+      //      `BLDRS_spatial_tree` extension (closure returning the cached
+      //      tree). `hasOwnProperty` discriminates this from wit-three's
+      //      `IFCModel.prototype.getSpatialStructure` which takes no args
+      //      and would silently drop `withProperties=true`.
+      //   2. Wit-three's `m.ifcManager.getSpatialStructure(0, true)` —
+      //      legacy fallback. Post-Slice-5b this won't work for IFC
+      //      parses (wit-three's `state.models[modelID]` is empty
+      //      because we skipped its parse), but the branch stays as a
+      //      defensive fallback for non-IFC models that decorated with
+      //      `ifcManager` shims via `convertToShareModel`.
+      const hasOwnSpatialStructure =
+        Object.prototype.hasOwnProperty.call(m, 'getSpatialStructure')
+      if (hasOwnSpatialStructure) {
         rootElt = await m.getSpatialStructure(0, true)
       } else {
         rootElt = await m.ifcManager.getSpatialStructure(0, true)
@@ -525,21 +532,24 @@ export default function CadView({
         if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        // Always set parent expressID as the "selection" so the
-        // properties panel / nav tree / search highlight respond
-        // normally. The per-instance highlight is layered on top via
-        // selectedInstanceIds.
-        setSelectedElements([`${parentExpressId}`])
-        setSelectedInstanceIds(event.shiftKey ? [] : [instanceId])
+        // Route through selectItemsInScene (the single selection
+        // funnel) so a scene pick gets the same treatment as every
+        // other source: store update + element-path permalink in the
+        // URL. Previously this set the store directly and skipped the
+        // funnel, so scene selections never produced a shareable
+        // permalink. The parent expressID is always the "selection" so
+        // the properties panel / nav tree / search respond normally;
+        // `instanceIds` only narrows what the OutlineEffect draws.
+        // Shift = the whole IFC element (every instance) → no
+        // per-instance restriction; no-shift = just this PlacedGeometry.
+        const instanceIds = event.shiftKey ? [] : [instanceId]
+        selectItemsInScene([parentExpressId], true, instanceIds)
         return
       }
-      // Non-instance branch: clear any stale per-instance highlight
-      // so a Conway-click followed by a click on a non-Conway mesh
-      // doesn't leave the old single-instance subset stuck on the
-      // OutlineEffect.
-      if (Array.isArray(selectedInstanceIds) && selectedInstanceIds.length > 0) {
-        setSelectedInstanceIds([])
-      }
+      // Non-instance branch: elementSelection funnels through
+      // selectItemsInScene, which resets selectedInstanceIds, so a
+      // Conway pick followed by a click on a non-Conway mesh no longer
+      // leaves the old single-instance subset stuck on the OutlineEffect.
       if (mesh.expressID !== undefined) {
         elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, mesh.expressID)
       } else {
@@ -645,12 +655,25 @@ export default function CadView({
 
 
   /**
-   * Pick the given items in the scene.
+   * Pick the given items in the scene. This is the single funnel for
+   * EVERY selection source — scene pick, NavTree click, search,
+   * keyboard, and URL/permalink — so it owns the full store-side
+   * selection contract: the parent-level `selectedElements`, the
+   * Conway-direct per-instance `selectedInstanceIds`, and (optionally)
+   * the element-path permalink in the URL. Routing every source
+   * through here is what keeps the scene and NavTree in sync in both
+   * directions.
    *
    * @param {Array} resultIDs Array of expressIDs
    * @param {boolean} updateNavigation Whether to update navigation
+   * @param {Array<number>} instanceIds Conway-direct per-instance highlight
+   *   restriction. Empty (the default) clears any prior per-instance
+   *   highlight — required so a selection arriving from a non-scene
+   *   source (NavTree, search, permalink) doesn't inherit the instance
+   *   subset left behind by an earlier scene pick. Only the Conway
+   *   scene-pick path passes a non-empty value.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true) {
+  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = []) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -659,6 +682,7 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
+      setSelectedInstanceIds(instanceIds)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
@@ -700,8 +724,20 @@ export default function CadView({
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
-      const selectedInViewer = viewer.getSelectedIds()
-      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
+      // Skip re-selecting when this element is already the active
+      // selection. We consult the store (selectItemsInScene updates it
+      // synchronously) and not only viewer.getSelectedIds(), because this
+      // also runs from the location-watch effect — which fires on the
+      // SELF-INDUCED navigation a selection just made, and runs BEFORE
+      // the selection effect has pushed the pick into the viewer, so
+      // getSelectedIds() is still stale. Without the store check the
+      // re-selection would funnel through selectItemsInScene again and
+      // reset selectedInstanceIds, widening a Conway per-instance scene
+      // pick to the whole element.
+      const alreadySelected =
+        useStore.getState().selectedElements.includes(`${targetId}`) ||
+        viewer.getSelectedIds().includes(targetId)
+      if (isFinite(targetId) && !alreadySelected) {
         selectItemsInScene([targetId], false)
       }
     }
@@ -899,8 +935,18 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressId) => {
-            elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
+          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds) => {
+            // The element-types tree passes an array (every element of a
+            // type) to select the group at once; the spatial tree and
+            // the scene pass a single expressID. elementSelection is
+            // single-id (shift toggle + descendants); the group case
+            // replaces the selection wholesale, like a search result, so
+            // it goes straight to the funnel with no permalink.
+            if (Array.isArray(expressIdOrIds)) {
+              selectItemsInScene(expressIdOrIds, false)
+            } else {
+              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+            }
           }}
           deselectItems={deselectItems}
         />

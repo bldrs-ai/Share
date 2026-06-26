@@ -18,6 +18,13 @@ export default defineConfig({
     '**/*.spec.ts',
   ],
 
+  // The web-ifc engine smoke runs under tools/playwright.webifc.config.js
+  // against an isolated USE_WEBIFC_SHIM=false build; it must never run
+  // against this (Conway) build, where its assertions are meaningless.
+  testIgnore: [
+    '**/*.webifc.spec.ts',
+  ],
+
   // Run all tests in parallel.
   fullyParallel: true,
 

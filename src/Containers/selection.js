@@ -12,6 +12,17 @@ import {getDescendantExpressIds} from '../utils/TreeUtils'
  * @param {number} expressId the express id of the element
  */
 export function elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId) {
+  // NavTree click handlers pass `node.expressID.toString()` (a string)
+  // while scene picks pass a numeric `mesh.expressID`. Normalise to a
+  // number so the Set-membership test (shift toggle, below) and the
+  // isolator's numeric `Array.includes` checks behave identically
+  // regardless of which surface initiated the selection — otherwise a
+  // string id silently fails `selectedInViewer.has(expressId)` and
+  // `isolatedIds.includes(expressId)`.
+  expressId = Number(expressId)
+  if (!Number.isFinite(expressId)) {
+    return
+  }
   if (!viewer.isolator.canBePickedInScene(expressId)) {
     return
   }

@@ -237,9 +237,30 @@ describe('Containers/viewer', () => {
 
 
   describe('singleton fixture sanity', () => {
-    it('initViewer returns the same singleton object the test mock exposes', () => {
+    it('initViewer returns a ShareViewer that shares the singleton fork IfcManager', () => {
+      // ShareViewer instantiates `IfcContext` (vendored) + `IfcManager`
+      // directly; the mock factory in `__mocks__/web-ifc-viewer.js`
+      // routes `makeForkIfc` through the singleton `impl`, so mutations
+      // to the singleton's IFC surface are observable on `viewer.IFC`.
+      // We can't use `.toBe(singleton.IFC)` because babel-plugin-jest-
+      // hoist places the `jest.mock(..., factory)` calls outside the
+      // module's lexical scope; the factory closes over a different
+      // `impl` binding than the one `__getShareViewerMockSingleton`
+      // returns. Sharing is verified structurally via a sentinel round
+      // trip instead.
+      //
+      // Slice 5d.2 dropped the fork's `IfcClipper`: `viewer.clipper` is
+      // now a fresh in-repo `Clipper` (not sourced from the mock
+      // singleton), so only the IfcManager is shared.
       const viewer = initViewer('/share/v/p')
-      expect(viewer).toBe(__getShareViewerMockSingleton())
+      const singleton = __getShareViewerMockSingleton()
+      expect(viewer.IFC).toBeDefined()
+      // Round-trip: mutating the singleton's IFC propagates to viewer.IFC
+      // (and vice versa) iff they're the same backing object.
+      const sentinel = Symbol('5d2-sanity')
+      singleton.IFC[sentinel] = 'shared'
+      expect(viewer.IFC[sentinel]).toBe('shared')
+      delete singleton.IFC[sentinel]
     })
   })
 })
