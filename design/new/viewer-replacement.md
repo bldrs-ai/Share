@@ -843,8 +843,8 @@ forced tree-wide via `resolutions` — so the original "bump `three`" goal
 is met; what remains under **5e** is shedding the fork-era color/lighting
 compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
 the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
-deletion target. **5g** renames the test mock off the `web-ifc-viewer`
-name (5d.4 parked it behind a jest `moduleNameMapper`). The slice
+deletion target. **5g** renamed the test mock off the `web-ifc-viewer`
+name (5d.4 had parked it behind a jest `moduleNameMapper`). The slice
 numbering below matches the `5d.N` tags in the committed source comments
 (`grep -rn "5d\." src/`).
 
@@ -1013,9 +1013,9 @@ comments (`grep "5d\." src/`).
   diff) AND the cut-plane-permalink load path (fork's
   `IfcClipper.active` setter dives into `postProduction.composer` /
   `outlineUniforms`); vendoring the *real* Postproduction fixed both.
-  Test-mock plumbing notes live in `__mocks__/web-ifc-viewer.js` (the
-  jest.mock-for-local-modules + `globalThis` singleton dedup is subtle
-  — read the comments there before touching it).
+  Test-mock plumbing notes live in `__mocks__/shareViewerTestHarness.js`
+  (the jest.mock-for-local-modules + `globalThis` singleton dedup is
+  subtle — read the comments there before touching it).
 
 - **5d.4 — drop the last fork imports + the dep (done 2026-06, this
   slice).** `IfcManager` was the only remaining fork construct
@@ -1045,12 +1045,13 @@ comments (`grep "5d\." src/`).
     needs it) and `webIfcShimAlias` (5f). `web-ifc` itself survives via
     `@bldrs-ai/ifclib`; `web-ifc-three` had no real `src/` import.
   - **Test harness:** ShareViewer no longer self-imports the fork to
-    trigger `__mocks__/web-ifc-viewer.js`, so the viewer-stack tests
-    that relied on that self-trigger (`ShareViewer.test.js`,
-    `CadView.test.jsx`, `MarkerControl.test.jsx`, `Share.test.jsx`) now
-    load the harness explicitly before the component-under-test. The
-    harness still resolves under its `web-ifc-viewer` name via a jest
-    `moduleNameMapper` — the rename to a non-fork name is slice 5g.
+    trigger the harness, so the viewer-stack tests that relied on that
+    self-trigger (`ShareViewer.test.js`, `CadView.test.jsx`,
+    `MarkerControl.test.jsx`, `Share.test.jsx`) now load the harness
+    explicitly before the component-under-test. (Slice 5g later renamed
+    the harness `__mocks__/web-ifc-viewer.js` →
+    `shareViewerTestHarness.js` and dropped the `moduleNameMapper` it had
+    resolved through.)
 
 **Slice 5e — shed fork-era three-compat scaffolding (todo; rescoped
 2026-06).** The version bump is already *done*: `three@0.184.0` +
@@ -1172,14 +1173,16 @@ imports.
   wasms bundled with runtime dispatch — a real refactor, deferred unless
   the side-by-side workflow demands it.
 
-**Slice 5g — mocks (todo; unblocked by 5d.4).** The harness now resolves
-under the `web-ifc-viewer` name only through a jest `moduleNameMapper`
-(`tools/jest/jest.config.js`) — the dep itself is gone. Remaining
-cosmetic work: rename `__mocks__/web-ifc-viewer.js` to a ShareViewer-named
-harness, update the ~10 test files that import it, and drop the
-`moduleNameMapper` entry. The `globalThis`-singleton + load-dedup
-machinery moves with it. No production coupling remains — pure test-tree
-rename.
+**Slice 5g — mocks (done 2026-06).** Renamed
+`__mocks__/web-ifc-viewer.js` → `__mocks__/shareViewerTestHarness.js` (the
+harness only resolved under the dead `web-ifc-viewer` package name via a
+jest `moduleNameMapper`). The 11 viewer-stack test files that imported it
+now load the harness by relative path; the `^web-ifc-viewer$`
+`moduleNameMapper` entry is dropped (`tools/jest/jest.config.js`), and the
+dead `web-ifc-three` / `web-ifc-viewer` entries are removed from
+`excludedNodeModules` (`tools/jest/common.js`). The `globalThis`-singleton
++ load-dedup machinery moved unchanged. Pure test-tree rename — no
+production coupling.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.

@@ -3,7 +3,7 @@
 // fork import remains. The Jest harness registers its sub-mocks
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
-// `__mocks__/web-ifc-viewer.js` for the load-order rationale.
+// `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
 import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'

@@ -36,7 +36,5 @@ export const excludedNodeModules = [
   'vfile',
   'vfile-message',
   'web-ifc',
-  'web-ifc-three',
-  'web-ifc-viewer',
   'use-double-tap',
 ].join('|')

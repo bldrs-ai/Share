@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from '../../../__mocks__/shareViewerTestHarness'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
