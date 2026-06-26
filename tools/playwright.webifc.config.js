@@ -4,11 +4,13 @@ import {runGetPortPlease} from './utils'
 
 // Separate Playwright config for the web-ifc *engine* smoke. It builds
 // with `USE_WEBIFC_SHIM=false` (real web-ifc, not the Conway shim) and
-// serves cross-origin isolated (`serveStaticIsolated.mjs`) so web-ifc
-// selects its multi-threaded wasm — the engine path we're validating
-// for side-by-side comparison with Conway. The default config
-// (`playwright.config.js`) ignores `*.webifc.spec.ts`, so these never
-// run against the Conway build.
+// serves it cross-origin isolated (`serveStaticIsolated.mjs`) — the
+// engine path we validate for side-by-side comparison with Conway. The
+// build is pinned to web-ifc's single-threaded wasm (0.0.35's MT build
+// is unshippable as packaged — see `webIfcSingleThreadPlugin`); the
+// isolated serve is retained for Conway's own MT wasm and a future MT
+// follow-up. The default config (`playwright.config.js`) ignores
+// `*.webifc.spec.ts`, so these never run against the Conway build.
 const ciPort = 9091 // distinct from the Conway run's 9081
 const isCI = process.env.CI === 'true'
 const port = isCI ? ciPort : runGetPortPlease(ciPort)
@@ -21,11 +23,11 @@ export default defineConfig({
 
   fullyParallel: true,
   retries: isCI ? 1 : 0,
-  // One worker: a single engine-init smoke, and MT web-ifc spins up its
-  // own pthread pool — no benefit to parallel pages here.
+  // One worker: this is a single engine-init smoke — no benefit to
+  // parallel pages here.
   workers: 1,
-  // web-ifc wasm compile + MT worker bootstrap + model parse; generous
-  // so a slow CI runner doesn't masquerade as an init failure.
+  // web-ifc wasm compile + model parse; generous so a slow CI runner
+  // doesn't masquerade as an init failure.
   timeout: 120_000,
 
   reporter: [
