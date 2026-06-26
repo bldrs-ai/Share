@@ -263,7 +263,15 @@ export default function CadView({
       }
 
       console.error(e)
-      captureException(e)
+      // Don't send the OOM/device-too-constrained case to Sentry's error
+      // stream: it's an expected, handled outcome on memory-constrained
+      // devices, already surfaced to the user with actionable advice (the
+      // 'oom' alert above). Capturing it generated the SHARE-RS noise
+      // (11k+ events / 2.7k users, ~100% old Android) — a device limit, not
+      // a code defect. Real (non-OOM) loader failures are still captured.
+      if (!isOOM) {
+        captureException(e)
+      }
       return
     }
     if (!tmpModelRef && !isOOM) {

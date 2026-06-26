@@ -1144,7 +1144,25 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   }
 
   if (!model) {
-    throw new Error('Loader could not read model')
+    // For IFC/async (Conway) loads, ShareIfcLoader.parse stashes the real
+    // engine failure on `viewer.IFC.ifcLastError` before returning a falsy
+    // model (it only re-throws OOM-classified errors; everything else is
+    // caught and returned as null). Surfacing that captured error here —
+    // instead of a blanket 'Loader could not read model' — does two things:
+    //   (1) lets `isOutOfMemoryError` route constrained-device memory
+    //       failures into the OOM "device too constrained" UX, and
+    //   (2) gives Sentry the true Conway error for grouping instead of
+    //       collapsing every failure into one opaque bucket (SHARE-RS,
+    //       11k+ events, ~100% old Android — the generic message hid the
+    //       actual cause from triage).
+    // Non-IFC loaders never set `ifcLastError`, so they keep the generic
+    // message. Mirrors the (now unreachable-for-IFC) fallback in `load()`.
+    const lastErr = (isIfc && viewer && viewer.IFC && viewer.IFC.ifcLastError) ||
+      new Error('Loader could not read model')
+    if (isOutOfMemoryError(lastErr)) {
+      lastErr.isOutOfMemory = true
+    }
+    throw lastErr
   }
 
   if (fixupCb) {
