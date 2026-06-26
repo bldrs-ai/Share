@@ -26,6 +26,58 @@ export default function makePlugins(root, buildDir) {
     },
   }
 
+  // Pin the real-web-ifc build to web-ifc's single-threaded engine.
+  //
+  // web-ifc 0.0.35 chooses between its MT and ST wasm at module-load time
+  // on `self.crossOriginIsolated`. We serve the app cross-origin-isolated
+  // (Conway's MT wasm needs it), so that check is true and web-ifc selects
+  // its MT build — which then can't run: the npm package ships neither
+  // `web-ifc-mt.worker.js` nor a standalone `web-ifc-mt.js` for that worker
+  // to import. CI confirmed the chain end-to-end (worker 404 -> wasm
+  // abort). Until the MT follow-up (a web-ifc that bundles a worker, or a
+  // vendored one — see design/new/viewer-replacement.md §5f), force the ST
+  // engine: it ships `web-ifc.wasm` and needs no worker.
+  //
+  // Two surgical rewrites of the resolved `web-ifc-api.js`:
+  //   1. force the engine selector to its ST branch.
+  //   2. resolve `*.wasm` from the absolute `/static/js/` (where
+  //      `build-share-copy-wasm-webifc` puts it). web-ifc otherwise
+  //      resolves it relative to the page's `scriptDirectory` — the deep
+  //      model route `/share/v/p/…`, not the server root — so a relative
+  //      path 404s regardless of `SetWasmPath`.
+  // Each rewrite is asserted to hit exactly once, so a future web-ifc bump
+  // fails the build loudly instead of silently regressing to broken MT.
+  // Conway's adapter has the identical selector + locateFile shape, so this
+  // is scoped to the real-web-ifc build only (not registered under shim).
+  const webIfcSingleThreadRewrites = [
+    {
+      from: 'if (typeof self !== "undefined" && self.crossOriginIsolated) {',
+      to: 'if (false) {',
+    },
+    {
+      from: 'return prefix + this.wasmPath + path;',
+      to: 'return \'/static/js/\' + path;',
+    },
+  ]
+  const webIfcSingleThreadPlugin = {
+    name: 'webIfcSingleThread',
+    setup(build) {
+      build.onLoad({filter: /web-ifc[\\/]web-ifc-api\.js$/}, async (args) => {
+        let contents = await fs.readFile(args.path, 'utf8')
+        for (const {from, to} of webIfcSingleThreadRewrites) {
+          const occurrences = contents.split(from).length - 1
+          if (occurrences !== 1) {
+            throw new Error(
+              `webIfcSingleThread: expected exactly 1 occurrence of ${JSON.stringify(from)} ` +
+              `in ${args.path}, found ${occurrences}. web-ifc changed — re-verify the ST pin.`)
+          }
+          contents = contents.replace(from, to)
+        }
+        return {contents, loader: 'js', resolveDir: path.dirname(args.path)}
+      })
+    },
+  }
+
   const fontDisplayPlugin = {
     name: 'fontDisplay',
     setup(build) {
@@ -93,7 +145,8 @@ export default function makePlugins(root, buildDir) {
     plugins.push(webIfcShimAliasPlugin)
     log('Engine: conway (via web-ifc shim)')
   } else {
-    log('Engine: web-ifc')
+    plugins.push(webIfcSingleThreadPlugin)
+    log('Engine: web-ifc (single-threaded; MT pinned off — see webIfcSingleThreadPlugin)')
   }
 
   return plugins

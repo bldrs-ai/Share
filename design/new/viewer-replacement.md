@@ -1093,19 +1093,74 @@ to run the old fork against modern `three`, now that the fork is gone:
 side-by-side while Conway proves out. `web-ifc` proper is *not* being
 removed here. Eventual removal of the shim is a **product call** (once
 Conway is confidently shown to fully supersede web-ifc), not blocked on
-imports. Two correctness gaps to make the web-ifc engine a first-class,
-trustworthy flag:
+imports.
 
-  1. **Promote `web-ifc` to a direct dependency.** It currently survives
-     only transitively via `@bldrs-ai/ifclib` (one lockfile requester); a
-     supported engine shouldn't depend on ifclib happening to pull it.
-  2. **Verify `build-webifc` still *renders*.** The IFC load path is
-     engine-agnostic in code (`ShareIfcLoader` → `parseIfcWithConway` →
-     `ifcAPI.OpenModel` / `StreamAllMeshes`), and `ifcAPI` is whatever the
-     shim resolves to — so real web-ifc *should* feed it. But that path was
-     built + tested against Conway's FlatMesh shape and hasn't been
-     exercised against real web-ifc since the Conway-direct rewrite (5b).
-     It may build clean yet render wrong; smoke-test before relying on it.
+  **Done (2026-06).** The flag was secretly *dead*: `isWebIfcShimEnabled`
+  in `tools/esbuild/defines.js` was hardcoded `true` (`// TODO: kill
+  this`), so the `web-ifc → conway` alias was always applied and
+  `build-webifc`'s `USE_WEBIFC_SHIM=false` was ignored — it built Conway
+  (logged `Engine: conway (via web-ifc shim)`). Fixed:
+  `isWebIfcShimEnabled` now reads `parse(process.env.USE_WEBIFC_SHIM) ??
+  true` — default stays Conway, and `USE_WEBIFC_SHIM=false` now logs
+  `Engine: web-ifc` and **builds the real web-ifc engine cleanly** (no
+  esbuild resolution errors). `web-ifc` is also promoted to a direct
+  `package.json` dependency (`0.0.35`) — was only transitive via
+  `@bldrs-ai/ifclib`.
+
+  **Runtime render verification — driven through CI.** The build succeeds,
+  but loading a model under real web-ifc surfaced a wasm init failure.
+  Root cause (confirmed in CI): web-ifc 0.0.35's glue picks its engine at
+  import time — `if (self.crossOriginIsolated) WebIFCWasm =
+  require_web_ifc_mt() else require_web_ifc()` (web-ifc-api.js:52713). The
+  app runs cross-origin isolated (a `SharedArrayBuffer` service worker, for
+  Conway's *own* MT wasm), so web-ifc selects its **multi-threaded** module
+  — which then can't run: the pthread bootstrap does
+  `new Worker(locateFile("web-ifc-mt.worker.js"))` (web-ifc-api.js:1084),
+  but the npm package ships **neither** `web-ifc-mt.worker.js` **nor** a
+  standalone `web-ifc-mt.js` for that worker to import. CI showed the chain
+  end-to-end: `crossOriginIsolated=true` → worker URL 404
+  (`net::ERR_FAILED`) → `both async and sync fetching of the wasm failed` →
+  `abort()`. So MT 0.0.35 is structurally unshippable as-packaged, not a
+  path bug. The single-threaded `web-ifc.wasm` ships and is self-consistent.
+
+  Decision (revised 2026-06): **pin this build to web-ifc's single-threaded
+  engine now; treat MT as a follow-up.** `webIfcSingleThreadPlugin`
+  (`tools/esbuild/plugins.js`, registered only when the shim is off) makes
+  two asserted rewrites of `web-ifc-api.js`: forces the import-time selector
+  to its ST branch, and resolves `*.wasm` from the absolute `/static/js/`
+  (web-ifc otherwise resolves it relative to the page's `scriptDirectory` —
+  the deep model route, not the server root — so it 404s regardless of
+  `SetWasmPath`). Each rewrite asserts exactly one hit, so a future web-ifc
+  bump fails the build loudly rather than silently regressing to broken MT.
+  This yields a green render of `index.ifc` under real web-ifc for
+  render/correctness comparison vs Conway; the **perf** comparison
+  understates web-ifc (ST is slower than its MT). **MT follow-up:** check
+  whether a current web-ifc ships a bundler-friendly MT build with a worker
+  (then bump + delete the plugin), or vendor a `web-ifc-mt.worker.js` (+
+  standalone mt glue) matching the pinned Emscripten build. Cross-origin
+  isolation (`serveStaticIsolated.mjs`) stays in place for when MT lands.
+
+  The verification needs a cross-origin-isolated browser, which the dev
+  sandbox can't run, so it's driven through CI: a dedicated
+  **`playwright-webifc-run`** job (`.github/workflows/test-flows.yml`) builds
+  `USE_WEBIFC_SHIM=false`, serves it isolated
+  (`tools/esbuild/serveStaticIsolated.mjs` — COOP `same-origin` + COEP
+  `require-corp`; kept off the default/prod servers because COEP breaks the
+  Drive Picker), and runs `src/tests/e2e/webIfcEngine.webifc.spec.ts` — a
+  smoke that loads `index.ifc`, asserts `crossOriginIsolated`, and forwards
+  the browser console so isolated-runtime errors are legible without a local
+  browser. The job is **advisory** (a standalone, non-required check).
+
+  Engine API divergence (found via the same CI loop): the Conway-direct
+  loader's *geometry* path (`OpenModel` / `StreamAllMeshes` /
+  `GetCoordinationMatrix`) runs on stock web-ifc, but its post-load stats
+  gather called Conway-only `getStatistics` / `getConwayVersion`, which
+  threw `TypeError: …getStatistics is not a function` and discarded an
+  otherwise-successful load. Now guarded in `ShareIfcLoader.parse` — the
+  stats are best-effort diagnostics, skipped when the engine lacks the API
+  (`CadView` already guards on `loadedModel.loadStats`). The deeper
+  divergence on the properties / NavTree path through `ifcAPI.properties.*`
+  remains for a later slice.
 
   The three `web-ifc` *constant* imports (`IfcElementsStyleManager`,
   `ViewRulesCompiler`, `bldrsElementProperties`) resolve through the shim
