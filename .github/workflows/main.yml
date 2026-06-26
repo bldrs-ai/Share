@@ -18,8 +18,12 @@ on:
 jobs:
   build:
     timeout-minutes: 10
+    # Per-ref group so a push to one branch only cancels in-progress builds
+    # for that same branch. The previous static `build-group` cancelled
+    # across every branch in the repo, so any push anywhere aborted PR
+    # builds that happened to be running.
     concurrency:
-      group: build-group
+      group: build-${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     env:
       SHARE_CONFIG: dev
