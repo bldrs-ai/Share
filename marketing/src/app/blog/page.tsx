@@ -32,10 +32,15 @@ export const metadata: Metadata = {
 
 
 function formatDate(iso: string): string {
+  // timeZone: 'UTC' keeps the rendered date deterministic. These pages are
+  // statically prerendered, so without it the output would depend on the
+  // build machine's local zone: `new Date('2024-12-05')` is UTC midnight, and
+  // a build west of UTC would render the previous day ('December 4').
   return new Date(iso).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

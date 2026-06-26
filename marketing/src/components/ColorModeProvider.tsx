@@ -6,7 +6,6 @@ import {
   Themes,
   getSystemPreference,
   readModeCookie,
-  resolveEffective,
   writeModeCookie,
 } from '@/lib/colorMode'
 
@@ -97,10 +96,3 @@ export function useEffectiveMode(): EffectiveMode {
   const ctx = useContext(ColorModeContext)
   return ctx?.effectiveMode ?? Themes.Day
 }
-
-
-/**
- * For consumers that want to resolve a mode value without going through the
- * provider (e.g. one-off computations). Prefer the hooks above in React tree.
- */
-export {resolveEffective}

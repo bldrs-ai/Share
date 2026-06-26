@@ -54,10 +54,13 @@ export async function generateMetadata({
 
 
 function formatDate(iso: string): string {
+  // timeZone: 'UTC' keeps the rendered date deterministic across build
+  // machines (date-only ISO strings parse as UTC midnight). See blog/page.tsx.
   return new Date(iso).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 

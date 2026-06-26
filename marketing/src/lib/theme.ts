@@ -88,7 +88,3 @@ export const dayTheme: Theme = createTheme({
     },
   },
 })
-
-
-// Backwards-compatible default for the few places still importing `theme`.
-export const theme = nightTheme

@@ -27,16 +27,16 @@ const ALL_MODES: readonly ThemeMode[] = [Themes.Day, Themes.Night, Themes.System
 /** Narrows an unknown string to a valid mode, or null if it isn't one. */
 export function parseMode(value: string | null | undefined): ThemeMode | null {
   if (!value) {
-return null
-}
+    return null
+  }
   return (ALL_MODES as readonly string[]).includes(value) ? (value as ThemeMode) : null
 }
 
 
 export function readModeCookie(): ThemeMode | null {
   if (typeof document === 'undefined') {
-return null
-}
+    return null
+  }
   const match = document.cookie.match(/(?:^|;\s*)preferences\.theme=([^;]+)/)
   return match ? parseMode(decodeURIComponent(match[1])) : null
 }
@@ -44,8 +44,8 @@ return null
 
 export function writeModeCookie(mode: ThemeMode) {
   if (typeof document === 'undefined') {
-return
-}
+    return
+  }
   const expires = new Date(Date.now() + THEME_COOKIE_MAX_AGE_DAYS * 86_400_000).toUTCString()
   document.cookie = `${THEME_COOKIE}=${encodeURIComponent(mode)}; expires=${expires}; path=/; samesite=lax`
 }
@@ -53,8 +53,8 @@ return
 
 export function getSystemPreference(): EffectiveMode {
   if (typeof window === 'undefined' || !window.matchMedia) {
-return Themes.Day
-}
+    return Themes.Day
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
 }
 
@@ -75,7 +75,7 @@ export function resolveEffective(mode: ThemeMode): EffectiveMode {
  * hydration. Kept compact so it stays inline in <head>.
  */
 export const INIT_SCRIPT = `(function(){try{
-var m=document.cookie.match(/(?:^|; )preferences\\.theme=([^;]+)/);
+var m=document.cookie.match(/(?:^|;\\s*)preferences\\.theme=([^;]+)/);
 var v=m?decodeURIComponent(m[1]):'System';
 if(v==='System'){v=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'Night':'Day';}
 document.documentElement.setAttribute('data-color-mode',v==='Night'?'night':'day');
