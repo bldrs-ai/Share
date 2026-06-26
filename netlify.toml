@@ -1,6 +1,25 @@
 # Skip the deploy preview when the only changes are documentation. The script
 # exits 0 to skip and 1 to build; logic and edge cases are documented inline.
+#
+# `yarn build` chains through build-share → build-marketing
+# (tools/marketing/build.js), which builds the Next.js marketing site and
+# overlays marketing/out/ onto docs/. Same script runs for `yarn serve`
+# locally, so dev and prod produce identical merged trees:
+#   /                  → SPA (docs/index.html — react-router → IFC homepage)
+#   /share/*           → SPA (public/_redirects /share/* /index.html 200)
+#   /about/, /pricing/,
+#   /services/, /blog/,
+#   /privacy/, /tos/   → marketing static HTML (file-match wins before _redirects)
+#   /sitemap.xml,
+#   /robots.txt,
+#   /feed.xml          → marketing
+# _redirects carries an explicit SPA allowlist so unknown paths 404 instead
+# of returning the SPA shell with HTTP 200 (soft-404 SEO trap). Marketing's
+# static export emits no out/index.html (root page.tsx removed), so the
+# overlay does not clobber the SPA's docs/index.html at /.
 [build]
+  command = "yarn build"
+  publish = "docs"
   ignore = "bash tools/netlify/ignore-build.sh"
 
 # Local development. `npx netlify dev` launches `yarn serve-prod` (the

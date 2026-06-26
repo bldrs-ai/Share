@@ -1,1 +1,15 @@
-/* /index.html 200
+# SPA fallback — explicit allowlist instead of a catch-all so unknown paths
+# return a real 404 rather than the SPA shell with HTTP 200. The catch-all
+# pattern (/* /index.html 200) is a soft-404 SEO trap: Google can index the
+# SPA shell under typo URLs and flag the site.
+#
+# Marketing pages emitted by `marketing/yarn build` are overlaid into docs/
+# by the Netlify build (see netlify.toml). Netlify resolves static files
+# before consulting _redirects, so /about/, /blog/, /pricing/, etc. always
+# win as 200 pre-rendered HTML — these rules only fire for SPA-handled
+# paths that don't ship a static file. Add a new entry here when adding a
+# new top-level SPA route, otherwise it will 404 in production.
+/share/*         /index.html  200
+/ipsum           /index.html  200
+/popup-auth      /index.html  200
+/popup-callback  /index.html  200
