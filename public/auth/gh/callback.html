@@ -57,7 +57,10 @@
       // for environments where the OAuth provider doesn't set strict COOP.
       try {
         if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(payload, window.location.origin)
+          var targetOrigin = window.location.origin
+          if (targetOrigin && targetOrigin !== 'null') {
+            window.opener.postMessage(payload, targetOrigin)
+          }
         }
       } catch (e) {
         // No-op.
