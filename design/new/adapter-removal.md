@@ -66,9 +66,9 @@ resolves to the real package — that is the **engine-comparison build**
 
 ### 1.2 What the adapter is
 
-`@bldrs-ai/conway-web-ifc-adapter` (~92 K LOC of TS, dominated by two
-42 K-line generated IFC schema type tables) is a **web-ifc API shim over
-Conway**:
+`@bldrs-ai/conway-web-ifc-adapter` is a **web-ifc API shim over Conway**.
+Its ~92 K-LOC headline is misleading — audited, most of it is dead or
+derivable (see §1.5). The load-bearing parts:
 
 | Adapter file | Role |
 |---|---|
@@ -76,7 +76,9 @@ Conway**:
 | `ifc_api_model_passthrough_factory.ts` | Format detection → routes **IFC vs AP214 (STEP)** to the right proxy |
 | `ifc_api_proxy_ifc.ts` / `ifc_api_proxy_ap214.ts` | Per-format model wrappers driving Conway extraction |
 | `ifc_properties.ts` / `properties.ts` / `ap214_properties.ts` | Property + spatial-structure + property-set extraction (Conway's own `IfcPropertyExtraction` only *logs* — the structured surface lives here) |
-| `IFC4x2.ts` / `ifc2x4_helper.ts` / `types-map.ts` / `shim_schema_mapping.ts` | web-ifc type-code ↔ Conway `EntityTypesIfc` mapping tables |
+| `ifc2x4_helper.ts` (42 K) | ~900 web-ifc entity classes + `FromTape` + `FromRawLineData`; produces web-ifc's `GetLine` shape for the properties path (see §1.5 bucket 3) |
+| `ifc2x4.ts` / `types-map.ts` / `shim_schema_mapping.ts` | Deterministic web-ifc-code ↔ name ↔ Conway `EntityTypesIfc` mapping; should be code-gen'd, not copied (§1.5 bucket 2) |
+| `IFC4x2.ts` (42 K) | **Dead** — byte-identical copy of `ifc2x4_helper.ts`, imported nowhere |
 
 Crucially it **already plumbs STEP through the web-ifc surface**:
 `IfcApiModelPassthroughFactory.from()` detects AP214 and builds an
@@ -139,6 +141,40 @@ they must resolve *somewhere* until then (see §4.3).
 The surface is small and already centralized — the migration is a
 **re-pointing of one import + retirement of a package**, not a viewer
 rewrite.
+
+### 1.5 The ~92 K LOC is mostly dead or derivable
+
+The headline size is dominated by schema tables, not logic. Audited into
+three buckets (drives the Conway-side scope —
+[`conway/web-ifc-compat-surface.md`](https://github.com/bldrs-ai/conway/blob/main/design/new/web-ifc-compat-surface.md)):
+
+1. **Dead duplicate (~42 K).** `IFC4x2.ts` is a *byte-identical* copy of
+   `ifc2x4_helper.ts`, imported nowhere. Delete outright.
+2. **Deterministic mapping (~2 K across 3 files).** `ifc2x4.ts`
+   (`NAME → webIfcCode`), `types-map.ts` (`webIfcCode → NAME`), and
+   `shimIfcEntityMap` (`webIfcCode → EntityTypesIfc`) are three views of
+   one name-keyed bijection — and `shim_schema_mapping.ts` already carries
+   `// TODO(nickcastel50): Remove this and add to Code-Gen`. Both sides key
+   on the same uppercase name, so the bridge is
+   `webIfcCode → name → EntityTypesIfc[name]`. Conway already code-gens
+   `entity_types_ifc.gen.ts` (with its *own* sequential indices, not the
+   web-ifc FNV codes); the mapping should be generated alongside it, not
+   copied. The `IFC*` constants the three stray Share imports need (§4.3)
+   come from this generated table.
+3. **Live entity parsing (~42 K).** `ifc2x4_helper.ts` is ~900 web-ifc
+   entity classes + `FromTape` that produce web-ifc's `GetLine` *shape*,
+   backing the properties path (`getItemProperties` → `getLine` →
+   `FromRawLineData`). Conway already parses these entities natively
+   (`src/ifc/ifc4_gen/Ifc*.gen.ts`) — so the parsing is duplicated, but the
+   shapes differ. Shrinking it means reshaping the properties path onto
+   Conway-native entities, which is the same work as giving Conway a
+   structured property surface (it only logs today). The compat doc treats
+   this as a decision point: vendor as-is for the first cut vs reshape now.
+
+Net: "vendor the adapter verbatim" overstates it ~4×. Roughly 0.8 K of
+real `IfcAPI`/proxy logic + the property extractors move; ~42 K is
+deleted; ~2 K of maps become generated; and the ~42 K entity layer is a
+deliberate keep-or-reshape call, not a copy.
 
 ---
 
@@ -214,8 +250,14 @@ end-state; usable as an **interim** if Option A slips (see §6).
 
 ### 4.1 Conway repo — publish the compat surface
 
-1. Vendor `conway-web-ifc-adapter/src/*` into `conway/src/compat/web-ifc/`.
-   Rewrite `@bldrs-ai/conway/src/X` imports → relative `../../X`.
+1. Vendor the **load-bearing** adapter code (`ifc_api.ts`, the
+   proxy/passthrough family, the property extractors) into
+   `conway/src/compat/web-ifc/`, rewriting `@bldrs-ai/conway/src/X` imports
+   → relative `../../X`. Drop `IFC4x2.ts` (dead); code-gen the type-map
+   (§1.5 bucket 2) instead of copying `ifc2x4.ts`/`types-map.ts`/
+   `shim_schema_mapping.ts`; handle `ifc2x4_helper.ts` per the properties
+   decision (§1.5 bucket 3). Detail in the compat doc's "Scope" +
+   "Properties layer" sections.
 2. Add a public entry `conway/src/compat/web-ifc/index.ts` re-exporting
    `IfcAPI` + the `ifc2x4` type surface + `Loadersettings` etc. that
    Share consumes (§1.4).
@@ -336,7 +378,7 @@ lands.
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Conway version jump (`0.23` → `1.22`) changes `IfcAPI`/extraction behavior vs the frozen adapter | Medium | Geometry/property/NavTree drift | Parity check (Schependomlaan + STEP) under the shim flag before merge; the adapter's own proxies are the reference impl to port |
-| web-ifc type-code ↔ Conway `EntityTypesIfc` maps go stale when vendored | Low | Wrong type names / picking | Bring `types-map.ts` + `shim_schema_mapping.ts` verbatim; add the Conway smoke test (§4.1.5) |
+| web-ifc-code ↔ Conway `EntityTypesIfc` map drifts | Low | Wrong type names / picking | Code-gen it from `entity_types_ifc.gen` instead of hand-copying (§1.5 bucket 2); add the Conway IFC+STEP smoke test (§4.1.5) |
 | wasm-copy scripts still reach the adapter path | Medium | Build ships no/old wasm | Audit every `build-share-copy-wasm-*` (§4.2.3) |
 | Stray `IFC*` constant imports lose their resolver | Low | Build break in 3 files | Re-export constants from compat `index.ts` (§4.3) |
 | Conway repo bloat (42 K-line gen tables ×2) slows CI | Low | Slower Conway builds | Tables are generated; compat tree is `tsc`-only, no codegen on PR |
