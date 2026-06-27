@@ -4,7 +4,7 @@
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
-import {ACESFilmicToneMapping, BufferAttribute, BufferGeometry, Mesh} from 'three'
+import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import Clipper from './three/Clipper'
@@ -38,6 +38,22 @@ function nextPow2(n) {
   return p
 }
 import {areDefinedAndNotNull} from '../utils/assert'
+
+
+// Slice 5e (design/new/viewer-replacement.md): enable three's r152+
+// automatic sRGB↔linear color management (the r184 default). Bldrs ran
+// with it OFF through the r135→r184 bump as a pixel-for-pixel compat hold;
+// 5e turns it back on as the first, smallest step toward the modern color
+// pipeline. Set at module load, before any three object is constructed, so
+// the renderer/scene/materials all see managed mode. On today's flat IFC
+// lighting this is a slight, accepted shift; managed color mainly pays off
+// later with an env map + PBR materials + tone mapping (§6e).
+//
+// Deliberately the ONLY color change in this slice: everything else stays
+// at the production values — `outputColorSpace` keeps `LinearSRGBColorSpace`
+// (see the constructor) and the scene lights keep their `×π` intensities —
+// so the visible delta is just managed color.
+ColorManagement.enabled = true
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -137,21 +153,18 @@ export class ShareViewer {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
-    // Slice 5e (design/new/viewer-replacement.md): move to three r184's
-    // managed-color pipeline. The r135-compat hold is dropped — we no
-    // longer set `ColorManagement.enabled = false` (left at the r184
-    // default: enabled, auto sRGB↔linear) nor force
-    // `outputColorSpace = LinearSRGBColorSpace` (left at the default
-    // `SRGBColorSpace`, so the framebuffer is gamma-encoded). We add ACES
-    // filmic tone mapping for the standard post-r152 look. Postprocessing's
-    // `EffectComposer.initialize` keys off `outputColorSpace`, so the
-    // renderer state is set before `new CustomPostProcessor()` below.
-    // Light intensities are re-tuned for this pipeline in
-    // `three/context/scene.js`; `toneMappingExposure` is left at its
-    // default (1) — calibrate against the deploy preview if needed.
-    // Guarded for tests where the mock's getRenderer() returns undefined.
+    // Kept at the production value `LinearSRGBColorSpace` (three r135's
+    // no-output-gamma-encode behavior) even though color management is now
+    // ON (module top). The fully-correct managed combo is SRGB output +
+    // tone mapping + re-tuned lights, but on flat IFC lighting that needs
+    // real range (env map / PBR) to look right, so it's deferred to a
+    // follow-up (§6e). Holding output here keeps the render ≈ production —
+    // 5e's only visible change is the slight managed-color shift.
+    // Postprocessing's `EffectComposer.initialize` keys off this property,
+    // so it's set before `new CustomPostProcessor()` below. Guard for tests
+    // where the mock's getRenderer() returns undefined.
     if (renderer) {
-      renderer.toneMapping = ACESFilmicToneMapping
+      renderer.outputColorSpace = LinearSRGBColorSpace
     }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()

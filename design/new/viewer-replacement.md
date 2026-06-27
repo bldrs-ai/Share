@@ -1060,19 +1060,19 @@ is no longer "bump `three`" — it's removing the compat layers that existed
 to run the old fork against modern `three`, now that the fork is gone:
 
   1. **Color / lighting forward step (§6b steps 2, 3, 5 + re-tune the
-     inlined lights) — first pass landed, pending visual sign-off.**
-     Dropped the r135-compat hold: removed `ColorManagement.enabled =
-     false` (now left at the r184 default — enabled) and the
-     `outputColorSpace = LinearSRGBColorSpace` override (now left at the
-     default `SRGBColorSpace`); added `renderer.toneMapping =
-     ACESFilmicToneMapping` (exposure left at the default 1); and de-scaled
-     the `×π` light intensities in the vendored
-     `src/viewer/three/context/scene.js` to equivalent magnitudes
-     (`2.5 / 2.5 / 0.8`) as a first pass — so the before/after isolates the
-     pipeline change ahead of any artistic light re-tune. This is the one
-     genuinely *visual* change and **may not fully reproduce the legacy
-     look** (accepted risk) — review the deploy-preview before/after and
-     re-tune lights / `toneMappingExposure` against it before merge.
+     inlined lights) — partially landed; managed color only.** 5e enables
+     just the first sub-step: `ColorManagement.enabled = true` (the r184
+     default; the r135-compat `= false` is removed). `outputColorSpace`
+     stays at the production `LinearSRGBColorSpace`, no tone mapper is set,
+     and the scene lights keep their production `×π` values — so the only
+     visible change is a slight, accepted managed-color shift. The rest of
+     the forward step — SRGB output + a tone mapper + a light re-tune — was
+     explored and **deferred**: on today's flat IFC lighting a filmic
+     mapper (ACES/AgX) just dims/flattens because there's no HDR range to
+     map, so it only pays off alongside an environment map + PBR materials.
+     Folded into the §6e step-4/5 follow-up. For a CAD viewer,
+     `NeutralToneMapping` (color-accurate, minimal hue shift) is the likely
+     mapper choice there rather than ACES.
   2. **Drop the `BLDRS_face_ids` per-vertex fallback's wit-three-specific
      checks** — wit-three's parse-state assumptions no longer apply.
   3. **Re-evaluate the `?feature=perf` baseline** now the fork (and its
