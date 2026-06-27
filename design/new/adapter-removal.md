@@ -302,24 +302,27 @@ end-state; usable as an **interim** if Option A slips (see §6).
 `IfcElementsStyleManager.js`, `ViewRulesCompiler.js`,
 `bldrsElementProperties.js` import IFC type *constants* from `web-ifc`.
 Two of the three files are already on the `IfcViewsManager`-deletion
-chopping block (`viewer-replacement.md` §8.1). For the duration:
+chopping block (`viewer-replacement.md` §8.1).
 
-- The compat `index.ts` must re-export those constants (they come from
-  the adapter's `ifc2x4` surface today), **or**
-- These three keep resolving against the real `web-ifc` dep (which Share
-  still lists directly at `0.0.35` for the engine-comparison build).
-
-Cleanest: have the Conway compat surface re-export the same `IFC*`
-constants so *all* `web-ifc` imports in Share resolve to one place under
-the shim; let §8.1 delete the consumers later. **Open item** — confirm
-the constant values match between web-ifc `0.0.35` and the adapter's
-`ifc2x4` table (they should; both target the same IFC schema).
+**Resolved (Q2):** **Conway owns the constants.** The compat surface
+generates and re-exports the `IFC*` constants from Conway's own schema, so
+*all* `web-ifc` imports in Share resolve to one place under the shim (and
+the comparison build still gets them from real `web-ifc`). Drift is
+guarded by a **Conway-internal parity check, opaque to consumers**: a
+Conway dev-only test (with `web-ifc` as a Conway `devDependency`) asserts
+the generated `name → code` table is byte-identical to web-ifc's
+`IfcTypesMap`. Consumers never see web-ifc; Conway guarantees the values
+equal it. Let §8.1 delete the three consumers later — they keep working
+through the generated constants until then. Detail lives in the Conway
+compat doc (§ "Scope" step 2).
 
 ### 4.4 Adapter repo — retire
 
-Archive `bldrs-ai/conway-web-ifc-adapter`; add a README banner pointing
-at the Conway `./web-ifc` export. Keep the repo readable (don't delete)
-for history and for any external consumer mid-migration.
+**Resolved (Q4): archive outright.** No known external consumers (no
+stars / forks / dependents on GitHub), so no migration window is owed.
+Archive `bldrs-ai/conway-web-ifc-adapter` (read-only, not deleted — keep
+the history) and add a README banner pointing at the Conway `./web-ifc`
+export. No final compat-pointer npm release needed.
 
 ---
 
@@ -401,19 +404,33 @@ lands.
 
 ---
 
-## 9. Open questions
+## 9. Resolved decisions
 
-1. **Subpath vs dedicated package.** `@bldrs-ai/conway/web-ifc` subpath
-   export (recommended, one version) vs a second published package from
-   the Conway monorepo. Subpath is simpler and matches "Conway exposes
-   the surface."
-2. **Constant re-export vs real web-ifc for the 3 stray imports** (§4.3)
-   — pick one before the Share PR; depends on whether §8.1 lands first.
-3. **AP203 through the compat surface.** The adapter routes IFC + AP214;
-   `step-support.md` Phase 4 is still deciding AP203 (fall-through vs own
-   gen tree). The compat factory should fail loudly, not silently
-   mis-route, on AP203 until that lands.
-4. **External adapter consumers.** Does anything outside Share depend on
-   `@bldrs-ai/conway-web-ifc-adapter` on npm? If yes, the archive banner
-   + a final compat-pointer release; if no, archive outright.
+1. **Subpath export.** `@bldrs-ai/conway/web-ifc` subpath, not a second
+   published package — one version, matches "Conway exposes the surface."
+2. **Conway owns the constants, with an internal parity check.** The
+   compat surface generates the `IFC*` constants from Conway's own schema
+   and re-exports them; consumers never touch web-ifc. A Conway-internal,
+   consumer-opaque test (web-ifc as a Conway `devDependency`) asserts the
+   generated `name → code` table equals web-ifc's `IfcTypesMap`, so the
+   values can't drift. See §4.3 + the Conway compat doc.
+3. **AP203: route to the AP214 proxy — do NOT fail loudly.** Earlier
+   draft said hard-fail on AP203 until a real AP203 path lands; that was
+   wrong. AP203 routed through the AP214 engine **succeeds often** — it's
+   why Conway's native `conway_model_loader` has `case AP203:` fall through
+   to the AP214 loader (logging "AP203 Step Detected, using AP214 loader").
+   Code check, though: the *adapter's* `IfcApiModelPassthroughFactory` only
+   has `AP214` / `IFC` / `default:error` cases — **no `AP203` case** — so
+   AP203 actually *errors* through the adapter today, even though it works
+   in the native loader (`ModelFormatType.AP203 = 2` is a distinct value;
+   the detector returns it for CONFIG_CONTROL_DESIGN). So the compat
+   factory should **add** the AP203→AP214 route to match
+   `conway_model_loader` — a small *improvement* (AP203 works through the
+   compat surface) rather than preserving the adapter's accidental
+   strictness. Correctness hardening (fall-through vs own AP203 gen tree)
+   stays with `step-support.md` Phase 4. The `default` branch still errors
+   on a format with no proxy at all — unchanged.
+4. **Archive the adapter outright.** No known external consumers (no
+   stars / forks / dependents), so no migration window. Read-only archive
+   + README banner; no final compat-pointer npm release. See §4.4.
 </content>
