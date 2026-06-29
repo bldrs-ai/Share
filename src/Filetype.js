@@ -161,7 +161,14 @@ export function analyzeHeaderStr(header) {
   } else if (header.match(/(^\s*#.*$)?(^\s*$)*^\s*v(\s+-?\d+(\.\d+)?){3}\s*$/m)) {
     return 'obj'
   } else if (header.includes('ISO-10303-21')) {
-    return 'ifc'
+    // IFC and STEP share the ISO-10303-21 (STEP physical file) envelope and,
+    // in this app, the same Conway loader. They differ only in their
+    // FILE_SCHEMA: IFC declares an IFC schema (IFC2X3 / IFC4 / IFC4X3 / ...),
+    // generic STEP declares an application protocol (AUTOMOTIVE_DESIGN,
+    // CONFIG_CONTROL_DESIGN, AP203/AP214/AP242, ...). Disambiguate so the
+    // upload/temp URL extension reflects the real format instead of always
+    // labeling part-21 files ".ifc".
+    return classifyStepFamily(header)
   } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) { // matches IFC & STEP, so put after
     return 'pdb'
   } else if (header.startsWith('solid') || header.includes('VCG')) {
@@ -173,6 +180,31 @@ export function analyzeHeaderStr(header) {
   } else {
     return null
   }
+}
+
+
+/**
+ * Classify an ISO-10303-21 (STEP physical file) header as IFC or generic
+ * STEP. We anchor on the FILE_SCHEMA entry's value rather than searching the
+ * whole header for "IFC", so an "IFC" substring elsewhere (e.g. a project
+ * name in FILE_NAME) doesn't cause a false IFC classification.
+ *
+ * IFC schema names always begin with "IFC" (IFC2X3, IFC4, IFC4X3, ...); any
+ * other schema is treated as generic STEP. If FILE_SCHEMA isn't present in
+ * the sniffed header window (e.g. an unusually long FILE_DESCRIPTION pushed
+ * it past the 1024-byte limit), default to 'ifc' — that preserves the prior
+ * behavior for the dominant format, and both types load through the same
+ * loader regardless.
+ *
+ * @param {string} header
+ * @return {string} 'ifc' or 'step'
+ */
+export function classifyStepFamily(header) {
+  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
+  if (schemaMatch === null) {
+    return 'ifc'
+  }
+  return /^IFC/i.test(schemaMatch[1]) ? 'ifc' : 'step'
 }
 
 
