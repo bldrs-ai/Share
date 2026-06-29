@@ -18,8 +18,11 @@ on:
 jobs:
   playwright-run:
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
-    # Make sure this matches the version in package.json to get the cache right and APIs matched
-    container: mcr.microsoft.com/playwright:v1.54.2-jammy
+    # Image must match @playwright/test in package.json (Playwright caches
+    # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
+    # is chosen so screenshot baselines regenerated in the dev/sandbox env
+    # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +85,7 @@ jobs:
   # browser (see design/new/viewer-replacement.md §5f).
   playwright-webifc-run:
     runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
-    container: mcr.microsoft.com/playwright:v1.54.2-jammy
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
