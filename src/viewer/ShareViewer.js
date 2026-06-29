@@ -4,7 +4,16 @@
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
-import {BufferAttribute, BufferGeometry, ColorManagement, Mesh, PMREMGenerator} from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  CanvasTexture,
+  ColorManagement,
+  EquirectangularReflectionMapping,
+  Mesh,
+  PMREMGenerator,
+  SRGBColorSpace,
+} from 'three'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
@@ -41,6 +50,51 @@ const ENV_MAP_BLUR = 0.04
 // dial it well under 1. This is the dominant overall-brightness lever —
 // live-tunable via the `?feature=look` GUI.
 const ENV_MAP_INTENSITY = 0.4
+
+
+// Default IBL environment (§6e). 'gradient' is the procedural studio gradient
+// (see makeGradientEquirectTexture); 'room' is three's RoomEnvironment; 'none'
+// disables IBL. Swappable live via the `?feature=look` GUI.
+const DEFAULT_ENV_TYPE = 'gradient'
+
+
+// Procedural studio-gradient env texture params (§6e). A vertical sky→ground
+// gradient on a tiny canvas, prefiltered by PMREM into the IBL map.
+const GRADIENT_TEX_WIDTH = 16
+const GRADIENT_TEX_HEIGHT = 256
+const GRADIENT_HORIZON_STOP = 0.5
+const GRADIENT_SKY_COLOR = '#e9eef3'
+const GRADIENT_HORIZON_COLOR = '#c2c6ca'
+const GRADIENT_GROUND_COLOR = '#33373b'
+
+
+/**
+ * Build a vertical-gradient equirectangular texture for the procedural
+ * "studio" IBL (§6e) — a light cool sky fading to a darker ground. Zero-asset
+ * (a 2D canvas, no HDR/network), so it ships without a dependency. PMREM
+ * prefilters it into the env map; the vertical falloff gives soft top-down
+ * lighting + natural grounding (down-facing surfaces get less light) that the
+ * flatter RoomEnvironment lacks.
+ *
+ * @return {CanvasTexture}
+ */
+function makeGradientEquirectTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = GRADIENT_TEX_WIDTH
+  canvas.height = GRADIENT_TEX_HEIGHT
+  const ctx = canvas.getContext('2d')
+  const gradient = ctx.createLinearGradient(0, 0, 0, GRADIENT_TEX_HEIGHT)
+  gradient.addColorStop(0, GRADIENT_SKY_COLOR)
+  gradient.addColorStop(GRADIENT_HORIZON_STOP, GRADIENT_HORIZON_COLOR)
+  gradient.addColorStop(1, GRADIENT_GROUND_COLOR)
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, GRADIENT_TEX_WIDTH, GRADIENT_TEX_HEIGHT)
+  const texture = new CanvasTexture(canvas)
+  texture.mapping = EquirectangularReflectionMapping
+  texture.colorSpace = SRGBColorSpace
+  texture.needsUpdate = true
+  return texture
+}
 
 
 /**
@@ -128,6 +182,11 @@ export class ShareViewer {
   // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
   // unless the flag is set; lazily code-split in (see `_initLookGui`).
   _lookGui = null
+  // Current IBL environment selection + PMREM blur, tracked so the
+  // `?feature=look` GUI can rebuild the env on a type swap or blur change
+  // without losing the other setting.
+  _envType = DEFAULT_ENV_TYPE
+  _envBlur = ENV_MAP_BLUR
   /**
    * @param {object} options - Configuration options
    */
@@ -185,7 +244,7 @@ export class ShareViewer {
     // diffuse + specular grounding, scaled by `environmentIntensity` to
     // avoid washout; scene.js's direct lights are dialed down to compensate.
     // Env build no-ops in tests where getRenderer() returns undefined.
-    this._buildEnvironment(ENV_MAP_BLUR)
+    this._buildEnvironment(this._envBlur, this._envType)
     if (renderer) {
       scene.environmentIntensity = ENV_MAP_INTENSITY
     }
@@ -214,29 +273,42 @@ export class ShareViewer {
 
 
   /**
-   * Build (or rebuild) the procedural image-based-lighting environment.
-   * RoomEnvironment is a zero-asset studio scene; PMREM pre-filters it into
-   * the cube-UV env map three samples for PBR diffuse + specular. `sigma`
-   * is the pre-blur in radians — higher = softer, flatter lighting.
+   * Build (or rebuild) the image-based-lighting environment. PMREM
+   * pre-filters the chosen source into the cube-UV env map three samples for
+   * PBR diffuse + specular:
+   *   - 'gradient' (default): the zero-asset procedural studio gradient.
+   *   - 'room': three's RoomEnvironment (PMREM `sigma` pre-blur applies here).
+   *   - 'none': no IBL.
    *
    * Disposes the previous env texture first so repeated calls (the
-   * `?feature=look` blur slider) don't leak GPU memory. Deliberately does
-   * NOT touch `scene.environmentIntensity` — set once at construction and
-   * owned by the GUI thereafter, so changing blur preserves intensity.
-   * No-op without a renderer (the Jest context mock returns undefined).
+   * `?feature=look` type/blur controls) don't leak GPU memory. Deliberately
+   * does NOT touch `scene.environmentIntensity` — set once at construction and
+   * owned by the GUI thereafter, so rebuilds preserve intensity. No-op
+   * without a renderer (the Jest context mock returns undefined).
    *
-   * @param {number} sigma PMREM pre-blur in radians
+   * @param {number} sigma PMREM pre-blur in radians (RoomEnvironment only)
+   * @param {string} type 'gradient' | 'room' | 'none'
    */
-  _buildEnvironment(sigma) {
+  _buildEnvironment(sigma, type) {
     const renderer = this.context.getRenderer()
     if (!renderer) {
       return
     }
     const scene = this.context.getScene()
     const previous = scene.environment
-    const pmrem = new PMREMGenerator(renderer)
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), sigma).texture
-    pmrem.dispose()
+    if (type === 'none') {
+      scene.environment = null
+    } else {
+      const pmrem = new PMREMGenerator(renderer)
+      if (type === 'room') {
+        scene.environment = pmrem.fromScene(new RoomEnvironment(), sigma).texture
+      } else {
+        const gradientTex = makeGradientEquirectTexture()
+        scene.environment = pmrem.fromEquirectangular(gradientTex).texture
+        gradientTex.dispose()
+      }
+      pmrem.dispose()
+    }
     if (previous) {
       previous.dispose()
     }
@@ -244,13 +316,27 @@ export class ShareViewer {
 
 
   /**
-   * Rebuild the env map at a new PMREM blur. Public entry point for the
-   * `?feature=look` GUI's blur slider; preserves `environmentIntensity`.
+   * Rebuild the env map at a new PMREM blur (RoomEnvironment only). Public
+   * entry for the `?feature=look` GUI's blur slider; preserves type +
+   * `environmentIntensity`.
    *
    * @param {number} sigma PMREM pre-blur in radians
    */
   setEnvironmentBlur(sigma) {
-    this._buildEnvironment(sigma)
+    this._envBlur = sigma
+    this._buildEnvironment(sigma, this._envType)
+  }
+
+
+  /**
+   * Swap the IBL environment source. Public entry for the `?feature=look`
+   * GUI's env-type selector; preserves blur + `environmentIntensity`.
+   *
+   * @param {string} type 'gradient' | 'room' | 'none'
+   */
+  setEnvironmentType(type) {
+    this._envType = type
+    this._buildEnvironment(this._envBlur, type)
   }
 
 

@@ -37,6 +37,15 @@ const MATERIAL_STEP = 0.01
 const FALLBACK_KEY_LIGHT = 1.5
 const FALLBACK_FILL_LIGHT = 1.0
 const FALLBACK_AMBIENT = 0.1
+const AO_STRENGTH_STEP = 0.05
+
+
+// IBL environment sources offered in the dropdown (label → ShareViewer type).
+const ENV_TYPES = {
+  'Gradient studio': 'gradient',
+  'Room': 'room',
+  'None': 'none',
+}
 
 
 // Named look presets. Each is a full set of tunable values; selecting one
@@ -65,8 +74,9 @@ const PRESETS = {
 
 /**
  * LightingGui — a lil-gui overlay for live-tuning the §6e filmic look
- * (tone-mapping operator, env-map intensity/blur, the three scene lights,
- * model material roughness/metalness, background). It exists because the
+ * (tone-mapping operator, IBL environment source/intensity/blur, ambient
+ * occlusion, the three scene lights, model material roughness/metalness,
+ * background). It exists because the
  * look has to be judged visually in a real browser on a GPU — the deploy
  * preview is blocked from the dev sandbox and CI runs software GL — so
  * iterating by pushing constants is slow. With this panel a reviewer dials
@@ -101,6 +111,9 @@ export default class LightingGui {
       roughness: 0.8,
       metalness: 0,
       background: `#${scene?.background?.getHexString?.() ?? 'a9a9a9'}`,
+      envType: viewer._envType ?? 'gradient',
+      aoEnabled: postProcessor?.getAOEnabled?.() ?? true,
+      aoStrength: postProcessor?.getAOStrength?.() ?? 1,
     }
     const params = this._params
 
@@ -112,14 +125,22 @@ export default class LightingGui {
       .onChange((v) => postProcessor?.setToneMappingMode(Number(v)))
 
     const env = gui.addFolder('Environment (IBL)')
+    env.add(params, 'envType', ENV_TYPES).name('source')
+      .onChange((v) => viewer.setEnvironmentType(v))
     env.add(params, 'envIntensity', 0, ENV_INTENSITY_MAX, ENV_INTENSITY_STEP).name('intensity')
       .onChange((v) => {
         if (scene) {
           scene.environmentIntensity = v
         }
       })
-    env.add(params, 'envBlur', 0, ENV_BLUR_MAX, ENV_BLUR_STEP).name('blur (sigma)')
+    env.add(params, 'envBlur', 0, ENV_BLUR_MAX, ENV_BLUR_STEP).name('blur (sigma, Room)')
       .onChange((v) => viewer.setEnvironmentBlur(v))
+
+    const ao = gui.addFolder('Ambient occlusion')
+    ao.add(params, 'aoEnabled').name('enabled')
+      .onChange((v) => postProcessor?.setAOEnabled(v))
+    ao.add(params, 'aoStrength', 0, MATERIAL_MAX, AO_STRENGTH_STEP).name('strength')
+      .onChange((v) => postProcessor?.setAOStrength(v))
 
     const lights = gui.addFolder('Lights')
     lights.add(params, 'keyLight', 0, LIGHT_MAX, LIGHT_STEP).name('key')
@@ -230,8 +251,11 @@ export default class LightingGui {
       .find((k) => TONE_MODES[k] === Number(p.toneMapping)) ?? String(p.toneMapping)
     const snapshot = {
       toneMapping: toneLabel,
+      envType: p.envType,
       envIntensity: p.envIntensity,
       envBlur: p.envBlur,
+      aoEnabled: p.aoEnabled,
+      aoStrength: p.aoStrength,
       keyLight: p.keyLight,
       fillLight: p.fillLight,
       ambient: p.ambient,
