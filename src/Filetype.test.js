@@ -89,6 +89,44 @@ describe('Filetype', () => {
       expect(analyzeHeaderStr(`ORIGX1      1.000000  0.000000  0.000000        0.00000`)).toBe('pdb')
     })
 
+    it('matches ifc header', () => {
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_DESCRIPTION((''),'2;1');\n` +
+            `FILE_NAME('model.ifc','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('IFC4'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('ifc')
+    })
+
+    it('matches step header as step, not ifc', () => {
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_DESCRIPTION((''),'2;1');\n` +
+            `FILE_NAME('part.step','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('step')
+    })
+
+    it('does not misclassify step as ifc when the name contains "IFC"', () => {
+      // "IFC" appears in the FILE_NAME but the schema is a STEP AP, so the
+      // FILE_SCHEMA-anchored check must still resolve to step.
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_NAME('myIFCexport.stp','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('step')
+    })
+
+    it('defaults part-21 to ifc when FILE_SCHEMA is absent from the window', () => {
+      // FILE_SCHEMA truncated out of the sniffed header — fall back to the
+      // dominant format rather than mislabeling as step.
+      const header = `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\n`
+      expect(analyzeHeaderStr(header)).toBe('ifc')
+    })
+
     it('matches stl header', () => {
       expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
     })
