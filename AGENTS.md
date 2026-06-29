@@ -40,6 +40,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Sharing PR3 (GitHub adapter) carry-over notes | [design/new/sharing-pr3-github.md](design/new/sharing-pr3-github.md) |
 | Marketing / blog site (Next.js SSG, sibling build to the viewer SPA), MDX content collections, SEO pipeline | [marketing/README.md](marketing/README.md) |
 | AdSense / ads strategy, route policy, test-hermeticity rules | [design/new/ads.md](design/new/ads.md) |
+| Usage quotas: tiers, 30-day rolling window, `record-load` server gate, GitHub privacy detection, OPFS local fallback, `quotas` feature flag | [design/new/quotas.md](design/new/quotas.md) |
 | Conway-direct IFC pipeline, IfcInstanceMap, per-instance picking, `?feature=conwayDirectIfc` | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §3b |
 | Removing the `conway-web-ifc-adapter` shim, the `web-ifc` engine seam (`webIfcShimAlias`/`USE_WEBIFC_SHIM`), Conway version-lag, runtime engine swap | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
 | Epic/Story/Track catalogue, Pro-MVP phase plan, post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
