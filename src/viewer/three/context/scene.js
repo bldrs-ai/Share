@@ -11,10 +11,13 @@ import {IfcComponent} from './base-types'
 
 // Direct-light intensities (§6e). Low because the env map carries the
 // ambient/fill now; these are a key + fill directional pair plus a small
-// ambient lift. Named for the deferred §6e settings panel.
+// ambient lift. The env IBL (RoomEnvironment, scaled by
+// `scene.environmentIntensity` in ShareViewer) is the dominant light, so
+// ambient is kept minimal — it only lifts the deepest shadows. Live-tunable
+// via the `?feature=look` GUI (LightingGui); these are its starting values.
 const KEY_LIGHT_INTENSITY = 1.5
 const FILL_LIGHT_INTENSITY = 1.0
-const AMBIENT_LIGHT_INTENSITY = 0.2
+const AMBIENT_LIGHT_INTENSITY = 0.1
 
 
 export class IfcScene extends IfcComponent {
@@ -58,13 +61,18 @@ export class IfcScene extends IfcComponent {
     this.scene.background = (options === null || options === void 0 ? void 0 : options.backgroundColor) || this.defaultBackgroundColor
   }
   setupLights() {
+    // Named so the `?feature=look` GUI (LightingGui) can look them up via
+    // `scene.getObjectByName(...)` to live-tune intensities.
     const light1 = new DirectionalLight(0xffeeff, KEY_LIGHT_INTENSITY)
+    light1.name = 'keyLight'
     light1.position.set(1, 1, 1)
     this.scene.add(light1)
     const light2 = new DirectionalLight(0xffffff, FILL_LIGHT_INTENSITY)
+    light2.name = 'fillLight'
     light2.position.set(-1, 0.5, -1)
     this.scene.add(light2)
     const ambientLight = new AmbientLight(0xffffee, AMBIENT_LIGHT_INTENSITY)
+    ambientLight.name = 'ambientLight'
     this.scene.add(ambientLight)
   }
 }

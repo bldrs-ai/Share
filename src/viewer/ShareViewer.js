@@ -19,6 +19,7 @@ import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
+import {isFeatureEnabled} from '../FeatureFlags'
 
 
 // Minimum index-buffer capacity for the preselection pool. 256 u32
@@ -29,8 +30,17 @@ const MIN_PRESELECTION_INDEX_CAP = 256
 
 // PMREM blur (radians) for the procedural env map (§6e). A touch of blur
 // softens the RoomEnvironment studio into smooth image-based lighting.
-// Tunable via the deferred §6e settings panel.
+// Live-tunable via the `?feature=look` GUI (LightingGui).
 const ENV_MAP_BLUR = 0.04
+
+
+// §6e env-map intensity — scales the RoomEnvironment IBL contribution
+// (`scene.environmentIntensity`). The default RoomEnvironment is bright; at
+// full strength (1) it floods the matte PBR surfaces and washes the model
+// out against the grey background (the "totally washed out" report), so we
+// dial it well under 1. This is the dominant overall-brightness lever —
+// live-tunable via the `?feature=look` GUI.
+const ENV_MAP_INTENSITY = 0.4
 
 
 /**
@@ -115,6 +125,9 @@ export class ShareViewer {
   // keeps one Mesh/BufferGeometry/Uint32Array alive across calls and
   // updates the index buffer in place rather than allocating per hover.
   _conwayPreselectionPool = null
+  // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
+  // unless the flag is set; lazily code-split in (see `_initLookGui`).
+  _lookGui = null
   /**
    * @param {object} options - Configuration options
    */
@@ -169,13 +182,12 @@ export class ShareViewer {
     // render path always goes through it and `renderer.toneMapping` would
     // be bypassed. A neutral procedural env map (RoomEnvironment, zero-
     // asset) drives image-based lighting so the PBR materials get soft
-    // diffuse + specular grounding; scene.js's direct lights are dialed
-    // down to compensate. Guarded for tests where getRenderer() is
-    // undefined (the mock).
+    // diffuse + specular grounding, scaled by `environmentIntensity` to
+    // avoid washout; scene.js's direct lights are dialed down to compensate.
+    // Env build no-ops in tests where getRenderer() returns undefined.
+    this._buildEnvironment(ENV_MAP_BLUR)
     if (renderer) {
-      const pmrem = new PMREMGenerator(renderer)
-      scene.environment = pmrem.fromScene(new RoomEnvironment(), ENV_MAP_BLUR).texture
-      pmrem.dispose()
+      scene.environmentIntensity = ENV_MAP_INTENSITY
     }
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
@@ -193,6 +205,69 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
+    // §6e: opt-in live tuning panel for the filmic look. Off by default;
+    // `?feature=look` pulls in the (otherwise-unbundled) lil-gui panel.
+    if (isFeatureEnabled('look')) {
+      this._initLookGui()
+    }
+  }
+
+
+  /**
+   * Build (or rebuild) the procedural image-based-lighting environment.
+   * RoomEnvironment is a zero-asset studio scene; PMREM pre-filters it into
+   * the cube-UV env map three samples for PBR diffuse + specular. `sigma`
+   * is the pre-blur in radians — higher = softer, flatter lighting.
+   *
+   * Disposes the previous env texture first so repeated calls (the
+   * `?feature=look` blur slider) don't leak GPU memory. Deliberately does
+   * NOT touch `scene.environmentIntensity` — set once at construction and
+   * owned by the GUI thereafter, so changing blur preserves intensity.
+   * No-op without a renderer (the Jest context mock returns undefined).
+   *
+   * @param {number} sigma PMREM pre-blur in radians
+   */
+  _buildEnvironment(sigma) {
+    const renderer = this.context.getRenderer()
+    if (!renderer) {
+      return
+    }
+    const scene = this.context.getScene()
+    const previous = scene.environment
+    const pmrem = new PMREMGenerator(renderer)
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), sigma).texture
+    pmrem.dispose()
+    if (previous) {
+      previous.dispose()
+    }
+  }
+
+
+  /**
+   * Rebuild the env map at a new PMREM blur. Public entry point for the
+   * `?feature=look` GUI's blur slider; preserves `environmentIntensity`.
+   *
+   * @param {number} sigma PMREM pre-blur in radians
+   */
+  setEnvironmentBlur(sigma) {
+    this._buildEnvironment(sigma)
+  }
+
+
+  /**
+   * Lazily build the `?feature=look` lighting/material tuning panel
+   * (LightingGui, a lil-gui overlay). Dynamic-imported so neither lil-gui
+   * nor the panel lands in the default bundle — only the flag pulls the
+   * chunk. Fire-and-forget: the panel appears a tick after viewer init.
+   *
+   * @private
+   */
+  _initLookGui() {
+    import('./three/LightingGui').then(({default: LightingGui}) => {
+      this._lookGui = new LightingGui(this)
+    }).catch((e) => {
+      console.warn('LightingGui failed to load:', e)
+    })
   }
 
 
@@ -215,6 +290,11 @@ export class ShareViewer {
   async dispose() {
     // Local plugins. Each is null-safe individually so partial-init
     // teardown (e.g. constructor throw mid-build) still works.
+    try {
+      this._lookGui?.dispose?.()
+    } catch (e) {
+      console.warn('lookGui.dispose failed:', e)
+    }
     try {
       this.viewsManager?.dispose?.()
     } catch (e) {

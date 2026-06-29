@@ -43,6 +43,28 @@ export default class CustomPostProcessor {
   }
 
   /**
+   * Swap the filmic tone-mapping operator at runtime. Used by the
+   * `?feature=look` GUI (LightingGui) to compare ACES / AgX / Neutral /
+   * Linear live. `postprocessing`'s ToneMappingEffect recompiles its
+   * shader macro internally on assignment.
+   *
+   * @param {number} mode a `ToneMappingMode` enum value
+   */
+  setToneMappingMode(mode) {
+    if (this._toneMappingEffect) {
+      this._toneMappingEffect.mode = mode
+    }
+  }
+
+  /**
+   * @return {number|null} the current `ToneMappingMode`, or null when the
+   *   effect isn't built (renderer-less test contexts).
+   */
+  getToneMappingMode() {
+    return this._toneMappingEffect ? this._toneMappingEffect.mode : null
+  }
+
+  /**
    * Creates a new outline effect and adds it to the composer
    *
    * @param {object} effectOpts The outline effect options
