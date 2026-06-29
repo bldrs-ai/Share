@@ -149,7 +149,7 @@
     "@jest/test-sequencer": "^30.2.0",
     "@mui/types": "7.2.3",
     "@pablo-mayrgundter/cookies.js": "1.1.0",
-    "@playwright/test": "1.54.2",
+    "@playwright/test": "1.56.1",
     "@testing-library/dom": "8.19.1",
     "@testing-library/jest-dom": "5.16.5",
     "@testing-library/react": "13.4.0",
@@ -182,7 +182,7 @@
     "jsdom": "20.0.3",
     "netlify-cli": "^26.0.1",
     "node-fetch": "2",
-    "playwright": "1.54.2",
+    "playwright": "1.56.1",
     "ts-jest": "29.4.4"
   },
   "engines": {
