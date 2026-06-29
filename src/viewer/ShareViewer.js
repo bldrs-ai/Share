@@ -40,27 +40,20 @@ function nextPow2(n) {
 import {areDefinedAndNotNull} from '../utils/assert'
 
 
-// Disable three.js r152+ automatic linear-sRGB color management
-// (a.k.a. "Managed" color mode). With it enabled, three converts sRGB
-// values to linear before lighting and back to sRGB on output — the
-// physically-correct path. The fork (web-ifc-viewer) and our material
-// setup were tuned in the r135 era against the *legacy* regime where
-// material colors are used as-is and the rendered framebuffer flows
-// straight through the monitor's sRGB curve. Under managed mode the
-// Schependomlaan baseline renders washed out / overly bright.
+// Slice 5e (design/new/viewer-replacement.md): enable three's r152+
+// automatic sRGB↔linear color management (the r184 default). Bldrs ran
+// with it OFF through the r135→r184 bump as a pixel-for-pixel compat hold;
+// 5e turns it back on as the first, smallest step toward the modern color
+// pipeline. Set at module load, before any three object is constructed, so
+// the renderer/scene/materials all see managed mode. On today's flat IFC
+// lighting this is a slight, accepted shift; managed color mainly pays off
+// later with an env map + PBR materials + tone mapping (§6e).
 //
-// Setting this to `false` at module load (before any three object is
-// constructed, including the fork's renderer/scene/materials inside
-// `new IfcViewerAPI(...)`) restores r135-identical visual output. It
-// also reverts the r157 `useLegacyLights = false` default's effect for
-// most practical purposes — light intensities tuned for r135 (e.g.,
-// the fork's hardcoded `0.8` / `0.25` in scene.js) match the r135
-// visual without per-light π scaling.
-//
-// Goes away with Phase 5 of design/new/viewer-replacement.md, when
-// ShareViewer owns its scene and we re-enable Managed mode as the new
-// baseline.
-ColorManagement.enabled = false
+// Deliberately the ONLY color change in this slice: everything else stays
+// at the production values — `outputColorSpace` keeps `LinearSRGBColorSpace`
+// (see the constructor) and the scene lights keep their `×π` intensities —
+// so the visible delta is just managed color.
+ColorManagement.enabled = true
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -160,17 +153,16 @@ export class ShareViewer {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
-    // Partner to the top-level `ColorManagement.enabled = false`: that
-    // disables the *input* side (auto sRGB→linear conversions on
-    // materials / textures); this disables the *output* side. r184's
-    // `WebGLRenderer.outputColorSpace` default is `SRGBColorSpace`,
-    // which gamma-encodes the rendered framebuffer. r135's default was
-    // `LinearEncoding` (no gamma encoding) — the modern equivalent is
-    // `LinearSRGBColorSpace`. Postprocessing's `EffectComposer.initialize`
-    // also keys off this property: when it sees SRGB it tags its render
-    // target as sRGB and applies its own encoding. We need both off to
-    // match r135 pixel-for-pixel. Guard for tests where the mock's
-    // getRenderer() returns undefined.
+    // Kept at the production value `LinearSRGBColorSpace` (three r135's
+    // no-output-gamma-encode behavior) even though color management is now
+    // ON (module top). The fully-correct managed combo is SRGB output +
+    // tone mapping + re-tuned lights, but on flat IFC lighting that needs
+    // real range (env map / PBR) to look right, so it's deferred to a
+    // follow-up (§6e). Holding output here keeps the render ≈ production —
+    // 5e's only visible change is the slight managed-color shift.
+    // Postprocessing's `EffectComposer.initialize` keys off this property,
+    // so it's set before `new CustomPostProcessor()` below. Guard for tests
+    // where the mock's getRenderer() returns undefined.
     if (renderer) {
       renderer.outputColorSpace = LinearSRGBColorSpace
     }
