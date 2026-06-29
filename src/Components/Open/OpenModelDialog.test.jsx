@@ -233,6 +233,8 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
     render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('button-open-by-id'))
+    // getAccessToken preflights inside the click, then record() awaits the
+    // MSW-backed record-load handler before navigateToModel fires.
     await waitFor(() => {
       expect(navigateToModel).toHaveBeenCalledWith(
         expect.stringMatching(/\/v\/g\/file-id-abc$/),

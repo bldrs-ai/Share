@@ -1,8 +1,10 @@
 import React, {ReactElement} from 'react'
 import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
+import useQuota from '../../hooks/useQuota'
 import {ControlButtonWithHashState} from '../Buttons'
 import OpenModelDialog from './OpenModelDialog'
+import QuotaBadge from './QuotaBadge'
 import {HASH_PREFIX_OPEN_MODEL} from './hashState'
 import {FolderOpen as FolderOpenIcon} from '@mui/icons-material'
 
@@ -16,12 +18,18 @@ export default function OpenModelControl() {
   const isOpenModelVisible = useStore((state) => state.isOpenModelVisible)
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
+  const {used, limit, tier} = useQuota()
+
   const navigate = useNavigate()
 
   return (
     <ControlButtonWithHashState
       title='Open Models and Samples'
-      icon={<FolderOpenIcon className='icon-share'/>}
+      icon={
+        <QuotaBadge used={used} limit={limit} tier={tier}>
+          <FolderOpenIcon className='icon-share'/>
+        </QuotaBadge>
+      }
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={HASH_PREFIX_OPEN_MODEL}
