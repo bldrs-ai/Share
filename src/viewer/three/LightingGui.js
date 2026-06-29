@@ -92,7 +92,7 @@ export default class LightingGui {
     const postProcessor = this._postProcessor
 
     this._params = {
-      toneMapping: postProcessor?.getToneMappingMode?.() ?? ToneMappingMode.ACES_FILMIC,
+      toneMapping: postProcessor?.getToneMappingMode?.() ?? ToneMappingMode.NEUTRAL,
       envIntensity: scene?.environmentIntensity ?? 1,
       envBlur: DEFAULT_ENV_BLUR,
       keyLight: scene?.getObjectByName('keyLight')?.intensity ?? FALLBACK_KEY_LIGHT,

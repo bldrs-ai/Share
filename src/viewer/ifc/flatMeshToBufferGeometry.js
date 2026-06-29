@@ -6,6 +6,7 @@ import {
   Matrix3,
   Matrix4,
   MeshStandardMaterial,
+  SRGBColorSpace,
 } from 'three'
 
 
@@ -225,7 +226,15 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     // respond to the scene env map (§6e) — was `MeshLambertMaterial` (flat,
     // no specular/IBL). Per-color binning + transparent/opacity on alpha < 1
     // are unchanged.
-    const col = new Color(bin.color.x, bin.color.y, bin.color.z)
+    //
+    // §6e step 1 (sRGB albedo): Conway emits the IFC color as a plain RGB
+    // triple authored in display (sRGB) space, but `new Color(r,g,b)` under
+    // `ColorManagement.enabled` treats numeric args as the linear working
+    // space — so untagged the albedo renders ~too bright and the model
+    // washes out. `setRGB(..., SRGBColorSpace)` converts sRGB→linear at set
+    // time so surfaces light at their authored value. See
+    // design/new/viewer-replacement.md §6e step 1.
+    const col = new Color().setRGB(bin.color.x, bin.color.y, bin.color.z, SRGBColorSpace)
     const material = new MeshStandardMaterial({
       color: col,
       side: DoubleSide,

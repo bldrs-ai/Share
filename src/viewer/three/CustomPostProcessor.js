@@ -20,14 +20,17 @@ export default class CustomPostProcessor {
   constructor(renderer, scene, camera) {
     this._composer = new EffectComposer(renderer)
     this._composer.addPass(new RenderPass(scene, camera))
-    // Filmic tone mapping (§6e). The render path always runs through this
+    // Tone mapping (§6e). The render path always runs through this
     // composer, so tone mapping must be a composer effect — `renderer.
     // toneMapping` is bypassed by postprocessing's pipeline (this is why a
-    // naive `renderer.toneMapping = ACES` did nothing in 5e). ACES Filmic
-    // is the canonical filmic curve; swap the ToneMappingMode (AGX /
-    // NEUTRAL) to change the look. Persistent pass so it applies with or
-    // without a selection outline; the outline pass composites after it.
-    this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.ACES_FILMIC})
+    // naive `renderer.toneMapping = ACES` did nothing in 5e). Default is the
+    // Khronos PBR-NEUTRAL operator: unlike ACES it preserves hue/saturation
+    // and doesn't lift mid-tones, which reads cleaner for CAD/product viz
+    // (ACES washed the matte IFC surfaces out). Swap via the `?feature=look`
+    // GUI / `setToneMappingMode` (ACES / AgX / ...). Persistent pass so it
+    // applies with or without a selection outline; the outline composites
+    // after it.
+    this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
     this._composer.addPass(new EffectPass(camera, this._toneMappingEffect))
     this._scene = scene
     this._camera = camera
