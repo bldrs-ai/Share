@@ -29,9 +29,10 @@
 // `ifcLastError`.
 //
 // Conway construction: `new IfcAPI()` from 'web-ifc'. In production the
-// esbuild `webIfcShimAlias` plugin resolves 'web-ifc' to
-// `@bldrs-ai/conway-web-ifc-adapter/compiled/src/ifc_api.js`
-// (tools/esbuild/plugins.js; the alias itself is removed in slice 5f).
+// esbuild `webIfcShimAlias` plugin resolves 'web-ifc' to Conway's own
+// web-ifc compat surface, `@bldrs-ai/conway/compiled/src/compat/web-ifc/
+// index.js` (tools/esbuild/plugins.js). The alias is the kept Conway↔
+// web-ifc engine switch (`USE_WEBIFC_SHIM`), not a deletion target.
 // In Jest 'web-ifc' resolves to the real package, but ShareIfc is mocked
 // in the ShareViewer test harness (`__mocks__/ShareViewer.js`) so the
 // real `IfcAPI` is never constructed there. The wasm `Init` is lazy —
