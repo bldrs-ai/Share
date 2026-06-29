@@ -10,6 +10,7 @@ import debug from './utils/debug'
 import {disablePageReloadApprovalCheck} from './utils/event'
 import About from './pages/share/About'
 import Conway from './pages/share/Conway'
+import Quotas from './pages/share/Quotas'
 import Share from './Share'
 
 
@@ -45,6 +46,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
       <Route path='/' element={<Forward appPrefix={appPrefix}/>}>
         <Route path='about' element={<About/>}/>
         <Route path='about/conway' element={<Conway/>}/>
+        <Route path='quotas' element={<Quotas/>}/>
         <Route
           path='v/new/*'
           element={
