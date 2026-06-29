@@ -5,7 +5,7 @@ import {
   DoubleSide,
   Matrix3,
   Matrix4,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
 } from 'three'
 
 
@@ -64,7 +64,7 @@ import {
  *   for `instanceMapFromOrderedPlacedRanges`. NOT the FlatMesh-walk
  *   order — color binning permutes the emission so each color's
  *   triangles stay contiguous in the merged buffer.
- * @property {Array<MeshLambertMaterial>} materials one per distinct
+ * @property {Array<MeshStandardMaterial>} materials one per distinct
  *   PlacedGeometry color (RGBA). Caller assigns this to
  *   `mesh.material` (array form) — three.js's renderer pairs each
  *   `geometry.groups[i].materialIndex` with `materials[i]`.
@@ -78,6 +78,15 @@ import {
 
 /** Fallback colour used when a PlacedGeometry has no `.color` field. */
 const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
+
+
+// PBR params for IFC surfaces (§6e filmic/PBR step). Building materials are
+// dielectric and matte, so no metalness and a high roughness — under the
+// scene env map this gives soft image-based shading + a faint sheen rather
+// than plastic gloss. Named constants so the deferred §6e settings panel
+// can expose them.
+const IFC_METALNESS = 0
+const IFC_ROUGHNESS = 0.8
 
 
 /**
@@ -212,12 +221,17 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
   let materialIndex = 0
   for (const bin of bins.values()) {
     const groupStart = iCursor
-    // Material for this bin. Match `web-ifc-three`'s shape:
-    //   MeshLambertMaterial({color, side: DoubleSide})
-    //   + transparent / opacity when alpha < 1.
-    // IFCLoader.js:256-262.
+    // Material for this bin. PBR (`MeshStandardMaterial`) so IFC surfaces
+    // respond to the scene env map (§6e) — was `MeshLambertMaterial` (flat,
+    // no specular/IBL). Per-color binning + transparent/opacity on alpha < 1
+    // are unchanged.
     const col = new Color(bin.color.x, bin.color.y, bin.color.z)
-    const material = new MeshLambertMaterial({color: col, side: DoubleSide})
+    const material = new MeshStandardMaterial({
+      color: col,
+      side: DoubleSide,
+      metalness: IFC_METALNESS,
+      roughness: IFC_ROUGHNESS,
+    })
     if (bin.color.w !== 1) {
       material.transparent = true
       material.opacity = bin.color.w

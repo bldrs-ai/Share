@@ -1,11 +1,20 @@
 // IfcScene — vendored from `web-ifc-viewer/dist/components/context/scene.js`
-// in slice 5d.3. The light intensity values (DirectionalLight 0.8,
-// AmbientLight 0.25) are scaled by Math.PI inline to match the
-// pre-r157 visual under three's `useLegacyLights=false` default —
-// previously applied by `tools/esbuild/plugins.js#scaleLightIntensities`.
+// in slice 5d.3. Light intensities re-tuned for the §6e filmic/PBR
+// pipeline: the scene env map (RoomEnvironment IBL, set in ShareViewer)
+// now carries the fill + grounding, so these direct lights are lower than
+// the legacy `× Math.PI` values and mainly give directional shape. Tune
+// against the deploy preview.
 
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
+
+
+// Direct-light intensities (§6e). Low because the env map carries the
+// ambient/fill now; these are a key + fill directional pair plus a small
+// ambient lift. Named for the deferred §6e settings panel.
+const KEY_LIGHT_INTENSITY = 1.5
+const FILL_LIGHT_INTENSITY = 1.0
+const AMBIENT_LIGHT_INTENSITY = 0.2
 
 
 export class IfcScene extends IfcComponent {
@@ -49,13 +58,13 @@ export class IfcScene extends IfcComponent {
     this.scene.background = (options === null || options === void 0 ? void 0 : options.backgroundColor) || this.defaultBackgroundColor
   }
   setupLights() {
-    const light1 = new DirectionalLight(0xffeeff, 0.8 * Math.PI)
+    const light1 = new DirectionalLight(0xffeeff, KEY_LIGHT_INTENSITY)
     light1.position.set(1, 1, 1)
     this.scene.add(light1)
-    const light2 = new DirectionalLight(0xffffff, 0.8 * Math.PI)
+    const light2 = new DirectionalLight(0xffffff, FILL_LIGHT_INTENSITY)
     light2.position.set(-1, 0.5, -1)
     this.scene.add(light2)
-    const ambientLight = new AmbientLight(0xffffee, 0.25 * Math.PI)
+    const ambientLight = new AmbientLight(0xffffee, AMBIENT_LIGHT_INTENSITY)
     this.scene.add(ambientLight)
   }
 }

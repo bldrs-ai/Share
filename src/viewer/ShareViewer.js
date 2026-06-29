@@ -4,7 +4,8 @@
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
-import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
+import {BufferAttribute, BufferGeometry, ColorManagement, Mesh, PMREMGenerator} from 'three'
+import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import Clipper from './three/Clipper'
@@ -24,6 +25,12 @@ import {modelHasCapability} from './ShareModel'
 // entries ≈ 85 triangles — covers the vast majority of single-
 // PlacedGeometry instances without growing the buffer on first hover.
 const MIN_PRESELECTION_INDEX_CAP = 256
+
+
+// PMREM blur (radians) for the procedural env map (§6e). A touch of blur
+// softens the RoomEnvironment studio into smooth image-based lighting.
+// Tunable via the deferred §6e settings panel.
+const ENV_MAP_BLUR = 0.04
 
 
 /**
@@ -153,21 +160,23 @@ export class ShareViewer {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
-    // Kept at the production value `LinearSRGBColorSpace` (three r135's
-    // no-output-gamma-encode behavior) even though color management is now
-    // ON (module top). The fully-correct managed combo is SRGB output +
-    // tone mapping + re-tuned lights, but on flat IFC lighting that needs
-    // real range (env map / PBR) to look right, so it's deferred to a
-    // follow-up (§6e). Holding output here keeps the render ≈ production —
-    // 5e's only visible change is the slight managed-color shift.
-    // Postprocessing's `EffectComposer.initialize` keys off this property,
-    // so it's set before `new CustomPostProcessor()` below. Guard for tests
-    // where the mock's getRenderer() returns undefined.
-    if (renderer) {
-      renderer.outputColorSpace = LinearSRGBColorSpace
-    }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
+    // §6e filmic pipeline. `outputColorSpace` is left at the r184 default
+    // (`SRGBColorSpace`) — the legacy `LinearSRGBColorSpace` override is
+    // gone — so the framebuffer is gamma-encoded; the filmic tone-map runs
+    // in the postprocessing composer (see CustomPostProcessor), since the
+    // render path always goes through it and `renderer.toneMapping` would
+    // be bypassed. A neutral procedural env map (RoomEnvironment, zero-
+    // asset) drives image-based lighting so the PBR materials get soft
+    // diffuse + specular grounding; scene.js's direct lights are dialed
+    // down to compensate. Guarded for tests where getRenderer() is
+    // undefined (the mock).
+    if (renderer) {
+      const pmrem = new PMREMGenerator(renderer)
+      scene.environment = pmrem.fromScene(new RoomEnvironment(), ENV_MAP_BLUR).texture
+      pmrem.dispose()
+    }
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)

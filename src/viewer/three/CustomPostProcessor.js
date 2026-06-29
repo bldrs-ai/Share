@@ -1,4 +1,4 @@
-import {EffectComposer, EffectPass, OutlineEffect, RenderPass} from 'postprocessing'
+import {EffectComposer, EffectPass, OutlineEffect, RenderPass, ToneMappingEffect, ToneMappingMode} from 'postprocessing'
 import {WebGLRenderer, Scene, Camera} from 'three'
 
 
@@ -7,6 +7,7 @@ export default class CustomPostProcessor {
   _composer = null
   _scene = null
   _camera = null
+  _toneMappingEffect = null
   static _instance = null
 
   /**
@@ -19,6 +20,15 @@ export default class CustomPostProcessor {
   constructor(renderer, scene, camera) {
     this._composer = new EffectComposer(renderer)
     this._composer.addPass(new RenderPass(scene, camera))
+    // Filmic tone mapping (§6e). The render path always runs through this
+    // composer, so tone mapping must be a composer effect — `renderer.
+    // toneMapping` is bypassed by postprocessing's pipeline (this is why a
+    // naive `renderer.toneMapping = ACES` did nothing in 5e). ACES Filmic
+    // is the canonical filmic curve; swap the ToneMappingMode (AGX /
+    // NEUTRAL) to change the look. Persistent pass so it applies with or
+    // without a selection outline; the outline pass composites after it.
+    this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.ACES_FILMIC})
+    this._composer.addPass(new EffectPass(camera, this._toneMappingEffect))
     this._scene = scene
     this._camera = camera
   }
