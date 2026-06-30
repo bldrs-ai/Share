@@ -672,44 +672,53 @@ plan asks of Share and the per-instance id GPU instancing needs are the
 **same** identifier. Doing them together is cheaper than either alone, and
 STEP assemblies are both the forcing function and the biggest beneficiary.
 
-**Measured (PR1, 2026-06).** The grouper ran over real models. Vertex
-reduction = how much of the merged vertex memory the geometry sharing
-removes; `drawCalls` = unique shapes (the *naive* InstancedMesh-per-shape
-bound, **not** the target — see below).
+**Measured (PR1, 2026-06).** The grouper ran over real models.
+**vtx reduction** = the share of merged vertex memory the geometry
+*sharing* removes (`1 − instancedVerts/mergedVerts`). **mem saved** = that
+sharing win on a uniform 24 B/vertex basis (position+normal) **minus** the
+per-instance matrix+colour overhead (80 B/instance) — i.e. only what
+instancing's geometry dedup buys, *not* the separate ~8 B/vertex the
+batched path also saves by dropping per-vertex pick attributes (that is a
+picking-model co-benefit, not sharing, so it is excluded to avoid
+overstating). **naive drawCalls** = unique shapes — the *naive*
+InstancedMesh-per-shape bound, **not** the target (see below).
 
-| Model | instances | unique shapes | shared | vtx reduction | mem saved | top shape | naive drawCalls |
+| Model | instances | unique shapes | shared | vtx reduction | mem saved (sharing) | top shape | naive drawCalls |
 |---|---|---|---|---|---|---|---|
 | index.ifc | 7 | 7 | 0 | 0% | ~0 | ×1 | 7 |
-| Momentum (ArchiCAD) | 439 | 425 | 7 | 1% | 0.5 MB | ×3 | 425 |
-| Schependomlaan | 6,250 | 4,697 | 667 | 34% | 5.7 MB | ×147 | 4,697 |
-| Snowdon 2x3 (Revit) | 25,587 | 9,767 | 5,230 | **60%** | **63 MB** | ×336 | 9,767 |
-| Snowdon 4 (Revit) | 28,363 | 12,251 | 5,310 | **57%** | **65 MB** | ×336 | 12,251 |
-| Arty.step | 6,769 | 5,128 | 1,285 | **26%** | **25 MB** | ×20 | 5,128 |
+| Momentum (ArchiCAD) | 439 | 425 | 7 | 1% | ~0 | ×3 | 425 |
+| Schependomlaan | 6,250 | 4,697 | 667 | 34% | ~2.5 MB | ×147 | 4,697 |
+| Snowdon 2x3 (Revit) | 25,587 | 9,767 | 5,230 | **60%** | **~38 MB** | ×336 | 9,767 |
+| Snowdon 4 (Revit) | 28,363 | 12,251 | 5,310 | **57%** | **~38 MB** | ×336 | 12,251 |
+| Arty.step | 6,769 | 5,128 | 1,285 | **26%** | **~10 MB** | ×20 | 5,128 |
 
 Three settled conclusions:
 
 1. **The memory win is real and large where instancing is dense** (Revit
-   ~60% / ~63 MB; STEP `Arty.step` 26% / 25 MB) and **degrades
-   gracefully** to ~0 on singleton-heavy models (index, Momentum) — no
-   penalty, they just merge as today.
+   ~60% / ~38 MB; STEP `Arty.step` 26% / ~10 MB) and **degrades
+   gracefully** to ~0 (or slightly negative — the per-instance overhead
+   with no sharing) on singleton-heavy models (index, Momentum). The
+   batched path additionally drops ~8 B/vertex of per-vertex pick
+   attributes — a further win not counted in the column above.
 2. **STEP is a first-class beneficiary**, confirming the occurrence-identity
    thesis on real data, not just `as1`.
 3. **The `drawCalls` column is a warning, not a target.** Naive
    InstancedMesh-per-shape turns Snowdon's 1 merged draw call into ~10–12k —
-   almost certainly a net render-perf loss. **This is the empirical reason
-   PR2 uses `BatchedMesh`** (one multi-draw call across many shapes +
-   per-instance transforms), keeping draw calls ~1 while taking the memory
-   win. Do **not** ship InstancedMesh-per-shape.
+   almost certainly a net render-perf loss. Even instancing *only* the
+   shared shapes (the hybrid) is ~5k draw calls. **This is the empirical
+   reason PR2 uses `BatchedMesh`** — it multi-draws the whole batch (all
+   shapes + per-instance transforms) in **~1 draw call**, taking the memory
+   win without the draw-call blowup. Do **not** ship InstancedMesh-per-shape.
 
 **Slicing.**
-- **PR1 (landed, #1568) — grouper + always-on verbose analysis.**
+- **PR1 (#1568) — grouper + verbose analysis.**
   `src/viewer/ifc/flatMeshToInstancedModel.js` is a pure grouper that
   dedupes the captured FlatMeshes by `geometryExpressID` and returns the
   per-shape placement lists (matrix/color/parent/instanceId) + the stats
-  above. It runs on every Conway-direct load (the grouping is cheap and is
-  the foundation PR2 builds on — not throwaway scaffolding) and the
-  analysis line is logged under verbose (`debug(DEBUG)`); there is **no
-  feature flag**. Render is unchanged.
+  above. There is **no feature flag** (it is a permanent diagnostic and
+  the foundation PR2 builds on); it runs **only when verbose logging is
+  enabled** (`isLogEnabled(DEBUG)`), so the per-placement grouping cost is
+  paid only when the analysis is actually wanted. Render is unchanged.
 - **PR2 — `BatchedMesh` render path.** Build a `BatchedMesh` from the
   grouper output (`addGeometry` once per unique shape in local space,
   `addInstance` + `setMatrixAt`/`setColorAt` per placement; merge or batch

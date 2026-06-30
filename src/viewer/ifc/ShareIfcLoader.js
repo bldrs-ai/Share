@@ -24,20 +24,21 @@ import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
-import debug, {DEBUG} from '../../utils/debug'
+import debug, {DEBUG, isLogEnabled} from '../../utils/debug'
 
 
 /**
  * Group the captured FlatMesh stream by shared geometry and log the
  * instancing analysis (draw-call + vertex-memory delta vs. the merged
- * path) under verbose logging.
+ * path) — but ONLY when verbose logging is enabled.
  *
- * Runs on every Conway-direct load — the grouping is cheap (a map lookup
- * + size accessor per shape, a push per placement; negligible against
- * parse/geometry) and `flatMeshToInstancedModel` is the foundation the
- * BatchedMesh render path (§3b.iv) builds on, so this is not throwaway
- * scaffolding. The log itself is gated on `debug(DEBUG)` so it only
- * surfaces when verbose logging is enabled. Never throws into the load
+ * The whole grouping is gated on `isLogEnabled(DEBUG)`, not just the
+ * print: on a large model it walks every placement (tens of thousands)
+ * and re-fetches each unique shape's size across the Conway boundary, so
+ * building it on every default-level load — only to drop the result —
+ * would be pure waste. There is no feature flag (the grouper is a
+ * permanent diagnostic and the foundation the BatchedMesh render path,
+ * §3b.iv, builds on); verbosity is the gate. Never throws into the load
  * path: a probe failure must not discard a successful parse.
  *
  * @param {object} ifcAPI Conway IfcAPI bound to the model
@@ -45,6 +46,9 @@ import debug, {DEBUG} from '../../utils/debug'
  * @param {Array} captured FlatMeshes captured during the parse
  */
 function logInstancedModelStats(ifcAPI, modelID, captured) {
+  if (!isLogEnabled(DEBUG)) {
+    return
+  }
   try {
     const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
     const reduction = stats.vertexReductionRatio.toFixed(2)

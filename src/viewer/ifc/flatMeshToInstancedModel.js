@@ -40,27 +40,27 @@ const VERT_STRIDE = 6
 const INDICES_PER_TRIANGLE = 3
 
 /**
- * Bytes a merged-path vertex costs in the GPU buffer: position (3) +
- * normal (3) + per-vertex `expressID` (1) + per-vertex `instanceID` (1),
- * all 4-byte. The merged path needs the two per-vertex id attributes to
- * recover picking identity after the index buffer is BVH-reordered.
+ * Bytes one geometry vertex costs in the GPU buffer: position (3) +
+ * normal (3), 4-byte. Used for BOTH paths so `estimatedBytesSaved`
+ * isolates the *geometry-sharing* win — the thing instancing actually
+ * buys — and is not inflated by the picking-attribute format change.
+ *
+ * (Separately, the instanced/batched path can also drop the per-vertex
+ * `expressID` + `instanceID` attributes the merged path needs for
+ * BVH-reordered picking — another ~8 B/vertex — because it picks via the
+ * native `instanceId`/`batchId`. That is a real but *orthogonal* co-
+ * benefit of the picking-model change, not of sharing, so it is
+ * deliberately NOT credited here; counting it made singleton-heavy
+ * models report a large bogus "saving" with no sharing at all.)
  */
-const MERGED_BYTES_PER_VERTEX = (3 + 3 + 1 + 1) * 4
-
-/**
- * Bytes an instanced-path vertex costs: position (3) + normal (3),
- * 4-byte. The instanced path drops the per-vertex id attributes —
- * picking resolves through the native `instanceId`/`batchId`, so the
- * shared shape's vertices carry no identity.
- */
-const INSTANCED_BYTES_PER_VERTEX = (3 + 3) * 4
+const BYTES_PER_VERTEX = (3 + 3) * 4
 
 /**
  * Per-instance GPU overhead the instanced path adds in place of the
  * duplicated vertices: a 4×4 matrix (16 floats) + an RGBA instance
  * colour (4 floats), 4-byte each.
  */
-const INSTANCED_BYTES_PER_INSTANCE = ((4 * 4) + 4) * 4
+const BYTES_PER_INSTANCE = ((4 * 4) + 4) * 4
 
 
 /**
@@ -72,8 +72,12 @@ const INSTANCED_BYTES_PER_INSTANCE = ((4 * 4) + 4) * 4
  * @property {number} parentExpressId owning IFC product (the
  *   `FlatMesh.expressID`).
  * @property {number} instanceId synthetic 0-based id, assigned in
- *   emission order across the whole stream — the same id space
- *   `flatMeshToBufferGeometry` mints, so the two paths agree.
+ *   FlatMesh emission order across the whole stream. (Note: this is NOT
+ *   the same ordering `flatMeshToBufferGeometry` mints — that path
+ *   numbers its per-vertex `instanceID` in colour-bin order — so the two
+ *   ids must not be assumed equal. This id is unused today; the render
+ *   path, `flatMeshToBatchedModel`, mints its own occurrence id and maps
+ *   `batchId → parentExpressId` directly.)
  */
 
 
@@ -139,10 +143,13 @@ function computeStats(groupsById, instanceCount) {
       topInstancedGeometryID = group.geometryExpressID
     }
   }
-  const mergedBytes = mergedVertexCount * MERGED_BYTES_PER_VERTEX
+  // Same per-vertex cost both sides, so the delta is purely the
+  // geometry-sharing win (dropped duplicate vertices) minus the
+  // per-instance matrix/colour overhead. Negative for singleton-heavy
+  // models — correct: instancing costs more memory there than it saves.
+  const mergedBytes = mergedVertexCount * BYTES_PER_VERTEX
   const instancedBytes =
-    (instancedVertexCount * INSTANCED_BYTES_PER_VERTEX) +
-    (instanceCount * INSTANCED_BYTES_PER_INSTANCE)
+    (instancedVertexCount * BYTES_PER_VERTEX) + (instanceCount * BYTES_PER_INSTANCE)
   return {
     // Draw calls: the merged path is a single mesh (1); the instanced
     // path is one InstancedMesh per unique shape. A hybrid (§3b.iv)

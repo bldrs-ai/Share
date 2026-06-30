@@ -19,6 +19,20 @@ export default function debug(level = INFO) {
 }
 
 
+/**
+ * Whether `debug(level)` would actually log at the current threshold —
+ * i.e. logging at `level` is enabled. Lets callers skip *building* an
+ * expensive diagnostic (not just suppress the print) when it wouldn't be
+ * shown. Mirrors the predicate in `debug()`.
+ *
+ * @param {number} [level] The level the caller would log at (default DEBUG).
+ * @return {boolean}
+ */
+export function isLogEnabled(level = DEBUG) {
+  return level >= DEBUG_LEVEL
+}
+
+
 /** @param {number} level One of OFF, INFO, DEBUG, ALL. */
 export function setDebugLevel(level) {
   if (!Number.isFinite(level) || level < DEBUG || level > OFF) {
