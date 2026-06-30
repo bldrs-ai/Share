@@ -11,6 +11,9 @@ const IDENTITY_MAT = [
   0, 0, 0, 1,
 ]
 
+const OPAQUE = {x: 0.8, y: 0.8, z: 0.8, w: 1}
+const GLASS = {x: 0.6, y: 0.8, z: 1, w: 0.4}
+
 
 /** @return {Float32Array} single-triangle interleaved vert buffer (p+n). */
 function unitTriangleVerts() {
@@ -27,16 +30,12 @@ function unitTriangleVerts() {
  * @return {object} mock Conway IfcAPI
  */
 function makeApi(byGeomExpressId) {
-  const api = {
-    _verts: new Map(),
-    _indices: new Map(),
+  return {
     GetGeometry(_modelID, geomExpressID) {
       const g = byGeomExpressId[geomExpressID]
       if (!g) {
         return null
       }
-      // Encode the geomExpressID into the data-pointer so GetVertexArray /
-      // GetIndexArray return the right buffer per geometry.
       return {
         GetVertexData: () => geomExpressID,
         GetIndexData: () => geomExpressID,
@@ -51,83 +50,101 @@ function makeApi(byGeomExpressId) {
       return byGeomExpressId[ptr].indexData
     },
   }
-  return api
+}
+
+
+/** @return {object} api with one unit-triangle shape at id 999. */
+function unitTriApi() {
+  return makeApi({999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}})
 }
 
 
 describe('viewer/ifc/flatMeshToBatchedModel', () => {
-  it('builds a BatchedMesh with one geometry per shape and one instance per placement', () => {
-    // One shared shape, three placements — the instancing case.
-    const api = makeApi({999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}})
+  it('builds one opaque batch: one geometry per shape, one instance per placement', () => {
     const flatMeshes = [{
       expressID: 100,
       geometries: {
         size: () => 3,
-        get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT}),
+        get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}),
       },
     }]
-    const {mesh, instanceParents, instanceOccurrenceIds, stats} =
-      flatMeshToBatchedModel(flatMeshes, api, 0)
-    expect(mesh).toBeInstanceOf(BatchedMesh)
+    const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(batches.length).toBe(1)
+    expect(batches[0].transparent).toBe(false)
+    expect(batches[0].mesh).toBeInstanceOf(BatchedMesh)
     expect(stats.uniqueGeometryCount).toBe(1) // one shared shape
     expect(stats.instanceCount).toBe(3) // three placements
-    expect(stats.vertexCount).toBe(3) // shape stored once (not 9)
-    // Every placement resolves back to its parent product, with a distinct
-    // synthetic occurrence id in emission order.
-    expect(Array.from(instanceParents)).toEqual([100, 100, 100])
-    expect(Array.from(instanceOccurrenceIds)).toEqual([0, 1, 2])
+    expect(stats.vertexCount).toBe(3) // stored once (not 9)
+    expect(stats.transparentInstanceCount).toBe(0)
+    expect(Array.from(batches[0].instanceParents)).toEqual([100, 100, 100])
+    expect(Array.from(batches[0].instanceOccurrenceIds)).toEqual([0, 1, 2])
   })
 
-  it('adds a distinct geometry per unique geometryExpressID (compound case)', () => {
-    const api = makeApi({
-      1: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
-      2: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
-    })
+  it('splits opaque and transparent placements into separate batches', () => {
+    // Same shape, one opaque + one glass placement → two batches.
     const flatMeshes = [{
       expressID: 100,
-      geometries: {
-        size: () => 2,
-        get: (i) => ({geometryExpressID: i === 0 ? 1 : 2, flatTransformation: IDENTITY_MAT}),
-      },
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: GLASS},
+      ],
     }]
-    const {stats} = flatMeshToBatchedModel(flatMeshes, api, 0)
-    expect(stats.uniqueGeometryCount).toBe(2)
-    expect(stats.instanceCount).toBe(2)
-    expect(stats.vertexCount).toBe(6) // two distinct shapes, 3 verts each
+    const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(batches.length).toBe(2)
+    const opaque = batches.find((b) => !b.transparent)
+    const transparent = batches.find((b) => b.transparent)
+    expect(opaque.material.transparent).toBe(false)
+    expect(transparent.material.transparent).toBe(true)
+    expect(transparent.material.depthWrite).toBe(false)
+    expect(stats.transparentInstanceCount).toBe(1)
+    expect(stats.materialCount).toBe(2)
+    // The occurrence id space is global across both batches (emission order).
+    expect(Array.from(opaque.instanceOccurrenceIds)).toEqual([0])
+    expect(Array.from(transparent.instanceOccurrenceIds)).toEqual([1])
   })
 
-  it('maps each instance to the right parent across multiple products', () => {
+  it('emits only an opaque batch when nothing is transparent', () => {
+    const flatMeshes = [
+      {expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}]},
+      {expressID: 200, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}]},
+    ]
+    const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(batches.length).toBe(1)
+    expect(stats.uniqueGeometryCount).toBe(1) // shared across two products
+    expect(stats.instanceCount).toBe(2)
+    expect(Array.from(batches[0].instanceParents)).toEqual([100, 200])
+  })
+
+  it('skips a bad geometry once (no redundant re-fetch) and counts each skipped placement', () => {
+    let getGeometryCalls = 0
     const api = makeApi({999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}})
-    const flatMeshes = [
-      {expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT}]},
-      {expressID: 200, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT}]},
-    ]
-    const {instanceParents, stats} = flatMeshToBatchedModel(flatMeshes, api, 0)
-    expect(stats.uniqueGeometryCount).toBe(1) // shared shape across two products
-    expect(stats.instanceCount).toBe(2)
-    expect(Array.from(instanceParents)).toEqual([100, 200])
+    const wrapped = {...api, GetGeometry(m, id) {
+      getGeometryCalls++
+      // eslint-disable-next-line new-cap
+      return api.GetGeometry(m, id)
+    }}
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+        {geometryExpressID: 777, flatTransformation: IDENTITY_MAT, color: OPAQUE}, // bad, ref'd twice
+        {geometryExpressID: 777, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+      ],
+    }]
+    const {stats} = flatMeshToBatchedModel(flatMeshes, wrapped, 0)
+    expect(stats.skippedPlacedGeometries).toBe(2) // each bad placement counted
+    // GetGeometry called once for 999 + once for 777 (not twice) = 2.
+    expect(getGeometryCalls).toBe(2)
   })
 
-  it('skips FlatMeshes without an expressID and missing/empty geometry', () => {
-    const api = makeApi({
-      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
-      0: {vertexData: new Float32Array([]), indexData: new Uint32Array([])},
-    })
+  it('skips FlatMeshes without an expressID', () => {
     const flatMeshes = [
-      {expressID: undefined, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT}]},
-      {
-        expressID: 100,
-        geometries: [
-          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT},
-          {geometryExpressID: 777, flatTransformation: IDENTITY_MAT}, // missing
-          {geometryExpressID: 0, flatTransformation: IDENTITY_MAT}, // empty
-        ],
-      },
+      {expressID: undefined, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}]},
+      {expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}]},
     ]
-    const {stats} = flatMeshToBatchedModel(flatMeshes, api, 0)
-    expect(stats.uniqueGeometryCount).toBe(1)
-    expect(stats.instanceCount).toBe(1)
+    const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
     expect(stats.skippedFlatMeshes).toBe(1)
-    expect(stats.skippedPlacedGeometries).toBe(2)
+    expect(stats.instanceCount).toBe(1)
+    expect(batches.length).toBe(1)
   })
 })
