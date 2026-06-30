@@ -19,10 +19,52 @@
 
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
+import debug, {DEBUG, isLogEnabled} from '../../utils/debug'
+
+
+/**
+ * Group the captured FlatMesh stream by shared geometry and log the
+ * instancing analysis (draw-call + vertex-memory delta vs. the merged
+ * path) — but ONLY when verbose logging is enabled.
+ *
+ * The whole grouping is gated on `isLogEnabled(DEBUG)`, not just the
+ * print: on a large model it walks every placement (tens of thousands)
+ * and re-fetches each unique shape's size across the Conway boundary, so
+ * building it on every default-level load — only to drop the result —
+ * would be pure waste. There is no feature flag (the grouper is a
+ * permanent diagnostic and the foundation the BatchedMesh render path,
+ * §3b.iv, builds on); verbosity is the gate. Never throws into the load
+ * path: a probe failure must not discard a successful parse.
+ *
+ * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {number} modelID
+ * @param {Array} captured FlatMeshes captured during the parse
+ */
+function logInstancedModelStats(ifcAPI, modelID, captured) {
+  if (!isLogEnabled(DEBUG)) {
+    return
+  }
+  try {
+    const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
+    const reduction = stats.vertexReductionRatio.toFixed(2)
+    debug(DEBUG).log(
+      `[instancedMeshes] modelID=${modelID} — ` +
+      `instances=${stats.instanceCount} ` +
+      `uniqueShapes=${stats.uniqueGeometryCount} ` +
+      `(shared=${stats.sharedGeometryCount} singleton=${stats.singletonGeometryCount}) ` +
+      `→ instancedDrawCalls=${stats.uniqueGeometryCount} (merged path = 1) | ` +
+      `verts merged=${stats.mergedVertexCount} instanced=${stats.instancedVertexCount} ` +
+      `(reductionRatio=${reduction}) bytesSaved=${stats.estimatedBytesSaved} | ` +
+      `mostInstanced: geometry#${stats.topInstancedGeometryID} ×${stats.topInstancedCount}`)
+  } catch (err) {
+    console.warn('[instancedMeshes] probe failed (non-fatal):', err)
+  }
+}
 
 
 /**
@@ -174,6 +216,12 @@ export default class ShareIfcLoader {
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
       }
+      // Instanced-rendering analysis: always runs (cheap), logged under
+      // verbose. Groups the captured stream by shared `geometryExpressID`
+      // and reports the GPU-instancing draw-call + vertex-memory delta vs.
+      // the merged path that just rendered. The grouper is the foundation
+      // the BatchedMesh render path (§3b.iv) builds on.
+      logInstancedModelStats(ifcAPI, modelID, captured)
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal
