@@ -36,6 +36,10 @@ function run(label, cmd, cwd) {
 }
 
 
+// marketing/ is a standalone yarn-classic project (pinned via its own
+// package.json#packageManager). `--frozen-lockfile` is the classic flag and is
+// correct here even though the root repo is on yarn Berry; corepack runs classic
+// yarn in this directory because of that pin.
 run('installing deps (frozen lockfile)', 'yarn install --frozen-lockfile', MARKETING)
 run('building static export', 'yarn build', MARKETING)
 
