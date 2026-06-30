@@ -145,7 +145,28 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
   geometry.setAttribute('expressID', new BufferAttribute(expressIDs, 1))
   geometry.setIndex(new BufferAttribute(indices, 1))
 
-  const subset = new Mesh(geometry, opts.material ?? mesh.material)
+  let material = opts.material ?? mesh.material
+  if (opts.raycastInvisible && material && typeof material.clone === 'function') {
+    // Overlay (selection / preselection) sits coplanar with the opaque
+    // batch, but — unlike the merged-path subsets, which share the source's
+    // exact vertex buffer and so get pixel-identical depth — this subset is
+    // re-baked from independent CPU math. Without a depth bias the two
+    // surfaces z-fight and the cyan overlay mostly vanishes. Clone the
+    // (shared, fork-owned) overlay material and pull it toward the camera so
+    // it reliably wins the coplanar depth test; `depthTest` stays on so the
+    // highlight is still occluded by geometry genuinely in front.
+    material = material.clone()
+    material.polygonOffset = true
+    material.polygonOffsetFactor = -1
+    material.polygonOffsetUnits = -1
+    material.needsUpdate = true
+  }
+
+  const subset = new Mesh(geometry, material)
+  if (material !== (opts.material ?? mesh.material)) {
+    // We own this clone — flag it so removeSubset disposes it.
+    subset.userData.disposableMaterial = true
+  }
   // Mirror the source's full local transform (the coordination matrix is
   // stamped onto the BatchedMesh with matrixAutoUpdate off). Copy the
   // matrix and decompose so both representations stay consistent whether
@@ -230,6 +251,10 @@ export function attachBatchedSubsets(model, fallbackParent, defaults = {}) {
       // Batched subset geometry is freshly baked (not shared with the
       // source batch's packed buffers) — always safe to dispose.
       m.geometry?.dispose?.()
+      // Overlay subsets carry a cloned, depth-biased material we own.
+      if (m.userData.disposableMaterial) {
+        m.material?.dispose?.()
+      }
     }
     subsetsByCustomID.delete(customID)
   }

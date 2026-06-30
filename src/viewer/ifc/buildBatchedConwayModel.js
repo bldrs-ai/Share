@@ -38,9 +38,14 @@ import {
  * @param {Array} capturedFlatMeshes FlatMeshes captured during the parse
  * @param {object} ifcAPI Conway-compatible IfcAPI
  * @param {number} modelID
+ * @param {object} [opts]
+ * @param {object} [opts.scene] the THREE scene; passed as the subset
+ *   `fallbackParent` so selection / preselection overlays still attach (and
+ *   render their fill) when a source batch has no parent at subset-build
+ *   time. Mirrors the merged paths (`attachInstanceMapSubsets(model, scene)`).
  * @return {object} `{model, stats}` — `model` is a BatchedMesh or a Group of them.
  */
-export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID) {
+export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
   const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID)
 
   if (batches.length === 0) {
@@ -101,8 +106,8 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID) {
   // contract the merged paths expose, so ShareViewer + IfcIsolator drive the
   // batched model unchanged. `fallbackParent = null`: in production the
   // source batch is parented into the scene, so subsets inherit its parent;
-  // headless tests pass their own root.
-  attachBatchedSubsets(model, null, {})
+  // `opts.scene` backstops the case where a source batch has no parent yet.
+  attachBatchedSubsets(model, opts.scene ?? null, {})
 
   // Property / spatial closures (getItemProperties, getPropertySets,
   // getSpatialStructure, getIfcType) — identical to the merged path, so the

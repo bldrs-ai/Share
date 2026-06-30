@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {Group, Mesh} from 'three'
+import {Group, Mesh, MeshBasicMaterial} from 'three'
 import {
   attachBatchedSubsets,
   buildBatchedModelSubsets,
@@ -120,6 +120,29 @@ describe('viewer/ifc/batchedSubset', () => {
     expect(sel[0].raycast).not.toBe(Mesh.prototype.raycast)
     const iso = mesh.createSubset({ids: [100], customID: 'Bldrs::Share::Isolator'})
     expect(iso[0].raycast).toBe(Mesh.prototype.raycast)
+  })
+
+  it('depth-biases a cloned overlay material so it wins the coplanar test', () => {
+    const mesh = decoratedBatch()
+    const overlay = new MeshBasicMaterial()
+    const subset = buildBatchedSubsetMesh(mesh, new Set([100]), {
+      material: overlay, raycastInvisible: true,
+    })
+    // Cloned (not the shared fork material) and pulled toward the camera.
+    expect(subset.material).not.toBe(overlay)
+    expect(subset.material.polygonOffset).toBe(true)
+    expect(subset.material.polygonOffsetFactor).toBeLessThan(0)
+    expect(subset.userData.disposableMaterial).toBe(true)
+  })
+
+  it('leaves isolation-subset material untouched (no clone, no offset)', () => {
+    const mesh = decoratedBatch()
+    const isoMat = new MeshBasicMaterial()
+    const subset = buildBatchedSubsetMesh(mesh, new Set([100]), {
+      material: isoMat, raycastInvisible: false,
+    })
+    expect(subset.material).toBe(isoMat)
+    expect(subset.userData.disposableMaterial).toBeUndefined()
   })
 
   it('removeSubset clears a named slot', () => {

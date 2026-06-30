@@ -167,7 +167,7 @@ export default class ShareIfcLoader {
       let buildStats
       if (isFeatureEnabled('batchedMesh')) {
         try {
-          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID)
+          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
