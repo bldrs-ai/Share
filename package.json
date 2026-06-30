@@ -8,6 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
+    "setup": "yarn install",
     "build": "yarn build-conway",
     "build-prod": "SHARE_CONFIG=prod yarn build",
     "build-conway": "yarn clean && yarn build-share-conway",
