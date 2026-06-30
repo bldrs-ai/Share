@@ -21,6 +21,11 @@ const MARKETING = path.join(REPO_ROOT, 'marketing')
 const MARKETING_OUT = path.join(MARKETING, 'out')
 const DOCS = path.join(REPO_ROOT, 'docs')
 
+// corepack (used for the marketing install/build below) must not block on an
+// interactive "about to download" prompt when it fetches marketing's pinned
+// classic yarn version on a fresh CI/Netlify runner.
+process.env.COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+
 
 /**
  * Run a labeled child command, inheriting stdio so progress streams through.
@@ -36,12 +41,15 @@ function run(label, cmd, cwd) {
 }
 
 
-// marketing/ is a standalone yarn-classic project (pinned via its own
-// package.json#packageManager). `--frozen-lockfile` is the classic flag and is
-// correct here even though the root repo is on yarn Berry; corepack runs classic
-// yarn in this directory because of that pin.
-run('installing deps (frozen lockfile)', 'yarn install --frozen-lockfile', MARKETING)
-run('building static export', 'yarn build', MARKETING)
+// marketing/ is a standalone yarn-classic project (pinned to yarn 1.x via its
+// own package.json#packageManager). It must install with CLASSIC yarn — but the
+// root repo is on yarn Berry, which forces its own `yarn` onto PATH for child
+// scripts, so a bare `yarn` here runs Berry 4.x (wrong: rejects
+// --frozen-lockfile, and under hardened mode refuses to migrate the classic
+// lockfile → YN0028). Invoke `corepack yarn` instead: corepack is NOT shimmed by
+// Berry, so it resolves and runs marketing's pinned classic yarn.
+run('installing deps (frozen lockfile)', 'corepack yarn install --frozen-lockfile', MARKETING)
+run('building static export', 'corepack yarn build', MARKETING)
 
 if (!existsSync(DOCS)) {
   mkdirSync(DOCS, {recursive: true})
