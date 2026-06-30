@@ -1,10 +1,10 @@
-/* eslint-disable no-unused-vars */
-const OFF = 4
-const ERROR = 3
-const WARN = 2 // Use this as default for prod.  Should never see these messages.
-const INFO = 1
-const DEBUG = 0
-/* eslint-enable no-unused-vars */
+// Log levels, exported so callers can pick a threshold for `debug(level)`
+// (e.g. `debug(DEBUG).log(...)` only surfaces under verbose logging).
+export const OFF = 4
+export const ERROR = 3
+export const WARN = 2 // Use this as default for prod.  Should never see these messages.
+export const INFO = 1
+export const DEBUG = 0
 let DEBUG_LEVEL = WARN
 
 

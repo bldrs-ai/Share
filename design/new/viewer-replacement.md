@@ -672,22 +672,54 @@ plan asks of Share and the per-instance id GPU instancing needs are the
 **same** identifier. Doing them together is cheaper than either alone, and
 STEP assemblies are both the forcing function and the biggest beneficiary.
 
+**Measured (PR1, 2026-06).** The grouper ran over real models. Vertex
+reduction = how much of the merged vertex memory the geometry sharing
+removes; `drawCalls` = unique shapes (the *naive* InstancedMesh-per-shape
+bound, **not** the target — see below).
+
+| Model | instances | unique shapes | shared | vtx reduction | mem saved | top shape | naive drawCalls |
+|---|---|---|---|---|---|---|---|
+| index.ifc | 7 | 7 | 0 | 0% | ~0 | ×1 | 7 |
+| Momentum (ArchiCAD) | 439 | 425 | 7 | 1% | 0.5 MB | ×3 | 425 |
+| Schependomlaan | 6,250 | 4,697 | 667 | 34% | 5.7 MB | ×147 | 4,697 |
+| Snowdon 2x3 (Revit) | 25,587 | 9,767 | 5,230 | **60%** | **63 MB** | ×336 | 9,767 |
+| Snowdon 4 (Revit) | 28,363 | 12,251 | 5,310 | **57%** | **65 MB** | ×336 | 12,251 |
+| Arty.step | 6,769 | 5,128 | 1,285 | **26%** | **25 MB** | ×20 | 5,128 |
+
+Three settled conclusions:
+
+1. **The memory win is real and large where instancing is dense** (Revit
+   ~60% / ~63 MB; STEP `Arty.step` 26% / 25 MB) and **degrades
+   gracefully** to ~0 on singleton-heavy models (index, Momentum) — no
+   penalty, they just merge as today.
+2. **STEP is a first-class beneficiary**, confirming the occurrence-identity
+   thesis on real data, not just `as1`.
+3. **The `drawCalls` column is a warning, not a target.** Naive
+   InstancedMesh-per-shape turns Snowdon's 1 merged draw call into ~10–12k —
+   almost certainly a net render-perf loss. **This is the empirical reason
+   PR2 uses `BatchedMesh`** (one multi-draw call across many shapes +
+   per-instance transforms), keeping draw calls ~1 while taking the memory
+   win. Do **not** ship InstancedMesh-per-shape.
+
 **Slicing.**
-- **PR1 (this slice) — building block + measurement, no live render
-  change.** `src/viewer/ifc/flatMeshToInstancedModel.js`: a pure grouper
-  that dedupes the captured FlatMeshes by `geometryExpressID` and returns
-  the per-shape placement lists (matrix/color/parent/instanceId) + stats
-  (unique shapes = instanced draw calls, total instances, vertex-buffer
-  bytes merged-vs-instanced, the most-instanced shape). Behind
-  `?feature=instancedMeshes` the loader logs the real comparison for the
-  loaded model, so as1 / Snowdon give concrete draw-call + memory deltas
-  in a deploy preview **without** touching the production render path
-  (no Conway release needed — the data is already in the stream). The
-  grouper is the reusable core PR2 consumes.
-- **PR2 — live render swap.** Build `BatchedMesh` (hybrid) from the
-  grouper output, rewire picking onto native `instanceId`/`batchId`, and
-  reconcile selection/subset + the cache round-trip. Gated behind the same
-  flag until it reaches parity with the merged-mesh path.
+- **PR1 (landed, #1568) — grouper + always-on verbose analysis.**
+  `src/viewer/ifc/flatMeshToInstancedModel.js` is a pure grouper that
+  dedupes the captured FlatMeshes by `geometryExpressID` and returns the
+  per-shape placement lists (matrix/color/parent/instanceId) + the stats
+  above. It runs on every Conway-direct load (the grouping is cheap and is
+  the foundation PR2 builds on — not throwaway scaffolding) and the
+  analysis line is logged under verbose (`debug(DEBUG)`); there is **no
+  feature flag**. Render is unchanged.
+- **PR2 — `BatchedMesh` render path.** Build a `BatchedMesh` from the
+  grouper output (`addGeometry` once per unique shape in local space,
+  `addInstance` + `setMatrixAt`/`setColorAt` per placement; merge or batch
+  the singletons too — one draw call regardless). Rewire picking onto
+  native `batchId` → `parentExpressId`, reconcile selection/subset + the
+  GLB-cache round-trip, validate `three-mesh-bvh` accelerated raycast on
+  the batched geometry. Moving toward **always-on** within the Conway-direct
+  path (no new flag) with a defensive fallback to the merged path on any
+  construction error. Pairs with the `expressID → occurrence path`
+  identifier generalization (`batchId` is that per-occurrence handle).
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

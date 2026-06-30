@@ -24,14 +24,21 @@ import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
+import debug, {DEBUG} from '../../utils/debug'
 
 
 /**
- * Run the instanced-rendering grouper over a captured FlatMesh stream
- * and log the draw-call + vertex-memory comparison vs. the merged path.
- * Diagnostic only — see `?feature=instancedMeshes`
- * (design/new/viewer-replacement.md §3b.iv). Never throws into the
- * load path: a probe failure must not discard a successful parse.
+ * Group the captured FlatMesh stream by shared geometry and log the
+ * instancing analysis (draw-call + vertex-memory delta vs. the merged
+ * path) under verbose logging.
+ *
+ * Runs on every Conway-direct load — the grouping is cheap (a map lookup
+ * + size accessor per shape, a push per placement; negligible against
+ * parse/geometry) and `flatMeshToInstancedModel` is the foundation the
+ * BatchedMesh render path (§3b.iv) builds on, so this is not throwaway
+ * scaffolding. The log itself is gated on `debug(DEBUG)` so it only
+ * surfaces when verbose logging is enabled. Never throws into the load
+ * path: a probe failure must not discard a successful parse.
  *
  * @param {object} ifcAPI Conway IfcAPI bound to the model
  * @param {number} modelID
@@ -41,8 +48,7 @@ function logInstancedModelStats(ifcAPI, modelID, captured) {
   try {
     const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
     const reduction = stats.vertexReductionRatio.toFixed(2)
-    // eslint-disable-next-line no-console
-    console.info(
+    debug(DEBUG).log(
       `[instancedMeshes] modelID=${modelID} — ` +
       `instances=${stats.instanceCount} ` +
       `uniqueShapes=${stats.uniqueGeometryCount} ` +
@@ -206,14 +212,12 @@ export default class ShareIfcLoader {
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
       }
-      // Instanced-rendering measurement probe (`?feature=instancedMeshes`).
-      // Groups the same captured stream by shared `geometryExpressID` and
-      // logs the GPU-instancing draw-call + vertex-memory delta vs. the
-      // merged path that just rendered — diagnostic only, render unchanged.
-      // See design/new/viewer-replacement.md §3b.iv.
-      if (isFeatureEnabled('instancedMeshes')) {
-        logInstancedModelStats(ifcAPI, modelID, captured)
-      }
+      // Instanced-rendering analysis: always runs (cheap), logged under
+      // verbose. Groups the captured stream by shared `geometryExpressID`
+      // and reports the GPU-instancing draw-call + vertex-memory delta vs.
+      // the merged path that just rendered. The grouper is the foundation
+      // the BatchedMesh render path (§3b.iv) builds on.
+      logInstancedModelStats(ifcAPI, modelID, captured)
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal
