@@ -39,3 +39,17 @@ deno.lock
 # Claude Code local settings
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# SessionStart hook per-step completion stamps (runtime state)
+.claude/.bootstrap/
+
+# Yarn Berry (nodeLinker: node-modules). Commit the release binary; ignore the
+# fetch cache and per-install state. PnP is not used.
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+.yarn/install-state.gz

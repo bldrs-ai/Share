@@ -30,15 +30,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
             
       # Use exact lock file to ensure reproducible install and cached node_modules
       # since we're hashing on yarn.lock anyways
-      - run: yarn install --frozen-lockfile --prefer-offline
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
 
       # Useful diagnostic
       - name: Playwright Info
@@ -93,13 +94,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
 
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - run: yarn install --frozen-lockfile --prefer-offline
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
 
       - name: Playwright Info
         run: npx playwright --version

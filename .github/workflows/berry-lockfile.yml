@@ -1,0 +1,49 @@
+# One-shot helper: convert yarn.lock to Berry format on a healthy-network runner
+# and commit it back to the branch. The Claude-Code-on-web sandbox egress can't
+# reliably complete the full fetch needed to write the converted lockfile, so we
+# generate it here. Remove this workflow once the Berry lockfile is committed.
+name: Generate Berry lockfile
+
+on:
+  push:
+    branches:
+      - claude/yarn-berry-migration-tjw7hc
+    paths:
+      - .yarnrc.yml
+      - package.json
+      - .yarn/releases/**
+      - .github/workflows/berry-lockfile.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack (activates yarn Berry from package.json)
+        run: corepack enable
+
+      - name: Convert lockfile to Berry format
+        run: yarn install --mode=update-lockfile
+
+      - name: Commit converted lockfile
+        run: |
+          if git diff --quiet -- yarn.lock; then
+            echo "yarn.lock already in Berry format; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yarn.lock
+          git commit -m "chore(yarn): convert yarn.lock to Berry format"
+          git push

@@ -33,7 +33,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: yarn install
+      - name: Install dependencies
+        run: |
+          # Activate yarn Berry from package.json#packageManager (+ vendored
+          # .yarn/releases binary). --immutable is Berry's --frozen-lockfile.
+          corepack enable
+          yarn install --immutable
       - run: yarn build-prod
       - run: yarn lint
       - run: yarn test-ci
