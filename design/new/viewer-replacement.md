@@ -719,16 +719,43 @@ Three settled conclusions:
   the foundation PR2 builds on); it runs **only when verbose logging is
   enabled** (`isLogEnabled(DEBUG)`), so the per-placement grouping cost is
   paid only when the analysis is actually wanted. Render is unchanged.
-- **PR2 — `BatchedMesh` render path.** Build a `BatchedMesh` from the
-  grouper output (`addGeometry` once per unique shape in local space,
-  `addInstance` + `setMatrixAt`/`setColorAt` per placement; merge or batch
-  the singletons too — one draw call regardless). Rewire picking onto
-  native `batchId` → `parentExpressId`, reconcile selection/subset + the
-  GLB-cache round-trip, validate `three-mesh-bvh` accelerated raycast on
-  the batched geometry. Moving toward **always-on** within the Conway-direct
-  path (no new flag) with a defensive fallback to the merged path on any
+- **PR2 (#1571) — `BatchedMesh` render path.** Build a `BatchedMesh` from
+  the grouper output (`addGeometry` once per unique shape in local space,
+  `addInstance` + `setMatrixAt`/`setColorAt` per placement; one draw call
+  regardless). Picking resolves on native `batchId` → `parentExpressId` via
+  the per-batch tables `buildBatchedConwayModel` attaches. Behind
+  `?feature=batchedMesh` with a defensive fallback to the merged path on any
   construction error. Pairs with the `expressID → occurrence path`
   identifier generalization (`batchId` is that per-occurrence handle).
+
+  **Transparency:** opaque and blended instances can't share one material
+  state, so placements are split by alpha into an opaque batch and a
+  transparent batch (`depthWrite:false`, per-instance RGBA via
+  `setColorAt(Vector4)`); >1 batch wraps in a `Group`. The occurrence-id
+  space is global across both batches so selection is split-agnostic.
+
+  **Interaction follow-ups — landed (this slice).** The batched model now
+  drives the same selection / preselection / isolation call-sites the
+  merged paths use, by attaching a `createSubset` / `removeSubset` surface
+  (`src/viewer/ifc/batchedSubset.js`) that re-bakes the selected instances
+  (read back via `getMatrixAt` + the retained per-batch `instanceGeometry`)
+  into world-aligned subset Meshes carrying a synthetic per-vertex
+  `expressID`. Capabilities are `expressIdPicking` + `batchedPicking`, so
+  `ShareViewer.setSelection` / `highlightIfcItem` fall to the generic
+  `model.createSubset` branch and `IfcIsolator` works unchanged
+  (`visualElementsIds` is unioned from `instanceParents`). Selection
+  highlights every occurrence of the picked product — **per-occurrence
+  outline narrowing still needs `instancePicking`** and is the remaining
+  follow-up. `three-mesh-bvh` accelerated raycast is validated on
+  `BatchedMesh`: `ShareIfc` patches
+  `BatchedMesh.prototype.{computeBoundsTree,raycast}` and each batch builds
+  its per-geometry bounds trees; `acceleratedBatchedMeshRaycast` still emits
+  `intersection.batchId`, so the pick path is unaffected. **GLB cache:** a
+  `BatchedMesh` model is **not** GLB-cacheable yet (no per-primitive
+  geometry for `GLTFExporter`, no per-vertex `_EXPRESSID` for
+  `BLDRS_face_ids`), so `exportAndCacheGlb` skips it and the model
+  re-parses on the next load; a batched-aware GLB schema is future work.
+  **Always-on** flip is deferred pending smoke-test of the flagged path.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

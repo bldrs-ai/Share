@@ -521,9 +521,12 @@ export default function CadView({
       // keep the legacy Shift behavior unchanged.
       // BatchedMesh render path (`?feature=batchedMesh`): the raycast sets
       // `batchId` (the per-instance id); resolve it to the parent IFC
-      // product through the tables `buildBatchedConwayModel` attached. The
-      // synthetic occurrence id narrows the (deferred) per-instance outline,
-      // exactly like the merged path's instanceId.
+      // product through the tables `buildBatchedConwayModel` attached.
+      // Selection highlights every occurrence of that product (parent-level
+      // subset, via the model's `createSubset`). Per-occurrence narrowing
+      // would need `instancePicking`, which the batched model doesn't carry
+      // yet — so we pass no instanceIds (avoids a no-op `setInstanceSelection`
+      // + its warn). See design/new/viewer-replacement.md §3b.iv.
       if (mesh.isBatchedMesh && mesh.instanceParents) {
         const batchId = picked.batchId
         if (batchId === undefined || batchId < 0) {
@@ -533,8 +536,7 @@ export default function CadView({
         if (parentExpressId === undefined || !viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        const instanceIds = event.shiftKey ? [] : [mesh.instanceOccurrenceIds[batchId]]
-        selectItemsInScene([parentExpressId], true, instanceIds)
+        selectItemsInScene([parentExpressId], true, [])
         return
       }
       if (mesh.instanceMap) {

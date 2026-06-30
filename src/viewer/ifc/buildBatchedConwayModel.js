@@ -1,4 +1,5 @@
 import {Group} from 'three'
+import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {
   attachConwayDirectModelMethods,
@@ -17,19 +18,22 @@ import {
  * directly; two are wrapped in a `Group` (the same hierarchical-model shape
  * the GLB cache-hit path already produces and the viewer already handles).
  *
- * Geometry-specific decoration the merged path uses (three-mesh-bvh
- * `IfcInstanceMap`, per-vertex subset construction) does NOT apply to a
- * `BatchedMesh` and is skipped; picking is native (`batchId`), and 3D
- * selection-outline / isolate is a follow-up (design/new/viewer-replacement.md
- * §3b.iv).
+ * The merged path's `IfcInstanceMap` / per-vertex subset construction
+ * doesn't apply to a `BatchedMesh`. Instead this model gets:
+ *   - native `batchId` picking (CadView resolves it via the per-batch tables),
+ *   - per-geometry three-mesh-bvh bounds trees (`computeBoundsTree`) so the
+ *     accelerated raycast stays sub-linear and still emits `batchId`,
+ *   - a `createSubset` / `removeSubset` surface (`attachBatchedSubsets`) that
+ *     re-bakes selected instances into world-aligned subset Meshes, so 3D
+ *     selection-outline, hover-preselection and isolate all light up through
+ *     the same call-sites the merged paths use (design/new/viewer-replacement.md
+ *     §3b.iv).
  *
- * Capabilities are `batchedPicking` only (NOT `expressIdPicking` /
- * `instancePicking`): `CadView` resolves a pick through the per-batch
- * `batchId` tables, while `ShareViewer.setSelection` / `setInstanceSelection`
- * guard on those other capabilities and so no-op safely (selection *state* —
- * store, NavTree, Properties — still flows; only the OutlineEffect subset is
- * deferred). Nothing in the selection path throws on a model without an
- * `instanceMap`.
+ * Capabilities: `expressIdPicking` + `batchedPicking` (NOT `instancePicking`
+ * — per-occurrence outline narrowing is still a follow-up; a click highlights
+ * every occurrence of the picked product). `setInstanceSelection` guards on
+ * `instancePicking` and so no-ops safely; the parent-level highlight from
+ * `setSelection` stands.
  *
  * @param {Array} capturedFlatMeshes FlatMeshes captured during the parse
  * @param {object} ifcAPI Conway-compatible IfcAPI
@@ -46,12 +50,23 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID) {
   }
 
   // Each batch carries its own pick tables; CadView reads them off the
-  // raycast-hit child (`intersection.object`).
+  // raycast-hit child (`intersection.object`). `instanceGeometry` feeds
+  // `batchedSubset` (selection / preselection / isolation re-baking).
   for (const batch of batches) {
     batch.mesh.instanceParents = batch.instanceParents
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+    batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.computeBoundingBox?.()
     batch.mesh.computeBoundingSphere?.()
+    // Per-geometry BVH for the batch. `ShareIfc` patches
+    // `BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree`
+    // (+ `raycast = acceleratedRaycast`), so picking on a many-instance
+    // batch resolves through the bounds trees instead of brute force —
+    // and `acceleratedBatchedMeshRaycast` still sets `intersection.batchId`
+    // (validated against three-mesh-bvh r0.9), so the CadView pick branch
+    // is unaffected. Guarded: the method is absent under the Jest `three`
+    // mock and present only in the production prototype patch.
+    batch.mesh.computeBoundsTree?.()
   }
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
@@ -70,10 +85,24 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID) {
   model.ifcManager = makeConwayDirectIfcManager(ifcAPI, modelID)
 
   model.capabilities = model.capabilities ?? {}
-  // batchedPicking only — see the class doc above for why expressIdPicking /
-  // instancePicking are intentionally left off.
+  // `expressIdPicking` (parent-level subsets via the `createSubset` surface
+  // attached below) + `batchedPicking` (CadView resolves a click through the
+  // per-batch `batchId` tables). NOT `instancePicking` (per-occurrence
+  // narrowing) or `ifcSubsets` (web-ifc-three parser state) — those route
+  // through machinery the batched model doesn't have. With `expressIdPicking`
+  // on, `setSelection` / `highlightIfcItem` fall to the generic
+  // `model.createSubset` branch, which `attachBatchedSubsets` services.
+  model.capabilities.expressIdPicking = true
   model.capabilities.batchedPicking = true
   model.capabilities.ifcSubsets = false
+
+  // Selection / preselection / isolation subsets, re-baked from the batch
+  // instances (see batchedSubset.js). Same `createSubset` / `removeSubset`
+  // contract the merged paths expose, so ShareViewer + IfcIsolator drive the
+  // batched model unchanged. `fallbackParent = null`: in production the
+  // source batch is parented into the scene, so subsets inherit its parent;
+  // headless tests pass their own root.
+  attachBatchedSubsets(model, null, {})
 
   // Property / spatial closures (getItemProperties, getPropertySets,
   // getSpatialStructure, getIfcType) — identical to the merged path, so the

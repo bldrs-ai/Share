@@ -1009,6 +1009,17 @@ export class ShareViewer {
    */
   getPickedItemId(picked) {
     const mesh = picked.object
+    // BatchedMesh path (`?feature=batchedMesh`): the parent IFC product id
+    // lives in the per-batch `instanceParents` table keyed by `batchId`,
+    // not on any vertex — there's no per-face expressID to read. Resolve it
+    // here so hover-preselection (highlightIfcItem) matches the click path.
+    if (mesh.isBatchedMesh && mesh.instanceParents) {
+      const batchId = picked.batchId
+      if (batchId === undefined || batchId < 0) {
+        return null
+      }
+      return mesh.instanceParents[batchId]
+    }
     if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }

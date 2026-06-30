@@ -72,6 +72,10 @@ const OPAQUE_ALPHA = 1
  *   expressID`.
  * @property {Uint32Array} instanceOccurrenceIds `batchId → synthetic 0-based
  *   occurrence id` (global emission order across both batches).
+ * @property {Array<BufferGeometry>} instanceGeometry `batchId → the shared
+ *   local-space shape geometry` this instance was added from. Retained so
+ *   `batchedSubset` can re-bake a selection/isolation subset (the packed
+ *   batch buffers aren't conveniently re-readable per instance).
  */
 
 
@@ -251,6 +255,7 @@ function buildBatch(groups, transparent) {
   const mesh = new BatchedMesh(instanceCount, vertexCount, indexCount, material)
   const instanceParents = new Uint32Array(instanceCount)
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
+  const instanceGeometry = new Array(instanceCount)
   const matrix = new Matrix4()
   const rgba = new Vector4()
 
@@ -264,9 +269,10 @@ function buildBatch(groups, transparent) {
         placement.color.x, placement.color.y, placement.color.z, placement.color.w))
       instanceParents[batchId] = placement.parentExpressId
       instanceOccurrenceIds[batchId] = placement.occurrenceId
+      instanceGeometry[batchId] = group.geometry
     }
   }
-  return {mesh, material, transparent, instanceParents, instanceOccurrenceIds}
+  return {mesh, material, transparent, instanceParents, instanceOccurrenceIds, instanceGeometry}
 }
 
 
