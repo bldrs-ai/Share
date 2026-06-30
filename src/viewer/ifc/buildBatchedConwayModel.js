@@ -23,16 +23,18 @@ import {
  *   - native `batchId` picking (CadView resolves it via the per-batch tables),
  *   - per-geometry three-mesh-bvh bounds trees (`computeBoundsTree`) so the
  *     accelerated raycast stays sub-linear and still emits `batchId`,
- *   - a `createSubset` / `removeSubset` surface (`attachBatchedSubsets`) that
- *     re-bakes selected instances into world-aligned subset Meshes, so 3D
- *     selection-outline, hover-preselection and isolate all light up through
- *     the same call-sites the merged paths use (design/new/viewer-replacement.md
- *     §3b.iv).
+ *   - in-place selection / hover highlight by recoloring the picked product's
+ *     instances (`setColorAt`, via `batchedHighlight`) — a coplanar overlay
+ *     subset z-fights the opaque batch and won't render reliably, so the
+ *     batched path recolors the actual pixels instead,
+ *   - a `createSubset` / `removeSubset` surface (`attachBatchedSubsets`) used
+ *     by `IfcIsolator` to re-bake hide/isolate subsets from the instances
+ *     (design/new/viewer-replacement.md §3b.iv).
  *
  * Capabilities: `expressIdPicking` + `batchedPicking` (NOT `instancePicking`
- * — per-occurrence outline narrowing is still a follow-up; a click highlights
- * every occurrence of the picked product). `setInstanceSelection` guards on
- * `instancePicking` and so no-ops safely; the parent-level highlight from
+ * — per-occurrence narrowing is still a follow-up; a click highlights every
+ * occurrence of the picked product). `setInstanceSelection` guards on
+ * `instancePicking` and so no-ops safely; the parent-level recolor from
  * `setSelection` stands.
  *
  * @param {Array} capturedFlatMeshes FlatMeshes captured during the parse
@@ -61,6 +63,7 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
     batch.mesh.instanceParents = batch.instanceParents
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
     batch.mesh.instanceGeometry = batch.instanceGeometry
+    batch.mesh.instanceColors = batch.instanceColors
     batch.mesh.computeBoundingBox?.()
     batch.mesh.computeBoundingSphere?.()
     // Per-geometry BVH for the batch. `ShareIfc` patches

@@ -734,28 +734,38 @@ Three settled conclusions:
   `setColorAt(Vector4)`); >1 batch wraps in a `Group`. The occurrence-id
   space is global across both batches so selection is split-agnostic.
 
-  **Interaction follow-ups — landed (this slice).** The batched model now
-  drives the same selection / preselection / isolation call-sites the
-  merged paths use, by attaching a `createSubset` / `removeSubset` surface
-  (`src/viewer/ifc/batchedSubset.js`) that re-bakes the selected instances
-  (read back via `getMatrixAt` + the retained per-batch `instanceGeometry`)
-  into world-aligned subset Meshes carrying a synthetic per-vertex
-  `expressID`. Capabilities are `expressIdPicking` + `batchedPicking`, so
-  `ShareViewer.setSelection` / `highlightIfcItem` fall to the generic
-  `model.createSubset` branch and `IfcIsolator` works unchanged
-  (`visualElementsIds` is unioned from `instanceParents`). Selection
-  highlights every occurrence of the picked product — **per-occurrence
-  outline narrowing still needs `instancePicking`** and is the remaining
-  follow-up. `three-mesh-bvh` accelerated raycast is validated on
-  `BatchedMesh`: `ShareIfc` patches
-  `BatchedMesh.prototype.{computeBoundsTree,raycast}` and each batch builds
-  its per-geometry bounds trees; `acceleratedBatchedMeshRaycast` still emits
-  `intersection.batchId`, so the pick path is unaffected. **GLB cache:** a
-  `BatchedMesh` model is **not** GLB-cacheable yet (no per-primitive
-  geometry for `GLTFExporter`, no per-vertex `_EXPRESSID` for
-  `BLDRS_face_ids`), so `exportAndCacheGlb` skips it and the model
-  re-parses on the next load; a batched-aware GLB schema is future work.
-  **Always-on** flip is deferred pending smoke-test of the flagged path.
+  **Interaction follow-ups — landed (this slice).**
+
+  - *Selection + hover highlight (`src/viewer/ifc/batchedHighlight.js`).*
+    **Recolor, not overlay.** The merged paths highlight by dropping a
+    translucent subset Mesh into the scene coplanar with the source; that
+    only renders because the subset shares the source's *exact* vertex
+    buffer (pixel-identical depth, so it wins the depth test). A
+    `BatchedMesh` subset must be re-baked from independent CPU math, which
+    z-fights the opaque batch and vanishes — polygon-offset tuning never
+    made it robust. So the batched path recolors the *actual* instances via
+    `setColorAt` (the idiomatic BatchedMesh approach): two layers
+    (selection = sticky, preselection = hover) painted over each instance's
+    original colour, which is retained per-batch (`instanceColors`, alpha
+    included so glass stays glass). Selection covers every occurrence of the
+    picked product — **per-occurrence narrowing still needs `instancePicking`**
+    and is the remaining follow-up.
+  - *Isolate / hide (`src/viewer/ifc/batchedSubset.js`).* `IfcIsolator`
+    drives the batched model unchanged through a `createSubset` /
+    `removeSubset` surface that re-bakes the kept instances (`getMatrixAt` +
+    the retained `instanceGeometry`) into world-aligned subset Meshes
+    carrying a synthetic per-vertex `expressID` (so the isolated subset
+    stays pickable). `visualElementsIds` is unioned from `instanceParents`.
+  - *BVH picking.* `three-mesh-bvh` accelerated raycast validated on
+    `BatchedMesh`: `ShareIfc` patches
+    `BatchedMesh.prototype.{computeBoundsTree,raycast}` and each batch builds
+    its per-geometry bounds trees; `acceleratedBatchedMeshRaycast` still
+    emits `intersection.batchId`, so the pick path is unaffected.
+  - *GLB cache.* A `BatchedMesh` model is **not** GLB-cacheable yet (no
+    per-primitive geometry for `GLTFExporter`, no per-vertex `_EXPRESSID` for
+    `BLDRS_face_ids`), so `exportAndCacheGlb` skips it and the model
+    re-parses on the next load; a batched-aware GLB schema is future work.
+  - *Always-on* flip is deferred pending smoke-test of the flagged path.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:

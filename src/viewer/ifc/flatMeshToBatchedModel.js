@@ -76,6 +76,10 @@ const OPAQUE_ALPHA = 1
  *   local-space shape geometry` this instance was added from. Retained so
  *   `batchedSubset` can re-bake a selection/isolation subset (the packed
  *   batch buffers aren't conveniently re-readable per instance).
+ * @property {Array<object>} instanceColors `batchId → original `{x,y,z,w}`
+ *   RGBA`. Retained so `batchedHighlight` can recolor a selected instance
+ *   via `setColorAt` and restore the exact original afterwards (alpha
+ *   included — `getColorAt` would drop it).
  */
 
 
@@ -256,6 +260,7 @@ function buildBatch(groups, transparent) {
   const instanceParents = new Uint32Array(instanceCount)
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
   const instanceGeometry = new Array(instanceCount)
+  const instanceColors = new Array(instanceCount)
   const matrix = new Matrix4()
   const rgba = new Vector4()
 
@@ -270,9 +275,13 @@ function buildBatch(groups, transparent) {
       instanceParents[batchId] = placement.parentExpressId
       instanceOccurrenceIds[batchId] = placement.occurrenceId
       instanceGeometry[batchId] = group.geometry
+      instanceColors[batchId] = placement.color
     }
   }
-  return {mesh, material, transparent, instanceParents, instanceOccurrenceIds, instanceGeometry}
+  return {
+    mesh, material, transparent,
+    instanceParents, instanceOccurrenceIds, instanceGeometry, instanceColors,
+  }
 }
 
 
