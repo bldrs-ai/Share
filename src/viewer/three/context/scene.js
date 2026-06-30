@@ -24,10 +24,7 @@ export class IfcScene extends IfcComponent {
   constructor(context) {
     super(context)
     this.context = context
-    // White to match the §6e looks (src/viewer/looks.js — both ship white);
-    // `ShareViewer.applyLook` re-asserts the look's background after the
-    // theme-driven init colour, so the active look owns the 3D backdrop.
-    this.defaultBackgroundColor = new Color(0xffffff)
+    this.defaultBackgroundColor = new Color(0xa9a9a9)
     this.scene = new Scene()
     this.setupScene(context.options)
     this.setupLights()

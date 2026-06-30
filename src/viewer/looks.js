@@ -11,12 +11,14 @@ import {ToneMappingMode} from 'postprocessing'
  *     map, procedural gradient studio IBL, soft key+fill, a faint material
  *     sheen. These values are ALSO baked into the construction-time
  *     constants so the first paint is correct without any apply call:
- *       · lights + background → src/viewer/three/context/scene.js
+ *       · lights → src/viewer/three/context/scene.js
  *       · material roughness/metalness → src/viewer/ifc/flatMeshToBufferGeometry.js
  *       · env intensity → src/viewer/ShareViewer.js (ENV_MAP_INTENSITY)
  *       · tone-mapping operator → src/viewer/three/CustomPostProcessor.js
  *     Keep those in sync with `neutral` below — this object is the runtime
  *     source of truth when toggling, the constants are the boot defaults.
+ *     Scene background is deliberately NOT a look property — it follows the
+ *     day/night theme (theme/Palette.js `sceneBackground`: white / black).
  *
  *   - `flat`: the legacy-ish unlit read — no tone curve, no IBL, flat bright
  *     lighting, fully matte — for users who prefer the old high-key look.
@@ -36,7 +38,6 @@ export const LOOKS = {
     ambient: 0.25,
     roughness: 0.68,
     metalness: 0.16,
-    background: '#ffffff',
   },
   flat: {
     label: 'Flat',
@@ -48,7 +49,6 @@ export const LOOKS = {
     ambient: 0.5,
     roughness: 1,
     metalness: 0,
-    background: '#ffffff',
   },
 }
 

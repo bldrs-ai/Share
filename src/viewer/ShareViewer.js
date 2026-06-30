@@ -500,8 +500,10 @@ export class ShareViewer {
 
   /**
    * Apply a named render "look" (LOOKS key) live: tone-mapping operator, IBL
-   * source + intensity, the three scene lights, scene background, and model
-   * material roughness/metalness. Toggled from the profile menu and applied
+   * source + intensity, the three scene lights, and model material
+   * roughness/metalness. Scene background is owned by the day/night theme, not
+   * the look, so it's deliberately untouched. Toggled from the profile menu
+   * and applied
    * on viewer init with the persisted choice; falls back to DEFAULT_LOOK for
    * an unknown name. The IBL is rebuilt only when the source actually changes
    * (PMREM is costly). Material changes hit all currently-loaded models;
@@ -523,9 +525,6 @@ export class ShareViewer {
       this._setLightIntensity('keyLight', config.keyLight)
       this._setLightIntensity('fillLight', config.fillLight)
       this._setLightIntensity('ambientLight', config.ambient)
-      if (scene.background?.set) {
-        scene.background.set(config.background)
-      }
     }
     const models = this.context?.getLoadedModels?.() ?? []
     for (const model of models) {
