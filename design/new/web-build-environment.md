@@ -21,7 +21,12 @@ allowlist, or the yarn version. Mirrors the conway change (same root cause).
 ## Lifecycle (setup script vs SessionStart hook)
 
 - **Cloud environment setup script** (web UI) — runs once, **snapshotted/cached**
-  → set it to `bash scripts/web-setup.sh` so `node_modules` is present right off.
+  → set it to `bash scripts/web-setup.sh || true` so `node_modules` is present
+  right off. The `|| true` is load-bearing: a non-zero setup script makes the
+  *session fail to start*, so a transient cold-install failure would lock you out;
+  with `|| true` the session still starts and the SessionStart hook re-runs the
+  script (a non-zero hook does not block the session) so the failure is
+  recoverable in-session.
 - **SessionStart hook** (`.claude/`) — runs every session; delegates to the same
   `scripts/web-setup.sh`. The install is gated on a hash of `yarn.lock` +
   `package.json`, so it is an instant no-op when deps are unchanged.

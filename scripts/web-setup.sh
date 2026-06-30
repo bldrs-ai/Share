@@ -4,8 +4,13 @@
 #
 # Used in two places (keep the logic here, not duplicated):
 #   - the Claude Code on the web *environment setup script* (cloud UI), which is
-#     snapshotted/cached so node_modules is present right off in every session:
-#         bash scripts/web-setup.sh
+#     snapshotted/cached so node_modules is present right off in every session.
+#     Set that field to:   bash scripts/web-setup.sh || true
+#     The `|| true` is load-bearing: a non-zero setup script makes the SESSION
+#     FAIL TO START, so a transient cold-install failure would lock you out
+#     entirely. With `|| true` the session still starts and the SessionStart hook
+#     re-runs this script — failing loudly but recoverably, in-session — if the
+#     install didn't complete.
 #   - the repo SessionStart hook (.claude/hooks/session-start.sh), as a guard for
 #     local dev and for a cold cache.
 #
