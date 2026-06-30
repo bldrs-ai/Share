@@ -2473,10 +2473,10 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway@1.334.1066":
-  version "1.334.1066"
-  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-1.334.1066.tgz#b2b5d3719f41c92f04a556aea10649817e33f648"
-  integrity sha512-ohP1MVBAzKrgH64LZHtUZr7ssAavgqz1PSsy/h1/eBTDCm28exFWmxopTthzoivYSd+awwbOiVOy8yUliOAJGw==
+"@bldrs-ai/conway@1.347.1107":
+  version "1.347.1107"
+  resolved "https://registry.yarnpkg.com/@bldrs-ai/conway/-/conway-1.347.1107.tgz#f3989b17539e5470acada69c1aa7ba8844600dc9"
+  integrity sha512-xW/Xrw/QoAaFEovG6ZwJ2tWyRyHEpYhIIfvyc+F583meG6oJRV5NdDx7ojGrq9QpuTCq72Rr710Wa/SuvWATRQ==
   dependencies:
     gl-matrix "3.4.3"
     seedrandom "3.0.5"
