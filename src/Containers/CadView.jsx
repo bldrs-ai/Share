@@ -405,6 +405,11 @@ export default function CadView({
       viewer.context.fitModelToFrame()
     }
 
+    // §6e: fit the contact-shadow ground + shadow frustum to the model's
+    // bounds (valid now it's added + framed). Optional-chained: the Jest
+    // viewer mock doesn't define it.
+    viewer.groundModel?.(loadedModel)
+
     // TODO(pablo): centralize capability check somewhere
     if (loadedModel.ifcManager) {
       await viewer.isolator.setModel(loadedModel)

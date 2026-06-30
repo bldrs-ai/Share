@@ -38,6 +38,7 @@ const FALLBACK_KEY_LIGHT = 1.5
 const FALLBACK_FILL_LIGHT = 1.0
 const FALLBACK_AMBIENT = 0.1
 const AO_STRENGTH_STEP = 0.05
+const FALLBACK_SHADOW_OPACITY = 0.35
 
 
 // IBL environment sources offered in the dropdown (label → ShareViewer type).
@@ -114,6 +115,8 @@ export default class LightingGui {
       envType: viewer._envType ?? 'gradient',
       aoEnabled: postProcessor?.getAOEnabled?.() ?? true,
       aoStrength: postProcessor?.getAOStrength?.() ?? 1,
+      shadowEnabled: viewer._shadowEnabled ?? true,
+      shadowOpacity: viewer._groundPlane?.material?.opacity ?? FALLBACK_SHADOW_OPACITY,
     }
     const params = this._params
 
@@ -141,6 +144,12 @@ export default class LightingGui {
       .onChange((v) => postProcessor?.setAOEnabled(v))
     ao.add(params, 'aoStrength', 0, MATERIAL_MAX, AO_STRENGTH_STEP).name('strength')
       .onChange((v) => postProcessor?.setAOStrength(v))
+
+    const shadow = gui.addFolder('Contact shadow')
+    shadow.add(params, 'shadowEnabled').name('enabled')
+      .onChange((v) => viewer.setShadowEnabled(v))
+    shadow.add(params, 'shadowOpacity', 0, MATERIAL_MAX, AO_STRENGTH_STEP).name('opacity')
+      .onChange((v) => viewer.setShadowOpacity(v))
 
     const lights = gui.addFolder('Lights')
     lights.add(params, 'keyLight', 0, LIGHT_MAX, LIGHT_STEP).name('key')
@@ -256,6 +265,8 @@ export default class LightingGui {
       envBlur: p.envBlur,
       aoEnabled: p.aoEnabled,
       aoStrength: p.aoStrength,
+      shadowEnabled: p.shadowEnabled,
+      shadowOpacity: p.shadowOpacity,
       keyLight: p.keyLight,
       fillLight: p.fillLight,
       ambient: p.ambient,
