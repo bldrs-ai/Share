@@ -19,6 +19,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three'
+import {LOOKS, DEFAULT_LOOK} from './looks'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
@@ -54,7 +55,10 @@ const ENV_MAP_BLUR = 0.04
 // out against the grey background (the "totally washed out" report), so we
 // dial it well under 1. This is the dominant overall-brightness lever —
 // live-tunable via the `?feature=look` GUI.
-const ENV_MAP_INTENSITY = 0.4
+// Default env-map intensity (§6e) — the Neutral look's value (see
+// src/viewer/looks.js LOOKS.neutral). Scales the IBL contribution; `applyLook`
+// overrides it at runtime when the user toggles render modes.
+const ENV_MAP_INTENSITY = 2.56
 
 
 // Default IBL environment (§6e). 'gradient' is the procedural studio gradient
@@ -209,7 +213,11 @@ export class ShareViewer {
   // `groundModel`. Null until built (renderer present). `_shadowEnabled`
   // gates visibility so the `?feature=look` toggle survives model reloads.
   _groundPlane = null
-  _shadowEnabled = true
+  _shadowEnabled = false
+  // Current render "look" (LOOKS key). Applied by `applyLook` and persisted by
+  // the profile-menu toggle; the default is also baked into the construction
+  // constants so the first paint is correct before any apply call.
+  _currentLook = DEFAULT_LOOK
   /**
    * @param {object} options - Configuration options
    */
@@ -470,7 +478,7 @@ export class ShareViewer {
     if (this._groundPlane) {
       this._groundPlane.visible = enabled
     }
-    const key = this.context.getScene()?.getObjectByName('keyLight')
+    const key = this.context.getScene()?.getObjectByName?.('keyLight')
     if (key) {
       key.castShadow = enabled
     }
@@ -486,6 +494,86 @@ export class ShareViewer {
   setShadowOpacity(opacity) {
     if (this._groundPlane?.material) {
       this._groundPlane.material.opacity = opacity
+    }
+  }
+
+
+  /**
+   * Apply a named render "look" (LOOKS key) live: tone-mapping operator, IBL
+   * source + intensity, the three scene lights, scene background, and model
+   * material roughness/metalness. Toggled from the profile menu and applied
+   * on viewer init with the persisted choice; falls back to DEFAULT_LOOK for
+   * an unknown name. The IBL is rebuilt only when the source actually changes
+   * (PMREM is costly). Material changes hit all currently-loaded models;
+   * models loaded later are covered by `applyLookToModel`.
+   *
+   * @param {string} name a LOOKS key ('neutral' | 'flat')
+   */
+  applyLook(name) {
+    const look = LOOKS[name] ? name : DEFAULT_LOOK
+    this._currentLook = look
+    const config = LOOKS[look]
+    this.postProcessor?.setToneMappingMode(config.toneMapping)
+    if (this._envType !== config.envType) {
+      this.setEnvironmentType(config.envType)
+    }
+    const scene = this.context.getScene()
+    if (scene) {
+      scene.environmentIntensity = config.envIntensity
+      this._setLightIntensity('keyLight', config.keyLight)
+      this._setLightIntensity('fillLight', config.fillLight)
+      this._setLightIntensity('ambientLight', config.ambient)
+      if (scene.background?.set) {
+        scene.background.set(config.background)
+      }
+    }
+    const models = this.context?.getLoadedModels?.() ?? []
+    for (const model of models) {
+      this.applyLookToModel(model)
+    }
+  }
+
+
+  /**
+   * Apply the current look's material params (roughness/metalness) to one
+   * model's PBR materials. Called by CadView on each model load, so a model
+   * opened while a non-default look is active still matches. Null-safe (the
+   * Jest viewer mock won't define it; CadView optional-chains the call).
+   *
+   * @param {object} model the loaded model root (Object3D)
+   */
+  applyLookToModel(model) {
+    if (!model) {
+      return
+    }
+    const config = LOOKS[this._currentLook] ?? LOOKS[DEFAULT_LOOK]
+    model.traverse?.((obj) => {
+      const material = obj.material
+      if (!material) {
+        return
+      }
+      const list = Array.isArray(material) ? material : [material]
+      for (const m of list) {
+        if (typeof m.roughness === 'number') {
+          m.roughness = config.roughness
+          m.metalness = config.metalness
+        }
+      }
+    })
+  }
+
+
+  /**
+   * Set a named scene light's intensity (no-op if the light is absent).
+   *
+   * @param {string} name keyLight | fillLight | ambientLight
+   * @param {number} value new intensity
+   * @private
+   */
+  _setLightIntensity(name, value) {
+    const light = this.context.getScene()?.getObjectByName?.(name)
+    if (light) {
+      light.intensity = value
     }
   }
 

@@ -9,22 +9,25 @@ import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
 
 
-// Direct-light intensities (§6e). Low because the env map carries the
-// ambient/fill now; these are a key + fill directional pair plus a small
-// ambient lift. The env IBL (RoomEnvironment, scaled by
-// `scene.environmentIntensity` in ShareViewer) is the dominant light, so
-// ambient is kept minimal — it only lifts the deepest shadows. Live-tunable
-// via the `?feature=look` GUI (LightingGui); these are its starting values.
-const KEY_LIGHT_INTENSITY = 1.5
-const FILL_LIGHT_INTENSITY = 1.0
-const AMBIENT_LIGHT_INTENSITY = 0.1
+// Direct-light intensities — the Neutral look's values (src/viewer/looks.js
+// LOOKS.neutral). The gradient studio IBL (scaled by
+// `scene.environmentIntensity` in ShareViewer) carries most of the ambient +
+// fill, so these are a key + fill directional pair plus an ambient lift for
+// directional shape. `ShareViewer.applyLook` overrides them at runtime when
+// the user toggles render mode; also live-tunable via `?feature=look`.
+const KEY_LIGHT_INTENSITY = 1.25
+const FILL_LIGHT_INTENSITY = 2.3
+const AMBIENT_LIGHT_INTENSITY = 0.25
 
 
 export class IfcScene extends IfcComponent {
   constructor(context) {
     super(context)
     this.context = context
-    this.defaultBackgroundColor = new Color(0xa9a9a9)
+    // White to match the §6e looks (src/viewer/looks.js — both ship white);
+    // `ShareViewer.applyLook` re-asserts the look's background after the
+    // theme-driven init colour, so the active look owns the 3D backdrop.
+    this.defaultBackgroundColor = new Color(0xffffff)
     this.scene = new Scene()
     this.setupScene(context.options)
     this.setupLights()

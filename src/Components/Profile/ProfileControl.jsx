@@ -9,9 +9,11 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/preferences'
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
+import {LOOKS, DEFAULT_LOOK} from '../../viewer/looks'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
 import ManageProfile from './ManageProfile'
@@ -26,6 +28,8 @@ import {
   WbSunnyOutlined as WbSunnyOutlinedIcon,
   SettingsBrightnessOutlined as SettingsBrightnessOutlinedIcon,
   CheckOutlined as CheckOutlinedIcon,
+  GradientOutlined as GradientOutlinedIcon,
+  FlareOutlined as FlareOutlinedIcon,
   PaymentOutlined,
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
@@ -41,6 +45,7 @@ export default function ProfileControl() {
   const isGoogleEnabled = useStore((state) => state.isGoogleEnabled)
   const appMetadata = useStore((state) => state.appMetadata)
   const setAccessToken = useStore((state) => state.setAccessToken)
+  const viewer = useStore((state) => state.viewer)
 
   const {
     getAccessTokenSilently,
@@ -54,6 +59,7 @@ export default function ProfileControl() {
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const setIsLoginVisible = useStore((state) => state.setIsLoginVisible)
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+  const [renderMode, setRenderModeState] = useState(getRenderMode() ?? DEFAULT_LOOK)
   const [isManageProfileOpen, setIsManageProfileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
@@ -93,6 +99,20 @@ export default function ProfileControl() {
   }, [getAccessTokenSilently, setAccessToken])
 
   const onCloseMenu = () => setAnchorEl(null)
+
+
+  /**
+   * Switch the §6e render look: update the checkmark, persist the choice
+   * (cookie), and apply it live to the current viewer. No reload needed.
+   *
+   * @param {string} mode a LOOKS key ('neutral' | 'flat')
+   */
+  const onSelectRenderMode = (mode) => {
+    setRenderModeState(mode)
+    saveRenderMode(mode)
+    viewer?.applyLook?.(mode)
+    onCloseMenu()
+  }
 
   const handleLogin = (connection) => {
     if (useMock) {
@@ -294,6 +314,31 @@ export default function ProfileControl() {
           {!theme.isSystemMode && !isDay && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
         </MenuItem>
         {/* End of theme menu items */}
+
+        <Divider/>
+
+        {/* Render-mode menu items (§6e looks) */}
+        <MenuItem
+          onClick={() => onSelectRenderMode('neutral')}
+          role='menuitemradio'
+          aria-checked={renderMode === 'neutral'}
+          data-testid='control-button-profile-menu-item-rendermode-neutral'
+        >
+          <GradientOutlinedIcon/>
+          <Typography>{LOOKS.neutral.label} render</Typography>
+          {renderMode === 'neutral' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        <MenuItem
+          onClick={() => onSelectRenderMode('flat')}
+          role='menuitemradio'
+          aria-checked={renderMode === 'flat'}
+          data-testid='control-button-profile-menu-item-rendermode-flat'
+        >
+          <FlareOutlinedIcon/>
+          <Typography>{LOOKS.flat.label} render</Typography>
+          {renderMode === 'flat' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+        </MenuItem>
+        {/* End of render-mode menu items */}
 
         <Divider/>
 

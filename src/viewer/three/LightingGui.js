@@ -41,6 +41,15 @@ const AO_STRENGTH_STEP = 0.05
 const FALLBACK_SHADOW_OPACITY = 0.35
 
 
+// Panel inset so the GUI rides inside the app chrome instead of lil-gui's
+// default flush top:0/right:0 — which overlaps the top-right control buttons
+// (OperationsGroup: profile/apps/share + the notes column down the right
+// edge). Top clears the control row; right clears the right-edge column.
+// Tune if the toolbar geometry changes.
+const PANEL_INSET_TOP = '64px'
+const PANEL_INSET_RIGHT = '64px'
+
+
 // IBL environment sources offered in the dropdown (label → ShareViewer type).
 const ENV_TYPES = {
   'Gradient studio': 'gradient',
@@ -122,6 +131,12 @@ export default class LightingGui {
 
     const gui = new GUI({title: 'Look — §6e filmic'})
     this._gui = gui
+    // Inset the auto-placed panel inside the app chrome (below the top
+    // control row, clear of the right-edge buttons); scroll if it runs tall.
+    gui.domElement.style.top = PANEL_INSET_TOP
+    gui.domElement.style.right = PANEL_INSET_RIGHT
+    gui.domElement.style.maxHeight = `calc(100dvh - ${PANEL_INSET_TOP} - 24px)`
+    gui.domElement.style.overflowY = 'auto'
 
     const tone = gui.addFolder('Tone mapping')
     tone.add(params, 'toneMapping', TONE_MODES).name('operator')

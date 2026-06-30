@@ -62,6 +62,11 @@ export default class CustomPostProcessor {
       })
       this._ssaoPass = new EffectPass(camera, this._ssaoEffect)
       this._composer.addPass(this._ssaoPass)
+      // Default OFF: AO is not part of either shipped look, only a dev-only
+      // `?feature=look` GUI tool. Both passes start disabled (skipped at
+      // render) until toggled, so they cost nothing in the default pipeline.
+      this._normalPass.enabled = false
+      this._ssaoPass.enabled = false
     }
     // Tone mapping (§6e). The render path always runs through this
     // composer, so tone mapping must be a composer effect — `renderer.

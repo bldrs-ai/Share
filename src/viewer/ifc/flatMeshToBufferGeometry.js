@@ -81,13 +81,13 @@ import {
 const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 
 
-// PBR params for IFC surfaces (§6e filmic/PBR step). Building materials are
-// dielectric and matte, so no metalness and a high roughness — under the
-// scene env map this gives soft image-based shading + a faint sheen rather
-// than plastic gloss. Named constants so the deferred §6e settings panel
-// can expose them.
-const IFC_METALNESS = 0
-const IFC_ROUGHNESS = 0.8
+// PBR params for IFC surfaces — the Neutral look's values (src/viewer/looks.js
+// LOOKS.neutral). A touch of metalness + sub-1 roughness gives building
+// surfaces a faint image-based sheen under the gradient studio IBL rather than
+// a fully matte read. `ShareViewer.applyLook` overrides these per material at
+// runtime when the user toggles render mode (Flat resets to fully matte).
+const IFC_METALNESS = 0.16
+const IFC_ROUGHNESS = 0.68
 
 
 /**
