@@ -17,6 +17,7 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
+import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
@@ -24,7 +25,7 @@ import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
-import debug, {DEBUG, isLogEnabled} from '../../utils/debug'
+import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
 
 
 /**
@@ -146,11 +147,29 @@ export default class ShareIfcLoader {
       if (onProgress) {
         onProgress('Building model...')
       }
-      const {mesh: ifcModel, stats: buildStats} = buildConwayIfcModel(
-        captured, ifcAPI, modelID)
       const scene = typeof ifc.context?.getScene === 'function' ?
         ifc.context.getScene() : null
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+
+      // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
+      // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
+      // path on any construction error so the flag can never break a load.
+      let ifcModel
+      let buildStats
+      if (isFeatureEnabled('batchedMesh')) {
+        try {
+          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID)
+          ifcModel = batched.model
+          buildStats = batched.stats
+        } catch (e) {
+          debug(WARN).warn('batchedMesh build failed; falling back to merged path:', e)
+        }
+      }
+      if (ifcModel === undefined) {
+        const merged = buildConwayIfcModel(captured, ifcAPI, modelID)
+        ifcModel = merged.mesh
+        buildStats = merged.stats
+        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+      }
 
       ifc.addIfcModel(ifcModel)
 

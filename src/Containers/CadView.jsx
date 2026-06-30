@@ -519,6 +519,24 @@ export default function CadView({
       // viewer-replacement work, so it wins the modifier slot. Models
       // without an instanceMap (today's wit-three path, GLB cache hit)
       // keep the legacy Shift behavior unchanged.
+      // BatchedMesh render path (`?feature=batchedMesh`): the raycast sets
+      // `batchId` (the per-instance id); resolve it to the parent IFC
+      // product through the tables `buildBatchedConwayModel` attached. The
+      // synthetic occurrence id narrows the (deferred) per-instance outline,
+      // exactly like the merged path's instanceId.
+      if (mesh.isBatchedMesh && mesh.instanceParents) {
+        const batchId = picked.batchId
+        if (batchId === undefined || batchId < 0) {
+          return
+        }
+        const parentExpressId = mesh.instanceParents[batchId]
+        if (parentExpressId === undefined || !viewer.isolator.canBePickedInScene(parentExpressId)) {
+          return
+        }
+        const instanceIds = event.shiftKey ? [] : [mesh.instanceOccurrenceIds[batchId]]
+        selectItemsInScene([parentExpressId], true, instanceIds)
+        return
+      }
       if (mesh.instanceMap) {
         const faceIdx = picked.faceIndex
         const instanceId = mesh.instanceMap.getInstanceIdByTriangle(faceIdx)
