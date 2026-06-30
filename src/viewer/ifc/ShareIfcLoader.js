@@ -19,10 +19,42 @@
 
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
+
+
+/**
+ * Run the instanced-rendering grouper over a captured FlatMesh stream
+ * and log the draw-call + vertex-memory comparison vs. the merged path.
+ * Diagnostic only — see `?feature=instancedMeshes`
+ * (design/new/viewer-replacement.md §3b.iv). Never throws into the
+ * load path: a probe failure must not discard a successful parse.
+ *
+ * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {number} modelID
+ * @param {Array} captured FlatMeshes captured during the parse
+ */
+function logInstancedModelStats(ifcAPI, modelID, captured) {
+  try {
+    const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
+    const reduction = stats.vertexReductionRatio.toFixed(2)
+    // eslint-disable-next-line no-console
+    console.info(
+      `[instancedMeshes] modelID=${modelID} — ` +
+      `instances=${stats.instanceCount} ` +
+      `uniqueShapes=${stats.uniqueGeometryCount} ` +
+      `(shared=${stats.sharedGeometryCount} singleton=${stats.singletonGeometryCount}) ` +
+      `→ instancedDrawCalls=${stats.uniqueGeometryCount} (merged path = 1) | ` +
+      `verts merged=${stats.mergedVertexCount} instanced=${stats.instancedVertexCount} ` +
+      `(reductionRatio=${reduction}) bytesSaved=${stats.estimatedBytesSaved} | ` +
+      `mostInstanced: geometry#${stats.topInstancedGeometryID} ×${stats.topInstancedCount}`)
+  } catch (err) {
+    console.warn('[instancedMeshes] probe failed (non-fatal):', err)
+  }
+}
 
 
 /**
@@ -173,6 +205,14 @@ export default class ShareIfcLoader {
       // per-instance story this check exposes.
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
+      }
+      // Instanced-rendering measurement probe (`?feature=instancedMeshes`).
+      // Groups the same captured stream by shared `geometryExpressID` and
+      // logs the GPU-instancing draw-call + vertex-memory delta vs. the
+      // merged path that just rendered — diagnostic only, render unchanged.
+      // See design/new/viewer-replacement.md §3b.iv.
+      if (isFeatureEnabled('instancedMeshes')) {
+        logInstancedModelStats(ifcAPI, modelID, captured)
       }
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]

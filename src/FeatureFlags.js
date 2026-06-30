@@ -71,6 +71,15 @@ export const flags = [
   // `ifcItemsMapParity` shares the same capture.
   // Design: design/new/viewer-replacement.md §3b.
   {name: 'conwayDirectIfc', isActive: true},
+  // Instanced-rendering measurement probe. When on, the Conway-direct
+  // parse additionally groups the captured FlatMesh stream by shared
+  // `geometryExpressID` (`flatMeshToInstancedModel`) and logs the
+  // draw-call + vertex-memory delta of GPU instancing vs. the current
+  // merged path — WITHOUT changing what renders. Diagnostic only; the
+  // live BatchedMesh render swap is the follow-up slice (PR2). Flip on
+  // via `?feature=instancedMeshes` to get real numbers on a model in a
+  // deploy preview. Design: design/new/viewer-replacement.md §3b.iv.
+  {name: 'instancedMeshes', isActive: false},
 ]
 
 

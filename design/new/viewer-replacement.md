@@ -380,8 +380,7 @@ the per-vertex `expressID` attribute across child Meshes.
   binned ones; on Snowdon (~6k products) that's noticeable but
   recoverable with InstancedMesh batching for the
   `IfcMappedItem`-heavy portion and per-product Mesh for the
-  rest. Worth a separate spike post-default-on. Captured here
-  so the idea doesn't fall off the followup list.
+  rest. See §3b.iv — now an active effort.
 
 **Done — BLDRS_spatial_tree slice.** Landed 2026-05 (PR #1527).
 Resolves §3b.iii default-on blocker 1 below: cache-hit GLBs now
@@ -612,6 +611,83 @@ Order of operations: ship Conway-direct + extensions → bake goldens
 manually → wire bit-level diff into the regression harness → flip
 public-launch gate. Not on the critical path for the §3b.iii blockers
 above; tracked here so it doesn't fall off.
+
+#### 3b.iv. Instanced rendering (GPU instancing) — active
+
+We now own the whole chain (Conway engine → `@bldrs-ai/conway/web-ifc`
+→ this loader), so the long-standing "InstancedMesh batching" idea
+(§3b.iii open item) becomes tractable end-to-end. The key fact, verified
+against the compat surface:
+
+**Conway already emits the instancing model; we throw it away here.**
+At the compat boundary each `PlacedGeometry` carries a `geometryExpressID`
+referencing a **shared, source-unit *local*-space** geometry plus its own
+`flatTransformation` placement matrix. `GetGeometry(geometryExpressID)`
+returns the shared buffer — and the conway #308 "port cluster" fix
+(`ifc_api_proxy_ap214.ts`, the removed per-leaf `normalize()`) exists
+precisely *because* AP214 instances / `IfcMappedItem`s share one geometry
+buffer. So the shared-geometry + N-matrices representation survives intact
+to `flatMeshToBufferGeometry`. That assembler is the *only* place it dies:
+`flatMeshToBufferGeometry.js:232` bakes each matrix into a private vertex
+slab and merges everything into one `BufferGeometry`, so the 6 physical
+as1 bolts (or Snowdon's 2284 shared-geometry multi-placed FlatMeshes,
+§3b.ii) become N full vertex copies instead of 1 shape + N matrices.
+(Conway's *own* three.js renderer, `conway/src/rendering/threejs/scene_object.ts`,
+already does the right thing — `BatchedMesh.addGeometry` once per shape +
+`addInstance` per placement. We're the outlier.)
+
+**Plan.** Render the case-1 (shared-`geometryExpressID`) portion with GPU
+instancing; keep merged geometry for case-2 / singletons — a **hybrid**,
+which `THREE.BatchedMesh` (three 0.184) models directly (many shapes +
+many instances, one draw call). Don't instance everything: a model of
+thousands of placed-once unique shapes would turn one draw call into
+thousands. Group by `geometryExpressID`; shapes with ≥2 placements
+instance, the rest merge.
+
+- **Geometry:** one `BufferGeometry` per unique `geometryExpressID`
+  (fetched once, kept in local space — *don't* apply `flatTransformation`
+  to vertices).
+- **Placement:** per-instance matrix from `flatTransformation`
+  (`setMatrixAt` / batched instance), per-instance color via
+  `instanceColor` — which retires most of the `color`-bin `groups[]` +
+  array-material machinery for the instanced case.
+- **Picking:** `InstancedMesh`/`BatchedMesh` raycasts return
+  `instanceId`/`batchId` *natively*, replacing the triangle→instance
+  lookup (`IfcInstanceMap.getInstanceIdByTriangle`). The synthetic 0-based
+  `instanceID` the assembler already mints per `PlacedGeometry`
+  (`flatMeshToBufferGeometry.js:278`) maps 1:1 onto it; selection still
+  resolves to `parentExpressId` the same way. (Validate `three-mesh-bvh`
+  accelerated raycast on instanced/batched geometry — current picking
+  depends on it.)
+
+**Why now / tie-in to STEP occurrence identity.** Instancing makes the
+scalar-`expressID` collapse *structural*: `instanceId` **is** the
+per-occurrence handle. Today all 6 as1 bolts resolve to one
+`parentExpressId` (`CadView.jsx`), exactly the case the conway
+STEP-metadata plan flags — STEP stores a compressed DAG of part *types* +
+NAUO edges, so a physical part exists only as a root→leaf *path*, not a
+single entity (conway `design/new/step-metadata-nist.md` §"Occurrence
+identity"). The `expressID → ordered occurrence path` generalization that
+plan asks of Share and the per-instance id GPU instancing needs are the
+**same** identifier. Doing them together is cheaper than either alone, and
+STEP assemblies are both the forcing function and the biggest beneficiary.
+
+**Slicing.**
+- **PR1 (this slice) — building block + measurement, no live render
+  change.** `src/viewer/ifc/flatMeshToInstancedModel.js`: a pure grouper
+  that dedupes the captured FlatMeshes by `geometryExpressID` and returns
+  the per-shape placement lists (matrix/color/parent/instanceId) + stats
+  (unique shapes = instanced draw calls, total instances, vertex-buffer
+  bytes merged-vs-instanced, the most-instanced shape). Behind
+  `?feature=instancedMeshes` the loader logs the real comparison for the
+  loaded model, so as1 / Snowdon give concrete draw-call + memory deltas
+  in a deploy preview **without** touching the production render path
+  (no Conway release needed — the data is already in the stream). The
+  grouper is the reusable core PR2 consumes.
+- **PR2 — live render swap.** Build `BatchedMesh` (hybrid) from the
+  grouper output, rewire picking onto native `instanceId`/`batchId`, and
+  reconcile selection/subset + the cache round-trip. Gated behind the same
+  flag until it reaches parity with the merged-mesh path.
 
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
