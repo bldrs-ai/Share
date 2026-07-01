@@ -93,13 +93,16 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   model.ifcManager = makeConwayDirectIfcManager(ifcAPI, modelID)
 
   model.capabilities = model.capabilities ?? {}
-  // `expressIdPicking` (parent-level subsets via the `createSubset` surface
-  // attached below) + `batchedPicking` (CadView resolves a click through the
-  // per-batch `batchId` tables). NOT `instancePicking` (per-occurrence
-  // narrowing) or `ifcSubsets` (web-ifc-three parser state) — those route
-  // through machinery the batched model doesn't have. With `expressIdPicking`
-  // on, `setSelection` / `highlightIfcItem` fall to the generic
-  // `model.createSubset` branch, which `attachBatchedSubsets` services.
+  // Provisional capabilities for the window before `Loader.js` decorates the
+  // model: `expressIdPicking` + `batchedPicking` (recolor selection via
+  // `batchedHighlight`, isolate via `attachBatchedSubsets`), NOT
+  // `instancePicking` / `ifcSubsets`. NOTE these are *overwritten* — `Loader.js`
+  // calls `decorateShareModel` (replacing `capabilities` with the format
+  // default, which has `ifcSubsets: true`) then `inferModelCapabilities`, which
+  // re-detects the BatchedMesh and re-establishes exactly this set. The
+  // authoritative source is `inferModelCapabilities` (ShareModel.js); this
+  // block only covers the pre-decoration window and keeps the model self-
+  // describing in isolation (tests, direct use).
   model.capabilities.expressIdPicking = true
   model.capabilities.batchedPicking = true
   model.capabilities.ifcSubsets = false

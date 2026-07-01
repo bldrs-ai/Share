@@ -457,7 +457,13 @@ export async function load(
   // in the next block (cache-hit restoration); the createSubset
   // closure resolves them lazily at invoke time, so the attach-here-
   // populate-below order is fine.
-  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
+  // BatchedMesh path excluded: its geometry carries no per-vertex `expressID`
+  // (IDs live in the per-batch `instanceParents` table), so the per-vertex
+  // `attachElementSubsets` would build empty subsets. `buildBatchedConwayModel`
+  // already attached the batch-aware `createSubset` (`attachBatchedSubsets`) —
+  // don't clobber it.
+  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets &&
+      !model.capabilities.batchedPicking) {
     const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
     if (model.capabilities.instancePicking) {
       attachInstanceMapSubsets(model, scene)
