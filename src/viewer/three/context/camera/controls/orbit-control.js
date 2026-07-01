@@ -63,6 +63,40 @@ export class OrbitControl extends IfcComponent {
         }
       })
       console.info(`[fitDiag v2] biggestChild type=${biggest?.type} diag=${biggestR.toFixed(1)} sceneChildCount=${scene.children.length}`)
+      // Dump every descendant of the framed object whose WORLD box is large,
+      // with its cached boundingBox, geometry boundingBox, and matrixWorld
+      // scale/translation — pinpoints whether a child's bounds or transform
+      // blew up between the two fits.
+      const fmt = (b) => b ? `[${b.min.toArray().map((n) => n.toFixed(0))}]→[${b.max.toArray().map((n) => n.toFixed(0))}]` : 'null'
+      framed?.traverse?.((o) => {
+        const wb = new Box3().setFromObject(o)
+        if (wb.isEmpty() || wb.getSize(new Vector3()).length() < 100) {
+          return
+        }
+        const me = o.matrixWorld.elements
+        let maxTrans = -1
+        let instCount = -1
+        if (o.isBatchedMesh && typeof o.getMatrixAt === 'function') {
+          const p = new Vector3()
+          const mat = o.matrixWorld.clone()
+          instCount = o.instanceParents?.length ?? -1
+          maxTrans = 0
+          for (let b = 0; b < instCount; b++) {
+            o.getMatrixAt(b, mat)
+            p.setFromMatrixPosition(mat)
+            const mag = Math.max(Math.abs(p.x), Math.abs(p.y), Math.abs(p.z))
+            if (mag > maxTrans) {
+              maxTrans = mag
+            }
+          }
+        }
+        console.info(
+          `[fitDiag v2]   node type=${o.type} isBatched=${!!o.isBatchedMesh} ` +
+          `objBox=${fmt(o.boundingBox)} geomBox=${fmt(o.geometry?.boundingBox)} ` +
+          `mwScale=[${me[0].toFixed(2)},${me[5].toFixed(2)},${me[10].toFixed(2)}] ` +
+          `mwTrans=[${me[12].toFixed(0)},${me[13].toFixed(0)},${me[14].toFixed(0)}] ` +
+          `instCount=${instCount} maxInstTrans=${maxTrans.toFixed(1)} worldBox=${fmt(wb)}`)
+      })
     } catch (e) {
       console.warn('[fitDiag v2] framed-object diag failed', e)
     }
