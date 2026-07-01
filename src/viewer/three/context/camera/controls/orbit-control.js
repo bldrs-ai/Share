@@ -83,6 +83,19 @@ export class OrbitControl extends IfcComponent {
     camera.updateProjectionMatrix()
 
     await controls.fitToSphere(sphere, true)
+
+    // TEMP diagnostic (batched over-zoom on Schependomlaan): the fit box is
+    // correct (~24m) yet the model shows as a far dot in batched mode. Log
+    // the sphere/fit distance and where the camera actually ended up so we
+    // can tell "camera parked wrong" from "geometry rendered small". Logs on
+    // every model load so batched vs merged can be compared. Remove once
+    // resolved.
+    const camPos = this.ifcCamera.perspectiveCamera.position
+    console.info(
+      `[fitDiag] sphereR=${sphere.radius.toFixed(1)} fitDistance=${fitDistance.toFixed(1)} ` +
+      `camPos=[${camPos.x.toFixed(1)},${camPos.y.toFixed(1)},${camPos.z.toFixed(1)}] ` +
+      `camDistToCenter=${camPos.distanceTo(sphere.center).toFixed(1)} ` +
+      `sphereCenter=[${sphere.center.x.toFixed(1)},${sphere.center.y.toFixed(1)},${sphere.center.z.toFixed(1)}]`)
   }
   activateOrbitControls() {
     const controls = this.ifcCamera.cameraControls
