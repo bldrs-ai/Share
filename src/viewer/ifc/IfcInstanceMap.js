@@ -99,7 +99,7 @@ export class IfcInstanceMap {
    * @param {Uint32Array} fields.instanceIdToParentExpressId
    * @param {Map<number, Uint32Array>} fields.parentExpressIdToInstanceIds
    * @param {BufferGeometry} fields.sourceGeometry
-   * @param {Array<Array<number>>} [fields.instanceIdToOccurrencePath]
+   * @param {Array<Array<number>|null>} [fields.instanceIdToOccurrencePath]
    *   Per-instance STEP occurrence path (NAUO express ids). Present only for
    *   STEP models on a Conway that emits `PlacedGeometry.occurrencePath`; the
    *   parent expressID collides across a reused part's occurrences, so this is
@@ -189,7 +189,12 @@ export class IfcInstanceMap {
     if (!paths || instanceId < 0 || instanceId >= paths.length) {
       return null
     }
-    return paths[instanceId] ?? null
+    const path = paths[instanceId]
+    // A root-level / single-occurrence placement has an empty path — no
+    // disambiguating occurrence — so normalize it to null alongside the
+    // no-data case, letting truthiness-testing callers fall back to the
+    // scalar parent expressID instead of keying on a meaningless empty path.
+    return path && path.length > 0 ? path : null
   }
 
 
