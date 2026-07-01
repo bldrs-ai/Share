@@ -506,8 +506,15 @@ export default function CadView({
       }
       const picked = pickedAll[0]
       const mesh = picked.object
-      // TODO(pablo): obsolete? needed this in h3 at some point
-      viewer.setHighlighted([mesh])
+      // TODO(pablo): obsolete? needed this in h3 at some point.
+      // A BatchedMesh must NOT reach the OutlineEffect: three auto-enables
+      // `USE_BATCHING` for it, but postprocessing's outline ShaderMaterial
+      // (DepthComparisonMaterial) predates BatchedMesh and omits the batching
+      // shader chunks, so its program fails to compile (`batchingMatrix`
+      // undeclared) and blanks the frame. The batched path highlights by
+      // recoloring instances (batchedHighlight) instead, so clear the outline
+      // rather than feed it the batch.
+      viewer.setHighlighted(mesh.isBatchedMesh ? null : [mesh])
       // Per-instance picking path (Conway-direct):
       //   no-shift = just this PlacedGeometry
       //   shift     = the whole IFC element (every instance)
