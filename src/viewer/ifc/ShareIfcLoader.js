@@ -17,6 +17,7 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
+import {Box3, Vector3} from 'three'
 import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
@@ -204,6 +205,31 @@ export default class ShareIfcLoader {
 
       if (onProgress) {
         onProgress('Fitting model to frame...')
+      }
+      // TEMP diagnostic: fitModelToFrame frames `scene.children[last]` and
+      // applies matrixWorld. The batch boxes are healthy (~24m) yet Schep
+      // over-zooms, so log exactly what the fit consumes: is the model the
+      // last child, and every scene child's WORLD box size.
+      if (isFeatureEnabled('batchedMesh')) {
+        try {
+          const kids = scene?.children ?? []
+          const last = kids[kids.length - 1]
+          const mb = new Box3().setFromObject(ifcModel)
+          const msz = mb.getSize(new Vector3()).toArray().map((n) => n.toFixed(1))
+          const mc = mb.getCenter(new Vector3()).toArray().map((n) => n.toFixed(1))
+          // eslint-disable-next-line no-console
+          console.info(
+            `[batchedMesh] fitInput modelIsLast=${last === ifcModel} lastType=${last?.type} ` +
+            `modelWorldSize=${JSON.stringify(msz)} modelWorldCenter=${JSON.stringify(mc)} empty=${mb.isEmpty()}`)
+          kids.forEach((c, i) => {
+            const cb = new Box3().setFromObject(c)
+            const cs = cb.getSize(new Vector3()).toArray().map((n) => n.toFixed(1))
+            // eslint-disable-next-line no-console
+            console.info(`  child[${i}] type=${c.type} name="${c.name}" worldSize=${JSON.stringify(cs)} empty=${cb.isEmpty()}`)
+          })
+        } catch (e) {
+          console.warn('[batchedMesh] fitInput diag failed', e)
+        }
       }
       ifc.context.fitToFrame()
 
