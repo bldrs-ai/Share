@@ -112,6 +112,7 @@ export class IfcInstanceMap {
     parentExpressIdToInstanceIds,
     sourceGeometry,
     instanceIdToOccurrencePath = null,
+    occurrencePathToInstanceIds = null,
   }) {
     this.triangleIndexToInstanceId = triangleIndexToInstanceId
     this.instanceIdToTriangleIndices = instanceIdToTriangleIndices
@@ -119,6 +120,7 @@ export class IfcInstanceMap {
     this.parentExpressIdToInstanceIds = parentExpressIdToInstanceIds
     this.sourceGeometry = sourceGeometry
     this.instanceIdToOccurrencePath = instanceIdToOccurrencePath
+    this.occurrencePathToInstanceIds = occurrencePathToInstanceIds
   }
 
 
@@ -195,6 +197,25 @@ export class IfcInstanceMap {
     // no-data case, letting truthiness-testing callers fall back to the
     // scalar parent expressID instead of keying on a meaningless empty path.
     return path && path.length > 0 ? path : null
+  }
+
+
+  /**
+   * Synthetic instance IDs placed at a given STEP occurrence path — the
+   * NavTree→scene direction (a clicked node highlights only its own
+   * occurrence, not every reuse of the part type). Returns `null` when the
+   * model carries no occurrence paths or the path matches nothing.
+   *
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @return {Uint32Array|null}
+   */
+  getInstanceIdsByOccurrencePath(occurrencePath) {
+    const byPath = this.occurrencePathToInstanceIds
+    if (!byPath || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+      return null
+    }
+    const list = byPath.get(occurrencePath.join('/'))
+    return list ? Uint32Array.from(list) : null
   }
 
 
@@ -395,6 +416,10 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
   // a Conway that emits them); IFC leaves this null so nothing downstream pays.
   const hasOccurrencePaths = valid.some((r) => r.occurrencePath !== undefined)
   const instanceIdToOccurrencePath = hasOccurrencePaths ? new Array(instanceCount) : null
+  // Reverse index for NavTree→scene: a tree node's occurrence path → the
+  // instance(s) placed there. Keyed by the path joined on '/'. Only non-empty
+  // paths are indexed (an empty root path can't disambiguate occurrences).
+  const occurrencePathToInstanceIds = hasOccurrencePaths ? new Map() : null
   const triangleListsByInstance = new Map()
   const instanceListsByParent = new Map()
   let tri = 0
@@ -402,7 +427,17 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
     const {parentExpressId, triangleCount} = valid[inst]
     instanceIdToParentExpressId[inst] = parentExpressId
     if (instanceIdToOccurrencePath) {
-      instanceIdToOccurrencePath[inst] = valid[inst].occurrencePath ?? null
+      const path = valid[inst].occurrencePath ?? null
+      instanceIdToOccurrencePath[inst] = path
+      if (path && path.length > 0) {
+        const key = path.join('/')
+        const list = occurrencePathToInstanceIds.get(key)
+        if (list) {
+          list.push(inst)
+        } else {
+          occurrencePathToInstanceIds.set(key, [inst])
+        }
+      }
     }
     let parentList = instanceListsByParent.get(parentExpressId)
     if (!parentList) {
@@ -429,6 +464,7 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
     parentExpressIdToInstanceIds,
     sourceGeometry: opts.geometry ?? null,
     instanceIdToOccurrencePath,
+    occurrencePathToInstanceIds,
   })
 }
 

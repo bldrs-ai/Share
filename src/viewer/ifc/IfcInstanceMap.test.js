@@ -82,6 +82,20 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1927, 1916])
     })
 
+    it('reverse-maps an occurrence path to its instance(s)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1921, 1916]},
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1927, 1916]},
+        {parentExpressId: 6210, triangleCount: 1, occurrencePath: []},
+      ])
+      // Each reused-nut occurrence resolves to exactly its own instance.
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([3810, 1921, 1916]))).toEqual([0])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([3810, 1927, 1916]))).toEqual([1])
+      // Empty / unknown paths resolve to null (caller falls back to expressID).
+      expect(map.getInstanceIdsByOccurrencePath([])).toBeNull()
+      expect(map.getInstanceIdsByOccurrencePath([9, 9, 9])).toBeNull()
+    })
+
     it('normalizes a root-level (empty) occurrence path to null', () => {
       // A root-level STEP placement carries an empty path; callers testing
       // truthiness must fall back to the parent expressID, so [] reads as null.

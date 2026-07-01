@@ -90,6 +90,12 @@ function serializeNode(node, depth = 0) {
   if (node.LongName !== undefined) {
     out.LongName = node.LongName
   }
+  // Preserve the STEP occurrence path (NAUO express ids) so a cache-hit tree
+  // can still key selection per-occurrence — without it, a reloaded (GLB-cached)
+  // STEP model would fall back to the colliding scalar expressID. Absent for IFC.
+  if (Array.isArray(node.occurrencePath)) {
+    out.occurrencePath = node.occurrencePath
+  }
   if (Array.isArray(node.children) && node.children.length > 0) {
     out.children = []
     for (const child of node.children) {

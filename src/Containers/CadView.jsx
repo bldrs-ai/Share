@@ -58,6 +58,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
   const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
+  const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -543,7 +544,12 @@ export default function CadView({
         // Shift = the whole IFC element (every instance) → no
         // per-instance restriction; no-shift = just this PlacedGeometry.
         const instanceIds = event.shiftKey ? [] : [instanceId]
-        selectItemsInScene([parentExpressId], true, instanceIds)
+        // STEP: the picked instance's occurrence path so the NavTree highlights
+        // the one occurrence, not every reuse of the part type. Null on shift
+        // (whole element) and for IFC / single-occurrence parts.
+        const occurrencePath = event.shiftKey ? null :
+          (mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null)
+        selectItemsInScene([parentExpressId], true, instanceIds, occurrencePath)
         return
       }
       // Non-instance branch: elementSelection funnels through
@@ -672,8 +678,12 @@ export default function CadView({
    *   source (NavTree, search, permalink) doesn't inherit the instance
    *   subset left behind by an earlier scene pick. Only the Conway
    *   scene-pick path passes a non-empty value.
+   * @param {Array<number>} occurrencePath STEP occurrence path (NAUO express
+   *   ids) of the selected occurrence, or null. Disambiguates which NavTree
+   *   node highlights when a reused part's occurrences share one expressID;
+   *   null (the default) clears it for IFC and non-occurrence sources.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = []) {
+  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -683,6 +693,10 @@ export default function CadView({
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
       setSelectedInstanceIds(instanceIds)
+      // STEP per-occurrence key: a reused part's occurrences share one
+      // expressID, so this disambiguates which NavTree node to highlight.
+      // Every non-occurrence caller passes null, clearing any stale path.
+      setSelectedOccurrencePath(occurrencePath)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
@@ -935,7 +949,7 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds) => {
+          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds, occurrencePath = null) => {
             // The element-types tree passes an array (every element of a
             // type) to select the group at once; the spatial tree and
             // the scene pass a single expressID. elementSelection is
@@ -945,7 +959,15 @@ export default function CadView({
             if (Array.isArray(expressIdOrIds)) {
               selectItemsInScene(expressIdOrIds, false)
             } else {
-              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+              // STEP: when the clicked node carries an occurrence path, inject
+              // it into the funnel (wrapping selectItemsInScene keeps
+              // elementSelection's signature untouched) so the NavTree
+              // highlights only that occurrence. Absent for IFC — unchanged.
+              const select = (occurrencePath && occurrencePath.length > 0) ?
+                (ids, updateNav, instanceIds = []) =>
+                  selectItemsInScene(ids, updateNav, instanceIds, occurrencePath) :
+                selectItemsInScene
+              elementSelection(viewer, elementsById, select, isShiftKeyDown, expressIdOrIds)
             }
           }}
           deselectItems={deselectItems}

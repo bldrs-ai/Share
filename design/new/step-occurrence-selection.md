@@ -35,25 +35,31 @@ already assigns one synthetic instance per `PlacedGeometry`.
 
 ### Done (this PR)
 
-- `IfcInstanceMap` now captures **`instanceIdToOccurrencePath`** from each
-  `PlacedGeometry.occurrencePath`, with `getOccurrencePathByInstance(id)`.
-  Additive and safe: `null` for IFC / a Conway without the field, so every
-  existing path is unchanged until the data appears. Unit-tested in
-  `IfcInstanceMap.test.js`.
+- **Data foundation.** `IfcInstanceMap` captures `instanceIdToOccurrencePath`
+  from each `PlacedGeometry.occurrencePath`, with `getOccurrencePathByInstance`
+  (instance → path) and `getInstanceIdsByOccurrencePath` (path → instances).
+  `bldrsSpatialTree.serializeNode` preserves `occurrencePath` so cache-hit trees
+  keep it. Store carries `selectedOccurrencePath`. All unit-tested; additive and
+  `null`/absent for IFC.
+- **Scene pick → NavTree (per-occurrence).** `canvasDoubleClickHandler` resolves
+  the picked instance's occurrence path and carries it into the selection funnel;
+  the NavTree scroll + `isSelected` match on the occurrence path, so a scene pick
+  highlights the *one* node — not every reuse. (Scene highlight was already
+  per-instance via `setInstanceSelection`.)
+- **NavTree click → NavTree (per-occurrence).** A node click passes its
+  `occurrencePath`, so clicking one occurrence of a reused part highlights only
+  that node in the tree, not all six.
 
-### Remaining (follow-up, needs the Conway bump + in-browser validation)
+### Remaining (follow-up)
 
-1. **Pick → occurrence.** In `CadView.canvasDoubleClickHandler`, resolve the
-   picked instance to its occurrence path (not just `parentExpressId`) and carry
-   it into selection.
-2. **NavTree node identity.** Key selection/highlight/scroll on the occurrence
-   path (nodes already expose `occurrencePath`) instead of the colliding
-   `expressID`, so one nut highlights one nut.
-3. **Highlight.** `IfcInstanceMap.createSubsetMeshByParent` collects *all* a
-   part-type's instances; add an occurrence-scoped subset so only the picked
-   occurrence lights up.
-4. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the
-   occurrence path, and resolve it on load.
+1. **NavTree click → occurrence-scoped scene highlight.** A node click still
+   highlights *all* the part-type's instances in the 3D scene (only the tree
+   narrows). Resolve the node's `occurrencePath` → the per-mesh instance ids
+   (`getInstanceIdsByOccurrencePath` across the scene meshes) and pass them as
+   `instanceIds` so `setInstanceSelection` lights up only that occurrence. Needs
+   care with the per-mesh instance-id spaces, and in-browser validation.
+2. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the occurrence
+   path and resolve it on load.
 
 Each step degrades gracefully to today's type-level behavior when no occurrence
 path is present.

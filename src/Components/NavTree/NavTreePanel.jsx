@@ -31,6 +31,7 @@ export default function NavTreePanel({
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
+  const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
   const viewer = useStore((state) => state.viewer)
@@ -91,14 +92,26 @@ export default function NavTreePanel({
   useEffect(() => {
     const nodeId = selectedElements[0]
     if (nodeId) {
-      const index = visibleNodes.findIndex(
-        ({node}) => node.expressID && node.expressID.toString() === nodeId,
+      // STEP: a reused part shares one expressID across occurrences, so prefer
+      // the node on the selected occurrence path; fall back to first-by-expressID
+      // for IFC / when no occurrence is selected.
+      const matchesOccurrence = (node) =>
+        !selectedOccurrencePath || !Array.isArray(node.occurrencePath) ||
+        node.occurrencePath.join('/') === selectedOccurrencePath.join('/')
+      let index = visibleNodes.findIndex(
+        ({node}) => node.expressID && node.expressID.toString() === nodeId &&
+          matchesOccurrence(node),
       )
+      if (index < 0) {
+        index = visibleNodes.findIndex(
+          ({node}) => node.expressID && node.expressID.toString() === nodeId,
+        )
+      }
       if (index >= 0 && listRef.current) {
         listRef.current.scrollToItem(index, 'center')
       }
     }
-  }, [selectedElements, visibleNodes])
+  }, [selectedElements, selectedOccurrencePath, visibleNodes])
 
   // Function to get item size
   const getItemSize = useCallback(
@@ -155,6 +168,7 @@ export default function NavTreePanel({
               expandedNodeIds,
               setExpandedNodeIds,
               selectedNodeIds: selectedElements,
+              selectedOccurrencePath,
               selectWithShiftClickEvents,
               model,
               viewer,
@@ -255,6 +269,7 @@ const RenderRow = ({index, style, data}) => {
     expandedNodeIds,
     setExpandedNodeIds,
     selectedNodeIds,
+    selectedOccurrencePath,
     selectWithShiftClickEvents,
     model,
     viewer,
@@ -271,6 +286,13 @@ const RenderRow = ({index, style, data}) => {
   if (!hasChildren) {
     // For element nodes
     isSelected = selectedNodeIds.includes(node.expressID.toString())
+    // STEP per-occurrence: when a specific occurrence is selected, only the node
+    // on that exact occurrence path stays highlighted — otherwise every reuse of
+    // the shared part type (same expressID) would light up. No-op for IFC and
+    // when no occurrence is selected (selectedOccurrencePath is null).
+    if (isSelected && selectedOccurrencePath && Array.isArray(node.occurrencePath)) {
+      isSelected = node.occurrencePath.join('/') === selectedOccurrencePath.join('/')
+    }
   }
 
   const rowRef = useRef(null)
@@ -314,7 +336,10 @@ const RenderRow = ({index, style, data}) => {
       const elementIds = node.children.map((child) => child.expressID.toString())
       selectWithShiftClickEvents(event.shiftKey, elementIds)
     } else if (node.expressID) {
-      selectWithShiftClickEvents(event.shiftKey, node.expressID.toString())
+      // Pass the STEP occurrence path so clicking one occurrence of a reused
+      // part highlights only that node, not every node sharing the expressID.
+      // Undefined for IFC — selection stays keyed on the expressID alone.
+      selectWithShiftClickEvents(event.shiftKey, node.expressID.toString(), node.occurrencePath)
     }
   }
 
