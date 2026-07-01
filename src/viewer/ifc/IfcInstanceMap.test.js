@@ -69,6 +69,27 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(Array.from(map.instanceIdToParentExpressId)).toEqual([10, 40])
     })
 
+    it('captures a distinct occurrence path per instance for STEP ranges', () => {
+      // One reused part (parentExpressId 1915) at two occurrences: the parent
+      // id collides, the occurrence path disambiguates.
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 1915, triangleCount: 2, occurrencePath: [3810, 1921, 1916]},
+        {parentExpressId: 1915, triangleCount: 2, occurrencePath: [3810, 1927, 1916]},
+      ])
+      expect(map.getParentExpressIdByInstance(0)).toBe(1915)
+      expect(map.getParentExpressIdByInstance(1)).toBe(1915)
+      expect(map.getOccurrencePathByInstance(0)).toEqual([3810, 1921, 1916])
+      expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1927, 1916])
+    })
+
+    it('leaves occurrence paths null for IFC ranges (no occurrencePath)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      expect(map.instanceIdToOccurrencePath).toBeNull()
+      expect(map.getOccurrencePathByInstance(0)).toBeNull()
+    })
+
     it('handles an empty stream', () => {
       const map = instanceMapFromOrderedPlacedRanges([])
       expect(map.triangleCount).toBe(0)

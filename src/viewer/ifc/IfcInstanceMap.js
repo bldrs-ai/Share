@@ -99,6 +99,11 @@ export class IfcInstanceMap {
    * @param {Uint32Array} fields.instanceIdToParentExpressId
    * @param {Map<number, Uint32Array>} fields.parentExpressIdToInstanceIds
    * @param {BufferGeometry} fields.sourceGeometry
+   * @param {Array<Array<number>>} [fields.instanceIdToOccurrencePath]
+   *   Per-instance STEP occurrence path (NAUO express ids). Present only for
+   *   STEP models on a Conway that emits `PlacedGeometry.occurrencePath`; the
+   *   parent expressID collides across a reused part's occurrences, so this is
+   *   what distinguishes them. Absent (null) for IFC and older engines.
    */
   constructor({
     triangleIndexToInstanceId,
@@ -106,12 +111,14 @@ export class IfcInstanceMap {
     instanceIdToParentExpressId,
     parentExpressIdToInstanceIds,
     sourceGeometry,
+    instanceIdToOccurrencePath = null,
   }) {
     this.triangleIndexToInstanceId = triangleIndexToInstanceId
     this.instanceIdToTriangleIndices = instanceIdToTriangleIndices
     this.instanceIdToParentExpressId = instanceIdToParentExpressId
     this.parentExpressIdToInstanceIds = parentExpressIdToInstanceIds
     this.sourceGeometry = sourceGeometry
+    this.instanceIdToOccurrencePath = instanceIdToOccurrencePath
   }
 
 
@@ -164,6 +171,25 @@ export class IfcInstanceMap {
       return null
     }
     return this.instanceIdToParentExpressId[instanceId]
+  }
+
+
+  /**
+   * STEP occurrence path (NAUO express ids, root→leaf) for the given synthetic
+   * instance ID — the identity that disambiguates a reused part's occurrences.
+   * Returns `null` when the model carries no occurrence paths (IFC, older
+   * engines) or the instance ID is out of range, so callers fall back to the
+   * scalar parent expressID.
+   *
+   * @param {number} instanceId
+   * @return {Array<number>|null}
+   */
+  getOccurrencePathByInstance(instanceId) {
+    const paths = this.instanceIdToOccurrencePath
+    if (!paths || instanceId < 0 || instanceId >= paths.length) {
+      return null
+    }
+    return paths[instanceId] ?? null
   }
 
 
@@ -360,12 +386,19 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
   const instanceCount = valid.length
   const triangleIndexToInstanceId = new Uint32Array(totalTriangles)
   const instanceIdToParentExpressId = new Uint32Array(instanceCount)
+  // Only carry occurrence paths when the source actually provides them (STEP on
+  // a Conway that emits them); IFC leaves this null so nothing downstream pays.
+  const hasOccurrencePaths = valid.some((r) => r.occurrencePath !== undefined)
+  const instanceIdToOccurrencePath = hasOccurrencePaths ? new Array(instanceCount) : null
   const triangleListsByInstance = new Map()
   const instanceListsByParent = new Map()
   let tri = 0
   for (let inst = 0; inst < valid.length; inst++) {
     const {parentExpressId, triangleCount} = valid[inst]
     instanceIdToParentExpressId[inst] = parentExpressId
+    if (instanceIdToOccurrencePath) {
+      instanceIdToOccurrencePath[inst] = valid[inst].occurrencePath ?? null
+    }
     let parentList = instanceListsByParent.get(parentExpressId)
     if (!parentList) {
       parentList = []
@@ -390,6 +423,7 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
     instanceIdToParentExpressId,
     parentExpressIdToInstanceIds,
     sourceGeometry: opts.geometry ?? null,
+    instanceIdToOccurrencePath,
   })
 }
 
@@ -628,7 +662,9 @@ export function instanceMapFromFlatMeshes(flatMeshes, api, modelID, opts = {}) {
       if (triangleCount <= 0) {
         continue
       }
-      ranges.push({parentExpressId, triangleCount})
+      // Conway (STEP) tags each PlacedGeometry with its occurrence path so a
+      // reused part's occurrences stay distinguishable; undefined for IFC.
+      ranges.push({parentExpressId, triangleCount, occurrencePath: placed.occurrencePath})
     }
   }
   return instanceMapFromOrderedPlacedRanges(ranges, opts)
