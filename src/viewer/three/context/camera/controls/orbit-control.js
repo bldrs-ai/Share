@@ -82,20 +82,27 @@ export class OrbitControl extends IfcComponent {
     camera.far = (controls.maxDistance + sphere.radius) * 1.5
     camera.updateProjectionMatrix()
 
-    await controls.fitToSphere(sphere, true)
-
     // TEMP diagnostic (batched over-zoom on Schependomlaan): the fit box is
-    // correct (~24m) yet the model shows as a far dot in batched mode. Log
-    // the sphere/fit distance and where the camera actually ended up so we
-    // can tell "camera parked wrong" from "geometry rendered small". Logs on
-    // every model load so batched vs merged can be compared. Remove once
-    // resolved.
-    const camPos = this.ifcCamera.perspectiveCamera.position
+    // correct (~24m) yet the model shows as a far dot in batched mode. Logged
+    // SYNCHRONOUSLY (before the await, which may never resolve if the
+    // transition is interrupted) so it always fires — the `v2` tag confirms
+    // the freshly-deployed bundle is running. A deferred read reports where
+    // the camera actually settled, distinguishing "camera parked wrong" from
+    // "geometry rendered small". Remove once resolved.
+    const cam = this.ifcCamera.perspectiveCamera
     console.info(
-      `[fitDiag] sphereR=${sphere.radius.toFixed(1)} fitDistance=${fitDistance.toFixed(1)} ` +
-      `camPos=[${camPos.x.toFixed(1)},${camPos.y.toFixed(1)},${camPos.z.toFixed(1)}] ` +
-      `camDistToCenter=${camPos.distanceTo(sphere.center).toFixed(1)} ` +
+      `[fitDiag v2] sphereR=${sphere.radius.toFixed(1)} fitDistance=${fitDistance.toFixed(1)} ` +
+      `preFitCamDist=${cam.position.distanceTo(sphere.center).toFixed(1)} ` +
+      `near=${camera.near.toFixed(2)} far=${camera.far.toFixed(1)} ` +
       `sphereCenter=[${sphere.center.x.toFixed(1)},${sphere.center.y.toFixed(1)},${sphere.center.z.toFixed(1)}]`)
+    const c = sphere.center.clone()
+    setTimeout(() => {
+      console.info(
+        `[fitDiag v2] settled camPos=[${cam.position.x.toFixed(1)},${cam.position.y.toFixed(1)},` +
+        `${cam.position.z.toFixed(1)}] settledCamDistToCenter=${cam.position.distanceTo(c).toFixed(1)}`)
+    }, 1500)
+
+    await controls.fitToSphere(sphere, true)
   }
   activateOrbitControls() {
     const controls = this.ifcCamera.cameraControls
