@@ -41,7 +41,31 @@ export class OrbitControl extends IfcComponent {
     // TODO(#1561): frame the loader's named primary-model object, not the
     // last scene child. Lights/helpers/isolation subsets appended after the
     // model can otherwise become the framing target.
-    const box = new Box3().setFromObject(scene.children[scene.children.length - 1])
+    const framed = scene.children[scene.children.length - 1]
+    const box = new Box3().setFromObject(framed)
+    // TEMP diagnostic (batched over-zoom): identify exactly what the fit
+    // frames and whether its world transform carries the coordination matrix.
+    try {
+      const e = framed?.matrixWorld?.elements
+      console.info(
+        `[fitDiag v2] framed type=${framed?.type} name="${framed?.name}" uuid=${framed?.uuid?.slice(0, 8)} ` +
+        `isGroup=${!!framed?.isGroup} children=${framed?.children?.length} ` +
+        `matrixWorldTranslation=[${e ? [e[12].toFixed(1), e[13].toFixed(1), e[14].toFixed(1)] : '?'}] ` +
+        `boxMin=[${box.min.toArray().map((n) => n.toFixed(1))}] boxMax=[${box.max.toArray().map((n) => n.toFixed(1))}]`)
+      let biggest = null
+      let biggestR = 0
+      scene.children.forEach((c) => {
+        const cb = new Box3().setFromObject(c)
+        const r = cb.isEmpty() ? 0 : cb.getSize(new Vector3()).length()
+        if (r > biggestR) {
+          biggestR = r
+          biggest = c
+        }
+      })
+      console.info(`[fitDiag v2] biggestChild type=${biggest?.type} diag=${biggestR.toFixed(1)} sceneChildCount=${scene.children.length}`)
+    } catch (e) {
+      console.warn('[fitDiag v2] framed-object diag failed', e)
+    }
 
     // True enclosing sphere of the model (half the box diagonal). The old
     // `max(x,y,z) * 0.5` used half the longest *edge*, which under-sizes the
