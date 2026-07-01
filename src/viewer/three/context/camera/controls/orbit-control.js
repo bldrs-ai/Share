@@ -68,6 +68,13 @@ export class OrbitControl extends IfcComponent {
       // scale/translation — pinpoints whether a child's bounds or transform
       // blew up between the two fits.
       const fmt = (b) => b ? `[${b.min.toArray().map((n) => n.toFixed(0))}]→[${b.max.toArray().map((n) => n.toFixed(0))}]` : 'null'
+      ;(framed?.children ?? []).forEach((c, i) => {
+        const cb = new Box3().setFromObject(c)
+        console.info(
+          `[fitDiag v2]   child[${i}] type=${c.type} isBatched=${!!c.isBatchedMesh} visible=${c.visible} ` +
+          `name="${c.name}" uuid=${c.uuid?.slice(0, 8)} grandkids=${c.children?.length} ` +
+          `worldBox=${fmt(cb)}`)
+      })
       framed?.traverse?.((o) => {
         const wb = new Box3().setFromObject(o)
         if (wb.isEmpty() || wb.getSize(new Vector3()).length() < 100) {
@@ -91,7 +98,8 @@ export class OrbitControl extends IfcComponent {
           }
         }
         console.info(
-          `[fitDiag v2]   node type=${o.type} isBatched=${!!o.isBatchedMesh} ` +
+          `[fitDiag v2]   node type=${o.type} isBatched=${!!o.isBatchedMesh} visible=${o.visible} ` +
+          `name="${o.name}" uuid=${o.uuid?.slice(0, 8)} parentType=${o.parent?.type} parentUuid=${o.parent?.uuid?.slice(0, 8)} ` +
           `objBox=${fmt(o.boundingBox)} geomBox=${fmt(o.geometry?.boundingBox)} ` +
           `mwScale=[${me[0].toFixed(2)},${me[5].toFixed(2)},${me[10].toFixed(2)}] ` +
           `mwTrans=[${me[12].toFixed(0)},${me[13].toFixed(0)},${me[14].toFixed(0)}] ` +
