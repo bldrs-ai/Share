@@ -765,6 +765,15 @@ Three settled conclusions:
     per-primitive geometry for `GLTFExporter`, no per-vertex `_EXPRESSID` for
     `BLDRS_face_ids`), so `exportAndCacheGlb` skips it and the model
     re-parses on the next load; a batched-aware GLB schema is future work.
+  - *Fit-to-frame.* `Loader.js#readModel` hoists a Group root's first child
+    geometry onto `model.geometry` ("generalize to multi-mesh" TODO). A
+    `BatchedMesh`'s `.geometry` is its packed buffer — every shape in
+    *un-instanced* local space — so for models whose shapes carry
+    building-scale local coords (Schependomlaan) that box is the whole site
+    (~830m), and `Box3.setFromObject` used it instead of recursing to the
+    instance-placed children, zooming the camera miles out. Fixed by skipping
+    `isBatchedMesh` children in that hoist (a batched Group has no single
+    representative geometry).
   - *Always-on* flip is deferred pending smoke-test of the flagged path.
 
 ### 3c. Plugins (small, replaceable, individually disposable)

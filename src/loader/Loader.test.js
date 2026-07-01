@@ -238,6 +238,28 @@ describe('Loader', () => {
       expect(result.geometry).toBe(meshChild.geometry)
     })
 
+    it('does not hoist a BatchedMesh child geometry onto the model root', async () => {
+      // A BatchedMesh's `.geometry` is its internal packed buffer (all shapes
+      // in un-instanced local space), so hoisting it onto a Group root makes
+      // Box3.setFromObject read those un-placed bounds instead of recursing to
+      // the instance-placed children — fit-to-frame then zooms miles out
+      // (Schependomlaan regression). The batched child must be skipped.
+      const batched = new Mesh(new BufferGeometry(), new Material())
+      batched.geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0]), 3))
+      batched.isBatchedMesh = true
+
+      const mockLoader = {
+        parse: jest.fn().mockReturnValue({
+          children: [batched],
+          isObject3D: true,
+        }),
+      }
+
+      const result = await readModel(mockLoader, 'test-data', './', false, false, null, null)
+
+      expect(result.geometry).toBeUndefined()
+    })
+
     it('logs warning when model has no geometry and children have no geometry', async () => {
       const mockLoader = {
         parse: jest.fn().mockReturnValue({

@@ -1,4 +1,4 @@
-import {Group, Matrix4, Vector3} from 'three'
+import {Group} from 'three'
 import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {
@@ -75,32 +75,6 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
     // is unaffected. Guarded: the method is absent under the Jest `three`
     // mock and present only in the production prototype patch.
     batch.mesh.computeBoundsTree?.()
-  }
-
-  // TEMP diagnostic (batchedMesh flag only — this whole builder runs only
-  // under the flag): the fit heuristic zooms to Box3().setFromObject(model);
-  // Schependomlaan renders as a far dot in batched mode but frames fine on
-  // the merged path, so surface each batch's bounds + the worst instance
-  // translation to find the outlier. Remove once the cause is fixed.
-  const _p = new Vector3()
-  const _mat4Scratch = new Matrix4()
-  for (const batch of batches) {
-    const bb = batch.mesh.boundingBox
-    const size = bb ? bb.getSize(new Vector3()).toArray() : null
-    let maxTrans = 0
-    const m = batch.mesh
-    for (let b = 0; b < batch.instanceParents.length; b++) {
-      m.getMatrixAt(b, _mat4Scratch)
-      _p.setFromMatrixPosition(_mat4Scratch)
-      const mag = Math.max(Math.abs(_p.x), Math.abs(_p.y), Math.abs(_p.z))
-      if (mag > maxTrans) {
-        maxTrans = mag
-      }
-    }
-    // eslint-disable-next-line no-console
-    console.info(
-      `[batchedMesh] bounds: transparent=${batch.transparent} instances=${batch.instanceParents.length} ` +
-      `boxSize=${JSON.stringify(size)} empty=${bb?.isEmpty?.()} maxInstanceTranslation=${maxTrans.toFixed(1)}`)
   }
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.

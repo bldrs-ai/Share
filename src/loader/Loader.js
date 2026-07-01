@@ -1166,7 +1166,15 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
     for (let i = 0, n = model.children.length; i < n; i++) {
       const obj = model.children[i]
-      if (obj.geometry) {
+      // A `THREE.BatchedMesh`'s `.geometry` is its internal PACKED buffer —
+      // every shape in un-instanced local space (which, for models whose
+      // shapes carry building-scale local coords like Schependomlaan, spans
+      // the whole site, ~830m). Hoisting it onto the Group root makes
+      // `Box3.setFromObject` read that instead of recursing into the
+      // instance-placed children, so fit-to-frame zooms miles out. The
+      // batched Group has no single representative geometry — leave
+      // `model.geometry` undefined and let bounds recurse to the children.
+      if (obj.geometry && !obj.isBatchedMesh) {
         model.geometry = obj.geometry
         break
       }
