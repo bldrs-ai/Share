@@ -13,6 +13,7 @@ import {getRenderMode, setRenderMode as saveRenderMode} from '../../privacy/pref
 import useStore from '../../store/useStore'
 import {Themes} from '../../theme/Theme'
 import {assertDefinedBoolean} from '../../utils/assert'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import {LOOKS, DEFAULT_LOOK} from '../../viewer/looks'
 import {TooltipIconButton} from '../Buttons'
 import LoginDialog from './LoginDialog'
@@ -46,6 +47,9 @@ export default function ProfileControl() {
   const appMetadata = useStore((state) => state.appMetadata)
   const setAccessToken = useStore((state) => state.setAccessToken)
   const viewer = useStore((state) => state.viewer)
+  // The §6e Neutral/Flat render toggle only appears when the whole look system
+  // is enabled (`?feature=look`); off, there's no look to switch.
+  const isLookEnabled = isFeatureEnabled('look')
 
   const {
     getAccessTokenSilently,
@@ -317,30 +321,34 @@ export default function ProfileControl() {
 
         <Divider/>
 
-        {/* Render-mode menu items (§6e looks) */}
-        <MenuItem
-          onClick={() => onSelectRenderMode('neutral')}
-          role='menuitemradio'
-          aria-checked={renderMode === 'neutral'}
-          data-testid='control-button-profile-menu-item-rendermode-neutral'
-        >
-          <GradientOutlinedIcon/>
-          <Typography>{LOOKS.neutral.label} render</Typography>
-          {renderMode === 'neutral' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
-        </MenuItem>
-        <MenuItem
-          onClick={() => onSelectRenderMode('flat')}
-          role='menuitemradio'
-          aria-checked={renderMode === 'flat'}
-          data-testid='control-button-profile-menu-item-rendermode-flat'
-        >
-          <FlareOutlinedIcon/>
-          <Typography>{LOOKS.flat.label} render</Typography>
-          {renderMode === 'flat' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
-        </MenuItem>
-        {/* End of render-mode menu items */}
-
-        <Divider/>
+        {/* Render-mode menu items (§6e looks) — gated on ?feature=look, the
+            flag the whole §6e render sits behind. Items gated individually (no
+            Fragment) so MUI Menu can clone each for keyboard nav. */}
+        {isLookEnabled && (
+          <MenuItem
+            onClick={() => onSelectRenderMode('neutral')}
+            role='menuitemradio'
+            aria-checked={renderMode === 'neutral'}
+            data-testid='control-button-profile-menu-item-rendermode-neutral'
+          >
+            <GradientOutlinedIcon/>
+            <Typography>{LOOKS.neutral.label} render</Typography>
+            {renderMode === 'neutral' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+          </MenuItem>
+        )}
+        {isLookEnabled && (
+          <MenuItem
+            onClick={() => onSelectRenderMode('flat')}
+            role='menuitemradio'
+            aria-checked={renderMode === 'flat'}
+            data-testid='control-button-profile-menu-item-rendermode-flat'
+          >
+            <FlareOutlinedIcon/>
+            <Typography>{LOOKS.flat.label} render</Typography>
+            {renderMode === 'flat' && <CheckOutlinedIcon sx={{marginLeft: 'auto'}}/>}
+          </MenuItem>
+        )}
+        {isLookEnabled && <Divider/>}
 
         <MenuItem
           onClick={async () => {

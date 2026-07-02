@@ -4,10 +4,10 @@ import {
   BufferGeometry,
   DoubleSide,
   Matrix4,
-  MeshLambertMaterial,
   Vector4,
 } from 'three'
 import {forEachVectorItem} from './conwayVector'
+import {makeSurfaceMaterial} from '../lookMaterial'
 
 
 /**
@@ -67,7 +67,7 @@ const OPAQUE_ALPHA = 1
  * @typedef {object} BatchHandle
  * @property {BatchedMesh} mesh the batch (one geometry per unique shape it
  *   uses, one instance per placement).
- * @property {MeshLambertMaterial} material the batch material.
+ * @property {import('three').Material} material the batch material.
  * @property {boolean} transparent whether this is the blended batch.
  * @property {Uint32Array} instanceParents `batchId → parent IFC product
  *   expressID`.
@@ -244,7 +244,7 @@ function buildBatch(groups, transparent) {
     return null
   }
 
-  const material = new MeshLambertMaterial({side: DoubleSide})
+  const material = makeSurfaceMaterial({side: DoubleSide})
   if (transparent) {
     material.transparent = true
     // Don't occlude geometry behind the glass; per-instance alpha blends.

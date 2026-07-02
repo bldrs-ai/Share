@@ -11,6 +11,7 @@ import {
   CanvasTexture,
   ColorManagement,
   EquirectangularReflectionMapping,
+  LinearSRGBColorSpace,
   Mesh,
   PCFSoftShadowMap,
   PlaneGeometry,
@@ -267,19 +268,25 @@ export class ShareViewer {
     const renderer = this.context.getRenderer()
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
-    // §6e filmic pipeline. `outputColorSpace` is left at the r184 default
-    // (`SRGBColorSpace`) — the legacy `LinearSRGBColorSpace` override is
-    // gone — so the framebuffer is gamma-encoded; the filmic tone-map runs
-    // in the postprocessing composer (see CustomPostProcessor), since the
-    // render path always goes through it and `renderer.toneMapping` would
-    // be bypassed. A neutral procedural env map (RoomEnvironment, zero-
-    // asset) drives image-based lighting so the PBR materials get soft
-    // diffuse + specular grounding, scaled by `environmentIntensity` to
-    // avoid washout; scene.js's direct lights are dialed down to compensate.
+    // The whole §6e look — PBR materials + gradient studio IBL + tone-mapping
+    // + retuned lights + the Neutral/Flat profile toggle — sits behind a
+    // single `?feature=look` flag (default OFF), so `main`'s rendering is
+    // unchanged until the flag is flipped (an atomic switch-over).
+    //   · flag ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
+    //     so the filmic tone-map (CustomPostProcessor, in the composer) writes
+    //     gamma-encoded output, and build the gradient env map for image-based
+    //     lighting (scaled by `environmentIntensity`; scene.js dials the direct
+    //     lights down to compensate).
+    //   · flag OFF: restore the legacy `LinearSRGBColorSpace` output and skip
+    //     the env map — the pre-§6e pipeline, matching `main` pixel-for-pixel.
     // Env build no-ops in tests where getRenderer() returns undefined.
-    this._buildEnvironment(this._envBlur, this._envType)
-    if (renderer) {
-      scene.environmentIntensity = ENV_MAP_INTENSITY
+    if (isFeatureEnabled('look')) {
+      this._buildEnvironment(this._envBlur, this._envType)
+      if (renderer) {
+        scene.environmentIntensity = ENV_MAP_INTENSITY
+      }
+    } else if (renderer) {
+      renderer.outputColorSpace = LinearSRGBColorSpace
     }
     this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
@@ -519,6 +526,12 @@ export class ShareViewer {
    * @param {string} name a LOOKS key ('neutral' | 'flat')
    */
   applyLook(name) {
+    // The whole §6e look is behind `?feature=look` (default off). No-op when
+    // the flag is off so a stale `renderMode` cookie from a prior flag-on
+    // session can't apply look lights/env over the legacy render.
+    if (!isFeatureEnabled('look')) {
+      return
+    }
     const look = LOOKS[name] ? name : DEFAULT_LOOK
     if (look === this._currentLook) {
       return

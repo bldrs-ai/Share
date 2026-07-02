@@ -1,14 +1,11 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   DoubleSide,
   Matrix3,
   Matrix4,
-  MeshStandardMaterial,
-  SRGBColorSpace,
 } from 'three'
-import {LOOKS} from '../looks'
+import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
 
 
 /**
@@ -69,7 +66,7 @@ import {LOOKS} from '../looks'
  *   triangles stay contiguous in the merged buffer. `occurrencePath`
  *   is the STEP NAUO express-id path off `PlacedGeometry.occurrencePath`
  *   (undefined for IFC).
- * @property {Array<MeshStandardMaterial>} materials one per distinct
+ * @property {Array<import('three').Material>} materials one per distinct
  *   PlacedGeometry color (RGBA). Caller assigns this to
  *   `mesh.material` (array form) — three.js's renderer pairs each
  *   `geometry.groups[i].materialIndex` with `materials[i]`.
@@ -83,15 +80,6 @@ import {LOOKS} from '../looks'
 
 /** Fallback colour used when a PlacedGeometry has no `.color` field. */
 const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
-
-
-// PBR params for IFC surfaces — derived from the Neutral look (single source
-// of truth: src/viewer/looks.js LOOKS.neutral). A touch of metalness + sub-1
-// roughness gives building surfaces a faint image-based sheen under the
-// gradient studio IBL rather than a fully matte read. `ShareViewer.applyLook`
-// overrides these per look-managed material on a render-mode toggle.
-const IFC_METALNESS = LOOKS.neutral.metalness
-const IFC_ROUGHNESS = LOOKS.neutral.roughness
 
 
 /**
@@ -226,30 +214,14 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
   let materialIndex = 0
   for (const bin of bins.values()) {
     const groupStart = iCursor
-    // Material for this bin. PBR (`MeshStandardMaterial`) so IFC surfaces
-    // respond to the scene env map (§6e) — was `MeshLambertMaterial` (flat,
-    // no specular/IBL). Per-color binning + transparent/opacity on alpha < 1
-    // are unchanged.
-    //
-    // §6e step 1 (sRGB albedo): Conway emits the IFC color as a plain RGB
-    // triple authored in display (sRGB) space, but `new Color(r,g,b)` under
-    // `ColorManagement.enabled` treats numeric args as the linear working
-    // space — so untagged the albedo renders ~too bright and the model
-    // washes out. `setRGB(..., SRGBColorSpace)` converts sRGB→linear at set
-    // time so surfaces light at their authored value. See
-    // design/new/viewer-replacement.md §6e step 1.
-    const col = new Color().setRGB(bin.color.x, bin.color.y, bin.color.z, SRGBColorSpace)
-    const material = new MeshStandardMaterial({
-      color: col,
-      side: DoubleSide,
-      metalness: IFC_METALNESS,
-      roughness: IFC_ROUGHNESS,
-    })
-    // Tag as look-managed so ShareViewer.applyLook / the ?feature=look GUI
-    // restyle these generated IFC surfaces on a render-mode toggle, while
-    // leaving authored glTF/GLB material PBR untouched (looks.js
-    // forEachLookManagedMaterial filters on this).
-    material.userData.isLookManaged = true
+    // Material + albedo for this bin, via the §6e-flag-gated factory
+    // (src/viewer/lookMaterial.js): with `?feature=look` on, a look-managed
+    // MeshStandardMaterial + sRGB albedo so IFC surfaces respond to the env
+    // map; off, the legacy MeshLambertMaterial + untagged colour (main's
+    // behaviour). Per-color binning + transparent/opacity on alpha < 1 are
+    // unchanged.
+    const col = makeSurfaceColor(bin.color.x, bin.color.y, bin.color.z)
+    const material = makeSurfaceMaterial({color: col, side: DoubleSide})
     if (bin.color.w !== 1) {
       material.transparent = true
       material.opacity = bin.color.w

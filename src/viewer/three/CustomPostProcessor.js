@@ -81,18 +81,21 @@ export default class CustomPostProcessor {
       this._normalPass.enabled = false
       this._ssaoPass.enabled = false
     }
-    // Tone mapping (§6e). The render path always runs through this
+    // Tone mapping (§6e). Gated on `?feature=look` (the whole §6e look is
+    // behind it, default off): without the flag the composer is RenderPass +
+    // outline only, matching main. The render path always runs through this
     // composer, so tone mapping must be a composer effect — `renderer.
     // toneMapping` is bypassed by postprocessing's pipeline (this is why a
     // naive `renderer.toneMapping = ACES` did nothing in 5e). Default is the
     // Khronos PBR-NEUTRAL operator: unlike ACES it preserves hue/saturation
-    // and doesn't lift mid-tones, which reads cleaner for CAD/product viz
-    // (ACES washed the matte IFC surfaces out). Swap via the `?feature=look`
-    // GUI / `setToneMappingMode` (ACES / AgX / ...). Persistent pass so it
-    // applies with or without a selection outline; the outline composites
-    // after it.
-    this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
-    this._composer.addPass(new EffectPass(camera, this._toneMappingEffect))
+    // and doesn't lift mid-tones, which reads cleaner for CAD/product viz.
+    // Swap via the `?feature=look` GUI / `setToneMappingMode` (ACES / AgX /
+    // ...). Persistent pass so it applies with or without a selection outline;
+    // the outline composites after it.
+    if (isFeatureEnabled('look')) {
+      this._toneMappingEffect = new ToneMappingEffect({mode: ToneMappingMode.NEUTRAL})
+      this._composer.addPass(new EffectPass(camera, this._toneMappingEffect))
+    }
     this._scene = scene
     this._camera = camera
   }

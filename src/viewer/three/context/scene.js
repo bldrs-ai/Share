@@ -8,17 +8,21 @@
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
 import {LOOKS} from '../../looks'
+import {isFeatureEnabled} from '../../../FeatureFlags'
 
 
-// Direct-light intensities — derived from the Neutral look (single source of
-// truth: src/viewer/looks.js LOOKS.neutral). The gradient studio IBL (scaled
+// Direct-light intensities. The whole §6e look sits behind `?feature=look`
+// (default off): with the flag ON, the Neutral look's values (single source of
+// truth: src/viewer/looks.js LOOKS.neutral) — the gradient studio IBL (scaled
 // by `scene.environmentIntensity` in ShareViewer) carries most of the ambient
-// + fill, so these are a key + fill directional pair plus an ambient lift for
-// directional shape. `ShareViewer.applyLook` overrides them at runtime when
-// the user toggles render mode; also live-tunable via `?feature=look`.
-const KEY_LIGHT_INTENSITY = LOOKS.neutral.keyLight
-const FILL_LIGHT_INTENSITY = LOOKS.neutral.fillLight
-const AMBIENT_LIGHT_INTENSITY = LOOKS.neutral.ambient
+// + fill, so these direct lights are a key + fill pair plus an ambient lift.
+// With the flag OFF, main's legacy `× Math.PI` intensities, so default
+// rendering is unchanged until the flag is flipped. `ShareViewer.applyLook`
+// overrides these at runtime on a render-mode toggle.
+const USE_LOOK = isFeatureEnabled('look')
+const KEY_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.keyLight : 0.8 * Math.PI
+const FILL_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.fillLight : 0.8 * Math.PI
+const AMBIENT_LIGHT_INTENSITY = USE_LOOK ? LOOKS.neutral.ambient : 0.25 * Math.PI
 
 
 export class IfcScene extends IfcComponent {
