@@ -17,6 +17,7 @@ import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
+import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {
   applyBatchedPreselection,
@@ -580,6 +581,68 @@ export class ShareViewer {
       mesh.instanceMap.createSubsetMeshByInstance(instanceIds, {
         material: this.selector.getSelectionMaterial(),
       }))
+  }
+
+
+  /**
+   * Resolve a STEP occurrence path (NAUO express ids) to the synthetic
+   * `IfcInstanceMap` instance ids placed at — or under — it, across
+   * every child Mesh of the model. This is the NavTree→scene join a
+   * plain expressID can't make: a tree node's id is its NAUO express
+   * id, but the geometry is owned by the (part-type-shared)
+   * `product_definition_shape`, so the two never coincide on a scalar
+   * id. The occurrence path is the only key both sides carry, so a
+   * NavTree click resolves through it to the exact instances to
+   * highlight (then `setInstanceSelection` draws them).
+   *
+   * Prefix-inclusive: clicking an assembly node lights up every leaf
+   * occurrence beneath it (the node's path is a prefix of theirs),
+   * while a leaf part resolves to just its own instance(s). Returns an
+   * empty array for IFC / non-occurrence models (no map) so callers
+   * fall back to parent-level selection.
+   *
+   * @param {number} modelID
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @param {object} [opts]
+   * @param {boolean} [opts.includeDescendants] When false (a leaf node, which
+   *   can have no descendants), take the O(1) exact-key lookup instead of
+   *   scanning every occurrence key on every mesh — the common NavTree click.
+   *   Defaults to true (the assembly case, which needs the prefix scan).
+   * @return {number[]} synthetic instance ids (empty when none)
+   */
+  getInstanceIdsForOccurrencePath(modelID, occurrencePath, {includeDescendants = true} = {}) {
+    const model = this._modelById(modelID)
+    if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+      return []
+    }
+    const target = occurrencePathKey(occurrencePath)
+    const descendantPrefix = `${target}/`
+    const ids = []
+    model.traverse((obj) => {
+      const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
+      if (!byPath) {
+        return
+      }
+      if (!includeDescendants) {
+        // Leaf: at most one key can match (a leaf has no descendant paths), so
+        // an O(1) Map lookup replaces the per-key scan on this mesh.
+        const exact = byPath.get(target)
+        if (exact) {
+          for (let i = 0; i < exact.length; i++) {
+            ids.push(exact[i])
+          }
+        }
+        return
+      }
+      for (const [key, list] of byPath) {
+        if (key === target || key.startsWith(descendantPrefix)) {
+          for (let i = 0; i < list.length; i++) {
+            ids.push(list[i])
+          }
+        }
+      }
+    })
+    return ids
   }
 
 

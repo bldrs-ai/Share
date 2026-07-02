@@ -3,6 +3,7 @@ import {
   BufferGeometry,
   Mesh,
 } from 'three'
+import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
 /**
@@ -99,6 +100,15 @@ export class IfcInstanceMap {
    * @param {Uint32Array} fields.instanceIdToParentExpressId
    * @param {Map<number, Uint32Array>} fields.parentExpressIdToInstanceIds
    * @param {BufferGeometry} fields.sourceGeometry
+   * @param {Array<Array<number>|null>} [fields.instanceIdToOccurrencePath]
+   *   Per-instance STEP occurrence path (NAUO express ids). Present only for
+   *   STEP models on a Conway that emits `PlacedGeometry.occurrencePath`; the
+   *   parent expressID collides across a reused part's occurrences, so this is
+   *   what distinguishes them. Absent (null) for IFC and older engines.
+   * @param {Map<string, Array<number>>} [fields.occurrencePathToInstanceIds]
+   *   Reverse index of the above — occurrence-path key (`occurrencePathKey`) →
+   *   the synthetic instance ids placed there. The NavTree→scene direction.
+   *   Absent (null) for IFC and older engines.
    */
   constructor({
     triangleIndexToInstanceId,
@@ -106,12 +116,16 @@ export class IfcInstanceMap {
     instanceIdToParentExpressId,
     parentExpressIdToInstanceIds,
     sourceGeometry,
+    instanceIdToOccurrencePath = null,
+    occurrencePathToInstanceIds = null,
   }) {
     this.triangleIndexToInstanceId = triangleIndexToInstanceId
     this.instanceIdToTriangleIndices = instanceIdToTriangleIndices
     this.instanceIdToParentExpressId = instanceIdToParentExpressId
     this.parentExpressIdToInstanceIds = parentExpressIdToInstanceIds
     this.sourceGeometry = sourceGeometry
+    this.instanceIdToOccurrencePath = instanceIdToOccurrencePath
+    this.occurrencePathToInstanceIds = occurrencePathToInstanceIds
   }
 
 
@@ -164,6 +178,49 @@ export class IfcInstanceMap {
       return null
     }
     return this.instanceIdToParentExpressId[instanceId]
+  }
+
+
+  /**
+   * STEP occurrence path (NAUO express ids, root→leaf) for the given synthetic
+   * instance ID — the identity that disambiguates a reused part's occurrences.
+   * Returns `null` when the model carries no occurrence paths (IFC, older
+   * engines) or the instance ID is out of range, so callers fall back to the
+   * scalar parent expressID.
+   *
+   * @param {number} instanceId
+   * @return {Array<number>|null}
+   */
+  getOccurrencePathByInstance(instanceId) {
+    const paths = this.instanceIdToOccurrencePath
+    if (!paths || instanceId < 0 || instanceId >= paths.length) {
+      return null
+    }
+    const path = paths[instanceId]
+    // A root-level / single-occurrence placement has an empty path — no
+    // disambiguating occurrence — so normalize it to null alongside the
+    // no-data case, letting truthiness-testing callers fall back to the
+    // scalar parent expressID instead of keying on a meaningless empty path.
+    return path && path.length > 0 ? path : null
+  }
+
+
+  /**
+   * Synthetic instance IDs placed at a given STEP occurrence path — the
+   * NavTree→scene direction (a clicked node highlights only its own
+   * occurrence, not every reuse of the part type). Returns `null` when the
+   * model carries no occurrence paths or the path matches nothing.
+   *
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @return {Uint32Array|null}
+   */
+  getInstanceIdsByOccurrencePath(occurrencePath) {
+    const byPath = this.occurrencePathToInstanceIds
+    if (!byPath || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+      return null
+    }
+    const list = byPath.get(occurrencePathKey(occurrencePath))
+    return list ? Uint32Array.from(list) : null
   }
 
 
@@ -332,6 +389,63 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
 
 
 /**
+ * Attach STEP occurrence-path tables to an already-built `IfcInstanceMap`
+ * from a global `instanceId → occurrencePath` table (the cache-hit GLB
+ * restore path). The cache-miss populators derive these tables from the
+ * per-PlacedGeometry stream, but a GLB cache round-trip loses the paths —
+ * the per-triangle / per-vertex ID arrays only carry the scalar
+ * `expressID` + `instanceID`, not the variable-length path. So the writer
+ * persists the global table (see `BLDRS_face_ids`), and this reattaches it.
+ *
+ * Only instance ids actually present in this map (a cache-hit GLB is split
+ * into per-material primitives, so each mesh owns a subset of the global
+ * ids) get an entry, so the reverse `occurrencePathToInstanceIds` never
+ * claims instances this mesh can't render. No-op when the map already has
+ * occurrence tables, the global table is absent, or nothing matches
+ * (IFC) — leaving the map's `null` tables so callers fall back to scalar
+ * keying.
+ *
+ * @param {IfcInstanceMap} instanceMap map to enrich in place
+ * @param {Array<Array<number>|null>} occurrencePathsByInstanceId global
+ *   table indexed by synthetic instance id (from the cache-miss build)
+ */
+export function attachOccurrencePaths(instanceMap, occurrencePathsByInstanceId) {
+  if (!instanceMap || instanceMap.instanceIdToOccurrencePath ||
+      !Array.isArray(occurrencePathsByInstanceId)) {
+    return
+  }
+  const count = instanceMap.instanceIdToParentExpressId?.length ?? 0
+  if (count === 0) {
+    return
+  }
+  const perInstance = new Array(count).fill(null)
+  const byPath = new Map()
+  let any = false
+  // Walk only the instance ids this mesh actually holds triangles for.
+  for (const inst of instanceMap.instanceIdToTriangleIndices.keys()) {
+    const path = occurrencePathsByInstanceId[inst] ?? null
+    if (!Array.isArray(path) || path.length === 0) {
+      continue
+    }
+    perInstance[inst] = path
+    any = true
+    const key = occurrencePathKey(path)
+    const list = byPath.get(key)
+    if (list) {
+      list.push(inst)
+    } else {
+      byPath.set(key, [inst])
+    }
+  }
+  if (!any) {
+    return
+  }
+  instanceMap.instanceIdToOccurrencePath = perInstance
+  instanceMap.occurrencePathToInstanceIds = byPath
+}
+
+
+/**
  * Build an IfcInstanceMap from a per-PlacedGeometry triangle range
  * stream. Each entry contributes `triangleCount` triangles to the
  * merged buffer; the populator assigns a fresh synthetic instance
@@ -360,12 +474,33 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
   const instanceCount = valid.length
   const triangleIndexToInstanceId = new Uint32Array(totalTriangles)
   const instanceIdToParentExpressId = new Uint32Array(instanceCount)
+  // Only carry occurrence paths when the source actually provides them (STEP on
+  // a Conway that emits them); IFC leaves this null so nothing downstream pays.
+  const hasOccurrencePaths = valid.some((r) => r.occurrencePath !== undefined)
+  const instanceIdToOccurrencePath = hasOccurrencePaths ? new Array(instanceCount) : null
+  // Reverse index for NavTree→scene: a tree node's occurrence path → the
+  // instance(s) placed there. Keyed by the path joined on '/'. Only non-empty
+  // paths are indexed (an empty root path can't disambiguate occurrences).
+  const occurrencePathToInstanceIds = hasOccurrencePaths ? new Map() : null
   const triangleListsByInstance = new Map()
   const instanceListsByParent = new Map()
   let tri = 0
   for (let inst = 0; inst < valid.length; inst++) {
     const {parentExpressId, triangleCount} = valid[inst]
     instanceIdToParentExpressId[inst] = parentExpressId
+    if (instanceIdToOccurrencePath) {
+      const path = valid[inst].occurrencePath ?? null
+      instanceIdToOccurrencePath[inst] = path
+      if (path && path.length > 0) {
+        const key = occurrencePathKey(path)
+        const list = occurrencePathToInstanceIds.get(key)
+        if (list) {
+          list.push(inst)
+        } else {
+          occurrencePathToInstanceIds.set(key, [inst])
+        }
+      }
+    }
     let parentList = instanceListsByParent.get(parentExpressId)
     if (!parentList) {
       parentList = []
@@ -390,6 +525,8 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
     instanceIdToParentExpressId,
     parentExpressIdToInstanceIds,
     sourceGeometry: opts.geometry ?? null,
+    instanceIdToOccurrencePath,
+    occurrencePathToInstanceIds,
   })
 }
 
@@ -628,7 +765,9 @@ export function instanceMapFromFlatMeshes(flatMeshes, api, modelID, opts = {}) {
       if (triangleCount <= 0) {
         continue
       }
-      ranges.push({parentExpressId, triangleCount})
+      // Conway (STEP) tags each PlacedGeometry with its occurrence path so a
+      // reused part's occurrences stay distinguishable; undefined for IFC.
+      ranges.push({parentExpressId, triangleCount, occurrencePath: placed.occurrencePath})
     }
   }
   return instanceMapFromOrderedPlacedRanges(ranges, opts)

@@ -26,7 +26,7 @@ import {updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
-import {instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
+import {attachOccurrencePaths, instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {BldrsElementPropertiesReader} from './bldrsElementProperties'
@@ -531,6 +531,11 @@ export async function load(
   if (model.capabilities.instancePicking ||
       model.userData?.bldrsFaceIds) {
     const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Global STEP occurrence-path table (index = synthetic instance id),
+    // persisted by the writer so a cache-hit STEP model can rebuild the
+    // per-occurrence tables the cache-miss instance map carried. Null for
+    // IFC / pre-occurrence artifacts. Read before the userData is freed below.
+    const occurrencePaths = model.userData?.bldrsFaceIds?.occurrencePaths ?? null
     // Per-vertex IDs are only trustworthy on uncompressed artifacts.
     // DRACO quantises integer attributes and Meshopt welds shared
     // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
@@ -597,6 +602,13 @@ export async function load(
         }
       }
       if (map) {
+        // Restore STEP per-occurrence tables from the persisted global
+        // table (no-op for IFC / when absent), so scene↔NavTree selection
+        // keys on the occurrence path — not the part-type id shared across
+        // every reuse — on cache-hit exactly as it does on cache-miss.
+        if (occurrencePaths) {
+          attachOccurrencePaths(map, occurrencePaths)
+        }
         obj.instanceMap = map
         attached++
         totalInstances += map.instanceCount
