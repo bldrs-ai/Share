@@ -21,9 +21,9 @@ import {Vector4} from 'three'
  * `preselection` (transient, hover). Preselection paints over selection;
  * removing either restores the layer beneath, ending at the instance's
  * original colour (kept in `mesh.instanceColors`, alpha included — so glass
- * stays glass). State lives on the BatchedMesh in non-enumerable-ish
- * `__sel*` / `__pre*` slots; isolate still uses the subset path
- * (`batchedSubset`) and is unaffected.
+ * stays glass). State lives in `mesh.userData.batchedHighlight` (layer sets +
+ * colours + a one-time parent→batchIds index); isolate still uses the subset
+ * path (`batchedSubset`) and is unaffected.
  *
  * @see batchedSubset — the isolation-subset sibling.
  * @see design/new/viewer-replacement.md §3b.iv
@@ -62,6 +62,37 @@ function eachBatch(model, fn) {
 
 
 /**
+ * Lazily create + cache this batch's highlight state under `userData`
+ * (matching the repo convention for custom mesh state, cf.
+ * `userData.sourceMesh`). Holds the two layer sets + colours and a one-time
+ * `parentIndex` (parent expressID → batchIds) so `setLayer` resolves a
+ * product's instances in O(matched) instead of scanning all N instances on
+ * every hover/selection.
+ *
+ * @param {object} mesh BatchedMesh carrying `instanceParents`
+ * @return {object} `{selSet, preSet, selColor, preColor, parentIndex}`
+ */
+function highlightState(mesh) {
+  let state = mesh.userData.batchedHighlight
+  if (!state) {
+    const parentIndex = new Map()
+    const parents = mesh.instanceParents
+    for (let b = 0; b < parents.length; b++) {
+      const list = parentIndex.get(parents[b])
+      if (list) {
+        list.push(b)
+      } else {
+        parentIndex.set(parents[b], [b])
+      }
+    }
+    state = {selSet: new Set(), preSet: new Set(), selColor: undefined, preColor: undefined, parentIndex}
+    mesh.userData.batchedHighlight = state
+  }
+  return state
+}
+
+
+/**
  * Repaint one instance to its current layered colour: preselection wins
  * over selection wins over the instance's original colour. Alpha always
  * comes from the original (keeps a highlighted glass pane translucent).
@@ -70,13 +101,14 @@ function eachBatch(model, fn) {
  * @param {number} batchId
  */
 function paint(mesh, batchId) {
+  const state = mesh.userData.batchedHighlight
   const orig = mesh.instanceColors?.[batchId]
   const a = orig?.w ?? 1
   let rgb
-  if (mesh.__preSet?.has(batchId)) {
-    rgb = mesh.__preColor ?? DEFAULT_HIGHLIGHT
-  } else if (mesh.__selSet?.has(batchId)) {
-    rgb = mesh.__selColor ?? DEFAULT_HIGHLIGHT
+  if (state?.preSet.has(batchId)) {
+    rgb = state.preColor ?? DEFAULT_HIGHLIGHT
+  } else if (state?.selSet.has(batchId)) {
+    rgb = state.selColor ?? DEFAULT_HIGHLIGHT
   } else {
     rgb = orig ? {r: orig.x, g: orig.y, b: orig.z} : DEFAULT_HIGHLIGHT
   }
@@ -95,23 +127,29 @@ function paint(mesh, batchId) {
  */
 function setLayer(model, expressIds, color, layer) {
   const ids = expressIds instanceof Set ? expressIds : new Set(expressIds ?? [])
-  const setKey = layer === 'pre' ? '__preSet' : '__selSet'
-  const colorKey = layer === 'pre' ? '__preColor' : '__selColor'
+  const setKey = layer === 'pre' ? 'preSet' : 'selSet'
+  const colorKey = layer === 'pre' ? 'preColor' : 'selColor'
   eachBatch(model, (mesh) => {
     if (!mesh.instanceParents || typeof mesh.setColorAt !== 'function') {
       return
     }
-    mesh[colorKey] = color ?? undefined
+    const state = highlightState(mesh)
+    state[colorKey] = color ?? undefined
+    // O(matched): walk the requested products' batchIds via the index, not
+    // all N instances.
     const next = new Set()
     if (color && ids.size > 0) {
-      for (let b = 0; b < mesh.instanceParents.length; b++) {
-        if (ids.has(mesh.instanceParents[b])) {
-          next.add(b)
+      for (const id of ids) {
+        const list = state.parentIndex.get(id)
+        if (list) {
+          for (const b of list) {
+            next.add(b)
+          }
         }
       }
     }
-    const prev = mesh[setKey] ?? new Set()
-    mesh[setKey] = next
+    const prev = state[setKey]
+    state[setKey] = next
     // Repaint every instance whose membership in this layer changed; paint()
     // resolves the layered colour from the still-current sets.
     for (const b of prev) {

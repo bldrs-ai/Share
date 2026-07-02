@@ -892,8 +892,14 @@ export class ShareViewer {
       // BatchedMesh render path: recolor the hovered product's instances in
       // place (setColorAt). Coexists with — and paints over — the selection
       // recolor; cleared on cursor-leave by `_clearPreselectionForAllModels`.
-      const preMat = this.selector.getPreselectionMaterial()
-      applyBatchedPreselection(model, [id], preMat?.color)
+      // Dedup on the resolved id: `highlightIfcItem` fires per animation frame
+      // while the cursor rests, and a repaint re-uploads the colours texture —
+      // skip when the hovered product hasn't changed.
+      if (id !== this._lastBatchedPreselectId) {
+        this._lastBatchedPreselectId = id
+        const preMat = this.selector.getPreselectionMaterial()
+        applyBatchedPreselection(model, [id], preMat?.color)
+      }
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
@@ -947,6 +953,8 @@ export class ShareViewer {
     // logic stays in one place instead of being split between
     // ShareViewer (Conway) and each model's `removeSubset` (legacy).
     this._clearConwayPreselectionSubsets()
+    // Reset the batched hover-dedup so re-entering the same product repaints.
+    this._lastBatchedPreselectId = undefined
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return
