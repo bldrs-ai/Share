@@ -309,6 +309,24 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(Array.from(byParent.geometry.getIndex().array))
         .toEqual(Array.from(byInstance.geometry.getIndex().array))
     })
+
+    it('omits excludeInstances — the per-occurrence hide reveal', () => {
+      // Parent 100 reused across 3 occurrences (inst 0,1,2). Hiding occurrence
+      // inst 1 must leave 0 and 2 in the reveal subset — the seam that lets one
+      // STEP occurrence hide while its siblings stay shown.
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1}, // inst 0 → tri 0
+        {parentExpressId: 100, triangleCount: 1}, // inst 1 → tri 1
+        {parentExpressId: 100, triangleCount: 1}, // inst 2 → tri 2
+      ], {geometry: geom})
+      const subset = map.createSubsetMeshByParent([100], {excludeInstances: new Set([1])})
+      // Tris 0 and 2 only (inst 1's tri 1 dropped).
+      expect(Array.from(subset.geometry.getIndex().array)).toEqual([0, 1, 2, 6, 7, 8])
+      // An empty exclude set is identical to no exclusion.
+      const full = map.createSubsetMeshByParent([100], {excludeInstances: new Set()})
+      expect(Array.from(full.geometry.getIndex().array)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    })
   })
 
 

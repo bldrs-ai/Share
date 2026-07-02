@@ -123,7 +123,7 @@ export default function NavTreeNode({
           role='button'
           tabIndex={0}
         >
-          <HideToggleButton elementId={parseInt(node.expressID, 10)}/>
+          <HideToggleButton elementId={parseInt(node.expressID, 10)} occurrencePath={node.occurrencePath}/>
         </div>
       )}
     </div>

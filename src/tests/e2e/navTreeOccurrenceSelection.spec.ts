@@ -85,5 +85,17 @@ describe('NavTree STEP occurrence selection', () => {
     await firstNode('nut').getByTestId('NavTreeNodeLabel').click()
     await expect(firstNode('nut')).toHaveAttribute('data-is-selected', 'true')
     await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+
+    // Per-occurrence hide: the eye on the FIRST l-bracket-assembly hides just
+    // that occurrence — its eye flips to the hidden state while the second
+    // l-bracket-assembly's eye stays the 'shown' eye (pre-fix, hiding by the
+    // shared product id would have flipped both / done nothing).
+    const assemblies = node('l-bracket-assembly')
+    await assemblies.first().getByTestId('hide-icon').click()
+    await expect(assemblies.first().getByTestId('unhide-icon')).toBeVisible()
+    await expect(assemblies.last().getByTestId('hide-icon')).toBeVisible()
+    // Toggling it back restores the 'shown' eye.
+    await assemblies.first().getByTestId('unhide-icon').click()
+    await expect(assemblies.first().getByTestId('hide-icon')).toBeVisible()
   })
 })

@@ -613,6 +613,44 @@ describe('viewer/three/IfcIsolator', () => {
       expect(iso.hiddenIds).toEqual([])
     })
 
+    it('hideOccurrence hides one occurrence\'s instances, leaving the reused part\'s siblings', () => {
+      // One product (100) reused across 3 occurrences: instances 0, 1, 2.
+      // Hiding occurrence instance 1 must leave 2 triangles (instances 0, 2)
+      // in the reveal — the "H hides both / eye does nothing" bug was that
+      // hiding by the shared product id removed all three.
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const child = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      const model = new Group()
+      model.add(child)
+      attachInstanceMapSubsets(model, null)
+      scene.add(model)
+      pickable.push(model)
+      iso.ifcModel = model
+      iso.visualElementsIds = [100]
+      iso.spatialStructure = {}
+
+      const useStore = require('../../store/useStore').default
+      iso.hideOccurrence(6, [1])
+      expect(iso.hiddenOccurrences.has(6)).toBe(true)
+      // Store keyed by the NAUO node id so the NavTree eye toggles.
+      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {6: true}})
+      expect(scene.children).not.toContain(model) // full model swapped for reveal
+      expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2) // instances 0 + 2
+
+      // Unhiding the only hidden occurrence restores the full model.
+      iso.unHideOccurrence(6)
+      expect(iso.hiddenOccurrences.has(6)).toBe(false)
+      expect(scene.children).toContain(model)
+      expect(iso.unhiddenSubset).toBeNull()
+      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}})
+    })
+
     it('reset-isolation with no hidden ids restores the model', () => {
       const {scene, pickable, iso, model} = setupIsolatorWithModel()
       iso.tempIsolationModeOn = true

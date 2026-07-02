@@ -279,19 +279,30 @@ export class IfcInstanceMap {
    * Build a Mesh containing every instance of the named parents.
    * Parent-level subset — matches current per-element semantics.
    *
+   * `opts.excludeInstances` omits specific synthetic instance ids from the
+   * result — the seam that lets the isolator hide one STEP occurrence of a
+   * reused part while still showing its siblings: the reveal subset is built
+   * from the still-visible parents minus the hidden occurrence's instances.
+   * Empty/absent means "every instance of the parents" (today's behavior).
+   *
    * @param {Array<number>|Set<number>} parentExpressIds
    * @param {object} [opts]
+   * @param {Set<number>} [opts.excludeInstances] instance ids to omit
    * @return {Mesh|null}
    */
   createSubsetMeshByParent(parentExpressIds, opts = {}) {
     // Collect every instance under each named parent, then run the
     // per-instance build. Two-step rather than maintaining a parallel
     // parent→triangles table — keeps populator allocation small.
+    const exclude = opts.excludeInstances
     const instanceIds = []
     for (const pid of parentExpressIds) {
       const ids = this.parentExpressIdToInstanceIds.get(pid)
       if (ids) {
         for (let i = 0; i < ids.length; i++) {
+          if (exclude && exclude.has(ids[i])) {
+            continue
+          }
           instanceIds.push(ids[i])
         }
       }
