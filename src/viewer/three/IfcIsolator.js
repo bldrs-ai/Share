@@ -104,7 +104,7 @@ export default class IfcIsolator {
     }
     if (foundBatched) {
       this.visualElementsIds = [...ids]
-      const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
+      const rootElement = await this._getSpatialStructure()
       this.collectSpatialElementsId(rootElement)
       return
     }
@@ -143,8 +143,30 @@ export default class IfcIsolator {
       return
     }
     this.visualElementsIds = [...ids]
-    const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
+    const rootElement = await this._getSpatialStructure()
     this.collectSpatialElementsId(rootElement)
+  }
+
+
+  /**
+   * Fetch the model's spatial structure, tolerating both load backends.
+   * Cache-miss Conway-direct / wit-three expose it under
+   * `ifcModel.ifcManager.getSpatialStructure`; a cache-hit GLB model exposes
+   * its OWN `ifcModel.getSpatialStructure` closure (from
+   * `Loader.js#convertToShareModel`) and has no `ifcManager` spatial method.
+   * Preferring the own method — discriminated by `hasOwnProperty`, exactly as
+   * `CadView#onModel` does — is what populates `spatialStructure` on cache-hit,
+   * so `canBeHidden` returns true and the NavTree renders its hide/eye icons
+   * (they were missing on every cache-hit reload otherwise).
+   *
+   * @return {Promise<object>} spatial-structure root (may have no children)
+   * @private
+   */
+  _getSpatialStructure() {
+    if (Object.prototype.hasOwnProperty.call(this.ifcModel, 'getSpatialStructure')) {
+      return this.ifcModel.getSpatialStructure(0, false)
+    }
+    return this.ifcModel.ifcManager.getSpatialStructure(0, false)
   }
 
 

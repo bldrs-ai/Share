@@ -349,6 +349,34 @@ describe('viewer/three/IfcIsolator', () => {
         expect(iso.visualElementsIds).toEqual([5])
       })
     })
+
+    it('populates spatialStructure from the model\'s OWN getSpatialStructure (cache-hit GLB)', () => {
+      // Cache-hit GLB models expose their spatial tree as an own closure and
+      // have no `ifcManager` spatial method. Without honoring that, the
+      // isolator's spatialStructure stays empty and canBeHidden returns false
+      // for every node — so the NavTree renders no hide/eye icons on reload.
+      const iso = makeIsolator()
+      const g = new BufferGeometry()
+      g.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      // Per-vertex ids are the geometry owner (product_definition_shape for
+      // STEP): 900. The tree node ids (NAUO) are different: 5, 6.
+      g.setAttribute('expressID', new BufferAttribute(new Uint32Array([900, 900, 900]), 1))
+      const model = new Mesh(g, new MeshBasicMaterial())
+      // Own method (hasOwnProperty true), no ifcManager — the cache-hit shape.
+      // Node 6 is an assembly (has a child); leaves aren't hidable, matching the
+      // NavTree showing eyes on assemblies, not leaf parts.
+      model.getSpatialStructure = jest.fn(() => Promise.resolve({
+        expressID: 5,
+        children: [{expressID: 6, children: [{expressID: 7, children: []}]}],
+      }))
+      return iso.setModel(model).then(() => {
+        expect(model.getSpatialStructure).toHaveBeenCalled()
+        // The assembly NAUO node id (6) isn't a geometry owner id, so it's
+        // hidable only via the spatial structure — which must now be populated.
+        expect(iso.canBeHidden(6)).toBe(true)
+        expect(iso.canBeHidden(900)).toBe(true)
+      })
+    })
   })
 
 
