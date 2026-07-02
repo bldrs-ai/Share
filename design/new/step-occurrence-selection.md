@@ -84,15 +84,23 @@ order; BVH permutes only the index buffer, not the numbering).
   just nicer: the node's NAUO id can't reach the PDS-keyed mesh, so without the
   path resolution a STEP node click highlights *nothing* in the scene.
 
+- **Cache-hit parity.** The occurrence tables also survive the GLB cache. The
+  writer persists the global `instanceId → occurrencePath` table on
+  `BLDRS_face_ids` (`glbExport` reads it off `model.instanceMap`); the reader
+  decodes it to `userData.bldrsFaceIds.occurrencePaths`, and `Loader.js`
+  reattaches it to each restored per-mesh map via
+  `IfcInstanceMap.attachOccurrencePaths` (only for the instance ids that mesh
+  actually holds, since the GLB splits into per-material primitives). Schema
+  bumped `0.8.0 → 0.9.0` so stale occurrence-less caches read as a miss and get
+  rewritten. **This is why an already-cached STEP model (e.g. one loaded on the
+  same preview origin before this change) has to be re-fetched once: OPFS holds
+  the old 0.8.0 artifact with no occurrence data until the schema bump forces a
+  re-parse.**
+
 ### Remaining (follow-up)
 
 1. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the occurrence
    path and resolve it on load.
-2. **Cache-hit parity.** The occurrence tables ride the cache-miss
-   `buildConwayIfcModel` path; the cache-hit GLB restore
-   (`instanceMapFromTriangleIds` / `instanceMapFromGeometry` in `Loader.js`) does
-   not yet reconstruct them, so a reloaded (GLB-cached) STEP model falls back to
-   type-level selection until the path is persisted per-instance in the artifact.
 
 Each step degrades gracefully to today's type-level behavior when no occurrence
 path is present (IFC, single-occurrence parts).

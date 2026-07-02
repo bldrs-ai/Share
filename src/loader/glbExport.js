@@ -244,6 +244,18 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         '[glb] writer: parseGlb for face_ids capture threw; ' +
         'skipping face_ids (DRACO will skip too):', e)
     }
+    // STEP per-occurrence identity. The per-triangle arrays above only
+    // carry the scalar instance id; the occurrence path (a variable-length
+    // NAUO chain) lives on the live instance map. Persist the global
+    // `instanceId → path` table alongside face_ids so a cache-hit STEP
+    // model can restore per-occurrence NavTree↔scene selection instead of
+    // collapsing to the shared part-type id. Absent for IFC.
+    if (faceIds) {
+      const occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath
+      if (Array.isArray(occurrencePaths)) {
+        faceIds.occurrencePaths = occurrencePaths
+      }
+    }
     await yieldToBrowser()
     const capturePromise = (async () => {
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)

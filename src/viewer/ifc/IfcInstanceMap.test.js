@@ -8,9 +8,11 @@ import {
 import {
   IfcInstanceMap,
   NO_INSTANCE_ID,
+  attachOccurrencePaths,
   instanceMapFromFlatMeshes,
   instanceMapFromGeometry,
   instanceMapFromOrderedPlacedRanges,
+  instanceMapFromTriangleIds,
 } from './IfcInstanceMap'
 
 
@@ -577,6 +579,51 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       const wholeWall = map.createSubsetMeshByParent([100])
       expect(oneInstance.geometry.getIndex().array.length).toBe(3)
       expect(wholeWall.geometry.getIndex().array.length).toBe(126)
+    })
+  })
+
+
+  describe('attachOccurrencePaths (cache-hit restore)', () => {
+    it('restores occurrence tables from a global instanceId→path table', () => {
+      // Two reused occurrences (instance 0 and 1) sharing parent 100.
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100, 100]), new Uint32Array([0, 1]))
+      expect(map.instanceIdToOccurrencePath).toBeNull()
+
+      attachOccurrencePaths(map, [[10, 20], [11, 20]])
+      expect(map.getOccurrencePathByInstance(0)).toEqual([10, 20])
+      expect(map.getOccurrencePathByInstance(1)).toEqual([11, 20])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([0])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([11, 20]))).toEqual([1])
+    })
+
+    it('only indexes instance ids the mesh actually holds (per-primitive subset)', () => {
+      // A cache-hit primitive covering only global instance id 5 — the global
+      // table has entries for 0..5 but only 5 is present in this mesh, so the
+      // reverse index must not claim ids 0..4 this mesh can't render.
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([5]))
+      const global = [[1], [2], [3], [4], [5], [10, 20]]
+      attachOccurrencePaths(map, global)
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([5])
+      expect(map.getInstanceIdsByOccurrencePath([1])).toBeNull()
+      expect(map.getOccurrencePathByInstance(5)).toEqual([10, 20])
+    })
+
+    it('is a no-op for IFC (no matching paths) and when tables already exist', () => {
+      const ifcMap = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([0]))
+      attachOccurrencePaths(ifcMap, [null])
+      expect(ifcMap.instanceIdToOccurrencePath).toBeNull()
+
+      // Already-populated map (cache-miss) is left untouched.
+      const occMap = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [7, 8]},
+      ])
+      const before = occMap.instanceIdToOccurrencePath
+      attachOccurrencePaths(occMap, [[99]])
+      expect(occMap.instanceIdToOccurrencePath).toBe(before)
+      expect(occMap.getOccurrencePathByInstance(0)).toEqual([7, 8])
     })
   })
 })

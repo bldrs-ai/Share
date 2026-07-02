@@ -384,6 +384,63 @@ function buildSubsetMesh(sourceGeometry, ids, lookupTriangles, opts) {
 
 
 /**
+ * Attach STEP occurrence-path tables to an already-built `IfcInstanceMap`
+ * from a global `instanceId → occurrencePath` table (the cache-hit GLB
+ * restore path). The cache-miss populators derive these tables from the
+ * per-PlacedGeometry stream, but a GLB cache round-trip loses the paths —
+ * the per-triangle / per-vertex ID arrays only carry the scalar
+ * `expressID` + `instanceID`, not the variable-length path. So the writer
+ * persists the global table (see `BLDRS_face_ids`), and this reattaches it.
+ *
+ * Only instance ids actually present in this map (a cache-hit GLB is split
+ * into per-material primitives, so each mesh owns a subset of the global
+ * ids) get an entry, so the reverse `occurrencePathToInstanceIds` never
+ * claims instances this mesh can't render. No-op when the map already has
+ * occurrence tables, the global table is absent, or nothing matches
+ * (IFC) — leaving the map's `null` tables so callers fall back to scalar
+ * keying.
+ *
+ * @param {IfcInstanceMap} instanceMap map to enrich in place
+ * @param {Array<Array<number>|null>} occurrencePathsByInstanceId global
+ *   table indexed by synthetic instance id (from the cache-miss build)
+ */
+export function attachOccurrencePaths(instanceMap, occurrencePathsByInstanceId) {
+  if (!instanceMap || instanceMap.instanceIdToOccurrencePath ||
+      !Array.isArray(occurrencePathsByInstanceId)) {
+    return
+  }
+  const count = instanceMap.instanceIdToParentExpressId?.length ?? 0
+  if (count === 0) {
+    return
+  }
+  const perInstance = new Array(count).fill(null)
+  const byPath = new Map()
+  let any = false
+  // Walk only the instance ids this mesh actually holds triangles for.
+  for (const inst of instanceMap.instanceIdToTriangleIndices.keys()) {
+    const path = occurrencePathsByInstanceId[inst] ?? null
+    if (!Array.isArray(path) || path.length === 0) {
+      continue
+    }
+    perInstance[inst] = path
+    any = true
+    const key = path.join('/')
+    const list = byPath.get(key)
+    if (list) {
+      list.push(inst)
+    } else {
+      byPath.set(key, [inst])
+    }
+  }
+  if (!any) {
+    return
+  }
+  instanceMap.instanceIdToOccurrencePath = perInstance
+  instanceMap.occurrencePathToInstanceIds = byPath
+}
+
+
+/**
  * Build an IfcInstanceMap from a per-PlacedGeometry triangle range
  * stream. Each entry contributes `triangleCount` triangles to the
  * merged buffer; the populator assigns a fresh synthetic instance
