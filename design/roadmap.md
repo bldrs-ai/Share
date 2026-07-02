@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.2 — initial reconciliation
-**Date:** 2026-05-28
+**Status:** Draft v0.3 — growth-strategy reconciliation + AI-workspace pivot
+**Date:** 2026-07-02
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -9,6 +9,28 @@ extract preserved in this commit's history; key Epic list inlined in §4.
 This doc normalizes the legacy Epic list against ~2 years of execution since the last
 top-down review, surfaces the work that landed without story tracking, and lays out the
 **Pro/billing-ready MVP** plan plus the loveable backlog beyond it.
+
+**v0.3 (2026-07-02) folds in three things:**
+
+1. **Implementation drift since v0.2** — the `conway-web-ifc-adapter` shim retired
+   (`design/new/adapter-removal.md`), the GPU-instancing/`BatchedMesh` render arc
+   behind `?feature=batchedMesh`, STEP metadata extraction (conway #345 arc), and
+   the marketing site's move to Next.js SSG. Reflected in §3–§5.
+2. **Growth-strategy reconciliation** — priorities re-cut against the funnel
+   attribution work in `bldrs-ai/bizdev` `docs/growth-strategy.md`. That doc is
+   **private** (spend, CAC, geo, raw traffic stay there — only qualitative
+   conclusions and instrumentation *shape* are mirrored here). Headline
+   conclusions: paid search is currently the only channel delivering real
+   authored-model opens; organic discovery is effectively zero; shared links are
+   the highest-quality earned traffic we have. Consequence: funnel
+   instrumentation, SEO landing surfaces, and share-loop polish move from
+   "post-MVP polish" into an active parallel phase — §4.10 (Grow), Track T9,
+   §6 Phase G.
+3. **The AI-workspace pivot** — the product direction after (and partly alongside)
+   the Pro-MVP: a Claude-Code-like conversational workspace over CAD/BIM models,
+   multi-user, with user-generated AI-app toolbelts. New Epic group §4.11
+   (Assist), Tracks T10–T11, plan in §7. Several long-held loveables
+   (`search-120`, `apps-130`, `apps-120`) are absorbed into it.
 
 It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
@@ -30,7 +52,7 @@ disagree, this doc wins and the others get updated.
 The original PDF interleaved capability lists and implementation notes. This doc keeps
 them split: §3 is the master overview (one row per Epic and Track), §4 is the Epic
 catalogue, §5 is the Track catalogue, §6 is the Pro-MVP sequencing across both, §7 is
-what's loveable but post-MVP.
+the AI-workspace pivot plan, §8 is what's loveable but post-MVP.
 
 
 ## 2. Status legend
@@ -51,8 +73,12 @@ intent. New work added since the PDF is marked `(NEW)`.
 
 - **A–E** = phase in the Pro-MVP plan (§6). A = stabilise viewer, B = identity +
   multi-account, C = sharing v1, D = subscribe + ads, E = launch checklist.
+- **G** = growth-funnel phase (§6 Phase G) — runs **parallel** to A–C and starts
+  now; small, high-leverage, mostly independent of the viewer/identity arcs.
+- **AI** = AI-workspace pivot arc (§7) — sequenced after the Pro-MVP launch, with
+  flagged foundations allowed to start earlier (see §7.4).
 - **—** = already shipped; no Pro-MVP work pending.
-- **Post** = held in §7 Post-MVP backlog.
+- **Post** = held in §8 Post-MVP backlog.
 
 
 ## 3. Status overview
@@ -94,15 +120,15 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | Versions | `versions-120` | Portable versions for Drive | 🔮 | Post | T6 |
 | Search | `search-100` | Search current model | 🟡 | — | — |
 | Search | `search-110` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
-| Search | `search-120` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | Post | — |
+| Search | `search-120` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
 | Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | 🟡 | B | — |
 | Identity | `identity-130` | Profile drawer + multi-account picker | ⬜ | B | T3 |
 | Apps | `apps-100` | Browse + select app (AppsDrawer) | ✔ | — | — |
 | Apps | `apps-110` | XYZ demo app (v0.1 API dogfood) | ✔ | — | — |
-| Apps | `apps-120` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | Post | — |
-| Apps | `apps-130` | v1.0 Public API + IDE (🥇) | 🔮 | Post | — |
+| Apps | `apps-120` | Bldrs Integrate (CI + ArchiCAD/Speckle) | 🔮 | AI | T11 |
+| Apps | `apps-130` | v1.0 Public API + IDE (🥇) | 🔮 | AI | T11 |
 | Community | `community-100` | Welcome dialog + onboarding | ✔ | — | — |
 | Community | `community-110` | Analytics + survey + thumbs feedback | 🟡 | E | — |
 | Community | `community-120` | Bug report w/ screenshot + session state | ⬜ | Post | — |
@@ -111,6 +137,13 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | Subscribe | `subscribe-110` | Stripe checkout + portal (NEW) | ⬜ | D | T8 |
 | Subscribe | `subscribe-120` | Quota tracking (NEW) | ⬜ | D | T8, T3 |
 | Subscribe | `subscribe-130` | Ads on free tier | 🟡 | D | T7 |
+| Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
+| Grow | `grow-110` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
+| Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | ⬜ | G | T9 |
+| Assist | `assist-100` | Workspace shell: left drawer projects + org nav (NEW) | ⬜ | AI | — |
+| Assist | `assist-110` | Conversational agent panel, single-user (NEW) | ⬜ | AI | T10, T11 |
+| Assist | `assist-120` | Multi-user channels + AI participation modes (NEW) | ⬜ | AI | T10 |
+| Assist | `assist-130` | AI-apps toolbelt: save/version/run + MCP (NEW) | ⬜ | AI | T11 |
 
 ### 3.2 Tracks
 
@@ -123,7 +156,10 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | T5 | Drive Recents HEAD-check | ⬜ | E (polish) | `open-150` |
 | T6 | Notes & Versions sidecar formats | ⬜ | Post | `notes-110`, `notes-120`, `versions-120` |
 | T7 | Ads | 🟡 | D | `subscribe-130` |
-| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120` |
+| T8 | Pro/Billing (NEW) | ⬜ | D | `subscribe-100`, `subscribe-110`, `subscribe-120`, §7 AI metering |
+| T9 | Growth funnel & SEO surfaces (NEW) | ⬜ | G | `grow-100`, `grow-110`, `grow-120` |
+| T10 | Agent runtime & conversation store (NEW) | ⬜ | AI (§7) | `assist-110`, `assist-120`, `search-120` |
+| T11 | App sandbox + MCP bridge (NEW) | ⬜ | AI (§7) | `assist-130`, `apps-130`, `apps-120` |
 
 
 ## 4. Normalized Epic catalogue
@@ -172,6 +208,9 @@ original list; landed via `googleDrive` flag now default-on).
 **Epic `open-150`: Recents reliability** 🟡 (NEW)
 *Not in PDF — surfaced by support friction.*
 - Track dependency: T5 Drive recents HEAD-check (proposed).
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a> local recent fails hard after a cache clear — needs a typed
+  "file no longer available" alert (T5's pre-flight pattern applied to the
+  OPFS/local case, not just Drive).
 - Story to file: `open-150: Recents show typed unreachable alert + remove-recent`.
 
 
@@ -204,6 +243,19 @@ slice, and isolation controls expected of a BIM viewer.
   `step-metadata-nist.md`); Share-side design +
   remaining follow-ups (permalink encoding, per-occurrence isolate) in
   `design/new/step-occurrence-selection.md`. PRs #1573 + #1575, E2E over `as1-oc-214.stp`.
+- STEP metadata: NavTree names + Properties 🟡 (NEW). Conway now extracts AP214/AP242
+  product structure + properties and emits them through the `web-ifc` compat surface
+  in the exact shapes Share consumes (conway #345 arc), so a STEP file lights up the
+  NavTree + Properties panel with no Share code change. Share-side follow-through:
+  <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> (verify against the NIST corpus after the next Conway release bump;
+  generalize the selection/permalink key to the occurrence path) and
+  <a href="https://github.com/bldrs-ai/Share/issues/1570" target="_blank" rel="noopener noreferrer">#1570</a> (pin down the `{value}`-handle + reference-graph contract `ifclib`
+  imposes on the engine; defensive `reifyName`; possible re-home to conway).
+- Open bugs feeding Phase A stabilisation: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera fit keys off "last scene
+  child" instead of a named primary-model reference; <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> `getSelectedElementsProps`
+  passes an expressID where a type code is expected (wrong/empty type in the
+  Properties panel); <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) selection/properties don't hydrate when a
+  private model is opened from an element permalink.
 
 **Epic `view-110`: Cut planes** ✔
 *PDF View.3 — Cut sub-item ✔.*
@@ -233,9 +285,23 @@ slice, and isolation controls expected of a BIM viewer.
 multi-worker; etc.*
 - Closed (effectively, via Tracks T1 + T2): OPFS cache, GLB cache, Conway-direct,
   per-instance picking, perf monitor (`?feature=perf`), DRACO compression unblocked.
+- Landed since v0.2:
+  - **Adapter removal ✔ (2026-06).** The `conway-web-ifc-adapter` shim is retired;
+    Share depends on `@bldrs-ai/conway` directly via the `@bldrs-ai/conway/web-ifc`
+    subpath export, and the release chain collapsed to Conway → Share (no more
+    three-hop republish / 22-minor-version lag). Real-`web-ifc` engine-swap
+    comparison retained. See `design/new/adapter-removal.md`.
+  - **GPU-instancing arc 🟡 (behind `?feature=batchedMesh`).** Grouper + measured
+    analysis (#1568: ~60% vertex-memory reduction on instancing-dense Revit models,
+    ~26% on STEP), `BatchedMesh` render path with recolor-based highlight, isolate,
+    and BVH picking (#1571), and a batched→merged GLB-cache bake so cached
+    artifacts stay byte-compatible with the merged reader (#1574). Always-on flip
+    deferred pending smoke-test. See `viewer-replacement.md` §3b.iv.
 - Open: on-demand rendering (dirty-flag, currently 60Hz unconditional — `viewer-
   replacement.md` §3c.iv "Open perf items"); hover-pick throttling tuning; per-product
-  Mesh emission spike.
+  Mesh emission spike; `batchedMesh` always-on flip + per-occurrence selection
+  narrowing on the batched path; `EXT_mesh_gpu_instancing` batched-native GLB cache
+  (§3b.v) so the round-trip stays instanced and the artifact shrinks.
 - Pre-public-launch gate: 4-angle screenshot harness + GLB bit-level diff (called out
   in `viewer-replacement.md` §3b.iii final paragraph). **Required for Pro-MVP.**
 
@@ -312,7 +378,7 @@ visualization on top (post-MVP loveable):
   **Phase C** alongside Notes work in the share flow — sharing a model with a
   pin-anchored discussion is a strong demo, and the URL-sync bug (<a href="https://github.com/bldrs-ai/Share/issues/930" target="_blank" rel="noopener noreferrer">#930</a>) blocks
   the share-a-note flow today.
-- Maps-style filtering UI itself is **Post-MVP loveable** (§7 item 10).
+- Maps-style filtering UI itself is **Post-MVP loveable** (§8 item 10).
 
 
 ### 4.3 Share (split out of legacy Collab)
@@ -423,7 +489,10 @@ data graph.
 *PDF Search.3 (🥇 MLP).*
 - Never started. Natural-language QA over building data with citations back to the
   model.
-- **Post-MVP loveable.** Johannes is the design partner.
+- **Absorbed by the AI pivot (§7).** Natural-language QA over the model is the
+  first-class job of the conversational panel (`assist-110`); the knowledge-graph
+  substrate becomes its retrieval layer (Track T10). Johannes stays the design
+  partner.
 
 
 ### 4.6 Identity & Account (NEW Epic group — implicit in PDF "Federated authentication")
@@ -460,7 +529,11 @@ Third-party (and dogfooded) apps add capabilities to Share via a stable API.
 
 **Epic `apps-100`: Browse + select app (AppsDrawer)** ✔
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/1282" target="_blank" rel="noopener noreferrer">#1282</a> Apps 100.
-- Open: nothing immediate. Surface exists; consumers are sparse.
+- Open: nothing immediate as a free-standing Epic — but the AppsDrawer + `WidgetApi/`
+  iframe surface is the **seed of the AI-apps toolbelt** (`assist-130`, §7.2).
+  <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> (iframe integration broken; its test suite disabled) graduates from
+  dormant bug to pivot blocker — the sandbox foundation must work before anything
+  is built on it (§7.4 AI.0).
 
 **Epic `apps-110`: XYZ demo app (dogfood v0.1 API)** ✔
 *PDF Apps.1 — done in PDF.*
@@ -469,12 +542,16 @@ Third-party (and dogfooded) apps add capabilities to Share via a stable API.
 *PDF Apps.2.*
 - Never started. Server-side IFC validation pipeline running IDS rules per commit
   (preview of view-170 IDS).
-- **Post-MVP.**
+- **Absorbed by the AI pivot (§7):** agent-driven model checks become the delivery
+  vehicle — an AI-app in the toolbelt (T11) rather than a bespoke CI product.
 
 **Epic `apps-130`: v1.0 Public API + docs + IDE integration** 🔮
 *PDF Apps.3 (🥇 MLP).*
 - Never started as a programmatic surface; the `WidgetApi/` directory is the seed.
-- **Post-MVP loveable.**
+- **Re-scoped by the AI pivot (§7):** the public API's first consumers are the
+  in-app agent and the AI-apps sandbox, so the surface is designed **MCP-first**
+  (Track T11) — external IDE/embedding consumers and the internal toolbelt share
+  one tool contract instead of us maintaining two APIs.
 
 
 ### 4.8 Community & Onboarding
@@ -499,7 +576,11 @@ User finds out about Bldrs, gets oriented, leaves feedback, and finds product he
 
 **Epic `community-130`: AEC outreach (Stack Overflow, Twitter)** 🔮
 *PDF Community.3 (🥇 MLP — ❤️ Kate?).*
-- Out of repo scope. Tracked here for completeness.
+- Out of repo scope. Now owned by the bizdev growth-strategy doc (§7 there:
+  community channels, Show HN, DevRel around git-based model versioning; channel
+  prioritisation follows the private attribution data). Tracked here for
+  completeness; the in-repo dependency is §6 Phase G instrumentation landing
+  first so a traffic spike is measurable.
 
 
 ### 4.9 Subscribe (NEW Epic group)
@@ -535,6 +616,113 @@ the quota-tracking notes in `identity-decoupling-decisions.md`.*
 - Track dependency: T7 Ads (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>). Phase 1 activation in flight (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>).
 - Open: Phases 2 (manual slots) + 3 (responsive) + 4 (consent gating).
 - **Required for Pro-MVP** — the free tier monetisation path.
+- Scope note: T7 is **on-site AdSense** (revenue). The Google Ads **acquisition**
+  campaigns (Smart→Search rebuild, keywords, geo, bidding) are out of repo scope —
+  owned in the private bizdev growth-strategy doc §4. The in-repo dependency runs
+  the other way: those campaigns need `grow-100` landing pages as destinations and
+  `grow-120` events to bid against.
+
+
+### 4.10 Grow (NEW Epic group)
+
+Users find Bldrs without us paying for every visit, and shared links convert
+recipients into new users. Driven by the growth-strategy conclusions summarised in
+the v0.3 note above: organic ≈ zero, the share loop is the best earned channel we
+have, and the acquisition campaigns need real landing targets and funnel events.
+Quantitative targets live in the **private** bizdev doc; only event names and
+mechanisms are recorded here.
+
+**Epic `grow-100`: SEO format landing pages** ⬜ (NEW)
+- Programmatic per-format pages — `/viewer/ifc`, `/viewer/step`, `/viewer/stl`,
+  `/viewer/obj`, … — each a real static page (title, copy, demo-model deep link,
+  FAQ) targeting "open/view X file online" queries.
+- Foundation already landed: the marketing site is Next.js SSG (PR #1519 —
+  `marketing/`, crawlable HTML, sitemap/robots/RSS). These pages are new routes in
+  that build, not SPA work. IFC + STEP first (STEP support is now real via T1 and
+  is the second acquisition campaign's landing target), then STL/OBJ/FBX.
+- Doubles as the destination for paid Search (bizdev §4) — until these exist the
+  campaigns land on the homepage, which is a viewer, not a pitch.
+- **Phase G.**
+
+**Epic `grow-110`: Rich share-link previews (OG cards)** ⬜ (NEW)
+- A shared `/share/*` link should unfurl in Slack/WhatsApp/LinkedIn/Teams with a
+  model thumbnail + title — both loop fuel (recipient trust/CTR) and SEO.
+- Supersedes the intent of <a href="https://github.com/bldrs-ai/Share/issues/1315" target="_blank" rel="noopener noreferrer">#1315</a>: the marketing routes got SSG in PR #1519, but
+  `/share/*` stays SPA, so per-model OG tags need edge/function injection (or
+  pre-render at share time — e.g. write the OG image alongside the T2 GLB share
+  artifact). Design call in Phase G.
+- Recipient landing experience rides along: a shared view should offer "Open your
+  own model" / "What is this?" affordances so recipients convert to sharers.
+- **Phase G** (metadata + affordances); OG image generation may slip to Phase C
+  where it pairs with the T2 Phase 5 share artifact.
+
+**Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
+- Instrument the funnel stages the growth doc defines (§3 there):
+  `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
+  the derived `real_model_open` key event (built on `select_content` +
+  `stats_preprocessorVersion`) is GA4 config, not code.
+- Hygiene: skip GA init when `navigator.webdriver === true` or when
+  `location.hostname !== 'bldrs.ai'` — one guard cleans CI/e2e, localhost, and
+  preview-deploy pollution out of prod analytics. (Also: confirm whether scheduled
+  e2e runs ship the prod measurement ID.)
+- Channel-grouping + dashboard slices are bizdev-side config; the Share-side
+  deliverable is the events existing and firing.
+- **Phase G — first slice.** Blocks conversion-based bidding, loop metrics, and
+  any honest read of a launch/Show-HN spike.
+
+
+### 4.11 Assist (NEW Epic group — the AI workspace)
+
+User works *with an AI agent* on their models and projects: converses with it,
+collaborates with teammates in the same conversation, and accumulates AI-built
+tools. This group is the Epic-level decomposition of the §7 pivot; read §7 for the
+vision, architecture, and sequencing. Design doc to draft: `design/new/ai-workspace.md`.
+
+**Epic `assist-100`: Workspace shell — left drawer, projects + org nav** ⬜ (NEW)
+- A modification of the existing UI adding a **left drawer** for workspace-level
+  navigation: projects (models, conversations, shared artifacts, recents) and
+  company-level nav (org, members, settings). Makes Share feel like a workspace
+  rather than a single-document viewer — the Claude-Code chrome around the canvas.
+- Pure UI + routing + state work; no AI-runtime dependency. Ships behind
+  `?feature=workspace`.
+- Interacts with: `open-130` Sources tab (accounts live in the same nav), T4
+  sharing (shared-with-me listing), `identity-130` profile drawer.
+
+**Epic `assist-110`: Conversational agent panel (single-user)** ⬜ (NEW)
+- A Claude-Code-like conversation panel over the open project/model: prompt →
+  agent loop → tool calls against the viewer → streamed response. The viewer
+  exposes its operations (load, camera, select, isolate/hide, properties/psets,
+  notes, search) as an **MCP tool surface** (Track T11); the agent is its first
+  consumer.
+- Single user, one conversation per project/model. This is the demo that sells
+  the pivot (§7.4 AI.2).
+- Absorbs `search-120`'s NL-QA ambition; T10 owns the runtime + conversation
+  persistence.
+
+**Epic `assist-120`: Multi-user channels + AI participation modes** ⬜ (NEW)
+- The conversation becomes a shared channel. The key mechanic:
+  - **Direct replies addressed to the AI** are commands — handled exactly as the
+    single-user panel handles a prompt (full agent loop + tool calls).
+  - **General channel discussion** is human↔human; the AI is aware of it as
+    context and may participate **comment-only** — it can contribute
+    observations, but a channel message never triggers the tool-using loop.
+    Only direct address does.
+- Depends on a shared conversation store with realtime sync (T10) and T4
+  sharing/grants for channel membership. Largest new backend piece — last in the
+  pivot sequence (§7.4 AI.4).
+
+**Epic `assist-130`: AI-apps toolbelt (right drawer)** ⬜ (NEW)
+- The existing right-drawer AppsDrawer, upgraded: code the agent generates can be
+  **saved, versioned, and run** in a sandboxed iframe that talks to the main app
+  context over an **MCP bridge** (postMessage transport) — the same tool surface
+  the agent uses (T11). Users accumulate personal/team toolbelts of generated
+  apps.
+- This is the user-generated-app story `apps-100`/`apps-130` always pointed at,
+  with the agent as the author. `apps-120`-style model checks become toolbelt
+  apps.
+- Pre-condition: fix <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> (iframe widget integration broken, suite disabled).
+- Storage/versioning candidate: the user's own hosting via T3/T4 providers (apps
+  are files too), keeping the BYOS shape of the rest of the product.
 
 
 ## 5. Cross-cutting Tracks
@@ -551,9 +739,17 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   also parses **STEP / AP214** assemblies, with per-occurrence NavTree↔scene selection
   and hide keyed on the occurrence path (`design/new/step-occurrence-selection.md`).
 - **Status:** Phases 0–4 + 5a + 5b landed. `conwayDirectIfc` + `glb` default-on.
-  Remaining: Phase 5 cleanup (drop wit-three entirely), perf items (on-demand
-  rendering, hover-pick throttle), per-product mesh emission spike, **public-launch
-  test gate** (4-angle screenshots + GLB bit-level diff harness).
+  **Adapter removal landed (2026-06)** — the `conway-web-ifc-adapter` shim is
+  retired; Share consumes `@bldrs-ai/conway/web-ifc` directly and the release
+  chain is Conway → Share (`design/new/adapter-removal.md`). **GPU instancing
+  active (§3b.iv):** grouper analysis (#1568), `BatchedMesh` render path behind
+  `?feature=batchedMesh` (#1571), batched→merged GLB-cache bake (#1574).
+  **STEP metadata** extraction landed conway-side (conway #345 arc); Share
+  verification + occurrence-path permalink key are open (#1569, #1570).
+  Remaining: perf items (on-demand rendering, hover-pick throttle), per-product
+  mesh emission spike, `batchedMesh` always-on flip, `EXT_mesh_gpu_instancing`
+  cache schema (§3b.v), **public-launch test gate** (4-angle screenshots + GLB
+  bit-level diff harness).
 - **Render look (§6e):** the filmic/PBR look — uniform `MeshStandardMaterial` +
   sRGB albedo, gradient studio IBL, Khronos-Neutral tone-mapping, retuned lights,
   a user-facing **Neutral / Flat** render-mode toggle in the profile menu, plus a
@@ -643,9 +839,60 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   plumbing throughout the app.
 - **Status:** Not started. Existing seeds: `netlify/functions/create-portal-session.js`,
   `netlify/functions/unlink-identity.js` (pattern reuse).
-- **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`.
+- **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
+  the same quota/metering rails are what §7 AI usage metering hangs off — design
+  the counter keying with that consumer in mind.
 - **Pro-MVP impact:** Required end-to-end.
 - **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
+
+
+### Track T9: Growth funnel & SEO surfaces (NEW)
+
+- **What:** The Share-side infrastructure the growth strategy needs: funnel events
+  (`share_link_created` / `share_link_opened` / `model_interacted`), analytics
+  hygiene (webdriver + hostname guard on GA init), OG/link-preview metadata on
+  share URLs, and the `/viewer/<format>` landing pages on the marketing SSG build.
+- **Status:** Not started in-repo. The enabling substrate (Next.js SSG marketing
+  build, PR #1519) is landed; strategy + attribution live in the private bizdev
+  doc.
+- **Unblocks:** `grow-100`, `grow-110`, `grow-120`; honest measurement of every
+  outreach move in `community-130`; conversion-based bidding for the (out-of-repo)
+  acquisition campaigns.
+- **Pro-MVP impact:** Phase G — parallel, starts now. Cheap relative to everything
+  else in §6 and the only work that grows the top of the funnel.
+- **Docs:** `bldrs-ai/bizdev` `docs/growth-strategy.md` (**private** — numbers stay
+  there) + `design/new/ads.md` (on-site ads only).
+
+
+### Track T10: Agent runtime & conversation store (NEW)
+
+- **What:** The conversational core of the §7 pivot: agent loop (LLM calls, tool
+  dispatch, streaming), conversation persistence, and — for `assist-120` — a
+  shared store with realtime sync and the direct-address vs channel-awareness
+  routing.
+- **Status:** Not started. Design questions (runtime placement client vs broker,
+  provider strategy, store choice, relation to Notes) go to
+  `design/new/ai-workspace.md` first — see §7.4 AI.0 and §10 open questions.
+- **Unblocks:** `assist-110`, `assist-120`, `search-120` (as retrieval), and the
+  §7 AI-metering upsell.
+- **Pro-MVP impact:** None (pivot arc). Must not destabilise Phases A–E.
+- **Doc:** TBD — `design/new/ai-workspace.md`.
+
+
+### Track T11: App sandbox + MCP bridge (NEW)
+
+- **What:** The viewer's operations exposed as one **MCP tool surface** (selection,
+  camera, isolate/hide, properties, notes, model queries), consumed by two
+  clients: the T10 agent in-process, and sandboxed iframe apps over a postMessage
+  MCP transport. Plus app storage/versioning for the toolbelt.
+- **Status:** Not started. Seeds: `WidgetApi/` + AppsDrawer (`apps-100`), the
+  `IfcModelService` query surface (T1). Known debt: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> iframe integration
+  broken with its suite disabled — repair is the first slice.
+- **Unblocks:** `assist-130`, `apps-130` (MCP-first public API), `apps-120`
+  (checks as toolbelt apps).
+- **Pro-MVP impact:** None (pivot arc), except the #1386 repair which is
+  independently worthwhile.
+- **Doc:** TBD — `design/new/ai-workspace.md` (sandbox/security section).
 
 
 ## 6. Pro-MVP plan
@@ -654,7 +901,34 @@ Goal: ship the **paid tier** publicly. Free + Pro coexist; anonymous use stays
 possible; private sharing + multi-account + quota are paid; ads run on free.
 
 This is a phased plan, not a sprint schedule. Each phase ends with a green CI + a
-public canary. Phases 1–2 can overlap; phases 3–5 sequence.
+public canary. Phases A–B can overlap; C–E sequence. **Phase G is new in v0.3 and
+runs in parallel starting now** — it's small, mostly independent of the viewer and
+identity arcs, and it's the only work in this plan that grows the top of the
+funnel. Rationale: the growth-strategy attribution work showed we currently earn
+almost no traffic (organic ≈ zero) while the one earned channel that does work —
+shared links — is uninvested; and the paid acquisition rebuild needs landing pages
+and conversion events from this repo before it can optimise. Launching Pro (D/E)
+into a funnel with no earned channels wastes the launch.
+
+
+### Phase G (parallel, starts now): Growth funnel + SEO surfaces
+**Goal:** the funnel is measurable, share links unfurl, and search intent has a
+landing page — before the Pro launch needs any of it.
+- `grow-120` first slice: GA hygiene guard (`navigator.webdriver` +
+  hostname check on GA init) — cleans CI/e2e/preview pollution out of prod data.
+- `grow-120` events: `share_link_created`, `share_link_opened`,
+  `model_interacted` wired into the share flow + viewer; `real_model_open`
+  derived key event configured GA4-side.
+- `grow-100`: `/viewer/ifc` + `/viewer/step` landing pages on the marketing SSG
+  build (then `/viewer/stl`, `/viewer/obj`, …). Unblocks the acquisition-campaign
+  landing targets.
+- `grow-110`: OG/Twitter metadata on share URLs so links unfurl with a model
+  thumbnail; recipient "Open your own model" affordance. Per-model OG image
+  generation may pair with T2 Phase 5 in Phase C if edge injection is the chosen
+  route.
+
+**Exit:** funnel dashboard shows clean stage-by-stage counts; a shared link
+unfurls with a thumbnail in Slack; both format pages indexed.
 
 
 ### Phase A: Stabilise the rebuilt viewer (foundation)
@@ -663,13 +937,24 @@ public canary. Phases 1–2 can overlap; phases 3–5 sequence.
   - `IfcViewsManager` deletion (§3c.iv slice 1).
   - On-demand rendering (dirty-flag) — biggest framerate win available.
   - Per-product Mesh emission spike — measure cost.
+- Flag-flip decisions (each is one PR + baseline regen once smoke-tested):
+  - `?feature=batchedMesh` always-on (§3b.iv — needs per-occurrence narrowing on
+    the batched path first, or an accepted gap).
+  - `?feature=look` default-on (§6e render look — flip + regenerate screenshot
+    baselines).
+- Correctness bugs on the rebuilt path: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera-fit "last scene child"
+  heuristic, <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> wrong arg to `getIfcType`, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) element-permalink
+  hydration on private models.
+- STEP follow-through: Conway release bump + <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> NavTree/Properties verification
+  over the NIST corpus; occurrence-path permalink key.
 - T1 **public-launch gate**: 4-angle screenshot harness + GLB bit-level diff against
   golden artifacts. Runs in CI. This is the "we won't regress on the things that
   worked" insurance.
-- Stretch in this phase: hover-pick throttle tuning; subset-pool unification.
+- Stretch in this phase: hover-pick throttle tuning; subset-pool unification;
+  `EXT_mesh_gpu_instancing` cache schema (§3b.v).
 
 **Exit:** screenshot harness green on the fixture corpus; on-demand rendering shipped
-default-on.
+default-on; flag-flip decisions made (shipped or explicitly deferred).
 
 
 ### Phase B: Identity + Sources, multi-account
@@ -697,10 +982,15 @@ recents are correctly attributed per-connection; commit author = Sources GH iden
   the Share dialog from `share-150` (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) on top.
 - `share-120` private link sharing surfaces in the dialog.
 - `share-130` people-grants surface in the dialog.
+- `grow-110` completion: per-model OG image written alongside the T2 Phase 5 share
+  artifact (if that's the chosen mechanism), so every share link unfurls with a
+  real thumbnail. The share loop is our best earned channel — this phase is where
+  it gets its polish.
 - Retire `sharing` flag once metrics + canary look clean.
 
 **Exit:** a user can click Share on a model, invite a teammate by email/login, and the
-teammate opens the link in <2s.
+teammate opens the link in <2s — and the link unfurls with a model thumbnail where
+it was pasted.
 
 
 ### Phase D: Subscribe
@@ -723,20 +1013,112 @@ text routes only.
 ### Phase E: Public-launch checklist
 **Goal:** the public site is ready for cold traffic.
 - T7 Phase 4 (consent gating) if EU consent landscape requires.
-- T5 Drive recents HEAD-check (and GH equivalent) — UX polish; reduces "WTF
-  failures."
+- T5 Drive recents HEAD-check (and GH + local/OPFS equivalents — <a href="https://github.com/bldrs-ai/Share/issues/1548" target="_blank" rel="noopener noreferrer">#1548</a>) — UX
+  polish; reduces "WTF failures."
 - `community-110` thumbs feedback widget.
-- Sentry + GA dashboards confirmed; runbook for typical failure modes.
+- Sentry + GA dashboards confirmed; runbook for typical failure modes. Funnel
+  events (Phase G) reviewed against a week of real traffic.
 - Pricing page + ToS + Privacy updated.
 - Decision: drop T5 of the legacy Auth0-federated GH path, or leave for one more
   release.
+- Outreach readiness: the Show HN moment (bizdev doc §7) waits for this phase —
+  spike traffic against an uninstrumented funnel is wasted; with Phase G landed
+  it's the launch amplifier.
 
 **Exit:** Pro launch announcement.
 
 
-## 7. Post-MVP backlog (loveable)
+## 7. The AI-workspace pivot
 
-Held over for after Phase E. Order roughly reflects current product-pull:
+**Status:** direction agreed (2026-07). Design doc to draft at
+`design/new/ai-workspace.md` before implementation starts. This section is the
+roadmap-level summary: the vision, the three architecture surfaces, what existing
+work it absorbs, and how it sequences against the Pro-MVP.
+
+### 7.1 Vision
+
+Share pivots from "viewer with collaboration features" to an **AI-native workspace
+for built-environment models** — the Claude-Code experience, where the working
+context is a CAD/BIM project instead of a repo checkout. The user talks to an
+agent that can see and operate the viewer (load, navigate, select, isolate,
+annotate, query properties and structure), collaborates with teammates inside the
+same conversation, and accumulates reusable AI-built tools.
+
+Everything shipped to date is the substrate, not a detour: Conway-direct gives
+structured model access (the `IfcModelService` query surface), Notes give anchored
+discussion, the AppsDrawer + `WidgetApi` give an embedding surface, T3/T4 give
+identity and sharing, T8 gives the metering rails. The pivot recomposes these
+around a conversational core rather than building beside them.
+
+### 7.2 Architecture: three surfaces
+
+1. **Left drawer — workspace nav (`assist-100`).** A modification of the existing
+   UI: a left drawer tracking **projects** (models, conversations, shared
+   artifacts) and **company-level nav** (org, members, settings). The container
+   that turns Share from a single-document viewer into a workspace. Pure
+   UI/routing work; ships behind a flag with no AI-runtime dependency.
+2. **Conversational panel (`assist-110`, `assist-120`).** A Claude-Code-like
+   conversation over the open project/model. The multi-user mechanic:
+   - **Direct replies addressed to the AI are commands** — treated exactly as
+     Claude Code treats a prompt today: agent loop, tool calls against the
+     viewer, streamed responses.
+   - **General channel discussion is human↔human** — the AI is aware of it as
+     context and can participate **comment-only**. A channel message never
+     triggers the tool-using agent loop; only direct address does.
+   The split keeps the agent useful in a group without it hijacking every thread.
+3. **Right drawer — AI-apps toolbelt (`assist-130`).** The existing right-drawer
+   AppsDrawer, upgraded: code the agent generates is **saved, versioned, and
+   run** in a sandboxed iframe that interacts with the main window/app context
+   over an **MCP bridge** (postMessage transport). Users accumulate personal and
+   team toolbelts of generated apps.
+
+The unifying piece: the main window exposes the viewer as an **MCP server**
+(selection, camera, isolation, properties, notes, model queries — Track T11).
+The conversational agent and the sandboxed apps consume the *same* tool surface —
+one contract, two consumers — and `apps-130`'s public API becomes a third
+consumer of it later, for free.
+
+### 7.3 What it absorbs
+
+- `search-120` Knowledge graph → the retrieval layer behind conversational QA.
+- `apps-130` v1.0 Public API → designed MCP-first; external IDE/embed consumers
+  and the internal toolbelt share one contract.
+- `apps-120` Bldrs Integrate → agent-run model checks as toolbelt apps.
+- `notes-*` / channels → need one coherent story: an anchored note thread and a
+  channel message are close cousins (open question, §10).
+
+### 7.4 Sequencing
+
+The pivot **follows the Pro-MVP**: Phases B–D give it identity, sharing, and the
+billing/quota rails that AI usage metering hangs off — metered agent usage is the
+natural Pro anchor, a cleaner upsell than private links alone. Foundations that
+can't destabilise the launch may start earlier behind flags.
+
+- **AI.0 — Design doc + seed repair (can start now).** Draft
+  `design/new/ai-workspace.md`: agent runtime placement (client-direct vs server
+  broker), provider strategy, conversation-store choice, sandbox/MCP security
+  model, Notes/channels relationship. Fix <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> and re-enable the iframe
+  suite — the sandbox foundation must hold weight before anything is built on it.
+- **AI.1 — Workspace shell.** `assist-100` left drawer behind
+  `?feature=workspace`. No AI dependency; can overlap Pro-MVP phases.
+- **AI.2 — Agent v0, single-user.** `assist-110`: viewer MCP tool surface (T11) +
+  agent loop (T10) + conversation panel. One user, one conversation per
+  project/model. **This is the demo that sells the pivot.**
+- **AI.3 — Toolbelt.** `assist-130`: generate → save → version → run in the
+  sandbox over the same MCP surface.
+- **AI.4 — Multi-user.** `assist-120`: shared channels, direct-address vs
+  comment-only mechanics, presence. Depends on the shared conversation store —
+  the largest new backend piece, so it goes last.
+
+Each stage is a shippable, demoable increment; AI.2 is the earliest point at
+which the pivot is publicly visible.
+
+
+## 8. Post-MVP backlog (loveable)
+
+Held over for after Phase E. Items marked **→ §7** are absorbed by the AI pivot
+and leave this queue — they ride the pivot sequencing instead. Order roughly
+reflects current product-pull:
 
 1. **`view-160` ETL / Table view** 🔮 (❤️ Markus). The "10$/mo by itself" loveable.
    Pre-cond mostly done via T1.
@@ -754,10 +1136,12 @@ Held over for after Phase E. Order roughly reflects current product-pull:
     primitive itself is 🟡 with polish slated for Phase C (see Epic). The filter
     chips + cluster rendering visualization on top is the post-MVP loveable.
     Pairs with T6 Q1.
-11. **`search-110` Cross-repo search** 🔮 (❤️ Oleg).
-12. **`apps-120` Bldrs Integrate (CI server-side IDS)**.
-13. **`apps-130` v1.0 Public API + IDE** 🔮.
-14. **`search-120` Knowledge Graph** 🔮 (❤️ Johannes).
+11. **`search-110` Cross-repo search** 🔮 (❤️ Oleg). An agent with repo-source
+    tools may deliver this as a §7 by-product — reassess once AI.2 exists.
+12. **`apps-120` Bldrs Integrate (CI server-side IDS)** → §7 (toolbelt apps).
+13. **`apps-130` v1.0 Public API + IDE** 🔮 → §7 (MCP-first, T11).
+14. **`search-120` Knowledge Graph** 🔮 (❤️ Johannes) → §7 (retrieval behind
+    `assist-110`).
 15. **`versions-110` Diff between versions**.
 16. **PDF "Smart Components & Templates"** 🔮 (❤️ Pablo). Massive scope; will warrant
     its own Epic group when started.
@@ -766,7 +1150,7 @@ Held over for after Phase E. Order roughly reflects current product-pull:
 18. **PDF "Social Updates" (ActivityPub federation)** — interesting; no current pull.
 
 
-## 8. Migration to GH issues + wiki
+## 9. Migration to GH issues + wiki
 
 Once this doc lands, the backfill order:
 
@@ -774,7 +1158,10 @@ Once this doc lands, the backfill order:
    For each Epic in §4 with status 🟡 or ⬜ and `Pro-MVP impact: required`, create an
    `epic`-labeled GH issue with the body content from the Epic block. Stable ID
    becomes the issue title prefix (e.g. `epic: open-130: SourcesTab with parallel GH +
-   Drive accounts`). One pass; expect ~12–15 new Epic issues.
+   Drive accounts`). One pass; expect ~12–15 new Epic issues. The v0.3 groups ride
+   the same pass: one `epic` issue per `grow-*` (Phase G starts now) and per
+   `assist-*` (so pivot discussion has a home), even though the `assist-*` bodies
+   will initially just point at §7 + the forthcoming `ai-workspace.md`.
 2. **GitHub issues — Stories under Epics.**
    For each open story already in §3.1 (e.g. <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>, <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>, <a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a>, <a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a>, <a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a>, <a href="https://github.com/bldrs-ai/Share/issues/850" target="_blank" rel="noopener noreferrer">#850</a>,
    <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>, <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a>), use `mcp__github__sub_issue_write` to attach them under the right
@@ -794,7 +1181,7 @@ I'll draft each batch and review with you before creating GH issues — won't bu
 without sign-off.
 
 
-## 9. Open questions
+## 10. Open questions
 
 - **Pro tier feature gate definition.** §4.9 sketches `subscribe-100` but the actual
   list of "this is Pro" features needs your call. Working hypothesis: private link
@@ -808,13 +1195,31 @@ without sign-off.
   resolved before Phase D quota tracking ships (the quota key is meaningless if the
   functions are anonymous).
 - **BCF priority.** Industry-credibility win vs. cost. If we want it for Pro-MVP it
-  becomes Phase C scope; otherwise it slips to post-MVP per §7 item 7.
+  becomes Phase C scope; otherwise it slips to post-MVP per §8 item 7.
+- **AI pivot — agent runtime placement.** Client-direct LLM calls (user's key /
+  our key in the browser) vs a server-side broker (Netlify Functions or a real
+  backend). The broker is where quota enforcement (T8) and key custody naturally
+  live, but it's new server surface for a to-date-static product. Decide in
+  `design/new/ai-workspace.md` before AI.2.
+- **AI pivot — conversation store.** `assist-120` needs shared, realtime-ish
+  conversation state. Candidates: GitHub-issue-backed (Notes-style, free, slow),
+  Firebase/Firestore (already floated for T2 Phase 6), or a purpose-built
+  backend. Also: are channels and Notes one primitive or two? (An anchored note
+  thread and a channel message are close cousins.)
+- **AI pivot — sandbox security model.** Toolbelt apps run generated code:
+  iframe origin isolation, MCP tool permissioning (which tools does an app get,
+  who approves), and versioned-app provenance all need a design pass (T11).
+- **AI pivot — naming.** "Assist" is the working Epic-group verb; the
+  user-facing name for the workspace/agent is unpicked.
+- **Growth — OG image mechanism.** Edge-function injection on `/share/*` vs
+  pre-rendering the OG image at share time next to the T2 artifact. Decides
+  whether `grow-110` finishes in Phase G or pairs with Phase C.
 - **Maintenance of this doc.** Cadence: bump on every Epic state change? Or quarterly
   rollup? My recommendation: amend per-PR when an Epic moves status; quarterly review
   to catch drift.
 
 
-## 10. Doc maintenance
+## 11. Doc maintenance
 
 - **When an Epic ships:** update its row in §3.1 and its block in §4 from 🟡 → ✔.
   Move it out of the Pro-MVP phase list in §6 if it was there.
@@ -826,4 +1231,8 @@ without sign-off.
   stable ID one above the highest existing in that group (e.g. `open-160`), and add
   the matching row to §3.1. Don't renumber existing IDs.
 - **Don't delete done Epics.** They stay in §4 as the historical record of what
-  shipped, which is what §7 "Post-MVP backlog" is measured against.
+  shipped, which is what §8 "Post-MVP backlog" is measured against.
+- **Privacy firewall.** This doc is public. Growth/traffic *numbers* (spend, CAC,
+  geo, raw counts) never land here — they stay in the private bizdev
+  growth-strategy doc. Event names, funnel stage definitions, and qualitative
+  conclusions are fine.
