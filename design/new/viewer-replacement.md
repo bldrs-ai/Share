@@ -761,10 +761,22 @@ Three settled conclusions:
     `BatchedMesh.prototype.{computeBoundsTree,raycast}` and each batch builds
     its per-geometry bounds trees; `acceleratedBatchedMeshRaycast` still
     emits `intersection.batchId`, so the pick path is unaffected.
-  - *GLB cache.* A `BatchedMesh` model is **not** GLB-cacheable yet (no
-    per-primitive geometry for `GLTFExporter`, no per-vertex `_EXPRESSID` for
-    `BLDRS_face_ids`), so `exportAndCacheGlb` skips it and the model
-    re-parses on the next load; a batched-aware GLB schema is future work.
+  - *GLB cache.* `GLTFExporter` can't serialise a `BatchedMesh`'s packed
+    buffer, and a batch carries no per-vertex `_EXPRESSID` for the
+    `BLDRS_face_ids` picking capture. So before serialising, `exportAndCacheGlb`
+    bakes the batched model into the *same* merged-mesh shape the merged
+    Conway-direct path emits (`batchedModelToMergedMesh`): one indexed
+    geometry with per-vertex `expressID`/`instanceID`, colour-binned into
+    `geometry.groups[]` + `MeshLambertMaterial[]`, instance matrices baked
+    into the vertices and the coordination transform kept on the node. The
+    resulting GLB is **byte-compatible with a merged Conway-direct cache
+    artifact**, so the reader hydrates it through the existing cache-hit path
+    as an `instancePicking` model — no reader-side changes, no schema bump.
+    Consequence: a reload from cache is the merged mesh, not a live
+    `BatchedMesh` — the same cache-hit/cache-miss shape divergence §3b.iii
+    already notes for the Conway-direct path. A batched-native GLB schema
+    (EXT_mesh_gpu_instancing, preserving the instanced representation across
+    the round-trip) remains future work.
   - *Fit-to-frame.* `Loader.js#readModel` hoists a Group root's first child
     geometry onto `model.geometry` ("generalize to multi-mesh" TODO). A
     `BatchedMesh`'s `.geometry` is its packed buffer — every shape in
