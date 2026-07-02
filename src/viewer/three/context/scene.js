@@ -7,17 +7,18 @@
 
 import {AmbientLight, Color, DirectionalLight, Scene} from 'three'
 import {IfcComponent} from './base-types'
+import {LOOKS} from '../../looks'
 
 
-// Direct-light intensities — the Neutral look's values (src/viewer/looks.js
-// LOOKS.neutral). The gradient studio IBL (scaled by
-// `scene.environmentIntensity` in ShareViewer) carries most of the ambient +
-// fill, so these are a key + fill directional pair plus an ambient lift for
+// Direct-light intensities — derived from the Neutral look (single source of
+// truth: src/viewer/looks.js LOOKS.neutral). The gradient studio IBL (scaled
+// by `scene.environmentIntensity` in ShareViewer) carries most of the ambient
+// + fill, so these are a key + fill directional pair plus an ambient lift for
 // directional shape. `ShareViewer.applyLook` overrides them at runtime when
 // the user toggles render mode; also live-tunable via `?feature=look`.
-const KEY_LIGHT_INTENSITY = 1.25
-const FILL_LIGHT_INTENSITY = 2.3
-const AMBIENT_LIGHT_INTENSITY = 0.25
+const KEY_LIGHT_INTENSITY = LOOKS.neutral.keyLight
+const FILL_LIGHT_INTENSITY = LOOKS.neutral.fillLight
+const AMBIENT_LIGHT_INTENSITY = LOOKS.neutral.ambient
 
 
 export class IfcScene extends IfcComponent {

@@ -8,6 +8,7 @@ import {
   MeshStandardMaterial,
   SRGBColorSpace,
 } from 'three'
+import {LOOKS} from '../looks'
 
 
 /**
@@ -84,13 +85,13 @@ import {
 const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 
 
-// PBR params for IFC surfaces — the Neutral look's values (src/viewer/looks.js
-// LOOKS.neutral). A touch of metalness + sub-1 roughness gives building
-// surfaces a faint image-based sheen under the gradient studio IBL rather than
-// a fully matte read. `ShareViewer.applyLook` overrides these per material at
-// runtime when the user toggles render mode (Flat resets to fully matte).
-const IFC_METALNESS = 0.16
-const IFC_ROUGHNESS = 0.68
+// PBR params for IFC surfaces — derived from the Neutral look (single source
+// of truth: src/viewer/looks.js LOOKS.neutral). A touch of metalness + sub-1
+// roughness gives building surfaces a faint image-based sheen under the
+// gradient studio IBL rather than a fully matte read. `ShareViewer.applyLook`
+// overrides these per look-managed material on a render-mode toggle.
+const IFC_METALNESS = LOOKS.neutral.metalness
+const IFC_ROUGHNESS = LOOKS.neutral.roughness
 
 
 /**
@@ -244,6 +245,11 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       metalness: IFC_METALNESS,
       roughness: IFC_ROUGHNESS,
     })
+    // Tag as look-managed so ShareViewer.applyLook / the ?feature=look GUI
+    // restyle these generated IFC surfaces on a render-mode toggle, while
+    // leaving authored glTF/GLB material PBR untouched (looks.js
+    // forEachLookManagedMaterial filters on this).
+    material.userData.isLookManaged = true
     if (bin.color.w !== 1) {
       material.transparent = true
       material.opacity = bin.color.w

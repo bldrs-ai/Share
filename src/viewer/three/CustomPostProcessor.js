@@ -9,6 +9,7 @@ import {
   ToneMappingMode,
 } from 'postprocessing'
 import {WebGLRenderer, Scene, Camera} from 'three'
+import {isFeatureEnabled} from '../../FeatureFlags'
 
 
 // SSAO defaults (§6e). Screen-space ambient occlusion darkens crevices /
@@ -21,6 +22,15 @@ const AO_RINGS = 7
 const AO_RADIUS = 0.1
 const AO_INTENSITY = 2
 const AO_LUMINANCE_INFLUENCE = 0.6
+
+
+// Maps a look's `toneMapping` key (src/viewer/looks.js) to a postprocessing
+// ToneMappingMode. Lives here so looks.js stays free of the postprocessing
+// dependency; unknown keys fall back to NEUTRAL.
+const TONE_MODE_BY_LOOK_KEY = {
+  neutral: ToneMappingMode.NEUTRAL,
+  linear: ToneMappingMode.LINEAR,
+}
 
 
 /** A custom post processor utility */
@@ -47,10 +57,13 @@ export default class CustomPostProcessor {
     // Ambient occlusion (§6e). SSAO needs a scene-normal buffer (NormalPass)
     // + the depth the composer already provides. Added before tone mapping so
     // occlusion darkens the linear lit color, then gets tone-mapped with
-    // everything else. Its own pass (not merged with tone mapping) so the GUI
-    // can toggle it via `_ssaoPass.enabled`. Guarded on `renderer`: the Jest
-    // context mock has none, and SSAO/NormalPass allocate GL resources.
-    if (renderer) {
+    // everything else. Its own pass so the GUI can toggle it via
+    // `_ssaoPass.enabled`. Gated on `?feature=look`: AO is a dev-only tool,
+    // off in both shipped looks, and NormalPass allocates a full-res render
+    // target + SSAO compiles a shader — so only build it when the look GUI
+    // (the only way to enable it) is present. Also skipped renderer-less
+    // (the Jest context mock has none).
+    if (renderer && isFeatureEnabled('look')) {
       this._normalPass = new NormalPass(scene, camera)
       this._composer.addPass(this._normalPass)
       this._ssaoEffect = new SSAOEffect(camera, this._normalPass.texture, {
@@ -105,6 +118,17 @@ export default class CustomPostProcessor {
     if (this._toneMappingEffect) {
       this._toneMappingEffect.mode = mode
     }
+  }
+
+  /**
+   * Set the tone-mapping operator from a look's `toneMapping` key
+   * (src/viewer/looks.js). Resolves the key → ToneMappingMode here so looks.js
+   * needn't import postprocessing. Used by `ShareViewer.applyLook`.
+   *
+   * @param {string} lookKey 'neutral' | 'linear'
+   */
+  setToneMappingForLook(lookKey) {
+    this.setToneMappingMode(TONE_MODE_BY_LOOK_KEY[lookKey] ?? ToneMappingMode.NEUTRAL)
   }
 
   /**
@@ -163,5 +187,21 @@ export default class CustomPostProcessor {
     const selectionOutlinePass = new EffectPass(this._camera, outlineEffect)
     this._composer.addPass(selectionOutlinePass)
     return outlineEffect
+  }
+
+
+  /**
+   * Free the composer and all its passes' GPU resources. Called by
+   * `ShareViewer.dispose`; without it the composer + RenderPass / NormalPass /
+   * SSAO / ToneMapping / outline render targets leak on every viewer
+   * re-creation (CadView rebuilds the viewer on each day/night theme toggle).
+   */
+  dispose() {
+    this._composer?.dispose?.()
+    this._composer = null
+    this._normalPass = null
+    this._ssaoEffect = null
+    this._ssaoPass = null
+    this._toneMappingEffect = null
   }
 }

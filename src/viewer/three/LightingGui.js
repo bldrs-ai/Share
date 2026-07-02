@@ -1,5 +1,6 @@
 import GUI from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import {ToneMappingMode} from 'postprocessing'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from '../looks'
 
 
 // Tone-mapping operators offered in the dropdown (label → enum value). The
@@ -118,8 +119,8 @@ export default class LightingGui {
       keyLight: scene?.getObjectByName('keyLight')?.intensity ?? FALLBACK_KEY_LIGHT,
       fillLight: scene?.getObjectByName('fillLight')?.intensity ?? FALLBACK_FILL_LIGHT,
       ambient: scene?.getObjectByName('ambientLight')?.intensity ?? FALLBACK_AMBIENT,
-      roughness: 0.8,
-      metalness: 0,
+      roughness: (LOOKS[viewer._currentLook] ?? LOOKS[DEFAULT_LOOK]).roughness,
+      metalness: (LOOKS[viewer._currentLook] ?? LOOKS[DEFAULT_LOOK]).metalness,
       background: `#${scene?.background?.getHexString?.() ?? 'a9a9a9'}`,
       envType: viewer._envType ?? 'gradient',
       aoEnabled: postProcessor?.getAOEnabled?.() ?? true,
@@ -222,27 +223,17 @@ export default class LightingGui {
 
 
   /**
-   * Run `fn` against every roughness-bearing material (Standard/Physical)
-   * on the currently-loaded models. Resolved at call time so materials of
+   * Run `fn` against every look-managed material on the currently-loaded
+   * models (the generated IFC surfaces; authored glTF/GLB PBR is left alone —
+   * see looks.js `forEachLookManagedMaterial`). Resolved at call time so
    * models loaded after the GUI opened are still covered.
    *
-   * @param {Function} fn invoked with each material
+   * @param {Function} fn invoked with each look-managed material
    */
   _applyToModelMaterials(fn) {
     const models = this._viewer.context?.getLoadedModels?.() ?? []
     for (const model of models) {
-      model.traverse((obj) => {
-        const material = obj.material
-        if (!material) {
-          return
-        }
-        const list = Array.isArray(material) ? material : [material]
-        for (const m of list) {
-          if (typeof m.roughness === 'number') {
-            fn(m)
-          }
-        }
-      })
+      forEachLookManagedMaterial(model, fn)
     }
   }
 

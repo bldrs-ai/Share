@@ -19,7 +19,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three'
-import {LOOKS, DEFAULT_LOOK} from './looks'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from './looks'
 import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
@@ -56,12 +56,11 @@ const MIN_PRESELECTION_INDEX_CAP = 256
 const ENV_MAP_BLUR = 0.04
 
 
-// Default env-map intensity (§6e) — the Neutral look's value (see
-// src/viewer/looks.js LOOKS.neutral). Scales the gradient studio IBL
-// contribution (`scene.environmentIntensity`); `applyLook` overrides it at
-// runtime when the user toggles render modes. Also live-tunable via
-// `?feature=look`.
-const ENV_MAP_INTENSITY = 2.56
+// Default env-map intensity (§6e) — derived from the Neutral look (single
+// source of truth: src/viewer/looks.js LOOKS.neutral). Scales the gradient
+// studio IBL contribution (`scene.environmentIntensity`); `applyLook`
+// overrides it on a render-mode toggle. Also live-tunable via `?feature=look`.
+const ENV_MAP_INTENSITY = LOOKS.neutral.envIntensity
 
 
 // Default IBL environment (§6e). 'gradient' is the procedural studio gradient
@@ -380,13 +379,16 @@ export class ShareViewer {
    * visible where the model's shadow lands) and enable shadow maps on the
    * renderer. Added to the scene invisible; `groundModel` fits + reveals it
    * per loaded model. Not registered in the pickable lists, so the raycaster
-   * ignores it. No-op without a renderer (the Jest context mock).
+   * ignores it. Gated on `?feature=look`: contact shadow is a dev-only tool,
+   * off in both shipped looks, and `shadowMap.enabled = true` forces a
+   * scene-wide shader recompile — so only pay it when the look GUI (the only
+   * way to enable the shadow) is present. No-op without a renderer (Jest).
    *
    * @private
    */
   _createGroundPlane() {
     const renderer = this.context.getRenderer()
-    if (!renderer) {
+    if (!renderer || !isFeatureEnabled('look')) {
       return
     }
     renderer.shadowMap.enabled = true
@@ -503,22 +505,27 @@ export class ShareViewer {
 
   /**
    * Apply a named render "look" (LOOKS key) live: tone-mapping operator, IBL
-   * source + intensity, the three scene lights, and model material
-   * roughness/metalness. Scene background is owned by the day/night theme, not
-   * the look, so it's deliberately untouched. Toggled from the profile menu
-   * and applied
-   * on viewer init with the persisted choice; falls back to DEFAULT_LOOK for
-   * an unknown name. The IBL is rebuilt only when the source actually changes
-   * (PMREM is costly). Material changes hit all currently-loaded models;
-   * models loaded later are covered by `applyLookToModel`.
+   * source + intensity, the three scene lights, and look-managed model
+   * material roughness/metalness. Scene background is owned by the day/night
+   * theme, not the look, so it's untouched. Toggled from the profile menu and
+   * applied on viewer init with the persisted choice; falls back to
+   * DEFAULT_LOOK for an unknown name. No-ops when the look is already current —
+   * the boot constants (scene.js/flatMesh/env-intensity) all derive from
+   * `neutral`, so the default init apply is a genuine skip. The IBL is rebuilt
+   * only when the source actually changes (PMREM is costly). Material changes
+   * hit look-managed materials on all loaded models; models loaded later are
+   * covered by `applyLookToModel`.
    *
    * @param {string} name a LOOKS key ('neutral' | 'flat')
    */
   applyLook(name) {
     const look = LOOKS[name] ? name : DEFAULT_LOOK
+    if (look === this._currentLook) {
+      return
+    }
     this._currentLook = look
     const config = LOOKS[look]
-    this.postProcessor?.setToneMappingMode(config.toneMapping)
+    this.postProcessor?.setToneMappingForLook(config.toneMapping)
     if (this._envType !== config.envType) {
       this.setEnvironmentType(config.envType)
     }
@@ -537,30 +544,19 @@ export class ShareViewer {
 
 
   /**
-   * Apply the current look's material params (roughness/metalness) to one
-   * model's PBR materials. Called by CadView on each model load, so a model
-   * opened while a non-default look is active still matches. Null-safe (the
-   * Jest viewer mock won't define it; CadView optional-chains the call).
+   * Apply the current look's material params (roughness/metalness) to a
+   * model's look-managed materials — the generated IFC surfaces tagged
+   * `userData.isLookManaged`; authored glTF/GLB material PBR is preserved.
+   * Called by CadView on each model load so a model opened while a non-default
+   * look is active still matches. Null-safe for the Jest viewer mock.
    *
    * @param {object} model the loaded model root (Object3D)
    */
   applyLookToModel(model) {
-    if (!model) {
-      return
-    }
     const config = LOOKS[this._currentLook] ?? LOOKS[DEFAULT_LOOK]
-    model.traverse?.((obj) => {
-      const material = obj.material
-      if (!material) {
-        return
-      }
-      const list = Array.isArray(material) ? material : [material]
-      for (const m of list) {
-        if (typeof m.roughness === 'number') {
-          m.roughness = config.roughness
-          m.metalness = config.metalness
-        }
-      }
+    forEachLookManagedMaterial(model, (m) => {
+      m.roughness = config.roughness
+      m.metalness = config.metalness
     })
   }
 
@@ -630,6 +626,20 @@ export class ShareViewer {
       }
     } catch (e) {
       console.warn('groundPlane.dispose failed:', e)
+    }
+    try {
+      // §6e: free the PMREM env map + the contact-shadow depth map. Neither is
+      // owned by a plugin's dispose, so without this each viewer re-creation
+      // (CadView rebuilds on every day/night theme toggle) leaks a cube-UV env
+      // texture — and a shadow map — on the GPU.
+      const scene = this.context?.getScene?.()
+      if (scene?.environment) {
+        scene.environment.dispose?.()
+        scene.environment = null
+      }
+      scene?.getObjectByName?.('keyLight')?.shadow?.map?.dispose?.()
+    } catch (e) {
+      console.warn('env/shadow-map dispose failed:', e)
     }
     try {
       this.viewsManager?.dispose?.()
