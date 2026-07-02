@@ -673,16 +673,21 @@ plan asks of Share and the per-instance id GPU instancing needs are the
 **same** identifier. Doing them together is cheaper than either alone, and
 STEP assemblies are both the forcing function and the biggest beneficiary.
 
-**Landed (PR #1573, merged Conway-direct path).** The `expressID → ordered
-occurrence path` generalization is real: `PlacedGeometry.occurrencePath`
-(the root→leaf NAUO ids) now keys per-occurrence selection both ways —
-scene pick → per-occurrence NavTree highlight, NavTree click → occurrence-
-scoped scene highlight — via `setInstanceSelection` on `instancePicking`
-models. Full design in `design/new/step-occurrence-selection.md`. This
-shipped on the **merged** Conway-direct path only; the **batched** path
-carries `batchedPicking` (product-level) not `instancePicking`, so it still
-highlights every occurrence of the picked product — see the batched
-selection follow-up below.
+**Landed (PRs #1573 + #1575, merged Conway-direct path).** The `expressID →
+ordered occurrence path` generalization is real: `PlacedGeometry.occurrencePath`
+(the root→leaf NAUO ids) now keys per-occurrence behavior both ways —
+scene pick → per-occurrence NavTree highlight (+ auto-expand to the node),
+NavTree click → occurrence-scoped scene highlight — via `setInstanceSelection`
+on `instancePicking` models. #1575 extended it past selection: per-occurrence
+**hide** (the NavTree eye / `H` hide one occurrence, not every reuse) and
+**GLB-cache persistence** (the `instanceId → occurrencePath` table rides
+`BLDRS_face_ids`, schema `0.9.0`, so a cache-hit STEP model keeps per-occurrence
+behavior). Full design + remaining follow-ups (permalink, per-occurrence
+isolate) in `design/new/step-occurrence-selection.md`. This shipped on the
+**merged** Conway-direct path only; the **batched** path carries
+`batchedPicking` (product-level) not `instancePicking`, so it still highlights
+every occurrence of the picked product — see the batched selection follow-up
+below.
 
 **Measured (PR1, 2026-06).** The grouper ran over real models.
 **vtx reduction** = the share of merged vertex memory the geometry
