@@ -224,8 +224,9 @@ The cache-side concerns are addressed below in "Cache round-trip" —
 no custom glTF extension was needed; per-vertex `instanceID` rides
 through GLTFExporter's `_UPPERCASE` rename verbatim.
 
-**Live implementation** (behind `?feature=conwayDirectIfc`, on track
-to default-on once the open items in §3b.iii land):
+**Live implementation** (the production geometry path — `conwayDirectIfc`
+flipped **default-on 2026-05** (PR #1529) once the §3b.iii open items
+landed, so `?feature=conwayDirectIfc` is now redundant):
 
 - `src/viewer/ifc/IfcItemsMap.js` — per-IFC-product table. Three
   populators: per-vertex-attribute (fallback / cache-hit before
@@ -285,7 +286,7 @@ to default-on once the open items in §3b.iii land):
   `viewer.setSelection(0, ids)` then
   `viewer.setInstanceSelection(0, instanceIds)`.
 
-**Cache round-trip** (`?feature=conwayDirectIfc,glb`):
+**Cache round-trip** (`conwayDirectIfc` + `glb`, both default-on):
 
 Per-vertex `instanceID` rides through the IFC→GLB→IFC cache
 natively via GLTFExporter's `_UPPERCASE` rename — no custom glTF
@@ -672,6 +673,17 @@ plan asks of Share and the per-instance id GPU instancing needs are the
 **same** identifier. Doing them together is cheaper than either alone, and
 STEP assemblies are both the forcing function and the biggest beneficiary.
 
+**Landed (PR #1573, merged Conway-direct path).** The `expressID → ordered
+occurrence path` generalization is real: `PlacedGeometry.occurrencePath`
+(the root→leaf NAUO ids) now keys per-occurrence selection both ways —
+scene pick → per-occurrence NavTree highlight, NavTree click → occurrence-
+scoped scene highlight — via `setInstanceSelection` on `instancePicking`
+models. Full design in `design/new/step-occurrence-selection.md`. This
+shipped on the **merged** Conway-direct path only; the **batched** path
+carries `batchedPicking` (product-level) not `instancePicking`, so it still
+highlights every occurrence of the picked product — see the batched
+selection follow-up below.
+
 **Measured (PR1, 2026-06).** The grouper ran over real models.
 **vtx reduction** = the share of merged vertex memory the geometry
 *sharing* removes (`1 − instancedVerts/mergedVerts`). **mem saved** = that
@@ -748,8 +760,12 @@ Three settled conclusions:
     (selection = sticky, preselection = hover) painted over each instance's
     original colour, which is retained per-batch (`instanceColors`, alpha
     included so glass stays glass). Selection covers every occurrence of the
-    picked product — **per-occurrence narrowing still needs `instancePicking`**
-    and is the remaining follow-up.
+    picked product — **per-occurrence narrowing still needs `instancePicking`**,
+    which the batched model doesn't carry (it has `batchedPicking`). The
+    merged Conway-direct path already narrows to a single occurrence via
+    `PlacedGeometry.occurrencePath` (PR #1573,
+    `design/new/step-occurrence-selection.md`, follow-up #3); bringing that to
+    the batched path is the remaining follow-up.
   - *Isolate / hide (`src/viewer/ifc/batchedSubset.js`).* `IfcIsolator`
     drives the batched model unchanged through a `createSubset` /
     `removeSubset` surface that re-bakes the kept instances (`getMatrixAt` +
@@ -763,8 +779,9 @@ Three settled conclusions:
     emits `intersection.batchId`, so the pick path is unaffected.
   - *GLB cache.* `GLTFExporter` can't serialise a `BatchedMesh`'s packed
     buffer, and a batch carries no per-vertex `_EXPRESSID` for the
-    `BLDRS_face_ids` picking capture. So before serialising, `exportAndCacheGlb`
-    bakes the batched model into the *same* merged-mesh shape the merged
+    `BLDRS_face_ids` picking capture. So before serialising (landed PR #1574),
+    `exportAndCacheGlb` bakes the batched model into the *same* merged-mesh
+    shape the merged
     Conway-direct path emits (`batchedModelToMergedMesh`): one indexed
     geometry with per-vertex `expressID`/`instanceID`, colour-binned into
     `geometry.groups[]` + `MeshLambertMaterial[]`, instance matrices baked
@@ -1798,6 +1815,29 @@ interface ShareModel extends Object3D {
   }
 }
 ```
+
+**Update (landed) — the shape grew to seven flags** as the Conway-direct
+and batched paths landed. `ShareModel.js` (`capabilitiesForFormat` /
+`inferModelCapabilities`) is now authoritative; the current set:
+
+```ts
+capabilities: {
+  expressIdPicking: boolean   // click resolves a parent IFC product id
+  spatialStructure: boolean   // NavTree available (live parse or BLDRS_spatial_tree)
+  typedProperties: boolean    // Properties panel (live parse or BLDRS_element_properties)
+  ifcSubsets: boolean         // web-ifc-three per-vertex subsets; false on Conway-direct
+  instancePicking: boolean    // per-occurrence: merged Conway-direct + cache-hit GLB
+  batchedPicking: boolean     // product-level pick/recolor on the BatchedMesh path
+  useIfcClipper: boolean      // (legacy; slated for removal per §3c.iv item 3)
+}
+```
+
+`inferModelCapabilities` is additive over the format default and is the
+runtime source of truth: it detects a decorated `BatchedMesh`
+(`isBatchedMesh` + `instanceParents`) → `batchedPicking`, a per-vertex
+`instanceID`/`BLDRS_face_ids` signature → `instancePicking`. The two are
+mutually exclusive (the batched branch returns before the per-vertex
+checks). Both imply `expressIdPicking` and turn `ifcSubsets` off.
 Call-sites become `if (model.capabilities.expressIdPicking)` and `if (model.capabilities.ifcSubsets)` — no `viewer.IFC.type` left anywhere. After the unified `Clipper` lands (§3c), the cut-plane branch collapses entirely. This shape is forward-compatible with the in-flight GLB-optimized-scene PR (8.3): that PR can set `capabilities.spatialStructure = true` on its loaded model and re-light the NavTree without any other viewer-side work.
 
 ### 8.3 Fake `ifcManager` on non-IFC models — deprecate gracefully
