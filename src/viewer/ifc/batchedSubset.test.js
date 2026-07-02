@@ -111,13 +111,11 @@ describe('viewer/ifc/batchedSubset', () => {
     expect(buildBatchedSubsetMesh(mesh, new Set([999]), {})).toBeNull()
   })
 
-  it('mutes the raycast on overlay subsets but not isolation subsets', () => {
+  it('keeps every subset pickable (selection/preselection recolor, never subset)', () => {
     const mesh = decoratedBatch()
     attachBatchedSubsets(mesh, mesh.parent ?? null, {})
-    const sel = mesh.createSubset({ids: [100], customID: 'selection'})
-    expect(typeof sel[0].raycast).toBe('function')
-    // Overlay subset is raycast-muted (its own no-op, not Mesh.prototype).
-    expect(sel[0].raycast).not.toBe(Mesh.prototype.raycast)
+    // Only isolation reaches this builder now; whatever customID a caller
+    // passes, the subset stays clickable via its baked `expressID` attribute.
     const iso = mesh.createSubset({ids: [100], customID: 'Bldrs::Share::Isolator'})
     expect(iso[0].raycast).toBe(Mesh.prototype.raycast)
   })

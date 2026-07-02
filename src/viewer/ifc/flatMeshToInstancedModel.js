@@ -25,6 +25,8 @@
  * @see flatMeshToBufferGeometry — the merge (baked) path this mirrors.
  */
 
+import {forEachVectorItem} from './conwayVector'
+
 
 /** Fallback colour used when a PlacedGeometry has no `.color` field. */
 const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
@@ -100,21 +102,6 @@ const BYTES_PER_INSTANCE = ((4 * 4) + 4) * 4
  * @property {object} stats see `computeStats` — draw-call and
  *   vertex-memory comparison of the merged vs. instanced shapes.
  */
-
-
-/**
- * Iterate the FlatMesh source uniformly whether it is a Conway
- * `Vector` (size()/get(i)) or a plain Array of FlatMesh-shaped objects.
- *
- * @param {object|Array} vec
- * @param {Function} fn called with each element
- */
-function forEachVectorItem(vec, fn) {
-  const size = typeof vec?.size === 'function' ? vec.size() : (vec?.length ?? 0)
-  for (let i = 0; i < size; i++) {
-    fn(typeof vec.get === 'function' ? vec.get(i) : vec[i])
-  }
-}
 
 
 /**

@@ -1,4 +1,5 @@
 import {Vector4} from 'three'
+import {eachBatch} from './batchedModel'
 
 
 /**
@@ -34,31 +35,6 @@ import {Vector4} from 'three'
 const DEFAULT_HIGHLIGHT = {r: 0, g: 0.8, b: 1}
 
 const _rgba = new Vector4()
-
-
-/**
- * Run `fn` for every `BatchedMesh` in a batched model (the mesh itself, or
- * each batch child of a two-batch Group).
- *
- * @param {object} model BatchedMesh or Group root
- * @param {Function} fn called with each BatchedMesh
- */
-function eachBatch(model, fn) {
-  if (!model) {
-    return
-  }
-  if (model.isBatchedMesh) {
-    fn(model)
-    return
-  }
-  if (typeof model.traverse === 'function') {
-    model.traverse((obj) => {
-      if (obj.isBatchedMesh) {
-        fn(obj)
-      }
-    })
-  }
-}
 
 
 /**
@@ -212,20 +188,6 @@ export function clearBatchedPreselection(model) {
 }
 
 
-/**
- * True when the model is, or contains, a decorated BatchedMesh (carries the
- * `instanceParents` table). Lets call-sites pick the recolor path without a
- * capability lookup.
- *
- * @param {object} model
- * @return {boolean}
- */
-export function isBatchedModel(model) {
-  let found = false
-  eachBatch(model, (mesh) => {
-    if (mesh.instanceParents) {
-      found = true
-    }
-  })
-  return found
-}
+// `isBatchedModel` moved to ./batchedModel; re-exported here so existing
+// call-sites (and tests) that import it from batchedHighlight keep working.
+export {isBatchedModel} from './batchedModel'

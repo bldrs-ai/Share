@@ -6,6 +6,7 @@ import {
   Mesh,
   Vector3,
 } from 'three'
+import {eachBatch} from './batchedModel'
 
 
 /**
@@ -48,14 +49,6 @@ import {
 /** Floats per position / normal vector. */
 const VEC3 = 3
 
-/**
- * Custom IDs whose subsets are hover/selection overlays (raycast-mute).
- * Defensive only — production selection/preselection now recolor in place
- * (`batchedHighlight`) and never reach `createSubset`; isolation IDs aren't
- * here, so isolation subsets stay pickable.
- */
-const OVERLAY_CUSTOM_IDS = new Set(['selection', 'preselection'])
-
 
 /**
  * Reconstruct a single subset Mesh from one BatchedMesh, baking every
@@ -70,7 +63,6 @@ const OVERLAY_CUSTOM_IDS = new Set(['selection', 'preselection'])
  * @param {Set<number>} idSet parent IFC product expressIDs to keep
  * @param {object} [opts]
  * @param {object} [opts.material] subset material (defaults to the batch's)
- * @param {boolean} [opts.raycastInvisible] mute the subset to the raycaster
  * @return {Mesh|null}
  */
 export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
@@ -162,12 +154,6 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
   subset.matrixAutoUpdate = mesh.matrixAutoUpdate
   subset.matrix.copy(mesh.matrix)
   subset.matrix.decompose(subset.position, subset.quaternion, subset.scale)
-  if (opts.raycastInvisible) {
-    // Selection/preselection overlays are coplanar with the source and
-    // would steal clicks; the OutlineEffect renders them via its own
-    // mask pass regardless of raycast. Same guard elementSubsets uses.
-    subset.raycast = () => {/* raycast-invisible overlay */}
-  }
   subset.name = `${mesh.name || 'batch'}__subset`
   subset.userData.sourceMesh = mesh
   return subset
@@ -184,19 +170,13 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
  * @return {Mesh[]}
  */
 export function buildBatchedModelSubsets(modelRoot, ids, opts = {}) {
-  if (!modelRoot || typeof modelRoot.traverse !== 'function') {
-    return []
-  }
   const idSet = ids instanceof Set ? ids : new Set(ids)
   if (idSet.size === 0) {
     return []
   }
   const subsets = []
-  modelRoot.traverse((obj) => {
-    if (!obj.isBatchedMesh) {
-      return
-    }
-    const subset = buildBatchedSubsetMesh(obj, idSet, opts)
+  eachBatch(modelRoot, (mesh) => {
+    const subset = buildBatchedSubsetMesh(mesh, idSet, opts)
     if (subset) {
       subsets.push(subset)
     }
@@ -211,9 +191,10 @@ export function buildBatchedModelSubsets(modelRoot, ids, opts = {}) {
  * `attachInstanceMapSubsets`. Same Map-of-named-slots contract so the
  * shared selection / preselection / isolation call-sites are unchanged.
  *
- * Overlay slots (`selection`, `preselection`) get raycast-muted subsets;
- * isolation slots get pickable ones (parity with the merged path, where
- * isolated geometry stays clickable via its `expressID` attribute).
+ * Subsets stay pickable (parity with the merged path, where isolated
+ * geometry stays clickable via its `expressID` attribute) — only isolation
+ * reaches this builder now; selection / preselection recolor in place
+ * (`batchedHighlight`).
  *
  * @param {object} model BatchedMesh or Group root to decorate
  * @param {object|null} fallbackParent parent for subsets when the source
@@ -253,8 +234,7 @@ export function attachBatchedSubsets(model, fallbackParent, defaults = {}) {
     if (removePrevious) {
       removeSubset(customID)
     }
-    const raycastInvisible = OVERLAY_CUSTOM_IDS.has(customID)
-    const meshes = buildBatchedModelSubsets(model, ids ?? [], {material, raycastInvisible})
+    const meshes = buildBatchedModelSubsets(model, ids ?? [], {material})
     if (meshes.length === 0) {
       return []
     }

@@ -40,6 +40,7 @@ import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
+import {eachBatch} from '../viewer/ifc/batchedModel'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -152,20 +153,10 @@ function silenceGltfExporterMaterialWarnings() {
  * @return {boolean}
  */
 function modelHasBatchedMesh(model) {
-  if (!model) {
-    return false
-  }
-  if (model.isBatchedMesh) {
-    return true
-  }
   let found = false
-  if (typeof model.traverse === 'function') {
-    model.traverse((obj) => {
-      if (obj.isBatchedMesh) {
-        found = true
-      }
-    })
-  }
+  eachBatch(model, () => {
+    found = true
+  })
   return found
 }
 

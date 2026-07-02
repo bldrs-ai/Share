@@ -7,6 +7,7 @@ import {
   MeshLambertMaterial,
   Vector4,
 } from 'three'
+import {forEachVectorItem} from './conwayVector'
 
 
 /**
@@ -91,20 +92,6 @@ const OPAQUE_ALPHA = 1
  *   triangleCount, parentCount, materialCount, transparentInstanceCount,
  *   skippedFlatMeshes, skippedPlacedGeometries}`.
  */
-
-
-/**
- * Iterate a Conway `Vector` (size()/get(i)) or a plain Array uniformly.
- *
- * @param {object|Array} vec
- * @param {Function} fn called with each element
- */
-function forEachVectorItem(vec, fn) {
-  const size = typeof vec?.size === 'function' ? vec.size() : (vec?.length ?? 0)
-  for (let i = 0; i < size; i++) {
-    fn(typeof vec.get === 'function' ? vec.get(i) : vec[i])
-  }
-}
 
 
 /**
