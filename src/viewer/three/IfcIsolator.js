@@ -416,8 +416,10 @@ export default class IfcIsolator {
    * (`ShareViewer.getInstanceIdsForOccurrencePath`); `nodeId` is the tree
    * node's NAUO express id, used as the store key so its eye toggles.
    *
-   * No-op when there are no instances to hide (IFC / unresolved path) — the
-   * caller falls back to `hideElementsById`.
+   * No-op when there are no instances to hide (empty `instanceIds` — an IFC or
+   * unresolved path). The eye / H call sites don't currently fall back to
+   * `hideElementsById` in that case (occurrence nodes with geometry always
+   * resolve to ≥1 instance), so an unresolved occurrence hide is a quiet no-op.
    *
    * @param {number} nodeId NAUO express id of the hidden occurrence node
    * @param {Array<number>} instanceIds synthetic instance ids to hide
@@ -431,6 +433,7 @@ export default class IfcIsolator {
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
     this._clearSelectionVisualOnly()
+    this._resetRevealMode()
   }
 
 
@@ -453,6 +456,25 @@ export default class IfcIsolator {
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
     this._rebuildSelectionVisualFromStore()
+    this._resetRevealMode()
+  }
+
+
+  /**
+   * Tear down and rebuild the reveal-hidden ghost overlay after the hidden set
+   * changed, so it doesn't linger stale. No-op when reveal mode is off. The
+   * product-type hide paths inline this; the per-occurrence paths call it so
+   * both stay in sync. (The ghost still only covers product-type hides — see
+   * `toggleRevealHiddenElements` — so occurrence hides show no ghost; that
+   * secondary gap is noted in design/new/step-occurrence-selection.md.)
+   *
+   * @private
+   */
+  _resetRevealMode() {
+    if (this.revealHiddenElementsMode) {
+      this.revealHiddenElementsMode = false
+      this.toggleRevealHiddenElements()
+    }
   }
 
   /**
@@ -532,9 +554,8 @@ export default class IfcIsolator {
 
     const toBeHidden = new Set(selection.concat(this.hiddenIds))
     this.hiddenIds = [...toBeHidden]
-    const hiddenIdsObject = Object.fromEntries(
-      this.hiddenIds.map((id) => [id, true]))
-    useStore.setState({hiddenElements: hiddenIdsObject})
+    // Union writer — preserve any per-occurrence hides' eye keys (see hideElementsById).
+    this._syncHiddenStore()
     const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
     this._clearSelectionVisualOnly()
@@ -604,9 +625,10 @@ export default class IfcIsolator {
       }
       const toBeHidden = new Set(toBeHiddenElementIds.concat(this.hiddenIds))
       this.hiddenIds = [...toBeHidden]
-      const hiddenIdsObject = Object.fromEntries(
-        this.hiddenIds.map((id) => [id, true]))
-      useStore.setState({hiddenElements: hiddenIdsObject})
+      // Publish through the union writer so a concurrent per-occurrence hide's
+      // eye keys aren't clobbered — building hiddenElements from hiddenIds alone
+      // would drop them and desync the NavTree eye from the still-hidden geometry.
+      this._syncHiddenStore()
     } else if (Number.isFinite(toBeHiddenElementIds)) {
       if (this.hiddenIds.includes(toBeHiddenElementIds)) {
         return
@@ -639,9 +661,8 @@ export default class IfcIsolator {
       }
       const toBeHidden = new Set(this.hiddenIds.filter((el) => !toBeShown.includes(el)))
       this.hiddenIds = [...toBeHidden]
-      const hiddenIdsObject = Object.fromEntries(
-        this.hiddenIds.map((id) => [id, true]))
-      useStore.setState({hiddenElements: hiddenIdsObject})
+      // Union writer — keep any per-occurrence hides' eye keys (see hideElementsById).
+      this._syncHiddenStore()
     } else if (Number.isFinite(toBeUnhiddenElementIds)) {
       if (this.hiddenIds.includes(toBeUnhiddenElementIds)) {
         this.hiddenIds = arrayRemove(this.hiddenIds, toBeUnhiddenElementIds)
@@ -652,7 +673,11 @@ export default class IfcIsolator {
     } else {
       return
     }
-    if (this.hiddenIds.length === 0) {
+    // Only fully restore the model when NOTHING remains hidden — product-type
+    // AND per-occurrence. Checking hiddenIds alone would let unhiding the last
+    // product resurrect a still-hidden occurrence (unHideAllElements clears
+    // hiddenOccurrences). Mirrors the guard in unHideOccurrence.
+    if (this.hiddenIds.length === 0 && this.hiddenOccurrences.size === 0) {
       this.unHideAllElements()
     } else {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes(el))
@@ -827,7 +852,11 @@ export default class IfcIsolator {
     useStore.setState({isolatedElements: {}})
     this._removeSubsetFromScene(this.isolationSubset)
     this.isolationSubset = null
-    if (this.hiddenIds.length > 0) {
+    // Rebuild the hide reveal (which subtracts occurrence-hidden instances) when
+    // ANYTHING is still hidden — product-type or per-occurrence. The bare
+    // `hiddenIds.length > 0` check would re-add the full model and resurrect a
+    // per-occurrence hide that outlived the isolate/reset round-trip.
+    if (this.hiddenIds.length > 0 || this.hiddenOccurrences.size > 0) {
       const toBeShown = this.visualElementsIds.filter((el) => !this.hiddenIds.includes( el ))
       this.initHideOperationsSubset(toBeShown, false)
     } else {

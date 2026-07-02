@@ -651,6 +651,61 @@ describe('viewer/three/IfcIsolator', () => {
       expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}})
     })
 
+    it('product-type and per-occurrence hides compose without clobbering each other', () => {
+      // Regression for the review cluster: the pre-existing product-type hide
+      // paths replaced hiddenElements from hiddenIds only, wiping occurrence eye
+      // keys; unHideElementsById restored the full model when hiddenIds emptied,
+      // resurrecting a still-hidden occurrence.
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const child = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1}, // inst 0
+        {parentExpressId: 100, triangleCount: 1}, // inst 1
+        {parentExpressId: 100, triangleCount: 1}, // inst 2
+        {parentExpressId: 200, triangleCount: 1}, // inst 3
+      ])
+      const model = new Group()
+      model.add(child)
+      attachInstanceMapSubsets(model, null)
+      scene.add(model)
+      pickable.push(model)
+      iso.ifcModel = model
+      iso.visualElementsIds = [100, 200]
+      iso.spatialStructure = {}
+      const useStore = require('../../store/useStore').default
+      // hideElementsById reads selectedElements off the store; the shared mock
+      // only stubs elementTypesMap, so widen getState for this test and restore.
+      const origGetState = useStore.getState.getMockImplementation()
+      useStore.getState.mockReturnValue({
+        elementTypesMap: [], selectedElements: [], selectedInstanceIds: [],
+        updateHiddenStatus: jest.fn(),
+      })
+      try {
+        // Hide occurrence (node 6 → instance 1), then a whole product (200).
+        iso.hideOccurrence(6, [1])
+        iso.hideElementsById([200])
+        // Store carries BOTH keys — the occurrence eye key survives the product
+        // write (hideElementsById also writes selectedElements, so assert the
+        // specific hiddenElements call rather than the last).
+        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {200: true, 6: true}})
+        // Reveal shows parent 100 instances 0 + 2 (200 hidden, instance 1 hidden).
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
+
+        // Unhide the product — the occurrence must stay hidden (not resurrected).
+        useStore.setState.mockClear()
+        iso.unHideElementsById([200])
+        expect(iso.hiddenOccurrences.has(6)).toBe(true)
+        expect(scene.children).not.toContain(model) // still a reveal subset, not full model
+        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {6: true}})
+        // 200 restored (inst 3) + 100's insts 0,2 — instance 1 still excluded.
+        // 3 of the 4 total instances (not 4) proves the occurrence stayed hidden.
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(3)
+      } finally {
+        useStore.getState.mockImplementation(origGetState)
+      }
+    })
+
     it('reset-isolation with no hidden ids restores the model', () => {
       const {scene, pickable, iso, model} = setupIsolatorWithModel()
       iso.tempIsolationModeOn = true

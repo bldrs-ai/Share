@@ -395,6 +395,8 @@ export function attachElementSubsets(model, fallbackParent, defaults = {}) {
  * @param {Set<number>} parentIdSet IFC product expressIDs
  * @param {object} [opts]
  * @param {object} [opts.material]
+ * @param {Set<number>} [opts.excludeInstances] synthetic instance ids to omit
+ *   (per-occurrence hide — see IfcInstanceMap.createSubsetMeshByParent)
  * @return {Mesh|null}
  */
 export function buildInstanceMapSubsetMesh(sourceMesh, parentIdSet, opts = {}) {

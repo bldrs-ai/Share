@@ -116,6 +116,15 @@ order; BVH permutes only the index buffer, not the numbering).
 2. **Per-occurrence isolate.** Isolate (`I` / temp-isolation) still shows every
    occurrence of the isolated part type — the same occurrence→instance
    resolution the hide path now uses would make it per-occurrence too.
+3. **Reveal-hidden ghosts skip occurrence hides.** The "reveal hidden" (ghost)
+   overlay is built from `hiddenIds` (product-type) only, so a per-occurrence
+   hide shows no cyan ghost. The hide itself is correct; only the ghost preview
+   omits it. Would need the ghost subset to build from the hidden instances.
+4. **Assembly-node eye vs child eyes.** Hiding an assembly occurrence via its
+   eye hides all descendant geometry but only marks the assembly node's eye
+   (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
+   the assembly eye is the way to reveal them again. Making descendant eyes
+   follow would need per-node hidden-state derived from the occurrence prefix.
 2. **Root-level parts.** A placement directly under the product root has an empty
    occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
    `null` — an empty path can't disambiguate anything. So a scene pick of a
