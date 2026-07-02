@@ -57,7 +57,9 @@ export default function CadView({
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
+  const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
+  const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -570,7 +572,12 @@ export default function CadView({
         // Shift = the whole IFC element (every instance) → no
         // per-instance restriction; no-shift = just this PlacedGeometry.
         const instanceIds = event.shiftKey ? [] : [instanceId]
-        selectItemsInScene([parentExpressId], true, instanceIds)
+        // STEP: the picked instance's occurrence path so the NavTree highlights
+        // the one occurrence, not every reuse of the part type. Null on shift
+        // (whole element) and for IFC / single-occurrence parts.
+        const occurrencePath = event.shiftKey ? null :
+          (mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null)
+        selectItemsInScene([parentExpressId], true, instanceIds, occurrencePath)
         return
       }
       // Non-instance branch: elementSelection funnels through
@@ -699,8 +706,12 @@ export default function CadView({
    *   source (NavTree, search, permalink) doesn't inherit the instance
    *   subset left behind by an earlier scene pick. Only the Conway
    *   scene-pick path passes a non-empty value.
+   * @param {Array<number>} occurrencePath STEP occurrence path (NAUO express
+   *   ids) of the selected occurrence, or null. Disambiguates which NavTree
+   *   node highlights when a reused part's occurrences share one expressID;
+   *   null (the default) clears it for IFC and non-occurrence sources.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = []) {
+  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -710,6 +721,10 @@ export default function CadView({
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
       setSelectedInstanceIds(instanceIds)
+      // STEP per-occurrence key: a reused part's occurrences share one
+      // expressID, so this disambiguates which NavTree node to highlight.
+      // Every non-occurrence caller passes null, clearing any stale path.
+      setSelectedOccurrencePath(occurrencePath)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
@@ -916,8 +931,18 @@ export default function CadView({
           props = await viewer.getProperties(0, Number(lastId))
         }
         setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
+        // Update the expanded elements in NavTreePanel. For a STEP occurrence
+        // the parent-link walk must key off the occurrence's own tree node —
+        // its leaf NAUO express id (the last occurrence-path entry) — not
+        // `lastId`, which on a scene pick is the geometry's
+        // product_definition_shape id and isn't a tree node at all. Walking
+        // from the leaf NAUO expands every ancestor up to the root so the
+        // picked node is actually visible (and scrollable) in the tree.
+        const expandFromId =
+          (selectedOccurrencePath && selectedOccurrencePath.length > 0) ?
+            selectedOccurrencePath[selectedOccurrencePath.length - 1] :
+            parseInt(lastId)
+        const pathIds = getParentPathIdsForElement(elementsById, expandFromId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }
@@ -932,7 +957,7 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements, selectedInstanceIds])
+  }, [selectedElements, selectedInstanceIds, selectedOccurrencePath])
   /* eslint-enable */
 
 
@@ -962,19 +987,40 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds) => {
-            // The element-types tree passes an array (every element of a
-            // type) to select the group at once; the spatial tree and
-            // the scene pass a single expressID. elementSelection is
-            // single-id (shift toggle + descendants); the group case
-            // replaces the selection wholesale, like a search result, so
-            // it goes straight to the funnel with no permalink.
-            if (Array.isArray(expressIdOrIds)) {
-              selectItemsInScene(expressIdOrIds, false)
-            } else {
-              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
-            }
-          }}
+          selectWithShiftClickEvents={
+            (isShiftKeyDown, expressIdOrIds, occurrencePath = null, hasChildren = false) => {
+              // The element-types tree passes an array (every element of a
+              // type) to select the group at once; the spatial tree and
+              // the scene pass a single expressID. elementSelection is
+              // single-id (shift toggle + descendants); the group case
+              // replaces the selection wholesale, like a search result, so
+              // it goes straight to the funnel with no permalink.
+              if (Array.isArray(expressIdOrIds)) {
+                selectItemsInScene(expressIdOrIds, false)
+              } else if (occurrencePath && occurrencePath.length > 0 && !isShiftKeyDown) {
+                // STEP occurrence node (non-shift). The tree node's id is its NAUO
+                // express id, but the geometry is keyed by the shared
+                // product_definition_shape, so parent-level selection
+                // (elementSelection → setSelection) can't reach the mesh — the
+                // occurrence path is the only shared key. Resolve it to the exact
+                // instance ids and drive the per-instance highlight directly,
+                // mirroring the scene-pick funnel. The node's expressID stays the
+                // "selection" so properties / nav / the tree's per-occurrence
+                // highlight (selectedOccurrencePath) all key off it.
+                //
+                // Shift-click falls through to elementSelection instead, which
+                // toggles/accumulates against the current selection (multi-select);
+                // the per-occurrence scene highlight is single-selection only, so
+                // shift keeps its legacy type-level accumulate behavior.
+                const instanceIds =
+                  typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
+                    viewer.getInstanceIdsForOccurrencePath(
+                      0, occurrencePath, {includeDescendants: hasChildren}) : []
+                selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
+              } else {
+                elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+              }
+            }}
           deselectItems={deselectItems}
         />
       )}
