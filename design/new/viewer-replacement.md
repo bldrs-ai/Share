@@ -1331,12 +1331,12 @@ to run the old fork against modern `three`, now that the fork is gone:
      and the scene lights keep their production `×π` values — so the only
      visible change is a slight, accepted managed-color shift. The rest of
      the forward step — SRGB output + a tone mapper + a light re-tune — was
-     explored and **deferred**: on today's flat IFC lighting a filmic
-     mapper (ACES/AgX) just dims/flattens because there's no HDR range to
-     map, so it only pays off alongside an environment map + PBR materials.
-     Folded into the §6e step-4/5 follow-up. For a CAD viewer,
-     `NeutralToneMapping` (color-accurate, minimal hue shift) is the likely
-     mapper choice there rather than ACES.
+     deferred at 5e and later **shipped as the §6e look, behind
+     `?feature=look`** (default off): on flat IFC lighting a filmic mapper
+     (ACES/AgX) just dims/flattens because there's no HDR range to map, so it
+     only pays off alongside the environment map + PBR materials that the flag
+     also turns on. `NeutralToneMapping` (color-accurate, minimal hue shift)
+     was the choice there, over ACES.
   2. **Drop the `BLDRS_face_ids` per-vertex fallback's wit-three-specific
      checks** — wit-three's parse-state assumptions no longer apply.
   3. **Re-evaluate the `?feature=perf` baseline** now the fork (and its
@@ -1719,11 +1719,42 @@ the third over- or under-corrects:
   the fork is incompatible with modern three; the root override forces
   one version across all consumers.
 
-### 6e. Where this is going — the migration to PBR / tone-mapping
+### 6e. The render "look" — PBR / IBL / tone-mapping (shipped behind `?feature=look`)
 
-The compat path in §6b is a **deliberate hold**, not the destination.
-The fork's IFC pipeline and our material setup were tuned in 2022
-against three's pre-r152 conventions. To migrate forward we need:
+**Status (2026-07): delivered, gated behind `?feature=look` (default OFF).**
+Flag off renders the legacy look (`MeshLambertMaterial`, no env map, no tone
+mapper, legacy `× π` lights, `LinearSRGBColorSpace` output) = `main`
+unchanged; flag on renders the full filmic/PBR look. It's one **atomic**
+switch: to ship, flip the flag's default in `src/FeatureFlags.js` and
+regenerate the screenshot baselines to the look in the *same* PR (they're
+legacy today).
+
+**What the flag turns on:** uniform `MeshStandardMaterial` + sRGB albedo across
+the generated-surface loaders, built through one factory
+(`src/viewer/lookMaterial.js` — `makeSurfaceMaterial` / `makeSurfaceColor`;
+covers IFC `flatMeshToBufferGeometry`, Conway-batched `batchedToMergedMesh` /
+`flatMeshToBatchedModel`, and `stl.js`), tagged `userData.isLookManaged` so a
+look toggle restyles them but authored glTF/GLB PBR is left untouched; a
+zero-asset **gradient studio IBL** (PMREM-prefiltered canvas gradient);
+**Khronos PBR-Neutral tone-mapping** in the postprocessing composer
+(`CustomPostProcessor`) with `outputColorSpace` back at the r184 sRGB default;
+Neutral-look **retuned lights** (`scene.js`); named **looks**
+(`src/viewer/looks.js` — the single source of truth: **Neutral** default +
+**Flat** legacy-style high-key) applied live by `ShareViewer.applyLook`, with a
+user-facing **Neutral / Flat** toggle in the profile menu (`ProfileControl`,
+cookie-persisted like the day/night theme); and dev-only tuning via a
+`?feature=look` lil-gui panel (`LightingGui`) plus **SSAO ambient occlusion** +
+a bounds-fitted **contact shadow** (both off in the shipped looks). The
+construction-time constants (lights, IFC material params, env intensity) all
+*derive* from `LOOKS.neutral`, so retuning Neutral is one edit. *Follow-up:*
+OBJ uses `OBJLoader`'s own materials, so it's unchanged either way (matches its
+legacy baseline); converting it to Standard for full flag-on uniformity is a
+separate step.
+
+The compat path in §6b was a **deliberate hold**, not the destination.
+The fork's IFC pipeline and our material setup were tuned in 2022 against
+three's pre-r152 conventions. The forward plan below (steps 1–5) all landed
+behind the flag; migrating forward meant:
 
 1. **Tag IFC material colors as sRGB** at parse / decoration time —
    today the colors come out of Conway / `web-ifc-three` as plain RGB
@@ -1755,16 +1786,18 @@ and most impactful: a one-line `toneMapping` setter unlocks the entire
 post-r152 visual quality. We should do this **before** PBR materials
 land, so we have a stable reference point for material tuning.
 
-A reasonable target sequence:
+How it actually shipped:
 
-- Phase 5: the fork drop (5d.4) landed *without* the color steps — kept
-  deliberately mechanical. The color/lighting forward step (steps 2–3 +
-  step 5 + re-tuning the now-vendored lights) is **slice 5e**, a separate
-  PR on top of the merged fork removal. Tune one set of `ambient` +
-  `directional` values against the new pipeline; snapshot a fresh Cosmos
-  baseline. May not fully reproduce the legacy look — accepted risk.
-- Phase 6+: step 1 (material colorSpace tagging) + step 4 (PBR + env
-  map). Standalone visual-quality PR; ships against the post-5e pipeline.
+- **Slice 5e** landed step 2 only (`ColorManagement.enabled = true`), keeping
+  `outputColorSpace` + the lights at production values — a slight managed-color
+  shift, no visible re-tune.
+- Everything else (steps 1, 3, 4, 5 + the look registry, the profile toggle,
+  the tuning GUI, and the dev SSAO/contact-shadow effects) shipped as **one
+  atomic, flag-gated feature** — the §6e look above — instead of a default-on
+  visual-quality PR. Gating behind `?feature=look` (default off) keeps `main`
+  and the screenshot baselines unchanged; the flag flip + baseline regen is a
+  single focused follow-up. `NeutralToneMapping` was chosen over ACES/AgX, as
+  anticipated in the §3d.iii deferral note.
 
 The compat-path code is a single docblock in `ShareViewer.js` + the
 esbuild plugin's lights rewrite. The lights rewrite (`scaleLightIntensities`

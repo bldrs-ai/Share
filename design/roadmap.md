@@ -554,6 +554,13 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   Remaining: Phase 5 cleanup (drop wit-three entirely), perf items (on-demand
   rendering, hover-pick throttle), per-product mesh emission spike, **public-launch
   test gate** (4-angle screenshots + GLB bit-level diff harness).
+- **Render look (§6e):** the filmic/PBR look — uniform `MeshStandardMaterial` +
+  sRGB albedo, gradient studio IBL, Khronos-Neutral tone-mapping, retuned lights,
+  a user-facing **Neutral / Flat** render-mode toggle in the profile menu, plus a
+  `?feature=look` tuning GUI and dev-only AO + contact-shadow. Shipped **behind
+  `?feature=look` (default off)** — the default still renders the legacy look. To
+  go live: flip the flag default + regenerate the screenshot baselines (one PR).
+  See `design/new/viewer-replacement.md` §6e.
 - **Unblocks:** `view-100`, `view-110`, `view-130`, `view-150`, `view-160`, T2.
 - **Pro-MVP impact:** Required — public-launch gate.
 - **Doc:** `design/new/viewer-replacement.md`.
