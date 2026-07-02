@@ -39,6 +39,14 @@ export default function NavTreeNode({
   const theme = useTheme()
   return (
     <div
+      data-testid='NavTreeNode'
+      // Stable test hooks: the label repeats across a reused part's
+      // occurrences and selection is themed via backgroundColor, so e2e
+      // asserts against these instead of text/colour. `data-is-selected`
+      // is the per-occurrence highlight state (see step-occurrence-selection).
+      data-node-label={label}
+      data-is-selected={isSelected ? 'true' : 'false'}
+      data-is-expanded={hasChildren ? (isExpanded ? 'true' : 'false') : undefined}
       style={{
         ...style,
         paddingLeft: depth * paddingLeft,
@@ -51,6 +59,7 @@ export default function NavTreeNode({
       {/* Expand/Collapse Icon */}
       {hasChildren ? (
         <div
+          data-testid='NavTreeNodeToggle'
           onClick={handleExpandClick}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
@@ -77,6 +86,7 @@ export default function NavTreeNode({
       {/* Label */}
       <div
         id='NavTreeNodeLabelId'
+        data-testid='NavTreeNodeLabel'
         onClick={handleLabelClick}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -113,7 +123,7 @@ export default function NavTreeNode({
           role='button'
           tabIndex={0}
         >
-          <HideToggleButton elementId={parseInt(node.expressID, 10)}/>
+          <HideToggleButton elementId={parseInt(node.expressID, 10)} occurrencePath={node.occurrencePath}/>
         </div>
       )}
     </div>

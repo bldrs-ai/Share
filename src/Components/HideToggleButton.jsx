@@ -8,9 +8,10 @@ import GlassesIcon from '../assets/icons/Glasses.svg'
 /**
  * @param {IfcIsolator} The IFC isoaltor
  * @param {number} IFC element id
+ * @param {Array<number>} [occurrencePath] STEP occurrence path of the node, if any
  * @return {ReactElement}
  */
-export default function HideToggleButton({elementId}) {
+export default function HideToggleButton({elementId, occurrencePath = null}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
@@ -18,6 +19,21 @@ export default function HideToggleButton({elementId}) {
   const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
+    // STEP: hide this occurrence's own geometry instances. Hiding by expressID
+    // would hit the shared product_definition_shape and vanish every reuse of
+    // the part (the reported "eye does nothing / H hides both"); resolving the
+    // occurrence path to instances hides only this node's placement. The
+    // isolator syncs the store, so the eye toggles without updateHiddenStatus.
+    if (Array.isArray(occurrencePath) && occurrencePath.length > 0 &&
+        typeof viewer.getInstanceIdsForOccurrencePath === 'function') {
+      if (!isHidden) {
+        viewer.isolator.hideOccurrence(
+          elementId, viewer.getInstanceIdsForOccurrencePath(0, occurrencePath))
+      } else {
+        viewer.isolator.unHideOccurrence(elementId)
+      }
+      return
+    }
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
     if (!isHidden) {
       viewer.isolator.hideElementsById(toBeHidden)

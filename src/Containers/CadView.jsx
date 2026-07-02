@@ -15,7 +15,7 @@ import {load} from '../loader/Loader'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
-import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
@@ -946,21 +946,21 @@ export default function CadView({
           props = await viewer.getProperties(0, Number(lastId))
         }
         setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel. For a STEP occurrence
-        // the parent-link walk must key off the occurrence's own tree node —
-        // its leaf NAUO express id (the last occurrence-path entry) — not
-        // `lastId`, which on a scene pick is the geometry's
-        // product_definition_shape id and isn't a tree node at all. Walking
-        // from the leaf NAUO expands every ancestor up to the root so the
-        // picked node is actually visible (and scrollable) in the tree.
-        const expandFromId =
-          (selectedOccurrencePath && selectedOccurrencePath.length > 0) ?
-            selectedOccurrencePath[selectedOccurrencePath.length - 1] :
-            parseInt(lastId)
-        const pathIds = getParentPathIdsForElement(elementsById, expandFromId)
-        if (pathIds) {
-          setExpandedElements(pathIds.map((n) => `${n}`))
-        }
+        // Reveal the selection in the NavTree by opening the path to it, merged
+        // into the current expansion (see `expandedIdsForSelection`). For a STEP
+        // occurrence this keys off the occurrence path rather than `lastId` —
+        // on a scene pick `lastId` is the geometry's shared
+        // product_definition_shape, which isn't a tree node, so the old
+        // parent-path lookup missed and deep/reused nodes never expanded.
+        const pathIds = (selectedOccurrencePath && selectedOccurrencePath.length > 0) ?
+          null : getParentPathIdsForElement(elementsById, parseInt(lastId))
+        const nextExpanded = expandedIdsForSelection({
+          prevExpanded: useStore.getState().expandedElements,
+          occurrencePath: selectedOccurrencePath,
+          rootExpressId: rootElement?.expressID,
+          pathIds,
+        })
+        setExpandedElements(nextExpanded)
         const types = elementTypesMap.filter(
           (t) => t.elements.filter(
             (e) => ids.includes(e.expressID)).length > 0)
