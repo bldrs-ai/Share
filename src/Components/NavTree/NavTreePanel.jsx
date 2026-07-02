@@ -7,6 +7,7 @@ import {ToggleButton, ToggleButtonGroup, Tooltip} from '@mui/material'
 import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
+import {occurrencePathKey} from '../../utils/occurrencePaths'
 import Panel from '../SideDrawer/Panel'
 import NavTreeNode from './NavTreeNode'
 import {removeHashParams} from './hashState'
@@ -36,6 +37,14 @@ export default function NavTreePanel({
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
   const viewer = useStore((state) => state.viewer)
   const itemDefaultHeight = 24
+
+  // Canonical key of the selected occurrence path, computed once per render and
+  // threaded to every row — the per-row `isSelected` check and the scroll
+  // effect both compare against it, so joining it here avoids re-joining the
+  // (invariant) selected path for each of the many visible rows.
+  const selectedOccurrencePathKey =
+    selectedOccurrencePath && selectedOccurrencePath.length > 0 ?
+      occurrencePathKey(selectedOccurrencePath) : null
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
   const isNavTree = navigationMode === 'spatial-tree'
@@ -95,11 +104,10 @@ export default function NavTreePanel({
     // (product_definition_shape), which never equals a tree node's id (its NAUO
     // express id) — the shared occurrence path is the only reliable join, so
     // prefer it. Falls back to expressID for IFC and when no occurrence is set.
-    if (selectedOccurrencePath && selectedOccurrencePath.length > 0) {
-      const target = selectedOccurrencePath.join('/')
+    if (selectedOccurrencePathKey !== null) {
       index = visibleNodes.findIndex(
         ({node}) => Array.isArray(node.occurrencePath) &&
-          node.occurrencePath.join('/') === target,
+          occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey,
       )
     }
     if (index < 0) {
@@ -113,7 +121,7 @@ export default function NavTreePanel({
     if (index >= 0 && listRef.current) {
       listRef.current.scrollToItem(index, 'center')
     }
-  }, [selectedElements, selectedOccurrencePath, visibleNodes])
+  }, [selectedElements, selectedOccurrencePathKey, visibleNodes])
 
   // Function to get item size
   const getItemSize = useCallback(
@@ -170,7 +178,7 @@ export default function NavTreePanel({
               expandedNodeIds,
               setExpandedNodeIds,
               selectedNodeIds: selectedElements,
-              selectedOccurrencePath,
+              selectedOccurrencePathKey,
               selectWithShiftClickEvents,
               model,
               viewer,
@@ -279,7 +287,7 @@ const RenderRow = ({index, style, data}) => {
     expandedNodeIds,
     setExpandedNodeIds,
     selectedNodeIds,
-    selectedOccurrencePath,
+    selectedOccurrencePathKey,
     selectWithShiftClickEvents,
     model,
     viewer,
@@ -299,10 +307,9 @@ const RenderRow = ({index, style, data}) => {
     // product_definition_shape id, which never equals this node's NAUO express
     // id), and it uniquely identifies one occurrence so a reused part lights up
     // only the clicked/picked node, not every reuse. Falls back to expressID for
-    // IFC and when no occurrence is selected (selectedOccurrencePath is null).
-    if (selectedOccurrencePath && selectedOccurrencePath.length > 0 &&
-        Array.isArray(node.occurrencePath)) {
-      isSelected = node.occurrencePath.join('/') === selectedOccurrencePath.join('/')
+    // IFC and when no occurrence is selected (selectedOccurrencePathKey is null).
+    if (selectedOccurrencePathKey !== null && Array.isArray(node.occurrencePath)) {
+      isSelected = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
     } else {
       isSelected = selectedNodeIds.includes(node.expressID.toString())
     }
@@ -352,7 +359,10 @@ const RenderRow = ({index, style, data}) => {
       // Pass the STEP occurrence path so clicking one occurrence of a reused
       // part highlights only that node, not every node sharing the expressID.
       // Undefined for IFC — selection stays keyed on the expressID alone.
-      selectWithShiftClickEvents(event.shiftKey, node.expressID.toString(), node.occurrencePath)
+      // `hasChildren` lets the scene-highlight resolver pick its lookup: a leaf
+      // takes the O(1) exact path, an assembly needs the descendant scan.
+      selectWithShiftClickEvents(
+        event.shiftKey, node.expressID.toString(), node.occurrencePath, hasChildren)
     }
   }
 

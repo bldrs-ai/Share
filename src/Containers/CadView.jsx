@@ -987,32 +987,40 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds, occurrencePath = null) => {
-            // The element-types tree passes an array (every element of a
-            // type) to select the group at once; the spatial tree and
-            // the scene pass a single expressID. elementSelection is
-            // single-id (shift toggle + descendants); the group case
-            // replaces the selection wholesale, like a search result, so
-            // it goes straight to the funnel with no permalink.
-            if (Array.isArray(expressIdOrIds)) {
-              selectItemsInScene(expressIdOrIds, false)
-            } else if (occurrencePath && occurrencePath.length > 0) {
-              // STEP occurrence node. The tree node's id is its NAUO express id,
-              // but the geometry is keyed by the shared product_definition_shape,
-              // so parent-level selection (elementSelection → setSelection) can't
-              // reach the mesh — the occurrence path is the only shared key.
-              // Resolve it to the exact instance ids and drive the per-instance
-              // highlight directly, mirroring the scene-pick funnel. The node's
-              // expressID stays the "selection" so properties / nav / the tree's
-              // per-occurrence highlight (selectedOccurrencePath) all key off it.
-              const instanceIds =
-                typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
-                  viewer.getInstanceIdsForOccurrencePath(0, occurrencePath) : []
-              selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
-            } else {
-              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
-            }
-          }}
+          selectWithShiftClickEvents={
+            (isShiftKeyDown, expressIdOrIds, occurrencePath = null, hasChildren = false) => {
+              // The element-types tree passes an array (every element of a
+              // type) to select the group at once; the spatial tree and
+              // the scene pass a single expressID. elementSelection is
+              // single-id (shift toggle + descendants); the group case
+              // replaces the selection wholesale, like a search result, so
+              // it goes straight to the funnel with no permalink.
+              if (Array.isArray(expressIdOrIds)) {
+                selectItemsInScene(expressIdOrIds, false)
+              } else if (occurrencePath && occurrencePath.length > 0 && !isShiftKeyDown) {
+                // STEP occurrence node (non-shift). The tree node's id is its NAUO
+                // express id, but the geometry is keyed by the shared
+                // product_definition_shape, so parent-level selection
+                // (elementSelection → setSelection) can't reach the mesh — the
+                // occurrence path is the only shared key. Resolve it to the exact
+                // instance ids and drive the per-instance highlight directly,
+                // mirroring the scene-pick funnel. The node's expressID stays the
+                // "selection" so properties / nav / the tree's per-occurrence
+                // highlight (selectedOccurrencePath) all key off it.
+                //
+                // Shift-click falls through to elementSelection instead, which
+                // toggles/accumulates against the current selection (multi-select);
+                // the per-occurrence scene highlight is single-selection only, so
+                // shift keeps its legacy type-level accumulate behavior.
+                const instanceIds =
+                  typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
+                    viewer.getInstanceIdsForOccurrencePath(
+                      0, occurrencePath, {includeDescendants: hasChildren}) : []
+                selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
+              } else {
+                elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+              }
+            }}
           deselectItems={deselectItems}
         />
       )}

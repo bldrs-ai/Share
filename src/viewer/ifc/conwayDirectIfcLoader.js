@@ -213,8 +213,21 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
     const buildMap = ifcModel.instanceMap
     ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
     if (buildMap?.instanceIdToOccurrencePath) {
-      ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
-      ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+      // Guard the 1:1 assumption instead of trusting it silently. If the two
+      // populators ever number instances differently (e.g. one drops a
+      // degenerate PlacedGeometry the other keeps), copying the tables over
+      // would bind occurrence paths to the wrong instances — a silent
+      // wrong-nut-highlights bug. On mismatch, skip the transfer and degrade
+      // to type-level selection rather than mis-highlight.
+      if (buildMap.instanceCount === ifcModel.instanceMap.instanceCount) {
+        ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
+        ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+      } else {
+        console.warn(
+          '[conwayDirect] occurrence-path transfer skipped: instance-count mismatch ' +
+          `(build ${buildMap.instanceCount}, geometry ${ifcModel.instanceMap.instanceCount}); ` +
+          'STEP selection degrades to type-level for this model')
+      }
     }
   }
 

@@ -101,6 +101,21 @@ order; BVH permutes only the index buffer, not the numbering).
 
 1. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the occurrence
    path and resolve it on load.
+2. **Root-level parts.** A placement directly under the product root has an empty
+   occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
+   `null` — an empty path can't disambiguate anything. So a scene pick of a
+   *root-level* part can't reconcile to its NavTree node (the pick reports the
+   PDS id, which never equals the node's id), and it silently degrades to
+   type-level. Harmless when the file has one root assembly (the common case);
+   only bites files with several distinct parts placed directly at the root. A
+   real fix needs a PDS→product-definition→node reverse map, out of scope here.
+3. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
+   `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
+   under that flag — a documented gap in `buildBatchedConwayModel`, not a
+   regression (NAUO≠PDS meant a STEP node click highlighted nothing there
+   before this work either).
 
 Each step degrades gracefully to today's type-level behavior when no occurrence
-path is present (IFC, single-occurrence parts).
+path is present (IFC, single-occurrence parts). NavTree **shift-click** on an
+occurrence node also degrades to type-level accumulate (multi-select wins the
+modifier slot; per-occurrence highlight is single-selection only).

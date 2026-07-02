@@ -3,6 +3,7 @@ import {
   BufferGeometry,
   Mesh,
 } from 'three'
+import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
 /**
@@ -104,6 +105,10 @@ export class IfcInstanceMap {
    *   STEP models on a Conway that emits `PlacedGeometry.occurrencePath`; the
    *   parent expressID collides across a reused part's occurrences, so this is
    *   what distinguishes them. Absent (null) for IFC and older engines.
+   * @param {Map<string, Array<number>>} [fields.occurrencePathToInstanceIds]
+   *   Reverse index of the above — occurrence-path key (`occurrencePathKey`) →
+   *   the synthetic instance ids placed there. The NavTree→scene direction.
+   *   Absent (null) for IFC and older engines.
    */
   constructor({
     triangleIndexToInstanceId,
@@ -214,7 +219,7 @@ export class IfcInstanceMap {
     if (!byPath || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
       return null
     }
-    const list = byPath.get(occurrencePath.join('/'))
+    const list = byPath.get(occurrencePathKey(occurrencePath))
     return list ? Uint32Array.from(list) : null
   }
 
@@ -424,7 +429,7 @@ export function attachOccurrencePaths(instanceMap, occurrencePathsByInstanceId) 
     }
     perInstance[inst] = path
     any = true
-    const key = path.join('/')
+    const key = occurrencePathKey(path)
     const list = byPath.get(key)
     if (list) {
       list.push(inst)
@@ -487,7 +492,7 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
       const path = valid[inst].occurrencePath ?? null
       instanceIdToOccurrencePath[inst] = path
       if (path && path.length > 0) {
-        const key = path.join('/')
+        const key = occurrencePathKey(path)
         const list = occurrencePathToInstanceIds.get(key)
         if (list) {
           list.push(inst)

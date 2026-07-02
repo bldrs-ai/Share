@@ -475,6 +475,21 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
     expect(second).toEqual([1])
   })
 
+  it('with includeDescendants:false takes the exact leaf lookup (no descendants)', () => {
+    // A leaf click must resolve to only its own instance even though a deeper
+    // path exists that has it as a prefix — the exact-key branch must not scan.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [10, 20]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false})).toEqual([0])
+    // Same path with descendants included also pulls the child at [10,20].
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: true}).sort()).toEqual([0, 1])
+  })
+
   it('is prefix-inclusive: an assembly path lights up every leaf beneath it', () => {
     // Two leaves under assembly-occurrence [10]; a lookup on [10] returns both,
     // a lookup on the exact leaf returns just one.
