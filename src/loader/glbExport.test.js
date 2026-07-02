@@ -152,6 +152,25 @@ describe('loader/glbExport', () => {
       expect(branch).toBe('main')
     })
 
+    it('skips a BatchedMesh model (not GLB-cacheable yet) without exporting', async () => {
+      const ok = await exportAndCacheGlb({model: {isBatchedMesh: true}, ...ctx})
+      expect(ok).toBe(false)
+      expect(mockExporterParse).not.toHaveBeenCalled()
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
+    it('skips a Group that contains a BatchedMesh', async () => {
+      const model = {
+        traverse: (fn) => {
+          fn({isBatchedMesh: false})
+          fn({isBatchedMesh: true})
+        },
+      }
+      const ok = await exportAndCacheGlb({model, ...ctx})
+      expect(ok).toBe(false)
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
     it('returns false (no throw) when the exporter produces no bytes', async () => {
       mockExporterParse.mockImplementation((_input, _onDone, onError) => onError(new Error('nope')))
       const ok = await exportAndCacheGlb({model: {}, ...ctx})

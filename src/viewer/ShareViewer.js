@@ -18,6 +18,12 @@ import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {modelHasCapability} from './ShareModel'
+import {
+  applyBatchedPreselection,
+  applyBatchedSelection,
+  clearBatchedPreselection,
+  clearBatchedSelection,
+} from './ifc/batchedHighlight'
 
 
 // Minimum index-buffer capacity for the preselection pool. 256 u32
@@ -448,7 +454,10 @@ export class ShareViewer {
     if (toBeSelected.length === 0) {
       this.highlighter.setHighlighted(null)
       this._clearConwaySelectionSubsets()
-      if (modelHasCapability(model, 'ifcSubsets')) {
+      if (modelHasCapability(model, 'batchedPicking')) {
+        // Batched path recolors instances in place (no subset to remove).
+        clearBatchedSelection(model)
+      } else if (modelHasCapability(model, 'ifcSubsets')) {
         this.selector.unpick()
       } else if (typeof model.removeSubset === 'function') {
         model.removeSubset('selection')
@@ -478,6 +487,14 @@ export class ShareViewer {
           mesh.instanceMap.createSubsetMeshByParent(toBeSelected, {
             material: this.selector.getSelectionMaterial(),
           }))
+      } else if (modelHasCapability(model, 'batchedPicking')) {
+        // BatchedMesh render path: recolor the selected instances in place
+        // (setColorAt) rather than overlay a coplanar subset Mesh — see
+        // batchedHighlight.js for why the overlay approach can't render
+        // reliably on a BatchedMesh. Selection covers every occurrence of
+        // each requested product (per-occurrence narrowing is a follow-up).
+        const selMat = this.selector.getSelectionMaterial()
+        applyBatchedSelection(model, toBeSelected, selMat?.color)
       } else if (modelHasCapability(model, 'ifcSubsets')) {
         // Real-IFC path: web-ifc-three holds the parser state needed
         // by createSubset / SubsetCreator.
@@ -917,6 +934,18 @@ export class ShareViewer {
       // handler's no-shift semantic — hover preview should match what
       // a click would select.
       this._setConwayPreselectionFromHit(found.object, found.faceIndex)
+    } else if (modelHasCapability(model, 'batchedPicking')) {
+      // BatchedMesh render path: recolor the hovered product's instances in
+      // place (setColorAt). Coexists with — and paints over — the selection
+      // recolor; cleared on cursor-leave by `_clearPreselectionForAllModels`.
+      // Dedup on the resolved id: `highlightIfcItem` fires per animation frame
+      // while the cursor rests, and a repaint re-uploads the colours texture —
+      // skip when the hovered product hasn't changed.
+      if (id !== this._lastBatchedPreselectId) {
+        this._lastBatchedPreselectId = id
+        const preMat = this.selector.getPreselectionMaterial()
+        applyBatchedPreselection(model, [id], preMat?.color)
+      }
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
@@ -970,12 +999,17 @@ export class ShareViewer {
     // logic stays in one place instead of being split between
     // ShareViewer (Conway) and each model's `removeSubset` (legacy).
     this._clearConwayPreselectionSubsets()
+    // Reset the batched hover-dedup so re-entering the same product repaints.
+    this._lastBatchedPreselectId = undefined
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return
     }
     for (const m of models) {
-      if (typeof m?.removeSubset === 'function') {
+      if (modelHasCapability(m, 'batchedPicking')) {
+        // Batched path: undo the hover recolor (restores selection / original).
+        clearBatchedPreselection(m)
+      } else if (typeof m?.removeSubset === 'function') {
         m.removeSubset('preselection')
       }
     }
@@ -1055,6 +1089,17 @@ export class ShareViewer {
    */
   getPickedItemId(picked) {
     const mesh = picked.object
+    // BatchedMesh path (`?feature=batchedMesh`): the parent IFC product id
+    // lives in the per-batch `instanceParents` table keyed by `batchId`,
+    // not on any vertex — there's no per-face expressID to read. Resolve it
+    // here so hover-preselection (highlightIfcItem) matches the click path.
+    if (mesh.isBatchedMesh && mesh.instanceParents) {
+      const batchId = picked.batchId
+      if (batchId === undefined || batchId < 0) {
+        return null
+      }
+      return mesh.instanceParents[batchId]
+    }
     if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }
