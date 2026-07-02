@@ -194,6 +194,16 @@ slice, and isolation controls expected of a BIM viewer.
   (now owns `selectedInstanceIds` + the URL path). Reactivated the `SynchronizedView` E2E
   (was `describe.skip`). Stories: <a href="https://github.com/bldrs-ai/Share/issues/1046" target="_blank" rel="noopener noreferrer">#1046</a> (sync) +
   <a href="https://github.com/bldrs-ai/Share/issues/1180" target="_blank" rel="noopener noreferrer">#1180</a> (permalinks).
+- STEP occurrence-keyed selection + hide ✔ (NEW). For STEP / AP214 assemblies, one
+  part type is reused across many occurrences (e.g. every as1 bolt shares one
+  `product_definition_shape`), so the scalar-`expressID` selection key collapsed them
+  all. NavTree↔scene selection and the hide/eye now key on the per-occurrence path
+  (root→leaf NAUO ids from Conway's `PlacedGeometry.occurrencePath`), so a reused part
+  selects, reveals-in-tree, and hides as a *single* occurrence — and it survives the GLB
+  cache. Conway-side extraction is the `step-metadata` track (see Track T1 + conway's
+  `step-metadata-nist.md`); Share-side design +
+  remaining follow-ups (permalink encoding, per-occurrence isolate) in
+  `design/new/step-occurrence-selection.md`. PRs #1573 + #1575, E2E over `as1-oc-214.stp`.
 
 **Epic `view-110`: Cut planes** ✔
 *PDF View.3 — Cut sub-item ✔.*
@@ -537,7 +547,9 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 ### Track T1: Viewer Replacement
 
 - **What:** Replace `web-ifc-viewer` + `web-ifc-three`. Cuts the three.js 0.135 anchor;
-  ships Conway-direct IFC parse, per-instance picking, unified Clipper.
+  ships Conway-direct IFC parse, per-instance picking, unified Clipper. Conway-direct
+  also parses **STEP / AP214** assemblies, with per-occurrence NavTree↔scene selection
+  and hide keyed on the occurrence path (`design/new/step-occurrence-selection.md`).
 - **Status:** Phases 0–4 + 5a + 5b landed. `conwayDirectIfc` + `glb` default-on.
   Remaining: Phase 5 cleanup (drop wit-three entirely), perf items (on-demand
   rendering, hover-pick throttle), per-product mesh emission spike, **public-launch

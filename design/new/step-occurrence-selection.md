@@ -57,7 +57,7 @@ range; (b) `decorateConwayDirectIfcModel` carries the occurrence tables
 rebuilt map — safe because the synthetic instance ids line up 1:1 (same emission
 order; BVH permutes only the index buffer, not the numbering).
 
-### Done (this PR)
+### Done (landed — PRs #1573 + #1575)
 
 - **Data foundation.** `IfcInstanceMap` captures `instanceIdToOccurrencePath` +
   `occurrencePathToInstanceIds` from each `PlacedGeometry.occurrencePath`, with
@@ -125,7 +125,7 @@ order; BVH permutes only the index buffer, not the numbering).
    (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
    the assembly eye is the way to reveal them again. Making descendant eyes
    follow would need per-node hidden-state derived from the occurrence prefix.
-2. **Root-level parts.** A placement directly under the product root has an empty
+5. **Root-level parts.** A placement directly under the product root has an empty
    occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
    `null` — an empty path can't disambiguate anything. So a scene pick of a
    *root-level* part can't reconcile to its NavTree node (the pick reports the
@@ -133,7 +133,7 @@ order; BVH permutes only the index buffer, not the numbering).
    type-level. Harmless when the file has one root assembly (the common case);
    only bites files with several distinct parts placed directly at the root. A
    real fix needs a PDS→product-definition→node reverse map, out of scope here.
-3. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
+6. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a
    regression (NAUO≠PDS meant a STEP node click highlighted nothing there
