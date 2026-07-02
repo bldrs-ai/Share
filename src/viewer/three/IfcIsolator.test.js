@@ -316,6 +316,22 @@ describe('viewer/three/IfcIsolator', () => {
       })
     })
 
+    it('unions expressIDs from a BatchedMesh model via instanceParents', () => {
+      const iso = makeIsolator()
+      // A BatchedMesh has a `.geometry` (its packed buffer) but no
+      // per-vertex expressID — the IDs live in `instanceParents`. The
+      // batched branch must win over the geometry-attribute branch.
+      const geom = new BufferGeometry()
+      geom.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      const model = new Mesh(geom, new MeshBasicMaterial())
+      model.isBatchedMesh = true
+      model.instanceParents = new Uint32Array([100, 100, 200, 300])
+      model.ifcManager = makeFakeManager()
+      return iso.setModel(model).then(() => {
+        expect(iso.visualElementsIds.sort((a, b) => a - b)).toEqual([100, 200, 300])
+      })
+    })
+
     it('skips Group children without an expressID attribute', () => {
       const iso = makeIsolator()
       const root = new Group()

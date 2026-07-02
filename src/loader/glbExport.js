@@ -40,6 +40,7 @@ import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
+import {eachBatch} from '../viewer/ifc/batchedModel'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -144,6 +145,23 @@ function silenceGltfExporterMaterialWarnings() {
 
 
 /**
+ * True when the model root is, or contains, a `THREE.BatchedMesh`. Such
+ * models are produced by the Conway-direct instancing path and are not
+ * yet GLB-cacheable (see `exportAndCacheGlb`).
+ *
+ * @param {object} model Three.js root (Mesh / Group / Scene / BatchedMesh)
+ * @return {boolean}
+ */
+function modelHasBatchedMesh(model) {
+  let found = false
+  eachBatch(model, () => {
+    found = true
+  })
+  return found
+}
+
+
+/**
  * Export the loaded model and write the resulting GLB (wrapped in the
  * Bldrs container) to OPFS at the cache key the reader will look for.
  * Fire-and-forget at the call site — any failure is logged but never
@@ -170,6 +188,17 @@ function silenceGltfExporterMaterialWarnings() {
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
   const startMs = Date.now()
   try {
+    // BatchedMesh render path (`?feature=batchedMesh`): a `THREE.BatchedMesh`
+    // has no standard per-primitive geometry/attributes for `GLTFExporter`
+    // to serialize, and it carries no per-vertex `_EXPRESSID` for the
+    // `BLDRS_face_ids` capture — a cached artifact would be empty or
+    // unpickable on read-back. Skip the cache write entirely; the model
+    // re-parses (fast, flag-gated) on the next load. A batched-aware GLB
+    // schema is future work (design/new/viewer-replacement.md §3b.iv).
+    if (modelHasBatchedMesh(model)) {
+      glbInfo('writer: skipped (BatchedMesh model is not GLB-cacheable yet)')
+      return false
+    }
     const filePath = cacheKeyArgs.sourcePath
     const requestedMode = activeGlbCompressionMode()
     glbInfo(

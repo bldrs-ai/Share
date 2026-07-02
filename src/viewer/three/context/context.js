@@ -92,15 +92,34 @@ export class IfcContext {
     this.items.components.length = 0
     this.items.ifcModels.forEach((model) => {
       model.removeFromParent()
-      if (model.geometry.boundsTree) {
-        model.geometry.disposeBoundsTree()
-      }
-      model.geometry.dispose()
-      if (Array.isArray(model.material)) {
-        model.material.forEach((mat) => mat.dispose())
-      } else {
-        model.material.dispose()
-      }
+      // Free any attached subset controller (batched isolation subsets + their
+      // baked geometries; no-op on models without one).
+      model.disposeSubsets?.()
+      // Dispose by traversal so every model shape frees its GPU resources: a
+      // plain Mesh (merged / wit-three), a BatchedMesh (Conway-direct
+      // `?feature=batchedMesh`), or a Group of either (batched opaque+
+      // transparent, or a GLB cache-hit). The old single-Mesh assumption threw
+      // on a Group (no `.geometry` / `.material`), aborting disposal mid-loop
+      // and leaking the remaining models.
+      model.traverse((obj) => {
+        if (obj.isBatchedMesh) {
+          // Per-geometry BVH (patched onto the prototype in ShareIfc) + the
+          // batch's internal matrix/color textures + packed geometry.
+          obj.disposeBoundsTree?.()
+          obj.dispose?.()
+        } else if (obj.isMesh) {
+          if (obj.geometry?.boundsTree) {
+            obj.geometry.disposeBoundsTree()
+          }
+          obj.geometry?.dispose?.()
+        }
+        const material = obj.material
+        if (Array.isArray(material)) {
+          material.forEach((mat) => mat?.dispose?.())
+        } else {
+          material?.dispose?.()
+        }
+      })
     })
     this.items.ifcModels.length = 0
     this.items.pickableIfcModels.length = 0

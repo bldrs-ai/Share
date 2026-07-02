@@ -85,6 +85,29 @@ export default class IfcIsolator {
   async setModel(ifcModel) {
     this.ifcModel = ifcModel
     const ids = new Set()
+    // BatchedMesh render path (`?feature=batchedMesh`): element IDs aren't a
+    // per-vertex attribute — they live in each batch's `instanceParents`
+    // table. Union those so hide / isolate (which gate on `visualElementsIds`
+    // and drive the `createSubset` surface attachBatchedSubsets installed)
+    // see the model's elements. Checked first because a BatchedMesh also has
+    // a `.geometry` (its packed buffer) that would mislead the branch below.
+    let foundBatched = false
+    if (typeof ifcModel.traverse === 'function') {
+      ifcModel.traverse((obj) => {
+        if (obj.isBatchedMesh && obj.instanceParents) {
+          foundBatched = true
+          for (const id of obj.instanceParents) {
+            ids.add(id)
+          }
+        }
+      })
+    }
+    if (foundBatched) {
+      this.visualElementsIds = [...ids]
+      const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
+      this.collectSpatialElementsId(rootElement)
+      return
+    }
     if (ifcModel.geometry && ifcModel.geometry.attributes) {
       const attr = ifcModel.geometry.attributes.expressID
       if (attr) {

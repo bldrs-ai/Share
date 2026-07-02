@@ -237,7 +237,7 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
  * @param {number} modelID
  * @return {object} the shim
  */
-function makeConwayDirectIfcManager(ifcAPI, modelID) {
+export function makeConwayDirectIfcManager(ifcAPI, modelID) {
   return {
     ifcAPI,
     getSpatialStructure: (_modelIDArg, withProperties = false) =>
@@ -260,7 +260,7 @@ function makeConwayDirectIfcManager(ifcAPI, modelID) {
  * @param {object} ifcAPI
  * @param {number} modelID
  */
-function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
+export function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
   // Two-arg + single-arg calling conventions exist across consumers:
   //   - `(modelID, withProps)` — CadView.jsx, ShareViewer.getByFloor,
   //     IfcIsolator (mirrors `ifcManager.getSpatialStructure` shape)

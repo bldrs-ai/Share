@@ -21,6 +21,9 @@ describe('viewer/ShareModel', () => {
         // off by default; Loader's Conway-direct path flips it on after
         // attaching an IfcInstanceMap.
         instancePicking: false,
+        // off by default; `inferModelCapabilities` flips it on (and ifcSubsets
+        // off) for the BatchedMesh render path.
+        batchedPicking: false,
         useIfcClipper: true,
       })
     })
@@ -138,6 +141,21 @@ describe('viewer/ShareModel', () => {
       expect(() => inferModelCapabilities(null)).not.toThrow()
       expect(inferModelCapabilities(null)).toEqual({})
       expect(inferModelCapabilities({})).toEqual({})
+    })
+
+    it('promotes batchedPicking (and clears ifcSubsets) for a decorated BatchedMesh', () => {
+      // A BatchedMesh carries no per-vertex expressID — IDs live in
+      // `instanceParents`. Without this, the model keeps the IFC format
+      // default (ifcSubsets:true, no batchedPicking) and setSelection routes
+      // through web-ifc-three's pickByIds → no highlight.
+      const batched = new Mesh(new BufferGeometry())
+      batched.isBatchedMesh = true
+      // eslint-disable-next-line no-magic-numbers
+      batched.instanceParents = new Uint32Array([100, 200])
+      const caps = inferModelCapabilities(batched)
+      expect(caps.batchedPicking).toBe(true)
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.ifcSubsets).toBe(false)
     })
 
     /**

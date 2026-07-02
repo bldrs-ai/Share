@@ -41,8 +41,14 @@
 // path; it deliberately does not await an Init that hasn't been kicked
 // off yet.
 
-import {BufferGeometry, Mesh} from 'three'
-import {acceleratedRaycast, computeBoundsTree, disposeBoundsTree} from 'three-mesh-bvh'
+import {BatchedMesh, BufferGeometry, Mesh} from 'three'
+import {
+  acceleratedRaycast,
+  computeBatchedBoundsTree,
+  computeBoundsTree,
+  disposeBatchedBoundsTree,
+  disposeBoundsTree,
+} from 'three-mesh-bvh'
 import {IfcAPI} from 'web-ifc'
 import ShareIfcManager from './ShareIfcManager'
 
@@ -62,6 +68,18 @@ import ShareIfcManager from './ShareIfcManager'
 BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
 BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree
 Mesh.prototype.raycast = acceleratedRaycast
+
+// Same accelerated raycast for the Conway-direct BatchedMesh path. The
+// shared `acceleratedRaycast` dispatches on `this.isBatchedMesh` to
+// `acceleratedBatchedMeshRaycast`, which walks each instance's per-geometry
+// bounds tree (populated by `computeBatchedBoundsTree`) and still sets
+// `intersection.batchId` — the per-occurrence handle CadView reads to
+// resolve a pick. When a batch has no bounds trees built it falls back to
+// three's native BatchedMesh raycast (also batchId-bearing), so the patch
+// is safe even on batches we never call `computeBoundsTree()` on.
+BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree
+BatchedMesh.prototype.disposeBoundsTree = disposeBatchedBoundsTree
+BatchedMesh.prototype.raycast = acceleratedRaycast
 
 
 /**

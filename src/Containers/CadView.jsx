@@ -506,8 +506,15 @@ export default function CadView({
       }
       const picked = pickedAll[0]
       const mesh = picked.object
-      // TODO(pablo): obsolete? needed this in h3 at some point
-      viewer.setHighlighted([mesh])
+      // TODO(pablo): obsolete? needed this in h3 at some point.
+      // A BatchedMesh must NOT reach the OutlineEffect: three auto-enables
+      // `USE_BATCHING` for it, but postprocessing's outline ShaderMaterial
+      // (DepthComparisonMaterial) predates BatchedMesh and omits the batching
+      // shader chunks, so its program fails to compile (`batchingMatrix`
+      // undeclared) and blanks the frame. The batched path highlights by
+      // recoloring instances (batchedHighlight) instead, so clear the outline
+      // rather than feed it the batch.
+      viewer.setHighlighted(mesh.isBatchedMesh ? null : [mesh])
       // Per-instance picking path (Conway-direct):
       //   no-shift = just this PlacedGeometry
       //   shift     = the whole IFC element (every instance)
@@ -519,6 +526,26 @@ export default function CadView({
       // viewer-replacement work, so it wins the modifier slot. Models
       // without an instanceMap (today's wit-three path, GLB cache hit)
       // keep the legacy Shift behavior unchanged.
+      // BatchedMesh render path (`?feature=batchedMesh`): the raycast sets
+      // `batchId` (the per-instance id); resolve it to the parent IFC
+      // product through the tables `buildBatchedConwayModel` attached.
+      // Selection highlights every occurrence of that product (parent-level
+      // subset, via the model's `createSubset`). Per-occurrence narrowing
+      // would need `instancePicking`, which the batched model doesn't carry
+      // yet — so we pass no instanceIds (avoids a no-op `setInstanceSelection`
+      // + its warn). See design/new/viewer-replacement.md §3b.iv.
+      if (mesh.isBatchedMesh && mesh.instanceParents) {
+        const batchId = picked.batchId
+        if (batchId === undefined || batchId < 0) {
+          return
+        }
+        const parentExpressId = mesh.instanceParents[batchId]
+        if (parentExpressId === undefined || !viewer.isolator.canBePickedInScene(parentExpressId)) {
+          return
+        }
+        selectItemsInScene([parentExpressId], true, [])
+        return
+      }
       if (mesh.instanceMap) {
         const faceIdx = picked.faceIndex
         const instanceId = mesh.instanceMap.getInstanceIdByTriangle(faceIdx)
