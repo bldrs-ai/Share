@@ -349,6 +349,34 @@ describe('viewer/three/IfcIsolator', () => {
         expect(iso.visualElementsIds).toEqual([5])
       })
     })
+
+    it('populates spatialStructure from the model\'s OWN getSpatialStructure (cache-hit GLB)', () => {
+      // Cache-hit GLB models expose their spatial tree as an own closure and
+      // have no `ifcManager` spatial method. Without honoring that, the
+      // isolator's spatialStructure stays empty and canBeHidden returns false
+      // for every node — so the NavTree renders no hide/eye icons on reload.
+      const iso = makeIsolator()
+      const g = new BufferGeometry()
+      g.setAttribute('position', new BufferAttribute(new Float32Array(9), 3))
+      // Per-vertex ids are the geometry owner (product_definition_shape for
+      // STEP): 900. The tree node ids (NAUO) are different: 5, 6.
+      g.setAttribute('expressID', new BufferAttribute(new Uint32Array([900, 900, 900]), 1))
+      const model = new Mesh(g, new MeshBasicMaterial())
+      // Own method (hasOwnProperty true), no ifcManager — the cache-hit shape.
+      // Node 6 is an assembly (has a child); leaves aren't hidable, matching the
+      // NavTree showing eyes on assemblies, not leaf parts.
+      model.getSpatialStructure = jest.fn(() => Promise.resolve({
+        expressID: 5,
+        children: [{expressID: 6, children: [{expressID: 7, children: []}]}],
+      }))
+      return iso.setModel(model).then(() => {
+        expect(model.getSpatialStructure).toHaveBeenCalled()
+        // The assembly NAUO node id (6) isn't a geometry owner id, so it's
+        // hidable only via the spatial structure — which must now be populated.
+        expect(iso.canBeHidden(6)).toBe(true)
+        expect(iso.canBeHidden(900)).toBe(true)
+      })
+    })
   })
 
 
@@ -583,6 +611,99 @@ describe('viewer/three/IfcIsolator', () => {
       expect(pickable).toContain(model)
       expect(iso.unhiddenSubset).toBeNull()
       expect(iso.hiddenIds).toEqual([])
+    })
+
+    it('hideOccurrence hides one occurrence\'s instances, leaving the reused part\'s siblings', () => {
+      // One product (100) reused across 3 occurrences: instances 0, 1, 2.
+      // Hiding occurrence instance 1 must leave 2 triangles (instances 0, 2)
+      // in the reveal — the "H hides both / eye does nothing" bug was that
+      // hiding by the shared product id removed all three.
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const child = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 100, triangleCount: 1},
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      const model = new Group()
+      model.add(child)
+      attachInstanceMapSubsets(model, null)
+      scene.add(model)
+      pickable.push(model)
+      iso.ifcModel = model
+      iso.visualElementsIds = [100]
+      iso.spatialStructure = {}
+
+      const useStore = require('../../store/useStore').default
+      iso.hideOccurrence(6, [1])
+      expect(iso.hiddenOccurrences.has(6)).toBe(true)
+      // Store keyed by the NAUO node id so the NavTree eye toggles.
+      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {6: true}})
+      expect(scene.children).not.toContain(model) // full model swapped for reveal
+      expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2) // instances 0 + 2
+
+      // Unhiding the only hidden occurrence restores the full model.
+      iso.unHideOccurrence(6)
+      expect(iso.hiddenOccurrences.has(6)).toBe(false)
+      expect(scene.children).toContain(model)
+      expect(iso.unhiddenSubset).toBeNull()
+      expect(useStore.setState).toHaveBeenLastCalledWith({hiddenElements: {}})
+    })
+
+    it('product-type and per-occurrence hides compose without clobbering each other', () => {
+      // Regression for the review cluster: the pre-existing product-type hide
+      // paths replaced hiddenElements from hiddenIds only, wiping occurrence eye
+      // keys; unHideElementsById restored the full model when hiddenIds emptied,
+      // resurrecting a still-hidden occurrence.
+      const scene = new Group()
+      const pickable = []
+      const iso = makeIsolator({scene, pickable})
+      const child = makeChildMesh([
+        {parentExpressId: 100, triangleCount: 1}, // inst 0
+        {parentExpressId: 100, triangleCount: 1}, // inst 1
+        {parentExpressId: 100, triangleCount: 1}, // inst 2
+        {parentExpressId: 200, triangleCount: 1}, // inst 3
+      ])
+      const model = new Group()
+      model.add(child)
+      attachInstanceMapSubsets(model, null)
+      scene.add(model)
+      pickable.push(model)
+      iso.ifcModel = model
+      iso.visualElementsIds = [100, 200]
+      iso.spatialStructure = {}
+      const useStore = require('../../store/useStore').default
+      // hideElementsById reads selectedElements off the store; the shared mock
+      // only stubs elementTypesMap, so widen getState for this test and restore.
+      const origGetState = useStore.getState.getMockImplementation()
+      useStore.getState.mockReturnValue({
+        elementTypesMap: [], selectedElements: [], selectedInstanceIds: [],
+        updateHiddenStatus: jest.fn(),
+      })
+      try {
+        // Hide occurrence (node 6 → instance 1), then a whole product (200).
+        iso.hideOccurrence(6, [1])
+        iso.hideElementsById([200])
+        // Store carries BOTH keys — the occurrence eye key survives the product
+        // write (hideElementsById also writes selectedElements, so assert the
+        // specific hiddenElements call rather than the last).
+        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {200: true, 6: true}})
+        // Reveal shows parent 100 instances 0 + 2 (200 hidden, instance 1 hidden).
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(2)
+
+        // Unhide the product — the occurrence must stay hidden (not resurrected).
+        useStore.setState.mockClear()
+        iso.unHideElementsById([200])
+        expect(iso.hiddenOccurrences.has(6)).toBe(true)
+        expect(scene.children).not.toContain(model) // still a reveal subset, not full model
+        expect(useStore.setState).toHaveBeenCalledWith({hiddenElements: {6: true}})
+        // 200 restored (inst 3) + 100's insts 0,2 — instance 1 still excluded.
+        // 3 of the 4 total instances (not 4) proves the occurrence stayed hidden.
+        expect(countTriangles(iso, iso.unhiddenSubset)).toBe(3)
+      } finally {
+        useStore.getState.mockImplementation(origGetState)
+      }
     })
 
     it('reset-isolation with no hidden ids restores the model', () => {

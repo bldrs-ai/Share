@@ -97,10 +97,34 @@ order; BVH permutes only the index buffer, not the numbering).
   the old 0.8.0 artifact with no occurrence data until the schema bump forces a
   re-parse.**
 
+- **Per-occurrence hide.** The NavTree eye and the `H` shortcut hide one
+  occurrence's geometry, not every reuse of the part. `IfcIsolator` tracks
+  `hiddenOccurrences` (node id → instance ids) and the hide reveal subset omits
+  their union via `IfcInstanceMap.createSubsetMeshByParent`'s `excludeInstances`
+  option; `HideToggleButton` / `hideSelectedElements` resolve the node's
+  occurrence path to instances (`getInstanceIdsForOccurrencePath`) and key the
+  hidden-store by the NAUO node id so the eye toggles. Hiding by the scalar
+  expressID would hit the shared `product_definition_shape` and vanish every
+  reuse ("H hides both", "eye does nothing"). The NavTree hide/eye icons also
+  now survive a cache-hit reload (the isolator reads the model's own
+  `getSpatialStructure` so `canBeHidden` is populated).
+
 ### Remaining (follow-up)
 
 1. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the occurrence
    path and resolve it on load.
+2. **Per-occurrence isolate.** Isolate (`I` / temp-isolation) still shows every
+   occurrence of the isolated part type — the same occurrence→instance
+   resolution the hide path now uses would make it per-occurrence too.
+3. **Reveal-hidden ghosts skip occurrence hides.** The "reveal hidden" (ghost)
+   overlay is built from `hiddenIds` (product-type) only, so a per-occurrence
+   hide shows no cyan ghost. The hide itself is correct; only the ghost preview
+   omits it. Would need the ghost subset to build from the hidden instances.
+4. **Assembly-node eye vs child eyes.** Hiding an assembly occurrence via its
+   eye hides all descendant geometry but only marks the assembly node's eye
+   (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
+   the assembly eye is the way to reveal them again. Making descendant eyes
+   follow would need per-node hidden-state derived from the occurrence prefix.
 2. **Root-level parts.** A placement directly under the product root has an empty
    occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
    `null` — an empty path can't disambiguate anything. So a scene pick of a
