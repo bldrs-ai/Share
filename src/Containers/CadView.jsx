@@ -57,6 +57,7 @@ export default function CadView({
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
+  const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
   const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
@@ -903,8 +904,18 @@ export default function CadView({
           props = await viewer.getProperties(0, Number(lastId))
         }
         setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
+        // Update the expanded elements in NavTreePanel. For a STEP occurrence
+        // the parent-link walk must key off the occurrence's own tree node —
+        // its leaf NAUO express id (the last occurrence-path entry) — not
+        // `lastId`, which on a scene pick is the geometry's
+        // product_definition_shape id and isn't a tree node at all. Walking
+        // from the leaf NAUO expands every ancestor up to the root so the
+        // picked node is actually visible (and scrollable) in the tree.
+        const expandFromId =
+          (selectedOccurrencePath && selectedOccurrencePath.length > 0) ?
+            selectedOccurrencePath[selectedOccurrencePath.length - 1] :
+            parseInt(lastId)
+        const pathIds = getParentPathIdsForElement(elementsById, expandFromId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }
@@ -919,7 +930,7 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements, selectedInstanceIds])
+  }, [selectedElements, selectedInstanceIds, selectedOccurrencePath])
   /* eslint-enable */
 
 
@@ -958,16 +969,21 @@ export default function CadView({
             // it goes straight to the funnel with no permalink.
             if (Array.isArray(expressIdOrIds)) {
               selectItemsInScene(expressIdOrIds, false)
+            } else if (occurrencePath && occurrencePath.length > 0) {
+              // STEP occurrence node. The tree node's id is its NAUO express id,
+              // but the geometry is keyed by the shared product_definition_shape,
+              // so parent-level selection (elementSelection → setSelection) can't
+              // reach the mesh — the occurrence path is the only shared key.
+              // Resolve it to the exact instance ids and drive the per-instance
+              // highlight directly, mirroring the scene-pick funnel. The node's
+              // expressID stays the "selection" so properties / nav / the tree's
+              // per-occurrence highlight (selectedOccurrencePath) all key off it.
+              const instanceIds =
+                typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
+                  viewer.getInstanceIdsForOccurrencePath(0, occurrencePath) : []
+              selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
             } else {
-              // STEP: when the clicked node carries an occurrence path, inject
-              // it into the funnel (wrapping selectItemsInScene keeps
-              // elementSelection's signature untouched) so the NavTree
-              // highlights only that occurrence. Absent for IFC — unchanged.
-              const select = (occurrencePath && occurrencePath.length > 0) ?
-                (ids, updateNav, instanceIds = []) =>
-                  selectItemsInScene(ids, updateNav, instanceIds, occurrencePath) :
-                selectItemsInScene
-              elementSelection(viewer, elementsById, select, isShiftKeyDown, expressIdOrIds)
+              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
             }
           }}
           deselectItems={deselectItems}

@@ -196,7 +196,26 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
       ifcModel.geometry.getIndex() &&
       ifcModel.geometry.getAttribute?.('expressID') &&
       ifcModel.geometry.getAttribute?.('instanceID')) {
+    // The pre-reorder map from `buildConwayIfcModel` carries the STEP
+    // per-occurrence tables (`instanceIdToOccurrencePath` /
+    // `occurrencePathToInstanceIds`), but the BVH permute forces a
+    // rebuild from geometry attributes — and `instanceMapFromGeometry`
+    // reads only `expressID` + `instanceID` per vertex, so it can't
+    // recover the occurrence path (a variable-length array, not a
+    // per-vertex scalar). Carry those tables forward by hand. The
+    // synthetic instance ids line up 1:1: `flatMeshToBufferGeometry`
+    // stamps per-vertex `instanceID` in the same emission order
+    // `instanceMapFromOrderedPlacedRanges` numbered the build map, and
+    // the reorder permutes only the index buffer, not that numbering.
+    // Without this, scene→NavTree picks and per-occurrence tree
+    // narrowing fall back to the colliding part-type expressID (every
+    // reuse of a nut highlights together).
+    const buildMap = ifcModel.instanceMap
     ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
+    if (buildMap?.instanceIdToOccurrencePath) {
+      ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
+      ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+    }
   }
 
   ifcModel.capabilities = ifcModel.capabilities ?? {}

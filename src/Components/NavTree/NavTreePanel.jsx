@@ -90,26 +90,28 @@ export default function NavTreePanel({
 
   // Scroll to selected element
   useEffect(() => {
-    const nodeId = selectedElements[0]
-    if (nodeId) {
-      // STEP: a reused part shares one expressID across occurrences, so prefer
-      // the node on the selected occurrence path; fall back to first-by-expressID
-      // for IFC / when no occurrence is selected.
-      const matchesOccurrence = (node) =>
-        !selectedOccurrencePath || !Array.isArray(node.occurrencePath) ||
-        node.occurrencePath.join('/') === selectedOccurrencePath.join('/')
-      let index = visibleNodes.findIndex(
-        ({node}) => node.expressID && node.expressID.toString() === nodeId &&
-          matchesOccurrence(node),
+    let index = -1
+    // STEP: a scene pick reports the geometry's owner id
+    // (product_definition_shape), which never equals a tree node's id (its NAUO
+    // express id) — the shared occurrence path is the only reliable join, so
+    // prefer it. Falls back to expressID for IFC and when no occurrence is set.
+    if (selectedOccurrencePath && selectedOccurrencePath.length > 0) {
+      const target = selectedOccurrencePath.join('/')
+      index = visibleNodes.findIndex(
+        ({node}) => Array.isArray(node.occurrencePath) &&
+          node.occurrencePath.join('/') === target,
       )
-      if (index < 0) {
+    }
+    if (index < 0) {
+      const nodeId = selectedElements[0]
+      if (nodeId) {
         index = visibleNodes.findIndex(
           ({node}) => node.expressID && node.expressID.toString() === nodeId,
         )
       }
-      if (index >= 0 && listRef.current) {
-        listRef.current.scrollToItem(index, 'center')
-      }
+    }
+    if (index >= 0 && listRef.current) {
+      listRef.current.scrollToItem(index, 'center')
     }
   }, [selectedElements, selectedOccurrencePath, visibleNodes])
 
@@ -230,13 +232,21 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
     const childArray = Array.isArray(node.children) ?
       node.children.filter((c) => c && c.expressID !== undefined) :
       []
-    return {
+    const mapped = {
       nodeId: node.expressID.toString(),
       label: reifyName({properties: model}, node),
       expressID: node.expressID,
       hasChildren: childArray.length > 0,
       children: childArray.map(mapSpatialNode),
     }
+    // Preserve the STEP occurrence path (NAUO express ids) so RenderRow's
+    // `isSelected` and the scroll effect can distinguish a reused part's
+    // occurrences — the scalar `expressID` collides across them, so without
+    // this a single-node click / pick highlights every reuse. Absent for IFC.
+    if (Array.isArray(node.occurrencePath)) {
+      mapped.occurrencePath = node.occurrencePath
+    }
+    return mapped
   }
 
   if (isNavTree) {
@@ -284,14 +294,17 @@ const RenderRow = ({index, style, data}) => {
   let isSelected = false
 
   if (!hasChildren) {
-    // For element nodes
-    isSelected = selectedNodeIds.includes(node.expressID.toString())
-    // STEP per-occurrence: when a specific occurrence is selected, only the node
-    // on that exact occurrence path stays highlighted — otherwise every reuse of
-    // the shared part type (same expressID) would light up. No-op for IFC and
-    // when no occurrence is selected (selectedOccurrencePath is null).
-    if (isSelected && selectedOccurrencePath && Array.isArray(node.occurrencePath)) {
+    // STEP: match on the occurrence path when one is selected — it's the only
+    // key shared with the geometry side (a scene pick reports the part-type's
+    // product_definition_shape id, which never equals this node's NAUO express
+    // id), and it uniquely identifies one occurrence so a reused part lights up
+    // only the clicked/picked node, not every reuse. Falls back to expressID for
+    // IFC and when no occurrence is selected (selectedOccurrencePath is null).
+    if (selectedOccurrencePath && selectedOccurrencePath.length > 0 &&
+        Array.isArray(node.occurrencePath)) {
       isSelected = node.occurrencePath.join('/') === selectedOccurrencePath.join('/')
+    } else {
+      isSelected = selectedNodeIds.includes(node.expressID.toString())
     }
   }
 
