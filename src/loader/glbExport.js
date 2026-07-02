@@ -41,6 +41,7 @@ import {
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
 import {eachBatch} from '../viewer/ifc/batchedModel'
+import {batchedModelToMergedMesh, disposeMergedMesh} from '../viewer/ifc/batchedToMergedMesh'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -146,8 +147,9 @@ function silenceGltfExporterMaterialWarnings() {
 
 /**
  * True when the model root is, or contains, a `THREE.BatchedMesh`. Such
- * models are produced by the Conway-direct instancing path and are not
- * yet GLB-cacheable (see `exportAndCacheGlb`).
+ * models come from the Conway-direct instancing path (`?feature=batchedMesh`)
+ * and are baked back to a merged mesh before serialising (see
+ * `exportAndCacheGlb`), since `GLTFExporter` can't serialise a packed batch.
  *
  * @param {object} model Three.js root (Mesh / Group / Scene / BatchedMesh)
  * @return {boolean}
@@ -188,15 +190,19 @@ function modelHasBatchedMesh(model) {
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
   const startMs = Date.now()
   try {
-    // BatchedMesh render path (`?feature=batchedMesh`): a `THREE.BatchedMesh`
-    // has no standard per-primitive geometry/attributes for `GLTFExporter`
-    // to serialize, and it carries no per-vertex `_EXPRESSID` for the
-    // `BLDRS_face_ids` capture — a cached artifact would be empty or
-    // unpickable on read-back. Skip the cache write entirely; the model
-    // re-parses (fast, flag-gated) on the next load. A batched-aware GLB
-    // schema is future work (design/new/viewer-replacement.md §3b.iv).
-    if (modelHasBatchedMesh(model)) {
-      glbInfo('writer: skipped (BatchedMesh model is not GLB-cacheable yet)')
+    // BatchedMesh render path (`?feature=batchedMesh`): `GLTFExporter` can't
+    // serialise a `THREE.BatchedMesh`'s packed buffer, and a batch carries
+    // no per-vertex `_EXPRESSID` for the `BLDRS_face_ids` picking capture.
+    // Bake it into the same merged-mesh shape the Conway-direct merged path
+    // produces (per-vertex expressID/instanceID + colour-binned materials);
+    // the resulting GLB is byte-compatible with a merged cache artifact and
+    // reads back through the existing cache-hit path unchanged
+    // (design/new/viewer-replacement.md §3b.iv). The bake is transient —
+    // disposed right after serialisation below.
+    const isBatched = modelHasBatchedMesh(model)
+    const exportModel = isBatched ? batchedModelToMergedMesh(model) : model
+    if (isBatched && !exportModel) {
+      glbInfo('writer: skipped (batched model produced no exportable geometry)')
       return false
     }
     const filePath = cacheKeyArgs.sourcePath
@@ -205,7 +211,15 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    const rawBytes = await exportThreeModelAsGlb(model)
+    if (isBatched) {
+      glbVerbose('writer: baked BatchedMesh model to a merged mesh for export')
+    }
+    const rawBytes = await exportThreeModelAsGlb(exportModel)
+    // The baked mesh is a transient, off-scene copy; free its buffers now
+    // that the bytes are captured (the source batched model is untouched).
+    if (exportModel !== model) {
+      disposeMergedMesh(exportModel)
+    }
     if (!rawBytes || rawBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
