@@ -1,15 +1,14 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   DoubleSide,
   Matrix3,
   Matrix4,
   Mesh,
-  MeshLambertMaterial,
   Vector3,
 } from 'three'
 import {eachBatch} from './batchedModel'
+import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
 
 
 /**
@@ -28,7 +27,7 @@ import {eachBatch} from './batchedModel'
  * This bakes it back into exactly the shape the merged Conway-direct path
  * (`flatMeshToBufferGeometry`) produces: one indexed `BufferGeometry` with
  * per-vertex `position` / `normal` / `expressID` / `instanceID`, colour-
- * binned into `geometry.groups[]` + an array of `MeshLambertMaterial`.
+ * binned into `geometry.groups[]` + an array of look-gated surface materials.
  * `GLTFExporter` renames `expressID` → `_EXPRESSID` and `instanceID` →
  * `_INSTANCEID` verbatim, so the resulting GLB is byte-compatible with a
  * merged Conway-direct cache artifact — the reader hydrates it as an
@@ -176,10 +175,11 @@ export function batchedModelToMergedMesh(model) {
 
   for (const bin of bins.values()) {
     const groupStart = iCursor
-    // Match flatMeshToBufferGeometry's material: MeshLambertMaterial(color,
-    // DoubleSide) + transparent/opacity when alpha < 1.
-    const col = new Color(bin.color.x, bin.color.y, bin.color.z)
-    const material = new MeshLambertMaterial({color: col, side: DoubleSide})
+    // Match flatMeshToBufferGeometry via the §6e-flag-gated factory: Standard
+    // + sRGB albedo under `?feature=look`, else legacy Lambert + untagged
+    // colour (src/viewer/lookMaterial.js). Transparent/opacity on alpha < 1.
+    const col = makeSurfaceColor(bin.color.x, bin.color.y, bin.color.z)
+    const material = makeSurfaceMaterial({color: col, side: DoubleSide})
     if (bin.color.w !== OPAQUE_ALPHA) {
       material.transparent = true
       material.opacity = bin.color.w

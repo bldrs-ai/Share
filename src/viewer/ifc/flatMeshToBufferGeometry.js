@@ -1,12 +1,11 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   DoubleSide,
   Matrix3,
   Matrix4,
-  MeshLambertMaterial,
 } from 'three'
+import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
 
 
 /**
@@ -67,7 +66,7 @@ import {
  *   triangles stay contiguous in the merged buffer. `occurrencePath`
  *   is the STEP NAUO express-id path off `PlacedGeometry.occurrencePath`
  *   (undefined for IFC).
- * @property {Array<MeshLambertMaterial>} materials one per distinct
+ * @property {Array<import('three').Material>} materials one per distinct
  *   PlacedGeometry color (RGBA). Caller assigns this to
  *   `mesh.material` (array form) — three.js's renderer pairs each
  *   `geometry.groups[i].materialIndex` with `materials[i]`.
@@ -215,12 +214,14 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
   let materialIndex = 0
   for (const bin of bins.values()) {
     const groupStart = iCursor
-    // Material for this bin. Match `web-ifc-three`'s shape:
-    //   MeshLambertMaterial({color, side: DoubleSide})
-    //   + transparent / opacity when alpha < 1.
-    // IFCLoader.js:256-262.
-    const col = new Color(bin.color.x, bin.color.y, bin.color.z)
-    const material = new MeshLambertMaterial({color: col, side: DoubleSide})
+    // Material + albedo for this bin, via the §6e-flag-gated factory
+    // (src/viewer/lookMaterial.js): with `?feature=look` on, a look-managed
+    // MeshStandardMaterial + sRGB albedo so IFC surfaces respond to the env
+    // map; off, the legacy MeshLambertMaterial + untagged colour (main's
+    // behaviour). Per-color binning + transparent/opacity on alpha < 1 are
+    // unchanged.
+    const col = makeSurfaceColor(bin.color.x, bin.color.y, bin.color.z)
+    const material = makeSurfaceMaterial({color: col, side: DoubleSide})
     if (bin.color.w !== 1) {
       material.transparent = true
       material.opacity = bin.color.w

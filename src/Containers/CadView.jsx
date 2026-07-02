@@ -8,6 +8,7 @@ import {filetypeRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
 import {gtagEvent} from '../privacy/analytics'
+import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
@@ -24,6 +25,7 @@ import {addProperties} from '../utils/objects'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
+import {DEFAULT_LOOK} from '../viewer/looks'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
@@ -157,6 +159,10 @@ export default function CadView({
         captureException(error)
       }
       const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      // Apply the persisted §6e render look (profile-menu toggle). Runs on
+      // every (re)init — including theme changes, which re-create the viewer —
+      // so the chosen look survives re-creation.
+      initializedViewer.applyLook?.(getRenderMode() ?? DEFAULT_LOOK)
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
@@ -406,6 +412,15 @@ export default function CadView({
     if (!isCamHashSet) {
       viewer.context.fitModelToFrame()
     }
+
+    // §6e: fit the contact-shadow ground + shadow frustum to the model's
+    // bounds (valid now it's added + framed). Optional-chained: the Jest
+    // viewer mock doesn't define it.
+    viewer.groundModel?.(loadedModel)
+
+    // §6e: apply the active render look's materials to the new model, so a
+    // model opened while a non-default look is active still matches.
+    viewer.applyLookToModel?.(loadedModel)
 
     // TODO(pablo): centralize capability check somewhere
     if (loadedModel.ifcManager) {

@@ -4,7 +4,24 @@
 // (`./ifc/ShareIfc`, `./three/context`, IfcHighlighter, …) from the test
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
-import {BufferAttribute, BufferGeometry, ColorManagement, LinearSRGBColorSpace, Mesh} from 'three'
+import {
+  Box3,
+  BufferAttribute,
+  BufferGeometry,
+  CanvasTexture,
+  ColorManagement,
+  EquirectangularReflectionMapping,
+  LinearSRGBColorSpace,
+  Mesh,
+  PCFSoftShadowMap,
+  PlaneGeometry,
+  PMREMGenerator,
+  ShadowMaterial,
+  SRGBColorSpace,
+  Vector3,
+} from 'three'
+import {LOOKS, DEFAULT_LOOK, forEachLookManagedMaterial} from './looks'
+import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js'
 import IfcViewsManager from '../Infrastructure/IfcElementsStyleManager'
 import IfcCustomViewSettings from '../Infrastructure/IfcCustomViewSettings'
 import Clipper from './three/Clipper'
@@ -19,6 +36,7 @@ import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
 import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
+import {isFeatureEnabled} from '../FeatureFlags'
 import {
   applyBatchedPreselection,
   applyBatchedSelection,
@@ -31,6 +49,77 @@ import {
 // entries ≈ 85 triangles — covers the vast majority of single-
 // PlacedGeometry instances without growing the buffer on first hover.
 const MIN_PRESELECTION_INDEX_CAP = 256
+
+
+// PMREM blur (radians) for the procedural env map (§6e). A touch of blur
+// softens the RoomEnvironment studio into smooth image-based lighting.
+// Live-tunable via the `?feature=look` GUI (LightingGui).
+const ENV_MAP_BLUR = 0.04
+
+
+// Default env-map intensity (§6e) — derived from the Neutral look (single
+// source of truth: src/viewer/looks.js LOOKS.neutral). Scales the gradient
+// studio IBL contribution (`scene.environmentIntensity`); `applyLook`
+// overrides it on a render-mode toggle. Also live-tunable via `?feature=look`.
+const ENV_MAP_INTENSITY = LOOKS.neutral.envIntensity
+
+
+// Default IBL environment (§6e). 'gradient' is the procedural studio gradient
+// (see makeGradientEquirectTexture); 'room' is three's RoomEnvironment; 'none'
+// disables IBL. Swappable live via the `?feature=look` GUI.
+const DEFAULT_ENV_TYPE = 'gradient'
+
+
+// Procedural studio-gradient env texture params (§6e). A vertical sky→ground
+// gradient on a tiny canvas, prefiltered by PMREM into the IBL map.
+const GRADIENT_TEX_WIDTH = 16
+const GRADIENT_TEX_HEIGHT = 256
+const GRADIENT_HORIZON_STOP = 0.5
+const GRADIENT_SKY_COLOR = '#e9eef3'
+const GRADIENT_HORIZON_COLOR = '#c2c6ca'
+const GRADIENT_GROUND_COLOR = '#33373b'
+
+
+/**
+ * Build a vertical-gradient equirectangular texture for the procedural
+ * "studio" IBL (§6e) — a light cool sky fading to a darker ground. Zero-asset
+ * (a 2D canvas, no HDR/network), so it ships without a dependency. PMREM
+ * prefilters it into the env map; the vertical falloff gives soft top-down
+ * lighting + natural grounding (down-facing surfaces get less light) that the
+ * flatter RoomEnvironment lacks.
+ *
+ * @return {CanvasTexture}
+ */
+function makeGradientEquirectTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = GRADIENT_TEX_WIDTH
+  canvas.height = GRADIENT_TEX_HEIGHT
+  const ctx = canvas.getContext('2d')
+  const gradient = ctx.createLinearGradient(0, 0, 0, GRADIENT_TEX_HEIGHT)
+  gradient.addColorStop(0, GRADIENT_SKY_COLOR)
+  gradient.addColorStop(GRADIENT_HORIZON_STOP, GRADIENT_HORIZON_COLOR)
+  gradient.addColorStop(1, GRADIENT_GROUND_COLOR)
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, GRADIENT_TEX_WIDTH, GRADIENT_TEX_HEIGHT)
+  const texture = new CanvasTexture(canvas)
+  texture.mapping = EquirectangularReflectionMapping
+  texture.colorSpace = SRGBColorSpace
+  texture.needsUpdate = true
+  return texture
+}
+
+
+// Contact-shadow / ground params (§6e). The model casts onto a transparent
+// ShadowMaterial ground plane fitted to its bounds, with the key light as the
+// caster. The factors are relative to the model's bounding box so one rig
+// works across model scales (unit GLBs to metre-scale IFC). See groundModel.
+const SHADOW_MAP_SIZE = 2048
+const GROUND_SIZE_FACTOR = 4
+const KEY_LIGHT_DISTANCE_FACTOR = 1.5
+const SHADOW_NEAR_FACTOR = 0.1
+const SHADOW_FAR_FACTOR = 10
+const SHADOW_NORMAL_BIAS_FACTOR = 0.01
+const DEFAULT_SHADOW_OPACITY = 0.35
 
 
 /**
@@ -115,6 +204,23 @@ export class ShareViewer {
   // keeps one Mesh/BufferGeometry/Uint32Array alive across calls and
   // updates the index buffer in place rather than allocating per hover.
   _conwayPreselectionPool = null
+  // The `?feature=look` lighting/material tuning GUI (LightingGui). Null
+  // unless the flag is set; lazily code-split in (see `_initLookGui`).
+  _lookGui = null
+  // Current IBL environment selection + PMREM blur, tracked so the
+  // `?feature=look` GUI can rebuild the env on a type swap or blur change
+  // without losing the other setting.
+  _envType = DEFAULT_ENV_TYPE
+  _envBlur = ENV_MAP_BLUR
+  // Contact-shadow ground plane (ShadowMaterial), fitted per model in
+  // `groundModel`. Null until built (renderer present). `_shadowEnabled`
+  // gates visibility so the `?feature=look` toggle survives model reloads.
+  _groundPlane = null
+  _shadowEnabled = false
+  // Current render "look" (LOOKS key). Applied by `applyLook` and persisted by
+  // the profile-menu toggle; the default is also baked into the construction
+  // constants so the first paint is correct before any apply call.
+  _currentLook = DEFAULT_LOOK
   /**
    * @param {object} options - Configuration options
    */
@@ -160,21 +266,29 @@ export class ShareViewer {
       this.ifcLoader = new ShareIfcLoader({ifcAPI: conwayIfcAPI, ifc: this.IFC})
     }
     const renderer = this.context.getRenderer()
-    // Kept at the production value `LinearSRGBColorSpace` (three r135's
-    // no-output-gamma-encode behavior) even though color management is now
-    // ON (module top). The fully-correct managed combo is SRGB output +
-    // tone mapping + re-tuned lights, but on flat IFC lighting that needs
-    // real range (env map / PBR) to look right, so it's deferred to a
-    // follow-up (§6e). Holding output here keeps the render ≈ production —
-    // 5e's only visible change is the slight managed-color shift.
-    // Postprocessing's `EffectComposer.initialize` keys off this property,
-    // so it's set before `new CustomPostProcessor()` below. Guard for tests
-    // where the mock's getRenderer() returns undefined.
-    if (renderer) {
-      renderer.outputColorSpace = LinearSRGBColorSpace
-    }
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
+    // The whole §6e look — PBR materials + gradient studio IBL + tone-mapping
+    // + retuned lights + the Neutral/Flat profile toggle — sits behind a
+    // single `?feature=look` flag (default OFF), so `main`'s rendering is
+    // unchanged until the flag is flipped (an atomic switch-over).
+    //   · flag ON: leave `outputColorSpace` at the r184 default (SRGBColorSpace)
+    //     so the filmic tone-map (CustomPostProcessor, in the composer) writes
+    //     gamma-encoded output, and build the gradient env map for image-based
+    //     lighting (scaled by `environmentIntensity`; scene.js dials the direct
+    //     lights down to compensate).
+    //   · flag OFF: restore the legacy `LinearSRGBColorSpace` output and skip
+    //     the env map — the pre-§6e pipeline, matching `main` pixel-for-pixel.
+    // Env build no-ops in tests where getRenderer() returns undefined.
+    if (isFeatureEnabled('look')) {
+      this._buildEnvironment(this._envBlur, this._envType)
+      if (renderer) {
+        scene.environmentIntensity = ENV_MAP_INTENSITY
+      }
+    } else if (renderer) {
+      renderer.outputColorSpace = LinearSRGBColorSpace
+    }
+    this._createGroundPlane()
     this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
@@ -191,6 +305,304 @@ export class ShareViewer {
     // call `viewer.clipper.X` and never branch on model type.
     this.clipper = new Clipper(this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
+    // §6e: opt-in live tuning panel for the filmic look. Off by default;
+    // `?feature=look` pulls in the (otherwise-unbundled) lil-gui panel.
+    if (isFeatureEnabled('look')) {
+      this._initLookGui()
+    }
+  }
+
+
+  /**
+   * Build (or rebuild) the image-based-lighting environment. PMREM
+   * pre-filters the chosen source into the cube-UV env map three samples for
+   * PBR diffuse + specular:
+   *   - 'gradient' (default): the zero-asset procedural studio gradient.
+   *   - 'room': three's RoomEnvironment (PMREM `sigma` pre-blur applies here).
+   *   - 'none': no IBL.
+   *
+   * Disposes the previous env texture first so repeated calls (the
+   * `?feature=look` type/blur controls) don't leak GPU memory. Deliberately
+   * does NOT touch `scene.environmentIntensity` — set once at construction and
+   * owned by the GUI thereafter, so rebuilds preserve intensity. No-op
+   * without a renderer (the Jest context mock returns undefined).
+   *
+   * @param {number} sigma PMREM pre-blur in radians (RoomEnvironment only)
+   * @param {string} type 'gradient' | 'room' | 'none'
+   */
+  _buildEnvironment(sigma, type) {
+    const renderer = this.context.getRenderer()
+    if (!renderer) {
+      return
+    }
+    const scene = this.context.getScene()
+    const previous = scene.environment
+    if (type === 'none') {
+      scene.environment = null
+    } else {
+      const pmrem = new PMREMGenerator(renderer)
+      if (type === 'room') {
+        scene.environment = pmrem.fromScene(new RoomEnvironment(), sigma).texture
+      } else {
+        const gradientTex = makeGradientEquirectTexture()
+        scene.environment = pmrem.fromEquirectangular(gradientTex).texture
+        gradientTex.dispose()
+      }
+      pmrem.dispose()
+    }
+    if (previous) {
+      previous.dispose()
+    }
+  }
+
+
+  /**
+   * Rebuild the env map at a new PMREM blur (RoomEnvironment only). Public
+   * entry for the `?feature=look` GUI's blur slider; preserves type +
+   * `environmentIntensity`.
+   *
+   * @param {number} sigma PMREM pre-blur in radians
+   */
+  setEnvironmentBlur(sigma) {
+    this._envBlur = sigma
+    this._buildEnvironment(sigma, this._envType)
+  }
+
+
+  /**
+   * Swap the IBL environment source. Public entry for the `?feature=look`
+   * GUI's env-type selector; preserves blur + `environmentIntensity`.
+   *
+   * @param {string} type 'gradient' | 'room' | 'none'
+   */
+  setEnvironmentType(type) {
+    this._envType = type
+    this._buildEnvironment(this._envBlur, type)
+  }
+
+
+  /**
+   * Create the contact-shadow ground plane (transparent ShadowMaterial — only
+   * visible where the model's shadow lands) and enable shadow maps on the
+   * renderer. Added to the scene invisible; `groundModel` fits + reveals it
+   * per loaded model. Not registered in the pickable lists, so the raycaster
+   * ignores it. Gated on `?feature=look`: contact shadow is a dev-only tool,
+   * off in both shipped looks, and `shadowMap.enabled = true` forces a
+   * scene-wide shader recompile — so only pay it when the look GUI (the only
+   * way to enable the shadow) is present. No-op without a renderer (Jest).
+   *
+   * @private
+   */
+  _createGroundPlane() {
+    const renderer = this.context.getRenderer()
+    if (!renderer || !isFeatureEnabled('look')) {
+      return
+    }
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = PCFSoftShadowMap
+    const ground = new Mesh(
+      new PlaneGeometry(1, 1),
+      new ShadowMaterial({opacity: DEFAULT_SHADOW_OPACITY}),
+    )
+    ground.rotation.x = -Math.PI / 2
+    ground.receiveShadow = true
+    ground.visible = false
+    ground.name = 'contactShadowGround'
+    this.context.getScene().add(ground)
+    this._groundPlane = ground
+  }
+
+
+  /**
+   * Fit the contact-shadow ground + the key light's shadow frustum to a loaded
+   * model's bounds, and mark the model's meshes as shadow casters. Called by
+   * CadView after the model is added + framed (bounds are valid by then). The
+   * ground size, light distance, and frustum all scale with the bounding box
+   * so one rig works across model scales (unit GLB → metre-scale IFC). No-op
+   * without a ground plane (renderer-less contexts).
+   *
+   * @param {object} model the loaded model root (Object3D)
+   */
+  groundModel(model) {
+    if (!this._groundPlane || !model) {
+      return
+    }
+    const box = new Box3().setFromObject(model)
+    if (box.isEmpty()) {
+      return
+    }
+    const size = new Vector3()
+    const center = new Vector3()
+    box.getSize(size)
+    box.getCenter(center)
+    const maxXZ = Math.max(size.x, size.z)
+    const diag = size.length()
+    const groundSize = maxXZ * GROUND_SIZE_FACTOR
+    this._groundPlane.scale.set(groundSize, groundSize, 1)
+    this._groundPlane.position.set(center.x, box.min.y, center.z)
+    this._groundPlane.visible = this._shadowEnabled
+    const scene = this.context.getScene()
+    const key = scene.getObjectByName('keyLight')
+    if (key) {
+      key.castShadow = this._shadowEnabled
+      // Re-allocating mapSize on a reload requires dropping the old map.
+      if (key.shadow.map) {
+        key.shadow.map.dispose()
+        key.shadow.map = null
+      }
+      key.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE)
+      // Offset the light above + diagonally so its shadow falls under the
+      // model; aim it at the model centre.
+      const offset = diag * KEY_LIGHT_DISTANCE_FACTOR
+      key.position.set(center.x + offset, center.y + offset, center.z + offset)
+      key.target.position.copy(center)
+      scene.add(key.target)
+      key.target.updateMatrixWorld()
+      // Fit the orthographic shadow frustum to the ground extent.
+      const cam = key.shadow.camera
+      const half = groundSize / 2
+      cam.left = -half
+      cam.right = half
+      cam.top = half
+      cam.bottom = -half
+      cam.near = diag * SHADOW_NEAR_FACTOR
+      cam.far = diag * SHADOW_FAR_FACTOR
+      cam.updateProjectionMatrix()
+      // normalBias scaled to model size fights shadow acne across scales.
+      key.shadow.normalBias = diag * SHADOW_NORMAL_BIAS_FACTOR
+    }
+    model.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = true
+      }
+    })
+  }
+
+
+  /**
+   * Toggle the contact shadow (ground visibility + key-light casting). Public
+   * entry for the `?feature=look` GUI.
+   *
+   * @param {boolean} enabled
+   */
+  setShadowEnabled(enabled) {
+    this._shadowEnabled = enabled
+    if (this._groundPlane) {
+      this._groundPlane.visible = enabled
+    }
+    const key = this.context.getScene()?.getObjectByName?.('keyLight')
+    if (key) {
+      key.castShadow = enabled
+    }
+  }
+
+
+  /**
+   * Set contact-shadow darkness (ShadowMaterial opacity, [0,1]). Public entry
+   * for the `?feature=look` GUI.
+   *
+   * @param {number} opacity
+   */
+  setShadowOpacity(opacity) {
+    if (this._groundPlane?.material) {
+      this._groundPlane.material.opacity = opacity
+    }
+  }
+
+
+  /**
+   * Apply a named render "look" (LOOKS key) live: tone-mapping operator, IBL
+   * source + intensity, the three scene lights, and look-managed model
+   * material roughness/metalness. Scene background is owned by the day/night
+   * theme, not the look, so it's untouched. Toggled from the profile menu and
+   * applied on viewer init with the persisted choice; falls back to
+   * DEFAULT_LOOK for an unknown name. No-ops when the look is already current —
+   * the boot constants (scene.js/flatMesh/env-intensity) all derive from
+   * `neutral`, so the default init apply is a genuine skip. The IBL is rebuilt
+   * only when the source actually changes (PMREM is costly). Material changes
+   * hit look-managed materials on all loaded models; models loaded later are
+   * covered by `applyLookToModel`.
+   *
+   * @param {string} name a LOOKS key ('neutral' | 'flat')
+   */
+  applyLook(name) {
+    // The whole §6e look is behind `?feature=look` (default off). No-op when
+    // the flag is off so a stale `renderMode` cookie from a prior flag-on
+    // session can't apply look lights/env over the legacy render.
+    if (!isFeatureEnabled('look')) {
+      return
+    }
+    const look = LOOKS[name] ? name : DEFAULT_LOOK
+    if (look === this._currentLook) {
+      return
+    }
+    this._currentLook = look
+    const config = LOOKS[look]
+    this.postProcessor?.setToneMappingForLook(config.toneMapping)
+    if (this._envType !== config.envType) {
+      this.setEnvironmentType(config.envType)
+    }
+    const scene = this.context.getScene()
+    if (scene) {
+      scene.environmentIntensity = config.envIntensity
+      this._setLightIntensity('keyLight', config.keyLight)
+      this._setLightIntensity('fillLight', config.fillLight)
+      this._setLightIntensity('ambientLight', config.ambient)
+    }
+    const models = this.context?.getLoadedModels?.() ?? []
+    for (const model of models) {
+      this.applyLookToModel(model)
+    }
+  }
+
+
+  /**
+   * Apply the current look's material params (roughness/metalness) to a
+   * model's look-managed materials — the generated IFC surfaces tagged
+   * `userData.isLookManaged`; authored glTF/GLB material PBR is preserved.
+   * Called by CadView on each model load so a model opened while a non-default
+   * look is active still matches. Null-safe for the Jest viewer mock.
+   *
+   * @param {object} model the loaded model root (Object3D)
+   */
+  applyLookToModel(model) {
+    const config = LOOKS[this._currentLook] ?? LOOKS[DEFAULT_LOOK]
+    forEachLookManagedMaterial(model, (m) => {
+      m.roughness = config.roughness
+      m.metalness = config.metalness
+    })
+  }
+
+
+  /**
+   * Set a named scene light's intensity (no-op if the light is absent).
+   *
+   * @param {string} name keyLight | fillLight | ambientLight
+   * @param {number} value new intensity
+   * @private
+   */
+  _setLightIntensity(name, value) {
+    const light = this.context.getScene()?.getObjectByName?.(name)
+    if (light) {
+      light.intensity = value
+    }
+  }
+
+
+  /**
+   * Lazily build the `?feature=look` lighting/material tuning panel
+   * (LightingGui, a lil-gui overlay). Dynamic-imported so neither lil-gui
+   * nor the panel lands in the default bundle — only the flag pulls the
+   * chunk. Fire-and-forget: the panel appears a tick after viewer init.
+   *
+   * @private
+   */
+  _initLookGui() {
+    import('./three/LightingGui').then(({default: LightingGui}) => {
+      this._lookGui = new LightingGui(this)
+    }).catch((e) => {
+      console.warn('LightingGui failed to load:', e)
+    })
   }
 
 
@@ -213,6 +625,35 @@ export class ShareViewer {
   async dispose() {
     // Local plugins. Each is null-safe individually so partial-init
     // teardown (e.g. constructor throw mid-build) still works.
+    try {
+      this._lookGui?.dispose?.()
+    } catch (e) {
+      console.warn('lookGui.dispose failed:', e)
+    }
+    try {
+      if (this._groundPlane) {
+        this._groundPlane.removeFromParent()
+        this._groundPlane.geometry?.dispose?.()
+        this._groundPlane.material?.dispose?.()
+        this._groundPlane = null
+      }
+    } catch (e) {
+      console.warn('groundPlane.dispose failed:', e)
+    }
+    try {
+      // §6e: free the PMREM env map + the contact-shadow depth map. Neither is
+      // owned by a plugin's dispose, so without this each viewer re-creation
+      // (CadView rebuilds on every day/night theme toggle) leaks a cube-UV env
+      // texture — and a shadow map — on the GPU.
+      const scene = this.context?.getScene?.()
+      if (scene?.environment) {
+        scene.environment.dispose?.()
+        scene.environment = null
+      }
+      scene?.getObjectByName?.('keyLight')?.shadow?.map?.dispose?.()
+    } catch (e) {
+      console.warn('env/shadow-map dispose failed:', e)
+    }
     try {
       this.viewsManager?.dispose?.()
     } catch (e) {

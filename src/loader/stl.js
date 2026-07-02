@@ -1,5 +1,6 @@
-import {BufferGeometry, Group, Mesh, MeshLambertMaterial} from 'three'
+import {BufferGeometry, Group, Mesh} from 'three'
 import {mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import {makeSurfaceMaterial} from '../viewer/lookMaterial'
 
 
 /**
@@ -10,9 +11,7 @@ export default function stlToThree(stlGeometry) {
   stlGeometry = mergeVertices(stlGeometry)
   const mesh = new Mesh(
     stlGeometry,
-    new MeshLambertMaterial({
-      color: 0xabcdef,
-    }),
+    makeSurfaceMaterial({color: 0xabcdef}),
   )
   const root = new Group()
   root.add(mesh)
