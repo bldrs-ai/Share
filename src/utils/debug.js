@@ -1,10 +1,10 @@
-/* eslint-disable no-unused-vars */
-const OFF = 4
-const ERROR = 3
-const WARN = 2 // Use this as default for prod.  Should never see these messages.
-const INFO = 1
-const DEBUG = 0
-/* eslint-enable no-unused-vars */
+// Log levels, exported so callers can pick a threshold for `debug(level)`
+// (e.g. `debug(DEBUG).log(...)` only surfaces under verbose logging).
+export const OFF = 4
+export const ERROR = 3
+export const WARN = 2 // Use this as default for prod.  Should never see these messages.
+export const INFO = 1
+export const DEBUG = 0
 let DEBUG_LEVEL = WARN
 
 
@@ -16,6 +16,20 @@ let DEBUG_LEVEL = WARN
  */
 export default function debug(level = INFO) {
   return (level === true || (typeof level === 'number' && level >= DEBUG_LEVEL)) ? console : mockLog
+}
+
+
+/**
+ * Whether `debug(level)` would actually log at the current threshold —
+ * i.e. logging at `level` is enabled. Lets callers skip *building* an
+ * expensive diagnostic (not just suppress the print) when it wouldn't be
+ * shown. Mirrors the predicate in `debug()`.
+ *
+ * @param {number} [level] The level the caller would log at (default DEBUG).
+ * @return {boolean}
+ */
+export function isLogEnabled(level = DEBUG) {
+  return level >= DEBUG_LEVEL
 }
 
 

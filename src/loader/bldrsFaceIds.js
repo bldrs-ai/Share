@@ -137,7 +137,14 @@ export class BldrsFaceIdsReader {
     })
 
     if (gltf.scene) {
-      gltf.scene.userData.bldrsFaceIds = {perPrimitive: resolved}
+      // Global STEP occurrence-path table (index = synthetic instance id),
+      // persisted alongside the per-triangle ids so a cache-hit STEP model
+      // can restore per-occurrence selection. Sanitised to arrays / null;
+      // absent (undefined) for IFC and pre-occurrence artifacts.
+      const occurrencePaths = Array.isArray(parsed.occurrencePaths) ?
+        parsed.occurrencePaths.map((p) => (Array.isArray(p) ? p : null)) :
+        null
+      gltf.scene.userData.bldrsFaceIds = {perPrimitive: resolved, occurrencePaths}
       const total = resolved.reduce(
         (n, e) => n + (e?.expressIds?.length ?? 0), 0)
       glbInfo(
@@ -270,7 +277,14 @@ function readAccessorAsUint32(json, bin, accIdx) {
  * payloads are Base64-encoded so they fit the existing JSON+gzip
  * inject pipeline without API changes.
  *
- * @param {object} captured `{perPrimitive: [{expressIds, instanceIds}|null, ...]}`
+ * When `captured.occurrencePaths` is present (STEP on a Conway that emits
+ * per-instance occurrence paths), it rides along as a top-level
+ * `occurrencePaths` array (index = synthetic instance id) so the reader can
+ * restore per-occurrence selection on cache-hit — the per-triangle arrays
+ * only carry the scalar instance id, not the variable-length path.
+ *
+ * @param {object} captured `{perPrimitive: [{expressIds, instanceIds}|null, ...],
+ *   occurrencePaths?: Array<Array<number>|null>}`
  * @return {object|null} extension data ready for `injectGlbExtensions`
  */
 export function buildFaceIdsExtensionData(captured) {
@@ -298,7 +312,15 @@ export function buildFaceIdsExtensionData(captured) {
     }
     return out
   })
-  return {perPrimitive}
+  const data = {perPrimitive}
+  // Occurrence paths are small (one entry per placed instance) and already
+  // JSON-native (nested int arrays), so carry them verbatim — the whole
+  // payload is gzipped downstream. Only emit when the source provides them.
+  if (Array.isArray(captured.occurrencePaths)) {
+    data.occurrencePaths = captured.occurrencePaths.map(
+      (p) => (Array.isArray(p) ? p : null))
+  }
+  return data
 }
 
 

@@ -51,6 +51,49 @@ import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb, exportThreeModelAsGlb} from './glbExport'
 import {parseGlb, serializeGlb} from './injectGlbExtensions'
 import {gitHubCacheKey} from './sourceCacheKey'
+import {flatMeshToBatchedModel} from '../viewer/ifc/flatMeshToBatchedModel'
+
+
+/**
+ * Build a decorated single-batch `THREE.BatchedMesh` (two placements of one
+ * unit triangle) the way `buildBatchedConwayModel` does — enough for the
+ * writer's batched→merged bake path. Uses the real `flatMeshToBatchedModel`
+ * over a tiny mock Conway IfcAPI.
+ *
+ * @return {object} decorated BatchedMesh
+ */
+function buildDecoratedBatchedMesh() {
+  const verts = new Float32Array([
+    0, 0, 0, 0, 0, 1,
+    1, 0, 0, 0, 0, 1,
+    0, 1, 0, 0, 0, 1,
+  ])
+  const idxData = new Uint32Array([0, 1, 2])
+  const GEOM_ID = 999
+  const api = {
+    GetGeometry: (_m, id) => (id === GEOM_ID ? {
+      GetVertexData: () => 0,
+      GetIndexData: () => 0,
+      GetVertexDataSize: () => verts.length,
+      GetIndexDataSize: () => idxData.length,
+    } : null),
+    GetVertexArray: () => verts,
+    GetIndexArray: () => idxData,
+  }
+  const ident = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+  const shift = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 0, 0, 1]
+  const grey = {x: 0.8, y: 0.8, z: 0.8, w: 1}
+  const {batches} = flatMeshToBatchedModel([
+    {expressID: 100, geometries: [{geometryExpressID: GEOM_ID, flatTransformation: ident, color: grey}]},
+    {expressID: 200, geometries: [{geometryExpressID: GEOM_ID, flatTransformation: shift, color: grey}]},
+  ], api, 0)
+  const batch = batches[0]
+  batch.mesh.instanceParents = batch.instanceParents
+  batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+  batch.mesh.instanceGeometry = batch.instanceGeometry
+  batch.mesh.instanceColors = batch.instanceColors
+  return batch.mesh
+}
 
 
 /**
@@ -150,6 +193,46 @@ describe('loader/glbExport', () => {
       expect(owner).toBe('bldrs-ai')
       expect(repo).toBe('share')
       expect(branch).toBe('main')
+    })
+
+    it('skips an undecorated BatchedMesh (no source tables → nothing to bake)', async () => {
+      const ok = await exportAndCacheGlb({model: {isBatchedMesh: true}, ...ctx})
+      expect(ok).toBe(false)
+      expect(mockExporterParse).not.toHaveBeenCalled()
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
+    it('skips a Group whose only BatchedMesh child has no convertible instances', async () => {
+      const model = {
+        traverse: (fn) => {
+          fn({isBatchedMesh: false})
+          fn({isBatchedMesh: true})
+        },
+      }
+      const ok = await exportAndCacheGlb({model, ...ctx})
+      expect(ok).toBe(false)
+      expect(mockWriteGlbBytesToOPFS).not.toHaveBeenCalled()
+    })
+
+    it('bakes a decorated batched model to a merged mesh and exports it', async () => {
+      // A real decorated BatchedMesh (two placements of one shape). The writer
+      // must bake it to a plain merged Mesh — carrying per-vertex expressID —
+      // and hand THAT to GLTFExporter, not the un-serialisable batch.
+      const batchedMesh = buildDecoratedBatchedMesh()
+      let exported = null
+      mockExporterParse.mockImplementation((input, onDone) => {
+        exported = input
+        onDone(makeValidEmptyGlb().buffer)
+      })
+
+      const ok = await exportAndCacheGlb({model: batchedMesh, ...ctx})
+      expect(ok).toBe(true)
+      // Serialised the baked merged mesh, not the BatchedMesh.
+      expect(exported).not.toBe(batchedMesh)
+      expect(exported.isBatchedMesh).toBeFalsy()
+      expect(exported.geometry.getAttribute('expressID')).toBeDefined()
+      expect(exported.geometry.getAttribute('instanceID')).toBeDefined()
+      expect(mockWriteGlbBytesToOPFS).toHaveBeenCalledTimes(1)
     })
 
     it('returns false (no throw) when the exporter produces no bytes', async () => {

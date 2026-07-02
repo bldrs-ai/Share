@@ -17,12 +17,65 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
+import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
+import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
+
+
+/**
+ * Group the captured FlatMesh stream by shared geometry and log the
+ * instancing analysis (draw-call + vertex-memory delta vs. the merged
+ * path).
+ *
+ * Normally the whole grouping is gated on `isLogEnabled(DEBUG)`, not just
+ * the print: on a large model it walks every placement (tens of thousands)
+ * and re-fetches each unique shape's size across the Conway boundary, so
+ * building it on every default-level load — only to drop the result —
+ * would be pure waste. There is no feature flag (the grouper is a
+ * permanent diagnostic and the foundation the BatchedMesh render path,
+ * §3b.iv, builds on); verbosity is the gate. `force` overrides the gate
+ * and logs at info level — used when `?feature=batchedMesh` is on so the
+ * operator running the eval sees the numbers without raising the log
+ * level. Never throws into the load path: a probe failure must not
+ * discard a successful parse.
+ *
+ * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {number} modelID
+ * @param {Array} captured FlatMeshes captured during the parse
+ * @param {boolean} [force] log at info level regardless of verbosity
+ */
+function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
+  if (!force && !isLogEnabled(DEBUG)) {
+    return
+  }
+  try {
+    const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
+    const reduction = stats.vertexReductionRatio.toFixed(2)
+    const line =
+      `[instancedMeshes] modelID=${modelID} — ` +
+      `instances=${stats.instanceCount} ` +
+      `uniqueShapes=${stats.uniqueGeometryCount} ` +
+      `(shared=${stats.sharedGeometryCount} singleton=${stats.singletonGeometryCount}) ` +
+      `→ instancedDrawCalls=${stats.uniqueGeometryCount} (merged path = 1) | ` +
+      `verts merged=${stats.mergedVertexCount} instanced=${stats.instancedVertexCount} ` +
+      `(reductionRatio=${reduction}) bytesSaved=${stats.estimatedBytesSaved} | ` +
+      `mostInstanced: geometry#${stats.topInstancedGeometryID} ×${stats.topInstancedCount}`
+    if (force) {
+      // eslint-disable-next-line no-console
+      console.info(line)
+    } else {
+      debug(DEBUG).log(line)
+    }
+  } catch (err) {
+    console.warn('[instancedMeshes] probe failed (non-fatal):', err)
+  }
+}
 
 
 /**
@@ -104,11 +157,29 @@ export default class ShareIfcLoader {
       if (onProgress) {
         onProgress('Building model...')
       }
-      const {mesh: ifcModel, stats: buildStats} = buildConwayIfcModel(
-        captured, ifcAPI, modelID)
       const scene = typeof ifc.context?.getScene === 'function' ?
         ifc.context.getScene() : null
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+
+      // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
+      // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
+      // path on any construction error so the flag can never break a load.
+      let ifcModel
+      let buildStats
+      if (isFeatureEnabled('batchedMesh')) {
+        try {
+          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
+          ifcModel = batched.model
+          buildStats = batched.stats
+        } catch (e) {
+          debug(WARN).warn('batchedMesh build failed; falling back to merged path:', e)
+        }
+      }
+      if (ifcModel === undefined) {
+        const merged = buildConwayIfcModel(captured, ifcAPI, modelID)
+        ifcModel = merged.mesh
+        buildStats = merged.stats
+        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+      }
 
       ifc.addIfcModel(ifcModel)
 
@@ -174,6 +245,12 @@ export default class ShareIfcLoader {
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
       }
+      // Instanced-rendering analysis: groups the captured stream by shared
+      // `geometryExpressID` and reports the GPU-instancing draw-call +
+      // vertex-memory delta. Logged under verbose normally; forced to info
+      // level when `?feature=batchedMesh` is on so the eval shows the
+      // numbers alongside what just rendered as a BatchedMesh.
+      logInstancedModelStats(ifcAPI, modelID, captured, isFeatureEnabled('batchedMesh'))
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal

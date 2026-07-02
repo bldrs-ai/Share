@@ -33,8 +33,15 @@ import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
 import debug from '../utils/debug'
+import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {
+  applyBatchedPreselection,
+  applyBatchedSelection,
+  clearBatchedPreselection,
+  clearBatchedSelection,
+} from './ifc/batchedHighlight'
 
 
 // Minimum index-buffer capacity for the preselection pool. 256 u32
@@ -49,15 +56,11 @@ const MIN_PRESELECTION_INDEX_CAP = 256
 const ENV_MAP_BLUR = 0.04
 
 
-// §6e env-map intensity — scales the RoomEnvironment IBL contribution
-// (`scene.environmentIntensity`). The default RoomEnvironment is bright; at
-// full strength (1) it floods the matte PBR surfaces and washes the model
-// out against the grey background (the "totally washed out" report), so we
-// dial it well under 1. This is the dominant overall-brightness lever —
-// live-tunable via the `?feature=look` GUI.
 // Default env-map intensity (§6e) — the Neutral look's value (see
-// src/viewer/looks.js LOOKS.neutral). Scales the IBL contribution; `applyLook`
-// overrides it at runtime when the user toggles render modes.
+// src/viewer/looks.js LOOKS.neutral). Scales the gradient studio IBL
+// contribution (`scene.environmentIntensity`); `applyLook` overrides it at
+// runtime when the user toggles render modes. Also live-tunable via
+// `?feature=look`.
 const ENV_MAP_INTENSITY = 2.56
 
 
@@ -870,7 +873,10 @@ export class ShareViewer {
     if (toBeSelected.length === 0) {
       this.highlighter.setHighlighted(null)
       this._clearConwaySelectionSubsets()
-      if (modelHasCapability(model, 'ifcSubsets')) {
+      if (modelHasCapability(model, 'batchedPicking')) {
+        // Batched path recolors instances in place (no subset to remove).
+        clearBatchedSelection(model)
+      } else if (modelHasCapability(model, 'ifcSubsets')) {
         this.selector.unpick()
       } else if (typeof model.removeSubset === 'function') {
         model.removeSubset('selection')
@@ -900,6 +906,14 @@ export class ShareViewer {
           mesh.instanceMap.createSubsetMeshByParent(toBeSelected, {
             material: this.selector.getSelectionMaterial(),
           }))
+      } else if (modelHasCapability(model, 'batchedPicking')) {
+        // BatchedMesh render path: recolor the selected instances in place
+        // (setColorAt) rather than overlay a coplanar subset Mesh — see
+        // batchedHighlight.js for why the overlay approach can't render
+        // reliably on a BatchedMesh. Selection covers every occurrence of
+        // each requested product (per-occurrence narrowing is a follow-up).
+        const selMat = this.selector.getSelectionMaterial()
+        applyBatchedSelection(model, toBeSelected, selMat?.color)
       } else if (modelHasCapability(model, 'ifcSubsets')) {
         // Real-IFC path: web-ifc-three holds the parser state needed
         // by createSubset / SubsetCreator.
@@ -985,6 +999,68 @@ export class ShareViewer {
       mesh.instanceMap.createSubsetMeshByInstance(instanceIds, {
         material: this.selector.getSelectionMaterial(),
       }))
+  }
+
+
+  /**
+   * Resolve a STEP occurrence path (NAUO express ids) to the synthetic
+   * `IfcInstanceMap` instance ids placed at — or under — it, across
+   * every child Mesh of the model. This is the NavTree→scene join a
+   * plain expressID can't make: a tree node's id is its NAUO express
+   * id, but the geometry is owned by the (part-type-shared)
+   * `product_definition_shape`, so the two never coincide on a scalar
+   * id. The occurrence path is the only key both sides carry, so a
+   * NavTree click resolves through it to the exact instances to
+   * highlight (then `setInstanceSelection` draws them).
+   *
+   * Prefix-inclusive: clicking an assembly node lights up every leaf
+   * occurrence beneath it (the node's path is a prefix of theirs),
+   * while a leaf part resolves to just its own instance(s). Returns an
+   * empty array for IFC / non-occurrence models (no map) so callers
+   * fall back to parent-level selection.
+   *
+   * @param {number} modelID
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @param {object} [opts]
+   * @param {boolean} [opts.includeDescendants] When false (a leaf node, which
+   *   can have no descendants), take the O(1) exact-key lookup instead of
+   *   scanning every occurrence key on every mesh — the common NavTree click.
+   *   Defaults to true (the assembly case, which needs the prefix scan).
+   * @return {number[]} synthetic instance ids (empty when none)
+   */
+  getInstanceIdsForOccurrencePath(modelID, occurrencePath, {includeDescendants = true} = {}) {
+    const model = this._modelById(modelID)
+    if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+      return []
+    }
+    const target = occurrencePathKey(occurrencePath)
+    const descendantPrefix = `${target}/`
+    const ids = []
+    model.traverse((obj) => {
+      const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
+      if (!byPath) {
+        return
+      }
+      if (!includeDescendants) {
+        // Leaf: at most one key can match (a leaf has no descendant paths), so
+        // an O(1) Map lookup replaces the per-key scan on this mesh.
+        const exact = byPath.get(target)
+        if (exact) {
+          for (let i = 0; i < exact.length; i++) {
+            ids.push(exact[i])
+          }
+        }
+        return
+      }
+      for (const [key, list] of byPath) {
+        if (key === target || key.startsWith(descendantPrefix)) {
+          for (let i = 0; i < list.length; i++) {
+            ids.push(list[i])
+          }
+        }
+      }
+    })
+    return ids
   }
 
 
@@ -1293,6 +1369,18 @@ export class ShareViewer {
       // handler's no-shift semantic — hover preview should match what
       // a click would select.
       this._setConwayPreselectionFromHit(found.object, found.faceIndex)
+    } else if (modelHasCapability(model, 'batchedPicking')) {
+      // BatchedMesh render path: recolor the hovered product's instances in
+      // place (setColorAt). Coexists with — and paints over — the selection
+      // recolor; cleared on cursor-leave by `_clearPreselectionForAllModels`.
+      // Dedup on the resolved id: `highlightIfcItem` fires per animation frame
+      // while the cursor rests, and a repaint re-uploads the colours texture —
+      // skip when the hovered product hasn't changed.
+      if (id !== this._lastBatchedPreselectId) {
+        this._lastBatchedPreselectId = id
+        const preMat = this.selector.getPreselectionMaterial()
+        applyBatchedPreselection(model, [id], preMat?.color)
+      }
     } else if (modelHasCapability(model, 'ifcSubsets')) {
       // Real-IFC path: web-ifc-three's preselection.pick handles
       // subset construction.
@@ -1346,12 +1434,17 @@ export class ShareViewer {
     // logic stays in one place instead of being split between
     // ShareViewer (Conway) and each model's `removeSubset` (legacy).
     this._clearConwayPreselectionSubsets()
+    // Reset the batched hover-dedup so re-entering the same product repaints.
+    this._lastBatchedPreselectId = undefined
     const models = this.IFC?.context?.items?.ifcModels
     if (!Array.isArray(models)) {
       return
     }
     for (const m of models) {
-      if (typeof m?.removeSubset === 'function') {
+      if (modelHasCapability(m, 'batchedPicking')) {
+        // Batched path: undo the hover recolor (restores selection / original).
+        clearBatchedPreselection(m)
+      } else if (typeof m?.removeSubset === 'function') {
         m.removeSubset('preselection')
       }
     }
@@ -1431,6 +1524,17 @@ export class ShareViewer {
    */
   getPickedItemId(picked) {
     const mesh = picked.object
+    // BatchedMesh path (`?feature=batchedMesh`): the parent IFC product id
+    // lives in the per-batch `instanceParents` table keyed by `batchId`,
+    // not on any vertex — there's no per-face expressID to read. Resolve it
+    // here so hover-preselection (highlightIfcItem) matches the click path.
+    if (mesh.isBatchedMesh && mesh.instanceParents) {
+      const batchId = picked.batchId
+      if (batchId === undefined || batchId < 0) {
+        return null
+      }
+      return mesh.instanceParents[batchId]
+    }
     if (!areDefinedAndNotNull(mesh.geometry, picked.faceIndex)) {
       return null
     }

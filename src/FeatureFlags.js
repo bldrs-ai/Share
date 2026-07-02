@@ -71,6 +71,17 @@ export const flags = [
   // `ifcItemsMapParity` shares the same capture.
   // Design: design/new/viewer-replacement.md §3b.
   {name: 'conwayDirectIfc', isActive: true},
+  // BatchedMesh render path: render the Conway-direct geometry as a
+  // THREE.BatchedMesh (one geometry per shared shape + per-instance
+  // transforms) instead of the merged BufferGeometry — the ~60% vertex-
+  // memory win measured in §3b.iv, at ~1 draw call. Picking is native
+  // (`batchId`). Off by default as a deploy-preview *validation gate*
+  // (render/pick can't be exercised headlessly); once confirmed in a
+  // preview this flips to always-on within the Conway-direct path. 3D
+  // selection-outline / isolate / GLB-cache for the batched path are
+  // follow-ups. Flip on via `?feature=batchedMesh`.
+  // Design: design/new/viewer-replacement.md §3b.iv.
+  {name: 'batchedMesh', isActive: false},
 ]
 
 

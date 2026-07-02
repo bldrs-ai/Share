@@ -48,5 +48,12 @@ export default function createNavTreeSlice(set, get) {
     // selects the whole IFC element.
     selectedInstanceIds: [],
     setSelectedInstanceIds: (ids) => set(() => ({selectedInstanceIds: ids})),
+
+    // STEP occurrence path (NAUO express ids) of the selected occurrence, or
+    // null. A reused part's occurrences share one `selectedElements` expressID,
+    // so this is what lets the NavTree highlight the one clicked/picked node
+    // instead of every reuse. Null for IFC and single-occurrence parts.
+    selectedOccurrencePath: null,
+    setSelectedOccurrencePath: (path) => set(() => ({selectedOccurrencePath: path})),
   }
 }

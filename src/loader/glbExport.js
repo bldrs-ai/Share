@@ -40,6 +40,8 @@ import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
+import {eachBatch} from '../viewer/ifc/batchedModel'
+import {batchedModelToMergedMesh, disposeMergedMesh} from '../viewer/ifc/batchedToMergedMesh'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -144,6 +146,24 @@ function silenceGltfExporterMaterialWarnings() {
 
 
 /**
+ * True when the model root is, or contains, a `THREE.BatchedMesh`. Such
+ * models come from the Conway-direct instancing path (`?feature=batchedMesh`)
+ * and are baked back to a merged mesh before serialising (see
+ * `exportAndCacheGlb`), since `GLTFExporter` can't serialise a packed batch.
+ *
+ * @param {object} model Three.js root (Mesh / Group / Scene / BatchedMesh)
+ * @return {boolean}
+ */
+function modelHasBatchedMesh(model) {
+  let found = false
+  eachBatch(model, () => {
+    found = true
+  })
+  return found
+}
+
+
+/**
  * Export the loaded model and write the resulting GLB (wrapped in the
  * Bldrs container) to OPFS at the cache key the reader will look for.
  * Fire-and-forget at the call site — any failure is logged but never
@@ -170,13 +190,36 @@ function silenceGltfExporterMaterialWarnings() {
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
   const startMs = Date.now()
   try {
+    // BatchedMesh render path (`?feature=batchedMesh`): `GLTFExporter` can't
+    // serialise a `THREE.BatchedMesh`'s packed buffer, and a batch carries
+    // no per-vertex `_EXPRESSID` for the `BLDRS_face_ids` picking capture.
+    // Bake it into the same merged-mesh shape the Conway-direct merged path
+    // produces (per-vertex expressID/instanceID + colour-binned materials);
+    // the resulting GLB is byte-compatible with a merged cache artifact and
+    // reads back through the existing cache-hit path unchanged
+    // (design/new/viewer-replacement.md §3b.iv). The bake is transient —
+    // disposed right after serialisation below.
+    const isBatched = modelHasBatchedMesh(model)
+    const exportModel = isBatched ? batchedModelToMergedMesh(model) : model
+    if (isBatched && !exportModel) {
+      glbInfo('writer: skipped (batched model produced no exportable geometry)')
+      return false
+    }
     const filePath = cacheKeyArgs.sourcePath
     const requestedMode = activeGlbCompressionMode()
     glbInfo(
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    const rawBytes = await exportThreeModelAsGlb(model)
+    if (isBatched) {
+      glbVerbose('writer: baked BatchedMesh model to a merged mesh for export')
+    }
+    const rawBytes = await exportThreeModelAsGlb(exportModel)
+    // The baked mesh is a transient, off-scene copy; free its buffers now
+    // that the bytes are captured (the source batched model is untouched).
+    if (exportModel !== model) {
+      disposeMergedMesh(exportModel)
+    }
     if (!rawBytes || rawBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
@@ -243,6 +286,18 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       console.warn(
         '[glb] writer: parseGlb for face_ids capture threw; ' +
         'skipping face_ids (DRACO will skip too):', e)
+    }
+    // STEP per-occurrence identity. The per-triangle arrays above only
+    // carry the scalar instance id; the occurrence path (a variable-length
+    // NAUO chain) lives on the live instance map. Persist the global
+    // `instanceId → path` table alongside face_ids so a cache-hit STEP
+    // model can restore per-occurrence NavTree↔scene selection instead of
+    // collapsing to the shared part-type id. Absent for IFC.
+    if (faceIds) {
+      const occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath
+      if (Array.isArray(occurrencePaths)) {
+        faceIds.occurrencePaths = occurrencePaths
+      }
     }
     await yieldToBrowser()
     const capturePromise = (async () => {

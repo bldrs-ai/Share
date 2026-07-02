@@ -51,6 +51,14 @@
  *     is meaningful. Set by Loader.js when the Conway-direct build
  *     (`?feature=conwayDirectIfc`) replaces the rendered geometry; the
  *     map lives on `model.instanceMap`.
+ * @property {boolean} batchedPicking
+ *     True when the model is a `THREE.BatchedMesh` (Conway-direct
+ *     `?feature=batchedMesh` path). Picking resolves via the per-batch
+ *     `instanceParents` table (`batchId → expressID`); selection / hover
+ *     highlight by recoloring instances (`batchedHighlight`), and
+ *     hide/isolate via `batchedSubset`. Mutually exclusive with
+ *     `ifcSubsets` (there's no web-ifc-three parser state to build subsets
+ *     from — routing selection through `pickByIds` would silently no-op).
  * @property {boolean} useIfcClipper
  *     Historical flag from when two cut-plane implementations co-existed
  *     (the fork's web-ifc clipper for IFC, the in-repo arrow-handle
@@ -79,6 +87,9 @@ export function capabilitiesForFormat(format) {
       // Off by default; Loader.js flips it on for the Conway-direct path
       // (after substituting geometry + attaching IfcInstanceMap).
       instancePicking: false,
+      // Off by default; `inferModelCapabilities` flips it on (and ifcSubsets
+      // off) when the rendered geometry is a decorated BatchedMesh.
+      batchedPicking: false,
       useIfcClipper: true,
     }
   }
@@ -103,6 +114,7 @@ function allOffCaps() {
     typedProperties: false,
     ifcSubsets: false,
     instancePicking: false,
+    batchedPicking: false,
     useIfcClipper: false,
   }
 }
@@ -186,7 +198,19 @@ export function inferModelCapabilities(model, opts = {}) {
   const instAttrName = opts.instanceAttrName ?? 'instanceID'
   let hasPerVertexElementIds = false
   let hasPerVertexInstanceIds = false
+  let hasBatchedInstances = false
   model.traverse((obj) => {
+    // BatchedMesh render path (`?feature=batchedMesh`): element IDs live in
+    // the per-batch `instanceParents` table, NOT on any vertex — so the
+    // per-vertex attribute checks below never fire and we'd otherwise keep
+    // the IFC format default (`ifcSubsets: true`, no `batchedPicking`),
+    // which routes ShareViewer.setSelection through web-ifc-three's
+    // `pickByIds` (no parser state → silent no-op → no highlight). Detect
+    // the decorated batch directly.
+    if (obj.isBatchedMesh && obj.instanceParents) {
+      hasBatchedInstances = true
+      return
+    }
     if (!obj.isMesh || !obj.geometry?.attributes) {
       return
     }
@@ -197,6 +221,13 @@ export function inferModelCapabilities(model, opts = {}) {
       hasPerVertexInstanceIds = true
     }
   })
+  if (hasBatchedInstances) {
+    // Parent-level picking (batchId → expressID) + in-place recolor
+    // highlight + batched isolation subsets. NOT web-ifc-three subsets.
+    caps.expressIdPicking = true
+    caps.batchedPicking = true
+    caps.ifcSubsets = false
+  }
   if (hasPerVertexElementIds) {
     caps.expressIdPicking = true
   }

@@ -133,6 +133,32 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     expect(Array.from(geometry.getIndex().array)).toEqual([0, 1, 2])
   })
 
+  it('carries each PlacedGeometry.occurrencePath onto its range (STEP)', () => {
+    // Two occurrences of one reused part-type: same parentExpressId, distinct
+    // occurrence paths. The ranges must preserve each path so the downstream
+    // IfcInstanceMap can tell the occurrences apart.
+    const api = wireGeomFetch(makeApi({
+      999: {
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+      },
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 2,
+        get: (i) => i === 0 ?
+          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, occurrencePath: [10, 20]} :
+          {geometryExpressID: 999, flatTransformation: translation(5, 0, 0), occurrencePath: [10, 30]},
+      },
+    }]
+    const {ranges} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(ranges).toEqual([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 30]},
+    ])
+  })
+
   it('applies the per-instance flatTransformation to vertex positions', () => {
     // Two instances of the same shape, one translated +5 in X.
     const api = wireGeomFetch(makeApi({

@@ -257,6 +257,42 @@ describe('loader/bldrsFaceIds', () => {
       expect(entry.firstExpressId).toBe(entry.expressIds[0])
     })
 
+    it('round-trips the global STEP occurrence-path table (index = instance id)', async () => {
+      const indices = new Uint32Array([0, 1, 2, 3, 4, 5])
+      const expressIdsPerVertex = new Uint32Array([700000, 700000, 700000, 700000, 700000, 700000])
+      const instanceIdsPerVertex = new Uint32Array([0, 0, 0, 1, 1, 1])
+      const glb = makeGlbWithIds({indices, expressIdsPerVertex, instanceIdsPerVertex})
+      const {json, bin} = parseGlb(glb)
+      const captured = capturePerTriangleIds(json, bin)
+      // Two occurrences of one reused part (same expressID), distinct paths.
+      captured.occurrencePaths = [[10, 20], [11, 20]]
+      const extensionData = buildFaceIdsExtensionData(captured)
+      const {bytes: withExt} = injectGlbExtensions(glb, [
+        {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: extensionData, compress: true},
+      ])
+
+      const reader = new BldrsFaceIdsReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      expect(gltf.scene.userData.bldrsFaceIds.occurrencePaths).toEqual([[10, 20], [11, 20]])
+    })
+
+    it('leaves occurrencePaths null when the source carries none (IFC)', async () => {
+      const indices = new Uint32Array([0, 1, 2])
+      const expressIdsPerVertex = new Uint32Array([42, 42, 42])
+      const glb = makeGlbWithIds({indices, expressIdsPerVertex})
+      const {json, bin} = parseGlb(glb)
+      const extensionData = buildFaceIdsExtensionData(capturePerTriangleIds(json, bin))
+      expect(extensionData.occurrencePaths).toBeUndefined()
+      const {bytes: withExt} = injectGlbExtensions(glb, [
+        {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: extensionData, compress: true},
+      ])
+      const reader = new BldrsFaceIdsReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      expect(gltf.scene.userData.bldrsFaceIds.occurrencePaths).toBeNull()
+    })
+
     it('is a no-op when the GLB has no BLDRS_face_ids extension', async () => {
       const indices = new Uint32Array([0, 1, 2])
       const expressIdsPerVertex = new Uint32Array([1, 1, 1])

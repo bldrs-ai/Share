@@ -60,11 +60,14 @@ import {
  *   expressID per-vertex, instanceID per-vertex; uint32 index). Carries
  *   `groups[]` binding each color-bin's contiguous triangle range to
  *   a `materials[]` index.
- * @property {Array<{parentExpressId: number, triangleCount: number}>} ranges
+ * @property {Array<{parentExpressId: number, triangleCount: number,
+ *   occurrencePath: (Array<number>|undefined)}>} ranges
  *   per-PlacedGeometry ranges in EMISSION order (color-binned), ready
  *   for `instanceMapFromOrderedPlacedRanges`. NOT the FlatMesh-walk
  *   order — color binning permutes the emission so each color's
- *   triangles stay contiguous in the merged buffer.
+ *   triangles stay contiguous in the merged buffer. `occurrencePath`
+ *   is the STEP NAUO express-id path off `PlacedGeometry.occurrencePath`
+ *   (undefined for IFC).
  * @property {Array<MeshStandardMaterial>} materials one per distinct
  *   PlacedGeometry color (RGBA). Caller assigns this to
  *   `mesh.material` (array form) — three.js's renderer pairs each
@@ -306,7 +309,11 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       }
       vCursor += vertCount
       iCursor += indexCount
-      ranges.push({parentExpressId, triangleCount})
+      // Carry the STEP occurrence path (NAUO express ids) off the
+      // PlacedGeometry so `instanceMapFromOrderedPlacedRanges` can key a
+      // reused part's occurrences apart. `undefined` for IFC, so the
+      // downstream map leaves its occurrence tables null.
+      ranges.push({parentExpressId, triangleCount, occurrencePath: placed.occurrencePath})
       p++
     }
     // Close the group spanning this colour bin's contiguous index range.

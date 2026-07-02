@@ -8,6 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
+    "setup": "yarn install",
     "build": "yarn build-conway",
     "build-prod": "SHARE_CONFIG=prod yarn build",
     "build-conway": "yarn clean && yarn build-share-conway",
@@ -74,7 +75,7 @@
     "@babel/plugin-syntax-import-assertions": "7.18.6",
     "@babel/preset-env": "7.18.10",
     "@babel/preset-react": "7.18.6",
-    "@bldrs-ai/conway": "1.334.1066",
+    "@bldrs-ai/conway": "1.353.1118",
     "@bldrs-ai/ifclib": "5.3.3",
     "@emotion/react": "11.10.0",
     "@emotion/styled": "11.10.0",
