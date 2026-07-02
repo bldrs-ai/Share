@@ -165,6 +165,13 @@ function collectGroups(flatMeshes, api, modelID) {
     }
     forEachVectorItem(placedVec, (placed) => {
       const geomExpressID = placed?.geometryExpressID
+      // Skip a placement with no geometry id — mirrors the parent guard
+      // above. Without it, an undefined id would key one shared "undefined"
+      // group and cross the Conway boundary with a bogus id.
+      if (geomExpressID === undefined) {
+        totals.skippedPlacedGeometries++
+        return
+      }
       let group = groups.get(geomExpressID)
       if (group === undefined) {
         // Known-bad shape: count this placement as skipped (matching the

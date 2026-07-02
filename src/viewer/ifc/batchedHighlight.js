@@ -130,7 +130,10 @@ function setLayer(model, expressIds, color, layer) {
   const setKey = layer === 'pre' ? 'preSet' : 'selSet'
   const colorKey = layer === 'pre' ? 'preColor' : 'selColor'
   eachBatch(model, (mesh) => {
-    if (!mesh.instanceParents || typeof mesh.setColorAt !== 'function') {
+    // `instanceColors` is required: paint() restores a cleared instance to
+    // its original colour from it — without it, clearing would repaint every
+    // touched instance the default highlight colour. Skip rather than corrupt.
+    if (!mesh.instanceParents || !mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
       return
     }
     const state = highlightState(mesh)
