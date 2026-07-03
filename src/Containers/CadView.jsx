@@ -773,8 +773,21 @@ export default function CadView({
         // which is not a tree node. Store read is imperative because this
         // funnel is also called from the once-installed dblclick handler,
         // whose closure predates the render that set `rootElement`.
+        //
+        // Only tree-known paths are written: `trimToTreeOccurrencePath`
+        // passes a RAW geometry path through unchanged when the tree carries
+        // no occurrence keys (engine skew between geometry stamping and
+        // getSpatialStructure, malformed capture), and minting that into the
+        // URL would both share a dead link and — via the location effect
+        // re-entering selectElementBasedOnFilepath one tick later — clobber
+        // the pick's per-instance highlight. Non-tree paths fall back to the
+        // legacy lookup, which fails into this try/catch for a scene pick's
+        // PDS id, so no navigation happens (the pre-occurrence behavior).
         const rootElt = useStore.getState().rootElement
-        const pathIds = (occurrencePath && occurrencePath.length > 0 && rootElt) ?
+        const isTreeOccurrencePath = Boolean(
+          occurrencePath && occurrencePath.length > 0 && rootElt &&
+          occurrencePathKeySetForTree(rootElt)?.has(occurrencePathKey(occurrencePath)))
+        const pathIds = isTreeOccurrencePath ?
           [rootElt.expressID, ...occurrencePath] :
           getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
@@ -824,15 +837,25 @@ export default function CadView({
       // the bare trailing id — that id is a NAUO shared by every duplicate of
       // a reused sub-assembly (under-determined in the tree) and never equals
       // the product_definition_shape id that owns the geometry (unreachable
-      // in the scene). See design/new/step-occurrence-selection.md. Null for
-      // IFC (the tree carries no occurrence keys) and for element paths the
-      // tree doesn't know — those keep the plain scalar-id selection below.
-      const treeKeys = occurrencePathKeySetForTree(state.rootElement)
+      // in the scene). See design/new/step-occurrence-selection.md.
+      // `findNodeByOccurrencePath` is the single tree-membership gate (a
+      // non-null node ⟺ the tree knows the path) and its node supplies
+      // `hasChildren` for the scene resolution below. Null for IFC (nodes
+      // carry no occurrence paths) and for element paths the tree doesn't
+      // know — those keep the plain scalar-id selection.
+      //
+      // The first segment must be the root id: every app-written element
+      // path starts at the root (both the occurrence branch and
+      // getParentPathIdsForElement), so a hand-trimmed URL whose tail
+      // happens to also be a valid occurrence key must not silently
+      // re-anchor to that different occurrence — it degrades to the
+      // scalar-id selection instead.
       const eltPathIds = parts.slice(1).map((part) => parseInt(part))
-      const occurrencePath =
-        (treeKeys && treeKeys.size > 0 && eltPathIds.length > 0 &&
-          eltPathIds.every((id) => isFinite(id)) &&
-          treeKeys.has(occurrencePathKey(eltPathIds))) ? eltPathIds : null
+      const startsAtRoot =
+        state.rootElement && parseInt(parts[0]) === state.rootElement.expressID
+      const node = startsAtRoot ?
+        findNodeByOccurrencePath(state.rootElement, eltPathIds) : null
+      const occurrencePath = node ? eltPathIds : null
       // Skip re-selecting when this element is already the active
       // selection. We consult the store (selectItemsInScene updates it
       // synchronously) and not only viewer.getSelectedIds(), because this
@@ -842,33 +865,52 @@ export default function CadView({
       // getSelectedIds() is still stale. Without the store check the
       // re-selection would funnel through selectItemsInScene again and
       // reset selectedInstanceIds, widening a Conway per-instance scene
-      // pick to the whole element. For an occurrence path the identity
-      // check is the path itself, not the trailing id — duplicates share
+      // pick to the whole element. When BOTH sides carry an occurrence
+      // path, identity is the path, not the trailing id — duplicates share
       // the id, and a scene pick's selectedElements holds the PDS id, not
-      // this NAUO, though its selection is the same occurrence.
-      const alreadySelected = occurrencePath ?
+      // this NAUO, though its selection is the same occurrence. When the
+      // store side has none (a shift multi-select or types-tree group
+      // reset it to null while the pathname kept the occurrence), fall
+      // back to id membership — otherwise any hash-only location change
+      // (camera rest, panel close) would re-fire this and stomp the
+      // accumulated multi-select back to the URL's single occurrence.
+      const idSelected =
+        state.selectedElements.includes(`${targetId}`) ||
+        viewer.getSelectedIds().includes(targetId)
+      const alreadySelected = (occurrencePath && state.selectedOccurrencePath) ?
         occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) :
-        (state.selectedElements.includes(`${targetId}`) ||
-          viewer.getSelectedIds().includes(targetId))
+        idSelected
       if (alreadySelected) {
         return
       }
-      if (occurrencePath) {
-        // Mirror the NavTree occurrence-click funnel: resolve the path to the
-        // exact instance ids so the scene highlights just this occurrence
-        // (`includeDescendants` per the node's children — an assembly needs
-        // the descendant scan, a leaf takes the exact-key path).
-        const node = findNodeByOccurrencePath(state.rootElement, occurrencePath)
-        const hasChildren = Boolean(node && Array.isArray(node.children) && node.children.length > 0)
-        const instanceIds =
-          typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
-            viewer.getInstanceIdsForOccurrencePath(
-              0, occurrencePath, {includeDescendants: hasChildren}) : []
-        selectItemsInScene([targetId], false, instanceIds, occurrencePath)
-      } else {
-        selectItemsInScene([targetId], false)
-      }
+      // Mirror the NavTree occurrence-click funnel: resolve the path to the
+      // exact instance ids so the scene highlights just this occurrence
+      // (`includeDescendants` per the node's children — an assembly needs
+      // the descendant scan, a leaf takes the exact-key path). Empty for the
+      // scalar-id (IFC / unknown-path) case, where occurrencePath is null.
+      const hasChildren = Boolean(node && Array.isArray(node.children) && node.children.length > 0)
+      const instanceIds = occurrencePath ? occurrenceInstanceIds(occurrencePath, hasChildren) : []
+      selectItemsInScene([targetId], false, instanceIds, occurrencePath)
     }
+  }
+
+
+  /**
+   * Resolve a STEP occurrence path to the exact IfcInstanceMap instance ids
+   * to highlight — the single implementation shared by the NavTree click
+   * funnel and the permalink resolver, so the two entry points can't drift
+   * on the resolution contract (modelID, options, the feature-detect for
+   * viewers without the method). Empty array when the viewer can't resolve
+   * (legacy/IFC viewers) so callers fall back to parent-level selection.
+   *
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @param {boolean} includeDescendants an assembly needs the descendant
+   *   prefix scan; a leaf takes the O(1) exact-key path
+   * @return {Array<number>} synthetic instance ids
+   */
+  function occurrenceInstanceIds(occurrencePath, includeDescendants) {
+    return typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
+      viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {includeDescendants}) : []
   }
 
 
@@ -1103,10 +1145,7 @@ export default function CadView({
                 // toggles/accumulates against the current selection (multi-select);
                 // the per-occurrence scene highlight is single-selection only, so
                 // shift keeps its legacy type-level accumulate behavior.
-                const instanceIds =
-                  typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
-                    viewer.getInstanceIdsForOccurrencePath(
-                      0, occurrencePath, {includeDescendants: hasChildren}) : []
+                const instanceIds = occurrenceInstanceIds(occurrencePath, hasChildren)
                 selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
               } else {
                 elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
