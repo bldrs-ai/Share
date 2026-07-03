@@ -490,6 +490,26 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
       viewer, 0, [10], {includeDescendants: true}).sort()).toEqual([0, 1])
   })
 
+  it('with includeDescendants:false falls back to the prefix scan on an exact miss', () => {
+    // The Arty_Z7 / Alibre shape: a leaf part's brep hangs off its placement
+    // representation through a plain shape_representation_relationship, so
+    // Conway stamps the geometry with the SRR's own id below the leaf NAUO —
+    // every geometry path is strictly deeper than the tree leaf's
+    // ([10, 20, 38151] vs [10, 20]) and the exact key doesn't exist. The leaf
+    // click must still find its instances; hide (always prefix-inclusive)
+    // already did, which was the "hide works but highlight doesn't" asymmetry.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20, 38151]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [10, 21, 38152]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10, 20], {includeDescendants: false})).toEqual([0])
+    // A sibling leaf's extended path must not bleed in.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10, 21], {includeDescendants: false})).toEqual([1])
+  })
+
   it('is prefix-inclusive: an assembly path lights up every leaf beneath it', () => {
     // Two leaves under assembly-occurrence [10]; a lookup on [10] returns both,
     // a lookup on the exact leaf returns just one.

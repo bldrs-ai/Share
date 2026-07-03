@@ -1046,9 +1046,17 @@ export class ShareViewer {
    * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
    * @param {object} [opts]
    * @param {boolean} [opts.includeDescendants] When false (a leaf node, which
-   *   can have no descendants), take the O(1) exact-key lookup instead of
-   *   scanning every occurrence key on every mesh — the common NavTree click.
-   *   Defaults to true (the assembly case, which needs the prefix scan).
+   *   can have no tree descendants), try the O(1) exact-key lookup first
+   *   instead of scanning every occurrence key on every mesh — the common
+   *   NavTree click. If the exact lookup matches nothing, the prefix scan
+   *   runs anyway: geometry paths can be strictly deeper than the tree
+   *   leaf's when a part's brep is attached through a plain
+   *   `shape_representation_relationship` (Conway appends the SRR's own id
+   *   as a path segment — Alibre/ST-Developer exports like Arty_Z7), so the
+   *   leaf's instances only exist under extended keys. Without the fallback
+   *   a leaf click on such a model highlights nothing while hide (always
+   *   prefix-inclusive) works. Defaults to true (the assembly case, which
+   *   needs the prefix scan).
    * @return {number[]} synthetic instance ids (empty when none)
    */
   getInstanceIdsForOccurrencePath(modelID, occurrencePath, {includeDescendants = true} = {}) {
@@ -1058,32 +1066,43 @@ export class ShareViewer {
     }
     const target = occurrencePathKey(occurrencePath)
     const descendantPrefix = `${target}/`
-    const ids = []
-    model.traverse((obj) => {
-      const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
-      if (!byPath) {
-        return
-      }
-      if (!includeDescendants) {
-        // Leaf: at most one key can match (a leaf has no descendant paths), so
-        // an O(1) Map lookup replaces the per-key scan on this mesh.
-        const exact = byPath.get(target)
-        if (exact) {
-          for (let i = 0; i < exact.length; i++) {
-            ids.push(exact[i])
+    const collect = (matchDescendants) => {
+      const ids = []
+      model.traverse((obj) => {
+        const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
+        if (!byPath) {
+          return
+        }
+        if (!matchDescendants) {
+          const exact = byPath.get(target)
+          if (exact) {
+            for (let i = 0; i < exact.length; i++) {
+              ids.push(exact[i])
+            }
+          }
+          return
+        }
+        for (const [key, list] of byPath) {
+          if (key === target || key.startsWith(descendantPrefix)) {
+            for (let i = 0; i < list.length; i++) {
+              ids.push(list[i])
+            }
           }
         }
-        return
+      })
+      return ids
+    }
+    if (!includeDescendants) {
+      const exactIds = collect(false)
+      if (exactIds.length > 0) {
+        return exactIds
       }
-      for (const [key, list] of byPath) {
-        if (key === target || key.startsWith(descendantPrefix)) {
-          for (let i = 0; i < list.length; i++) {
-            ids.push(list[i])
-          }
-        }
-      }
-    })
-    return ids
+      // Exact miss — fall through to the scan for SRR-extended geometry
+      // paths (see the JSDoc). An exact hit above intentionally skips the
+      // scan: when the tree leaf's own key exists, deeper keys belong to
+      // other (deeper-NAUO) occurrences, not to this leaf.
+    }
+    return collect(true)
   }
 
 

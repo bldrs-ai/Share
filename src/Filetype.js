@@ -34,6 +34,19 @@ const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
 
 
 /**
+ * The model file's ".<type>" suffix at a path-segment boundary (followed by
+ * '/' or end-of-string). Use this — not the bare `filetypeRegex` — to split a
+ * URL pathname into (model file, element path): the bare regex also matches
+ * type names appearing as plain directory segments (e.g. the "step" in
+ * ".../test-models/main/step/nist/as1.stp/1/2"), which splits the pathname
+ * into three parts and silently defeats the element-path parse. The lookahead
+ * keeps the match zero-width on the boundary so `String.split` drops only the
+ * suffix itself.
+ */
+export const fileSuffixBoundaryRegex = new RegExp(`\\.${typeRegexStr}(?=/|$)`, 'i')
+
+
+/**
  * @param {string} ext
  * @return {boolean} Is supported
  */
