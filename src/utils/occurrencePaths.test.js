@@ -1,5 +1,10 @@
 /* eslint-disable no-magic-numbers */
-import {occurrencePathKey, occurrencePathsEqual} from './occurrencePaths'
+import {
+  occurrencePathKey,
+  occurrencePathKeySetForTree,
+  occurrencePathsEqual,
+  trimToTreeOccurrencePath,
+} from './occurrencePaths'
 
 
 describe('utils/occurrencePaths', () => {
@@ -20,6 +25,62 @@ describe('utils/occurrencePaths', () => {
       expect(occurrencePathsEqual([10, 20], [10])).toBe(false)
       expect(occurrencePathsEqual(null, [10])).toBe(false)
       expect(occurrencePathsEqual([10], undefined)).toBe(false)
+    })
+  })
+
+  describe('occurrencePathKeySetForTree', () => {
+    const tree = {
+      expressID: 1,
+      occurrencePath: [],
+      children: [
+        {expressID: 10, occurrencePath: [10], children: [
+          {expressID: 20, occurrencePath: [10, 20], children: []},
+        ]},
+        {expressID: 11, occurrencePath: [11], children: []},
+      ],
+    }
+
+    it('collects a key per node with a non-empty path (root excluded)', () => {
+      const keys = occurrencePathKeySetForTree(tree)
+      expect(keys).toEqual(new Set(['10', '10/20', '11']))
+    })
+
+    it('memoizes per root object and handles missing roots', () => {
+      expect(occurrencePathKeySetForTree(tree)).toBe(occurrencePathKeySetForTree(tree))
+      expect(occurrencePathKeySetForTree(null)).toBeNull()
+      expect(occurrencePathKeySetForTree(undefined)).toBeNull()
+    })
+
+    it('returns an empty set for an IFC-style tree with no occurrence paths', () => {
+      const ifcTree = {expressID: 1, children: [{expressID: 2, children: []}]}
+      expect(occurrencePathKeySetForTree(ifcTree).size).toBe(0)
+    })
+  })
+
+  describe('trimToTreeOccurrencePath', () => {
+    const treeKeys = new Set(['10', '10/20', '11'])
+
+    it('keeps a tree-known path unchanged', () => {
+      expect(trimToTreeOccurrencePath([10, 20], treeKeys)).toEqual([10, 20])
+    })
+
+    it('trims geometry-only extension segments (the SRR-attached-brep case)', () => {
+      // Conway appends the shape_representation_relationship's own id below
+      // the leaf NAUO for Alibre-style exports; the tree only knows [10, 20].
+      expect(trimToTreeOccurrencePath([10, 20, 38151], treeKeys)).toEqual([10, 20])
+      expect(trimToTreeOccurrencePath([11, 500, 501], treeKeys)).toEqual([11])
+    })
+
+    it('does not false-match on numeric prefixes ([1] vs [12])', () => {
+      expect(trimToTreeOccurrencePath([12, 5], new Set(['1']))).toBeNull()
+    })
+
+    it('returns null when nothing matches, passthrough when the tree has no keys', () => {
+      expect(trimToTreeOccurrencePath([99, 98], treeKeys)).toBeNull()
+      expect(trimToTreeOccurrencePath([10, 20, 30], null)).toEqual([10, 20, 30])
+      expect(trimToTreeOccurrencePath([10, 20, 30], new Set())).toEqual([10, 20, 30])
+      expect(trimToTreeOccurrencePath([], treeKeys)).toBeNull()
+      expect(trimToTreeOccurrencePath(null, treeKeys)).toBeNull()
     })
   })
 })
