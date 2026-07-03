@@ -8,7 +8,7 @@ extract preserved in this commit's history; key Epic list inlined in §4.
 
 This doc normalizes the legacy Epic list against ~2 years of execution since the last
 top-down review, surfaces the work that landed without story tracking, and lays out the
-**Pro/billing-ready MVP** plan plus the loveable backlog beyond it.
+**MVP plan** (billing-ready by definition — §2.1) plus the loveable backlog beyond it.
 
 **v0.3 (2026-07-02) folds in three things:**
 
@@ -27,7 +27,7 @@ top-down review, surfaces the work that landed without story tracking, and lays 
    "post-MVP polish" into an active parallel phase — §4.10 (Grow), Track T9,
    §6 Phase G.
 3. **The AI-workspace pivot** — the product direction after (and partly alongside)
-   the Pro-MVP: a Claude-Code-like conversational workspace over CAD/BIM models,
+   the MVP: a Claude-Code-like conversational workspace over CAD/BIM models,
    multi-user, with user-generated AI-app toolbelts. New Epic group §4.11
    (Assist), Tracks T10–T11, plan in §7. Several long-held loveables
    (`search-310`, `apps-300`, `apps-310`) are absorbed into it.
@@ -70,7 +70,9 @@ the basics; Pro = power features earning feature-level positive feedback;
 Enterprise = an operating business with validated ICPs — and re-passes the
 numbering against that. Big movers: billing and funnel measurement *into* the
 MVP band, the Assist/AI arc *out* to the Pro band. Rubric + full ID lineage in
-§2.1; the exhaustive open-MVP checklist is §6.0.
+§2.1; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
+to just the **MVP plan** — under this rubric the MVP *is* the paying launch, so
+the prefix was redundant (and collided with the 300-band "Pro" milestone).
 
 It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
@@ -91,7 +93,7 @@ disagree, this doc wins and the others get updated.
 
 The original PDF interleaved capability lists and implementation notes. This doc keeps
 them split: §3 is the master overview (one row per Epic and Track), §4 is the Epic
-catalogue, §5 is the Track catalogue, §6 is the Pro-MVP sequencing across both, §7 is
+catalogue, §5 is the Track catalogue, §6 is the MVP sequencing across both, §7 is
 the AI-workspace pivot plan, §8 is what's loveable but post-MVP.
 
 
@@ -139,7 +141,7 @@ What the milestone reading changes (the v0.6 re-pass):
   channels to 400) — §7's pivot sequencing is unchanged; only the band signal
   moved. Nothing AI is required for the MVP trickle.
 
-Tier is **not** schedule: the Pro-MVP phase column carries sequencing; the ID
+Tier is **not** schedule: the Phase column carries sequencing; the ID
 carries the milestone. §6.0 enumerates the open 100-band work exhaustively.
 
 **ID lineage** — every epic that has ever been renumbered (all other IDs have
@@ -185,27 +187,27 @@ restored to their original meanings.
 | AI-apps toolbelt | assist-130 (v0.3) | assist-200 | `assist-320` |
 | Multi-user channels + AI modes | assist-120 (v0.3) | assist-300 | `assist-400` |
 
-**Pro-MVP column legend** (used in §3 and §5):
+**Phase column legend** (used in §3 and §5):
 
-- **A–E** = phase in the Pro-MVP plan (§6). A = stabilise viewer, B = identity +
+- **A–E** = phase in the MVP plan (§6). A = stabilise viewer, B = identity +
   multi-account, C = sharing v1, D = subscribe + ads, E = launch checklist.
 - **G** = growth-funnel phase (§6 Phase G) — runs **parallel** to A–C and starts
   now; small, high-leverage, mostly independent of the viewer/identity arcs.
-- **AI** = AI-workspace pivot arc (§7) — sequenced after the Pro-MVP launch, with
+- **AI** = AI-workspace pivot arc (§7) — sequenced after the MVP launch, with
   flagged foundations allowed to start earlier (see §7.4).
-- **—** = already shipped; no Pro-MVP work pending.
+- **—** = already shipped; no MVP work pending.
 - **Post** = held in §8 Post-MVP backlog.
 
 
 ## 3. Status overview
 
-The master tables. Each Epic and Track lists status, Pro-MVP phase, and the
+The master tables. Each Epic and Track lists status, phase, and the
 cross-references that connect them. The detailed bodies live in §4 (Epics) and §5
 (Tracks).
 
 ### 3.1 Epics
 
-| Verb | ID | Name | Status | Pro-MVP | Tracks |
+| Verb | ID | Name | Status | Phase | Tracks |
 |---|---|---|---|---|---|
 | Open | `open-100` | Open from local file system | ✔ | — | — |
 | Open | `open-110` | Open from GitHub URL / UI | ✔ | — | — |
@@ -265,7 +267,7 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 
 ### 3.2 Tracks
 
-| ID | Name | Status | Pro-MVP | Unblocks |
+| ID | Name | Status | Phase | Unblocks |
 |---|---|---|---|---|
 | T1 | Viewer Replacement | 🟡 | A (launch gate) | `view-100`, `view-110`, `view-200`, `view-130`, `view-300`, T2 |
 | T2 | GLB Model Sharing | 🟡 | C (Ph 4 + 5) | `share-110`, `notes-300`, `view-130` |
@@ -284,7 +286,7 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 
 Each Epic block: heading with stable ID; one-sentence purpose; status; legacy reference
 in italics; closed stories (with GH numbers); open stories; gaps relevant to the
-Pro-MVP; relevant tracks from §5.
+MVP; relevant tracks from §5.
 
 
 ### 4.1 Open
@@ -323,7 +325,7 @@ original list; landed via `googleDrive` flag now default-on).
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1251" target="_blank" rel="noopener noreferrer">#1251</a> Open 200: import and overlay multiple models.
 - Pre-condition: Conway-direct + GLB cache are stable per-model (✔ via T1/T2), so
   scaling to N models is now a UI + state-management problem, not an engine problem.
-- **Not in Pro-MVP.** Loveable post-MVP.
+- **Not in MVP.** Loveable post-MVP.
 
 **Epic `open-300`: Multiple sources / multi-account Sources tab** 🟡
 *PDF didn't anticipate multi-account; absorbed from T3 Identity Decoupling.*
@@ -414,7 +416,7 @@ multi-worker; etc.*
   narrowing on the batched path; `EXT_mesh_gpu_instancing` batched-native GLB cache
   (§3b.v) so the round-trip stays instanced and the artifact shrinks.
 - Pre-public-launch gate: 4-angle screenshot harness + GLB bit-level diff (called out
-  in `viewer-replacement.md` §3b.iii final paragraph). **Required for Pro-MVP.**
+  in `viewer-replacement.md` §3b.iii final paragraph). **Required for MVP.**
 
 **Epic `view-200`: Persistent visibility / Isolate** 🟡
 *PDF "View element subsets" — partial.*
@@ -487,7 +489,7 @@ visualization on top (post-MVP loveable):
   categories on Notes) so filtering has meaningful axes. Pairs with T6 (notes
   sidecar formats) once notes carry richer anchor + tag data.
 
-**Pro-MVP**: split.
+**Phasing:** split.
 - Placemark polish (<a href="https://github.com/bldrs-ai/Share/issues/929" target="_blank" rel="noopener noreferrer">#929</a>/<a href="https://github.com/bldrs-ai/Share/issues/930" target="_blank" rel="noopener noreferrer">#930</a>/<a href="https://github.com/bldrs-ai/Share/issues/931" target="_blank" rel="noopener noreferrer">#931</a>/<a href="https://github.com/bldrs-ai/Share/issues/932" target="_blank" rel="noopener noreferrer">#932</a>/<a href="https://github.com/bldrs-ai/Share/issues/985" target="_blank" rel="noopener noreferrer">#985</a>/<a href="https://github.com/bldrs-ai/Share/issues/998" target="_blank" rel="noopener noreferrer">#998</a>/<a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a>) is candidate for
   **Phase C** alongside Notes work in the share flow — sharing a model with a
   pin-anchored discussion is a strong demo, and the URL-sync bug (<a href="https://github.com/bldrs-ai/Share/issues/930" target="_blank" rel="noopener noreferrer">#930</a>) blocks
@@ -527,20 +529,20 @@ publicly — and the recipient sees what was intended.
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> Share (200) Extended login flow — the dialog that picks between
   anonymous-public-5-day, free-public-long-term, Pro-private, etc. This is the
   surface where the Pro pricing tiers become visible.
-- **Required for Pro-MVP** (it's where the upgrade prompt lives).
+- **Required for MVP** (it's where the upgrade prompt lives).
 
 **Epic `share-130`: Private link sharing + visibility chip** 🟡 (NEW)
 *Not in PDF except as "Private hosting" sub-bullet under Open.1.*
 - Track dependency: T4 Multi-User Sharing PR1 (landed: provider scaffolding + Drive
   adapter); PR2 (Drive Share dialog UI); PR3 (GitHub sharing adapter).
 - Open: feature flag `sharing` is off; turn-on once PR2 lands.
-- **Required for Pro-MVP** (private sharing is a paid feature per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
+- **Required for MVP** (private sharing is a paid feature per <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>).
 
 **Epic `share-200`: Grant/revoke per-principal sharing** 🟡 (NEW)
 *Not in PDF.*
 - Track dependency: T4 PR2/PR3 (Share dialog People panel — invites people/teams).
 - Open: same `sharing` flag as `share-130`.
-- **Pro-MVP**: Pro feature.
+- **MVP impact:** ships in Phase C alongside the Share dialog, but not load-bearing for the trickle (MLP band).
 
 **Epic `share-400`: Folder-scoped boundaries** ⬜ (NEW)
 *Not in PDF.*
@@ -579,7 +581,7 @@ a specific version of the model.
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/980" target="_blank" rel="noopener noreferrer">#980</a> Save model, <a href="https://github.com/bldrs-ai/Share/issues/1154" target="_blank" rel="noopener noreferrer">#1154</a> Show specific version.
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/850" target="_blank" rel="noopener noreferrer">#850</a> Versions 100 sha path (filtering to single-file commits unresolved); <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>
   Versions 200 Delete a version (UI + flow not landed).
-- **Pro-MVP**: enough is done for free-tier; Delete + branch UX polish slot post-MVP.
+- **MVP impact:** enough is done for free-tier; Delete + branch UX polish slot post-MVP.
 
 **Epic `versions-300`: Diff between versions** ⬜
 *PDF Collab table — "Showing Diffs?"*
@@ -632,17 +634,17 @@ changes (Google → GitHub or vice versa).
 - Track dependency: T3 PR1 merged (provider scaffolding + Netlify Functions). PR2
   (SourcesTab integration) + PR3 (switchover + flag retire) open.
 - Open: feature flag `githubAsSource` off.
-- **Required for Pro-MVP.**
+- **Required for MVP.**
 
 **Epic `identity-120`: Auth disambiguation across linked identities** 🟡
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a> Auth Disambiguation — primary + linked stored in cookie; chooser surface
   for prior identities on next login.
-- **Required for Pro-MVP** (otherwise users with two GH accounts can't tell what
+- **Required for MVP** (otherwise users with two GH accounts can't tell what
   they're billed under).
 
 **Epic `identity-300`: Profile drawer + multi-account picker** ⬜
 - Implicit in T3 PR2 design.
-- **Required for Pro-MVP** — the "Saving as X — GitHub" footer in the Save dialog
+- **Required for MVP** — the "Saving as X — GitHub" footer in the Save dialog
   (`identity-decoupling-decisions.md` §Q4).
 
 
@@ -689,13 +691,13 @@ User finds out about Bldrs, gets oriented, leaves feedback, and finds product he
 - Google Analytics integrated via `gtagEvent` (visible in code; called from `CadView`,
   GLB pipeline, etc.).
 - Open: 👍/👎 exit feedback widget; in-app Google Forms survey link.
-- **Pro-MVP**: at least one feedback affordance is needed for the public launch.
+- **MVP impact:** at least one feedback affordance is needed for the public launch.
 
 **Epic `community-200`: Bug report w/ screenshot + session state** ⬜
 *PDF Community.2 (MVP).*
 - Never started. The closest seed is `?feature=perf` for diagnostics; structured bug
   capture + auto-redaction of model bytes is the missing piece.
-- **Post-MVP** unless Pro-MVP support burden makes it Day-1 critical.
+- **Post-MVP** unless MVP support burden makes it Day-1 critical.
 
 **Epic `community-210`: AEC outreach (Stack Overflow, Twitter)** 🔮
 *PDF Community.3 (🥇 MLP — ❤️ Kate?).*
@@ -732,14 +734,14 @@ not just a revenue trickle.*
   **model size/complexity** (plus private sharing, multi-account, ad-free).
   Threshold placement is a §10 open question — it wants the model-size
   distribution from telemetry before it's picked.
-- **Required for Pro-MVP.**
+- **Required for MVP.**
 
 **Epic `subscribe-110`: Stripe checkout + portal** ⬜ (NEW)
 - Tasks: `create-portal-session` Netlify Function exists already (per identity
   decoupling decisions doc — model pattern for new functions). Add
   `create-checkout-session`; webhook for status changes; persist Pro flag against
   Auth0 `sub`.
-- **Required for Pro-MVP.**
+- **Required for MVP.**
 
 **Epic `subscribe-120`: Quota tracking** ⬜ (NEW)
 - Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
@@ -752,12 +754,12 @@ not just a revenue trickle.*
 - Experiment instrumentation is part of the epic, not an afterthought: events
   for threshold-hit, upgrade-prompt-shown, converted/churned, so the quota run
   yields decision-grade evidence either way.
-- **Required for Pro-MVP.**
+- **Required for MVP.**
 
 **Epic `subscribe-130`: Ads on free tier** 🟡
 - Track dependency: T7 Ads (<a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>). Phase 1 activation in flight (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>).
 - Open: Phases 2 (manual slots) + 3 (responsive) + 4 (consent gating).
-- **Required for Pro-MVP** — the free tier monetisation path.
+- **Required for MVP** — the free tier monetisation path.
 - Scope note: T7 is **on-site AdSense** (revenue). The Google Ads **acquisition**
   campaigns (Smart→Search rebuild, keywords, geo, bidding) are out of repo scope —
   owned in the private bizdev growth-strategy doc §4. The in-repo dependency runs
@@ -910,7 +912,7 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
 
 Each track has its own long-form design doc. This section is the one-paragraph
 overview + status + Epic linkage; details live in the linked docs. Each entry uses the
-same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
+same list-item order: What, Status, Unblocks, MVP impact, Doc.
 
 
 ### Track T1: Viewer Replacement
@@ -940,7 +942,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   go live: flip the flag default + regenerate the screenshot baselines (one PR).
   See `design/new/viewer-replacement.md` §6e.
 - **Unblocks:** `view-100`, `view-110`, `view-200`, `view-130`, `view-300`, T2.
-- **Pro-MVP impact:** Required — public-launch gate.
+- **MVP impact:** Required — public-launch gate.
 - **Doc:** `design/new/viewer-replacement.md`.
 
 
@@ -951,7 +953,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **Status:** Phases 4 (Notes + view-states v0.1 round-trip), 5 (originator share
   flow), 6 (shared cache tier — Drive/Firebase) open.
 - **Unblocks:** `share-110`, `notes-300`, `view-130` perf wins.
-- **Pro-MVP impact:** Phase 5 (originator share flow) — required. Phase 4 — required
+- **MVP impact:** Phase 5 (originator share flow) — required. Phase 4 — required
   (so notes survive cache hits). Phase 6 — post-MVP optimisation.
 - **Doc:** `design/new/glb-model-sharing.md`.
 
@@ -965,7 +967,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   integration, recents migration) + PR3 (switchover + flag retire) open.
 - **Unblocks:** `identity-110`, `identity-120`, `identity-300`, `open-300`,
   `share-200`, `subscribe-120` (quota keying), and T4 PR3 (GH sharing).
-- **Pro-MVP impact:** PR2 + PR3 required.
+- **MVP impact:** PR2 + PR3 required.
 - **Docs:** `design/new/identity-decoupling.md` + `identity-decoupling-decisions.md`.
 
 
@@ -978,7 +980,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   sharing adapter), PR4 (folder boundary routes) open. PR5 (GH token-health parity)
   and PR6 (flag retire) follow.
 - **Unblocks:** `share-130`, `share-200`, `share-400`, `notes-300`, `versions-310`.
-- **Pro-MVP impact:** PR2 + PR3 required (private sharing is a paid feature). PR4
+- **MVP impact:** PR2 + PR3 required (private sharing is a paid feature). PR4
   post-MVP. PR5 nice-to-have.
 - **Docs:** `design/new/multi-user-sharing.md` + `design/new/sharing-pr3-github.md`.
 
@@ -990,7 +992,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **Status:** Proposed. Not started.
 - **Unblocks:** `open-200`. Pattern reusable for GH recents once `githubAsSource`
   lands.
-- **Pro-MVP impact:** Polish; not strictly required for paid launch but the support
+- **MVP impact:** Polish; not strictly required for paid launch but the support
   cost of "Failed to parse model" on dead recents is real.
 - **Doc:** `design/new/drive-recents-head-check.md`.
 
@@ -1001,7 +1003,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   between Drive snapshots and git issues/commits.
 - **Status:** Not started.
 - **Unblocks:** `notes-300`, `notes-200` (BCF can be derived), `versions-310`.
-- **Pro-MVP impact:** Post-MVP. Quarter-scale work.
+- **MVP impact:** Post-MVP. Quarter-scale work.
 - **Doc:** `multi-user-sharing.md` §Stretch (Q1–Q4).
 
 
@@ -1010,7 +1012,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **What:** AdSense free-tier monetisation without Auto-ads on viewer routes.
 - **Status:** Phase 1 activation in flight (<a href="https://github.com/bldrs-ai/Share/issues/1523" target="_blank" rel="noopener noreferrer">#1523</a>). Phases 2–4 outlined.
 - **Unblocks:** `subscribe-130`.
-- **Pro-MVP impact:** Phase 1 required (activate publisher account). Phases 2–3
+- **MVP impact:** Phase 1 required (activate publisher account). Phases 2–3
   should land before public launch but can lag a beat.
 - **Doc:** `design/new/ads.md` + epic <a href="https://github.com/bldrs-ai/Share/issues/1524" target="_blank" rel="noopener noreferrer">#1524</a>.
 
@@ -1028,7 +1030,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   aligns with the moat (small models free + unlimited; the threshold sits where
   Share is the only thing that works). Phase D runs as an instrumented
   experiment; see §4.9.
-- **Pro-MVP impact:** Required end-to-end.
+- **MVP impact:** Required end-to-end.
 - **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
 
 
@@ -1046,7 +1048,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **Unblocks:** `grow-100`, `grow-200`, `grow-120`, `grow-400`; honest measurement
   of every outreach move in `community-210`; conversion-based bidding for the
   (out-of-repo) acquisition campaigns; the Phase D quota-threshold pick.
-- **Pro-MVP impact:** Phase G — parallel, starts now. Cheap relative to everything
+- **MVP impact:** Phase G — parallel, starts now. Cheap relative to everything
   else in §6 and the only work that grows the top of the funnel.
 - **Docs:** `bldrs-ai/bizdev` `docs/growth-strategy.md` + `docs/ai-strategy.md`
   (**private** — numbers stay there) + `design/new/ads.md` (on-site ads only).
@@ -1063,7 +1065,7 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   `design/new/ai-workspace.md` first — see §7.4 AI.0 and §10 open questions.
 - **Unblocks:** `assist-310`, `assist-400`, `search-310` (as retrieval), and the
   §7 AI-metering upsell.
-- **Pro-MVP impact:** None (pivot arc). Must not destabilise Phases A–E.
+- **MVP impact:** None (pivot arc). Must not destabilise Phases A–E.
 - **Doc:** TBD — `design/new/ai-workspace.md`.
 
 
@@ -1080,12 +1082,17 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   broken with its suite disabled — repair is the first slice.
 - **Unblocks:** `assist-320`, `apps-300` (MCP-first public API), `apps-310`
   (checks as toolbelt apps).
-- **Pro-MVP impact:** None (pivot arc), except the #1386 repair which is
+- **MVP impact:** None (pivot arc), except the #1386 repair which is
   independently worthwhile.
 - **Doc:** TBD — `design/new/ai-workspace.md` (sandbox/security section).
 
 
-## 6. Pro-MVP plan
+## 6. MVP plan
+
+*(Called the "Pro-MVP plan" in v0.2–v0.5 and in older issues/PR descriptions —
+same plan. Renamed in v0.6: under the milestone rubric (§2.1) the MVP **is** the
+paying launch, and "Pro" now names the 300-band milestone, so the prefix
+collided.)*
 
 Goal: ship the **paid tier** publicly. Free + Pro coexist; anonymous use stays
 possible; private sharing + multi-account + quota are paid; ads run on free.
@@ -1137,7 +1144,7 @@ into a funnel with no earned channels wastes the launch.
 
 ### Phase G (parallel, starts now): Growth funnel + SEO surfaces
 **Goal:** the funnel is measurable, share links unfurl, and search intent has a
-landing page — before the Pro launch needs any of it.
+landing page — before the MVP launch needs any of it.
 - `grow-120` first slice: GA hygiene guard (`navigator.webdriver` +
   hostname check on GA init) — cleans CI/e2e/preview pollution out of prod data.
 - `grow-120` events: `share_link_created`, `share_link_opened`,
@@ -1160,7 +1167,7 @@ format pages + positioning page indexed.
 
 
 ### Phase A: Stabilise the rebuilt viewer (foundation)
-**Goal:** the Pro launch can't ship if the viewer regresses on real models.
+**Goal:** the MVP launch can't ship if the viewer regresses on real models.
 - T1 remaining slices:
   - `IfcViewsManager` deletion (§3c.iv slice 1).
   - On-demand rendering (dirty-flag) — biggest framerate win available.
@@ -1261,7 +1268,7 @@ stated hypotheses.
   spike traffic against an uninstrumented funnel is wasted; with Phase G landed
   it's the launch amplifier.
 
-**Exit:** Pro launch announcement.
+**Exit:** MVP launch announcement.
 
 
 ## 7. The AI-workspace pivot
@@ -1269,7 +1276,7 @@ stated hypotheses.
 **Status:** direction agreed (2026-07). Design doc to draft at
 `design/new/ai-workspace.md` before implementation starts. This section is the
 roadmap-level summary: the vision, the three architecture surfaces, what existing
-work it absorbs, and how it sequences against the Pro-MVP.
+work it absorbs, and how it sequences against the MVP.
 
 ### 7.1 Vision
 
@@ -1358,7 +1365,7 @@ Two v0.4 constraints on that architecture:
 
 ### 7.4 Sequencing
 
-The pivot **follows the Pro-MVP**: Phases B–D give it identity, sharing, and the
+The pivot **follows the MVP**: Phases B–D give it identity, sharing, and the
 billing/quota rails that AI usage metering hangs off — metered agent usage is the
 natural Pro anchor, a cleaner upsell than private links alone. Foundations that
 can't destabilise the launch may start earlier behind flags.
@@ -1369,7 +1376,7 @@ can't destabilise the launch may start earlier behind flags.
   model, Notes/channels relationship. Fix <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> and re-enable the iframe
   suite — the sandbox foundation must hold weight before anything is built on it.
 - **AI.1 — Workspace shell.** `assist-300` left drawer behind
-  `?feature=workspace`. No AI dependency; can overlap Pro-MVP phases.
+  `?feature=workspace`. No AI dependency; can overlap MVP phases.
 - **AI.2 — Agent v0, single-user.** `assist-310`: viewer MCP tool surface (T11) +
   agent loop (T10) + conversation panel. One user, one conversation per
   project/model. **This is the demo that sells the pivot — and it must be run
@@ -1442,7 +1449,7 @@ reflects current product-pull:
 Once this doc lands, the backfill order:
 
 1. **GitHub issues — Epics first.**
-   For each Epic in §4 with status 🟡 or ⬜ and `Pro-MVP impact: required`, create an
+   For each Epic in §4 with status 🟡 or ⬜ and `MVP impact: required`, create an
    `epic`-labeled GH issue with the body content from the Epic block. Stable ID
    becomes the issue title prefix (e.g. `epic: open-300: SourcesTab with parallel GH +
    Drive accounts`). One pass; expect ~12–15 new Epic issues. The v0.3 groups ride
@@ -1454,12 +1461,12 @@ Once this doc lands, the backfill order:
    <a href="https://github.com/bldrs-ai/Share/issues/890" target="_blank" rel="noopener noreferrer">#890</a>, <a href="https://github.com/bldrs-ai/Share/issues/892" target="_blank" rel="noopener noreferrer">#892</a>), use `mcp__github__sub_issue_write` to attach them under the right
    Epic. Re-title for consistency where useful.
 3. **GitHub issues — backfill missing stories.**
-   For Epics with `Pro-MVP impact: required` but no story coverage, create one story
+   For Epics with `MVP impact: required` but no story coverage, create one story
    per acceptance criterion. Stories enter the queue with the corresponding `epic`
    sub-issue parent.
 4. **Wiki rewrite.**
    Replace `Planning:-Requirements` with a public-facing summary derived from §4 of
-   this doc. Strip the implementation links and `Pro-MVP impact` rows; keep the
+   this doc. Strip the implementation links and `MVP impact` rows; keep the
    Epic-by-Epic structure with status. The wiki page becomes the user-facing roadmap.
 5. **CLAUDE.md router row.**
    Added in this commit so future assistants find this doc.
@@ -1485,7 +1492,7 @@ without sign-off.
   `identity-decoupling-decisions.md` §Open Implementation Details. Needs to be
   resolved before Phase D quota tracking ships (the quota key is meaningless if the
   functions are anonymous).
-- **BCF priority.** Industry-credibility win vs. cost. If we want it for Pro-MVP it
+- **BCF priority.** Industry-credibility win vs. cost. If we want it for MVP it
   becomes Phase C scope; otherwise it slips to post-MVP per §8 item 7.
 - **AI pivot — agent runtime placement.** Client-direct LLM calls (user's key /
   our key in the browser) vs a server-side broker (Netlify Functions or a real
@@ -1522,7 +1529,7 @@ without sign-off.
 ## 11. Doc maintenance
 
 - **When an Epic ships:** update its row in §3.1 and its block in §4 from 🟡 → ✔.
-  Move it out of the Pro-MVP phase list in §6 if it was there.
+  Move it out of the MVP phase list in §6 if it was there.
 - **When a story closes:** add it to the Closed list under its Epic; PR description
   should reference `roadmap.md` if the change moves an Epic state.
 - **When a track lands a slice:** update the Status line of the track in §3.2 and §5.
