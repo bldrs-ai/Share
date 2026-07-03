@@ -1,5 +1,4 @@
 import {useEffect} from 'react'
-import {useAuth0} from '../Auth0/Auth0Proxy'
 import {getCommitsForFile} from '../net/github/Commits'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
@@ -14,8 +13,8 @@ import {updateRecentFileLastModified} from './persistence'
  * @param {string} branch Current branch or ref
  */
 export default function useGithubLastModified(modelPath, branch) {
-  const {isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
+  const isAuthResolved = useStore((state) => state.isAuthResolved)
   const repository = useStore((state) => state.repository)
 
   useEffect(() => {
@@ -25,7 +24,12 @@ export default function useGithubLastModified(modelPath, branch) {
     if (!repository?.orgName || !repository?.name) {
       return
     }
-    if (isAuthenticated && accessToken === '') {
+    // Wait for BaseRoutes to settle auth so this backfill runs exactly once,
+    // with the right token — not anonymously during page load and then again
+    // authed when the token lands. Post-resolution an empty accessToken is
+    // legitimate (logged-out or Google-only users); anonymous is correct
+    // for public repos then.
+    if (!isAuthResolved) {
       return
     }
 
@@ -41,5 +45,5 @@ export default function useGithubLastModified(modelPath, branch) {
       }
     }
     backfill()
-  }, [accessToken, branch, isAuthenticated, modelPath, repository])
+  }, [accessToken, branch, isAuthResolved, modelPath, repository])
 }
