@@ -2,6 +2,7 @@ import {
   FilenameParseError,
   analyzeHeader,
   analyzeHeaderStr,
+  fileSuffixBoundaryRegex,
   getValidExtension,
   isExtensionSupported,
   pathSuffixSupported,
@@ -48,6 +49,24 @@ describe('Filetype', () => {
       expect(getValidExtension(ext)).toBe(extLower)
       expect(getValidExtension(extLower)).toBe(extLower)
       expect(getValidExtension(extUpper)).toBe(extLower)
+    }
+  })
+
+  it('fileSuffixBoundaryRegex splits pathname into (model file, element path)', () => {
+    // The motivating case: a filetype name ("step") as a plain directory
+    // segment must NOT split — only the file's own dotted suffix at a
+    // path boundary does. Pre-fix, permalinks under such directories
+    // produced a 3-way split and element-path selection never ran.
+    const pathname = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214.stp/5/6217/3804'
+    expect(pathname.split(fileSuffixBoundaryRegex)).toStrictEqual(
+      ['/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214', '/5/6217/3804'])
+    // No element path → empty trailing part; suffix at end-of-string matches.
+    expect('/share/v/p/index.ifc'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/index', ''])
+    // Mid-filename ".ifc" (no boundary) must not split.
+    expect('/share/v/p/index.ifcx/1'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/index.ifcx/1'])
+    for (const ext of supportedTypes) {
+      expect(`/x/${ext}/y/model.${ext}/1/2`.split(fileSuffixBoundaryRegex)).toStrictEqual(
+        [`/x/${ext}/y/model`, '/1/2'])
     }
   })
 

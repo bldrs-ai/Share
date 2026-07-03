@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
+  findNodeByOccurrencePath,
   occurrencePathKey,
   occurrencePathKeySetForTree,
   occurrencePathsEqual,
@@ -25,6 +26,37 @@ describe('utils/occurrencePaths', () => {
       expect(occurrencePathsEqual([10, 20], [10])).toBe(false)
       expect(occurrencePathsEqual(null, [10])).toBe(false)
       expect(occurrencePathsEqual([10], undefined)).toBe(false)
+    })
+  })
+
+  describe('findNodeByOccurrencePath', () => {
+    // Duplicated sub-assembly: the leaf NAUO id (20) repeats under two
+    // parent occurrences (10 and 11) — the shape a reused STEP part takes
+    // in the spatial tree, where the scalar expressID under-determines the
+    // node and only the path disambiguates.
+    const dupLeafA = {expressID: 20, occurrencePath: [10, 20], children: []}
+    const dupLeafB = {expressID: 20, occurrencePath: [11, 20], children: []}
+    const tree = {
+      expressID: 1,
+      occurrencePath: [],
+      children: [
+        {expressID: 10, occurrencePath: [10], children: [dupLeafA]},
+        {expressID: 11, occurrencePath: [11], children: [dupLeafB]},
+      ],
+    }
+
+    it('finds the one node for a duplicated expressID by its full path', () => {
+      expect(findNodeByOccurrencePath(tree, [10, 20])).toBe(dupLeafA)
+      expect(findNodeByOccurrencePath(tree, [11, 20])).toBe(dupLeafB)
+      expect(findNodeByOccurrencePath(tree, [11])).toBe(tree.children[1])
+    })
+
+    it('returns null for unknown paths, empty paths, and missing roots', () => {
+      expect(findNodeByOccurrencePath(tree, [12, 20])).toBeNull()
+      expect(findNodeByOccurrencePath(tree, [20])).toBeNull()
+      expect(findNodeByOccurrencePath(tree, [])).toBeNull()
+      expect(findNodeByOccurrencePath(tree, null)).toBeNull()
+      expect(findNodeByOccurrencePath(null, [10])).toBeNull()
     })
   })
 

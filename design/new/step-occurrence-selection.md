@@ -148,23 +148,37 @@ order; BVH permutes only the index buffer, not the numbering).
   now survive a cache-hit reload (the isolator reads the model's own
   `getSpatialStructure` so `canBeHidden` is populated).
 
+- **Permalink (round-trip).** The element-path URL doubles as the occurrence
+  encoding: for STEP, `selectItemsInScene` writes the path segments below the
+  file as `[rootExpressId, ...occurrencePath]` (the elementsById parent-path
+  lookup can't be used — duplicated subtrees share expressIDs so the table
+  holds only the last-visited duplicate, and a scene pick's PDS id isn't a
+  tree node at all). On load, `selectElementBasedOnFilepath` resolves the
+  segments below the root back to an occurrence path when the tree knows the
+  key (`occurrencePathKeySetForTree`), mirrors the NavTree click funnel
+  (`getInstanceIdsForOccurrencePath` + `selectedOccurrencePath`), and falls
+  back to the legacy scalar-id selection for IFC / unknown paths. Two
+  supporting fixes: the pathname→element-path split now matches the file
+  suffix at a path boundary (`fileSuffixBoundaryRegex`) — the bare type-name
+  regex also matched directory segments like `/step/` and silently dropped
+  the element path — and the NavTree row highlight applies to assembly rows,
+  not only leaves. E2E: `src/tests/e2e/navTreePermalink.spec.ts`.
+
 ### Remaining (follow-up)
 
-1. **Permalink.** Extend the `#n:;p:` / element-path URL to encode the occurrence
-   path and resolve it on load.
-2. **Per-occurrence isolate.** Isolate (`I` / temp-isolation) still shows every
+1. **Per-occurrence isolate.** Isolate (`I` / temp-isolation) still shows every
    occurrence of the isolated part type — the same occurrence→instance
    resolution the hide path now uses would make it per-occurrence too.
-3. **Reveal-hidden ghosts skip occurrence hides.** The "reveal hidden" (ghost)
+2. **Reveal-hidden ghosts skip occurrence hides.** The "reveal hidden" (ghost)
    overlay is built from `hiddenIds` (product-type) only, so a per-occurrence
    hide shows no cyan ghost. The hide itself is correct; only the ghost preview
    omits it. Would need the ghost subset to build from the hidden instances.
-4. **Assembly-node eye vs child eyes.** Hiding an assembly occurrence via its
+3. **Assembly-node eye vs child eyes.** Hiding an assembly occurrence via its
    eye hides all descendant geometry but only marks the assembly node's eye
    (the store is keyed by node id); child-leaf eyes still read "shown." Toggling
    the assembly eye is the way to reveal them again. Making descendant eyes
    follow would need per-node hidden-state derived from the occurrence prefix.
-5. **Root-level parts.** A placement directly under the product root has an empty
+4. **Root-level parts.** A placement directly under the product root has an empty
    occurrence path (no NAUO), which `getOccurrencePathByInstance` normalizes to
    `null` — an empty path can't disambiguate anything. So a scene pick of a
    *root-level* part can't reconcile to its NavTree node (the pick reports the
@@ -172,7 +186,7 @@ order; BVH permutes only the index buffer, not the numbering).
    type-level. Harmless when the file has one root assembly (the common case);
    only bites files with several distinct parts placed directly at the root. A
    real fix needs a PDS→product-definition→node reverse map, out of scope here.
-6. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
+5. **`?feature=batchedMesh`.** The BatchedMesh render path builds no
    `IfcInstanceMap`, so per-occurrence (and all per-instance) selection no-ops
    under that flag — a documented gap in `buildBatchedConwayModel`, not a
    regression (NAUO≠PDS meant a STEP node click highlighted nothing there
