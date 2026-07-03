@@ -314,15 +314,20 @@ slice, and isolation controls expected of a BIM viewer.
   (root→leaf NAUO ids from Conway's `PlacedGeometry.occurrencePath`), so a reused part
   selects, reveals-in-tree, and hides as a *single* occurrence — and it survives the GLB
   cache. Conway-side extraction is the `step-metadata` track (see Track T1 + conway's
-  `step-metadata-nist.md`); Share-side design +
-  remaining follow-ups (permalink encoding, per-occurrence isolate) in
+  `step-metadata-nist.md`); Share-side design + remaining follow-ups
+  (per-occurrence isolate, reveal-hidden ghosts) in
   `design/new/step-occurrence-selection.md`. PRs #1573 + #1575, E2E over `as1-oc-214.stp`.
+  Since landed: **occurrence-path permalinks round-trip** (the element-path URL
+  encodes `[rootExpressId, ...occurrencePath]` and resolves on load; PR #1581,
+  E2E `navTreePermalink.spec.ts`) and STEP selection on SRR-attached-brep
+  exports (Alibre/ST-Developer, e.g. Arty_Z7 — PR #1580).
 - STEP metadata: NavTree names + Properties 🟡 (NEW). Conway now extracts AP214/AP242
   product structure + properties and emits them through the `web-ifc` compat surface
   in the exact shapes Share consumes (conway #345 arc), so a STEP file lights up the
   NavTree + Properties panel with no Share code change. Share-side follow-through:
   <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> (verify against the NIST corpus after the next Conway release bump;
-  generalize the selection/permalink key to the occurrence path) and
+  the occurrence-path selection/permalink generalization it asks for landed in
+  PR #1581) and
   <a href="https://github.com/bldrs-ai/Share/issues/1570" target="_blank" rel="noopener noreferrer">#1570</a> (pin down the `{value}`-handle + reference-graph contract `ifclib`
   imposes on the engine; defensive `reifyName`; possible re-home to conway).
 - Open bugs feeding Phase A stabilisation: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera fit keys off "last scene
@@ -877,7 +882,8 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
   active (§3b.iv):** grouper analysis (#1568), `BatchedMesh` render path behind
   `?feature=batchedMesh` (#1571), batched→merged GLB-cache bake (#1574).
   **STEP metadata** extraction landed conway-side (conway #345 arc); Share
-  verification + occurrence-path permalink key are open (#1569, #1570).
+  verification is open (#1569, #1570); the occurrence-path selection/permalink
+  key landed (PRs #1573/#1575/#1581).
   Remaining: perf items (on-demand rendering, hover-pick throttle), per-product
   mesh emission spike, `batchedMesh` always-on flip, `EXT_mesh_gpu_instancing`
   cache schema (§3b.v), **public-launch test gate** (4-angle screenshots + GLB
@@ -1090,7 +1096,7 @@ format pages + positioning page indexed.
   heuristic, <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> wrong arg to `getIfcType`, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) element-permalink
   hydration on private models.
 - STEP follow-through: Conway release bump + <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> NavTree/Properties verification
-  over the NIST corpus; occurrence-path permalink key.
+  over the NIST corpus (the occurrence-path permalink key landed — PR #1581).
 - T1 **public-launch gate**: 4-angle screenshot harness + GLB bit-level diff against
   golden artifacts. Runs in CI. This is the "we won't regress on the things that
   worked" insurance.
