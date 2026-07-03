@@ -35,15 +35,15 @@ import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
-import {elementSelection} from './selection'
-import {partsToPath} from './urls'
-import {initViewer} from './viewer'
 import {
   AUTH_SETTLE_GRACE_MS,
   AUTH_SETTLE_RETRY_MS,
   isAuthShapedLoadError,
   waitForAuthSettled,
 } from './authLoadGate'
+import {elementSelection} from './selection'
+import {partsToPath} from './urls'
+import {initViewer} from './viewer'
 
 
 let count = 0
@@ -260,9 +260,20 @@ export default function CadView({
     setSnackMessage('Loading model...')
 
     // Only GitHub-hosted models use the Auth0-brokered token; local files,
-    // external URLs, and Drive (its own connection tokens) shouldn't wait
-    // on it at all.
-    const needsGithubAuth = Boolean(modelPath.gitpath && modelPath.gitpath !== 'external')
+    // other external URLs, and Drive (its own connection tokens) shouldn't
+    // wait on it at all. Mirror Loader#load's own detection
+    // (`pathUrl.host === 'github.com'`) rather than testing `gitpath`:
+    // /share/v/gh routes carry a github.com downloadUrl AND a gitpath, but a
+    // generic /share/v/u route can point at github.com too and has no
+    // gitpath — it still goes through the token-authed Contents API in the
+    // loader, so it needs the same grace + authed retry. Non-URL targets
+    // (local paths, upload UUIDs) throw in the URL constructor → not GitHub.
+    let needsGithubAuth = false
+    try {
+      needsGithubAuth = new URL(modelPath.downloadUrl || modelPath.filepath).host.toLowerCase() === 'github.com'
+    } catch {
+      // Relative/local path — not GitHub-hosted.
+    }
     const isAuthSettledBeforeLoad = needsGithubAuth ?
       await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
       true
@@ -300,13 +311,19 @@ export default function CadView({
       console.error(e)
       captureException(e)
       return
+    } finally {
+      // Whatever the outcome, this load attempt is over. The overlay/snack
+      // may still be up (set before the grace wait above, or re-set by the
+      // authed-retry path after loadModel's own finally cleared it) — a
+      // load that ends in an alert must not leave the LoadingBackdrop
+      // blocking the error dialog.
+      setIsModelLoading(false)
+      setSnackMessage(null)
     }
     if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
-    setIsModelLoading(false)
-    setSnackMessage(null)
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)

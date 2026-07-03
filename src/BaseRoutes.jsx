@@ -1,5 +1,5 @@
 import {jwtDecode} from 'jwt-decode'
-import React, {useEffect, useState} from 'react'
+import React, {useCallback, useEffect, useRef, useState} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import {Button, CssBaseline, Dialog, DialogActions, DialogContent, DialogTitle, ThemeProvider} from '@mui/material'
 import * as Sentry from '@sentry/react'
@@ -58,6 +58,65 @@ export default function BaseRoutes({testElt = null}) {
   const [reauthScope, setReauthScope] = useState('')
   const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
+  // The background fresh-claims pass below must run once per page load, not
+  // once per effect run — the auth effect re-fires on every navigation
+  // (`location` dep), and an unguarded cacheMode:'off' call there would
+  // reintroduce a network token exchange per SPA route change.
+  const freshClaimsRequestedRef = useRef(false)
+
+  /**
+   * Apply a resolved Auth0 access token to app state: reauth-modal short
+   * circuits from app_metadata, appMetadata store, GitHub identity → octokit
+   * init + accessToken. Shared by the boot-time cached-token fast path and
+   * the background fresh-claims pass; idempotent, so processing the same
+   * token twice is harmless. useCallback (all deps are stable setters) so
+   * the auth effect below can depend on it without re-firing per render.
+   */
+  const processAccessToken = useCallback((token) => {
+    if (token === '') {
+      initializeOctoKitUnauthenticated()
+      setAccessToken(token)
+      return
+    }
+
+    const decodedToken = jwtDecode(token)
+    const appData = decodedToken['https://bldrs.ai/app_metadata']
+
+    // Reauth-modal short circuits: show the modal and stop — leave
+    // identity/token state as it was.
+    if (appData?.subscriptionStatus === 'shareProPendingReauth') {
+      setReauthScope('repo')
+      setReauthModalOpen(true)
+      return
+    }
+    if (appData?.subscriptionStatus === 'freePendingReauth') {
+      setReauthScope('public_repo')
+      setReauthModalOpen(true)
+      return
+    }
+
+    // Only overwrite store appMetadata when the JWT actually carries
+    // one — tests (e.g. Subscription.spec) inject appMetadata directly
+    // before login and expect it to stick.
+    if (appData) {
+      setAppMetadata(appData)
+    }
+
+    const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
+    if (identities.length > 0) {
+      const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
+      if (hasGitHubIdentity) {
+        initializeOctoKitAuthenticated()
+        setAccessToken(token)
+        setHasGithubIdentity(true)
+      } else {
+        initializeOctoKitUnauthenticated()
+        setAccessToken('')
+        setHasGithubIdentity(false)
+      }
+    }
+  }, [setAccessToken, setAppMetadata, setHasGithubIdentity])
+
   useEffect(() => {
     setAppPrefix(appPrefix)
 
@@ -94,7 +153,7 @@ export default function BaseRoutes({testElt = null}) {
     } else if (!isLoading && !isAuthenticated) {
       setIsAuthResolved(true)
     } else if (!isLoading && isAuthenticated) {
-      getAccessTokenSilently({
+      const tokenFetchOpts = {
         authorizationParams: {
           // audience: 'https://bldrs.us.auth0.com/userinfo',
           audience: 'https://api.github.com/',
@@ -106,57 +165,13 @@ export default function BaseRoutes({testElt = null}) {
         // every page load, and CadView#onViewer serializes the first model
         // load behind this resolution — so a slow exchange (cross-tab lock
         // stall, timed-out first attempt) froze the viewer for ~10s before
-        // any progress UI appeared. Freshness after login/reauth is not a
-        // concern: those flows run through the popup callback, which updates
-        // the same localstorage cache (PopupCallback sets 'refreshAuth' →
-        // ProfileControl's storage listener re-reads the token).
+        // any progress UI appeared. The background pass below covers claims
+        // freshness off the critical path.
         cacheMode: 'on',
         useRefreshTokens: true,
-      })
-        .then((token) => {
-          if (token === '') {
-            initializeOctoKitUnauthenticated()
-            setAccessToken(token)
-            return
-          }
-
-          const decodedToken = jwtDecode(token)
-          const appData = decodedToken['https://bldrs.ai/app_metadata']
-
-          // Reauth-modal short circuits: show the modal and stop — leave
-          // identity/token state as it was.
-          if (appData?.subscriptionStatus === 'shareProPendingReauth') {
-            setReauthScope('repo')
-            setReauthModalOpen(true)
-            return
-          }
-          if (appData?.subscriptionStatus === 'freePendingReauth') {
-            setReauthScope('public_repo')
-            setReauthModalOpen(true)
-            return
-          }
-
-          // Only overwrite store appMetadata when the JWT actually carries
-          // one — tests (e.g. Subscription.spec) inject appMetadata directly
-          // before login and expect it to stick.
-          if (appData) {
-            setAppMetadata(appData)
-          }
-
-          const identities = decodedToken['https://bldrs.ai/identities'] || decodedToken.identities || []
-          if (identities.length > 0) {
-            const hasGitHubIdentity = identities.some((identity) => identity.connection === 'github')
-            if (hasGitHubIdentity) {
-              initializeOctoKitAuthenticated()
-              setAccessToken(token)
-              setHasGithubIdentity(true)
-            } else {
-              initializeOctoKitUnauthenticated()
-              setAccessToken('')
-              setHasGithubIdentity(false)
-            }
-          }
-        })
+      }
+      getAccessTokenSilently(tokenFetchOpts)
+        .then(processAccessToken)
         .catch((err) => {
           if (err.error === 'invalid_grant') {
             logout({returnTo: window.location.origin})
@@ -167,6 +182,30 @@ export default function BaseRoutes({testElt = null}) {
         .finally(() => {
           setIsAuthResolved(true)
         })
+
+      // Background fresh-claims pass. Cached tokens carry JWT claims frozen
+      // at mint time, so a boot that only reads the cache would miss
+      // anything set server-side since: the Stripe webhook flipping
+      // app_metadata.subscriptionStatus to a pendingReauth state (the modal
+      // would never open), a revoked refresh token / Auth0 session (the
+      // invalid_grant → logout path would never fire), or an out-of-band
+      // identity link/unlink. Force one refresh-grant per page load —
+      // exactly what cacheMode:'off' used to do — but off the load-blocking
+      // path: it doesn't gate isAuthResolved, and processAccessToken
+      // re-applies whatever it learns when it lands.
+      if (!freshClaimsRequestedRef.current) {
+        freshClaimsRequestedRef.current = true
+        getAccessTokenSilently({...tokenFetchOpts, cacheMode: 'off'})
+          .then(processAccessToken)
+          .catch((err) => {
+            if (err.error === 'invalid_grant') {
+              logout({returnTo: window.location.origin})
+            }
+            // Anything else is non-fatal here: the cached-token pass above
+            // already established a working session; this pass only exists
+            // to refresh claims.
+          })
+      }
     }
   }, [
     appPrefix,
@@ -183,6 +222,7 @@ export default function BaseRoutes({testElt = null}) {
     setHasGithubIdentity,
     setIsAuthResolved,
     logout,
+    processAccessToken,
   ])
 
   return (
