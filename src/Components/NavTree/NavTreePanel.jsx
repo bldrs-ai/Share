@@ -299,20 +299,23 @@ const RenderRow = ({index, style, data}) => {
   const nodeId = node.nodeId
   const isExpanded = expandedNodeIds.includes(nodeId)
   const hasChildren = node.hasChildren
+  // Assembly rows highlight like leaves — a selected assembly (NavTree click,
+  // scene pick, permalink) must mark its own row, not just its descendants
+  // (an old `!hasChildren` guard here left assembly selections invisible in
+  // the tree). Only the types tree's group rows stay unhighlighted: they have
+  // no expressID (the guard below), and their member elements highlight
+  // individually.
   let isSelected = false
-
-  if (!hasChildren) {
-    // STEP: match on the occurrence path when one is selected — it's the only
-    // key shared with the geometry side (a scene pick reports the part-type's
-    // product_definition_shape id, which never equals this node's NAUO express
-    // id), and it uniquely identifies one occurrence so a reused part lights up
-    // only the clicked/picked node, not every reuse. Falls back to expressID for
-    // IFC and when no occurrence is selected (selectedOccurrencePathKey is null).
-    if (selectedOccurrencePathKey !== null && Array.isArray(node.occurrencePath)) {
-      isSelected = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
-    } else {
-      isSelected = selectedNodeIds.includes(node.expressID.toString())
-    }
+  // STEP: match on the occurrence path when one is selected — it's the only
+  // key shared with the geometry side (a scene pick reports the part-type's
+  // product_definition_shape id, which never equals this node's NAUO express
+  // id), and it uniquely identifies one occurrence so a reused part lights up
+  // only the clicked/picked node, not every reuse. Falls back to expressID for
+  // IFC and when no occurrence is selected (selectedOccurrencePathKey is null).
+  if (selectedOccurrencePathKey !== null && Array.isArray(node.occurrencePath)) {
+    isSelected = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
+  } else if (node.expressID !== undefined) {
+    isSelected = selectedNodeIds.includes(node.expressID.toString())
   }
 
   const rowRef = useRef(null)

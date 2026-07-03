@@ -44,6 +44,39 @@ export function occurrencePathsEqual(a, b) {
 }
 
 
+/**
+ * Find the spatial-tree node whose `occurrencePath` is exactly `path` (DFS).
+ * The permalink resolver uses this to recover the node behind a URL-encoded
+ * occurrence path — its child count decides whether the scene resolution
+ * needs the descendant prefix scan (assembly) or the exact-key lookup (leaf).
+ *
+ * @param {object|null|undefined} rootNode spatial-structure root element
+ * @param {Array<number>|null|undefined} path NAUO express ids, root→leaf
+ * @return {object|null} the matching node, or null
+ */
+export function findNodeByOccurrencePath(rootNode, path) {
+  if (!rootNode || typeof rootNode !== 'object' || !Array.isArray(path) || path.length === 0) {
+    return null
+  }
+  const target = occurrencePathKey(path)
+  const stack = [rootNode]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (Array.isArray(node.occurrencePath) && occurrencePathKey(node.occurrencePath) === target) {
+      return node
+    }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        if (child && typeof child === 'object') {
+          stack.push(child)
+        }
+      }
+    }
+  }
+  return null
+}
+
+
 // Memoizes the per-tree key set below. Keyed by the root node object so a
 // model reload (new tree object) naturally gets a fresh set, and the old one
 // is GC-able with its tree.
