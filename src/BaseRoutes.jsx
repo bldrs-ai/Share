@@ -100,7 +100,17 @@ export default function BaseRoutes({testElt = null}) {
           audience: 'https://api.github.com/',
           scope: 'openid profile email offline_access',
         },
-        cacheMode: 'off',
+        // 'on', not 'off': resolve from the SDK's localstorage token cache
+        // (ms) and only hit the network when the cached token has expired.
+        // 'off' forced a refresh-grant round trip to auth0's /oauth/token on
+        // every page load, and CadView#onViewer serializes the first model
+        // load behind this resolution — so a slow exchange (cross-tab lock
+        // stall, timed-out first attempt) froze the viewer for ~10s before
+        // any progress UI appeared. Freshness after login/reauth is not a
+        // concern: those flows run through the popup callback, which updates
+        // the same localstorage cache (PopupCallback sets 'refreshAuth' →
+        // ProfileControl's storage listener re-reads the token).
+        cacheMode: 'on',
         useRefreshTokens: true,
       })
         .then((token) => {

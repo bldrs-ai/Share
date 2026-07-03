@@ -1,6 +1,6 @@
 import {useEffect, useState} from 'react'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {getCommitsForFile} from '../../net/github/Commits'
+import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 
 
@@ -8,7 +8,7 @@ import {assertDefined} from '../../utils/assert'
 export default function useVersions({repository, filePath, accessToken}) {
   assertDefined(accessToken, repository.orgName, repository.name, filePath)
 
-  const {isAuthenticated} = useAuth0()
+  const isAuthResolved = useStore((state) => state.isAuthResolved)
 
   const [commits, setCommits] = useState([])
   const [loading, setLoading] = useState(false)
@@ -16,9 +16,14 @@ export default function useVersions({repository, filePath, accessToken}) {
 
   useEffect(() => {
     const fetchCommits = async () => {
-      if (isAuthenticated && accessToken === '') {
-        // TODO(pablo): seen these in dev
-        console.warn('Unauthed flow while user is logged-in')
+      // Wait for BaseRoutes to settle auth before touching the API. Before
+      // resolution, isAuthenticated is still false even for logged-in users,
+      // so this hook used to fire an anonymous fetch on page load and a
+      // second, authed one when the token landed — a duplicate request that
+      // also burned the anonymous rate limit. Post-resolution, an empty
+      // accessToken is a legitimate state (logged-out or Google-only users)
+      // and the anonymous fetch is correct for public repos.
+      if (!isAuthResolved) {
         return
       }
       setLoading(true)
@@ -44,7 +49,7 @@ export default function useVersions({repository, filePath, accessToken}) {
       }
     }
     fetchCommits()
-  }, [accessToken, filePath, isAuthenticated, repository])
+  }, [accessToken, filePath, isAuthResolved, repository])
 
   return {commits, loading, error}
 }

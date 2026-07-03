@@ -32,6 +32,12 @@ import ViewerContainer from './ViewerContainer'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
+import {
+  AUTH_SETTLE_GRACE_MS,
+  AUTH_SETTLE_RETRY_MS,
+  isAuthShapedLoadError,
+  waitForAuthSettled,
+} from './authLoadGate'
 
 
 let count = 0
@@ -93,11 +99,12 @@ export default function CadView({
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
   // [isAuthLoading, …]-dep effect fires (with an `!isViewerLoaded` guard) so
-  // a model whose initial `onViewer` returned early on auth-not-ready
-  // retries once auth settles. If auth settles WHILE the first onViewer is
-  // mid-`loadModel`, `isViewerLoaded` is still false (it's only set at the
-  // end), so both fire end-to-end → double load. This in-flight ref
-  // dedupes overlapping calls; whichever effect tick wins, the other skips.
+  // a model whose initial `onViewer` returned early on OPFS-status-unknown
+  // retries once availability lands, and again on auth-state changes. If
+  // auth settles WHILE the first onViewer is mid-`loadModel`,
+  // `isViewerLoaded` is still false (it's only set at the end), so both
+  // fire end-to-end → double load. This in-flight ref dedupes overlapping
+  // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
 
   // IFCSlice
@@ -191,13 +198,10 @@ export default function CadView({
       return
     }
 
-    // Wait only while auth is still being resolved. Once resolved, proceed
-    // regardless of whether a GitHub token landed — Google-only users
-    // legitimately have accessToken='' and hasGithubIdentity=false.
-    if (isAuthLoading || (isAuthenticated && !isAuthResolved)) {
-      debug().warn('Auth not yet resolved, waiting.')
-      return
-    }
+    // NB: no auth precondition here. onViewerInternal itself waits a bounded
+    // grace for auth to settle (GitHub loads only) and retries authed when an
+    // anonymous attempt fails auth-shaped — so a slow Auth0 exchange can no
+    // longer hold the load (and its progress UI) hostage.
 
     // Past the early returns — we're actually going to load. The in-flight
     // guard sits HERE (not at the effect-callback level) so two effect ticks
@@ -241,10 +245,26 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
+
+    // Progress overlay up BEFORE any auth/token waiting. Previously the
+    // overlay only appeared once loadModel ran, and loadModel sat behind
+    // full auth resolution — a slow Auth0 exchange meant ~10s of frozen
+    // screen with no feedback. loadModel refines the message once it runs.
+    setIsModelLoading(true)
+    setSnackMessage('Loading model...')
+
+    // Only GitHub-hosted models use the Auth0-brokered token; local files,
+    // external URLs, and Drive (its own connection tokens) shouldn't wait
+    // on it at all.
+    const needsGithubAuth = Boolean(modelPath.gitpath && modelPath.gitpath !== 'external')
+    const isAuthSettledBeforeLoad = needsGithubAuth ?
+      await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
+      true
+
     let tmpModelRef
     let isOOM = false
     try {
-      tmpModelRef = await loadModel(modelPath)
+      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad)
     } catch (e) {
       if (isOutOfMemoryError(e)) {
         isOOM = true
@@ -323,6 +343,40 @@ export default function CadView({
 
 
   /**
+   * loadModel wrapper for the auth-slow path: when the attempt went out
+   * before auth settled (grace window in onViewerInternal expired, so
+   * probably no token) and failed auth-shaped — GitHub masks private repos
+   * as 404 to anonymous callers and rate-limits anonymous IPs with 403 —
+   * wait for the token to land and retry once with it. Everything else
+   * rethrows to onViewerInternal's catch unchanged.
+   *
+   * @param {object} routeResult
+   * @param {boolean} isAuthSettledBeforeLoad
+   * @return {object} loaded model
+   */
+  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad) {
+    try {
+      return await loadModel(routeResult)
+    } catch (error) {
+      if (isAuthSettledBeforeLoad || !isAuthShapedLoadError(error)) {
+        throw error
+      }
+      // loadModel's finally just cleared the overlay; keep it up while we
+      // wait for the token — to the user this is still the same load.
+      setIsModelLoading(true)
+      await waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+      if (!useStore.getState().accessToken) {
+        // Auth settled without a GitHub token (logged out, Google-only) —
+        // the anonymous failure was the real answer.
+        throw error
+      }
+      debug().log('CadView#loadModelWithAuthRetry: anonymous load failed auth-shaped; retrying with token')
+      return await loadModel(routeResult)
+    }
+  }
+
+
+  /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
    * @param {object} routeResult
@@ -371,8 +425,13 @@ export default function CadView({
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
       } else {
+        // Read the token at call time, not from the render closure — the
+        // auth grace/retry flow in onViewerInternal can land a token
+        // mid-flight, and the closure would still hold the pre-resolution
+        // (usually empty) value.
+        const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
       }
     } catch (error) {
       if (isOutOfMemoryError(error)) {
@@ -850,10 +909,13 @@ export default function CadView({
     if (!isViewerLoaded) {
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
-      if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
+      // No auth precondition — onViewerInternal waits (bounded) for auth
+      // itself and retries authed on failure. This effect's remaining jobs:
+      // kick onViewer once OPFS availability lands (the [viewer]-effect may
+      // have fired while it was still null), and re-kick on auth-state
+      // changes (deduped by onViewer's in-flight ref).
+      if (isOpfsAvailable !== null) {
         (async () => {
-          // onViewer's own in-flight guard dedupes when this races the
-          // [viewer]-effect during a mid-load auth resolution.
           await onViewer()
         })()
       }
