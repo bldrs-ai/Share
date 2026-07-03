@@ -22,6 +22,7 @@ import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {occurrencePathKeySetForTree, trimToTreeOccurrencePath} from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
@@ -590,8 +591,21 @@ export default function CadView({
         // STEP: the picked instance's occurrence path so the NavTree highlights
         // the one occurrence, not every reuse of the part type. Null on shift
         // (whole element) and for IFC / single-occurrence parts.
-        const occurrencePath = event.shiftKey ? null :
+        //
+        // The geometry path can be deeper than any tree node's — Conway
+        // appends a segment per child shape_representation level, and an
+        // SRR-attached brep (Alibre exports) adds a non-NAUO id below the
+        // leaf — so trim to the deepest tree-known prefix or the NavTree's
+        // exact-key matches (row highlight, scroll) find nothing. The store
+        // is read imperatively: this handler is installed once from
+        // `onModel`, before that render's `rootElement` is set.
+        const rawOccurrencePath = event.shiftKey ? null :
           (mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null)
+        const occurrencePath = rawOccurrencePath ?
+          trimToTreeOccurrencePath(
+            rawOccurrencePath,
+            occurrencePathKeySetForTree(useStore.getState().rootElement)) :
+          null
         selectItemsInScene([parentExpressId], true, instanceIds, occurrencePath)
         return
       }

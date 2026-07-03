@@ -27,6 +27,45 @@ Share consumes this once it bumps to the Conway release that ships #353.
 
 ## Share side
 
+### Geometry paths can extend below tree leaves (why Arty_Z7 had no highlight)
+
+The tree and geometry agree on NAUO segments, but they are **not always the
+same length**. Conway's geometry walk pushes one occurrence segment per child
+`shape_representation` level; only a CDSR-placed child resolves to a NAUO id —
+for a plain `shape_representation_relationship` child the fallback pushes the
+SRR's *own* express id. Alibre / ST-Developer exports (e.g. the Arty_Z7 board)
+attach every part's brep that way: `SDR → SHAPE_REPRESENTATION` (placement
+axes only) + `SHAPE_REPRESENTATION_RELATIONSHIP(SR, ADVANCED_BREP_SHAPE_REP)`.
+So every geometry instance's path is the tree leaf's path **plus a trailing
+non-NAUO segment** (`[…, 31310, 31242, 38151]` vs the tree's
+`[…, 31310, 31242]`), and an exact-key join between the two sides matches
+nothing. Simpler exports (solids directly in the SDR's representation) have no
+extension, which is why the small-model tests passed while Arty failed.
+
+The symptom pair that identifies this case: **hide works but highlight
+doesn't** — the hide path resolves prefix-inclusively (an extension segment is
+just a deeper key under the node's prefix), while the leaf-click highlight and
+the pick→NavTree reconciliation used exact keys. Two consumer-side fixes
+restore the join without touching the persisted tables (no GLB schema bump —
+caches keep the raw extended paths):
+
+- **Leaf click → scene:** `getInstanceIdsForOccurrencePath`'s
+  `includeDescendants: false` fast path falls back to the prefix scan when the
+  exact key misses. An exact *hit* still skips the scan — when the tree leaf's
+  own key exists, deeper keys belong to other (deeper-NAUO) occurrences.
+- **Scene pick → NavTree:** the pick handler trims the instance's raw path to
+  the deepest tree-known prefix (`trimToTreeOccurrencePath` +
+  `occurrencePathKeySetForTree`, `utils/occurrencePaths.js`) before it enters
+  the store, so the NavTree's exact-key row highlight / scroll / auto-expand
+  and the `H`-toggle's node key (the path's last segment) all see tree-valid
+  paths. No tree keys (IFC, pre-0.9.0 cache) passes the path through; no
+  shared prefix degrades to null = type-level, same as having no path.
+
+A root fix (only push NAUO-backed segments, or expose the segment kind) belongs
+upstream in Conway's `makeThunk` occurrence stamping; the Share-side fixes above
+keep working either way since a NAUO-only geometry path is just the zero-
+extension case.
+
 ### The id-space mismatch (why scalar `expressID` can't join the two sides)
 
 The two surfaces speak **different express-id spaces** for STEP:
