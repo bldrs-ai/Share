@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.3 — growth-strategy reconciliation + AI-workspace pivot
-**Date:** 2026-07-02
+**Status:** Draft v0.4 — AI-strategy synthesis folded in (quota axis, moat framing)
+**Date:** 2026-07-03
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -31,6 +31,32 @@ top-down review, surfaces the work that landed without story tracking, and lays 
    multi-user, with user-generated AI-app toolbelts. New Epic group §4.11
    (Assist), Tracks T10–T11, plan in §7. Several long-held loveables
    (`search-120`, `apps-130`, `apps-120`) are absorbed into it.
+
+**v0.4 (2026-07-03)** reconciles against the AI-strategy synthesis
+(`bldrs-ai/bizdev` `docs/ai-strategy.md` — **private**: MAU/revenue/fundraise
+figures and competitor analysis stay there). The public-safe conclusions that
+re-cut this roadmap:
+
+- **Commodity/moat split.** Viewing *small* models is a commodity — free
+  alternatives everywhere, near-zero willingness to pay. Handling *large,
+  real-world* models client-side, fast, with a full structured IFC/STEP API is
+  where Share is in a different class — and it's the substrate an interactive
+  AI loop on real models requires. The engine is the foundation; **"AI iterates
+  on models nobody else can even open"** is the headline (not "fastest
+  viewer").
+- **Quota by size/complexity, not model count.** Free tier keeps small models
+  unlimited (the funnel is demand-gen); the paywall sits at the threshold where
+  Share is the only thing that works. Phase D runs as an **instrumented
+  experiment** with stated hypotheses, not a revenue switch. Reflected in
+  `subscribe-100`/`subscribe-120` and Phase D.
+- **Data sovereignty is a first-class feature.** "Runs in-browser, your model
+  never leaves your machine" is an enterprise wedge, not a privacy nicety — and
+  it constrains §7 architecture (the agent loop must not silently break the
+  no-upload story). New epic `grow-130` for the positioning surface; §7.2 for
+  the constraint.
+- **De-prioritised:** chasing more cheap small-model traffic; "fastest engine"
+  as headline positioning. Phase G stays (it's demand-gen + loop + measurement,
+  all cheap) but doesn't grow beyond that.
 
 It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
@@ -140,6 +166,7 @@ cross-references that connect them. The detailed bodies live in §4 (Epics) and 
 | Grow | `grow-100` | SEO format landing pages `/viewer/*` (NEW) | ⬜ | G | T9 |
 | Grow | `grow-110` | Rich share-link previews / OG cards (NEW) | ⬜ | G | T9 |
 | Grow | `grow-120` | Funnel instrumentation + GA hygiene (NEW) | ⬜ | G | T9 |
+| Grow | `grow-130` | Large-model + data-sovereignty positioning (NEW) | ⬜ | G | T9 |
 | Assist | `assist-100` | Workspace shell: left drawer projects + org nav (NEW) | ⬜ | AI | — |
 | Assist | `assist-110` | Conversational agent panel, single-user (NEW) | ⬜ | AI | T10, T11 |
 | Assist | `assist-120` | Multi-user channels + AI participation modes (NEW) | ⬜ | AI | T10 |
@@ -593,9 +620,22 @@ available.
 here from the existing `Mock Share Dialog B` in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> ("Pro Subscription ($25/mo)") and
 the quota-tracking notes in `identity-decoupling-decisions.md`.*
 
+*v0.4 framing (from the ai-strategy synthesis): the paid boundary must align with
+the moat, not against it. **Quota by model size/complexity, never by model
+count** — a per-model quota taxes exactly the commodity users we'd rather keep as
+free funnel, while a size/complexity threshold charges the user for whom Share is
+the only thing that works. And Phase D ships as an **experiment with stated
+hypotheses** (what share of users hit the threshold; of those, who pays vs.
+churns) instrumented well enough to produce decision-grade conversion evidence —
+not just a revenue trickle.*
+
 **Epic `subscribe-100`: Pricing tiers + feature manager** ⬜ (NEW)
 - Tasks: enumerate features per tier; ship a `tier`-aware capability map; UI in <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>
   mock dialog form.
+- Tier axis (v0.4): small models stay free and unlimited; the Pro boundary is
+  **model size/complexity** (plus private sharing, multi-account, ad-free).
+  Threshold placement is a §10 open question — it wants the model-size
+  distribution from telemetry before it's picked.
 - **Required for Pro-MVP.**
 
 **Epic `subscribe-110`: Stripe checkout + portal** ⬜ (NEW)
@@ -609,7 +649,13 @@ the quota-tracking notes in `identity-decoupling-decisions.md`.*
 - Tasks: server-side counter keyed by Auth0 `sub` (per identity-decoupling-decisions
   §Q4 Open Question on "Quota tracking"); enforcement points in (a) GLB writer
   Phase-5 share upload, (b) per-connection refresh-token mint, (c) public-share
-  retention sweep.
+  retention sweep — **plus (d) the size/complexity gate at model load/parse**,
+  which is the moat-aligned boundary (v0.4). Note (d) is client-observable
+  (parse happens in-browser), so enforcement is a product/UX gate + account
+  state, not a hard server wall — fine for an experiment, revisit if abused.
+- Experiment instrumentation is part of the epic, not an afterthought: events
+  for threshold-hit, upgrade-prompt-shown, converted/churned, so the quota run
+  yields decision-grade evidence either way.
 - **Required for Pro-MVP.**
 
 **Epic `subscribe-130`: Ads on free tier** 🟡
@@ -631,6 +677,14 @@ the v0.3 note above: organic ≈ zero, the share loop is the best earned channel
 have, and the acquisition campaigns need real landing targets and funnel events.
 Quantitative targets live in the **private** bizdev doc; only event names and
 mechanisms are recorded here.
+
+*v0.4 scope check: this group is **free-tier demand-gen + measurement**, and it
+stays cheap. The broad "open X file online" audience is the commodity segment —
+it feeds the funnel and the share loop but it is not where willingness-to-pay
+lives, so Phase G doesn't grow beyond the epics below. The audience that pays
+(large-model, enterprise-profile) gets its own positioning surface (`grow-130`);
+which channel *reaches* that audience is the open GTM question owned bizdev-side
+(ai-strategy §6).*
 
 **Epic `grow-100`: SEO format landing pages** ⬜ (NEW)
 - Programmatic per-format pages — `/viewer/ifc`, `/viewer/step`, `/viewer/stl`,
@@ -667,8 +721,31 @@ mechanisms are recorded here.
   e2e runs ship the prod measurement ID.)
 - Channel-grouping + dashboard slices are bizdev-side config; the Share-side
   deliverable is the events existing and firing.
+- v0.4 addition: capture **model size/complexity** (bucketed — bytes, element
+  count) on the model-open event, so (a) the `subscribe-100` quota threshold is
+  picked from real distribution data, not guessed, and (b) large-model users —
+  the segment that matters — become visible in the funnel instead of drowned in
+  commodity traffic.
 - **Phase G — first slice.** Blocks conversion-based bidding, loop metrics, and
   any honest read of a launch/Show-HN spike.
+
+**Epic `grow-130`: Large-model + data-sovereignty positioning** ⬜ (NEW, v0.4)
+- The positioning surface for the audience that pays: a page (marketing SSG
+  build) that leads with **"AI iterates on models nobody else can even open"**
+  and the two proof points behind it — large-model handling that defeats
+  proprietary and open-source alternatives, and **no-upload data sovereignty**
+  ("runs in-browser; your model never leaves your machine" — written to be
+  quoted in a security review, e.g. what does/doesn't leave the browser, where
+  tokens live, what the share flow uploads and only when asked).
+- A large-model live demo deep link is the centerpiece — show, don't claim.
+  Benchmark specifics stay qualitative here and quantitative in the private
+  strategy doc; the public page can carry whatever benchmark we're happy to
+  defend publicly.
+- Distinct from `grow-100`: format pages target commodity search intent
+  (demand-gen); this page is where enterprise-profile visitors land from
+  outbound/community/DevRel motion and from "what makes Bldrs different" links.
+- **Phase G** (it's one page on the existing SSG build), refreshed at §7 AI.2
+  when the AI-on-large-model demo exists.
 
 
 ### 4.11 Assist (NEW Epic group — the AI workspace)
@@ -842,6 +919,10 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **Unblocks:** `subscribe-100`, `subscribe-110`, `subscribe-120`. Forward-looking:
   the same quota/metering rails are what §7 AI usage metering hangs off — design
   the counter keying with that consumer in mind.
+- **Quota axis (v0.4):** model size/complexity, never model count — the paywall
+  aligns with the moat (small models free + unlimited; the threshold sits where
+  Share is the only thing that works). Phase D runs as an instrumented
+  experiment; see §4.9.
 - **Pro-MVP impact:** Required end-to-end.
 - **Doc:** TBD — to be drafted in `design/new/pro-billing.md`.
 
@@ -849,19 +930,21 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 ### Track T9: Growth funnel & SEO surfaces (NEW)
 
 - **What:** The Share-side infrastructure the growth strategy needs: funnel events
-  (`share_link_created` / `share_link_opened` / `model_interacted`), analytics
-  hygiene (webdriver + hostname guard on GA init), OG/link-preview metadata on
-  share URLs, and the `/viewer/<format>` landing pages on the marketing SSG build.
+  (`share_link_created` / `share_link_opened` / `model_interacted`, plus v0.4
+  size/complexity buckets on model-open), analytics hygiene (webdriver + hostname
+  guard on GA init), OG/link-preview metadata on share URLs, the
+  `/viewer/<format>` landing pages, and the `grow-130` large-model +
+  data-sovereignty positioning page — all on the marketing SSG build.
 - **Status:** Not started in-repo. The enabling substrate (Next.js SSG marketing
   build, PR #1519) is landed; strategy + attribution live in the private bizdev
-  doc.
-- **Unblocks:** `grow-100`, `grow-110`, `grow-120`; honest measurement of every
-  outreach move in `community-130`; conversion-based bidding for the (out-of-repo)
-  acquisition campaigns.
+  docs.
+- **Unblocks:** `grow-100`, `grow-110`, `grow-120`, `grow-130`; honest measurement
+  of every outreach move in `community-130`; conversion-based bidding for the
+  (out-of-repo) acquisition campaigns; the Phase D quota-threshold pick.
 - **Pro-MVP impact:** Phase G — parallel, starts now. Cheap relative to everything
   else in §6 and the only work that grows the top of the funnel.
-- **Docs:** `bldrs-ai/bizdev` `docs/growth-strategy.md` (**private** — numbers stay
-  there) + `design/new/ads.md` (on-site ads only).
+- **Docs:** `bldrs-ai/bizdev` `docs/growth-strategy.md` + `docs/ai-strategy.md`
+  (**private** — numbers stay there) + `design/new/ads.md` (on-site ads only).
 
 
 ### Track T10: Agent runtime & conversation store (NEW)
@@ -884,7 +967,9 @@ same list-item order: What, Status, Unblocks, Pro-MVP impact, Doc.
 - **What:** The viewer's operations exposed as one **MCP tool surface** (selection,
   camera, isolate/hide, properties, notes, model queries), consumed by two
   clients: the T10 agent in-process, and sandboxed iframe apps over a postMessage
-  MCP transport. Plus app storage/versioning for the toolbelt.
+  MCP transport. Plus app storage/versioning for the toolbelt. Forward scope
+  (v0.4): **write/edit tools** — the AI editing loop (§7.4 AI.5) rides this same
+  contract but is gated on a Conway-side write path that doesn't exist yet.
 - **Status:** Not started. Seeds: `WidgetApi/` + AppsDrawer (`apps-100`), the
   `IfcModelService` query surface (T1). Known debt: <a href="https://github.com/bldrs-ai/Share/issues/1386" target="_blank" rel="noopener noreferrer">#1386</a> iframe integration
   broken with its suite disabled — repair is the first slice.
@@ -926,9 +1011,13 @@ landing page — before the Pro launch needs any of it.
   thumbnail; recipient "Open your own model" affordance. Per-model OG image
   generation may pair with T2 Phase 5 in Phase C if edge injection is the chosen
   route.
+- `grow-120` v0.4 slice: size/complexity buckets on the model-open event — the
+  data the Phase D quota threshold gets picked from.
+- `grow-130`: the large-model + data-sovereignty positioning page.
 
-**Exit:** funnel dashboard shows clean stage-by-stage counts; a shared link
-unfurls with a thumbnail in Slack; both format pages indexed.
+**Exit:** funnel dashboard shows clean stage-by-stage counts (with large-model
+users visible as a segment); a shared link unfurls with a thumbnail in Slack;
+format pages + positioning page indexed.
 
 
 ### Phase A: Stabilise the rebuilt viewer (foundation)
@@ -994,9 +1083,16 @@ it was pasted.
 
 
 ### Phase D: Subscribe
-**Goal:** the Pro tier exists and bills.
+**Goal:** the Pro tier exists and bills — run as an **instrumented experiment**
+(v0.4): hypotheses stated up front (share of users hitting the size threshold;
+of those, pay vs. churn), events in place to answer them, and the outcome
+treated as evidence about where willingness-to-pay lives even if revenue is
+small. The quota axis is **model size/complexity**, never model count — small
+models stay free and unlimited.
 - T8 design doc (`design/new/pro-billing.md`) drafted first — locks in tier
-  definitions before code.
+  definitions + the experiment's hypotheses/threshold before code. Threshold
+  picked from the `grow-120` size-distribution telemetry (Phase G), not
+  guessed.
 - `subscribe-100` pricing tiers + feature-gate map.
 - `subscribe-110` Stripe checkout + portal Netlify Functions. Pattern from
   `unlink-identity.js`.
@@ -1006,8 +1102,9 @@ it was pasted.
 - `subscribe-130` ads wired to free-tier-only gate.
 - `share-150` Extended Share dialog (<a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a>) wires Pro upsell into the share flow.
 
-**Exit:** a free user hits a quota wall and can upgrade in two clicks; ads serve on
-text routes only.
+**Exit:** a free user hits the size/complexity threshold and can upgrade in two
+clicks; ads serve on text routes only; the experiment dashboard answers the
+stated hypotheses.
 
 
 ### Phase E: Public-launch checklist
@@ -1044,6 +1141,18 @@ agent that can see and operate the viewer (load, navigate, select, isolate,
 annotate, query properties and structure), collaborates with teammates inside the
 same conversation, and accumulates reusable AI-built tools.
 
+**The strategic frame (v0.4, from the ai-strategy synthesis):** the engine is the
+moat *because* it is the substrate an AI loop on real models requires — holding a
+large, real-world model client-side, fast, with a full structured IFC/STEP API.
+Tools that take minutes just to load such a model can't put it into an
+interactive AI loop at all. So the headline is **"AI iterates on models nobody
+else can even open"** — not "fastest browser engine" (that framing sells a
+viewer). What compounds on top: the semantic IFC/STEP API as the agent-binding
+layer (MCP, T11), no-upload data sovereignty, and the toolbelt flywheel. The
+pivot's success metric is correspondingly concrete: **a handful of large-model,
+enterprise-profile users doing AI-on-a-model they can do nowhere else — and
+paying** — outweighs any amount of free small-model traffic.
+
 Everything shipped to date is the substrate, not a detour: Conway-direct gives
 structured model access (the `IfcModelService` query surface), Notes give anchored
 discussion, the AppsDrawer + `WidgetApi` give an embedding surface, T3/T4 give
@@ -1078,6 +1187,27 @@ The conversational agent and the sandboxed apps consume the *same* tool surface 
 one contract, two consumers — and `apps-130`'s public API becomes a third
 consumer of it later, for free.
 
+Two v0.4 constraints on that architecture:
+
+- **Data sovereignty is load-bearing.** "Your model never leaves your machine"
+  is an enterprise wedge (`grow-130`), and the agent must not silently break
+  it. Model bytes stay client-side; what crosses the wire to the LLM provider
+  is the conversation plus tool *results* (which can contain model-derived
+  data — names, properties, geometry summaries). That boundary needs to be
+  explicit, documented, and ideally user-visible ("what the AI can see").
+  Design treatment in `ai-workspace.md`; it also weighs on the runtime-placement
+  question (§10) — a broker that proxies model content wholesale would forfeit
+  the story.
+- **Read first, edit as the north star.** The tool surface above is
+  read/annotate (query, navigate, notes). The headline capability is the AI
+  **editing** loop — the agent modifying the model, not just inspecting it.
+  That is gated on an engine write path (Conway-side: mutate + re-emit
+  geometry/semantics), which doesn't exist yet and is the biggest open
+  technical question in the pivot (§10). Sequence honestly: AI.2 ships the
+  read/annotate loop on large models (already beyond what anyone else can do);
+  editing lands as AI.5 when the engine supports it — don't let the headline
+  claim outrun the write path.
+
 ### 7.3 What it absorbs
 
 - `search-120` Knowledge graph → the retrieval layer behind conversational QA.
@@ -1103,15 +1233,33 @@ can't destabilise the launch may start earlier behind flags.
   `?feature=workspace`. No AI dependency; can overlap Pro-MVP phases.
 - **AI.2 — Agent v0, single-user.** `assist-110`: viewer MCP tool surface (T11) +
   agent loop (T10) + conversation panel. One user, one conversation per
-  project/model. **This is the demo that sells the pivot.**
+  project/model. **This is the demo that sells the pivot — and it must be run
+  on a large model** (one that defeats the alternatives), because
+  "conversational AI over a small IFC" is replicable by anyone, while the same
+  loop on a model nobody else can open is the moat made visible. Refresh
+  `grow-130` with this demo when it exists.
 - **AI.3 — Toolbelt.** `assist-130`: generate → save → version → run in the
   sandbox over the same MCP surface.
 - **AI.4 — Multi-user.** `assist-120`: shared channels, direct-address vs
   comment-only mechanics, presence. Depends on the shared conversation store —
-  the largest new backend piece, so it goes last.
+  the largest new backend piece.
+- **AI.5 — Editing loop (north star).** Agent-driven model *modification*
+  through the same MCP contract. Gated on the Conway write path (§7.2, §10);
+  scope and staging live in `ai-workspace.md` + a Conway-side design doc once
+  the write path is scoped.
 
 Each stage is a shippable, demoable increment; AI.2 is the earliest point at
 which the pivot is publicly visible.
+
+### 7.5 What proves it
+
+The benchmark proves the engine; it doesn't prove the business. The pivot's
+validation target: **large-model, enterprise-profile users running the AI loop
+on models they can't use anywhere else — paying**. Instrumentation to watch for
+them: the `grow-120` size buckets (are large models showing up at all?), the
+Phase D experiment (do size-threshold users convert?), and direct design-partner
+outreach (bizdev-owned). A few of these users are worth more than any aggregate
+traffic number, for both revenue and the company narrative.
 
 
 ## 8. Post-MVP backlog (loveable)
@@ -1183,10 +1331,14 @@ without sign-off.
 
 ## 10. Open questions
 
-- **Pro tier feature gate definition.** §4.9 sketches `subscribe-100` but the actual
-  list of "this is Pro" features needs your call. Working hypothesis: private link
-  sharing, ad-free, multi-account, larger model cache retention, quota uplift. Confirm
-  before T8 design doc.
+- **Pro tier feature gate definition.** §4.9 sketches `subscribe-100`; the v0.4
+  anchor is decided — the Pro boundary is **model size/complexity** — with
+  private link sharing, ad-free, multi-account, cache retention, and quota
+  uplift around it. Confirm the full list before the T8 design doc.
+- **Quota threshold placement.** *Where* the size/complexity threshold sits is
+  open — it should fall where free alternatives stop working and Share doesn't.
+  Pick from the `grow-120` size-distribution telemetry (Phase G) + the
+  engine-benchmark data, not by feel. (ai-strategy §9.3.)
 - **Free-tier quota numbers.** Public anonymous share TTL (3 days? 5 days?), public
   hosting size ceiling (PDF <a href="https://github.com/bldrs-ai/Share/issues/1421" target="_blank" rel="noopener noreferrer">#1421</a> says <10MB), refresh-token-mint rate. Needs a call
   before `subscribe-120`.
@@ -1199,8 +1351,17 @@ without sign-off.
 - **AI pivot — agent runtime placement.** Client-direct LLM calls (user's key /
   our key in the browser) vs a server-side broker (Netlify Functions or a real
   backend). The broker is where quota enforcement (T8) and key custody naturally
-  live, but it's new server surface for a to-date-static product. Decide in
+  live, but it's new server surface for a to-date-static product — and (v0.4)
+  the **data-sovereignty constraint** cuts against anything that proxies model
+  content wholesale: model bytes stay client-side, only conversation + tool
+  results cross the wire, and that boundary should be user-visible. Decide in
   `design/new/ai-workspace.md` before AI.2.
+- **AI pivot — engine write path.** The editing loop (§7.4 AI.5) needs Conway to
+  support model mutation + re-emission (geometry and semantics), which today it
+  doesn't. Biggest open technical question in the pivot: scope (parametric edits?
+  property edits only at first? geometry?), where the edit log lives, and how
+  round-tripping back to IFC/STEP works. Needs a Conway-side design doc; the
+  answer decides how soon the headline capability is honest.
 - **AI pivot — conversation store.** `assist-120` needs shared, realtime-ish
   conversation state. Candidates: GitHub-issue-backed (Notes-style, free, slow),
   Firebase/Firestore (already floated for T2 Phase 6), or a purpose-built
