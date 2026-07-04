@@ -371,7 +371,8 @@ slice, and isolation controls expected of a BIM viewer.
   product structure + properties and emits them through the `web-ifc` compat surface
   in the exact shapes Share consumes (conway #345 arc), so a STEP file lights up the
   NavTree + Properties panel with no Share code change. Share-side follow-through:
-  <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> (verify against the NIST corpus after the next Conway release bump;
+  <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> (verify against the NIST corpus — unblocked now that the Conway bump
+  landed, PR #1584 → conway 1.356.1126;
   the occurrence-path selection/permalink generalization it asks for landed in
   PR #1581) and
   <a href="https://github.com/bldrs-ai/Share/issues/1570" target="_blank" rel="noopener noreferrer">#1570</a> (pin down the `{value}`-handle + reference-graph contract `ifclib`
@@ -1180,8 +1181,9 @@ format pages + positioning page indexed.
 - Correctness bugs on the rebuilt path: <a href="https://github.com/bldrs-ai/Share/issues/1561" target="_blank" rel="noopener noreferrer">#1561</a> camera-fit "last scene child"
   heuristic, <a href="https://github.com/bldrs-ai/Share/issues/1545" target="_blank" rel="noopener noreferrer">#1545</a> wrong arg to `getIfcType`, <a href="https://github.com/bldrs-ai/Share/issues/1249" target="_blank" rel="noopener noreferrer">#1249</a> (critical) element-permalink
   hydration on private models.
-- STEP follow-through: Conway release bump + <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> NavTree/Properties verification
-  over the NIST corpus (the occurrence-path permalink key landed — PR #1581).
+- STEP follow-through: <a href="https://github.com/bldrs-ai/Share/issues/1569" target="_blank" rel="noopener noreferrer">#1569</a> NavTree/Properties verification over the NIST
+  corpus — unblocked: the Conway release bump landed (PR #1584) and the
+  occurrence-path permalink key landed (PR #1581).
 - T1 **public-launch gate**: 4-angle screenshot harness + GLB bit-level diff against
   golden artifacts. Runs in CI. This is the "we won't regress on the things that
   worked" insurance.
