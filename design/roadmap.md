@@ -10,70 +10,6 @@ This doc normalizes the legacy Epic list against ~2 years of execution since the
 top-down review, surfaces the work that landed without story tracking, and lays out the
 **MVP plan** (billing-ready by definition — §2.1) plus the loveable backlog beyond it.
 
-**v0.3 (2026-07-02) folds in three things:**
-
-1. **Implementation drift since v0.2** — the `conway-web-ifc-adapter` shim retired
-   (`design/new/adapter-removal.md`), the GPU-instancing/`BatchedMesh` render arc
-   behind `?feature=batchedMesh`, STEP metadata extraction (conway #345 arc), and
-   the marketing site's move to Next.js SSG. Reflected in §3–§5.
-2. **Growth-strategy reconciliation** — priorities re-cut against the funnel
-   attribution work in `bldrs-ai/bizdev` `docs/growth-strategy.md`. That doc is
-   **private** (spend, CAC, geo, raw traffic stay there — only qualitative
-   conclusions and instrumentation *shape* are mirrored here). Headline
-   conclusions: paid search is currently the only channel delivering real
-   authored-model opens; organic discovery is effectively zero; shared links are
-   the highest-quality earned traffic we have. Consequence: funnel
-   instrumentation, SEO landing surfaces, and share-loop polish move from
-   "post-MVP polish" into an active parallel phase — §4.10 (Grow), Track T9,
-   §6 Phase G.
-3. **The AI-workspace pivot** — the product direction after (and partly alongside)
-   the MVP: a Claude-Code-like conversational workspace over CAD/BIM models,
-   multi-user, with user-generated AI-app toolbelts. New Epic group §4.11
-   (Assist), Tracks T10–T11, plan in §7. Several long-held loveables
-   (`search-310`, `apps-300`, `apps-310`) are absorbed into it.
-
-**v0.4 (2026-07-03)** reconciles against the AI-strategy synthesis
-(`bldrs-ai/bizdev` `docs/ai-strategy.md` — **private**: MAU/revenue/fundraise
-figures and competitor analysis stay there). The public-safe conclusions that
-re-cut this roadmap:
-
-- **Commodity/moat split.** Viewing *small* models is a commodity — free
-  alternatives everywhere, near-zero willingness to pay. Handling *large,
-  real-world* models client-side, fast, with a full structured IFC/STEP API is
-  where Share is in a different class — and it's the substrate an interactive
-  AI loop on real models requires. The engine is the foundation; **"AI iterates
-  on models nobody else can even open"** is the headline (not "fastest
-  viewer").
-- **Quota by size/complexity, not model count.** Free tier keeps small models
-  unlimited (the funnel is demand-gen); the paywall sits at the threshold where
-  Share is the only thing that works. Phase D runs as an **instrumented
-  experiment** with stated hypotheses, not a revenue switch. Reflected in
-  `subscribe-100`/`subscribe-120` and Phase D.
-- **Data sovereignty is a first-class feature.** "Runs in-browser, your model
-  never leaves your machine" is an enterprise wedge, not a privacy nicety — and
-  it constrains §7 architecture (the agent loop must not silently break the
-  no-upload story). New epic `grow-400` for the positioning surface; §7.2 for
-  the constraint.
-- **De-prioritised:** chasing more cheap small-model traffic; "fastest engine"
-  as headline positioning. Phase G stays (it's demand-gen + loop + measurement,
-  all cheap) but doesn't grow beyond that.
-
-**v0.5 (2026-07-03)** renorms Epic numbering so the hundreds digit encodes the
-**tier**, matching the convention the story issues already use ("Open 200",
-"View 200", "Share (200)"): **100s = MVP, 200s = MLP, 300s = Pro, 400s =
-Enterprise**.
-
-**v0.6 (2026-07-03)** redefines the tiers as **business milestones** rather
-than capability levels — MVP = a steady *trickle* of paying customers with CAC
-estimable from the Ads funnel; MLP = respectable acceleration by building out
-the basics; Pro = power features earning feature-level positive feedback;
-Enterprise = an operating business with validated ICPs — and re-passes the
-numbering against that. Big movers: billing and funnel measurement *into* the
-MVP band, the Assist/AI arc *out* to the Pro band. Rubric + full ID lineage in
-§2.1; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
-to just the **MVP plan** — under this rubric the MVP *is* the paying launch, so
-the prefix was redundant (and collided with the 300-band "Pro" milestone).
-
 It is the single source of truth for Epic/Story/Track structure. The wiki page
 `Planning:-Requirements` and the `epic`-labeled GitHub issues mirror this doc; when they
 disagree, this doc wins and the others get updated.
@@ -111,7 +47,7 @@ Per the PDF: 🥉 = MVP, 🥇 = MLP (Minimum Loveable Product), ❤️ = persona
 those markers in §4 next to the original ranking so we don't lose the people-attached
 intent. New work added since the PDF is marked `(NEW)`.
 
-### 2.1 Tier rubric (Epic ID numbering, v0.6 — milestone-based)
+### 2.1 Tier rubric (Epic ID numbering)
 
 The hundreds digit of every Epic ID encodes the **business milestone the epic
 is needed for** — not a feature-fanciness scale. An epic's tier is the earliest
@@ -126,77 +62,6 @@ unchanged.
 | 200–299 | **MLP** | Significant strides on that trickle by **building out the basics** — signup/paid growth accelerating at a respectable rate. |
 | 300–399 | **Pro** | Confidence stage: **power features** shipping and earning **positive feedback at the feature level**. |
 | 400–499 | **Enterprise** | A fully up-and-running business: validated **ideal customer personas**, breadth of positive feedback, org-scale packaging (sovereignty posture, admin, boundaries). |
-
-What the milestone reading changes (the v0.6 re-pass):
-
-- **Billing is MVP.** No trickle of payers without pricing tiers, checkout, and
-  the size/complexity quota — `subscribe-100/110/120` return to the 100 band
-  (their original numbers, as it happens).
-- **Measurement is MVP.** CAC is not estimable without the `grow-120` funnel
-  events, and the steady signup trickle needs `grow-100` landing targets.
-- **The paid offer is MVP.** The extended share flow (`share-120`) is the
-  paywall surface; private link sharing (`share-130`) is the headline paid
-  feature beside the size quota.
-- **AI is the Pro arc.** The Assist epics move to `assist-3xx` (multi-user
-  channels to 400) — §7's pivot sequencing is unchanged; only the band signal
-  moved. Nothing AI is required for the MVP trickle.
-
-Tier is **not** schedule: the Phase column carries sequencing; the ID
-carries the milestone. §6.0 enumerates the open 100-band work exhaustively.
-
-**ID lineage** — every epic that has ever been renumbered (all other IDs have
-been stable since v0.2). Resolve any ID you meet in an older branch, issue, or
-PR description through this table; several numbers were reused across
-revisions (`share-120`, `share-130`, `share-200`, `open-200`, `view-130`,
-`view-220`, `view-230`, `assist-300`), and `subscribe-100/110/120` were
-restored to their original meanings.
-
-| Epic (current name) | v0.2–v0.4 | v0.5 | v0.6 (current) |
-|---|---|---|---|
-| Recents reliability | open-150 | open-130 | `open-200` |
-| Open multiple IFCs in one session | open-140 | open-200 | `open-210` |
-| Multi-account Sources tab | open-130 | open-300 | `open-300` |
-| Persistent visibility / Isolate | view-130 | view-200 | `view-200` |
-| Selection camera + measurement | view-140 | view-210 | `view-210` |
-| Performance + large-model viewing | view-150 | view-130 | `view-130` |
-| Common view operations | view-170 | view-230 | `view-220` |
-| Placemarks + maps-style filtering | view-180 | view-240 | `view-230` |
-| ETL / Table view | view-160 | view-220 | `view-300` |
-| Extended Share/Login flow | share-150 | share-200 | `share-120` |
-| Private link sharing | share-120 | share-300 | `share-130` |
-| Grant/revoke per-principal | share-130 | share-310 | `share-200` |
-| Folder-scoped boundaries | share-140 | share-400 | `share-400` |
-| BCF round-trip | notes-110 | notes-200 | `notes-200` |
-| Drive-backed notes | notes-120 | notes-210 | `notes-300` |
-| Diff between versions | versions-110 | versions-200 | `versions-300` |
-| Portable versions for Drive | versions-120 | versions-210 | `versions-310` |
-| Cross-repo search | search-110 | search-200 | `search-300` |
-| Knowledge graph | search-120 | search-210 | `search-310` |
-| Profile drawer + multi-account picker | identity-130 | identity-300 | `identity-300` |
-| v1.0 Public API + IDE | apps-130 | apps-200 | `apps-300` |
-| Bldrs Integrate | apps-120 | apps-210 | `apps-310` |
-| Bug report w/ screenshot | community-120 | community-200 | `community-200` |
-| AEC outreach | community-130 | community-210 | `community-210` |
-| Pricing tiers + feature manager | subscribe-100 | subscribe-300 | `subscribe-100` |
-| Stripe checkout + portal | subscribe-110 | subscribe-310 | `subscribe-110` |
-| Quota tracking | subscribe-120 | subscribe-320 | `subscribe-120` |
-| Rich share-link previews (OG) | grow-110 (v0.3) | grow-110 | `grow-200` |
-| Large-model + sovereignty positioning | grow-130 (v0.4) | grow-400 | `grow-400` |
-| Workspace shell (left drawer) | assist-100 (v0.3) | assist-100 | `assist-300` |
-| Conversational agent panel | assist-110 (v0.3) | assist-110 | `assist-310` |
-| AI-apps toolbelt | assist-130 (v0.3) | assist-200 | `assist-320` |
-| Multi-user channels + AI modes | assist-120 (v0.3) | assist-300 | `assist-400` |
-
-**Phase column legend** (used in §3 and §5):
-
-- **A–E** = phase in the MVP plan (§6). A = stabilise viewer, B = identity +
-  multi-account, C = sharing v1, D = subscribe + ads, E = launch checklist.
-- **G** = growth-funnel phase (§6 Phase G) — runs **parallel** to A–C and starts
-  now; small, high-leverage, mostly independent of the viewer/identity arcs.
-- **AI** = AI-workspace pivot arc (§7) — sequenced after the MVP launch, with
-  flagged foundations allowed to start earlier (see §7.4).
-- **—** = already shipped; no MVP work pending.
-- **Post** = held in §8 Post-MVP backlog.
 
 
 ## 3. Status overview
@@ -1552,3 +1417,69 @@ without sign-off.
   geo, raw counts) never land here — they stay in the private bizdev
   growth-strategy doc. Event names, funnel stage definitions, and qualitative
   conclusions are fine.
+
+
+# Changelog
+**v0.3 (2026-07-02) folds in three things:**
+
+1. **Implementation drift since v0.2** — the `conway-web-ifc-adapter` shim retired
+   (`design/new/adapter-removal.md`), the GPU-instancing/`BatchedMesh` render arc
+   behind `?feature=batchedMesh`, STEP metadata extraction (conway #345 arc), and
+   the marketing site's move to Next.js SSG. Reflected in §3–§5.
+2. **Growth-strategy reconciliation** — priorities re-cut against the funnel
+   attribution work in `bldrs-ai/bizdev` `docs/growth-strategy.md`. That doc is
+   **private** (spend, CAC, geo, raw traffic stay there — only qualitative
+   conclusions and instrumentation *shape* are mirrored here). Headline
+   conclusions: paid search is currently the only channel delivering real
+   authored-model opens; organic discovery is effectively zero; shared links are
+   the highest-quality earned traffic we have. Consequence: funnel
+   instrumentation, SEO landing surfaces, and share-loop polish move from
+   "post-MVP polish" into an active parallel phase — §4.10 (Grow), Track T9,
+   §6 Phase G.
+3. **The AI-workspace pivot** — the product direction after (and partly alongside)
+   the MVP: a Claude-Code-like conversational workspace over CAD/BIM models,
+   multi-user, with user-generated AI-app toolbelts. New Epic group §4.11
+   (Assist), Tracks T10–T11, plan in §7. Several long-held loveables
+   (`search-310`, `apps-300`, `apps-310`) are absorbed into it.
+
+**v0.4 (2026-07-03)** reconciles against the AI-strategy synthesis
+(`bldrs-ai/bizdev` `docs/ai-strategy.md` — **private**: MAU/revenue/fundraise
+figures and competitor analysis stay there). The public-safe conclusions that
+re-cut this roadmap:
+
+- **Commodity/moat split.** Viewing *small* models is a commodity — free
+  alternatives everywhere, near-zero willingness to pay. Handling *large,
+  real-world* models client-side, fast, with a full structured IFC/STEP API is
+  where Share is in a different class — and it's the substrate an interactive
+  AI loop on real models requires. The engine is the foundation; **"AI iterates
+  on models nobody else can even open"** is the headline (not "fastest
+  viewer").
+- **Quota by size/complexity, not model count.** Free tier keeps small models
+  unlimited (the funnel is demand-gen); the paywall sits at the threshold where
+  Share is the only thing that works. Phase D runs as an **instrumented
+  experiment** with stated hypotheses, not a revenue switch. Reflected in
+  `subscribe-100`/`subscribe-120` and Phase D.
+- **Data sovereignty is a first-class feature.** "Runs in-browser, your model
+  never leaves your machine" is an enterprise wedge, not a privacy nicety — and
+  it constrains §7 architecture (the agent loop must not silently break the
+  no-upload story). New epic `grow-400` for the positioning surface; §7.2 for
+  the constraint.
+- **De-prioritised:** chasing more cheap small-model traffic; "fastest engine"
+  as headline positioning. Phase G stays (it's demand-gen + loop + measurement,
+  all cheap) but doesn't grow beyond that.
+
+**v0.5 (2026-07-03)** renorms Epic numbering so the hundreds digit encodes the
+**tier**, matching the convention the story issues already use ("Open 200",
+"View 200", "Share (200)"): **100s = MVP, 200s = MLP, 300s = Pro, 400s =
+Enterprise**.
+
+**v0.6 (2026-07-03)** redefines the tiers as **business milestones** rather
+than capability levels — MVP = a steady *trickle* of paying customers with CAC
+estimable from the Ads funnel; MLP = respectable acceleration by building out
+the basics; Pro = power features earning feature-level positive feedback;
+Enterprise = an operating business with validated ICPs — and re-passes the
+numbering against that. Big movers: billing and funnel measurement *into* the
+MVP band, the Assist/AI arc *out* to the Pro band. Rubric + full ID lineage in
+§2.1; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
+to just the **MVP plan** — under this rubric the MVP *is* the paying launch, so
+the prefix was redundant (and collided with the 300-band "Pro" milestone).
