@@ -68,7 +68,10 @@ unchanged.
 
 The master tables. Each Epic and Track lists status, phase, and the
 cross-references that connect them. The detailed bodies live in §4 (Epics) and §5
-(Tracks).
+(Tracks). **Phase column**: A–E = MVP-plan phases (§6: A stabilise viewer,
+B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
+(§6 Phase G, parallel, starts now); AI = pivot arc (§7, after MVP launch);
+— = shipped, nothing pending; Post = §8 backlog.
 
 ### 3.1 Epics
 
@@ -1406,10 +1409,10 @@ without sign-off.
   400s Enterprise), at the next free ten within that band (e.g. the next
   MVP-band Open epic is `open-130`). Add the matching row to §3.1, keeping rows
   tier-sorted within the group. Don't renumber existing IDs outside a deliberate
-  tier change — the v0.5/v0.6 renorms are recorded in the §2.1 lineage table.
+  tier change — the v0.5/v0.6 renorms are recorded in the Changelog's ID-lineage table.
 - **When an Epic changes tier** (promoted into the MVP band, or demoted out):
   that *is* a renumber — do it deliberately, one epic at a time, and add the row
-  (or a new column entry) to the §2.1 lineage table. If it enters or leaves the
+  (or a new column entry) to the Changelog's ID-lineage table. If it enters or leaves the
   100 band, update the §6.0 MVP checklist in the same commit.
 - **Don't delete done Epics.** They stay in §4 as the historical record of what
   shipped, which is what §8 "Post-MVP backlog" is measured against.
@@ -1479,7 +1482,53 @@ estimable from the Ads funnel; MLP = respectable acceleration by building out
 the basics; Pro = power features earning feature-level positive feedback;
 Enterprise = an operating business with validated ICPs — and re-passes the
 numbering against that. Big movers: billing and funnel measurement *into* the
-MVP band, the Assist/AI arc *out* to the Pro band. Rubric + full ID lineage in
-§2.1; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
+MVP band, the Assist/AI arc *out* to the Pro band. Rubric in §2.1; full ID
+lineage below; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
 to just the **MVP plan** — under this rubric the MVP *is* the paying launch, so
 the prefix was redundant (and collided with the 300-band "Pro" milestone).
+
+
+## ID lineage
+
+Every epic that has ever been renumbered (all other IDs have been stable since
+v0.2). Resolve any ID you meet in an older branch, issue, or PR description
+through this table; several numbers were **reused across revisions**
+(`share-120`, `share-130`, `share-200`, `open-200`, `view-130`, `view-220`,
+`view-230`, `assist-300`), and `subscribe-100/110/120` were restored to their
+original meanings.
+
+| Epic (current name) | v0.2–v0.4 | v0.5 | v0.6 (current) |
+|---|---|---|---|
+| Recents reliability | open-150 | open-130 | `open-200` |
+| Open multiple IFCs in one session | open-140 | open-200 | `open-210` |
+| Multi-account Sources tab | open-130 | open-300 | `open-300` |
+| Persistent visibility / Isolate | view-130 | view-200 | `view-200` |
+| Selection camera + measurement | view-140 | view-210 | `view-210` |
+| Performance + large-model viewing | view-150 | view-130 | `view-130` |
+| Common view operations | view-170 | view-230 | `view-220` |
+| Placemarks + maps-style filtering | view-180 | view-240 | `view-230` |
+| ETL / Table view | view-160 | view-220 | `view-300` |
+| Extended Share/Login flow | share-150 | share-200 | `share-120` |
+| Private link sharing | share-120 | share-300 | `share-130` |
+| Grant/revoke per-principal | share-130 | share-310 | `share-200` |
+| Folder-scoped boundaries | share-140 | share-400 | `share-400` |
+| BCF round-trip | notes-110 | notes-200 | `notes-200` |
+| Drive-backed notes | notes-120 | notes-210 | `notes-300` |
+| Diff between versions | versions-110 | versions-200 | `versions-300` |
+| Portable versions for Drive | versions-120 | versions-210 | `versions-310` |
+| Cross-repo search | search-110 | search-200 | `search-300` |
+| Knowledge graph | search-120 | search-210 | `search-310` |
+| Profile drawer + multi-account picker | identity-130 | identity-300 | `identity-300` |
+| v1.0 Public API + IDE | apps-130 | apps-200 | `apps-300` |
+| Bldrs Integrate | apps-120 | apps-210 | `apps-310` |
+| Bug report w/ screenshot | community-120 | community-200 | `community-200` |
+| AEC outreach | community-130 | community-210 | `community-210` |
+| Pricing tiers + feature manager | subscribe-100 | subscribe-300 | `subscribe-100` |
+| Stripe checkout + portal | subscribe-110 | subscribe-310 | `subscribe-110` |
+| Quota tracking | subscribe-120 | subscribe-320 | `subscribe-120` |
+| Rich share-link previews (OG) | grow-110 (v0.3) | grow-110 | `grow-200` |
+| Large-model + sovereignty positioning | grow-130 (v0.4) | grow-400 | `grow-400` |
+| Workspace shell (left drawer) | assist-100 (v0.3) | assist-100 | `assist-300` |
+| Conversational agent panel | assist-110 (v0.3) | assist-110 | `assist-310` |
+| AI-apps toolbelt | assist-130 (v0.3) | assist-200 | `assist-320` |
+| Multi-user channels + AI modes | assist-120 (v0.3) | assist-300 | `assist-400` |
