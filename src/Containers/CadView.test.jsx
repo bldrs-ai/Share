@@ -580,7 +580,11 @@ describe('CadView', () => {
       expect(alert.message.toLowerCase()).toContain('out of memory')
     })
     expect(consoleErrorSpy).toHaveBeenCalledWith(oomErr)
-    expect(captureExceptionSpy).toHaveBeenCalledWith(oomErr)
+    // OOM is an expected, handled device-limit outcome (already surfaced to
+    // the user via the 'oom' alert), so it is intentionally NOT sent to
+    // Sentry's error stream — capturing it is what produced the SHARE-RS
+    // noise. Real (non-OOM) loader failures are still captured.
+    expect(captureExceptionSpy).not.toHaveBeenCalledWith(oomErr)
   })
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing

@@ -286,6 +286,28 @@ describe('Loader', () => {
         .rejects.toThrow('Loader could not read model')
     })
 
+    it('surfaces the engine error (viewer.IFC.ifcLastError) for IFC loads that return null', async () => {
+      // ShareIfcLoader stashes the real Conway failure on
+      // viewer.IFC.ifcLastError before returning null; readModel should
+      // surface that instead of the opaque generic message (SHARE-RS).
+      const mockLoader = {parse: jest.fn().mockResolvedValue(null)}
+      const engineErr = new Error('parseIfcWithConway: OpenModel returned -1')
+      const viewer = {IFC: {ifcLastError: engineErr}}
+
+      await expect(readModel(mockLoader, 'test-data', './', true, true, viewer, null))
+        .rejects.toThrow('OpenModel returned -1')
+    })
+
+    it('tags a constrained-device memory failure as OOM for IFC null loads', async () => {
+      const mockLoader = {parse: jest.fn().mockResolvedValue(null)}
+      // An Emscripten/wasm heap-exhaustion trap — now matched by oom.js.
+      const oomErr = new Error('RuntimeError: memory access out of bounds')
+      const viewer = {IFC: {ifcLastError: oomErr}}
+
+      await expect(readModel(mockLoader, 'test-data', './', true, true, viewer, null))
+        .rejects.toMatchObject({isOutOfMemory: true})
+    })
+
     it('calls fixupCb when provided', async () => {
       const mockModel = {
         geometry: new BufferGeometry(),
