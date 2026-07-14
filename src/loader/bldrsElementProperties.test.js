@@ -14,14 +14,31 @@ import {
 
 
 describe('loader/bldrsElementProperties', () => {
-  describe('captureBldrsElementProperties — fast path via Conway adapter', () => {
-    // The fast path reaches into `ifcAPI.getPassthrough(modelID)` and
-    // iterates the upstream Conway `IfcStepModel` synchronously,
+  describe('captureBldrsElementProperties — streaming path via Conway adapter', () => {
+    // The streaming path reaches into `ifcAPI.getPassthrough(modelID)`
+    // and iterates the upstream Conway `IfcStepModel` synchronously,
     // calling `proxy.getLine(expressID)` per entity to convert raw
     // STEP-tape data to the wit-three-shape object consumers expect.
-    // Pset extraction happens inline — `IfcRelDefinesByProperties`
-    // entities encountered during the walk build the
-    // product→psetIds index in one pass. No spatial tree needed.
+    // Records are gzipped into the wire JSON incrementally (never all
+    // resident at once), so the capture returns `{compressedBytes}` —
+    // tests decode it back to assert on content. Pset extraction
+    // happens inline — `IfcRelDefinesByProperties` entities
+    // encountered during the walk build the product→psetIds index in
+    // one pass. No spatial tree needed.
+
+    /**
+     * Decode a streaming-path capture result back to the wire object
+     * so assertions can run on content. Asserts the discriminated-
+     * union shape on the way through.
+     *
+     * @param {object} result `{compressedBytes: Uint8Array}`
+     * @return {object} `{itemProperties, propertySets}`
+     */
+    function decodeCaptured(result) {
+      expect(result).not.toBeNull()
+      expect(result.compressedBytes).toBeInstanceOf(Uint8Array)
+      return JSON.parse(pako.ungzip(result.compressedBytes, {to: 'string'}))
+    }
 
     /**
      * Build a fake ifcManager that mimics the adapter surface:
@@ -77,7 +94,7 @@ describe('loader/bldrsElementProperties', () => {
         },
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, /* unused */ null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, /* unused */ null))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '101', '102'])
       expect(captured.itemProperties[100]).toEqual(entities[100])
       // Pset index is empty when no IfcRelDefinesByProperties entities exist.
@@ -132,17 +149,19 @@ describe('loader/bldrsElementProperties', () => {
         999: relAB,
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       // Walls 100 and 101 share pset 500 (via the same rel). Wall 102
       // gets pset 501 from a different rel. The pset entities
       // themselves (500, 501) and the rel entities (998, 999) also
       // land in itemProperties so the reader can deref them.
+      // (Structural equality, not identity — the wire round-trip
+      // JSON-serialises class instances to plain objects.)
       expect(captured.propertySets[100]).toEqual([500])
       expect(captured.propertySets[101]).toEqual([500])
       expect(captured.propertySets[102]).toEqual([501])
       expect(captured.itemProperties[500]).toBeDefined()
-      expect(captured.itemProperties[998]).toBe(relC)
-      expect(captured.itemProperties[999]).toBe(relAB)
+      expect(captured.itemProperties[998]).toEqual({...relC})
+      expect(captured.itemProperties[999]).toEqual({...relAB})
     })
 
     it('detects IfcRelDefinesByProperties by numeric type, not constructor.name', async () => {
@@ -177,7 +196,7 @@ describe('loader/bldrsElementProperties', () => {
         getLine: (id) => entities[id],
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       // Pre-fix: this returned `{}` because `constructor.name` was
       // 'Object'. Post-fix: type check matches, pset index built.
       expect(captured.propertySets[100]).toEqual([500])
@@ -208,7 +227,7 @@ describe('loader/bldrsElementProperties', () => {
         999: rel,
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.propertySets[100]).toEqual([500])
     })
 
@@ -234,7 +253,7 @@ describe('loader/bldrsElementProperties', () => {
         getLine: (id) => entities[id],
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeDefined()
       expect(captured.itemProperties[101]).toBeUndefined()
       expect(captured.itemProperties[102]).toBeDefined()
@@ -260,7 +279,7 @@ describe('loader/bldrsElementProperties', () => {
         },
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeUndefined()
       expect(captured.itemProperties[101]).toBeDefined()
     })
@@ -291,7 +310,7 @@ describe('loader/bldrsElementProperties', () => {
         1001: {expressID: 1001, type: 1, Name: {type: 1, value: 'IfcRepresentation'}},
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeDefined() // root
       expect(captured.itemProperties[500]).toBeDefined() // reached via HasProperties
       expect(captured.itemProperties[999]).toBeUndefined() // orphan, pruned
@@ -317,6 +336,56 @@ describe('loader/bldrsElementProperties', () => {
       }
       const captured = await captureBldrsElementProperties(mgr, 0, null)
       expect(captured).toBeNull()
+    })
+
+    it('disables conway entity memoization during the sweep and restores it after', async () => {
+      // Fixed-memory discipline pin: with memoization on, conway pins
+      // one extracted entity object per descriptor for every getLine —
+      // O(all parsed entities) retained for the sweep's duration. The
+      // streaming path must run with it OFF and put the caller's value
+      // back afterwards.
+      const flagDuringGetLine = []
+      const stepModel = {
+        elementMemoization: true,
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          yield {expressID: 101}
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => {
+          flagDuringGetLine.push(stepModel.elementMemoization)
+          return {expressID: id, type: 1, GlobalId: {type: 1, value: `g${id}`}}
+        },
+        releaseEntityCache: jest.fn(),
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(flagDuringGetLine).toEqual([false, false])
+      expect(stepModel.elementMemoization).toBe(true)
+      // Sweep residue dropped at the end (conway ≥1.373 surface;
+      // optional-chained so its absence on older versions is fine —
+      // pinned here so a refactor doesn't silently lose the release).
+      expect(proxy.releaseEntityCache).toHaveBeenCalled()
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '101'])
+    })
+
+    it('restores entity memoization even when the sweep throws', async () => {
+      const stepModel = {
+        elementMemoization: true,
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          throw new Error('iterator exploded')
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => ({expressID: id, GlobalId: {type: 1, value: 'g'}}),
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      await expect(captureBldrsElementProperties(mgr, 0, null)).rejects.toThrow('iterator exploded')
+      expect(stepModel.elementMemoization).toBe(true)
     })
 
     it('falls back to slow path when adapter surface is absent (test stubs etc)', async () => {
@@ -702,6 +771,63 @@ describe('loader/bldrsElementProperties', () => {
   })
 
   describe('end-to-end: capture → inject → reader → decode', () => {
+    it('streams an adapter capture through precompressed inject + reader decode', async () => {
+      // The streaming writer's full production pipeline: adapter
+      // capture emits gzipped wire bytes → injectGlbExtensions embeds
+      // them verbatim as `precompressed` → the reader's single decode
+      // branch (ungzip + JSON.parse) recovers the same tables the
+      // legacy object-capture path produced.
+      const entities = {
+        100: {
+          expressID: 100, type: 3124254112,
+          GlobalId: {type: 1, value: 'g100'},
+          HasProperties: [{type: 5, value: 500}],
+        },
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset_WallCommon'}},
+        999: {
+          expressID: 999, type: 4186316022, // IFCRELDEFINESBYPROPERTIES
+          GlobalId: {type: 1, value: 'g999'},
+          RelatedObjects: [{type: 5, value: 100}],
+          RelatingPropertyDefinition: {type: 5, value: 500},
+        },
+      }
+      const ids = Object.keys(entities).map(Number)
+      const stepModel = {
+        * [Symbol.iterator]() {
+          for (const id of ids) {
+            yield {expressID: id}
+          }
+        },
+      }
+      const proxy = {model: [stepModel], getLine: (id) => entities[id]}
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.compressedBytes).toBeInstanceOf(Uint8Array)
+
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: captured.compressedBytes},
+      ])
+
+      const {json, bin} = parseGlb(withExt)
+      const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
+      const reader = new BldrsElementPropertiesReader({
+        json,
+        getDependency: () => Promise.resolve(buffer),
+      })
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+
+      expect(Object.keys(decoded.itemProperties).sort()).toEqual(['100', '500', '999'])
+      expect(decoded.itemProperties[100]).toEqual(entities[100])
+      expect(decoded.itemProperties[500]).toEqual(entities[500])
+      expect(decoded.propertySets).toEqual({100: [500]})
+    })
+
     it('preserves the captured map through write + read', async () => {
       const tree = {
         expressID: 1, type: 'IFCPROJECT', children: [

@@ -349,9 +349,18 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // module-worker support detection failure). Same result either
     // way; the only observable difference is main-thread freeze
     // duration.
+    // The element-properties capture is a discriminated union: the
+    // streaming path (Conway adapter available) hands back already-
+    // gzipped wire bytes — pass them through as `precompressed` so
+    // neither this thread nor the worker re-materialises the payload;
+    // the slow path hands back the decoded object, compressed by the
+    // inject step as before.
+    const elementPropertiesExt = elementProperties?.compressedBytes instanceof Uint8Array ?
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties.compressedBytes} :
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true}
     const extensionsForInject = [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
-      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
+      elementPropertiesExt,
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ]
     // Scene-level metadata that rides along in the same inject pass
