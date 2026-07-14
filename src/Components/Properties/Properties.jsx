@@ -54,10 +54,10 @@ export default function Properties() {
       if (model && element) {
         // Resolve `element` to the full IFC entity before rendering.
         // `selectedElement` is a spatial-tree node — for cache-miss
-        // IFC it carries full IFC properties (wit-three's
-        // `getSpatialStructure(0, true)` inlines them); for cache-hit
-        // GLB it's the slim whitelist {expressID, type, Name,
-        // LongName, children} captured by `bldrsSpatialTree.js`.
+        // IFC it carries only Name/LongName/GlobalId handles
+        // (CadView loads the tree with Conway's `'names'` mode); for
+        // cache-hit GLB it's the slim whitelist {expressID, type,
+        // Name, LongName, children} captured by `bldrsSpatialTree.js`.
         // `model.getItemProperties(expressID)` returns the full entity
         // in both cases (wit-three's IFCModel prototype on cache-miss;
         // the cached BLDRS_element_properties closure on cache-hit),

@@ -600,10 +600,17 @@ export default function CadView({
     // entity/descriptor caches (the 'names' walk + type sweep touched
     // O(products) entities). Entities rematerialise transparently on the
     // next property access (Properties panel, GLB cache writer), so this
-    // only bounds memory. Conway extension — optional-chained so cache-hit
-    // GLB models (no parser) and older conway versions no-op.
+    // only bounds memory. Conway extension — optional-chained so older
+    // conway versions no-op. The IsModelOpen gate keeps cache-hit GLB
+    // loads silent: they share the live conway ifcAPI via
+    // `viewer.IFC.loader.ifcManager` without ever opening model 0, and
+    // an ungated release would log a spurious model-undefined error.
+    const conwayApi = m.ifcManager?.ifcAPI
     // eslint-disable-next-line new-cap
-    m.ifcManager?.ifcAPI?.ReleaseEntityCache?.(0)
+    if (conwayApi?.ReleaseEntityCache && conwayApi.IsModelOpen?.(0)) {
+      // eslint-disable-next-line new-cap
+      conwayApi.ReleaseEntityCache(0)
+    }
   }
 
 
