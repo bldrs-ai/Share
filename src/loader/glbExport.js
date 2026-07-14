@@ -337,12 +337,16 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
     // Dispatch the JSON.stringify + pako.gzip + extension injection +
     // container packing to the GlbWriter worker. On Schependomlaan-
-    // class IFCs the element-properties payload is multi-MB; running
-    // its `JSON.stringify` + `pako.gzip` on the main thread costs
-    // ~300-500ms of frozen hover-pick. Moving them to the worker
+    // class IFCs the spatial-tree / face-ids payloads are multi-MB;
+    // running their `JSON.stringify` + `pako.gzip` on the main thread
+    // costs ~300-500ms of frozen hover-pick. Moving them to the worker
     // eliminates that block — the main thread only pays the
     // structured-clone cost across postMessage (~50ms on a
     // Schependomlaan payload, scales sublinearly with size).
+    // (The element-properties payload usually arrives already gzipped
+    // from the streaming capture — see below — so for it the worker
+    // only splices bytes; the stringify+gzip offload still applies to
+    // its slow-path object form and to the other extensions.)
     //
     // The fallback path runs everything inline (no worker) — used
     // when the worker fails to construct (Safari edge cases,
