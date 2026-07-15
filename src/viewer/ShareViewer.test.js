@@ -458,6 +458,65 @@ function makeResolverViewer(model) {
 }
 
 
+describe('viewer/ShareViewer getSelectedElementsProps', () => {
+  const IFCWALL_TYPE_CODE = 1095909175
+
+  /**
+   * @param {object} propsById expressID → props object returned by getProperties
+   * @return {object} ShareViewer-prototype-bound stand-in
+   */
+  function makePropsViewer(propsById) {
+    const viewer = Object.create(ShareViewer.prototype)
+    viewer.IFC = {
+      getProperties: jest.fn((modelID, id) => Promise.resolve(propsById[id] ?? null)),
+      loader: {
+        ifcManager: {
+          // Conway contract: type-code → name lookup (ShareIfcManager
+          // ignores modelID and forwards to Conway's global map).
+          getIfcType: jest.fn((_modelID, typeCode) =>
+            (typeCode === IFCWALL_TYPE_CODE ? 'IFCWALL' : undefined)),
+        },
+      },
+    }
+    return viewer
+  }
+
+  it('resolves the type name from the fetched props\' type code, not the expressID (#1545)', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: IFCWALL_TYPE_CODE}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(viewer, [42])
+
+    const manager = viewer.IFC.loader.ifcManager
+    expect(manager.getIfcType).toHaveBeenCalledWith(0, IFCWALL_TYPE_CODE)
+    expect(manager.getIfcType).not.toHaveBeenCalledWith(0, 42)
+    expect(results).toEqual([
+      {modelID: 0, expressID: 42, props: {expressID: 42, type: 'IFCWALL'}},
+    ])
+  })
+
+  it('skips elements whose getProperties returns null instead of throwing (#1545)', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: IFCWALL_TYPE_CODE}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(
+      viewer, [7, 42])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].expressID).toBe(42)
+    // The null-props element must not reach the type lookup.
+    expect(viewer.IFC.loader.ifcManager.getIfcType).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves an already-stringified type untouched', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: 'IFCWALL'}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(viewer, [42])
+
+    expect(viewer.IFC.loader.ifcManager.getIfcType).not.toHaveBeenCalled()
+    expect(results[0].props.type).toBe('IFCWALL')
+  })
+})
+
+
 describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
   it('resolves a leaf occurrence path to exactly its own instance(s)', () => {
     // One reused part-type (parent 100) placed at two occurrences; the paths
