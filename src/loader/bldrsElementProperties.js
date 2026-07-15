@@ -236,16 +236,17 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
 // exists to avoid.
 const STREAM_FLUSH_CHARS = 65536
 
-// How many `getLine` materialisations between conway entity-cache
-// releases during the streaming sweep. Each getLine populates conway's
-// per-entity descriptor cache; on a ~9M-entity IFC letting the sweep
-// run uncapped re-pins ~1GB of descriptors that the post-load
-// `ReleaseEntityCache` had just dropped. Releasing every 200k touched
-// entities bounds the transient to ~20-40MB. Safe mid-iteration: the
-// model iterator is a bare index loop that re-derives each descriptor
-// from the parse index, and dropped descriptors rematerialise on next
-// access.
-const RELEASE_CACHE_EVERY = 200_000
+// NOTE (bench, SKYLARK 7.8M entities, conway 1.372-1.374): an earlier
+// revision also released conway's entity cache every 200k getLines
+// mid-sweep, to bound the descriptor transient. Once the release
+// became real (conway >= 1.373; it was an optional-chained no-op on
+// 1.372) that tick REGRESSED both axes it was meant to protect:
+// sweep time 19-22s -> 31-47s (each wipe forces vtable + descriptor
+// re-growth churn) and process heap 1.6GB -> 3.3GB (the churn outruns
+// the GC). Letting the sweep run uncapped holds the SoA descriptor
+// transient (~1GB on 9M-entity IFCs) exactly as the shipped #1589
+// behavior did, and the single release in the `finally` below still
+// returns it when the sweep ends.
 
 
 /**
@@ -277,10 +278,12 @@ const RELEASE_CACHE_EVERY = 200_000
  * Memory discipline during the sweep:
  *   - `stepModel.elementMemoization` is turned off so conway doesn't
  *     pin an extracted entity object per descriptor (restored after).
- *   - conway's entity/descriptor cache is released every
- *     `RELEASE_CACHE_EVERY` materialisations and once at the end
- *     (`proxy.releaseEntityCache`, conway ≥1.373 — optional-chained
- *     no-op on older versions).
+ *   - conway's entity/descriptor cache is released once, when the
+ *     sweep ends (`proxy.releaseEntityCache`, conway ≥1.373 —
+ *     optional-chained no-op on older versions). Deliberately NOT
+ *     released mid-sweep: see the bench note above `STREAM_FLUSH_CHARS`
+ *     — periodic mid-sweep releases regressed both sweep time and
+ *     peak heap through re-growth churn.
  *
  * Returns `null` (so the caller falls back to the slow path) when:
  *   - the adapter surface isn't accessible (test stubs without
@@ -360,13 +363,6 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   // Counted on every iteration (not just kept entities) so the yield
   // cadence is independent of the percentage filtered out.
   let iterCount = 0
-  let sinceRelease = 0
-  const releaseTick = () => {
-    if (++sinceRelease >= RELEASE_CACHE_EVERY) {
-      sinceRelease = 0
-      proxy.releaseEntityCache?.()
-    }
-  }
 
   const hadMemoization = stepModel.elementMemoization
   stepModel.elementMemoization = false
@@ -384,7 +380,6 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
         // a hover-pick freeze immediately post-render.
         await yieldToBrowser()
       }
-      releaseTick()
       const expressID = entity?.expressID
       if (typeof expressID !== 'number') {
         continue
@@ -485,7 +480,6 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       if (++iterCount % ENTITIES_PER_YIELD === 0) {
         await yieldToBrowser()
       }
-      releaseTick()
       const id = queue[queueHead++]
       let props
       try {
