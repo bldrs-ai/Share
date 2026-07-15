@@ -4,7 +4,12 @@ import debug from '../utils/debug'
 // Named import so esbuild can prune the rest of the JSON (same trick as
 // index/sentry.js) — we only need `version` for the report preamble.
 import {version as shareVersion} from '../../package.json'
-import {LoadLogAccumulator, formatMb} from './loadLogFormat'
+// Canonical shared formatter (conway #301): the CLI renders with the same
+// module, so a pasted CLI run and a pasted browser report read identically.
+// Resolves via conway's `./src/*` export map to compiled/src/core/progress_log.js
+// (dependency-free — no wasm). Was an interim byte-identical local copy until
+// the 1.381.1195 pin shipped this module.
+import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_log'
 
 
 /**

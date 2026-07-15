@@ -19,9 +19,11 @@ receives the same trail as breadcrumbs plus the final report string in the
 
 Canonical implementation: conway `src/core/progress_log.ts`
 (`LoadLogAccumulator` + formatters), consumed by the conway CLI renderer.
-Share currently carries an interim byte-identical copy in
-`src/loader/loadLogFormat.js` — swap it for the conway deep import once the
-pin includes it, then delete the copy (note in that file's header).
+Share deep-imports the same module — `@bldrs-ai/conway/src/core/progress_log`
+(via conway's `./src/*` export map → `compiled/src/core/progress_log.js`,
+dependency-free, no wasm) — so the CLI and the browser render byte-identical
+text. (It was an interim local copy until the 1.381.1195 pin shipped the
+module.)
 
 ## The report, line by line
 
