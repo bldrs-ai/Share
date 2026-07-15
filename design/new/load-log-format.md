@@ -8,7 +8,8 @@ show it:
 
 - the **conway CLI** (stderr; animated on a TTY, plain lines when piped),
 - the **browser console** (mirrored line-for-line by `loader/loadProgress.js`),
-- Share's **status-bar expando** (`LoadStatusSlot`, live during load),
+- Share's **snackbar expando** (`AlertDialogAndSnackbar`, the main bottom-
+  center alert — live during load, a toggle reveals the accumulated lines),
 - Share's **post-load report dialog** (`LoadReportControl`, the "i" next to
   the "?", copy-to-clipboard).
 
@@ -28,10 +29,13 @@ pin includes it, then delete the copy (note in that file's header).
 Share v1.0.1132, 214 MB heap before load          ← 1. host + memory condition
 Conway v1.379.1190                                ← 2. engine identity
 Model: Arty_Z7.stp — AP214, 38.1 MB, SolidWorks 2021 (SwSTEP 2.0)   ← 3. model line
-Download [0%................100%] 2.1s, +40 MB heap    ← 4. stage lines…
-Parsing [0%................100%] 3.2s, +210 MB heap
-Geometry [0%........56%] 41.0s, +388 MB heap           ← (live/animated line)
-Total: 46.3s, 214 → 852 MB heap                        ← 5. separate before/after
+Download: 2.145s, +40.001234 MB heap              ← 4. completed stage (no bar)
+Parsing: 3.201s, +210.512000 MB heap
+Geometry [0%........56%] 41.004s, +388.250000 MB heap   ← live OR failed-at-56% stage
+Total: 46.310s, 214.000000 → 852.000000 MB heap   ← 5. separate before/after
+Warnings & errors (12):                           ← 6. captured console diagnostics
+CDT Exception (hemisphere: 0, svg: 2) … (×8)
+No basis found for brep!
 ```
 
 1. **Host line** — Share version + used-JS-heap before the load begins
@@ -45,14 +49,27 @@ Total: 46.3s, 214 → 852 MB heap                        ← 5. separate before/
    file name, schema (IFC4 / AP214), size, originating system
    (preprocessor). Non-STEP formats print the format-independent subset:
    name, format tag, size.
-4. **Stage lines** — one per stage, frozen when the stage completes. Each
-   stage owns *only its deltas*: its wall-clock duration and its heap
-   growth (`+N MB heap`, signed). The ASCII bar grows dots with percent
-   (`[0%........56%]`, 16 dots ≡ 100%) for determinate stages;
-   indeterminate stages render `[...]`.
+4. **Stage lines** — one per stage. A stage **ends when the next begins**
+   (or when the load finishes), so a stage that received only its opening
+   marker still owns the real elapsed gap until the next — this is what
+   makes a synchronous engine call between two string markers attribute its
+   full duration/heap to the right stage. Each stage owns *only its deltas*:
+   wall-clock duration and signed heap growth.
+   - A **completed** stage drops the bar: `Label: 1.234s, +N MB heap`.
+   - A stage frozen **before reaching 100%** (a failed/aborted determinate
+     stage) keeps its bar to show how far it got: `Geometry [0%..56%] …`.
+   - A **live** stage always shows its bar — determinate `[0%..56%]`
+     (16 dots ≡ 100%), indeterminate `[...]`.
 5. **Total line** — *not* a sum of stages: a separate before/after
    observation of wall clock and heap (`start → end MB heap`). Stages can
    overlap, skip, or leave gaps; Total stays honest regardless.
+6. **Warnings & errors** — the text of every `console.warn`/`console.error`
+   emitted during the load (this captures conway's engine warnings + CDT
+   exceptions, which route through the console), deduplicated with `(×N)`
+   counts and capped, appended below Total so the report is self-contained.
+
+**Precision** — seconds to millisecond precision (3 decimals), memory to
+byte precision (6 decimals of MB), per the report's diagnostic purpose.
 
 After the report, the engine's info/warn summary follows in the console
 (unchanged): the statistics line (parse/geometry/total ms, geometry memory,

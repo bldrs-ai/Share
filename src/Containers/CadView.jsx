@@ -430,7 +430,7 @@ export default function CadView({
     // Per-load progress reporter (conway #301): accumulates the normalized
     // load-log report (status-bar expando + post-load dialog + console
     // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
-    // finally below. Live progress renders in the bottom-bar LoadStatusSlot,
+    // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
     // so the snackbar keeps only the base "Loading <file>" message.
     beginLoadProgress({
       fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,

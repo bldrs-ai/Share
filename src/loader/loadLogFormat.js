@@ -25,6 +25,10 @@ const STAGE_LABELS = {
 const BAR_FULL_DOTS = 16
 const PERCENT = 100
 const MS_PER_SECOND = 1000
+// Seconds to millisecond precision, memory to byte precision (6 decimals of
+// MB ≡ bytes) — issue #301 preview feedback.
+const SECONDS_DECIMALS = 3
+const MB_DECIMALS = 6
 
 
 /**
@@ -67,7 +71,18 @@ export function formatBar(percent) {
  * @return {string}
  */
 export function formatSeconds(milliseconds) {
-  return `${(milliseconds / MS_PER_SECOND).toFixed(1)}s`
+  return `${(milliseconds / MS_PER_SECOND).toFixed(SECONDS_DECIMALS)}s`
+}
+
+
+/**
+ * Format a memory value in MB to byte precision (6 decimals).
+ *
+ * @param {number} megabytes
+ * @return {string} e.g. "720.000000"
+ */
+export function formatMb(megabytes) {
+  return megabytes.toFixed(MB_DECIMALS)
 }
 
 
@@ -101,22 +116,43 @@ export function formatModelLine(info) {
 
 
 /**
- * Format one stage's line from its state.
+ * The signed heap-delta suffix for a stage, byte precision, e.g.
+ * ", +663.000000 MB heap" — empty when memory wasn't sampled.
+ *
+ * @param {object} state
+ * @return {string}
+ */
+function heapDeltaSuffix(state) {
+  if (state.startHeapMb === undefined || state.lastHeapMb === undefined) {
+    return ''
+  }
+  const delta = state.lastHeapMb - state.startHeapMb
+  const sign = delta >= 0 ? '+' : '-'
+  return `, ${sign}${formatMb(Math.abs(delta))} MB heap`
+}
+
+
+/**
+ * Format one stage's line from its state (issue #301 preview feedback):
+ * a live stage shows its bar; a completed stage drops the bar
+ * (`Label: 1.234s, +N MB heap`); a stage frozen below 100% keeps its bar to
+ * show how far it got before failure.
  *
  * @param {object} state
  * @param {boolean} final
  * @return {string}
  */
 function formatStageLine(state, final) {
-  const percent = final && state.percent !== undefined ? PERCENT : state.percent
   const duration = state.lastElapsedMs - state.startElapsedMs
-  let heap = ''
-  if (state.startHeapMb !== undefined && state.lastHeapMb !== undefined) {
-    const delta = Math.round(state.lastHeapMb - state.startHeapMb)
-    const sign = delta >= 0 ? '+' : ''
-    heap = `, ${sign}${delta} MB heap`
+  const heap = heapDeltaSuffix(state)
+  const determinate = state.percent !== undefined
+
+  if (final && !(determinate && state.percent < PERCENT)) {
+    return `${state.label}: ${formatSeconds(duration)}${heap}`
   }
-  return `${state.label} ${formatBar(percent)} ${formatSeconds(duration)}${heap}`
+
+  const bar = formatBar(determinate ? state.percent : undefined)
+  return `${state.label} ${bar} ${formatSeconds(duration)}${heap}`
 }
 
 
@@ -167,7 +203,10 @@ export class LoadLogAccumulator {
 
     let closedLine
     if (this.current === undefined || this.current.label !== label) {
-      closedLine = this.closeCurrentStage()
+      // A stage ends when the next begins — extend the outgoing stage to
+      // this transition point so its duration/heap cover the real elapsed
+      // gap (a stage that got only its opening event would otherwise read 0).
+      closedLine = this.closeCurrentStage(event.elapsedMs, event.memoryMb)
       this.current = {
         label,
         startElapsedMs: event.elapsedMs,
@@ -190,13 +229,25 @@ export class LoadLogAccumulator {
   }
 
   /**
-   * Close any open stage (e.g. at load end) and freeze its line.
+   * Close any open stage (e.g. at load end) and freeze its line. When an
+   * end point is given, the stage is extended to it first (a stage ends
+   * when the next begins, or when the load finishes).
    *
+   * @param {number} [atElapsedMs] elapsed ms to extend the stage to first
+   * @param {number} [atMemoryMb] heap MB to extend the stage to first
    * @return {string|undefined} the closed stage's line, if one was open
    */
-  closeCurrentStage() {
+  closeCurrentStage(atElapsedMs, atMemoryMb) {
     if (this.current === undefined) {
       return undefined
+    }
+    if (atElapsedMs !== undefined) {
+      this.current.lastElapsedMs = atElapsedMs
+      this.lastElapsedMs = atElapsedMs
+    }
+    if (atMemoryMb !== undefined) {
+      this.current.lastHeapMb = atMemoryMb
+      this.lastHeapMb = atMemoryMb
     }
     const line = formatStageLine(this.current, true)
     this.finished.push(line)
@@ -226,7 +277,7 @@ export class LoadLogAccumulator {
     const duration = this.lastElapsedMs - (this.firstElapsedMs ?? 0)
     let heap = ''
     if (this.firstHeapMb !== undefined && this.lastHeapMb !== undefined) {
-      heap = `, ${Math.round(this.firstHeapMb)} → ${Math.round(this.lastHeapMb)} MB heap`
+      heap = `, ${formatMb(this.firstHeapMb)} → ${formatMb(this.lastHeapMb)} MB heap`
     }
     return `Total: ${formatSeconds(duration)}${heap}`
   }

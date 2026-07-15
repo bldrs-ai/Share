@@ -74,14 +74,19 @@ describe('loadProgress', () => {
       expect(reportLines()).toContain('Model: ISS_stationary.glb — GLB, 38.1 MB')
     })
 
-    it('publishes a live status line and freezes stage lines on transition', () => {
+    it('publishes a live bar and freezes a completed stage without a bar', () => {
       beginLoadProgress({fileInfo: 'index.ifc'})
       reportLoadProgress({phase: 'dataParse', completed: 50, total: 100, elapsedMs: 100})
+      // Live stage keeps its bar.
       expect(useStore.getState().currentLoadLine).toMatch(/^Parsing \[0%/)
 
+      // dataParse reaches 100%, then geometry begins → Parsing freezes as a
+      // completed line: colon format, no bar.
+      reportLoadProgress({phase: 'dataParse', completed: 100, total: 100, elapsedMs: 150})
       reportLoadProgress({phase: 'geometry', completed: 0, total: 10, elapsedMs: 200})
       const frozenParsing = reportLines().find((line) => line.startsWith('Parsing'))
-      expect(frozenParsing).toMatch(/100%/)
+      expect(frozenParsing).toMatch(/^Parsing: /)
+      expect(frozenParsing).not.toMatch(/\[/)
       expect(useStore.getState().currentLoadLine).toMatch(/^Geometry/)
     })
 
@@ -90,7 +95,8 @@ describe('loadProgress', () => {
       reportLoadProgress('Downloading model data...')
       expect(useStore.getState().currentLoadLine).toMatch(/^Downloading model data \[\.\.\.\]/)
       reportLoadProgress('Processing model data...')
-      expect(reportLines().some((line) => line.startsWith('Downloading model data'))).toBe(true)
+      // Indeterminate stage completed → colon format, no bar.
+      expect(reportLines().some((line) => /^Downloading model data: /.test(line))).toBe(true)
     })
 
     it('endLoadProgress freezes the running stage + Total and clears the live line', () => {
@@ -99,8 +105,26 @@ describe('loadProgress', () => {
       endLoadProgress()
       const lines = reportLines()
       expect(lines.some((line) => line.startsWith('Geometry'))).toBe(true)
-      expect(lines[lines.length - 1]).toMatch(/^Total: /)
+      expect(lines.some((line) => /^Total: /.test(line))).toBe(true)
       expect(useStore.getState().currentLoadLine).toBe(null)
+    })
+
+    it('appends captured console warnings/errors after the Total line', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 50})
+      // Engine-style errors during the load — captured via the console tee.
+      console.error('CDT Exception (hemisphere: 0)')
+      console.error('CDT Exception (hemisphere: 0)')
+      endLoadProgress()
+
+      const lines = reportLines()
+      const totalIndex = lines.findIndex((line) => /^Total: /.test(line))
+      const diagHeaderIndex = lines.findIndex((line) => /^Warnings & errors \(/.test(line))
+      expect(totalIndex).toBeGreaterThanOrEqual(0)
+      expect(diagHeaderIndex).toBeGreaterThan(totalIndex)
+      expect(lines).toContain('CDT Exception (hemisphere: 0) (×2)')
+      consoleErrorSpy.mockRestore()
     })
 
     it('a new load clears the previous report', () => {

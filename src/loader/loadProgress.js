@@ -4,7 +4,7 @@ import debug from '../utils/debug'
 // Named import so esbuild can prune the rest of the JSON (same trick as
 // index/sentry.js) — we only need `version` for the report preamble.
 import {version as shareVersion} from '../../package.json'
-import {LoadLogAccumulator} from './loadLogFormat'
+import {LoadLogAccumulator, formatMb} from './loadLogFormat'
 
 
 /**
@@ -24,6 +24,9 @@ import {LoadLogAccumulator} from './loadLogFormat'
 
 const BREADCRUMB_INTERVAL_MS = 1000
 const STATUS_LINE_INTERVAL_MS = 100
+// Cap on distinct warning/error lines appended to the report so a model
+// that throws thousands of CDT exceptions stays copy-pasteable.
+const MAX_DIAGNOSTIC_LINES = 50
 
 /**
  * No event during a tickable phase for this long → stalled. Long enough
@@ -103,25 +106,75 @@ class LoadProgressReporter {
     this.stallReported = false
     this.startTime = Date.now()
     this.ended = false
+    // Distinct console warning/error text → occurrence count, captured via
+    // the console tee below and appended after the Total line (issue #301
+    // preview feedback #4). Includes conway's engine warnings/errors, which
+    // route through console.warn/error.
+    this.diagnostics = new Map()
+    this.installConsoleTee()
 
     // Report preamble (log lines 1-2): Share version + memory condition
     // before the load. The engine line arrives via reportEngineVersion once
     // the wasm is initialized.
     const heap = usedHeapMb()
-    const heapNote = heap !== undefined ? `, ${Math.round(heap)} MB heap before load` : ''
+    const heapNote = heap !== undefined ? `, ${formatMb(heap)} MB heap before load` : ''
     this.addReportLine(`Share v${shareVersion}${heapNote}`)
   }
 
   /**
+   * Tee console.warn / console.error for the load window so their text is
+   * captured into the report (deduplicated with counts). Restored by
+   * dispose(). Our own report lines use console.info, so they aren't
+   * captured. Multi-line messages (wasm stack traces) collapse to one line.
+   */
+  installConsoleTee() {
+    this.originalWarn = console.warn
+    this.originalError = console.error
+    const capture = (args) => {
+      const text = args
+        .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
+        .join(' ').replace(/\s+/g, ' ').trim()
+      if (text !== '') {
+        this.diagnostics.set(text, (this.diagnostics.get(text) ?? 0) + 1)
+      }
+    }
+    console.warn = (...args) => {
+      capture(args)
+      this.originalWarn.apply(console, args)
+    }
+    console.error = (...args) => {
+      capture(args)
+      this.originalError.apply(console, args)
+    }
+  }
+
+  /** Restore the console methods the tee replaced. Idempotent. */
+  restoreConsole() {
+    if (this.originalWarn !== undefined) {
+      console.warn = this.originalWarn
+      this.originalWarn = undefined
+    }
+    if (this.originalError !== undefined) {
+      console.error = this.originalError
+      this.originalError = undefined
+    }
+  }
+
+  /**
    * Append a frozen line to the report: store (for the expando/dialog) +
-   * console mirror, so the UI shows exactly what the JS console shows.
+   * optional console mirror, so the UI shows exactly what the JS console
+   * shows during the load.
    *
    * @param {string} line
+   * @param {boolean} [echo] mirror to console.info (default true); false for
+   *   the post-Total diagnostics, which were already on the console
    */
-  addReportLine(line) {
+  addReportLine(line, echo = true) {
     this.lines.push(line)
-    // eslint-disable-next-line no-console
-    console.info(line)
+    if (echo) {
+      // eslint-disable-next-line no-console
+      console.info(line)
+    }
     this.publishReport()
   }
 
@@ -280,22 +333,51 @@ class LoadProgressReporter {
   }
 
   /**
-   * Finish the report: close the running stage, add the separate
-   * before/after Total line, clear the live line.
+   * Finish the report: close the running stage (extended to the load-end
+   * point so its duration is real), add the separate before/after Total
+   * line, then append the captured console warnings/errors, and clear the
+   * live line.
    */
   finishReport() {
-    const closedLine = this.log.closeCurrentStage()
+    const closedLine = this.log.closeCurrentStage(Date.now() - this.startTime, usedHeapMb())
     if (closedLine !== undefined) {
       this.addReportLine(closedLine)
     }
     this.addReportLine(this.log.totalLine())
+
+    // Warnings & errors captured from the console during the load, appended
+    // after Total (issue #301 preview feedback #4). Restore the console
+    // first so re-echoing these lines can't loop back through the tee.
+    this.restoreConsole()
+    this.appendDiagnostics()
+
     useStore.getState().setCurrentLoadLine(null)
   }
 
-  /** Stop watching (load finished or failed). */
+  /** Append the deduplicated console warnings/errors below the Total line. */
+  appendDiagnostics() {
+    if (this.diagnostics.size === 0) {
+      return
+    }
+    const total = Array.from(this.diagnostics.values()).reduce((sum, count) => sum + count, 0)
+    this.addReportLine(`Warnings & errors (${total}):`, false)
+
+    let shown = 0
+    for (const [text, count] of this.diagnostics) {
+      if (shown >= MAX_DIAGNOSTIC_LINES) {
+        this.addReportLine(`(+${this.diagnostics.size - shown} more distinct)`, false)
+        break
+      }
+      this.addReportLine(count > 1 ? `${text} (×${count})` : text, false)
+      shown++
+    }
+  }
+
+  /** Stop watching (load finished or failed); restore the console tee. */
   dispose() {
     this.ended = true
     this.clearStallWatchdog()
+    this.restoreConsole()
   }
 }
 

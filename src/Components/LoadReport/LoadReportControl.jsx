@@ -14,7 +14,7 @@ const COPY_CONFIRM_MS = 2000
  * Help control once a load has finished and opens the accumulated
  * load-log report (design/new/load-log-format.md) in a dialog the user
  * can copy — the same lines the JS console received during the load.
- * Hidden while a load is running (LoadStatusSlot owns that) and before
+ * Hidden while a load is running (the snackbar owns the live view) and before
  * any load has produced a report.
  *
  * @return {ReactElement|null}

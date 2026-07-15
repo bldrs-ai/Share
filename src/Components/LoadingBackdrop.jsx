@@ -6,8 +6,8 @@ import useStore from '../store/useStore'
 
 /**
  * Full-screen overlay while a model loads. Deliberately just the dimmer +
- * spinner — live progress renders in the status-bar expando
- * (LoadStatusSlot), which shows the same normalized load-log lines the JS
+ * spinner — live progress renders in the snackbar expando
+ * (AlertDialogAndSnackbar), which shows the same normalized load-log lines the JS
  * console gets (design/new/load-log-format.md).
  *
  * @return {ReactElement}
