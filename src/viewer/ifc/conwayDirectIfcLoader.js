@@ -313,7 +313,15 @@ export function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
     } else if (args.length >= 2) {
       withProps = isMode(args[1]) ? args[1] : Boolean(args[1])
     }
-    return ifcAPI.properties.getSpatialStructure(modelID, withProps)
+    // `includeSolids` (Conway ≥1.376.1184) surfaces STEP multibody sub-solids
+    // as ephemeral `type: 'solid'` NavTree nodes (named SolidWorks bodies like
+    // the NEMA 23 motor's `Boss-Extrude7`; anonymous solid dumps stay
+    // suppressed engine-side). The IFC surface ignores the option. This is the
+    // NavTree/search feed; the IfcIsolator path (`makeConwayDirectIfcManager`
+    // above) intentionally stays product-only — hide/isolate keys on product
+    // subsets and has no meaning for a sub-solid yet. See Conway
+    // `design/new/step-nonproduct-semantics.md`.
+    return ifcAPI.properties.getSpatialStructure(modelID, withProps, {includeSolids: true})
   }
   ifcModel.getItemProperties = (expressID, recursive = false) => {
     return ifcAPI.properties.getItemProperties(modelID, expressID, recursive)
