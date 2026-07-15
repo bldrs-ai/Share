@@ -16,6 +16,14 @@ export default function createIFCSlice(set, get) {
     isModelLoading: false,
     setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
 
+    // Last structured load-progress event ({phase, completed, total?, unit,
+    // elapsedMs, memoryMb?} — conway core/progress.ts shape, see
+    // loader/loadProgress.js). Drives the determinate LoadingBackdrop;
+    // null when idle or when the engine predates the progress API (the
+    // backdrop then falls back to its indeterminate spinner).
+    loadProgress: null,
+    setLoadProgress: (progress) => set(() => ({loadProgress: progress})),
+
     // TODO(pablo): really needed?
     isModelReady: false,
     setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),

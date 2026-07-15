@@ -152,7 +152,12 @@ export default class ShareIfcLoader {
         onProgress('Parsing model geometry...')
       }
       const ifcAPI = this.ifcManager.ifcAPI
-      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI)
+      // onProgress is threaded into conway's ON_PROGRESS extension so the
+      // opaque gap between 'Parsing model geometry...' and 'Building
+      // model...' carries real per-phase counts (headerParse / dataParse /
+      // geometry — conway #301). Engines without the extension just keep
+      // the coarse strings.
+      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress)
 
       if (onProgress) {
         onProgress('Building model...')

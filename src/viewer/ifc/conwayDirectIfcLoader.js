@@ -46,6 +46,8 @@
 // dispatch on `typeof model.X === 'function'` without branching on
 // the load backend.
 
+import {isFeatureEnabled} from '../../FeatureFlags'
+import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
 
@@ -77,9 +79,13 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {object} [settings] OpenModel settings — defaults to
  *   `{COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}` to match
  *   the wit-three baseline.
+ * @param {Function} [onProgress] receives conway's structured
+ *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
+ *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
+ *   silently ignored by engines that predate it (real web-ifc, old pins).
  * @return {Promise<{modelID: number, captured: Array}>}
  */
-export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
+export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, onProgress = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -91,10 +97,24 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
     // eslint-disable-next-line new-cap
     await ifcAPI.Init()
   }
+  applyEngineLogLevel(ifcAPI)
   const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
-  const openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
-  // eslint-disable-next-line new-cap
-  const modelID = ifcAPI.OpenModel(data, openSettings)
+  let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
+  if (onProgress) {
+    openSettings = {...openSettings, ON_PROGRESS: onProgress}
+  }
+  // OpenModelAsync (conway #301 §2) yields to the event loop between
+  // progress ticks, so the backdrop/snackbar actually repaint and the
+  // browser stops flagging the tab as stalled mid-parse. Feature-detected:
+  // engines without it get the classic synchronous OpenModel.
+  let modelID
+  if (typeof ifcAPI.OpenModelAsync === 'function') {
+    // eslint-disable-next-line new-cap
+    modelID = await ifcAPI.OpenModelAsync(data, openSettings)
+  } else {
+    // eslint-disable-next-line new-cap
+    modelID = ifcAPI.OpenModel(data, openSettings)
+  }
   if (typeof modelID !== 'number' || modelID < 0) {
     throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
   }
@@ -104,6 +124,34 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
     captured.push(flatMesh)
   })
   return {modelID, captured}
+}
+
+
+// web-ifc numeric log levels (conway's SetLogLevel shim uses the same
+// numbering so an engine swap keeps working).
+const ENGINE_LOG_LEVEL_DEBUG = 1
+const ENGINE_LOG_LEVEL_WARN = 3
+
+
+/**
+ * Quiet the engine's console for a clean load (#301 §6): warnings/errors
+ * only by default, everything (deduped log table included) under the
+ * `glbVerbose` diagnostics flag. Feature-detected — old engine pins and
+ * real web-ifc's wasm-side SetLogLevel both tolerate or lack this call.
+ *
+ * @param {object} ifcAPI
+ */
+function applyEngineLogLevel(ifcAPI) {
+  if (typeof ifcAPI.SetLogLevel !== 'function') {
+    return
+  }
+  try {
+    // eslint-disable-next-line new-cap
+    ifcAPI.SetLogLevel(
+      isFeatureEnabled('glbVerbose') ? ENGINE_LOG_LEVEL_DEBUG : ENGINE_LOG_LEVEL_WARN)
+  } catch (e) {
+    debug(WARN).warn('conwayDirectIfcLoader#applyEngineLogLevel:', e)
+  }
 }
 
 

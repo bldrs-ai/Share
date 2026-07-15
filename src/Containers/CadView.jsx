@@ -12,6 +12,14 @@ import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {
+  attachLoadFailureContext,
+  beginLoadProgress,
+  endLoadProgress,
+  formatLoadProgress,
+  isStructuredProgress,
+  reportLoadProgress,
+} from '../loader/loadProgress'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
@@ -129,6 +137,8 @@ export default function CadView({
 
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
+
+  const setLoadProgress = useStore((state) => state.setLoadProgress)
 
   // UISlice
   const setAlert = useStore((state) => state.setAlert)
@@ -309,6 +319,10 @@ export default function CadView({
       }
 
       console.error(e)
+      // load.* tags + context from the last progress event, so this
+      // capture groups by phase in Sentry instead of landing in one
+      // detail-free "model loading failed" bucket (conway #301 §7).
+      attachLoadFailureContext()
       captureException(e)
       return
     } finally {
@@ -417,9 +431,26 @@ export default function CadView({
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
 
+    // Per-load progress reporter (conway #301): drives the determinate
+    // backdrop, mirrors the phase timeline into Sentry breadcrumbs, and
+    // watches for stalls. Disposed in the finally below.
+    beginLoadProgress({
+      fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
+      onEvent: (event) => setLoadProgress(event),
+      onStall: (lastEvent) => {
+        const where = lastEvent ? `: last progress ${formatLoadProgress(lastEvent)}` : ''
+        setSnackMessage(`${loadingMessageBase}: still working${where}…`)
+      },
+    })
+
     const onProgress = (progressMsg) => {
+      reportLoadProgress(progressMsg)
       let msg
-      if (progressMsg && typeof progressMsg === 'object') {
+      if (isStructuredProgress(progressMsg)) {
+        // Structured conway ProgressEvent — phase label + percent in the
+        // snackbar, full detail on the backdrop via the store.
+        msg = formatLoadProgress(progressMsg)
+      } else if (progressMsg && typeof progressMsg === 'object') {
         const loadedBytes = progressMsg.loaded ?? progressMsg.receivedLength
         if (Number.isFinite(loadedBytes)) {
           // eslint-disable-next-line no-magic-numbers
@@ -472,6 +503,12 @@ export default function CadView({
       // generalises that pattern to every loader error.
       throw error
     } finally {
+      // Stall watchdog off, backdrop back to indeterminate/idle. The
+      // reporter's last-event state stays queryable after end —
+      // onViewerInternal's catch stamps it onto Sentry via
+      // attachLoadFailureContext before capturing.
+      endLoadProgress()
+      setLoadProgress(null)
       setIsModelLoading(false)
     }
 

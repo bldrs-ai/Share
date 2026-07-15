@@ -165,7 +165,7 @@ export async function load(
   let cameFromGlbCache = false
   const wantGlb = isFeatureEnabled('glb') && isIfc
   if (wantGlb) {
-    glbInfo('feature enabled')
+    glbVerbose('feature enabled')
   }
 
   if (isOpfsAvailable) {
@@ -221,7 +221,7 @@ export async function load(
           // the GLB cache lookup can happen pre-download (fastest hit path).
           if (wantGlb && shaHash) {
             cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
-            glbInfo(
+            glbVerbose(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
@@ -293,7 +293,7 @@ export async function load(
           const contentSha = await sha1Hex(sourceBytes)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
-            glbInfo(
+            glbVerbose(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
@@ -478,7 +478,7 @@ export async function load(
     // one element express ID), in which case selecting any of those
     // positions correctly highlights every other position too.
     const stats = summariseElementIdAttribute(model)
-    glbInfo(
+    glbVerbose(
       `reader: per-vertex element-IDs — ${stats.uniqueIds} unique across ` +
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
@@ -619,7 +619,7 @@ export async function load(
       meshIndex++
     })
     if (attached > 0) {
-      glbInfo(
+      glbVerbose(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
         `${totalInstances} instances under ${allParents.size} IFC products ` +
         `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
@@ -684,7 +684,7 @@ export async function load(
       }
     })
     if (bvhBuilt > 0) {
-      glbInfo(
+      glbVerbose(
         `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
         `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
     }
@@ -1037,7 +1037,7 @@ export function convertToShareModel(model, viewer) {
   const spatialTree = model.userData?.bldrsSpatialTree
   if (spatialTree) {
     model.getSpatialStructure = (_modelID, _withProperties) => spatialTree
-    glbInfo(
+    glbVerbose(
       'reader: hydrated NavTree from BLDRS_spatial_tree (' +
       `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
   }
@@ -1081,7 +1081,7 @@ export function convertToShareModel(model, viewer) {
         .map((pid) => data.itemProperties[pid])
         .filter((p) => p !== null && p !== undefined)
     }
-    glbInfo(
+    glbVerbose(
       'reader: hydrated Properties panel from BLDRS_element_properties ' +
       `(${elementProperties.compressed.byteLength}B compressed; ` +
       'decode on first access)')
@@ -1099,10 +1099,10 @@ export function convertToShareModel(model, viewer) {
       return geom.id
     }
   } else {
-    glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
+    glbVerbose('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
   }
   if (foundPreservedInstanceId) {
-    glbInfo('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
+    glbVerbose('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
@@ -1363,12 +1363,26 @@ function newGltfLoader() {
 /**
  * Computes progress and calls given onProgress handler
  *
+ * Emits a structured 'download' event (same shape as conway's
+ * ProgressEvents, see loader/loadProgress.js) when axios knows the total,
+ * so the backdrop is determinate during download too; falls back to the
+ * legacy MB string otherwise.
+ *
  * @param {Event} progressEvent
  * @param {Function} onProgress
  */
 function onDownloadProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
     const loadedBytes = progressEvent.loaded
+    if (Number.isFinite(progressEvent.total) && progressEvent.total > 0) {
+      onProgress({
+        phase: 'download',
+        completed: loadedBytes,
+        total: progressEvent.total,
+        unit: 'bytes',
+      })
+      return
+    }
     // eslint-disable-next-line no-magic-numbers
     const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
     debug().log(`Loader#loadModel$onProgress, ${loadedBytes} bytes`)
