@@ -722,9 +722,19 @@ export class ShareViewer {
     const results = []
     for (const expressID of hits) {
       const props = await this.IFC.getProperties(modelID, expressID, false, false)
-
-      props.type = manager.getIfcType(modelID, expressID)
-
+      // getProperties honors a null contract (null/undefined ids → null);
+      // skip rather than deref (#1545).
+      if (!props) {
+        continue
+      }
+      // Conway's getItemProperties (via getLine) returns the entity with
+      // `type` as the numeric IFC type code; `getIfcType` maps that code
+      // to its name (e.g. 1095909175 → 'IFCWALL'). Passing the expressID
+      // here — the pre-#1545 behavior — looked up the wrong key. Guarded
+      // on number so an already-stringified type passes through intact.
+      if (typeof props.type === 'number') {
+        props.type = manager.getIfcType(modelID, props.type)
+      }
       results.push({modelID, expressID, props})
     }
     return results
