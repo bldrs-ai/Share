@@ -554,18 +554,29 @@ export default function CadView({
       //      tree). `hasOwnProperty` discriminates this from wit-three's
       //      `IFCModel.prototype.getSpatialStructure` which takes no args
       //      and would silently drop `withProperties=true`.
-      //   2. Wit-three's `m.ifcManager.getSpatialStructure(0, true)` —
+      //   2. Wit-three's `m.ifcManager.getSpatialStructure(0, ...)` —
       //      legacy fallback. Post-Slice-5b this won't work for IFC
       //      parses (wit-three's `state.models[modelID]` is empty
       //      because we skipped its parse), but the branch stays as a
       //      defensive fallback for non-IFC models that decorated with
       //      `ifcManager` shims via `convertToShareModel`.
+      //
+      // `'names'` (Conway extension) fetches the tree with only the
+      // Name/LongName/GlobalId handles each load-time consumer here
+      // actually reads (setupLookupAndParentLinks: expressID;
+      // SearchIndex + reifyName: Name/LongName/GlobalId/type;
+      // groupElementsByTypes: Name/LongName/type) instead of the old
+      // `true`, which flattened and retained every spatial node's FULL
+      // attribute record — O(products) memory pinned for the session
+      // that the Properties panel re-fetches on demand anyway. The
+      // cache-hit GLB closure ignores the flag (tree pre-serialised);
+      // wit-three's legacy shim treats any truthy value as `true`.
       const hasOwnSpatialStructure =
         Object.prototype.hasOwnProperty.call(m, 'getSpatialStructure')
       if (hasOwnSpatialStructure) {
-        rootElt = await m.getSpatialStructure(0, true)
+        rootElt = await m.getSpatialStructure(0, 'names')
       } else {
-        rootElt = await m.ifcManager.getSpatialStructure(0, true)
+        rootElt = await m.ifcManager.getSpatialStructure(0, 'names')
       }
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
@@ -585,6 +596,21 @@ export default function CadView({
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
+    // Load-time property reads are done: drop Conway's materialised
+    // entity/descriptor caches (the 'names' walk + type sweep touched
+    // O(products) entities). Entities rematerialise transparently on the
+    // next property access (Properties panel, GLB cache writer), so this
+    // only bounds memory. Conway extension — optional-chained so older
+    // conway versions no-op. The IsModelOpen gate keeps cache-hit GLB
+    // loads silent: they share the live conway ifcAPI via
+    // `viewer.IFC.loader.ifcManager` without ever opening model 0, and
+    // an ungated release would log a spurious model-undefined error.
+    const conwayApi = m.ifcManager?.ifcAPI
+    // eslint-disable-next-line new-cap
+    if (conwayApi?.ReleaseEntityCache && conwayApi.IsModelOpen?.(0)) {
+      // eslint-disable-next-line new-cap
+      conwayApi.ReleaseEntityCache(0)
+    }
   }
 
 

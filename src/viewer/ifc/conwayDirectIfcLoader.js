@@ -297,16 +297,21 @@ export function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
   //   - `(modelID, withProps)` — CadView.jsx, ShareViewer.getByFloor,
   //     IfcIsolator (mirrors `ifcManager.getSpatialStructure` shape)
   //   - `(withProps)` — cache-hit closure pattern
-  // We accept both: if the first arg is a boolean (and only one arg
-  // was passed), it's the `withProperties` flag; otherwise the leading
-  // modelID is ignored and `withProperties` is the second arg. The
-  // model's bound modelID is always used — closures are per-model.
+  // We accept both: if the first arg is a boolean or Conway's `'names'`
+  // mode (and only one arg was passed), it's the `withProperties` flag;
+  // otherwise the leading modelID is ignored and `withProperties` is
+  // the second arg. `'names'` must pass through un-coerced — Conway's
+  // shim reads it as the light per-node Name/LongName/GlobalId mode; a
+  // bare boolean coercion here would silently upgrade it back to the
+  // full-record `true` visit this mode exists to avoid. The model's
+  // bound modelID is always used — closures are per-model.
   ifcModel.getSpatialStructure = function getSpatialStructure(...args) {
+    const isMode = (v) => typeof v === 'boolean' || v === 'names'
     let withProps = false
-    if (args.length === 1 && typeof args[0] === 'boolean') {
+    if (args.length === 1 && isMode(args[0])) {
       withProps = args[0]
     } else if (args.length >= 2) {
-      withProps = !!args[1]
+      withProps = isMode(args[1]) ? args[1] : Boolean(args[1])
     }
     return ifcAPI.properties.getSpatialStructure(modelID, withProps)
   }

@@ -191,6 +191,22 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
     })
 
+    it('getSpatialStructure passes Conway\'s \'names\' mode through un-coerced', async () => {
+      // Regression pin: 'names' must reach Conway as the string, not be
+      // boolean-coerced — a truthy coercion would silently upgrade the
+      // light Name/LongName/GlobalId walk back to the full-record visit
+      // that 'names' mode exists to avoid (CadView.jsx load path).
+      const ifcAPI = makeIfcAPI()
+      const ifcModel = new Mesh()
+      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 7)
+      // Two-arg manager shape (CadView.jsx): (modelID, 'names').
+      await ifcModel.getSpatialStructure(0, 'names')
+      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(7, 'names')
+      // Single-arg cache-hit closure shape: ('names').
+      await ifcModel.getSpatialStructure('names')
+      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenLastCalledWith(7, 'names')
+    })
+
     it('getIfcType is an identity over the spatial-tree node\'s string type', () => {
       // Regression pin: SearchIndex (`src/search/SearchIndex.js#indexElement`)
       // calls `Ifc.getType(model, elt)` → `model.properties.getIfcType(elt.type)`
