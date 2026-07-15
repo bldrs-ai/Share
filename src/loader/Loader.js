@@ -39,6 +39,7 @@ import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
+import {spillModelSource} from './opfsSourceByteStore'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -317,7 +318,13 @@ export async function load(
       }
 
       if (wantGlb && isIfc && cacheKeyArgs) {
-        glbExportContext = {kindLabel, cacheKeyArgs}
+        // `sourceFile` is the OPFS-backed File whose exact bytes are
+        // parsed below (`modelData = await file.arrayBuffer()`; IFC/STEP
+        // load with isFormatText=false, so no decode in between). The
+        // post-writer source spill backs Conway's window reads with it —
+        // identity by construction, and a disk-backed handle, so
+        // capturing it here pins nothing.
+        glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: file}
       }
 
       onProgress('Reading model data...')
@@ -731,6 +738,17 @@ export async function load(
         ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
+        // The writer's property/tree captures were the LAST load-time
+        // sweeps that read the parsed source synchronously — from here
+        // on, everything (Properties panel, psets, on-demand subtree
+        // props) goes through Conway's async APIs, which page ranges
+        // in on demand. So this is the one safe point to release
+        // Conway's resident copy of the raw source (100s of MB on
+        // large models) and back later reads with the OPFS File the
+        // model was parsed from. Cache-hit GLB loads never get here
+        // (no writer is scheduled) — nothing to spill. Fail-soft: any
+        // guard failure keeps the resident buffer (pre-spill behavior).
+        spillModelSource(viewer?.IFC?.loader?.ifcManager?.ifcAPI, 0, glbExportContext.sourceFile)
       })
     }
     scheduleIdleWork(runWriter)
