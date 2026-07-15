@@ -118,5 +118,23 @@ describe('loadProgress', () => {
       expect(() => reportLoadProgress({phase: 'geometry', completed: 1})).not.toThrow()
       expect(() => attachLoadFailureContext()).not.toThrow()
     })
+
+    it('ignores straggler progress after endLoadProgress', () => {
+      const onEvent = jest.fn()
+      const onStall = jest.fn()
+      beginLoadProgress({fileInfo: 'index.ifc', onEvent, onStall})
+      reportLoadProgress({phase: 'dataParse', completed: 2, total: 4, unit: 'bytes'})
+      endLoadProgress()
+
+      // A late callback must not re-arm the watchdog, update the UI, or
+      // overwrite the trail failure context reads from.
+      reportLoadProgress({phase: 'geometry', completed: 9, total: 10, unit: 'products'})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS * 2)
+      expect(onEvent).toHaveBeenCalledTimes(1)
+      expect(onStall).not.toHaveBeenCalled()
+
+      attachLoadFailureContext()
+      expect(setTag).toHaveBeenCalledWith('load.phase', 'dataParse')
+    })
   })
 })

@@ -96,6 +96,10 @@ class LoadProgressReporter {
     this.stallTimer = null
     this.stallReported = false
     this.startTime = Date.now()
+    // Flipped by dispose(): a straggler onProgress callback arriving after
+    // the load's finally must not re-arm the watchdog or mutate the trail
+    // (the last pre-end event is what failure context should carry).
+    this.ended = false
   }
 
   /**
@@ -104,6 +108,9 @@ class LoadProgressReporter {
    * @param {object|string} progressArg
    */
   report(progressArg) {
+    if (this.ended) {
+      return
+    }
     const structured = isStructuredProgress(progressArg)
     if (structured) {
       this.lastEvent = progressArg
@@ -209,6 +216,7 @@ class LoadProgressReporter {
 
   /** Stop watching (load finished or failed). */
   dispose() {
+    this.ended = true
     this.clearStallWatchdog()
   }
 }
