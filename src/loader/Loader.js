@@ -839,18 +839,21 @@ const BLDRS_TITLE_STRIP_PATTERN = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u206
 
 
 /**
- * Return a cache-hit title safe for promotion to `model.name`. Strips
- * control / bidi / markup characters, caps length, treats empty and
- * non-string inputs as "no usable title" by returning null.
+ * Return a file-derived name (cache-hit title, glTF scene/node name…)
+ * safe for promotion to `model.name` / `Name.value`. Strips control /
+ * bidi / markup characters, trims whitespace (a whitespace-only name
+ * carries no signal and would otherwise block downstream fallbacks),
+ * caps length, treats empty and non-string inputs as "no usable name"
+ * by returning null.
  *
- * @param {*} raw value from `model.userData.bldrsTitle`
+ * @param {*} raw value from `model.userData.bldrsTitle`, `Object3D.name`, …
  * @return {string|null}
  */
 function sanitizeCachedTitle(raw) {
   if (typeof raw !== 'string' || raw === '') {
     return null
   }
-  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '')
+  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '').trim()
   if (stripped === '') {
     return null
   }
@@ -906,8 +909,21 @@ export function convertToShareModel(model, viewer) {
   function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
-    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
+    // Standard scenegraph node naming (#1595): three.js loaders carry
+    // the source file's node names on `Object3D.name` — GLTFLoader
+    // copies glTF `nodes[i].name` (e.g. NASA's ISS_stationary.glb
+    // names every node), OBJLoader uses `o`/`g` group names. Surface
+    // them through the IFC-shaped `Name`/`LongName` that `reifyName`
+    // (NavTree labels) and the Properties panel read, keeping the
+    // legacy 'Object' placeholder only for unnamed nodes. Sanitized
+    // like the cached title — node names cross the same untrusted-file
+    // boundary. Root (depth 0) naming is handled below, after the
+    // cache-title hydration that must take precedence.
+    if (depth > 0) {
+      const nodeName = sanitizeCachedTitle(obj3d.name) ?? 'Object'
+      obj3d.Name = obj3d.Name || {value: nodeName}
+      obj3d.LongName = obj3d.LongName || {value: nodeName}
+    }
     const id = objIdSerial++
     let hasPerVertex = false
     if (obj3d.geometry) {
@@ -993,12 +1009,32 @@ export function convertToShareModel(model, viewer) {
   // `model.name` would split the source of truth between the page
   // title (`name`) and other consumers reading `LongName.value`. A
   // pre-set `model.name` means upstream already decided; trust it.
+  // convertToShareModel only runs on the non-IFC branch of Loader#load,
+  // so a pre-set `model.name` here always came from the loaded file
+  // (GLTFLoader copies the glTF `scenes[n].name` onto the returned
+  // scene; OBJLoader similarly). Scrub it with the same sanitizer as
+  // the cached title before it reaches the page <title> / NavTree —
+  // a name that sanitizes to nothing is treated as absent, which
+  // also re-enables the cached-title promotion below.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.name = sanitizeCachedTitle(model.name) ?? ''
+  }
   const cachedTitle = sanitizeCachedTitle(model.userData?.[BLDRS_TITLE_EXTRAS_KEY])
   const liveNameAlreadySet = (typeof model.name === 'string' && model.name !== '')
   if (cachedTitle && !liveNameAlreadySet) {
     model.Name = model.Name || {value: cachedTitle}
     model.LongName = model.LongName || {value: cachedTitle}
     model.name = cachedTitle
+  }
+  // Standard glTF root naming (#1595): when the file itself named its
+  // scene (a plain GLB's authored scene name, or — as of schema
+  // 0.10.0 — the title our writer stamps into `scenes[0].name`),
+  // mirror it into Name/LongName so the NavTree root and Properties
+  // panel show it instead of the generic "<mime> model" placeholder.
+  // Already sanitized above.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.Name = model.Name || {value: model.name}
+    model.LongName = model.LongName || {value: model.name}
   }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}

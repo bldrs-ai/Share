@@ -122,6 +122,31 @@ describe('Loader', () => {
     }
   })
 
+  it('surfaces standard glTF scene/node names as Name/LongName on a GLB load (#1595)', async () => {
+    // End-to-end through the real GLTFLoader: cube.glb carries
+    // `scenes[0].name = 'Scene'` and `nodes[0].name = 'Cube'`.
+    // GLTFLoader puts those on `Object3D.name`; convertToShareModel
+    // must mirror them into the IFC-shaped Name/LongName the NavTree
+    // (reifyName) and Properties panel read — previously every node
+    // showed the 'Object' placeholder (issue #1595, e.g. NASA's
+    // ISS_stationary.glb rendered structure but no names).
+    mockViewer.IFC.type = 'glb'
+    const testPath = 'glb/cube.glb'
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.name).toBe('Scene')
+      expect(model.Name.value).toBe('Scene')
+      expect(model.LongName.value).toBe('Scene')
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.Name.value).toBe('Cube')
+      expect(cube.LongName.value).toBe('Cube')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('loads an OBJ model', async () => {
     mockViewer.IFC.type = 'obj'
     const testPath = 'obj/Bunny.obj'

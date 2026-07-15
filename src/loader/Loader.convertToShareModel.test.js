@@ -428,27 +428,124 @@ describe('Loader/convertToShareModel — cache-hit page title hydration', () => 
   })
 
   it('leaves Name and LongName consistent with model.name when a pre-set name takes precedence', () => {
-    // Reviewer-flagged inconsistency: previously, if model.name was
-    // pre-set AND userData.bldrsTitle was set, model.name kept its
-    // pre-existing value but model.{Name,LongName} got filled from
-    // the stale cached title — splitting the source of truth.
-    // The hydration block now treats a pre-set model.name as a hard
-    // signal that upstream decided, so it skips all three writes and
-    // lets the existing `${mimeType} model` fallback fill Name/
-    // LongName consistently with the placeholder.
+    // Reviewer-flagged inconsistency: if model.name is pre-set AND
+    // userData.bldrsTitle is set, model.name keeps its pre-existing
+    // value and the stale cached title is ignored entirely. Since the
+    // standard-naming change (#1595), Name/LongName mirror the winning
+    // model.name — one source of truth for all three fields — instead
+    // of degrading to the `${mimeType} model` placeholder.
     const mesh = new Mesh(new BufferGeometry())
     mesh.name = 'From IFC parse'
     mesh.userData.bldrsTitle = 'Stale Cache Title'
     mesh.mimeType = 'glb'
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.name).toBe('From IFC parse')
-    // Name/LongName fall through to the `${mimeType} model`
-    // placeholder rather than picking up the stale cache title.
-    // (If you want them to mirror model.name, plumb that through at
-    // the IFC parse site — convertToShareModel only reasons about
-    // model.userData on the cache-hit path.)
-    expect(mesh.Name.value).toBe('glb model')
-    expect(mesh.LongName.value).toBe('glb model')
+    expect(mesh.Name.value).toBe('From IFC parse')
+    expect(mesh.LongName.value).toBe('From IFC parse')
+  })
+})
+
+
+describe('Loader/convertToShareModel — standard scenegraph node naming (#1595)', () => {
+  // three.js loaders carry the source file's node names on
+  // `Object3D.name` (GLTFLoader copies glTF `nodes[i].name` — e.g.
+  // NASA's ISS_stationary.glb names every node; OBJLoader uses o/g
+  // group names). The decoration step must surface those through the
+  // IFC-shaped `Name`/`LongName` that reifyName (NavTree) and the
+  // Properties panel read, instead of stamping the 'Object'
+  // placeholder over them.
+
+  it('fills Name/LongName from Object3D.name on child nodes', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = 'S0_Truss'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('S0_Truss')
+    expect(child.LongName.value).toBe('S0_Truss')
+  })
+
+  it('keeps the legacy Object placeholder for unnamed child nodes', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry()) // Object3D.name defaults to ''
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('Object')
+    expect(child.LongName.value).toBe('Object')
+  })
+
+  it('does not clobber a pre-existing IFC-shaped Name on a child', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = 'raw scenegraph name'
+    child.Name = {value: 'IFC-provided name'}
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('IFC-provided name')
+  })
+
+  it('sanitizes child node names (untrusted-file boundary)', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = '<b>Node ‮</b>'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('bNode/b')
+  })
+
+  it('a child name that sanitizes to nothing falls back to the Object placeholder', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = ' ‮<>'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('Object')
+  })
+
+  it('names nested descendants from their own Object3D.name', () => {
+    const root = new Mesh(new BufferGeometry())
+    const mid = new Mesh(new BufferGeometry())
+    mid.name = 'ISS_stationary'
+    const leaf = new Mesh(new BufferGeometry())
+    leaf.name = '23_港_2020_Model'
+    root.add(mid)
+    mid.add(leaf)
+    convertToShareModel(root, makeViewerStub())
+    expect(mid.Name.value).toBe('ISS_stationary')
+    expect(leaf.Name.value).toBe('23_港_2020_Model')
+  })
+
+  it('uses the glTF scene name for the root Name/LongName (plain GLB)', () => {
+    // GLTFLoader sets the returned scene Group's `name` from the glTF
+    // `scenes[n].name`. For a plain (non-Bldrs) GLB that IS the model
+    // root, so the NavTree root label / page title use the authored
+    // scene name instead of the "glb model" placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'ISS_stationary'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('ISS_stationary')
+    expect(mesh.Name.value).toBe('ISS_stationary')
+    expect(mesh.LongName.value).toBe('ISS_stationary')
+  })
+
+  it('sanitizes a file-derived root name before it reaches Name / page title', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene‮<script>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Scenescript')
+    expect(mesh.Name.value).toBe('Scenescript')
+  })
+
+  it('a root name that sanitizes to nothing re-enables cached-title promotion', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = ' ‮'
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
   })
 })
 
