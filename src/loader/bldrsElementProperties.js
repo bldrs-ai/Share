@@ -186,72 +186,122 @@ function collectSpatialTreeIds(root) {
 
 /**
  * Capture the element-properties closure for a model from an
- * IfcManager-like source. Tries the fast sync-bulk path first
- * (`captureBldrsElementPropertiesFast` — reaches into the Conway
- * adapter's parsed model and iterates synchronously), falling back
- * to the slow per-entity async BFS for environments that don't
- * expose the adapter internals (tests, non-Conway loaders).
+ * IfcManager-like source. Tries the streaming sync-bulk path first
+ * (`captureBldrsElementPropertiesStreaming` — reaches into the Conway
+ * adapter's parsed model, iterates synchronously, and gzips the wire
+ * JSON incrementally so the full property closure is never resident
+ * as one JS object graph), falling back to the slow per-entity async
+ * BFS for environments that don't expose the adapter internals
+ * (tests, non-Conway loaders).
  *
- * The two paths produce the same output shape so the cached
- * artifact is identical regardless of which path ran. The fast
- * path is ~100× faster on large IFCs because it skips Promise-per-
- * entity overhead: ~10 min → ~10 s on a 100MB Snowdon IFC.
+ * Both paths produce the same decoded wire JSON (same entity set,
+ * same pset index) so the cached artifact is equivalent regardless
+ * of which path ran. The streaming path is ~100× faster on large
+ * IFCs (no Promise per entity) AND fixed-memory: peak retained heap
+ * is O(reachable ids + one record) instead of O(all parsed records).
  *
- * Returns the wire-format payload, or `null` when no manager is
- * available (non-IFC sources, cache-hit GLB with no live parser).
+ * Return shape is a discriminated union:
+ *   - `{compressedBytes: Uint8Array}` — streaming path; already the
+ *     gzipped wire JSON, ready to embed as a bufferView payload
+ *     (pass to `injectGlbExtensions` as `precompressed`).
+ *   - `{itemProperties, propertySets}` — slow path; the decoded wire
+ *     object, compressed later by the inject step (`compress: true`).
+ *   - `null` — no manager available (non-IFC sources, cache-hit GLB
+ *     with no live parser).
  *
  * @param {object|null|undefined} ifcManager IfcManager-like.
  * @param {number} modelID
  * @param {object|null|undefined} spatialTree the JSON tree
  *   `captureBldrsSpatialTree` returned. Acts as the BFS seed for the
- *   slow path; the fast path ignores it (iterates all entities).
+ *   slow path; the streaming path ignores it (scans all entities).
  * @return {Promise<object|null>}
  */
 export async function captureBldrsElementProperties(ifcManager, modelID, spatialTree) {
   if (!ifcManager) {
     return null
   }
-  const fastResult = await captureBldrsElementPropertiesFast(ifcManager, modelID)
-  if (fastResult !== null) {
-    return fastResult
+  const compressedBytes = await captureBldrsElementPropertiesStreaming(ifcManager, modelID)
+  if (compressedBytes !== null) {
+    return {compressedBytes}
   }
   return await captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTree)
 }
 
 
+// Text-buffer flush threshold for the streaming deflate. Records are
+// concatenated into a small string buffer and pushed into pako's
+// streaming Deflate in ~64KB slabs — per-record push calls would pay
+// deflate-call overhead millions of times; one giant join would
+// recreate the whole-payload-resident problem the streaming path
+// exists to avoid.
+const STREAM_FLUSH_CHARS = 65536
+
+// How many `getLine` materialisations between conway entity-cache
+// releases during the streaming sweep. Each getLine populates conway's
+// per-entity descriptor cache; on a ~9M-entity IFC letting the sweep
+// run uncapped re-pins ~1GB of descriptors that the post-load
+// `ReleaseEntityCache` had just dropped. Releasing every 200k touched
+// entities bounds the transient to ~20-40MB. Safe mid-iteration: the
+// model iterator is a bare index loop that re-derives each descriptor
+// from the parse index, and dropped descriptors rematerialise on next
+// access.
+const RELEASE_CACHE_EVERY = 200_000
+
+
 /**
- * Fast sync-bulk capture path. Reaches into the Conway adapter's
+ * Streaming sync-bulk capture path. Reaches into the Conway adapter's
  * internal `IfcApiProxyIfc` to get the upstream Conway `IfcStepModel`
- * and iterates it synchronously — `for (const entity of stepModel)`
- * walks every parsed entity without any async overhead. For each,
- * `proxy.getLine(expressID)` synchronously converts the raw STEP
- * tape into the wit-three-shape object (the exact shape consumers
- * expect; same as what `ifcManager.getItemProperties` returns,
- * minus the async wrapping). Property-set indexing happens in the
- * same loop by detecting `IfcRelDefinesByProperties` entities and
- * walking their `RelatingPropertyDefinition` / `RelatedObjects`
- * fields — no second pass needed.
+ * and walks it synchronously, gzipping the wire JSON incrementally —
+ * the full property closure is NEVER resident as one JS object graph.
+ * Peak retained memory is O(reachable ids + pset index + one record +
+ * compressed output) instead of the old fast path's O(every parsed
+ * record) (~GBs on 100MB-class IFCs before the reachability filter
+ * could prune).
+ *
+ * Two sweeps, identical decoded output to the old capture-then-filter
+ * fast path:
+ *   1. Linear scan of every parsed entity via sync `proxy.getLine`.
+ *      IfcRoot-derived entities (`GlobalId` present — products, rels,
+ *      psets) are serialized into the stream immediately and their
+ *      non-geometric refs queued. `IfcRelDefinesByProperties` entities
+ *      additionally feed the product→psetIds index in the same pass.
+ *      Records not kept are dropped on the spot.
+ *   2. Ref-closure drain: queued ids (non-root entities reachable from
+ *      a root — property values, materials, owner history etc.) are
+ *      fetched by id, serialized, and their refs queued in turn.
+ *      `collectRefIds` skips the geometric backbone (Representation /
+ *      ObjectPlacement / RepresentationContexts / Representations) at
+ *      the entity top level, so the closure stops at the geometric
+ *      boundary — same ~2.7M → ~50k entity cut as before on Snowdon.
+ *
+ * Memory discipline during the sweep:
+ *   - `stepModel.elementMemoization` is turned off so conway doesn't
+ *     pin an extracted entity object per descriptor (restored after).
+ *   - conway's entity/descriptor cache is released every
+ *     `RELEASE_CACHE_EVERY` materialisations and once at the end
+ *     (`proxy.releaseEntityCache`, conway ≥1.373 — optional-chained
+ *     no-op on older versions).
  *
  * Returns `null` (so the caller falls back to the slow path) when:
  *   - the adapter surface isn't accessible (test stubs without
  *     `ifcAPI.getPassthrough`, non-Conway IFC backends)
  *   - the proxy's internal `model` field isn't where we expect
- *   - the iteration would yield zero entities (parser state empty)
+ *   - the iteration yields zero entities (parser state empty)
+ *   - the streaming deflate reports an error
  *
  * Coupling notes: this reaches `ifcAPI.getPassthrough(modelID)` and
  * then `proxy.model[0]` (the IfcStepModel) — both are stable on
  * the current adapter (see `ifc_api.js:53` and `ifc_api_proxy_ifc.js:154`)
- * but neither is part of the formal public API. We file a Conway PR
- * to expose them officially (parse-only `OpenModel` flag + bulk
- * iteration accessor); until then this is the seam. The fallback to
+ * but neither is part of the formal public API. The fallback to
  * the slow path keeps tests + non-Conway sources working.
  *
  * @param {object} ifcManager IfcManager-like with `.ifcAPI`.
  * @param {number} modelID
- * @return {object|null} `{itemProperties, propertySets}` or `null`
- *   when the fast path is unavailable.
+ * @return {Promise<Uint8Array|null>} gzipped wire JSON (the exact
+ *   bytes a reader `pako.ungzip` + `JSON.parse` expects) or `null`
+ *   when the streaming path is unavailable.
  */
-async function captureBldrsElementPropertiesFast(ifcManager, modelID) {
+async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   const ifcAPI = ifcManager.ifcAPI
   if (!ifcAPI || typeof ifcAPI.getPassthrough !== 'function') {
     return null
@@ -267,189 +317,223 @@ async function captureBldrsElementPropertiesFast(ifcManager, modelID) {
   }
 
   const startMs = Date.now()
-  const itemProperties = {}
+  const deflator = new pako.Deflate({gzip: true})
+  let textBuf = []
+  let textLen = 0
+  const flushText = () => {
+    if (textLen > 0) {
+      deflator.push(textBuf.join(''), false)
+      textBuf = []
+      textLen = 0
+    }
+  }
+  const pushText = (chunk) => {
+    textBuf.push(chunk)
+    textLen += chunk.length
+    if (textLen >= STREAM_FLUSH_CHARS) {
+      flushText()
+    }
+  }
+  let emittedCount = 0
+  const emitRecord = (id, props) => {
+    // Same wire JSON as `JSON.stringify({itemProperties: {...}})`
+    // would produce for this entry — numeric-string key, record value.
+    // Key ORDER differs from the legacy one-shot stringify (BFS
+    // discovery order vs ascending-integer), which is byte-different
+    // but decode-identical: the reader JSON.parses into a plain object
+    // and every consumer looks entries up by id.
+    pushText(`${emittedCount === 0 ? '' : ','}"${id}":${JSON.stringify(props)}`)
+    emittedCount++
+  }
+
+  // `visited` = "serialized or queued for serialization" — every id
+  // added is emitted exactly once (roots inline during the scan,
+  // ref-closure entities during the drain; a root first discovered as
+  // someone's ref drains from the queue instead and the scan skips it).
+  const visited = new Set()
+  const queue = []
+  let queueHead = 0
   const propertySets = {}
-  let captured = 0
+  let sawEntity = false
   let psetRelCount = 0
   // Cooperative-yield counter — see ENTITIES_PER_YIELD comment.
   // Counted on every iteration (not just kept entities) so the yield
   // cadence is independent of the percentage filtered out.
   let iterCount = 0
+  let sinceRelease = 0
+  const releaseTick = () => {
+    if (++sinceRelease >= RELEASE_CACHE_EVERY) {
+      sinceRelease = 0
+      proxy.releaseEntityCache?.()
+    }
+  }
 
-  for (const entity of stepModel) {
-    if (++iterCount % ENTITIES_PER_YIELD === 0) {
-      // Yield to the browser between chunks. The fast-path scan is
-      // pure JS object construction (no I/O, no Promise per entity),
-      // so without explicit yields it would block the main thread for
-      // the entire ~10s walk on a 100MB IFC. The user feels this as a
-      // hover-pick freeze immediately post-render. yieldToBrowser =
-      // setTimeout(0) wrapped in a Promise — one event-loop turn per
-      // yield, ~ms-scale overhead in aggregate.
-      await yieldToBrowser()
-    }
-    const expressID = entity?.expressID
-    if (typeof expressID !== 'number') {
-      continue
-    }
-    let props
-    try {
-      // Sync — no Promise allocation, no microtask hop. This is the
-      // 10-min-to-10-sec win on Snowdon: ~576k entities × ~10µs each
-      // instead of × ~1ms each through the async manager surface.
-      props = proxy.getLine(expressID)
-    } catch (e) {
-      // Per-entity failures are non-fatal — skip and continue. The
-      // wit-three slow path swallows the same way (one entity gap
-      // means one missing Properties row; not a cache abort).
-      continue
-    }
-    if (!props || typeof props !== 'object') {
-      continue
-    }
-    itemProperties[expressID] = props
-    captured++
+  const hadMemoization = stepModel.elementMemoization
+  stepModel.elementMemoization = false
+  try {
+    pushText('{"itemProperties":{')
 
-    // Inline pset-index extraction. An IfcRelDefinesByProperties
-    // entity has `RelatedObjects` (an array of {type:5, value:productId}
-    // refs to products) + `RelatingPropertyDefinition` ({type:5, value:psetId}
-    // ref to the pset). Detect by numeric `type` (the IFC type code
-    // — stable across wit-three's FromTape variants). An earlier
-    // version of this code used `constructor.name` which silently
-    // failed on Snowdon — `FromTape` does not always produce a
-    // class with a usable `name` property, so the check missed every
-    // rel. Wit-three's stock `getPropertySets(modelID, productID)`
-    // does the same walk one product at a time over an async API —
-    // building the index here in the same pass costs us nothing.
-    if (props.type === IFCRELDEFINESBYPROPERTIES) {
-      psetRelCount++
-      const psetRef = props.RelatingPropertyDefinition
-      const psetId = psetRef && typeof psetRef === 'object' ? psetRef.value : null
-      const relatedObjects = props.RelatedObjects
-      if (typeof psetId === 'number' && Array.isArray(relatedObjects)) {
-        for (const obj of relatedObjects) {
-          if (!obj || typeof obj !== 'object') {
-            continue
-          }
-          const productId = obj.value
-          if (typeof productId !== 'number') {
-            continue
-          }
-          let list = propertySets[productId]
-          if (!list) {
-            list = []
-            propertySets[productId] = list
-          }
-          // De-dup defensively — IFCs occasionally double-register.
-          if (!list.includes(psetId)) {
-            list.push(psetId)
+    // Sweep 1: linear scan — emit IfcRoot seeds, build the pset
+    // index, queue the ref frontier.
+    for (const entity of stepModel) {
+      if (++iterCount % ENTITIES_PER_YIELD === 0) {
+        // Yield to the browser between chunks. The scan is pure JS
+        // object construction (no I/O, no Promise per entity), so
+        // without explicit yields it would block the main thread for
+        // the entire ~10s walk on a 100MB IFC. The user feels this as
+        // a hover-pick freeze immediately post-render.
+        await yieldToBrowser()
+      }
+      releaseTick()
+      const expressID = entity?.expressID
+      if (typeof expressID !== 'number') {
+        continue
+      }
+      let props
+      try {
+        // Sync — no Promise allocation, no microtask hop. This is the
+        // 10-min-to-10-sec win on Snowdon: ~576k entities × ~10µs each
+        // instead of × ~1ms each through the async manager surface.
+        props = proxy.getLine(expressID)
+      } catch (e) {
+        // Per-entity failures are non-fatal — skip and continue. The
+        // wit-three slow path swallows the same way (one entity gap
+        // means one missing Properties row; not a cache abort).
+        continue
+      }
+      if (!props || typeof props !== 'object') {
+        continue
+      }
+      sawEntity = true
+
+      // Inline pset-index extraction. An IfcRelDefinesByProperties
+      // entity has `RelatedObjects` (an array of {type:5, value:productId}
+      // refs to products) + `RelatingPropertyDefinition` ({type:5, value:psetId}
+      // ref to the pset). Detect by numeric `type` (the IFC type code
+      // — stable across wit-three's FromTape variants). An earlier
+      // version of this code used `constructor.name` which silently
+      // failed on Snowdon — `FromTape` does not always produce a
+      // class with a usable `name` property, so the check missed every
+      // rel. Wit-three's stock `getPropertySets(modelID, productID)`
+      // does the same walk one product at a time over an async API —
+      // building the index here in the same pass costs us nothing.
+      if (props.type === IFCRELDEFINESBYPROPERTIES) {
+        psetRelCount++
+        const psetRef = props.RelatingPropertyDefinition
+        const psetId = psetRef && typeof psetRef === 'object' ? psetRef.value : null
+        const relatedObjects = props.RelatedObjects
+        if (typeof psetId === 'number' && Array.isArray(relatedObjects)) {
+          for (const obj of relatedObjects) {
+            if (!obj || typeof obj !== 'object') {
+              continue
+            }
+            const productId = obj.value
+            if (typeof productId !== 'number') {
+              continue
+            }
+            let list = propertySets[productId]
+            if (!list) {
+              list = []
+              propertySets[productId] = list
+            }
+            // De-dup defensively — IFCs occasionally double-register.
+            if (!list.includes(psetId)) {
+              list.push(psetId)
+            }
           }
         }
       }
-    }
-  }
 
-  if (captured === 0) {
-    // Parser state must have been empty / not the expected shape.
-    // Let the slow path try; it'll log the right cause.
-    return null
-  }
-
-  // Filter to entities reachable from IfcRoot via non-geometric refs.
-  // The bulk iteration above captured every parsed entity (millions
-  // for big IFCs, mostly geometric primitives). The Properties panel
-  // only needs IfcRoot-derived entities (products, rels, psets — all
-  // have `GlobalId`) plus their non-geometric ref closure
-  // (HasProperties, Quantities, materials, classifications, owner
-  // history etc.). `collectRefIds` skips the geometric backbone
-  // (Representation / ObjectPlacement / RepresentationContexts /
-  // Representations) at the entity's top-level, so the BFS naturally
-  // stops at the geometric boundary. Reduces Snowdon's captured set
-  // from ~2.7M entities to ~50k; cache payload from ~35MB compressed
-  // to ~1MB compressed.
-  const filterStartMs = Date.now()
-  const {filtered, prunedCount} = await filterReachableFromRoots(itemProperties)
-  const filteredCount = Object.keys(filtered).length
-
-  glbInfo(
-    `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: fast-path captured ${captured} entities ` +
-    `(${psetRelCount} IfcRelDefinesByProperties → ${Object.keys(propertySets).length} ` +
-    `products with psets) in ${Date.now() - startMs}ms; ` +
-    `filtered to ${filteredCount} reachable-from-IfcRoot ` +
-    `(pruned ${prunedCount} geometric primitives) in ${Date.now() - filterStartMs}ms`)
-
-  return {itemProperties: filtered, propertySets}
-}
-
-
-/**
- * BFS over the captured itemProperties map, keeping only entities
- * reachable from `IfcRoot`-derived entities (those with `GlobalId`)
- * via non-geometric refs. Unreachable entities — the geometric
- * primitives hanging off Representation / ObjectPlacement chains —
- * are dropped. The Properties panel never displays them; carrying
- * them in the cache costs ~30× the necessary payload size.
- *
- * `collectRefIds` (shared with the slow path) already skips
- * geometric field names at the entity's top level, so the BFS
- * frontier never expands into the geometric backbone. Property-
- * specific chains (HasProperties, Quantities, NominalValue refs,
- * Material*, Classification*, OwnerHistory) ARE followed because
- * those field names aren't in `GEOMETRIC_FIELD_NAMES`.
- *
- * @param {object} itemProperties the unfiltered map
- * @return {object} `{filtered: object, prunedCount: number}`
- */
-async function filterReachableFromRoots(itemProperties) {
-  const reachable = new Set()
-  const queue = []
-
-  // Seed: entities with `GlobalId`. IfcRoot mandates it, so this is
-  // the canonical "selectable entity" test — no whitelist of types
-  // needed. Covers products, processes, controls, resources, actors,
-  // groups, ALL `IfcRelXxx`, `IfcPropertySetDefinition`-derived
-  // entities (which includes `IfcPropertySet` / `IfcElementQuantity`),
-  // and any future IFC schema additions automatically.
-  let seedIter = 0
-  for (const idStr of Object.keys(itemProperties)) {
-    if (++seedIter % ENTITIES_PER_YIELD === 0) {
-      await yieldToBrowser()
-    }
-    const props = itemProperties[idStr]
-    if (props && props.GlobalId !== undefined) {
-      const id = Number(idStr)
-      reachable.add(id)
-      queue.push(id)
-    }
-  }
-
-  // BFS via non-geometric refs.
-  let bfsIter = 0
-  while (queue.length > 0) {
-    if (++bfsIter % ENTITIES_PER_YIELD === 0) {
-      await yieldToBrowser()
-    }
-    const id = queue.shift()
-    const props = itemProperties[id]
-    if (!props) {
-      continue
-    }
-    const refs = []
-    collectRefIds(props, refs)
-    for (const refId of refs) {
-      if (!reachable.has(refId) && itemProperties[refId] !== undefined) {
-        reachable.add(refId)
-        queue.push(refId)
+      // Seed test: entities with `GlobalId`. IfcRoot mandates it, so
+      // this is the canonical "selectable entity" test — no whitelist
+      // of types needed. Covers products, processes, controls,
+      // resources, actors, groups, ALL `IfcRelXxx`,
+      // `IfcPropertySetDefinition`-derived entities (which includes
+      // `IfcPropertySet` / `IfcElementQuantity`), and any future IFC
+      // schema additions automatically. Non-root entities are dropped
+      // here; the ones reachable from a root get re-fetched by id in
+      // the drain sweep.
+      if (props.GlobalId === undefined || visited.has(expressID)) {
+        continue
+      }
+      visited.add(expressID)
+      emitRecord(expressID, props)
+      const refs = []
+      collectRefIds(props, refs)
+      for (const refId of refs) {
+        if (!visited.has(refId)) {
+          visited.add(refId)
+          queue.push(refId)
+        }
       }
     }
-  }
 
-  // Filter into a new map.
-  const filtered = {}
-  for (const id of reachable) {
-    filtered[id] = itemProperties[id]
+    if (!sawEntity) {
+      // Parser state must have been empty / not the expected shape.
+      // Let the slow path try; it'll log the right cause.
+      return null
+    }
+
+    // Sweep 2: drain the ref closure. `collectRefIds` (shared with
+    // the slow path) skips geometric field names at the entity's top
+    // level, so the frontier never expands into the geometric
+    // backbone. Property-specific chains (HasProperties, Quantities,
+    // NominalValue refs, Material*, Classification*, OwnerHistory)
+    // ARE followed because those field names aren't in
+    // `GEOMETRIC_FIELD_NAMES`.
+    while (queueHead < queue.length) {
+      if (++iterCount % ENTITIES_PER_YIELD === 0) {
+        await yieldToBrowser()
+      }
+      releaseTick()
+      const id = queue[queueHead++]
+      let props
+      try {
+        props = proxy.getLine(id)
+      } catch (e) {
+        continue
+      }
+      if (!props || typeof props !== 'object') {
+        // Dangling ref (id not in the file) — same skip the legacy
+        // filter applied via its `itemProperties[refId] !== undefined`
+        // existence check.
+        continue
+      }
+      emitRecord(id, props)
+      const refs = []
+      collectRefIds(props, refs)
+      for (const refId of refs) {
+        if (!visited.has(refId)) {
+          visited.add(refId)
+          queue.push(refId)
+        }
+      }
+    }
+
+    pushText(`},"propertySets":${JSON.stringify(propertySets)}}`)
+    flushText()
+    deflator.push('', true)
+    if (deflator.err) {
+      glbInfo(
+        `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streaming deflate error ` +
+        `${deflator.err} (${deflator.msg}); falling back to slow path`)
+      return null
+    }
+
+    glbInfo(
+      `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streamed ${emittedCount} ` +
+      `reachable-from-IfcRoot entities (of ${iterCount} scanned; ` +
+      `${psetRelCount} IfcRelDefinesByProperties → ` +
+      `${Object.keys(propertySets).length} products with psets) into ` +
+      `${deflator.result.byteLength}B gzip in ${Date.now() - startMs}ms`)
+
+    return deflator.result
+  } finally {
+    stepModel.elementMemoization = hadMemoization
+    // Drop the descriptors the sweep materialised; they rematerialise
+    // transparently on the next property access.
+    proxy.releaseEntityCache?.()
   }
-  const prunedCount = Object.keys(itemProperties).length - reachable.size
-  return {filtered, prunedCount}
 }
 
 

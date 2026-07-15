@@ -175,6 +175,40 @@ describe('loader/injectGlbExtensions', () => {
     })
   })
 
+  describe('injectGlbExtensions — precompressed payloads', () => {
+    it('embeds precompressed bytes verbatim and records compressed: true', () => {
+      // Streaming-writer seam: bytes arrive already gzipped, so the
+      // inject step must skip its own stringify+gzip and the on-disk
+      // result must be indistinguishable from the {data, compress:true}
+      // path — the reader has one decode branch.
+      const wire = {itemProperties: {100: {expressID: 100}}, propertySets: {}}
+      const precompressed = pako.gzip(JSON.stringify(wire))
+      const glb = makeMinimalGlb()
+      const {bytes, stats} = injectGlbExtensions(glb, [
+        {name: 'BLDRS_test_stream', precompressed},
+      ])
+      expect(stats.addedExtensions).toBe(1)
+      const {json, bin} = parseGlb(bytes)
+      const ext = json.extensions.BLDRS_test_stream
+      expect(ext.compressed).toBe(true)
+      const bv = json.bufferViews[ext.bufferView]
+      expect(bv.byteLength).toBe(precompressed.byteLength)
+      const embedded = bin.subarray(bv.byteOffset, bv.byteOffset + bv.byteLength)
+      expect(Array.from(embedded)).toEqual(Array.from(precompressed))
+      expect(JSON.parse(pako.ungzip(embedded, {to: 'string'}))).toEqual(wire)
+    })
+
+    it('treats an entry with only precompressed (no data) as active, and null data alone as inactive', () => {
+      const glb = makeMinimalGlb()
+      const precompressed = pako.gzip(JSON.stringify({a: 1}))
+      const {stats} = injectGlbExtensions(glb, [
+        {name: 'BLDRS_active', precompressed, data: null},
+        {name: 'BLDRS_inactive', data: null},
+      ])
+      expect(stats.addedExtensions).toBe(1)
+    })
+  })
+
   describe('injectGlbExtensions — multiple extensions', () => {
     it('lays out each new bufferView at a 4-aligned offset, in order', () => {
       const glb = makeMinimalGlb({binBytes: 4})

@@ -216,8 +216,17 @@ export function serializeGlb(json, bin) {
  * non-empty input, we still parse+serialize so the new keys land in
  * the output.
  *
+ * **precompressed**: an extension entry may carry `precompressed`
+ * (a Uint8Array of already-gzipped wire JSON) instead of `data`.
+ * The bytes are embedded verbatim as the bufferView payload and the
+ * extension entry is recorded with `compressed: true` — exactly what
+ * the `{data, compress: true}` path would have produced, minus the
+ * stringify+gzip. This is the seam for streaming writers
+ * (`bldrsElementProperties.js`'s streaming capture) that compress
+ * incrementally instead of materialising the whole payload object.
+ *
  * @param {Uint8Array} glbBytes
- * @param {Array} extensions list of `{name: string, data: object|null|undefined, compress?: boolean}`
+ * @param {Array} extensions list of `{name: string, data: object|null|undefined, compress?: boolean, precompressed?: Uint8Array}`
  * @param {object} [sceneExtras] optional `{key: value, ...}` to merge
  *   into `scenes[json.scene ?? 0].extras`. Each value must be a
  *   JSON-serialisable scalar / object; entries with `null`/`undefined`
@@ -235,7 +244,8 @@ export function serializeGlb(json, bin) {
  *   without inspecting the byte stream.
  */
 export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
-  const active = (extensions ?? []).filter((e) => e && e.data !== null && e.data !== undefined)
+  const active = (extensions ?? []).filter((e) =>
+    e && ((e.data !== null && e.data !== undefined) || e.precompressed instanceof Uint8Array))
   const sceneExtraEntries = sceneExtras ?
     Object.entries(sceneExtras).filter(([, v]) => v !== null && v !== undefined) :
     []
@@ -331,11 +341,22 @@ export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
   let nextOffset = pad4(json.buffers[0].byteLength)
   let dataEnd = nextOffset
   const additions = []
-  for (const {name, data, compress = true} of toInject) {
-    const jsonText = JSON.stringify(data)
-    const raw = new TextEncoder().encode(jsonText)
-    const payload = compress ? pako.gzip(raw) : raw
-    additions.push({name, payload, byteOffset: nextOffset, compressed: compress})
+  for (const {name, data, compress = true, precompressed} of toInject) {
+    let payload
+    let compressed
+    if (precompressed instanceof Uint8Array) {
+      // Already-gzipped bytes from a streaming writer — embed
+      // verbatim; the reader's decode path is identical to the
+      // compress-here branch below.
+      payload = precompressed
+      compressed = true
+    } else {
+      const jsonText = JSON.stringify(data)
+      const raw = new TextEncoder().encode(jsonText)
+      payload = compress ? pako.gzip(raw) : raw
+      compressed = compress
+    }
+    additions.push({name, payload, byteOffset: nextOffset, compressed})
     dataEnd = nextOffset + payload.byteLength
     nextOffset += pad4(payload.byteLength)
   }

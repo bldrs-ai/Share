@@ -86,7 +86,11 @@ function getWorker() {
  *   the underlying ArrayBuffer
  * @param {string|null} args.mode container mode tag — draco/meshopt/null
  * @param {Array<object>} args.extensions extension payloads to inject;
- *   each entry is `{name, data, compress?}` matching `injectGlbExtensions`
+ *   each entry is `{name, data, compress?, precompressed?}` matching
+ *   `injectGlbExtensions`. A `precompressed` Uint8Array rides through
+ *   the structured clone intact (deliberately NOT in the transfer
+ *   list — the caller's inline fallback after a worker failure must
+ *   still see an attached buffer)
  * @param {object} [args.sceneExtras] optional small string-keyed
  *   metadata merged into `scenes[0].extras` in the same inject pass
  *   (see `injectGlbExtensions`)
