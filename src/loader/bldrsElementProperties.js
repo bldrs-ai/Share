@@ -281,9 +281,9 @@ const STREAM_FLUSH_CHARS = 65536
  *   - conway's entity/descriptor cache is released once, when the
  *     sweep ends (`proxy.releaseEntityCache`, conway ≥1.373 —
  *     optional-chained no-op on older versions). Deliberately NOT
- *     released mid-sweep: see the bench note above `STREAM_FLUSH_CHARS`
- *     — periodic mid-sweep releases regressed both sweep time and
- *     peak heap through re-growth churn.
+ *     released mid-sweep: see the bench NOTE just below
+ *     `STREAM_FLUSH_CHARS` — periodic mid-sweep releases regressed
+ *     both sweep time and peak heap through re-growth churn.
  *
  * Returns `null` (so the caller falls back to the slow path) when:
  *   - the adapter surface isn't accessible (test stubs without

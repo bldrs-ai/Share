@@ -19,6 +19,12 @@
 // the store) pins nothing; only the windows Conway keeps resident
 // (default 16 × 4MiB LRU) occupy memory.
 //
+// Degradation note: if the OPFS entry is deleted or overwritten
+// mid-session (e.g. the same model re-staged by another tab), reads
+// against the stale handle reject (NotReadableError) and the affected
+// property fetch surfaces an error — a per-fetch failure, never wrong
+// bytes. Reloading re-parses and re-stages as usual.
+//
 // See design/new/lazy-properties-memory.md (step 3) and the conway
 // companion design/new/memory-residency.md.
 import {glbInfo} from './glbLog'
