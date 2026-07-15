@@ -9,6 +9,7 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
+import {reportModelInfo} from './loadProgress'
 import {
   doesFileExistInOPFS,
   downloadModel,
@@ -380,6 +381,24 @@ export async function load(
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
+
+  // Model line for formats with no parsable STEP header (GLB/FBX/OBJ/…):
+  // name, format tag and size — the normalized form's format-independent
+  // core (design/new/load-log-format.md). STEP/IFC replaces this with a
+  // richer header-parsed line from the engine (ON_MODEL_INFO) as soon as
+  // its header parses.
+  let formatTag
+  try {
+    formatTag = Filetype.getValidExtension(path)?.toUpperCase()
+  } catch {
+    // Extension-less upload paths — the loader was already resolved by
+    // content sniffing in findLoader; the model line just omits the tag.
+  }
+  reportModelInfo({
+    fileName: path.substring(path.lastIndexOf('/') + 1) || path,
+    schema: formatTag,
+    byteLength: modelData?.byteLength ?? modelData?.length,
+  })
 
   let model
   try {

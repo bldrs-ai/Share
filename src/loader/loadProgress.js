@@ -1,38 +1,29 @@
 import {addBreadcrumb, captureMessage, setContext, setTag} from '@sentry/react'
+import useStore from '../store/useStore'
 import debug from '../utils/debug'
+// Named import so esbuild can prune the rest of the JSON (same trick as
+// index/sentry.js) — we only need `version` for the report preamble.
+import {version as shareVersion} from '../../package.json'
+import {LoadLogAccumulator} from './loadLogFormat'
 
 
 /**
  * Load-progress plumbing for conway issue #301: normalizes the progress
- * signals a load produces (conway's structured ProgressEvents, the loader's
- * legacy phase strings, download byte counts) into one shape the UI can
- * render determinately, mirrors them into Sentry breadcrumbs, watches for
- * stalls, and stamps `load.*` tags/context onto load failures so "model
- * loading failed" Sentry issues become groupable by phase.
+ * signals a load produces (conway's structured ProgressEvents, legacy phase
+ * strings, download byte counts) into the normalized load-log report
+ * (design/new/load-log-format.md) that drives the status-bar expando, the
+ * post-load report dialog, and a console mirror — plus Sentry breadcrumbs,
+ * stall detection, and `load.*` failure tags for phase-grouped issues.
  *
  * A load is a singleton in the viewer (one model at a time), so the
  * reporter is module-global: `beginLoadProgress()` in CadView's loadModel,
- * `reportLoadProgress()` from any layer that has a signal, and
- * `attachLoadFailureContext(error)` from the catch that calls
- * `captureException`.
+ * `reportLoadProgress()` / `reportModelInfo()` / `reportEngineVersion()`
+ * from any layer that has a signal, and `attachLoadFailureContext()` from
+ * the catch that calls `captureException`.
  */
-
-/**
- * Human labels for the conway phase taxonomy (core/progress.ts) + the
- * Share-side phases that precede/follow the engine.
- */
-export const PHASE_LABELS = {
-  download: 'Downloading',
-  headerParse: 'Reading header',
-  dataParse: 'Parsing model',
-  geometry: 'Extracting geometry',
-  sceneBuild: 'Building scene',
-  serialize: 'Writing output',
-  convert: 'Converting model',
-}
 
 const BREADCRUMB_INTERVAL_MS = 1000
-const PERCENT = 100
+const STATUS_LINE_INTERVAL_MS = 100
 
 /**
  * No event during a tickable phase for this long → stalled. Long enough
@@ -44,25 +35,22 @@ let activeReporter = null
 
 
 /**
- * Format a structured progress event as a short human phrase for the
- * snackbar, e.g. "Extracting geometry 42%" or "Parsing model".
+ * Chrome-only used-heap sample in MB; undefined elsewhere.
  *
- * @param {object} event structured progress event ({phase, completed,
- *   total, unit})
- * @return {string}
+ * @return {number|undefined}
  */
-export function formatLoadProgress(event) {
-  const label = PHASE_LABELS[event.phase] ?? event.phase
-  if (Number.isFinite(event.total) && event.total > 0) {
-    const percent = Math.min(PERCENT, Math.floor((event.completed / event.total) * PERCENT))
-    return `${label} ${percent}%`
+export function usedHeapMb() {
+  const memory = typeof performance !== 'undefined' ? performance.memory : undefined
+  if (memory && Number.isFinite(memory.usedJSHeapSize)) {
+    // eslint-disable-next-line no-magic-numbers
+    return memory.usedJSHeapSize / (1024 * 1024)
   }
-  return label
+  return undefined
 }
 
 
 /**
- * True for conway-shaped structured events ({phase, completed, ...});
+ * True for engine-shaped structured events ({phase, completed, ...});
  * false for legacy string messages and download byte objects.
  *
  * @param {*} progressArg whatever arrived on an onProgress callback
@@ -76,34 +64,77 @@ export function isStructuredProgress(progressArg) {
 }
 
 
-/** Per-load progress state: last event, breadcrumb throttle, stall watchdog. */
+/**
+ * True for the model-info envelope conwayDirectIfcLoader forwards from the
+ * engine's ON_MODEL_INFO callback ({modelInfo: {...}}).
+ *
+ * @param {*} progressArg
+ * @return {boolean}
+ */
+export function isModelInfoProgress(progressArg) {
+  return Boolean(progressArg) &&
+    typeof progressArg === 'object' &&
+    typeof progressArg.modelInfo === 'object' &&
+    progressArg.modelInfo !== null
+}
+
+
+/** Per-load report state: accumulator, breadcrumb throttle, stall watchdog. */
 class LoadProgressReporter {
   /**
    * @param {object} opts
    * @param {string} opts.fileInfo short model identity (path/type/size) for
-   *   Sentry context
-   * @param {Function} [opts.onEvent] called with each structured event (the
-   *   store setter driving the determinate UI)
+   *   Sentry context and the fallback model line
    * @param {Function} [opts.onStall] called once per silent period with the
    *   last event when the watchdog fires
    */
-  constructor({fileInfo, onEvent, onStall}) {
+  constructor({fileInfo, onStall}) {
     this.fileInfo = fileInfo
-    this.onEvent = onEvent
     this.onStall = onStall
+    this.log = new LoadLogAccumulator()
+    // The frozen report lines in display order (preamble, model line, and
+    // stage lines interleaved as they actually happened) — the accumulator
+    // tracks stage state; this list is the single source of line order.
+    this.lines = []
     this.lastEvent = null
     this.lastBreadcrumbTime = 0
+    this.lastStatusLineTime = 0
     this.stallTimer = null
     this.stallReported = false
     this.startTime = Date.now()
-    // Flipped by dispose(): a straggler onProgress callback arriving after
-    // the load's finally must not re-arm the watchdog or mutate the trail
-    // (the last pre-end event is what failure context should carry).
     this.ended = false
+
+    // Report preamble (log lines 1-2): Share version + memory condition
+    // before the load. The engine line arrives via reportEngineVersion once
+    // the wasm is initialized.
+    const heap = usedHeapMb()
+    const heapNote = heap !== undefined ? `, ${Math.round(heap)} MB heap before load` : ''
+    this.addReportLine(`Share v${shareVersion}${heapNote}`)
   }
 
   /**
-   * Ingest one progress signal (structured event or legacy string).
+   * Append a frozen line to the report: store (for the expando/dialog) +
+   * console mirror, so the UI shows exactly what the JS console shows.
+   *
+   * @param {string} line
+   */
+  addReportLine(line) {
+    this.lines.push(line)
+    // eslint-disable-next-line no-console
+    console.info(line)
+    this.publishReport()
+  }
+
+  /** Push the full report + live line into the store. */
+  publishReport() {
+    const state = useStore.getState()
+    state.setLoadReportLines([...this.lines])
+    state.setCurrentLoadLine(this.log.currentLine() ?? null)
+  }
+
+  /**
+   * Ingest one progress signal (structured event, model-info envelope, or
+   * legacy string).
    *
    * @param {object|string} progressArg
    */
@@ -111,18 +142,51 @@ class LoadProgressReporter {
     if (this.ended) {
       return
     }
-    const structured = isStructuredProgress(progressArg)
-    if (structured) {
-      this.lastEvent = progressArg
-      if (this.onEvent) {
-        this.onEvent(progressArg)
-      }
-    } else if (typeof progressArg === 'string') {
-      // Legacy phase strings keep the trail alive even when the engine
-      // pre-dates the structured API.
-      this.lastEvent = {phase: progressArg, completed: 0}
+
+    if (isModelInfoProgress(progressArg)) {
+      this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
+      this.armStallWatchdog()
+      return
     }
-    this.breadcrumb(progressArg, structured)
+
+    let event
+    if (isStructuredProgress(progressArg)) {
+      event = progressArg
+    } else if (typeof progressArg === 'string') {
+      // Legacy phase strings become indeterminate stage transitions, so
+      // engines/loaders that predate the structured API still produce a
+      // complete report (each string stage owns its wall/heap delta).
+      event = {phase: progressArg.replace(/(\.\.\.|…)$/, ''), completed: 0}
+    } else {
+      // Download byte objects without totals etc. — breadcrumb only.
+      this.breadcrumb(String(JSON.stringify(progressArg)), undefined)
+      this.armStallWatchdog()
+      return
+    }
+
+    // Share-side stages (download/convert/legacy strings) don't carry
+    // engine timings — stamp wall clock + heap so every stage line has its
+    // owned deltas (the normalized form's format-independent core).
+    event = {
+      ...event,
+      elapsedMs: event.elapsedMs ?? (Date.now() - this.startTime),
+      memoryMb: event.memoryMb ?? usedHeapMb(),
+    }
+
+    this.lastEvent = event
+
+    const closedLine = this.log.onProgress(event)
+    if (closedLine !== undefined) {
+      this.addReportLine(closedLine)
+    }
+
+    const now = Date.now()
+    if (closedLine !== undefined || now - this.lastStatusLineTime >= STATUS_LINE_INTERVAL_MS) {
+      this.lastStatusLineTime = now
+      this.publishReport()
+    }
+
+    this.breadcrumb(this.log.currentLine() ?? event.phase, event)
     this.armStallWatchdog()
   }
 
@@ -131,10 +195,10 @@ class LoadProgressReporter {
    * exception captured during/after the load carries the phase timeline —
    * "what's the last message you saw" without asking the user.
    *
-   * @param {object|string} progressArg
-   * @param {boolean} structured
+   * @param {string} message
+   * @param {object} [event]
    */
-  breadcrumb(progressArg, structured) {
+  breadcrumb(message, event) {
     const now = Date.now()
     if (now - this.lastBreadcrumbTime < BREADCRUMB_INTERVAL_MS) {
       return
@@ -143,14 +207,14 @@ class LoadProgressReporter {
     try {
       addBreadcrumb({
         category: 'model.load',
-        message: structured ? formatLoadProgress(progressArg) : String(progressArg),
-        data: structured ? {
-          phase: progressArg.phase,
-          completed: progressArg.completed,
-          total: progressArg.total,
-          unit: progressArg.unit,
-          elapsedMs: progressArg.elapsedMs,
-          memoryMb: progressArg.memoryMb,
+        message,
+        data: event ? {
+          phase: event.phase,
+          completed: event.completed,
+          total: event.total,
+          unit: event.unit,
+          elapsedMs: event.elapsedMs,
+          memoryMb: event.memoryMb,
         } : undefined,
         level: 'info',
       })
@@ -176,8 +240,8 @@ class LoadProgressReporter {
 
   /**
    * The watchdog fired: tell the UI, and send one rate-limited Sentry
-   * message per load — today a hung load that never throws is invisible
-   * to Sentry (issue #301 §7).
+   * message per load — a hung load that never throws is otherwise
+   * invisible to Sentry (issue #301 §7).
    */
   handleStall() {
     if (this.onStall) {
@@ -211,7 +275,21 @@ class LoadProgressReporter {
       elapsedMs: event?.elapsedMs ?? elapsedMs,
       memoryMb: event?.memoryMb,
       fileInfo: this.fileInfo,
+      report: this.lines.join('\n'),
     })
+  }
+
+  /**
+   * Finish the report: close the running stage, add the separate
+   * before/after Total line, clear the live line.
+   */
+  finishReport() {
+    const closedLine = this.log.closeCurrentStage()
+    if (closedLine !== undefined) {
+      this.addReportLine(closedLine)
+    }
+    this.addReportLine(this.log.totalLine())
+    useStore.getState().setCurrentLoadLine(null)
   }
 
   /** Stop watching (load finished or failed). */
@@ -223,7 +301,8 @@ class LoadProgressReporter {
 
 
 /**
- * Start reporting a new load, replacing any prior reporter.
+ * Start reporting a new load, replacing any prior reporter and clearing
+ * the prior report in the store.
  *
  * @param {object} opts see LoadProgressReporter
  * @return {LoadProgressReporter}
@@ -232,6 +311,8 @@ export function beginLoadProgress(opts) {
   if (activeReporter) {
     activeReporter.dispose()
   }
+  useStore.getState().setLoadReportLines([])
+  useStore.getState().setCurrentLoadLine(null)
   activeReporter = new LoadProgressReporter(opts)
   return activeReporter
 }
@@ -246,6 +327,32 @@ export function beginLoadProgress(opts) {
 export function reportLoadProgress(progressArg) {
   if (activeReporter) {
     activeReporter.report(progressArg)
+  }
+}
+
+
+/**
+ * Report the engine identity (log line 2), e.g. "Conway v1.377.1188" from
+ * ifcAPI.getConwayVersion(). Safe no-op with no active load.
+ *
+ * @param {string} versionLine
+ */
+export function reportEngineVersion(versionLine) {
+  if (activeReporter && !activeReporter.ended && versionLine) {
+    activeReporter.addReportLine(versionLine)
+  }
+}
+
+
+/**
+ * Report early model-header info (log line 3) directly (the engine path
+ * arrives via the onProgress envelope instead — see isModelInfoProgress).
+ *
+ * @param {object} info {fileName, schema, byteLength, ...}
+ */
+export function reportModelInfo(info) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
   }
 }
 
@@ -266,14 +373,15 @@ export function attachLoadFailureContext() {
 
 
 /**
- * Finish reporting (success or failure): stops the stall watchdog. The
- * reporter itself stays referenced so attachLoadFailureContext can still
- * stamp the final progress state onto a captureException that happens
- * after the load's finally block (CadView's catch is in the caller);
- * the next beginLoadProgress replaces it.
+ * Finish reporting (success or failure): freezes the report (Total line)
+ * and stops the stall watchdog. The reporter stays referenced so
+ * attachLoadFailureContext can still stamp the final progress state onto a
+ * captureException that happens after the load's finally block; the next
+ * beginLoadProgress replaces it.
  */
 export function endLoadProgress() {
-  if (activeReporter) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.finishReport()
     activeReporter.dispose()
   }
 }
@@ -287,3 +395,4 @@ export function endLoadProgress() {
 export function _getActiveReporterForTests() {
   return activeReporter
 }
+

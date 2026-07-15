@@ -16,13 +16,19 @@ export default function createIFCSlice(set, get) {
     isModelLoading: false,
     setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
 
-    // Last structured load-progress event ({phase, completed, total?, unit,
-    // elapsedMs, memoryMb?} — conway core/progress.ts shape, see
-    // loader/loadProgress.js). Drives the determinate LoadingBackdrop;
-    // null when idle or when the engine predates the progress API (the
-    // backdrop then falls back to its indeterminate spinner).
-    loadProgress: null,
-    setLoadProgress: (progress) => set(() => ({loadProgress: progress})),
+    // The normalized load-log report (design/new/load-log-format.md):
+    // frozen lines (Share/engine/model preamble + finished stage lines +
+    // Total) mirrored 1:1 with what loader/loadProgress.js prints to the
+    // console. Drives the status-bar expando and the post-load report
+    // dialog. Reset by beginLoadProgress on each load.
+    loadReportLines: [],
+    setLoadReportLines: (lines) => set(() => ({loadReportLines: lines})),
+
+    // The running stage's animated line ("Geometry [0%....56%] 41.0s,
+    // +388 MB heap"), or null when no load is in flight — the collapsed
+    // status-bar expando's one-liner.
+    currentLoadLine: null,
+    setCurrentLoadLine: (line) => set(() => ({currentLoadLine: line})),
 
     // TODO(pablo): really needed?
     isModelReady: false,

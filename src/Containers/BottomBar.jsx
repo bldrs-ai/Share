@@ -4,6 +4,8 @@ import AboutControl from '../Components/About/AboutControl'
 import BotControl from '../Components/Bot/BotControl'
 import ElementsControl from '../Components/ElementsControl'
 import HelpControl from '../Components/Help/HelpControl'
+import LoadReportControl from '../Components/LoadReport/LoadReportControl'
+import LoadStatusSlot from '../Components/LoadStatusSlot'
 import PerfToolbarSlot from '../Components/PerfToolbarSlot'
 import useExistInFeature from '../hooks/useExistInFeature'
 
@@ -33,9 +35,15 @@ export default function BottomBar({deselectItems}) {
         `justifyContent='space-between'`.  When the `?feature=perf`
         flag is off, `PerfToolbarSlot` returns null and this resolves
         to a single-child stack — no visual difference.
+
+        LoadStatusSlot (live load-log expando) renders only mid-load;
+        LoadReportControl (the "i" next to "?") only once a load has
+        finished with a report — see conway #301 follow-up.
       */}
       <Stack direction='row' alignItems='center' spacing={2}>
+        <LoadStatusSlot/>
         <PerfToolbarSlot/>
+        <LoadReportControl/>
         {isBotEnabled ? <BotControl/> : <HelpControl/>}
       </Stack>
     </Stack>

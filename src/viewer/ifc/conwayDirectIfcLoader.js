@@ -47,6 +47,7 @@
 // the load backend.
 
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {reportEngineVersion} from '../../loader/loadProgress'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -98,10 +99,22 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
     await ifcAPI.Init()
   }
   applyEngineLogLevel(ifcAPI)
+  // Engine identity line for the load report (log line 2) — e.g.
+  // "Conway v1.379.1190". Feature-detected; real web-ifc lacks it.
+  if (typeof ifcAPI.getConwayVersion === 'function') {
+    reportEngineVersion(ifcAPI.getConwayVersion())
+  }
   const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
   let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
   if (onProgress) {
-    openSettings = {...openSettings, ON_PROGRESS: onProgress}
+    // ON_MODEL_INFO (conway extension) arrives once, right after the header
+    // parses — forwarded through the same onProgress pipe as a
+    // {modelInfo} envelope so callers need only one callback channel.
+    openSettings = {
+      ...openSettings,
+      ON_PROGRESS: onProgress,
+      ON_MODEL_INFO: (info) => onProgress({modelInfo: info}),
+    }
   }
   // OpenModelAsync (conway #301 §2) yields to the event loop between
   // progress ticks, so the backdrop/snackbar actually repaint and the
