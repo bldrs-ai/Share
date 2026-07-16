@@ -15,6 +15,21 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.10.0 — adopted standard glTF scene naming (#1595): the writer now
+ *         stamps the model title into the standard `scenes[0].name`
+ *         field (what generic viewers like the three.js editor
+ *         display) in addition to the Bldrs-only `extras.bldrsTitle`,
+ *         replacing GLTFExporter's 'AuxScene' placeholder. Reader-side,
+ *         `convertToShareModel` now surfaces standard `Object3D.name`
+ *         node names (glTF `nodes[i].name` via GLTFLoader) in the
+ *         NavTree / Properties panel instead of the 'Object'
+ *         placeholder. Element-level hierarchy still travels in
+ *         `BLDRS_spatial_tree` — the exported scene graph is a merged
+ *         mesh (one node per material bin, not per IFC element), so
+ *         per-element standard nodes would defeat the draw-call
+ *         batching; the standard fields carry what the flat graph can
+ *         express. Older 0.9.0 artifacts read as miss; next miss
+ *         rewrites with the scene name attached.
  * 0.9.0 — extended `BLDRS_face_ids` with a global STEP occurrence-path
  *         table (`occurrencePaths`, index = synthetic instance id) so a
  *         cache-hit STEP model restores per-occurrence NavTree↔scene
@@ -62,7 +77,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.9.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.10.0'
 
 
 /**
