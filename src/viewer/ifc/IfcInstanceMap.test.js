@@ -8,6 +8,7 @@ import {
 import {
   IfcInstanceMap,
   NO_INSTANCE_ID,
+  attachGeometryExpressIds,
   attachOccurrencePaths,
   instanceMapFromFlatMeshes,
   instanceMapFromGeometry,
@@ -115,6 +116,27 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       ])
       expect(map.instanceIdToOccurrencePath).toBeNull()
       expect(map.getOccurrencePathByInstance(0)).toBeNull()
+    })
+
+    it('captures per-instance geometry (solid) express ids for STEP ranges', () => {
+      // A multibody part (the NEMA motor shape): one parent, one shared
+      // occurrence path, several named solids — the geometry express id is
+      // what tells the bodies apart.
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [10], geometryExpressId: 250},
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [10], geometryExpressId: 9382},
+      ])
+      expect(map.getGeometryExpressIdByInstance(0)).toBe(250)
+      expect(map.getGeometryExpressIdByInstance(1)).toBe(9382)
+      expect(map.getGeometryExpressIdByInstance(2)).toBeNull()
+    })
+
+    it('leaves geometry ids null for ranges that carry none (IFC)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      expect(map.instanceIdToGeometryExpressId).toBeNull()
+      expect(map.getGeometryExpressIdByInstance(0)).toBeNull()
     })
 
     it('handles an empty stream', () => {
@@ -642,6 +664,42 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       attachOccurrencePaths(occMap, [[99]])
       expect(occMap.instanceIdToOccurrencePath).toBe(before)
       expect(occMap.getOccurrencePathByInstance(0)).toEqual([7, 8])
+    })
+  })
+
+
+  describe('attachGeometryExpressIds (cache-hit restore)', () => {
+    it('restores per-instance geometry ids from a global table', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100, 100]), new Uint32Array([0, 1]))
+      expect(map.instanceIdToGeometryExpressId).toBeNull()
+
+      attachGeometryExpressIds(map, [250, 9382])
+      expect(map.getGeometryExpressIdByInstance(0)).toBe(250)
+      expect(map.getGeometryExpressIdByInstance(1)).toBe(9382)
+    })
+
+    it('only binds instance ids the mesh actually holds (per-primitive subset)', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([5]))
+      attachGeometryExpressIds(map, [1, 2, 3, 4, 5, 9382])
+      expect(map.getGeometryExpressIdByInstance(5)).toBe(9382)
+      expect(map.getGeometryExpressIdByInstance(0)).toBeNull()
+    })
+
+    it('is a no-op for null/absent tables and already-populated maps', () => {
+      const ifcMap = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([0]))
+      attachGeometryExpressIds(ifcMap, [null])
+      expect(ifcMap.instanceIdToGeometryExpressId).toBeNull()
+
+      const solidMap = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 250},
+      ])
+      const before = solidMap.instanceIdToGeometryExpressId
+      attachGeometryExpressIds(solidMap, [9382])
+      expect(solidMap.instanceIdToGeometryExpressId).toBe(before)
+      expect(solidMap.getGeometryExpressIdByInstance(0)).toBe(250)
     })
   })
 })

@@ -109,6 +109,12 @@ export class IfcInstanceMap {
    *   Reverse index of the above — occurrence-path key (`occurrencePathKey`) →
    *   the synthetic instance ids placed there. The NavTree→scene direction.
    *   Absent (null) for IFC and older engines.
+   * @param {Array<number|null>} [fields.instanceIdToGeometryExpressId]
+   *   Per-instance geometry express id (`PlacedGeometry.geometryExpressID`).
+   *   For STEP this is the solid's own express id — a multibody part's
+   *   instances share one occurrence path and one parent expressID, so this is
+   *   what narrows selection to a single named solid (the NavTree's ephemeral
+   *   `type:'solid'` nodes). Absent (null) when the source doesn't provide it.
    */
   constructor({
     triangleIndexToInstanceId,
@@ -118,6 +124,7 @@ export class IfcInstanceMap {
     sourceGeometry,
     instanceIdToOccurrencePath = null,
     occurrencePathToInstanceIds = null,
+    instanceIdToGeometryExpressId = null,
   }) {
     this.triangleIndexToInstanceId = triangleIndexToInstanceId
     this.instanceIdToTriangleIndices = instanceIdToTriangleIndices
@@ -126,6 +133,7 @@ export class IfcInstanceMap {
     this.sourceGeometry = sourceGeometry
     this.instanceIdToOccurrencePath = instanceIdToOccurrencePath
     this.occurrencePathToInstanceIds = occurrencePathToInstanceIds
+    this.instanceIdToGeometryExpressId = instanceIdToGeometryExpressId
   }
 
 
@@ -202,6 +210,26 @@ export class IfcInstanceMap {
     // no-data case, letting truthiness-testing callers fall back to the
     // scalar parent expressID instead of keying on a meaningless empty path.
     return path && path.length > 0 ? path : null
+  }
+
+
+  /**
+   * Geometry express id (`PlacedGeometry.geometryExpressID`) for the given
+   * synthetic instance ID. For STEP this is the solid's own express id —
+   * the second half of the `(occurrencePath, solid expressID)` identity that
+   * narrows selection to one named solid of a multibody part. Returns `null`
+   * when the model carries no geometry ids (IFC, older engines / cache
+   * artifacts) or the instance ID is out of range.
+   *
+   * @param {number} instanceId
+   * @return {number|null}
+   */
+  getGeometryExpressIdByInstance(instanceId) {
+    const ids = this.instanceIdToGeometryExpressId
+    if (!ids || instanceId < 0 || instanceId >= ids.length) {
+      return null
+    }
+    return ids[instanceId] ?? null
   }
 
 
@@ -457,6 +485,44 @@ export function attachOccurrencePaths(instanceMap, occurrencePathsByInstanceId) 
 
 
 /**
+ * Attach per-instance geometry (solid) express ids to an already-built map
+ * from a global `instanceId → geometryExpressId` table (the cache-hit GLB
+ * restore path — the per-triangle face_ids arrays only carry the scalar
+ * instance id). Mirrors `attachOccurrencePaths`: walks only the instance ids
+ * this mesh actually holds, no-ops when the map already carries geometry ids
+ * or the table is absent/empty.
+ *
+ * @param {IfcInstanceMap} instanceMap
+ * @param {Array<number|null>} geometryExpressIdsByInstanceId global
+ *   per-instance table, indexed by synthetic instance id
+ */
+export function attachGeometryExpressIds(instanceMap, geometryExpressIdsByInstanceId) {
+  if (!instanceMap || instanceMap.instanceIdToGeometryExpressId ||
+      !Array.isArray(geometryExpressIdsByInstanceId)) {
+    return
+  }
+  const count = instanceMap.instanceIdToParentExpressId?.length ?? 0
+  if (count === 0) {
+    return
+  }
+  const perInstance = new Array(count).fill(null)
+  let any = false
+  for (const inst of instanceMap.instanceIdToTriangleIndices.keys()) {
+    const geometryExpressId = geometryExpressIdsByInstanceId[inst]
+    if (typeof geometryExpressId !== 'number' || !Number.isFinite(geometryExpressId)) {
+      continue
+    }
+    perInstance[inst] = geometryExpressId
+    any = true
+  }
+  if (!any) {
+    return
+  }
+  instanceMap.instanceIdToGeometryExpressId = perInstance
+}
+
+
+/**
  * Build an IfcInstanceMap from a per-PlacedGeometry triangle range
  * stream. Each entry contributes `triangleCount` triangles to the
  * merged buffer; the populator assigns a fresh synthetic instance
@@ -493,12 +559,20 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
   // instance(s) placed there. Keyed by the path joined on '/'. Only non-empty
   // paths are indexed (an empty root path can't disambiguate occurrences).
   const occurrencePathToInstanceIds = hasOccurrencePaths ? new Map() : null
+  // Per-instance geometry (solid) express id — only when the source provides
+  // it (STEP on a Conway emitting PlacedGeometry.geometryExpressID); IFC and
+  // older engines leave this null so nothing downstream pays.
+  const hasGeometryIds = valid.some((r) => r.geometryExpressId !== undefined)
+  const instanceIdToGeometryExpressId = hasGeometryIds ? new Array(instanceCount) : null
   const triangleListsByInstance = new Map()
   const instanceListsByParent = new Map()
   let tri = 0
   for (let inst = 0; inst < valid.length; inst++) {
     const {parentExpressId, triangleCount} = valid[inst]
     instanceIdToParentExpressId[inst] = parentExpressId
+    if (instanceIdToGeometryExpressId) {
+      instanceIdToGeometryExpressId[inst] = valid[inst].geometryExpressId ?? null
+    }
     if (instanceIdToOccurrencePath) {
       const path = valid[inst].occurrencePath ?? null
       instanceIdToOccurrencePath[inst] = path
@@ -538,6 +612,7 @@ export function instanceMapFromOrderedPlacedRanges(ranges, opts = {}) {
     sourceGeometry: opts.geometry ?? null,
     instanceIdToOccurrencePath,
     occurrencePathToInstanceIds,
+    instanceIdToGeometryExpressId,
   })
 }
 
@@ -778,7 +853,14 @@ export function instanceMapFromFlatMeshes(flatMeshes, api, modelID, opts = {}) {
       }
       // Conway (STEP) tags each PlacedGeometry with its occurrence path so a
       // reused part's occurrences stay distinguishable; undefined for IFC.
-      ranges.push({parentExpressId, triangleCount, occurrencePath: placed.occurrencePath})
+      // The geometry express id is the solid's own id — the key that narrows
+      // a multibody part's shared path down to one named solid.
+      ranges.push({
+        parentExpressId,
+        triangleCount,
+        occurrencePath: placed.occurrencePath,
+        geometryExpressId: placed.geometryExpressID,
+      })
     }
   }
   return instanceMapFromOrderedPlacedRanges(ranges, opts)

@@ -212,7 +212,7 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
     // reuse of a nut highlights together).
     const buildMap = ifcModel.instanceMap
     ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
-    if (buildMap?.instanceIdToOccurrencePath) {
+    if (buildMap?.instanceIdToOccurrencePath || buildMap?.instanceIdToGeometryExpressId) {
       // Guard the 1:1 assumption instead of trusting it silently. If the two
       // populators ever number instances differently (e.g. one drops a
       // degenerate PlacedGeometry the other keeps), copying the tables over
@@ -220,8 +220,18 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
       // wrong-nut-highlights bug. On mismatch, skip the transfer and degrade
       // to type-level selection rather than mis-highlight.
       if (buildMap.instanceCount === ifcModel.instanceMap.instanceCount) {
-        ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
-        ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+        if (buildMap.instanceIdToOccurrencePath) {
+          ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
+          ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+        }
+        // Same 1:1 carry for the per-instance geometry (solid) express ids —
+        // per-vertex attributes can't encode them either, and they're the
+        // second half of the (occurrencePath, solid expressID) identity that
+        // per-solid selection joins on.
+        if (buildMap.instanceIdToGeometryExpressId) {
+          ifcModel.instanceMap.instanceIdToGeometryExpressId =
+            buildMap.instanceIdToGeometryExpressId
+        }
       } else {
         console.warn(
           '[conwayDirect] occurrence-path transfer skipped: instance-count mismatch ' +

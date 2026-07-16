@@ -298,6 +298,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       if (Array.isArray(occurrencePaths)) {
         faceIds.occurrencePaths = occurrencePaths
       }
+      // Per-instance geometry (solid) express ids — the other half of the
+      // (occurrencePath, solid expressID) identity per-solid selection of
+      // multibody STEP parts joins on. Same rationale as the paths above:
+      // per-triangle arrays carry only the scalar instance id. Absent for IFC.
+      const geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId
+      if (Array.isArray(geometryExpressIds)) {
+        faceIds.geometryExpressIds = geometryExpressIds
+      }
     }
     await yieldToBrowser()
     const capturePromise = (async () => {

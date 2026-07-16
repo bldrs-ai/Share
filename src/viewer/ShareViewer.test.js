@@ -569,6 +569,32 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
       viewer, 0, [10, 21], {includeDescendants: false})).toEqual([1])
   })
 
+  it('narrows to one solid with geometryExpressId (multibody part)', () => {
+    // The SolidWorks multibody shape (the NEMA motor): every named solid
+    // shares the part's occurrence path — extended by the SRR's own id on the
+    // geometry side — and PlacedGeometry.geometryExpressID is the solid's own
+    // express id, the NavTree ephemeral solid node's key.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 9382},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [11], geometryExpressId: 9751},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    // Solid node under the part leaf at [10]: the exact key misses (geometry
+    // keys are SRR-extended), the prefix scan + filter find the one body.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false, geometryExpressId: 9382})).toEqual([1])
+    // No filter: the whole part, both bodies.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false}).sort()).toEqual([0, 1])
+    // Filter also applies on the exact-key fast path.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [11], {includeDescendants: false, geometryExpressId: 9751})).toEqual([2])
+    // A geometry id the path doesn't hold resolves to nothing.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false, geometryExpressId: 424242})).toEqual([])
+  })
+
   it('is prefix-inclusive: an assembly path lights up every leaf beneath it', () => {
     // Two leaves under assembly-occurrence [10]; a lookup on [10] returns both,
     // a lookup on the exact leaf returns just one.

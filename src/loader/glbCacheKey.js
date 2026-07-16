@@ -15,6 +15,15 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.10.0 — extended `BLDRS_face_ids` with a global per-instance geometry
+ *         (solid) express-id table (`geometryExpressIds`, index = synthetic
+ *         instance id), and the spatial tree with Conway's ephemeral solid
+ *         nodes (`includeSolids`). Together they restore per-solid selection
+ *         of multibody STEP parts (NavTree `type:'solid'` rows ↔ the one
+ *         body's instances) on cache-hit. Older 0.9.0 artifacts read as
+ *         miss; next miss rewrites with the table and solid nodes attached.
+ *         IFC artifacts are unaffected. See conway
+ *         design/new/step-nonproduct-semantics.md.
  * 0.9.0 — extended `BLDRS_face_ids` with a global STEP occurrence-path
  *         table (`occurrencePaths`, index = synthetic instance id) so a
  *         cache-hit STEP model restores per-occurrence NavTree↔scene
@@ -62,7 +71,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.9.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.10.0'
 
 
 /**
