@@ -632,3 +632,88 @@ describe('Loader/sanitizeCachedTitle — untrusted-input scrubbing', () => {
     expect(mesh.name).toBe('glb model')
   })
 })
+
+
+describe('Loader/convertToShareModel — root label filename composition (#1595)', () => {
+  // Authored scene names are often generic exporter defaults
+  // (Blender's "Scene"), so the root label composes the source
+  // filename in parens — "Scene (ISS_stationary.glb)" — matching the
+  // three.js editor's use of the import filename. The filename comes
+  // from Loader#load: recent-files entry for uploads, trailing path
+  // part for URLs.
+
+  it('composes "<sceneName> (<fileName>)" when both exist', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'ISS_stationary.glb'})
+    expect(mesh.name).toBe('Scene (ISS_stationary.glb)')
+    expect(mesh.Name.value).toBe('Scene (ISS_stationary.glb)')
+    expect(mesh.LongName.value).toBe('Scene (ISS_stationary.glb)')
+  })
+
+  it('uses the filename alone when the file has no scene name', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'ISS_stationary.glb'})
+    expect(mesh.name).toBe('ISS_stationary.glb')
+    expect(mesh.Name.value).toBe('ISS_stationary.glb')
+  })
+
+  it('does not duplicate when the scene name equals the filename', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'cube.glb'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'cube.glb'})
+    expect(mesh.name).toBe('cube.glb')
+  })
+
+  it('keeps behavior unchanged when no fileName is provided', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Scene')
+  })
+
+  it('does not append the filename to a cache-stamped IFC project title', () => {
+    // Cache-hit GLB of an IFC: the bldrsTitle is the real project name
+    // ("Momentum"); appending the source filename would diverge from
+    // the live-parse page title.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
+  })
+
+  it('does not append when the scene name IS the stamped cache title (0.10.0 writer)', () => {
+    // New-writer artifacts stamp the title into BOTH scenes[0].name and
+    // extras.bldrsTitle; GLTFLoader hands the scene name back on
+    // model.name. Equality with the cached title marks it as an IFC
+    // project name, not an authored scenegraph name.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Momentum'
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    expect(mesh.name).toBe('Momentum')
+  })
+
+  it('sanitizes the filename before composing', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: '<evil>‮name.glb'})
+    expect(mesh.name).toBe('Scene (evilname.glb)')
+  })
+
+  it('a filename that sanitizes to nothing leaves the scene name alone', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: ' ‮<>'})
+    expect(mesh.name).toBe('Scene')
+  })
+})

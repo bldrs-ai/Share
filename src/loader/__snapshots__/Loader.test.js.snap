@@ -682,7 +682,7 @@ exports[`Loader loads a FBX model 1`] = `
       0,
       1,
     ],
-    "name": "fbx model",
+    "name": "cube.fbx",
     "type": "fbx",
     "up": [
       0,
@@ -1060,7 +1060,7 @@ exports[`Loader loads a GLB model 1`] = `
       0,
       1,
     ],
-    "name": "Scene",
+    "name": "Scene (cube.glb)",
     "type": "glb",
     "up": [
       0,
@@ -2599,7 +2599,7 @@ exports[`Loader loads a PDB model 1`] = `
       0,
       1,
     ],
-    "name": "Molecule",
+    "name": "caffeine.pdb",
     "type": "pdb",
     "up": [
       0,
@@ -32825,7 +32825,7 @@ exports[`Loader loads an OBJ model 1`] = `
       0,
       1,
     ],
-    "name": "obj model",
+    "name": "Bunny.obj",
     "type": "obj",
     "up": [
       0,
@@ -33179,7 +33179,7 @@ exports[`Loader loads an STL model 1`] = `
       0,
       1,
     ],
-    "name": "stl model",
+    "name": "cube.stl",
     "type": "stl",
     "up": [
       0,

@@ -129,15 +129,17 @@ describe('Loader', () => {
     // must mirror them into the IFC-shaped Name/LongName the NavTree
     // (reifyName) and Properties panel read — previously every node
     // showed the 'Object' placeholder (issue #1595, e.g. NASA's
-    // ISS_stationary.glb rendered structure but no names).
+    // ISS_stationary.glb rendered structure but no names). The root
+    // label composes the source filename in parens since authored
+    // scene names are usually generic exporter defaults.
     mockViewer.IFC.type = 'glb'
     const testPath = 'glb/cube.glb'
     const restoreArrayBuffer = testPathToContent(testPath)
     try {
       const model = await load(testPathToUrl(testPath), mockViewer, jest.fn(), true, jest.fn(), '')
-      expect(model.name).toBe('Scene')
-      expect(model.Name.value).toBe('Scene')
-      expect(model.LongName.value).toBe('Scene')
+      expect(model.name).toBe('Scene (cube.glb)')
+      expect(model.Name.value).toBe('Scene (cube.glb)')
+      expect(model.LongName.value).toBe('Scene (cube.glb)')
       const cube = model.children.find((child) => child.name === 'Cube')
       expect(cube).toBeDefined()
       expect(cube.Name.value).toBe('Cube')
