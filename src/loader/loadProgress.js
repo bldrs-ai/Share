@@ -398,10 +398,31 @@ export function beginLoadProgress(opts) {
   if (activeReporter) {
     activeReporter.dispose()
   }
-  useStore.getState().setLoadReportLines([])
-  useStore.getState().setCurrentLoadLine(null)
+  const store = useStore.getState()
+  store.setLoadReportLines([])
+  store.setCurrentLoadLine(null)
+  // Clear any lingering grace snackbar from the previous load before this
+  // one's live line takes over the snackbar.
+  store.setLoadResult(null)
   activeReporter = new LoadProgressReporter(opts)
   return activeReporter
+}
+
+
+/**
+ * One-line summary of a load failure for the grace snackbar. The full
+ * failure detail (last phase, diagnostics) lives in the copyable "i"
+ * report; this is just the eye-level "what happened".
+ *
+ * @param {Error} [error]
+ * @return {string}
+ */
+function loadErrorSummary(error) {
+  if (error && error.isOutOfMemory) {
+    return 'Load failed: out of memory'
+  }
+  const message = error && error.message ? error.message : 'could not parse model'
+  return `Load failed: ${message}`
 }
 
 
@@ -461,14 +482,28 @@ export function attachLoadFailureContext() {
 
 /**
  * Finish reporting (success or failure): freezes the report (Total line)
- * and stops the stall watchdog. The reporter stays referenced so
+ * and stops the stall watchdog, then publishes the end-of-load grace result
+ * that the snackbar lingers on (success → "Model Loaded. Total …", auto-
+ * dismissed with the shrink-to-"i" animation; error → the failure summary,
+ * dismissed only on OK). The reporter stays referenced so
  * attachLoadFailureContext can still stamp the final progress state onto a
  * captureException that happens after the load's finally block; the next
  * beginLoadProgress replaces it.
+ *
+ * @param {Error} [error] the loader error when the load failed; omitted /
+ *   null on success. Called from CadView's load `finally`, which captures
+ *   the thrown error before re-raising it to the outer handler.
  */
-export function endLoadProgress() {
+export function endLoadProgress(error = null) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.finishReport()
+    const summaryLine = error ?
+      loadErrorSummary(error) :
+      `Model Loaded. ${activeReporter.log.totalLine()}`
+    useStore.getState().setLoadResult({
+      status: error ? 'error' : 'success',
+      summaryLine,
+    })
     activeReporter.dispose()
   }
 }

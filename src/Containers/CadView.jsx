@@ -442,6 +442,10 @@ export default function CadView({
 
     const onProgress = (progressMsg) => reportLoadProgress(progressMsg)
     let loadedModel
+    // Captured in the catch so the finally can tell endLoadProgress whether
+    // the load succeeded (success grace line) or failed (error grace line),
+    // even though the error is re-raised to onViewerInternal's handler.
+    let loadError = null
     try {
       if (isGoogleResult) {
         const connection = connections.find((c) => c.providerId === 'google-drive')
@@ -465,6 +469,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
       }
     } catch (error) {
+      loadError = error
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
       }
@@ -483,8 +488,9 @@ export default function CadView({
       // Freeze the report (Total line) + stall watchdog off. The
       // reporter's last-event state stays queryable after end —
       // onViewerInternal's catch stamps it onto Sentry via
-      // attachLoadFailureContext before capturing.
-      endLoadProgress()
+      // attachLoadFailureContext before capturing. The captured error (or
+      // null on success) drives the end-of-load grace snackbar.
+      endLoadProgress(loadError)
       setIsModelLoading(false)
     }
 

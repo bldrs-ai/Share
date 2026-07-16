@@ -13,6 +13,24 @@ show it:
 - Share's **post-load report dialog** (`LoadReportControl`, the "i" next to
   the "?", copy-to-clipboard).
 
+### End-of-load grace period + hand-off animation
+
+When a load settles, the snackbar doesn't vanish — it hands off to the "i"
+report control with a short grace period, driven by the store's `loadResult`
+(`{status, summaryLine}`, set by `loadProgress.js#endLoadProgress`):
+
+- **Success** shows `Model Loaded. Total …` with an **OK** action for
+  ~5s (`GRACE_MS`), then **shrinks/translates toward the "i" control**
+  (`startDismissAnimation`, ~500ms) — an eye-draw to where the report now
+  lives. The animation runs *only* on this automatic dismiss.
+- **Error** shows the failure summary (`Load failed: …`, red) with an OK
+  action and **no timer and no animation** — it waits for an explicit OK,
+  which clears it instantly.
+- **Expanding during the grace period** cancels the auto-dismiss + its
+  animation (the user is now reading); the snackbar stays until OK, and that
+  OK dismiss is instant. Any manual dismiss is instant — animation is
+  reserved for the unattended success case.
+
 A user pasting any of these into a bug report produces the same text; Sentry
 receives the same trail as breadcrumbs plus the final report string in the
 `load` context.

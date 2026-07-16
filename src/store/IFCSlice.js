@@ -30,6 +30,19 @@ export default function createIFCSlice(set, get) {
     currentLoadLine: null,
     setCurrentLoadLine: (line) => set(() => ({currentLoadLine: line})),
 
+    // End-of-load grace state (conway #301 UX): once a load settles, the
+    // snackbar lingers on a final one-liner before the "i" report control
+    // takes over. Shape: {status: 'success'|'error', summaryLine}. On
+    // success the snackbar auto-dismisses after a grace period with a
+    // shrink-to-"i" animation that draws the eye to where the report now
+    // lives; on error it shows the error line and waits for an explicit OK,
+    // never animating. null when no load has settled or once the grace
+    // snackbar is dismissed. Set by loader/loadProgress.js#endLoadProgress,
+    // cleared by beginLoadProgress (next load) and by the snackbar on
+    // dismiss. See AlertDialogAndSnackbar.jsx for the grace state machine.
+    loadResult: null,
+    setLoadResult: (result) => set(() => ({loadResult: result})),
+
     // TODO(pablo): really needed?
     isModelReady: false,
     setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),

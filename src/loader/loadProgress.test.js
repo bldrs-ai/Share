@@ -35,6 +35,7 @@ describe('loadProgress', () => {
     consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
     useStore.getState().setLoadReportLines([])
     useStore.getState().setCurrentLoadLine(null)
+    useStore.getState().setLoadResult(null)
   })
 
   afterEach(() => {
@@ -133,6 +134,42 @@ describe('loadProgress', () => {
       endLoadProgress()
       beginLoadProgress({fileInfo: 'b.ifc'})
       expect(reportLines()).not.toContain('Conway v1')
+    })
+  })
+
+  describe('grace result', () => {
+    it('publishes a success result with the "Model Loaded." prefix', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 100})
+      endLoadProgress()
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('success')
+      expect(result.summaryLine).toMatch(/^Model Loaded\. Total: /)
+    })
+
+    it('publishes an error result with the failure summary', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      endLoadProgress(new Error('bad STEP header'))
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('error')
+      expect(result.summaryLine).toBe('Load failed: bad STEP header')
+    })
+
+    it('summarizes an out-of-memory failure specially', () => {
+      const oom = new Error('Cannot enlarge memory arrays')
+      oom.isOutOfMemory = true
+      beginLoadProgress({fileInfo: 'big.ifc'})
+      endLoadProgress(oom)
+      expect(useStore.getState().loadResult.summaryLine).toBe('Load failed: out of memory')
+    })
+
+    it('a new load clears the previous grace result', () => {
+      beginLoadProgress({fileInfo: 'a.ifc'})
+      endLoadProgress()
+      expect(useStore.getState().loadResult).not.toBe(null)
+      beginLoadProgress({fileInfo: 'b.ifc'})
+      expect(useStore.getState().loadResult).toBe(null)
     })
   })
 
