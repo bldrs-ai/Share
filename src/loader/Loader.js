@@ -22,7 +22,7 @@ import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
-import {updateRecentFileLastModified} from '../connections/persistence'
+import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
@@ -111,6 +111,14 @@ export async function load(
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
   const isUploadedFile = testUuid(path)
+  // Human-readable source filename for root-label composition (#1595,
+  // "Scene (ISS_stationary.glb)"). For uploads the route carries only
+  // the storage UUID, so resolve the original filename from the
+  // recent-files entry the drop handler recorded — and capture it
+  // BEFORE the blob-path rewrite below discards the UUID. For URL
+  // loads (GitHub, external, locally hosted) the trailing path
+  // segment is the filename.
+  const sourceFileName = isUploadedFile ? uploadedDisplayFileName(path) : fileNameFromPath(path)
   if (isUploadedFile) {
     path = constructUploadedBlobPath(path)
     debug().log('Loader#load: file uploaded, blob path:', path)
@@ -426,7 +434,7 @@ export async function load(
         glbInfo('reader: WARN — GLB has meshes but 0 vertices; degenerate geometry')
       }
     }
-    convertToShareModel(model, viewer)
+    convertToShareModel(model, viewer, {fileName: sourceFileName})
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
@@ -758,6 +766,64 @@ export async function load(
 }
 
 
+/**
+ * Trailing path segment of a URL or filepath, query/hash stripped and
+ * URI-decoded — the "filename" a user would recognize from the address
+ * bar. Returns null when there is no usable segment (trailing slash,
+ * empty input, malformed %-escape).
+ *
+ * @param {string} path URL or filepath
+ * @return {string|null}
+ */
+function fileNameFromPath(path) {
+  if (typeof path !== 'string' || path === '') {
+    return null
+  }
+  const noQuery = path.split(/[?#]/)[0]
+  const segment = noQuery.substring(noQuery.lastIndexOf('/') + 1)
+  if (segment === '') {
+    return null
+  }
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    // Malformed percent-escape — the raw segment still names the file
+    // better than nothing.
+    return segment
+  }
+}
+
+
+/**
+ * Original filename for an uploaded (drag-drop / file-picker) model.
+ * The upload flow stores the file in OPFS under a UUID and records the
+ * user's original filename in the recent-files entry keyed by that
+ * UUID (`utils/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
+ * Falls back to the UUID-based storage name when the entry is missing
+ * (cleared localStorage, direct navigation to a stale /v/new/ URL).
+ *
+ * @param {string} uploadPath the pre-blob-rewrite path whose trailing
+ *   segment is the upload's storage id (`<uuid>.<type>`)
+ * @return {string|null}
+ */
+function uploadedDisplayFileName(uploadPath) {
+  const storageId = fileNameFromPath(uploadPath)
+  if (storageId === null) {
+    return null
+  }
+  try {
+    const entry = loadAllRecentFiles().find((f) => f.id === storageId)
+    if (entry && typeof entry.name === 'string' && entry.name !== '') {
+      return entry.name
+    }
+  } catch {
+    // localStorage unavailable (some embeds / private modes) — the
+    // storage id is still a serviceable display name.
+  }
+  return storageId
+}
+
+
 // TODO(pablo): move somewhere?
 /**
  * Construct browser's actual blob URL from app URL for uploaded file.
@@ -857,18 +923,21 @@ const BLDRS_TITLE_STRIP_PATTERN = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u206
 
 
 /**
- * Return a cache-hit title safe for promotion to `model.name`. Strips
- * control / bidi / markup characters, caps length, treats empty and
- * non-string inputs as "no usable title" by returning null.
+ * Return a file-derived name (cache-hit title, glTF scene/node name…)
+ * safe for promotion to `model.name` / `Name.value`. Strips control /
+ * bidi / markup characters, trims whitespace (a whitespace-only name
+ * carries no signal and would otherwise block downstream fallbacks),
+ * caps length, treats empty and non-string inputs as "no usable name"
+ * by returning null.
  *
- * @param {*} raw value from `model.userData.bldrsTitle`
+ * @param {*} raw value from `model.userData.bldrsTitle`, `Object3D.name`, …
  * @return {string|null}
  */
 function sanitizeCachedTitle(raw) {
   if (typeof raw !== 'string' || raw === '') {
     return null
   }
-  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '')
+  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '').trim()
   if (stripped === '') {
     return null
   }
@@ -889,9 +958,13 @@ export {sanitizeCachedTitle as __sanitizeCachedTitleForTest}
  *
  * @param {Mesh} model
  * @param {object} viewer
+ * @param {object} [opts]
+ * @param {string|null} [opts.fileName] source filename for root-label
+ *   composition (#1595) — e.g. "ISS_stationary.glb". See the root
+ *   naming block below.
  * @return {Mesh}
  */
-export function convertToShareModel(model, viewer) {
+export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   let objIdSerial = 0
   // Whether we found per-vertex IFC expressIDs preserved through the
   // GLB cache round-trip. GLTFExporter renames our `expressID` attribute
@@ -924,8 +997,21 @@ export function convertToShareModel(model, viewer) {
   function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
-    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
+    // Standard scenegraph node naming (#1595): three.js loaders carry
+    // the source file's node names on `Object3D.name` — GLTFLoader
+    // copies glTF `nodes[i].name` (e.g. NASA's ISS_stationary.glb
+    // names every node), OBJLoader uses `o`/`g` group names. Surface
+    // them through the IFC-shaped `Name`/`LongName` that `reifyName`
+    // (NavTree labels) and the Properties panel read, keeping the
+    // legacy 'Object' placeholder only for unnamed nodes. Sanitized
+    // like the cached title — node names cross the same untrusted-file
+    // boundary. Root (depth 0) naming is handled below, after the
+    // cache-title hydration that must take precedence.
+    if (depth > 0) {
+      const nodeName = sanitizeCachedTitle(obj3d.name) ?? 'Object'
+      obj3d.Name = obj3d.Name || {value: nodeName}
+      obj3d.LongName = obj3d.LongName || {value: nodeName}
+    }
     const id = objIdSerial++
     let hasPerVertex = false
     if (obj3d.geometry) {
@@ -1011,12 +1097,48 @@ export function convertToShareModel(model, viewer) {
   // `model.name` would split the source of truth between the page
   // title (`name`) and other consumers reading `LongName.value`. A
   // pre-set `model.name` means upstream already decided; trust it.
+  // convertToShareModel only runs on the non-IFC branch of Loader#load,
+  // so a pre-set `model.name` here always came from the loaded file
+  // (GLTFLoader copies the glTF `scenes[n].name` onto the returned
+  // scene; OBJLoader similarly). Scrub it with the same sanitizer as
+  // the cached title before it reaches the page <title> / NavTree —
+  // a name that sanitizes to nothing is treated as absent, which
+  // also re-enables the cached-title promotion below.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.name = sanitizeCachedTitle(model.name) ?? ''
+  }
   const cachedTitle = sanitizeCachedTitle(model.userData?.[BLDRS_TITLE_EXTRAS_KEY])
   const liveNameAlreadySet = (typeof model.name === 'string' && model.name !== '')
+  let titleIsCacheStamped = false
   if (cachedTitle && !liveNameAlreadySet) {
     model.Name = model.Name || {value: cachedTitle}
     model.LongName = model.LongName || {value: cachedTitle}
     model.name = cachedTitle
+    titleIsCacheStamped = true
+  }
+  // Standard glTF root naming (#1595): authored scene names are often
+  // generic exporter defaults (Blender's "Scene"), so compose the root
+  // label as "<sceneName> (<fileName>)" — or the filename alone when
+  // the file has no scene name — matching the three.js editor's use of
+  // the import filename. Skipped for IFC-derived cache artifacts,
+  // where the title IS the real project name: either the bldrsTitle
+  // promotion above just ran, or (new-writer artifacts) the scene name
+  // GLTFLoader handed us equals the stamped bldrsTitle — appending the
+  // source filename there would diverge from the live-parse title.
+  const sourceFileName = sanitizeCachedTitle(fileName)
+  const titleIsIfcProjectName =
+    titleIsCacheStamped || (cachedTitle !== null && model.name === cachedTitle)
+  if (sourceFileName && !titleIsIfcProjectName) {
+    model.name = (model.name && model.name !== sourceFileName) ?
+      `${model.name} (${sourceFileName})` :
+      sourceFileName
+  }
+  // Mirror the composed root name into Name/LongName so the NavTree
+  // root and Properties panel show it instead of the generic
+  // "<mime> model" placeholder. Everything above is sanitized.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.Name = model.Name || {value: model.name}
+    model.LongName = model.LongName || {value: model.name}
   }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}

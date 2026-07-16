@@ -94,9 +94,12 @@ function getWorker() {
  * @param {object} [args.sceneExtras] optional small string-keyed
  *   metadata merged into `scenes[0].extras` in the same inject pass
  *   (see `injectGlbExtensions`)
+ * @param {string} [args.sceneName] optional standard glTF
+ *   `scenes[0].name` stamp applied in the same pass (#1595; see
+ *   `injectGlbExtensions`)
  * @return {Promise<{bytes: Uint8Array, extStats: object}>}
  */
-export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras}) {
+export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras, sceneName}) {
   return new Promise((resolve, reject) => {
     const worker = getWorker()
     const id = nextRequestId
@@ -111,6 +114,7 @@ export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras}) {
           mode,
           extensions,
           sceneExtras: sceneExtras ?? null,
+          sceneName: sceneName ?? null,
         },
         [bytes.buffer],
       )
