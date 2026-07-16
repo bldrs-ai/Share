@@ -126,7 +126,7 @@ describe('loader/glbExport', () => {
     // we return the input bytes so downstream `packGlbChunks` succeeds.
     mockInjectGlbExtensions.mockReset().mockImplementation((bytes) => ({
       bytes,
-      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: []},
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, addedSceneName: 0, skippedNames: []},
     }))
   })
 
@@ -293,9 +293,11 @@ describe('loader/glbExport', () => {
       // The writer should consolidate the title injection into the
       // existing BLDRS_* inject pass — one parse/serialize, not two.
       expect(mockInjectGlbExtensions).toHaveBeenCalledTimes(1)
-      const [, extensionsArg, sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      const [, extensionsArg, sceneExtrasArg, sceneNameArg] = mockInjectGlbExtensions.mock.calls[0]
       expect(Array.isArray(extensionsArg)).toBe(true)
       expect(sceneExtrasArg).toEqual({[BLDRS_TITLE_EXTRAS_KEY]: 'Momentum'})
+      // Same pass also stamps the standard glTF scenes[0].name (#1595).
+      expect(sceneNameArg).toBe('Momentum')
     })
 
     it('passes sceneExtras: null when model.name is absent (drag-dropped GLB / OBJ etc.)', async () => {
@@ -306,8 +308,9 @@ describe('loader/glbExport', () => {
       expect(ok).toBe(true)
 
       expect(mockInjectGlbExtensions).toHaveBeenCalledTimes(1)
-      const [, , sceneExtrasArg] = mockInjectGlbExtensions.mock.calls[0]
+      const [, , sceneExtrasArg, sceneNameArg] = mockInjectGlbExtensions.mock.calls[0]
       expect(sceneExtrasArg).toBeNull()
+      expect(sceneNameArg).toBeNull()
     })
 
     it('passes sceneExtras: null when model.name is the empty string', async () => {
@@ -356,6 +359,10 @@ describe('loader/glbExport', () => {
       const {json} = parseGlb(injectResult.bytes)
       expect(json.scenes[0].extras[BLDRS_TITLE_EXTRAS_KEY]).toBe('Momentum')
       expect(injectResult.stats.addedSceneExtras).toBe(1)
+      // Standard glTF alignment (#1595): the same pass stamps the
+      // title into scenes[0].name — the field generic viewers show.
+      expect(json.scenes[0].name).toBe('Momentum')
+      expect(injectResult.stats.addedSceneName).toBe(1)
     })
   })
 })

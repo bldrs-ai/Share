@@ -89,7 +89,7 @@ describe('loader/injectGlbExtensions', () => {
       const {bytes, stats} = injectGlbExtensions(glb, [])
       expect(bytes).toBe(glb)
       expect(stats).toEqual({
-        addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: [],
+        addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, addedSceneName: 0, skippedNames: [],
       })
     })
 
@@ -431,6 +431,68 @@ describe('loader/injectGlbExtensions', () => {
       const {bytes} = injectGlbExtensions(glb, [], {bldrsTitle: 'Defaulted'})
       const parsed = parseGlb(bytes)
       expect(parsed.json.scenes[0].extras.bldrsTitle).toBe('Defaulted')
+    })
+
+    it('stamps the standard scenes[n].name field when sceneName is provided (#1595)', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(glb, [], null, 'Momentum')
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].name).toBe('Momentum')
+      expect(stats.addedSceneName).toBe(1)
+      expect(stats.addedExtensions).toBe(0)
+      expect(stats.addedSceneExtras).toBe(0)
+    })
+
+    it('sceneName overwrites an existing scene name (GLTFExporter\'s AuxScene placeholder)', () => {
+      // GLTFExporter wraps a non-Scene export root in a scene named
+      // 'AuxScene'. The writer's title is the authoritative
+      // replacement — generic viewers display scenes[n].name, and
+      // 'AuxScene' is exporter noise, not model metadata.
+      const json = {
+        asset: {version: '2.0'},
+        scene: 0,
+        scenes: [{nodes: [], name: 'AuxScene'}],
+        buffers: [{byteLength: 0}],
+      }
+      const glb = serializeGlb(json, null)
+      const {bytes} = injectGlbExtensions(glb, [], null, 'Real Project')
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes[0].name).toBe('Real Project')
+    })
+
+    it('sceneName rides in the same pass as sceneExtras and extensions', () => {
+      const glb = makeGlbWithScene()
+      const {bytes, stats} = injectGlbExtensions(
+        glb,
+        [{name: 'BLDRS_test', data: {payload: 'hi'}, compress: true}],
+        {bldrsTitle: 'Combined'},
+        'Combined',
+      )
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.extensions.BLDRS_test).toBeDefined()
+      expect(parsed.json.scenes[0].extras.bldrsTitle).toBe('Combined')
+      expect(parsed.json.scenes[0].name).toBe('Combined')
+      expect(stats.addedExtensions).toBe(1)
+      expect(stats.addedSceneExtras).toBe(1)
+      expect(stats.addedSceneName).toBe(1)
+    })
+
+    it('nullish / empty / non-string sceneName opts out', () => {
+      const glb = makeGlbWithScene()
+      for (const noName of [null, undefined, '', 42]) {
+        const {bytes, stats} = injectGlbExtensions(glb, [], null, noName)
+        expect(bytes).toBe(glb)
+        expect(stats.addedSceneName).toBe(0)
+      }
+    })
+
+    it('no-ops the sceneName path on a GLB with no scenes array', () => {
+      const json = {asset: {version: '2.0'}, buffers: [{byteLength: 0}]}
+      const glb = serializeGlb(json, null)
+      const {bytes, stats} = injectGlbExtensions(glb, [], null, 'nowhere to go')
+      expect(stats.addedSceneName).toBe(0)
+      const parsed = parseGlb(bytes)
+      expect(parsed.json.scenes).toBeUndefined()
     })
 
     it('no-ops the scene-extras path on a GLB with no scenes array', () => {
