@@ -44,6 +44,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | STEP occurrence-keyed selection (NavTree↔scene per-occurrence), `PlacedGeometry.occurrencePath`, why one nut highlights all | [design/new/step-occurrence-selection.md](design/new/step-occurrence-selection.md) |
 | The `?feature=look` render look — PBR materials + gradient IBL + tone-mapping, Neutral/Flat toggle, `looks.js`/`lookMaterial.js`, `LightingGui`, why it's all behind one flag (default off) | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §6e |
 | Removing the `conway-web-ifc-adapter` shim, the `web-ifc` engine seam (`webIfcShimAlias`/`USE_WEBIFC_SHIM`), Conway version-lag, runtime engine swap | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
+| Load-log report format (CLI + console + snackbar expando + "i" report dialog), stage/Total line semantics, per-format cascade, `loadProgress.js` (deep-imports conway `core/progress_log`)/`AlertDialogAndSnackbar.jsx` (live expando)/`LoadReportControl` | [design/new/load-log-format.md](design/new/load-log-format.md) |
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
