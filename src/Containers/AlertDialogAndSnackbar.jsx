@@ -30,6 +30,13 @@ const GRACE_MS = 5000
 // any manual dismiss (OK) is instant.
 const ANIM_SHRINK_MS = 450
 const ANIM_FADE_MS = 2000
+// One frame between pinning the box at its current rect (FLIP step 1) and
+// animating it to the target, so the browser commits the start state first.
+const FLIP_SETTLE_MS = 20
+// Keep the animating circle above the bottom bar (where the "i" lives) once it
+// leaves the snackbar's stacking context via position:fixed. MUI's snackbar
+// z-index is 1400.
+const DISMISS_Z_INDEX = 1400
 // Extra ms past a phase before the safety timer force-finalizes (covers
 // environments — jsdom — where transitions don't run).
 const ANIM_SAFETY_PAD_MS = 80
@@ -170,10 +177,16 @@ export default function AlertAndSnackbar() {
 
   /**
    * Animate the whole snackbar collapsing into an "i"-sized circle layered
-   * over the "i" report control, then fading out so the icon behind is
-   * revealed — the eye follows the report to where it now lives. Runs only on
-   * the automatic success dismiss. Falls back to an instant clear if either
-   * endpoint can't be measured (jsdom in tests, or the "i" not mounted yet).
+   * directly over the "i" report control, then fading out so the icon behind
+   * is revealed — the eye follows the report to where it now lives. Runs only
+   * on the automatic success dismiss.
+   *
+   * FLIP with explicit viewport coordinates: pin the box (position:fixed) at
+   * its current rect, then animate top/left/width/height to an icon-centred
+   * square. Explicit coords land exactly on the icon — a transform+size
+   * shrink instead drifts, because changing width/height also moves the box's
+   * layout origin. Falls back to an instant clear if either endpoint can't be
+   * measured (jsdom in tests, or the "i" not mounted yet).
    */
   const startDismissAnimation = () => {
     const contentEl = typeof document !== 'undefined' ?
@@ -187,34 +200,49 @@ export default function AlertAndSnackbar() {
       return
     }
     const size = Math.max(to.width, to.height)
-    // Centre the circle ON the icon so the fade reveals it underneath.
-    const dx = (to.left + (to.width / HALF)) - (from.left + (from.width / HALF))
-    const dy = (to.top + (to.height / HALF)) - (from.top + (from.height / HALF))
-    setIsDismissing(true)
-    // Phase 1: collapse the box to an icon-sized circle over the "i".
-    setAnimStyle({
-      transform: `translate(${dx}px, ${dy}px)`,
-      width: `${size}px`,
-      height: `${size}px`,
-      minWidth: `${size}px`,
-      padding: 0,
-      borderRadius: '50%',
-      overflow: 'hidden',
+    const targetLeft = to.left + (to.width / HALF) - (size / HALF)
+    const targetTop = to.top + (to.height / HALF) - (size / HALF)
+    const pinnedStyle = {
+      position: 'fixed',
+      margin: 0,
+      zIndex: DISMISS_Z_INDEX,
       pointerEvents: 'none',
-      transition:
-        `transform ${ANIM_SHRINK_MS}ms ease-in, width ${ANIM_SHRINK_MS}ms ease-in, ` +
-        `height ${ANIM_SHRINK_MS}ms ease-in, min-width ${ANIM_SHRINK_MS}ms ease-in, ` +
-        `border-radius ${ANIM_SHRINK_MS}ms ease-in, padding ${ANIM_SHRINK_MS}ms ease-in`,
+    }
+    setIsDismissing(true)
+    // FLIP step 1: pin at the current viewport rect, no transition.
+    setAnimStyle({
+      ...pinnedStyle,
+      top: `${from.top}px`,
+      left: `${from.left}px`,
+      width: `${from.width}px`,
+      height: `${from.height}px`,
+      transition: 'none',
     })
-    // Phase 2: once shrunk, fade the circle out so it "becomes" the icon.
+    // FLIP step 2: next frame, animate to an icon-sized circle centred on "i".
     graceTimerRef.current = setTimeout(() => {
-      setAnimStyle((prev) => ({
-        ...prev,
-        opacity: 0,
-        transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
-      }))
-      graceTimerRef.current = setTimeout(completeDismiss, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
-    }, ANIM_SHRINK_MS)
+      setAnimStyle({
+        ...pinnedStyle,
+        top: `${targetTop}px`,
+        left: `${targetLeft}px`,
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        overflow: 'hidden',
+        transition:
+          `top ${ANIM_SHRINK_MS}ms ease-in, left ${ANIM_SHRINK_MS}ms ease-in, ` +
+          `width ${ANIM_SHRINK_MS}ms ease-in, height ${ANIM_SHRINK_MS}ms ease-in, ` +
+          `border-radius ${ANIM_SHRINK_MS}ms ease-in`,
+      })
+      // Phase 2: once shrunk, fade the circle out so it "becomes" the icon.
+      graceTimerRef.current = setTimeout(() => {
+        setAnimStyle((prev) => ({
+          ...prev,
+          opacity: 0,
+          transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
+        }))
+        graceTimerRef.current = setTimeout(completeDismiss, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
+      }, ANIM_SHRINK_MS)
+    }, FLIP_SETTLE_MS)
   }
 
 
@@ -274,9 +302,16 @@ export default function AlertAndSnackbar() {
   )
 
   const loadMessage = (
-    <Box sx={{maxWidth: '60vw'}} data-testid='LoadStatusMessage'>
+    // Hug the current line's width so the snackbar doesn't sprawl. The
+    // collapsed report history (a long "Model: …" line) would otherwise widen
+    // the box even while hidden — width:0 keeps it out of the width calc, and
+    // minWidth:100% stretches it to the box (scrolling) only once expanded.
+    <Box sx={{width: 'fit-content', maxWidth: '92vw'}} data-testid='LoadStatusMessage'>
       <Collapse in={isLoadExpanded}>
-        <Box sx={{...LOAD_LINE_SX, opacity: 0.8, mb: 0.5, overflowX: 'auto'}} data-testid='LoadStatusHistory'>
+        <Box
+          sx={{...LOAD_LINE_SX, opacity: 0.8, mb: 0.5, width: 0, minWidth: '100%', overflowX: 'auto'}}
+          data-testid='LoadStatusHistory'
+        >
           {loadReportLines.map((line, index) => (
             <div key={index}>{line}</div>
           ))}
@@ -362,8 +397,10 @@ export default function AlertAndSnackbar() {
         // through the dismiss animation) so it can't fight or flash the
         // shrink-to-"i" animation, which drives the content box itself.
         transitionDuration={(showLoadView || isDismissing) ? 0 : undefined}
-        // The grace shrink-to-"i" animation transforms the whole content box.
-        ContentProps={{style: animStyle}}
+        // Hug the content (no 288px min-width sprawl) so short lines like
+        // "Loaded <name>" don't leave a wide right gap; the animation's inline
+        // style overrides this while it runs.
+        ContentProps={{style: animStyle, sx: {minWidth: 'auto', width: 'fit-content', maxWidth: '94vw'}}}
         data-testid='snackbar'
       />
     </>
