@@ -149,11 +149,13 @@ describe('loadProgress', () => {
       expect(result.summaryLine).toBe('Loaded index.ifc')
     })
 
-    it('prefers the parsed header fileName for the success line', () => {
-      beginLoadProgress({fileInfo: 'gdrive:abc123'})
-      reportLoadProgress({modelInfo: {fileName: 'Arty_Z7.stp', schema: 'AP214'}})
+    it('uses the filename, ignoring an unreliable STEP header fileName', () => {
+      // The STEP header's fileName is often junk (a comment); the grace line
+      // falls back to the source filename (the snackbar prefers model.name).
+      beginLoadProgress({fileInfo: 'path/to/Arty_Z7_PCB.stp'})
+      reportLoadProgress({modelInfo: {fileName: `/* name */ 'export2`, schema: 'AP214'}})
       endLoadProgress()
-      expect(useStore.getState().loadResult.summaryLine).toBe('Loaded Arty_Z7.stp')
+      expect(useStore.getState().loadResult.summaryLine).toBe('Loaded Arty_Z7_PCB.stp')
     })
 
     it('publishes an error result with the failure summary', () => {

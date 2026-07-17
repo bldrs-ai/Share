@@ -22,9 +22,13 @@ report control with a short grace period, driven by the store's `loadResult`
 - **Success** shows a terse `Loaded <name>` (just the outcome + model name —
   the timing/heap Total and diagnostics stay one expand, or the "i" report,
   away) with an **OK** action for ~5s (`GRACE_MS`), then the **whole snackbar
-  collapses into an icon-sized circle just above the "i" control and fades
-  out over ~1s** (`startDismissAnimation`) — so the eye follows the report to
-  where it now lives. The animation runs *only* on this automatic dismiss.
+  collapses into an icon-sized circle layered over the "i" control and fades
+  out over ~2s** (`startDismissAnimation` / `completeDismiss`) — the icon
+  behind is revealed, so it reads as the snackbar turning into the "i". The
+  name is the same one the page title uses (`model.name`), falling back to the
+  reporter's filename — the STEP header's `fileName` is unreliable, so it's
+  not used. The animation runs *only* on this automatic dismiss; MUI's own
+  Grow transition is disabled for the load view so it can't fight the fade.
 - **Error** shows the failure summary (`Load failed: …`, red) with an OK
   action and **no timer and no animation** — it waits for an explicit OK,
   which clears it instantly.
@@ -33,13 +37,11 @@ report control with a short grace period, driven by the store's `loadResult`
   OK dismiss is instant. Any manual dismiss is instant — animation is
   reserved for the unattended success case.
 
-The **live line** is laid out fixed-width in the browser so it doesn't reflow
-as the bar fills: the snackbar splits the shared string into `label + bar`
-(bar space-padded to the 100% width so `]` holds its column) and the trailing
-metrics, right-aligned to a stable edge (`splitLiveLine`/`padBar`,
-`LIVE_LINE_WIDTH`). This is browser display layout only — the canonical string
-still comes from conway's `progress_log`; the CLI renderer does its own
-terminal layout.
+The **live line** doesn't reflow as the bar fills: the snackbar space-pads the
+bar's inner content to its 100% width (`padLiveLine`) so the closing `]` — and
+the metrics after it — hold a fixed column. This is browser display layout
+only — the canonical string still comes from conway's `progress_log`; the CLI
+renderer does its own terminal layout.
 
 A user pasting any of these into a bug report produces the same text; Sentry
 receives the same trail as breadcrumbs plus the final report string in the

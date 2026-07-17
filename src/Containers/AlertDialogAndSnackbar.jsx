@@ -23,17 +23,19 @@ const LOAD_LINE_SX = {
 // away toward the "i" report control. An error line has no timer — it waits
 // for an explicit OK.
 const GRACE_MS = 5000
-// Auto-dismiss animation, two phases: the whole snackbar first collapses to a
-// small circle sized/placed like the "i" report control just above it, then
-// fades to zero over ~1s so it reads as "turning into" the icon. Runs ONLY on
-// the automatic success dismiss; any manual dismiss (OK) is instant.
+// Auto-dismiss animation, two phases: the whole snackbar first collapses to an
+// "i"-sized circle layered directly over the "i" report control, then fades to
+// zero over ANIM_FADE_MS so the icon behind is revealed — it reads as the
+// snackbar turning into the icon. Runs ONLY on the automatic success dismiss;
+// any manual dismiss (OK) is instant.
 const ANIM_SHRINK_MS = 450
-const ANIM_FADE_MS = 1000
-// Gap between the shrunk circle's bottom and the "i" icon's top.
-const ANIM_GAP_PX = 6
+const ANIM_FADE_MS = 2000
 // Extra ms past a phase before the safety timer force-finalizes (covers
 // environments — jsdom — where transitions don't run).
 const ANIM_SAFETY_PAD_MS = 80
+// After the close render commits, restore a clean content style for the next
+// snackbar use. Short — just long enough to be a separate render.
+const POST_CLOSE_RESET_MS = 60
 // Divisor for rect center points (half width / half height).
 const HALF = 2
 const NO_ANIM_STYLE = {}
@@ -51,46 +53,29 @@ const SNACK_CONTENT_SELECTOR = '[data-testid="snackbar"] .MuiSnackbarContent-roo
 // bar string still comes from conway's shared formatter; this is browser
 // display layout only.
 const BAR_INNER_WIDTH = 22
-// Fixed width of the live-line row so the metrics right-align to a stable edge
-// instead of the box reflowing as the bar fills; capped so it can't exceed a
-// narrow viewport.
-const LIVE_LINE_WIDTH = 'min(78vw, 58ch)'
 
 
 /**
- * Split a live stage line ("Parsing [0%........98%] 1.114s, +89 MB heap") into
- * its left half (label + bar, the bar space-padded to a fixed width) and the
- * trailing metrics, so the row can render fixed-width with the metrics
- * right-aligned. Unrecognized shapes (no bar) render whole on the left.
+ * Space-pad a live stage line's bar to a fixed inner width so the closing "]"
+ * — and the metrics after it — hold a fixed column as the fill grows (the
+ * label+bar left half becomes fixed-width, so the row stops reflowing). The
+ * canonical string still comes from conway's shared formatter; this is browser
+ * display layout only. Unrecognized shapes render unchanged.
  *
- * @param {string} line
- * @return {{left: string, right: string}}
- */
-function splitLiveLine(line) {
-  const barClose = line.indexOf('] ')
-  if (barClose === -1) {
-    return {left: line, right: ''}
-  }
-  return {left: padBar(line.slice(0, barClose + 1)), right: line.slice(barClose + 2)}
-}
-
-
-/**
- * Space-pad the bar's inner content to BAR_INNER_WIDTH so "]" holds a fixed
- * column regardless of fill percent.
- *
- * @param {string} labelAndBar e.g. "Parsing [0%....98%]"
+ * @param {string} line e.g. "Parsing [0%....98%] 1.114s, +89 MB heap"
  * @return {string}
  */
-function padBar(labelAndBar) {
-  const open = labelAndBar.indexOf('[')
-  const close = labelAndBar.lastIndexOf(']')
-  if (open === -1 || close === -1 || close < open) {
-    return labelAndBar
+function padLiveLine(line) {
+  const open = line.indexOf('[')
+  const close = line.indexOf(']', open)
+  if (open === -1 || close === -1) {
+    return line
   }
-  const inner = labelAndBar.slice(open + 1, close)
-  const pad = inner.length < BAR_INNER_WIDTH ? ' '.repeat(BAR_INNER_WIDTH - inner.length) : ''
-  return `${labelAndBar.slice(0, open + 1)}${inner}${pad}]`
+  const inner = line.slice(open + 1, close)
+  if (inner.length >= BAR_INNER_WIDTH) {
+    return line
+  }
+  return `${line.slice(0, close)}${' '.repeat(BAR_INNER_WIDTH - inner.length)}${line.slice(close)}`
 }
 
 
@@ -109,6 +94,10 @@ export default function AlertAndSnackbar() {
   const loadReportLines = useStore((state) => state.loadReportLines)
   const loadResult = useStore((state) => state.loadResult)
   const setLoadResult = useStore((state) => state.setLoadResult)
+  // Same name the page title uses (Share.jsx) — preferred for the "Loaded …"
+  // grace line over the reporter's filename fallback, since a STEP header's
+  // fileName is often junk.
+  const model = useStore((state) => state.model)
   const isLoadActive = currentLoadLine !== null
   const isGrace = loadResult !== null
   const showLoadView = isLoadActive || isGrace
@@ -120,6 +109,10 @@ export default function AlertAndSnackbar() {
   // Inline transform/size/opacity applied to the snackbar content box during
   // the shrink-to-"i" animation; empty (identity) at all other times.
   const [animStyle, setAnimStyle] = useState(NO_ANIM_STYLE)
+  // True from the start of the dismiss animation through the close render, so
+  // MUI's own Grow transition stays disabled (transitionDuration 0) and can't
+  // fight the fade or flash the box back to full opacity at the end.
+  const [isDismissing, setIsDismissing] = useState(false)
   // Holds the pending grace timer (5s countdown, then each animation phase's
   // timer) so expand / OK / a new load can cancel it.
   const graceTimerRef = useRef(null)
@@ -152,6 +145,7 @@ export default function AlertAndSnackbar() {
   const finishGrace = () => {
     clearTimeout(graceTimerRef.current)
     graceTimerRef.current = null
+    setIsDismissing(false)
     setAnimStyle(NO_ANIM_STYLE)
     setIsLoadExpanded(false)
     setLoadResult(null)
@@ -159,11 +153,27 @@ export default function AlertAndSnackbar() {
 
 
   /**
-   * Animate the whole snackbar collapsing into a small circle just above the
-   * "i" report control, then fading out — so the eye follows the report to
-   * where it now lives. Runs only on the automatic success dismiss. Falls
-   * back to an instant clear if either endpoint can't be measured (jsdom in
-   * tests, or the "i" not mounted yet).
+   * Finish the auto-dismiss once the circle has faded: close the snackbar but
+   * keep the faded style + disabled transition through the close render (so
+   * nothing flashes back to full opacity), then restore a clean style on the
+   * next tick for the snackbar's next use.
+   */
+  const completeDismiss = () => {
+    setLoadResult(null)
+    setIsLoadExpanded(false)
+    graceTimerRef.current = setTimeout(() => {
+      setIsDismissing(false)
+      setAnimStyle(NO_ANIM_STYLE)
+    }, POST_CLOSE_RESET_MS)
+  }
+
+
+  /**
+   * Animate the whole snackbar collapsing into an "i"-sized circle layered
+   * over the "i" report control, then fading out so the icon behind is
+   * revealed — the eye follows the report to where it now lives. Runs only on
+   * the automatic success dismiss. Falls back to an instant clear if either
+   * endpoint can't be measured (jsdom in tests, or the "i" not mounted yet).
    */
   const startDismissAnimation = () => {
     const contentEl = typeof document !== 'undefined' ?
@@ -177,9 +187,10 @@ export default function AlertAndSnackbar() {
       return
     }
     const size = Math.max(to.width, to.height)
+    // Centre the circle ON the icon so the fade reveals it underneath.
     const dx = (to.left + (to.width / HALF)) - (from.left + (from.width / HALF))
-    // Land the circle's centre a gap above the icon's top edge.
-    const dy = (to.top - ANIM_GAP_PX - (size / HALF)) - (from.top + (from.height / HALF))
+    const dy = (to.top + (to.height / HALF)) - (from.top + (from.height / HALF))
+    setIsDismissing(true)
     // Phase 1: collapse the box to an icon-sized circle over the "i".
     setAnimStyle({
       transform: `translate(${dx}px, ${dy}px)`,
@@ -202,7 +213,7 @@ export default function AlertAndSnackbar() {
         opacity: 0,
         transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
       }))
-      graceTimerRef.current = setTimeout(finishGrace, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
+      graceTimerRef.current = setTimeout(completeDismiss, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
     }, ANIM_SHRINK_MS)
   }
 
@@ -245,28 +256,20 @@ export default function AlertAndSnackbar() {
   const snackOpen = showLoadView || isSnackOpen
   const snackDuration = showLoadView ? null : duration
   const isErrorGrace = loadResult?.status === 'error'
-  const displayLine = currentLoadLine ?? loadResult?.summaryLine ?? ''
-
-  // Live line: a fixed-width row with the label+bar left and the metrics
-  // right-aligned, so the box doesn't reflow as the bar fills. Grace line
-  // ("Loaded <name>" / "Load failed: …"): plain, no bar to align.
-  const live = isLoadActive ? splitLiveLine(currentLoadLine) : null
-  const lineElement = live ? (
-    <Box
-      component='span'
-      data-testid='LoadStatusLine'
-      sx={{...LOAD_LINE_SX, display: 'inline-flex', width: LIVE_LINE_WIDTH, overflow: 'hidden'}}
-    >
-      <Box component='span' sx={LOAD_LINE_SX}>{live.left}</Box>
-      <Box component='span' sx={{...LOAD_LINE_SX, ml: 'auto', pl: 1}}>{live.right}</Box>
-    </Box>
-  ) : (
+  // Live line: the padded stage line (bar padded to a fixed width so the row
+  // doesn't reflow, metrics following). Grace success: "Loaded <name>",
+  // preferring the page-title model name over the reporter's filename. Grace
+  // error: the failure summary.
+  const graceLine = (loadResult?.status === 'success' && model?.name) ?
+    `Loaded ${model.name}` : (loadResult?.summaryLine ?? '')
+  const shownLine = isLoadActive ? padLiveLine(currentLoadLine) : graceLine
+  const lineElement = (
     <Typography
       component='span'
       sx={{...LOAD_LINE_SX, ...(isErrorGrace ? {color: 'error.main'} : {})}}
       data-testid='LoadStatusLine'
     >
-      {displayLine}
+      {shownLine}
     </Typography>
   )
 
@@ -355,6 +358,10 @@ export default function AlertAndSnackbar() {
         onClose={() => setIsSnackOpen(false)}
         action={snackAction}
         message={showLoadView ? loadMessage : textMessage}
+        // Disable MUI's own Grow transition for the load/grace view (and
+        // through the dismiss animation) so it can't fight or flash the
+        // shrink-to-"i" animation, which drives the content box itself.
+        transitionDuration={(showLoadView || isDismissing) ? 0 : undefined}
         // The grace shrink-to-"i" animation transforms the whole content box.
         ContentProps={{style: animStyle}}
         data-testid='snackbar'

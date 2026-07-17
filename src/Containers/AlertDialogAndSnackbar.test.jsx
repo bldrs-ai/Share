@@ -21,6 +21,7 @@ describe('AlertAndSnackbar grace period', () => {
       useStore.getState().setLoadResult(null)
       useStore.getState().setCurrentLoadLine(null)
       useStore.getState().setLoadReportLines([])
+      useStore.getState().setModel(null)
     })
   })
 
@@ -78,16 +79,25 @@ describe('AlertAndSnackbar grace period', () => {
     expect(useStore.getState().loadResult).not.toBe(null)
   })
 
-  it('lays out the live line with the bar padded and the metrics split off', () => {
+  it('pads the live line bar to a fixed width, metrics following', () => {
     render(<ShareMock><AlertAndSnackbar/></ShareMock>)
     act(() => {
       useStore.getState().setCurrentLoadLine('Parsing [0%........98%] 1.114s, +89.034761 MB heap')
     })
     const line = screen.getByTestId('LoadStatusLine')
-    // Both halves present…
     expect(line.textContent).toContain('Parsing [0%')
     expect(line.textContent).toContain('1.114s, +89.034761 MB heap')
-    // …and the bar is space-padded past its "98%]" so "]" holds a fixed column.
+    // The bar is space-padded past "98%" so "]" holds a fixed column.
     expect(line.textContent).toMatch(/98% +\]/)
+  })
+
+  it('prefers the page-title model name for the success grace line', () => {
+    render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+    act(() => {
+      useStore.getState().setModel({name: 'Arty_Z7_PCB'})
+      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded Arty_Z7.stp'})
+    })
+    // model.name wins over the reporter's filename fallback.
+    expect(screen.getByTestId('LoadStatusLine').textContent).toBe('Loaded Arty_Z7_PCB')
   })
 })

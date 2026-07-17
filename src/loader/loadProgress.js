@@ -99,10 +99,10 @@ class LoadProgressReporter {
   constructor({fileInfo, onStall}) {
     this.fileInfo = fileInfo
     this.onStall = onStall
-    // Model name for the "Loaded <name>" grace line. Prefer the parsed
-    // header's fileName (set via model-info below); fall back to the
-    // fileInfo basename so a load with no header still names something.
-    this.modelName = null
+    // Filename for the "Loaded <name>" grace line when the snackbar has no
+    // better name. The STEP header's fileName is unreliable (often a comment),
+    // so the snackbar prefers the store's model.name — the same name the page
+    // title uses — and falls back to this basename.
     this.fallbackName = basenameOf(fileInfo)
     this.log = new LoadLogAccumulator()
     // The frozen report lines in display order (preamble, model line, and
@@ -171,18 +171,6 @@ class LoadProgressReporter {
   }
 
   /**
-   * Remember the model's display name from a model-info signal, for the
-   * "Loaded <name>" grace line.
-   *
-   * @param {object} [modelInfo] {fileName, ...}
-   */
-  noteModelName(modelInfo) {
-    if (modelInfo && typeof modelInfo.fileName === 'string' && modelInfo.fileName) {
-      this.modelName = modelInfo.fileName
-    }
-  }
-
-  /**
    * Append a frozen line to the report: store (for the expando/dialog) +
    * optional console mirror, so the UI shows exactly what the JS console
    * shows during the load.
@@ -219,7 +207,6 @@ class LoadProgressReporter {
     }
 
     if (isModelInfoProgress(progressArg)) {
-      this.noteModelName(progressArg.modelInfo)
       this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
       this.armStallWatchdog()
       return
@@ -497,7 +484,6 @@ export function reportEngineVersion(versionLine) {
  */
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
-    activeReporter.noteModelName(info)
     activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
   }
 }
@@ -537,10 +523,12 @@ export function endLoadProgress(error = null) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.finishReport()
     // The collapsed grace line stays deliberately terse — just the outcome
-    // and the model name; the timing/heap Total and diagnostics live one
-    // expand (or the "i" report) away.
-    const modelName = activeReporter.modelName || activeReporter.fallbackName || 'model'
-    const summaryLine = error ? loadErrorSummary(error) : `Loaded ${modelName}`
+    // and a name; the timing/heap Total and diagnostics live one expand (or
+    // the "i" report) away. The snackbar prefers the store's model.name (the
+    // page-title name); this filename is the fallback when that's absent.
+    const summaryLine = error ?
+      loadErrorSummary(error) :
+      `Loaded ${activeReporter.fallbackName || 'model'}`
     useStore.getState().setLoadResult({
       status: error ? 'error' : 'success',
       summaryLine,
