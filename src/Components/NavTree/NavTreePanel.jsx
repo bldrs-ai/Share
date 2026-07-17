@@ -33,6 +33,7 @@ export default function NavTreePanel({
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
+  const selectedSolidExpressId = useStore((state) => state.selectedSolidExpressId)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
   const viewer = useStore((state) => state.viewer)
@@ -103,11 +104,17 @@ export default function NavTreePanel({
     // STEP: a scene pick reports the geometry's owner id
     // (product_definition_shape), which never equals a tree node's id (its NAUO
     // express id) — the shared occurrence path is the only reliable join, so
-    // prefer it. Falls back to expressID for IFC and when no occurrence is set.
+    // prefer it. A multibody part's ephemeral solid rows share the part's
+    // path, so within the path match the solid id decides: a solid selection
+    // scrolls to its own row, a part selection to the (non-ephemeral) part
+    // row. Falls back to expressID for IFC and when no occurrence is set.
     if (selectedOccurrencePathKey !== null) {
       index = visibleNodes.findIndex(
         ({node}) => Array.isArray(node.occurrencePath) &&
-          occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey,
+          occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey &&
+          (selectedSolidExpressId !== null ?
+            (node.ephemeral === true && node.expressID === selectedSolidExpressId) :
+            node.ephemeral !== true),
       )
     }
     if (index < 0) {
@@ -121,7 +128,7 @@ export default function NavTreePanel({
     if (index >= 0 && listRef.current) {
       listRef.current.scrollToItem(index, 'center')
     }
-  }, [selectedElements, selectedOccurrencePathKey, visibleNodes])
+  }, [selectedElements, selectedOccurrencePathKey, selectedSolidExpressId, visibleNodes])
 
   // Function to get item size
   const getItemSize = useCallback(
@@ -179,6 +186,7 @@ export default function NavTreePanel({
               setExpandedNodeIds,
               selectedNodeIds: selectedElements,
               selectedOccurrencePathKey,
+              selectedSolidExpressId,
               selectWithShiftClickEvents,
               model,
               viewer,
@@ -296,6 +304,13 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
     if (Array.isArray(node.occurrencePath)) {
       mapped.occurrencePath = node.occurrencePath
     }
+    // Preserve the ephemeral-solid marker (a multibody part's named body).
+    // Solid rows share the parent part's occurrence path, so `isSelected`,
+    // the scroll effect, and the click funnel all need this to tell "the
+    // part" from "one body inside it". Absent for products and IFC.
+    if (node.ephemeral === true) {
+      mapped.ephemeral = true
+    }
     return mapped
   }
 
@@ -330,6 +345,7 @@ const RenderRow = ({index, style, data}) => {
     setExpandedNodeIds,
     selectedNodeIds,
     selectedOccurrencePathKey,
+    selectedSolidExpressId,
     selectWithShiftClickEvents,
     model,
     viewer,
@@ -355,7 +371,14 @@ const RenderRow = ({index, style, data}) => {
   // only the clicked/picked node, not every reuse. Falls back to expressID for
   // IFC and when no occurrence is selected (selectedOccurrencePathKey is null).
   if (selectedOccurrencePathKey !== null && Array.isArray(node.occurrencePath)) {
-    isSelected = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
+    // A multibody part's ephemeral solid rows share the part's occurrence
+    // path, so the path match alone would light up the part AND all its
+    // bodies at once. The solid id splits them: a solid selection highlights
+    // only its own row; a part selection only the (non-ephemeral) part row.
+    const pathMatches = occurrencePathKey(node.occurrencePath) === selectedOccurrencePathKey
+    isSelected = pathMatches && (selectedSolidExpressId !== null ?
+      (node.ephemeral === true && node.expressID === selectedSolidExpressId) :
+      node.ephemeral !== true)
   } else if (node.expressID !== undefined) {
     isSelected = selectedNodeIds.includes(node.expressID.toString())
   }
@@ -405,9 +428,12 @@ const RenderRow = ({index, style, data}) => {
       // part highlights only that node, not every node sharing the expressID.
       // Undefined for IFC — selection stays keyed on the expressID alone.
       // `hasChildren` lets the scene-highlight resolver pick its lookup: a leaf
-      // takes the O(1) exact path, an assembly needs the descendant scan.
+      // takes the O(1) exact path, an assembly needs the descendant scan. The
+      // ephemeral flag marks a multibody solid node, whose own express id then
+      // narrows the scene highlight to the one clicked body.
       selectWithShiftClickEvents(
-        event.shiftKey, node.expressID.toString(), node.occurrencePath, hasChildren)
+        event.shiftKey, node.expressID.toString(), node.occurrencePath, hasChildren,
+        node.ephemeral === true)
     }
   }
 

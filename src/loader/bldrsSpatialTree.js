@@ -96,6 +96,15 @@ function serializeNode(node, depth = 0) {
   if (Array.isArray(node.occurrencePath)) {
     out.occurrencePath = node.occurrencePath
   }
+  // Preserve the STEP ephemeral-solid marker and the suppressed-solid count
+  // (for an "N more…" affordance) so a cache-hit tree keeps rendering solid
+  // nodes the way a fresh parse does. Absent for IFC and product nodes.
+  if (node.ephemeral === true) {
+    out.ephemeral = true
+  }
+  if (typeof node.droppedSolids === 'number') {
+    out.droppedSolids = node.droppedSolids
+  }
   if (Array.isArray(node.children) && node.children.length > 0) {
     out.children = []
     for (const child of node.children) {
@@ -188,8 +197,13 @@ export async function captureBldrsSpatialTree(ifcManager, modelID) {
     const proxy = ifcManager.ifcAPI?.getPassthrough?.(modelID)
     const canEnrichSync = proxy && typeof proxy.getLine === 'function'
     const includeProperties = !canEnrichSync
+    // `includeSolids` matches the live-load NavTree feed
+    // (`attachConwayDirectModelMethods`) so a cache-hit tree shows the same
+    // STEP ephemeral solid nodes as a fresh parse. Ignored by the IFC surface
+    // and by pre-1.376.1184 Conway.
     const root = useConway ?
-      await conwayProperties.getSpatialStructure(modelID, includeProperties) :
+      await conwayProperties.getSpatialStructure(
+        modelID, includeProperties, {includeSolids: true}) :
       await ifcManager.getSpatialStructure(modelID, includeProperties)
     if (!root || root.expressID === undefined) {
       return null

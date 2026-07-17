@@ -51,6 +51,17 @@ describe('utils/occurrencePaths', () => {
       expect(findNodeByOccurrencePath(tree, [11])).toBe(tree.children[1])
     })
 
+    it('skips ephemeral solid nodes — a path-only lookup lands on the product', () => {
+      // A multibody part's solids share the part's occurrence path (their
+      // identity is (path, solid expressID)), and getVisibleNodes renders
+      // them BEFORE deeper siblings a DFS might pop first — the lookup must
+      // always return the product node, never one of its bodies.
+      const solidA = {expressID: 250, occurrencePath: [10], ephemeral: true, children: []}
+      const part = {expressID: 10, occurrencePath: [10], children: [solidA]}
+      const solidTree = {expressID: 1, occurrencePath: [], children: [part]}
+      expect(findNodeByOccurrencePath(solidTree, [10])).toBe(part)
+    })
+
     it('returns null for unknown paths, empty paths, and missing roots', () => {
       expect(findNodeByOccurrencePath(tree, [12, 20])).toBeNull()
       expect(findNodeByOccurrencePath(tree, [20])).toBeNull()

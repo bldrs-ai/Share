@@ -290,8 +290,15 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       // Carry the STEP occurrence path (NAUO express ids) off the
       // PlacedGeometry so `instanceMapFromOrderedPlacedRanges` can key a
       // reused part's occurrences apart. `undefined` for IFC, so the
-      // downstream map leaves its occurrence tables null.
-      ranges.push({parentExpressId, triangleCount, occurrencePath: placed.occurrencePath})
+      // downstream map leaves its occurrence tables null. The geometry
+      // express id (the solid's own id for STEP) rides along so selection
+      // can narrow a multibody part's shared path to one named solid.
+      ranges.push({
+        parentExpressId,
+        triangleCount,
+        occurrencePath: placed.occurrencePath,
+        geometryExpressId: placed.geometryExpressID,
+      })
       p++
     }
     // Close the group spanning this colour bin's contiguous index range.

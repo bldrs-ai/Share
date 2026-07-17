@@ -144,7 +144,15 @@ export class BldrsFaceIdsReader {
       const occurrencePaths = Array.isArray(parsed.occurrencePaths) ?
         parsed.occurrencePaths.map((p) => (Array.isArray(p) ? p : null)) :
         null
-      gltf.scene.userData.bldrsFaceIds = {perPrimitive: resolved, occurrencePaths}
+      // Global per-instance geometry (solid) express ids — the second half of
+      // the (occurrencePath, solid expressID) identity behind per-solid
+      // selection of multibody STEP parts. Sanitised to finite numbers / null.
+      const geometryExpressIds = Array.isArray(parsed.geometryExpressIds) ?
+        parsed.geometryExpressIds.map(
+          (id) => (typeof id === 'number' && Number.isFinite(id) ? id : null)) :
+        null
+      gltf.scene.userData.bldrsFaceIds =
+        {perPrimitive: resolved, occurrencePaths, geometryExpressIds}
       const total = resolved.reduce(
         (n, e) => n + (e?.expressIds?.length ?? 0), 0)
       glbInfo(
@@ -319,6 +327,13 @@ export function buildFaceIdsExtensionData(captured) {
   if (Array.isArray(captured.occurrencePaths)) {
     data.occurrencePaths = captured.occurrencePaths.map(
       (p) => (Array.isArray(p) ? p : null))
+  }
+  // Per-instance geometry (solid) express ids ride the same way — one scalar
+  // per placed instance, the join key for per-solid selection of multibody
+  // STEP parts (NavTree ephemeral solid nodes). Only emit when present.
+  if (Array.isArray(captured.geometryExpressIds)) {
+    data.geometryExpressIds = captured.geometryExpressIds.map(
+      (id) => (typeof id === 'number' && Number.isFinite(id) ? id : null))
   }
   return data
 }

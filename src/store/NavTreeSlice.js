@@ -55,5 +55,15 @@ export default function createNavTreeSlice(set, get) {
     // instead of every reuse. Null for IFC and single-occurrence parts.
     selectedOccurrencePath: null,
     setSelectedOccurrencePath: (path) => set(() => ({selectedOccurrencePath: path})),
+
+    // Express id of the selected ephemeral solid (a multibody STEP part's
+    // named body — the NavTree's `type:'solid'` nodes), or null when the
+    // selection is a whole product/occurrence. Solid nodes share their
+    // parent's occurrence path, so the path alone can't say whether the
+    // selection is the part or one body inside it — this is the second half
+    // of the (occurrencePath, solid expressID) identity. Consumers: NavTree
+    // row highlight/scroll, per-solid hide (H), permalink round-trip.
+    selectedSolidExpressId: null,
+    setSelectedSolidExpressId: (id) => set(() => ({selectedSolidExpressId: id})),
   }
 }

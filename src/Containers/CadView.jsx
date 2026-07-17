@@ -75,6 +75,7 @@ export default function CadView({
   const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
   const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
+  const setSelectedSolidExpressId = useStore((state) => state.setSelectedSolidExpressId)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -720,12 +721,34 @@ export default function CadView({
         // `onModel`, before that render's `rootElement` is set.
         const rawOccurrencePath = event.shiftKey ? null :
           (mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null)
+        const rootEltForPick = useStore.getState().rootElement
         const occurrencePath = rawOccurrencePath ?
           trimToTreeOccurrencePath(
             rawOccurrencePath,
-            occurrencePathKeySetForTree(useStore.getState().rootElement)) :
+            occurrencePathKeySetForTree(rootEltForPick)) :
           null
-        selectItemsInScene([parentExpressId], true, instanceIds, occurrencePath)
+        // Ephemeral solid resolution: when the tree surfaces the picked
+        // body as a `type:'solid'` child of the node at this path (Conway's
+        // multibody solid layer), select THAT node — its express id is the
+        // picked instance's PlacedGeometry.geometryExpressID — so the
+        // NavTree highlights the one body, not the whole part. Falls back
+        // to the part-level selection when the tree has no matching solid
+        // (single-solid parts, suppressed anonymous dumps, old caches).
+        let targetId = parentExpressId
+        let solidExpressId = null
+        if (occurrencePath) {
+          const pickedGeometryId =
+            mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null
+          const pathNode = pickedGeometryId !== null ?
+            findNodeByOccurrencePath(rootEltForPick, occurrencePath) : null
+          const solidNode = pathNode?.children?.find?.(
+            (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
+          if (solidNode) {
+            targetId = solidNode.expressID
+            solidExpressId = solidNode.expressID
+          }
+        }
+        selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
         return
       }
       // Non-instance branch: elementSelection funnels through
@@ -858,8 +881,15 @@ export default function CadView({
    *   ids) of the selected occurrence, or null. Disambiguates which NavTree
    *   node highlights when a reused part's occurrences share one expressID;
    *   null (the default) clears it for IFC and non-occurrence sources.
+   * @param {number} solidExpressId Express id of the selected ephemeral solid
+   *   (a multibody STEP part's named body), or null when the selection is a
+   *   whole product/occurrence. Solid nodes share their parent's occurrence
+   *   path, so this is what tells "the part" from "one body inside it" —
+   *   NavTree row highlight, per-solid hide and the permalink all read it.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null) {
+  function selectItemsInScene(
+    resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null,
+    solidExpressId = null) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -873,6 +903,7 @@ export default function CadView({
       // expressID, so this disambiguates which NavTree node to highlight.
       // Every non-occurrence caller passes null, clearing any stale path.
       setSelectedOccurrencePath(occurrencePath)
+      setSelectedSolidExpressId(solidExpressId)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
@@ -900,8 +931,13 @@ export default function CadView({
         const isTreeOccurrencePath = Boolean(
           occurrencePath && occurrencePath.length > 0 && rootElt &&
           occurrencePathKeySetForTree(rootElt)?.has(occurrencePathKey(occurrencePath)))
+        // A selected solid appends its own express id below the occurrence
+        // path — solids aren't path-addressable on their own (they share the
+        // parent part's path), so the URL identity is [root, ...path, solid].
+        // `selectElementBasedOnFilepath` resolves it back symmetrically.
         const pathIds = isTreeOccurrencePath ?
-          [rootElt.expressID, ...occurrencePath] :
+          [rootElt.expressID, ...occurrencePath,
+            ...(solidExpressId !== null ? [solidExpressId] : [])] :
           getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const enabledFeatures = searchParams.get('feature')
@@ -966,9 +1002,26 @@ export default function CadView({
       const eltPathIds = parts.slice(1).map((part) => parseInt(part))
       const startsAtRoot =
         state.rootElement && parseInt(parts[0]) === state.rootElement.expressID
-      const node = startsAtRoot ?
+      let node = startsAtRoot ?
         findNodeByOccurrencePath(state.rootElement, eltPathIds) : null
-      const occurrencePath = node ? eltPathIds : null
+      let occurrencePath = node ? eltPathIds : null
+      // Ephemeral solid permalink: the writer appends the solid's express id
+      // below its parent part's occurrence path ([root, ...path, solid]), so
+      // when the full segment list isn't a tree path, try the prefix as the
+      // path and the trailing id as one of that node's `type:'solid'`
+      // children. Mirrors the write in selectItemsInScene.
+      let solidExpressId = null
+      if (!node && startsAtRoot && eltPathIds.length >= 2) {
+        const parentPathIds = eltPathIds.slice(0, -1)
+        const parentNode = findNodeByOccurrencePath(state.rootElement, parentPathIds)
+        const solidNode = parentNode?.children?.find?.(
+          (child) => child.ephemeral === true && child.expressID === targetId)
+        if (solidNode) {
+          node = parentNode
+          occurrencePath = parentPathIds
+          solidExpressId = targetId
+        }
+      }
       // Skip re-selecting when this element is already the active
       // selection. We consult the store (selectItemsInScene updates it
       // synchronously) and not only viewer.getSelectedIds(), because this
@@ -990,8 +1043,13 @@ export default function CadView({
       const idSelected =
         state.selectedElements.includes(`${targetId}`) ||
         viewer.getSelectedIds().includes(targetId)
+      // Occurrence identity is the path — plus the solid id when the URL
+      // addresses one body of a multibody part: solid and parent share the
+      // path, so path equality alone would treat "the part" and "one body
+      // inside it" as the same selection and skip the re-select.
       const alreadySelected = (occurrencePath && state.selectedOccurrencePath) ?
-        occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) :
+        (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
+          state.selectedSolidExpressId === solidExpressId) :
         idSelected
       if (alreadySelected) {
         return
@@ -999,11 +1057,14 @@ export default function CadView({
       // Mirror the NavTree occurrence-click funnel: resolve the path to the
       // exact instance ids so the scene highlights just this occurrence
       // (`includeDescendants` per the node's children — an assembly needs
-      // the descendant scan, a leaf takes the exact-key path). Empty for the
-      // scalar-id (IFC / unknown-path) case, where occurrencePath is null.
+      // the descendant scan, a leaf takes the exact-key path; a solid narrows
+      // further by its geometry express id). Empty for the scalar-id
+      // (IFC / unknown-path) case, where occurrencePath is null.
       const hasChildren = Boolean(node && Array.isArray(node.children) && node.children.length > 0)
-      const instanceIds = occurrencePath ? occurrenceInstanceIds(occurrencePath, hasChildren) : []
-      selectItemsInScene([targetId], false, instanceIds, occurrencePath)
+      const instanceIds = occurrencePath ?
+        occurrenceInstanceIds(
+          occurrencePath, solidExpressId !== null ? false : hasChildren, solidExpressId) : []
+      selectItemsInScene([targetId], false, instanceIds, occurrencePath, solidExpressId)
     }
   }
 
@@ -1019,11 +1080,15 @@ export default function CadView({
    * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
    * @param {boolean} includeDescendants an assembly needs the descendant
    *   prefix scan; a leaf takes the O(1) exact-key path
+   * @param {number} geometryExpressId for an ephemeral solid node, the
+   *   solid's own express id — narrows the resolution to the one body of a
+   *   multibody part; null keeps every instance at/under the path
    * @return {Array<number>} synthetic instance ids
    */
-  function occurrenceInstanceIds(occurrencePath, includeDescendants) {
+  function occurrenceInstanceIds(occurrencePath, includeDescendants, geometryExpressId = null) {
     return typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
-      viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {includeDescendants}) : []
+      viewer.getInstanceIdsForOccurrencePath(
+        0, occurrencePath, {includeDescendants, geometryExpressId}) : []
   }
 
 
@@ -1237,7 +1302,8 @@ export default function CadView({
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
           selectWithShiftClickEvents={
-            (isShiftKeyDown, expressIdOrIds, occurrencePath = null, hasChildren = false) => {
+            (isShiftKeyDown, expressIdOrIds, occurrencePath = null, hasChildren = false,
+              isEphemeralSolid = false) => {
               // The element-types tree passes an array (every element of a
               // type) to select the group at once; the spatial tree and
               // the scene pass a single expressID. elementSelection is
@@ -1261,8 +1327,14 @@ export default function CadView({
                 // toggles/accumulates against the current selection (multi-select);
                 // the per-occurrence scene highlight is single-selection only, so
                 // shift keeps its legacy type-level accumulate behavior.
-                const instanceIds = occurrenceInstanceIds(occurrencePath, hasChildren)
-                selectItemsInScene([expressIdOrIds], true, instanceIds, occurrencePath)
+                // An ephemeral solid node shares its parent part's occurrence
+                // path; its own express id (= PlacedGeometry.geometryExpressID)
+                // narrows the resolution to the one clicked body.
+                const solidExpressId = isEphemeralSolid ? parseInt(expressIdOrIds, 10) : null
+                const instanceIds =
+                  occurrenceInstanceIds(occurrencePath, hasChildren, solidExpressId)
+                selectItemsInScene(
+                  [expressIdOrIds], true, instanceIds, occurrencePath, solidExpressId)
               } else {
                 elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
               }
