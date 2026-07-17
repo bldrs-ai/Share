@@ -77,4 +77,17 @@ describe('AlertAndSnackbar grace period', () => {
     act(() => jest.advanceTimersByTime(GRACE_MS - 1))
     expect(useStore.getState().loadResult).not.toBe(null)
   })
+
+  it('lays out the live line with the bar padded and the metrics split off', () => {
+    render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+    act(() => {
+      useStore.getState().setCurrentLoadLine('Parsing [0%........98%] 1.114s, +89.034761 MB heap')
+    })
+    const line = screen.getByTestId('LoadStatusLine')
+    // Both halves present…
+    expect(line.textContent).toContain('Parsing [0%')
+    expect(line.textContent).toContain('1.114s, +89.034761 MB heap')
+    // …and the bar is space-padded past its "98%]" so "]" holds a fixed column.
+    expect(line.textContent).toMatch(/98% +\]/)
+  })
 })

@@ -45,6 +45,54 @@ const INFO_CONTROL_SELECTOR = '[data-testid="control-button-load-report"]'
 // our snackbar so the LoadReportControl copy-confirm snackbar isn't matched.
 const SNACK_CONTENT_SELECTOR = '[data-testid="snackbar"] .MuiSnackbarContent-root'
 
+// Bar inner width at 100% ("0%" + 16 dots + "100%") — shorter live bars are
+// space-padded to this so the closing "]", and the metrics after it, hold a
+// fixed column as the fill grows (conway #301 preview feedback). The canonical
+// bar string still comes from conway's shared formatter; this is browser
+// display layout only.
+const BAR_INNER_WIDTH = 22
+// Fixed width of the live-line row so the metrics right-align to a stable edge
+// instead of the box reflowing as the bar fills; capped so it can't exceed a
+// narrow viewport.
+const LIVE_LINE_WIDTH = 'min(78vw, 58ch)'
+
+
+/**
+ * Split a live stage line ("Parsing [0%........98%] 1.114s, +89 MB heap") into
+ * its left half (label + bar, the bar space-padded to a fixed width) and the
+ * trailing metrics, so the row can render fixed-width with the metrics
+ * right-aligned. Unrecognized shapes (no bar) render whole on the left.
+ *
+ * @param {string} line
+ * @return {{left: string, right: string}}
+ */
+function splitLiveLine(line) {
+  const barClose = line.indexOf('] ')
+  if (barClose === -1) {
+    return {left: line, right: ''}
+  }
+  return {left: padBar(line.slice(0, barClose + 1)), right: line.slice(barClose + 2)}
+}
+
+
+/**
+ * Space-pad the bar's inner content to BAR_INNER_WIDTH so "]" holds a fixed
+ * column regardless of fill percent.
+ *
+ * @param {string} labelAndBar e.g. "Parsing [0%....98%]"
+ * @return {string}
+ */
+function padBar(labelAndBar) {
+  const open = labelAndBar.indexOf('[')
+  const close = labelAndBar.lastIndexOf(']')
+  if (open === -1 || close === -1 || close < open) {
+    return labelAndBar
+  }
+  const inner = labelAndBar.slice(open + 1, close)
+  const pad = inner.length < BAR_INNER_WIDTH ? ' '.repeat(BAR_INNER_WIDTH - inner.length) : ''
+  return `${labelAndBar.slice(0, open + 1)}${inner}${pad}]`
+}
+
 
 /** @return {ReactElement} */
 export default function AlertAndSnackbar() {
@@ -199,6 +247,29 @@ export default function AlertAndSnackbar() {
   const isErrorGrace = loadResult?.status === 'error'
   const displayLine = currentLoadLine ?? loadResult?.summaryLine ?? ''
 
+  // Live line: a fixed-width row with the label+bar left and the metrics
+  // right-aligned, so the box doesn't reflow as the bar fills. Grace line
+  // ("Loaded <name>" / "Load failed: …"): plain, no bar to align.
+  const live = isLoadActive ? splitLiveLine(currentLoadLine) : null
+  const lineElement = live ? (
+    <Box
+      component='span'
+      data-testid='LoadStatusLine'
+      sx={{...LOAD_LINE_SX, display: 'inline-flex', width: LIVE_LINE_WIDTH, overflow: 'hidden'}}
+    >
+      <Box component='span' sx={LOAD_LINE_SX}>{live.left}</Box>
+      <Box component='span' sx={{...LOAD_LINE_SX, ml: 'auto', pl: 1}}>{live.right}</Box>
+    </Box>
+  ) : (
+    <Typography
+      component='span'
+      sx={{...LOAD_LINE_SX, ...(isErrorGrace ? {color: 'error.main'} : {})}}
+      data-testid='LoadStatusLine'
+    >
+      {displayLine}
+    </Typography>
+  )
+
   const loadMessage = (
     <Box sx={{maxWidth: '60vw'}} data-testid='LoadStatusMessage'>
       <Collapse in={isLoadExpanded}>
@@ -220,13 +291,7 @@ export default function AlertAndSnackbar() {
         >
           {isLoadExpanded ? <ExpandMoreIcon fontSize='inherit'/> : <ExpandLessIcon fontSize='inherit'/>}
         </IconButton>
-        <Typography
-          component='span'
-          sx={{...LOAD_LINE_SX, ...(isErrorGrace ? {color: 'error.main'} : {})}}
-          data-testid='LoadStatusLine'
-        >
-          {displayLine}
-        </Typography>
+        {lineElement}
       </Stack>
     </Box>
   )

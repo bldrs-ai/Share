@@ -33,6 +33,14 @@ report control with a short grace period, driven by the store's `loadResult`
   OK dismiss is instant. Any manual dismiss is instant — animation is
   reserved for the unattended success case.
 
+The **live line** is laid out fixed-width in the browser so it doesn't reflow
+as the bar fills: the snackbar splits the shared string into `label + bar`
+(bar space-padded to the 100% width so `]` holds its column) and the trailing
+metrics, right-aligned to a stable edge (`splitLiveLine`/`padBar`,
+`LIVE_LINE_WIDTH`). This is browser display layout only — the canonical string
+still comes from conway's `progress_log`; the CLI renderer does its own
+terminal layout.
+
 A user pasting any of these into a bug report produces the same text; Sentry
 receives the same trail as breadcrumbs plus the final report string in the
 `load` context.
