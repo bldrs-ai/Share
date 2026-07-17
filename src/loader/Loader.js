@@ -27,7 +27,12 @@ import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/p
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
-import {attachOccurrencePaths, instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
+import {
+  attachGeometryExpressIds,
+  attachOccurrencePaths,
+  instanceMapFromGeometry,
+  instanceMapFromTriangleIds,
+} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {BldrsElementPropertiesReader} from './bldrsElementProperties'
@@ -570,6 +575,10 @@ export async function load(
     // per-occurrence tables the cache-miss instance map carried. Null for
     // IFC / pre-occurrence artifacts. Read before the userData is freed below.
     const occurrencePaths = model.userData?.bldrsFaceIds?.occurrencePaths ?? null
+    // Global per-instance geometry (solid) express-id table, persisted the
+    // same way — restores per-solid selection of multibody STEP parts on
+    // cache-hit. Null for IFC / pre-0.10.0 artifacts.
+    const geometryExpressIds = model.userData?.bldrsFaceIds?.geometryExpressIds ?? null
     // Per-vertex IDs are only trustworthy on uncompressed artifacts.
     // DRACO quantises integer attributes and Meshopt welds shared
     // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
@@ -642,6 +651,9 @@ export async function load(
         // every reuse — on cache-hit exactly as it does on cache-miss.
         if (occurrencePaths) {
           attachOccurrencePaths(map, occurrencePaths)
+        }
+        if (geometryExpressIds) {
+          attachGeometryExpressIds(map, geometryExpressIds)
         }
         obj.instanceMap = map
         attached++

@@ -127,7 +127,7 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     const {geometry, ranges, placedGeometryCount} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(geometry).toBeInstanceOf(BufferGeometry)
     expect(placedGeometryCount).toBe(1)
-    expect(ranges).toEqual([{parentExpressId: 100, triangleCount: 1}])
+    expect(ranges).toEqual([{parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}])
     expect(geometry.getAttribute('position').count).toBe(3)
     expect(geometry.getIndex().array.length).toBe(3)
     expect(Array.from(geometry.getIndex().array)).toEqual([0, 1, 2])
@@ -154,8 +154,8 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     }]
     const {ranges} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(ranges).toEqual([
-      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
-      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 30]},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20], geometryExpressId: 999},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 30], geometryExpressId: 999},
     ])
   })
 
@@ -263,8 +263,8 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     }]
     const {ranges} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(ranges).toEqual([
-      {parentExpressId: 100, triangleCount: 1},
-      {parentExpressId: 100, triangleCount: 2},
+      {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999},
+      {parentExpressId: 100, triangleCount: 2, geometryExpressId: 888},
     ])
   })
 
@@ -469,9 +469,9 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
       const {ranges, geometry} = flatMeshToBufferGeometry(flatMeshes, api, 0)
       // Ranges follow bin (emission) order, not walk order.
       expect(ranges).toEqual([
-        {parentExpressId: 100, triangleCount: 1}, // first red
-        {parentExpressId: 100, triangleCount: 1}, // second red
-        {parentExpressId: 200, triangleCount: 1}, // blue
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}, // first red
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}, // second red
+        {parentExpressId: 200, triangleCount: 1, geometryExpressId: 999}, // blue
       ])
       // The per-vertex instanceID attribute follows the same order.
       // Vertices 0..2 → instance 0 (parent 100), 3..5 → instance 1

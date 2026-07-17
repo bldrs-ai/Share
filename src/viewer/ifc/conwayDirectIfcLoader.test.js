@@ -180,7 +180,8 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       // Two-arg call (CadView.jsx / IfcIsolator.js shape). The
       // leading arg is ignored — the bound modelID is used instead.
       await ifcModel.getSpatialStructure(0, true)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(0, true, {includeSolids: true})
     })
 
     it('getSpatialStructure accepts a single boolean arg — the cache-hit closure shape', async () => {
@@ -188,7 +189,8 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       const ifcModel = new Mesh()
       decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
       await ifcModel.getSpatialStructure(true)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(0, true, {includeSolids: true})
     })
 
     it('getSpatialStructure passes Conway\'s \'names\' mode through un-coerced', async () => {
@@ -201,10 +203,12 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       decorateConwayDirectIfcModel(ifcModel, ifcAPI, 7)
       // Two-arg manager shape (CadView.jsx): (modelID, 'names').
       await ifcModel.getSpatialStructure(0, 'names')
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(7, 'names')
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(7, 'names', {includeSolids: true})
       // Single-arg cache-hit closure shape: ('names').
       await ifcModel.getSpatialStructure('names')
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenLastCalledWith(7, 'names')
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenLastCalledWith(7, 'names', {includeSolids: true})
     })
 
     it('getIfcType is an identity over the spatial-tree node\'s string type', () => {

@@ -273,7 +273,7 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
     // reuse of a nut highlights together).
     const buildMap = ifcModel.instanceMap
     ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
-    if (buildMap?.instanceIdToOccurrencePath) {
+    if (buildMap?.instanceIdToOccurrencePath || buildMap?.instanceIdToGeometryExpressId) {
       // Guard the 1:1 assumption instead of trusting it silently. If the two
       // populators ever number instances differently (e.g. one drops a
       // degenerate PlacedGeometry the other keeps), copying the tables over
@@ -281,8 +281,18 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
       // wrong-nut-highlights bug. On mismatch, skip the transfer and degrade
       // to type-level selection rather than mis-highlight.
       if (buildMap.instanceCount === ifcModel.instanceMap.instanceCount) {
-        ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
-        ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+        if (buildMap.instanceIdToOccurrencePath) {
+          ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
+          ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+        }
+        // Same 1:1 carry for the per-instance geometry (solid) express ids —
+        // per-vertex attributes can't encode them either, and they're the
+        // second half of the (occurrencePath, solid expressID) identity that
+        // per-solid selection joins on.
+        if (buildMap.instanceIdToGeometryExpressId) {
+          ifcModel.instanceMap.instanceIdToGeometryExpressId =
+            buildMap.instanceIdToGeometryExpressId
+        }
       } else {
         console.warn(
           '[conwayDirect] occurrence-path transfer skipped: instance-count mismatch ' +
@@ -374,7 +384,15 @@ export function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
     } else if (args.length >= 2) {
       withProps = isMode(args[1]) ? args[1] : Boolean(args[1])
     }
-    return ifcAPI.properties.getSpatialStructure(modelID, withProps)
+    // `includeSolids` (Conway ≥1.376.1184) surfaces STEP multibody sub-solids
+    // as ephemeral `type: 'solid'` NavTree nodes (named SolidWorks bodies like
+    // the NEMA 23 motor's `Boss-Extrude7`; anonymous solid dumps stay
+    // suppressed engine-side). The IFC surface ignores the option. This is the
+    // NavTree/search feed; the IfcIsolator path (`makeConwayDirectIfcManager`
+    // above) intentionally stays product-only — hide/isolate keys on product
+    // subsets and has no meaning for a sub-solid yet. See Conway
+    // `design/new/step-nonproduct-semantics.md`.
+    return ifcAPI.properties.getSpatialStructure(modelID, withProps, {includeSolids: true})
   }
   ifcModel.getItemProperties = (expressID, recursive = false) => {
     return ifcAPI.properties.getItemProperties(modelID, expressID, recursive)

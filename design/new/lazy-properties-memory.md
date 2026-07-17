@@ -1,8 +1,10 @@
 # Lazy / incremental IFC properties — memory reduction
 
-**Status:** Living doc. Steps 1–2 **shipped to `main`** (PR #1588, #1589);
-step 3 (OPFS source spill wiring) **in progress**; step 4 (compression
-default) **deferred, separate track**.
+**Status:** Living doc. Steps 1–3 **shipped to `main`** (PR #1588, #1589,
+#1591) — the track's memory goal is met: PSB's post-spill heap drops the
+902 MB source (verified by heap snapshot), props capture ~35–65 s and
+background-tab-safe. Step 4 (compression default) **deferred, separate
+track**; next levers listed under Priorities.
 
 **Owner:** Pablo (with Claude).
 
@@ -35,7 +37,7 @@ exactly why a *bounded* path beats a *usually-fits* one.
 
 | # | Sink | Scale (PSB) | Fix | Status |
 | --- | --- | --- | --- | --- |
-| 1 | **Raw STEP/IFC source buffer**, pinned all session | 100s of MB (≈ source) | conway #374 windowed spill → wire `SpillModelSource` in Share | conway shipped; **Share wiring = step 3, in progress** |
+| 1 | **Raw STEP/IFC source buffer**, pinned all session | 100s of MB (≈ source) | conway #374 windowed spill + `SpillModelSource` wiring (#1591; leak fix conway#378) | ✅ shipped |
 | 2 | conway per-entity descriptor cache | O(entities) | SoA (#372) + `ReleaseEntityCache` (#373); called post-load (#1588) & mid-sweep (#1589) | ✅ shipped |
 | 3 | Property-JSON object graph in the GLB writer (materialise-all) | multi-GB transient | streaming writer (#1589) → O(reachable ids) | ✅ shipped |
 | 4 | Eager full-property inline of the spatial tree at load | O(products) | `'names'` mode (#1588) | ✅ shipped |
@@ -122,7 +124,18 @@ suspicion. What's robust:
 
 ## Priorities / what's next
 
-### Step 3 (active) — wire the OPFS source spill (task: "drop resident source buffer")
+### Step 3 (SHIPPED, #1591) — OPFS source spill wiring
+
+Landed as designed, plus three findings from the PSB smoke tests:
+the mid-sweep cache-release tick regressed the sweep 1.5–2.5× once real
+on conway ≥ 1.373 (removed; bench in `bldrsElementProperties.js`);
+conway's scratch parsing buffer silently pinned the spilled source
+(conway#378 releases it — heap-snapshot verified); and `setTimeout`
+yields crawled in hidden tabs (~1/s throttle → 555 s capture) — swapped
+to `scheduler.yield()`/`MessageChannel` in `utils/scheduling.js`.
+Measured on PSB: props 35–65 s (tab visible OR hidden), 902 MB source
+released post-write, steady-state tab ≈ 3 GB dominated by the wasm heap.
+Original design notes follow.
 
 Row 1 above — the raw source buffer — is the largest remaining resident.
 conway #374 (shipped in **1.374.1181**) provides `SpillModelSource` /

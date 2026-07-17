@@ -1067,9 +1067,16 @@ export class ShareViewer {
    *   a leaf click on such a model highlights nothing while hide (always
    *   prefix-inclusive) works. Defaults to true (the assembly case, which
    *   needs the prefix scan).
+   * @param {number|null} [opts.geometryExpressId] When set, keep only
+   *   instances whose `PlacedGeometry.geometryExpressID` matches — the join
+   *   for the NavTree's ephemeral solid nodes: a multibody part's solids all
+   *   share the part's occurrence path, and the solid's own express id is
+   *   what narrows the selection to the one clicked body. Null (the default)
+   *   keeps every instance at/under the path.
    * @return {number[]} synthetic instance ids (empty when none)
    */
-  getInstanceIdsForOccurrencePath(modelID, occurrencePath, {includeDescendants = true} = {}) {
+  getInstanceIdsForOccurrencePath(
+    modelID, occurrencePath, {includeDescendants = true, geometryExpressId = null} = {}) {
     const model = this._modelById(modelID)
     if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
       return []
@@ -1083,11 +1090,17 @@ export class ShareViewer {
         if (!byPath) {
           return
         }
+        // Per-mesh filter: instance ids are mesh-local, so the geometry-id
+        // lookup must go through this mesh's own map.
+        const keep = (instanceId) => geometryExpressId === null ||
+          obj.instanceMap.getGeometryExpressIdByInstance?.(instanceId) === geometryExpressId
         if (!matchDescendants) {
           const exact = byPath.get(target)
           if (exact) {
             for (let i = 0; i < exact.length; i++) {
-              ids.push(exact[i])
+              if (keep(exact[i])) {
+                ids.push(exact[i])
+              }
             }
           }
           return
@@ -1095,7 +1108,9 @@ export class ShareViewer {
         for (const [key, list] of byPath) {
           if (key === target || key.startsWith(descendantPrefix)) {
             for (let i = 0; i < list.length; i++) {
-              ids.push(list[i])
+              if (keep(list[i])) {
+                ids.push(list[i])
+              }
             }
           }
         }
@@ -1110,7 +1125,10 @@ export class ShareViewer {
       // Exact miss — fall through to the scan for SRR-extended geometry
       // paths (see the JSDoc). An exact hit above intentionally skips the
       // scan: when the tree leaf's own key exists, deeper keys belong to
-      // other (deeper-NAUO) occurrences, not to this leaf.
+      // other (deeper-NAUO) occurrences, not to this leaf. (Under a
+      // geometryExpressId filter the "miss" can also mean the solid lives
+      // only under an extended key — the SolidWorks SRR-bridged multibody
+      // case, e.g. the NEMA motor — which the scan then finds.)
     }
     return collect(true)
   }

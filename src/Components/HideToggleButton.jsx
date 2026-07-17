@@ -9,9 +9,13 @@ import GlassesIcon from '../assets/icons/Glasses.svg'
  * @param {IfcIsolator} The IFC isoaltor
  * @param {number} IFC element id
  * @param {Array<number>} [occurrencePath] STEP occurrence path of the node, if any
+ * @param {number} [geometryExpressId] For an ephemeral solid node (a multibody
+ *   STEP part's named body), the solid's own express id — narrows the hide to
+ *   that one body's instances instead of the whole part occurrence. Null for
+ *   products and IFC.
  * @return {ReactElement}
  */
-export default function HideToggleButton({elementId, occurrencePath = null}) {
+export default function HideToggleButton({elementId, occurrencePath = null, geometryExpressId = null}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
@@ -27,8 +31,11 @@ export default function HideToggleButton({elementId, occurrencePath = null}) {
     if (Array.isArray(occurrencePath) && occurrencePath.length > 0 &&
         typeof viewer.getInstanceIdsForOccurrencePath === 'function') {
       if (!isHidden) {
+        // The geometry-id filter (ephemeral solid nodes only) narrows the
+        // hide from the whole part occurrence to the one named body.
         viewer.isolator.hideOccurrence(
-          elementId, viewer.getInstanceIdsForOccurrencePath(0, occurrencePath))
+          elementId,
+          viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {geometryExpressId}))
       } else {
         viewer.isolator.unHideOccurrence(elementId)
       }

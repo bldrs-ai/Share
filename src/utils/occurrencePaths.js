@@ -50,6 +50,11 @@ export function occurrencePathsEqual(a, b) {
  * occurrence path — its child count decides whether the scene resolution
  * needs the descendant prefix scan (assembly) or the exact-key lookup (leaf).
  *
+ * Ephemeral solid nodes are skipped: a multibody part's solids share the
+ * part's occurrence path (they are not occurrences themselves — their
+ * identity is (path, solid expressID)), so a path-only lookup must land on
+ * the product node, never one of its bodies.
+ *
  * @param {object|null|undefined} rootNode spatial-structure root element
  * @param {Array<number>|null|undefined} path NAUO express ids, root→leaf
  * @return {object|null} the matching node, or null
@@ -62,7 +67,8 @@ export function findNodeByOccurrencePath(rootNode, path) {
   const stack = [rootNode]
   while (stack.length > 0) {
     const node = stack.pop()
-    if (Array.isArray(node.occurrencePath) && occurrencePathKey(node.occurrencePath) === target) {
+    if (node.ephemeral !== true &&
+        Array.isArray(node.occurrencePath) && occurrencePathKey(node.occurrencePath) === target) {
       return node
     }
     if (Array.isArray(node.children)) {
