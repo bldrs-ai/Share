@@ -22,6 +22,7 @@ import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {labelForGeometryId} from '../utils/geometryLabels'
 import {
   findNodeByOccurrencePath,
   occurrencePathKey,
@@ -606,6 +607,9 @@ export default function CadView({
       rootElt.Name = {value: 'Model'}
       rootElt.LongName = {value: 'Model'}
     }
+    // Ids are only unique within one file — transient anonymous-geometry
+    // rows from the previous model must not leak into this tree.
+    useStore.getState().clearTransientTreeNodes()
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
     // Load-time property reads are done: drop Conway's materialised
@@ -746,6 +750,17 @@ export default function CadView({
           if (solidNode) {
             targetId = solidNode.expressID
             solidExpressId = solidNode.expressID
+          } else if (pickedGeometryId !== null && pathNode &&
+              occurrenceInstanceIds(occurrencePath, false).length > 1) {
+            // Anonymous piece of a multi-piece part (conway#387): no tree
+            // node exists, but (path, geometry id) is a complete identity —
+            // select it as a solid and materialize a transient NavTree row
+            // so highlight/scroll/eye/permalink all work. The >1-instance
+            // guard keeps single-solid parts (as1's nut, the NEMA screws)
+            // on the part-level selection, where the part node IS the piece.
+            targetId = pickedGeometryId
+            solidExpressId = pickedGeometryId
+            materializeTransientNode(occurrencePath, pickedGeometryId)
           }
         }
         selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
@@ -1020,6 +1035,18 @@ export default function CadView({
           node = parentNode
           occurrencePath = parentPathIds
           solidExpressId = targetId
+        } else if (parentNode &&
+            occurrenceInstanceIds(parentPathIds, false, targetId).length > 0) {
+          // Anonymous-geometry permalink (conway#387): the trailing id names
+          // no tree node, but the instance map holds geometry with that id
+          // under the parent path — the piece exists, it just has no in-file
+          // identity beyond its express id. Select it as a solid and
+          // materialize its transient row so the tree shows what the URL
+          // addressed.
+          node = parentNode
+          occurrencePath = parentPathIds
+          solidExpressId = targetId
+          materializeTransientNode(parentPathIds, targetId)
         }
       }
       // Skip re-selecting when this element is already the active
@@ -1089,6 +1116,28 @@ export default function CadView({
     return typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
       viewer.getInstanceIdsForOccurrencePath(
         0, occurrencePath, {includeDescendants, geometryExpressId}) : []
+  }
+
+
+  /**
+   * Materialize a transient NavTree row for an anonymous geometry piece
+   * (conway#387): resolve its label from Conway's arbitrary-id lookup
+   * ("Face #6321" / "Solid #250", degrading to "Item #id" on older engines)
+   * and add it to the session-only transient-node store, where NavTreePanel
+   * injects it under its parent part's row. Fire-and-forget: the selection
+   * itself never waits on the label, and the store dedups repeat arrivals
+   * (pick then permalink of the same piece).
+   *
+   * @param {Array<number>} occurrencePath the parent part's NAUO path
+   * @param {number} geometryExpressId the piece's own express id
+   */
+  function materializeTransientNode(occurrencePath, geometryExpressId) {
+    const pathKey = occurrencePathKey(occurrencePath)
+    const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+    labelForGeometryId(ifcAPI, 0, geometryExpressId).then((label) => {
+      useStore.getState().addTransientTreeNodes(
+        pathKey, [{expressID: geometryExpressId, label}])
+    })
   }
 
 

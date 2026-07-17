@@ -65,5 +65,31 @@ export default function createNavTreeSlice(set, get) {
     // row highlight/scroll, per-solid hide (H), permalink round-trip.
     selectedSolidExpressId: null,
     setSelectedSolidExpressId: (id) => set(() => ({selectedSolidExpressId: id})),
+
+    // Transient NavTree rows for anonymous below-product geometry
+    // (conway#387): parent occurrence-path key → [{expressID, label}].
+    // Session-only by design — rows materialize from a scene pick, a
+    // permalink, or a "N more…" expansion and are reconstructed on the fly;
+    // they are never persisted to the GLB cache, so a reload only recreates
+    // the one a permalink names. Keyed additively with per-id dedup because
+    // the same piece can arrive from several sources (pick then permalink).
+    transientTreeNodes: {},
+    addTransientTreeNodes: (pathKey, nodes) => set((state) => {
+      const existing = state.transientTreeNodes[pathKey] ?? []
+      const known = new Set(existing.map((node) => node.expressID))
+      const fresh = nodes.filter((node) => !known.has(node.expressID))
+      if (fresh.length === 0) {
+        return {}
+      }
+      return {
+        transientTreeNodes: {
+          ...state.transientTreeNodes,
+          [pathKey]: [...existing, ...fresh],
+        },
+      }
+    }),
+    // New model load: ids are only unique within one file, so stale rows
+    // from the previous model must not leak into the next tree.
+    clearTransientTreeNodes: () => set(() => ({transientTreeNodes: {}})),
   }
 }

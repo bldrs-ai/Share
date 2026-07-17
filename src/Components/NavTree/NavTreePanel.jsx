@@ -7,10 +7,18 @@ import {ToggleButton, ToggleButtonGroup, Tooltip} from '@mui/material'
 import {styled} from '@mui/material/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
+import {labelForGeometryId} from '../../utils/geometryLabels'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
 import Panel from '../SideDrawer/Panel'
 import NavTreeNode from './NavTreeNode'
 import {removeHashParams} from './hashState'
+
+
+// Transient rows materialized per "N more…" click (conway#387). Large
+// anonymous sets (an ECAD board's hundreds of pieces) arrive in chunks the
+// virtualized list absorbs without a hitch; the row retires when the
+// advisory remaining count reaches zero.
+const MORE_ROW_BATCH_SIZE = 250
 
 
 /**
@@ -34,6 +42,8 @@ export default function NavTreePanel({
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const selectedSolidExpressId = useStore((state) => state.selectedSolidExpressId)
+  const transientTreeNodes = useStore((state) => state.transientTreeNodes)
+  const addTransientTreeNodes = useStore((state) => state.addTransientTreeNodes)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
   const viewer = useStore((state) => state.viewer)
@@ -94,9 +104,9 @@ export default function NavTreePanel({
 
   // Flatten the tree into a list of visible nodes
   useEffect(() => {
-    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model)
+    const nodes = getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, transientTreeNodes)
     setVisibleNodes(nodes)
-  }, [treeData, expandedNodeIds, isNavTree, model])
+  }, [treeData, expandedNodeIds, isNavTree, model, transientTreeNodes])
 
   // Scroll to selected element
   useEffect(() => {
@@ -188,6 +198,7 @@ export default function NavTreePanel({
               selectedOccurrencePathKey,
               selectedSolidExpressId,
               selectWithShiftClickEvents,
+              addTransientTreeNodes,
               model,
               viewer,
               setItemSize,
@@ -234,9 +245,11 @@ export function compareNodeLabels(a, b) {
  * @param {Array} expandedNodeIds - IDs of expanded nodes
  * @param {boolean} isNavTree - Whether this is a nav tree
  * @param {object} model - The model object
+ * @param {object} [transientTreeNodes] - Session-only anonymous-geometry rows
+ *   (conway#387), keyed by parent occurrence-path key
  * @return {Array} nodes
  */
-function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
+function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, transientTreeNodes = {}) {
   const visibleNodes = []
 
   // Ordering policy discriminant. An IFC / STEP spatial structure (live
@@ -311,6 +324,52 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
     if (node.ephemeral === true) {
       mapped.ephemeral = true
     }
+    // Anonymous-geometry affordances (conway#387). Both are session-only
+    // and reconstructed on the fly — nothing here persists to the cache.
+    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0) {
+      const pathKey = occurrencePathKey(node.occurrencePath)
+      // Transient rows: pieces a pick / permalink / "more" expansion
+      // materialized under this part. Rendered as ephemeral solid rows —
+      // (path, geometry id) drives highlight/scroll/eye exactly like the
+      // engine-emitted solid nodes — with a path-scoped nodeId so reused
+      // parts don't alias expansion state.
+      const transientRows = (transientTreeNodes[pathKey] ?? [])
+        .filter((row) => !mapped.children.some((child) => child.expressID === row.expressID))
+        .map((row) => ({
+          nodeId: `${pathKey}:${row.expressID}`,
+          label: row.label,
+          expressID: row.expressID,
+          hasChildren: false,
+          children: [],
+          occurrencePath: node.occurrencePath,
+          ephemeral: true,
+          transient: true,
+        }))
+      if (transientRows.length > 0) {
+        mapped.children = [...mapped.children, ...transientRows]
+        mapped.hasChildren = true
+      }
+      // "N more…" expansion row: the engine reported suppressed solids
+      // (`droppedSolids`) that have no nodes; clicking materializes the next
+      // batch from the instance map. The remaining count is advisory — the
+      // enumeration can also surface face pieces the solid count never
+      // included — and the row retires when it reaches zero.
+      const materialized = transientRows.length
+      const remaining = Math.max((node.droppedSolids ?? 0) - materialized, 0)
+      if (remaining > 0) {
+        const knownIds = mapped.children.map((child) => child.expressID)
+        mapped.children = [...mapped.children, {
+          nodeId: `${pathKey}:__more`,
+          isMoreRow: true,
+          remaining,
+          parentPath: node.occurrencePath,
+          knownIds,
+          hasChildren: false,
+          children: [],
+        }]
+        mapped.hasChildren = true
+      }
+    }
     return mapped
   }
 
@@ -347,6 +406,7 @@ const RenderRow = ({index, style, data}) => {
     selectedOccurrencePathKey,
     selectedSolidExpressId,
     selectWithShiftClickEvents,
+    addTransientTreeNodes,
     model,
     viewer,
     setItemSize,
@@ -356,6 +416,31 @@ const RenderRow = ({index, style, data}) => {
   const {node, depth} = visibleNodes[index]
   const nodeId = node.nodeId
   const isExpanded = expandedNodeIds.includes(nodeId)
+
+  // "N more…" expansion row for anonymous below-product geometry
+  // (conway#387): clicking materializes the next batch of pieces from the
+  // instance map as transient rows. Labels resolve through Conway's
+  // arbitrary-id lookup asynchronously; the store dedups against pieces
+  // that already arrived from a pick or permalink.
+  const handleMoreClick = () => {
+    if (typeof viewer?.getGeometryIdsForOccurrencePath !== 'function') {
+      return
+    }
+    const known = new Set(node.knownIds)
+    const fresh = viewer.getGeometryIdsForOccurrencePath(0, node.parentPath)
+      .filter((geometryExpressId) => !known.has(geometryExpressId))
+      .slice(0, MORE_ROW_BATCH_SIZE)
+    if (fresh.length === 0) {
+      return
+    }
+    const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+    const pathKey = occurrencePathKey(node.parentPath)
+    Promise.all(fresh.map((geometryExpressId) =>
+      labelForGeometryId(ifcAPI, 0, geometryExpressId)
+        .then((label) => ({expressID: geometryExpressId, label})),
+    )).then((rows) => addTransientTreeNodes(pathKey, rows))
+  }
+
   const hasChildren = node.hasChildren
   // Assembly rows highlight like leaves — a selected assembly (NavTree click,
   // scene pick, permalink) must mark its own row, not just its descendants
@@ -408,6 +493,33 @@ const RenderRow = ({index, style, data}) => {
     }
   }, [index, setItemSize, node.label, model])
 
+  if (node.isMoreRow === true) {
+    const moreIndent = 20
+    return (
+      <div style={{...style}}>
+        <div
+          data-testid='NavTreeMoreRow'
+          onClick={handleMoreClick}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              handleMoreClick()
+            }
+          }}
+          role='button'
+          tabIndex={0}
+          style={{
+            paddingLeft: depth * moreIndent,
+            cursor: 'pointer',
+            fontStyle: 'italic',
+            opacity: 0.7,
+          }}
+        >
+          {`${node.remaining} more…`}
+        </div>
+      </div>
+    )
+  }
+
 
   const handleToggle = (event) => {
     event.stopPropagation()
@@ -438,7 +550,12 @@ const RenderRow = ({index, style, data}) => {
   }
 
   let hasHideIcon = false
-  if (node.expressID) {
+  if (node.transient === true) {
+    // Transient anonymous-geometry rows hide through their
+    // (occurrencePath, geometry id) identity — the isolator's canBeHidden
+    // list is built from the spatial tree, which never contains them.
+    hasHideIcon = true
+  } else if (node.expressID) {
     hasHideIcon = viewer.isolator.canBeHidden(node.expressID)
   }
 
