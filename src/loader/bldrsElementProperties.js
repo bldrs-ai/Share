@@ -262,7 +262,7 @@ const STREAM_FLUSH_CHARS = 65536
  * Two sweeps, identical decoded output to the old capture-then-filter
  * fast path:
  *   1. Root-seed scan via sync `proxy.getLine`. Preferred enumeration
- *      is conway's `RootExpressIDs` (≥1.380) — the type index yields
+ *      is conway's `RootExpressIDs` (≥1.383) — the type index yields
  *      just the IfcRoot-derived ids, skipping the ~96% of records that
  *      are geometric resources without materialising a descriptor per
  *      record. Fallback (older conway, degenerate iterators) is the
@@ -324,7 +324,7 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
     return null
   }
 
-  // Roots-only enumeration (conway ≥1.380): `RootExpressIDs` yields the
+  // Roots-only enumeration (conway ≥1.383): `RootExpressIDs` yields the
   // express IDs of exactly the IfcRoot-derived records (everything with
   // a GlobalId — products, rels, psets, quantities) straight from the
   // type index, without materialising an entity descriptor per record.
