@@ -138,13 +138,22 @@ describe('loadProgress', () => {
   })
 
   describe('grace result', () => {
-    it('publishes a success result with the "Model Loaded." prefix', () => {
-      beginLoadProgress({fileInfo: 'index.ifc'})
+    it('publishes a terse "Loaded <name>" success result (no timing/heap)', () => {
+      beginLoadProgress({fileInfo: 'path/to/index.ifc'})
       reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 100})
       endLoadProgress()
       const result = useStore.getState().loadResult
       expect(result.status).toBe('success')
-      expect(result.summaryLine).toMatch(/^Model Loaded\. Total: /)
+      // Just the name (basename of fileInfo when no header was parsed) — no
+      // Total, no seconds, no MB.
+      expect(result.summaryLine).toBe('Loaded index.ifc')
+    })
+
+    it('prefers the parsed header fileName for the success line', () => {
+      beginLoadProgress({fileInfo: 'gdrive:abc123'})
+      reportLoadProgress({modelInfo: {fileName: 'Arty_Z7.stp', schema: 'AP214'}})
+      endLoadProgress()
+      expect(useStore.getState().loadResult.summaryLine).toBe('Loaded Arty_Z7.stp')
     })
 
     it('publishes an error result with the failure summary', () => {

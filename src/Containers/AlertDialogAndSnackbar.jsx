@@ -19,26 +19,31 @@ const LOAD_LINE_SX = {
 }
 
 // End-of-load grace period (conway #301 UX): after a successful load the
-// snackbar lingers on the "Model Loaded. Total …" line for this long, then
-// animates away toward the "i" report control. An error line has no timer —
-// it waits for an explicit OK.
+// snackbar lingers on the "Loaded <name>" line for this long, then animates
+// away toward the "i" report control. An error line has no timer — it waits
+// for an explicit OK.
 const GRACE_MS = 5000
-// Shrink-to-"i" animation duration. The animation runs ONLY on the automatic
-// success dismiss; any manual dismiss (OK, or OK after expanding) is instant.
-const ANIM_MS = 500
-// Extra ms past ANIM_MS before the safety timer force-finalizes the grace
-// (covers environments — jsdom — where `transitionend` never fires).
-const ANIM_SAFETY_PAD_MS = 50
-// Terminal scale of the shrinking snackbar — small enough to read as
-// "collapsing into the icon" without vanishing before it arrives.
-const ANIM_END_SCALE = 0.08
+// Auto-dismiss animation, two phases: the whole snackbar first collapses to a
+// small circle sized/placed like the "i" report control just above it, then
+// fades to zero over ~1s so it reads as "turning into" the icon. Runs ONLY on
+// the automatic success dismiss; any manual dismiss (OK) is instant.
+const ANIM_SHRINK_MS = 450
+const ANIM_FADE_MS = 1000
+// Gap between the shrunk circle's bottom and the "i" icon's top.
+const ANIM_GAP_PX = 6
+// Extra ms past a phase before the safety timer force-finalizes (covers
+// environments — jsdom — where transitions don't run).
+const ANIM_SAFETY_PAD_MS = 80
 // Divisor for rect center points (half width / half height).
 const HALF = 2
 const NO_ANIM_STYLE = {}
-// data-testid of the post-load "i" control (LoadReportControl) — the
-// animation's target. Queried from the DOM rather than shared via ref
-// because the two live in different subtrees (snackbar vs bottom bar).
+// The animation's target — the post-load "i" control (LoadReportControl).
+// Queried from the DOM rather than shared via ref because the two live in
+// different subtrees (snackbar vs bottom bar).
 const INFO_CONTROL_SELECTOR = '[data-testid="control-button-load-report"]'
+// The snackbar's own content box — what we shrink into the circle. Scoped to
+// our snackbar so the LoadReportControl copy-confirm snackbar isn't matched.
+const SNACK_CONTENT_SELECTOR = '[data-testid="snackbar"] .MuiSnackbarContent-root'
 
 
 /** @return {ReactElement} */
@@ -64,12 +69,11 @@ export default function AlertAndSnackbar() {
   const [text, setText] = useState(null)
   const [duration, setDuration] = useState(null)
   const [isLoadExpanded, setIsLoadExpanded] = useState(false)
-  // Inline transform/opacity applied to the grace message during the
-  // shrink-to-"i" animation; empty (identity) at all other times.
+  // Inline transform/size/opacity applied to the snackbar content box during
+  // the shrink-to-"i" animation; empty (identity) at all other times.
   const [animStyle, setAnimStyle] = useState(NO_ANIM_STYLE)
-  const messageRef = useRef(null)
-  // Holds the pending grace timer (5s countdown, then the animation's own
-  // safety timer) so expand / OK / a new load can cancel it.
+  // Holds the pending grace timer (5s countdown, then each animation phase's
+  // timer) so expand / OK / a new load can cancel it.
   const graceTimerRef = useRef(null)
 
   const navigate = useNavigate()
@@ -107,33 +111,51 @@ export default function AlertAndSnackbar() {
 
 
   /**
-   * Animate the grace message shrinking toward the "i" report control, then
-   * clear it. Runs only on the automatic success dismiss — it exists purely
-   * to draw the eye to where the report moves. Falls back to an instant
-   * clear if either endpoint can't be measured (e.g. jsdom in tests).
+   * Animate the whole snackbar collapsing into a small circle just above the
+   * "i" report control, then fading out — so the eye follows the report to
+   * where it now lives. Runs only on the automatic success dismiss. Falls
+   * back to an instant clear if either endpoint can't be measured (jsdom in
+   * tests, or the "i" not mounted yet).
    */
   const startDismissAnimation = () => {
-    const messageEl = messageRef.current
+    const contentEl = typeof document !== 'undefined' ?
+      document.querySelector(SNACK_CONTENT_SELECTOR) : null
     const infoEl = typeof document !== 'undefined' ?
       document.querySelector(INFO_CONTROL_SELECTOR) : null
-    if (!messageEl || !infoEl || typeof messageEl.getBoundingClientRect !== 'function') {
+    const from = contentEl?.getBoundingClientRect?.()
+    const to = infoEl?.getBoundingClientRect?.()
+    if (!from || !to || !from.width || !to.width) {
       finishGrace()
       return
     }
-    const from = messageEl.getBoundingClientRect()
-    const to = infoEl.getBoundingClientRect()
+    const size = Math.max(to.width, to.height)
     const dx = (to.left + (to.width / HALF)) - (from.left + (from.width / HALF))
-    const dy = (to.top + (to.height / HALF)) - (from.top + (from.height / HALF))
+    // Land the circle's centre a gap above the icon's top edge.
+    const dy = (to.top - ANIM_GAP_PX - (size / HALF)) - (from.top + (from.height / HALF))
+    // Phase 1: collapse the box to an icon-sized circle over the "i".
     setAnimStyle({
-      transform: `translate(${dx}px, ${dy}px) scale(${ANIM_END_SCALE})`,
-      opacity: 0,
-      transformOrigin: 'center center',
-      transition: `transform ${ANIM_MS}ms ease-in, opacity ${ANIM_MS}ms ease-in`,
+      transform: `translate(${dx}px, ${dy}px)`,
+      width: `${size}px`,
+      height: `${size}px`,
+      minWidth: `${size}px`,
+      padding: 0,
+      borderRadius: '50%',
+      overflow: 'hidden',
       pointerEvents: 'none',
+      transition:
+        `transform ${ANIM_SHRINK_MS}ms ease-in, width ${ANIM_SHRINK_MS}ms ease-in, ` +
+        `height ${ANIM_SHRINK_MS}ms ease-in, min-width ${ANIM_SHRINK_MS}ms ease-in, ` +
+        `border-radius ${ANIM_SHRINK_MS}ms ease-in, padding ${ANIM_SHRINK_MS}ms ease-in`,
     })
-    // Safety timer: `transitionend` (below) finalizes normally, but jsdom
-    // never fires it — this guarantees the grace clears either way.
-    graceTimerRef.current = setTimeout(finishGrace, ANIM_MS + ANIM_SAFETY_PAD_MS)
+    // Phase 2: once shrunk, fade the circle out so it "becomes" the icon.
+    graceTimerRef.current = setTimeout(() => {
+      setAnimStyle((prev) => ({
+        ...prev,
+        opacity: 0,
+        transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
+      }))
+      graceTimerRef.current = setTimeout(finishGrace, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
+    }, ANIM_SHRINK_MS)
   }
 
 
@@ -178,17 +200,7 @@ export default function AlertAndSnackbar() {
   const displayLine = currentLoadLine ?? loadResult?.summaryLine ?? ''
 
   const loadMessage = (
-    <Box
-      ref={messageRef}
-      style={animStyle}
-      sx={{maxWidth: '60vw'}}
-      data-testid='LoadStatusMessage'
-      onTransitionEnd={() => {
-        if (animStyle.transition !== undefined) {
-          finishGrace()
-        }
-      }}
-    >
+    <Box sx={{maxWidth: '60vw'}} data-testid='LoadStatusMessage'>
       <Collapse in={isLoadExpanded}>
         <Box sx={{...LOAD_LINE_SX, opacity: 0.8, mb: 0.5, overflowX: 'auto'}} data-testid='LoadStatusHistory'>
           {loadReportLines.map((line, index) => (
@@ -199,6 +211,9 @@ export default function AlertAndSnackbar() {
       <Stack direction='row' alignItems='center' spacing={0.5}>
         <IconButton
           size='small'
+          // Inherit the snackbar's light content color — the default icon
+          // color is near-black and near-invisible on the dark snackbar.
+          sx={{color: 'inherit'}}
           aria-label={isLoadExpanded ? 'Collapse load log' : 'Expand load log'}
           onClick={onToggleExpand}
           data-testid='LoadStatusExpandToggle'
@@ -275,6 +290,8 @@ export default function AlertAndSnackbar() {
         onClose={() => setIsSnackOpen(false)}
         action={snackAction}
         message={showLoadView ? loadMessage : textMessage}
+        // The grace shrink-to-"i" animation transforms the whole content box.
+        ContentProps={{style: animStyle}}
         data-testid='snackbar'
       />
     </>

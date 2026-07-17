@@ -99,6 +99,11 @@ class LoadProgressReporter {
   constructor({fileInfo, onStall}) {
     this.fileInfo = fileInfo
     this.onStall = onStall
+    // Model name for the "Loaded <name>" grace line. Prefer the parsed
+    // header's fileName (set via model-info below); fall back to the
+    // fileInfo basename so a load with no header still names something.
+    this.modelName = null
+    this.fallbackName = basenameOf(fileInfo)
     this.log = new LoadLogAccumulator()
     // The frozen report lines in display order (preamble, model line, and
     // stage lines interleaved as they actually happened) — the accumulator
@@ -166,6 +171,18 @@ class LoadProgressReporter {
   }
 
   /**
+   * Remember the model's display name from a model-info signal, for the
+   * "Loaded <name>" grace line.
+   *
+   * @param {object} [modelInfo] {fileName, ...}
+   */
+  noteModelName(modelInfo) {
+    if (modelInfo && typeof modelInfo.fileName === 'string' && modelInfo.fileName) {
+      this.modelName = modelInfo.fileName
+    }
+  }
+
+  /**
    * Append a frozen line to the report: store (for the expando/dialog) +
    * optional console mirror, so the UI shows exactly what the JS console
    * shows during the load.
@@ -202,6 +219,7 @@ class LoadProgressReporter {
     }
 
     if (isModelInfoProgress(progressArg)) {
+      this.noteModelName(progressArg.modelInfo)
       this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
       this.armStallWatchdog()
       return
@@ -427,6 +445,25 @@ function loadErrorSummary(error) {
 
 
 /**
+ * Last path segment of a load source, for the fallback model name — strips
+ * any query/hash and a `provider:` prefix (e.g. `gdrive:<id>`). Empty string
+ * when nothing usable is left.
+ *
+ * @param {string} [fileInfo]
+ * @return {string}
+ */
+function basenameOf(fileInfo) {
+  if (typeof fileInfo !== 'string' || fileInfo === '') {
+    return ''
+  }
+  const noQuery = fileInfo.split(/[?#]/)[0]
+  const lastSegment = noQuery.split('/').pop() ?? ''
+  // Drop a leading `provider:` tag (gdrive:, opfs:, …) if that's all we have.
+  return lastSegment.includes(':') ? lastSegment.split(':').pop() ?? '' : lastSegment
+}
+
+
+/**
  * Report a progress signal to the active load, if any. Safe no-op when no
  * load is active (e.g. background cache writes after dispose).
  *
@@ -460,6 +497,7 @@ export function reportEngineVersion(versionLine) {
  */
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
+    activeReporter.noteModelName(info)
     activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
   }
 }
@@ -483,9 +521,10 @@ export function attachLoadFailureContext() {
 /**
  * Finish reporting (success or failure): freezes the report (Total line)
  * and stops the stall watchdog, then publishes the end-of-load grace result
- * that the snackbar lingers on (success → "Model Loaded. Total …", auto-
- * dismissed with the shrink-to-"i" animation; error → the failure summary,
- * dismissed only on OK). The reporter stays referenced so
+ * that the snackbar lingers on (success → "Loaded <name>", auto-dismissed
+ * with the shrink-to-"i" animation; error → the failure summary, dismissed
+ * only on OK). Timing/heap detail stays in the expandable report, not this
+ * terse line. The reporter stays referenced so
  * attachLoadFailureContext can still stamp the final progress state onto a
  * captureException that happens after the load's finally block; the next
  * beginLoadProgress replaces it.
@@ -497,9 +536,11 @@ export function attachLoadFailureContext() {
 export function endLoadProgress(error = null) {
   if (activeReporter && !activeReporter.ended) {
     activeReporter.finishReport()
-    const summaryLine = error ?
-      loadErrorSummary(error) :
-      `Model Loaded. ${activeReporter.log.totalLine()}`
+    // The collapsed grace line stays deliberately terse — just the outcome
+    // and the model name; the timing/heap Total and diagnostics live one
+    // expand (or the "i" report) away.
+    const modelName = activeReporter.modelName || activeReporter.fallbackName || 'model'
+    const summaryLine = error ? loadErrorSummary(error) : `Loaded ${modelName}`
     useStore.getState().setLoadResult({
       status: error ? 'error' : 'success',
       summaryLine,

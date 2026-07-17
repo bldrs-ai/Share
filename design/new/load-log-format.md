@@ -19,10 +19,12 @@ When a load settles, the snackbar doesn't vanish — it hands off to the "i"
 report control with a short grace period, driven by the store's `loadResult`
 (`{status, summaryLine}`, set by `loadProgress.js#endLoadProgress`):
 
-- **Success** shows `Model Loaded. Total …` with an **OK** action for
-  ~5s (`GRACE_MS`), then **shrinks/translates toward the "i" control**
-  (`startDismissAnimation`, ~500ms) — an eye-draw to where the report now
-  lives. The animation runs *only* on this automatic dismiss.
+- **Success** shows a terse `Loaded <name>` (just the outcome + model name —
+  the timing/heap Total and diagnostics stay one expand, or the "i" report,
+  away) with an **OK** action for ~5s (`GRACE_MS`), then the **whole snackbar
+  collapses into an icon-sized circle just above the "i" control and fades
+  out over ~1s** (`startDismissAnimation`) — so the eye follows the report to
+  where it now lives. The animation runs *only* on this automatic dismiss.
 - **Error** shows the failure summary (`Load failed: …`, red) with an OK
   action and **no timer and no animation** — it waits for an explicit OK,
   which clears it instantly.

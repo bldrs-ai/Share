@@ -32,11 +32,9 @@ describe('AlertAndSnackbar grace period', () => {
   it('shows the success summary with an OK action and auto-dismisses', () => {
     render(<ShareMock><AlertAndSnackbar/></ShareMock>)
     act(() => {
-      useStore.getState().setLoadResult({
-        status: 'success', summaryLine: 'Model Loaded. Total: 3.210s, 214.0 → 852.0 MB heap',
-      })
+      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded index.ifc'})
     })
-    expect(screen.getByTestId('LoadStatusLine').textContent).toMatch(/^Model Loaded\./)
+    expect(screen.getByTestId('LoadStatusLine').textContent).toBe('Loaded index.ifc')
     expect(screen.getByTestId('LoadStatusOk')).toBeInTheDocument()
 
     act(() => jest.advanceTimersByTime(PAST_GRACE_MS))
@@ -59,7 +57,7 @@ describe('AlertAndSnackbar grace period', () => {
   it('expanding during grace cancels the auto-dismiss; OK then dismisses', () => {
     render(<ShareMock><AlertAndSnackbar/></ShareMock>)
     act(() => {
-      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Model Loaded. Total: 1.000s'})
+      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded a.ifc'})
     })
     // Expand before the grace window elapses.
     fireEvent.click(screen.getByTestId('LoadStatusExpandToggle'))
@@ -74,7 +72,7 @@ describe('AlertAndSnackbar grace period', () => {
   it('does not fire the grace timer before the window elapses', () => {
     render(<ShareMock><AlertAndSnackbar/></ShareMock>)
     act(() => {
-      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Model Loaded. Total: 2.000s'})
+      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded b.ifc'})
     })
     act(() => jest.advanceTimersByTime(GRACE_MS - 1))
     expect(useStore.getState().loadResult).not.toBe(null)
