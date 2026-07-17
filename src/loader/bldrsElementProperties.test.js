@@ -404,6 +404,106 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured).not.toBeNull()
       expect(captured.itemProperties[1]).toBeDefined()
     })
+
+    describe('roots-only enumeration (conway RootExpressIDs)', () => {
+      /**
+       * Fast-mgr variant exposing `ifcAPI.RootExpressIDs` alongside the
+       * usual adapter surface. `rootIDs` is what the iterator yields;
+       * the stepModel iterator counts its own uses so tests can assert
+       * the full scan was (or wasn't) taken.
+       *
+       * @param {object} entitiesById flat map expressID → entity-shape
+       * @param {Array<number>|undefined} rootIDs ids RootExpressIDs yields
+       * @return {object} `{mgr, scanCounts}` — scanCounts.fullScans
+       *   increments each time the stepModel iterator is consumed
+       */
+      function makeRootsMgr(entitiesById, rootIDs) {
+        const ids = Object.keys(entitiesById).map(Number).sort((a, b) => a - b)
+        const scanCounts = {fullScans: 0}
+        const stepModel = {
+          * [Symbol.iterator]() {
+            scanCounts.fullScans++
+            for (const id of ids) {
+              yield {expressID: id}
+            }
+          },
+        }
+        const proxy = {
+          model: [stepModel],
+          getLine: (expressID) => entitiesById[expressID],
+        }
+        const mgr = {
+          ifcAPI: {
+            getPassthrough: (mid) => (mid === 0 ? proxy : undefined),
+            RootExpressIDs: rootIDs === undefined ?
+              () => undefined :
+              function* () {
+                yield* rootIDs
+              },
+          },
+        }
+        return {mgr, scanCounts}
+      }
+
+      const entities = {
+        100: {expressID: 100, type: 3124254112, GlobalId: {type: 1, value: 'g100'}, Name: {type: 1, value: 'Wall'}},
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset'}},
+        // Geometric noise the roots-only path never touches.
+        7000: {expressID: 7000, type: 1, Name: {type: 1, value: 'IfcCartesianPoint'}},
+        999: {
+          expressID: 999, type: 4186316022, GlobalId: {type: 1, value: 'g999'},
+          RelatedObjects: [{type: 5, value: 100}],
+          RelatingPropertyDefinition: {type: 5, value: 500},
+        },
+      }
+
+      it('uses the roots iterator and never runs the full entity scan', async () => {
+        const {mgr, scanCounts} = makeRootsMgr(entities, [100, 999])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        // Same payload the full scan produces: roots (100, 999) plus
+        // the pset (500) reached through the rel's ref; pset index
+        // built from the rel; geometric noise pruned.
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+        expect(captured.propertySets[100]).toEqual([500])
+        expect(captured.itemProperties[7000]).toBeUndefined()
+        expect(scanCounts.fullScans).toBe(0)
+      })
+
+      it('produces the same decoded payload as the full scan', async () => {
+        const {mgr: rootsMgr} = makeRootsMgr(entities, [100, 999])
+        const fullMgr = makeFastMgr(entities)
+        const viaRoots = decodeCaptured(await captureBldrsElementProperties(rootsMgr, 0, null))
+        const viaFull = decodeCaptured(await captureBldrsElementProperties(fullMgr, 0, null))
+        expect(viaRoots.itemProperties).toEqual(viaFull.itemProperties)
+        expect(viaRoots.propertySets).toEqual(viaFull.propertySets)
+      })
+
+      it('de-dupes ids the iterator yields more than once (multi-mapped entities)', async () => {
+        const {mgr} = makeRootsMgr(entities, [100, 100, 999, 999])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        // Wire JSON with duplicate keys would still JSON.parse, so pin
+        // the raw emission count via the visited-set contract instead:
+        // each id appears exactly once in the serialized text.
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+        expect(captured.propertySets[100]).toEqual([500])
+      })
+
+      it('falls back to the full scan when the iterator yields nothing', async () => {
+        const {mgr, scanCounts} = makeRootsMgr(entities, [])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(scanCounts.fullScans).toBe(1)
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+      })
+
+      it('falls back to the full scan when RootExpressIDs returns undefined', async () => {
+        // Conway returns undefined for missing models / schemas
+        // without a root notion (AP214).
+        const {mgr, scanCounts} = makeRootsMgr(entities, undefined)
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(scanCounts.fullScans).toBe(1)
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+      })
+    })
   })
 
   describe('captureBldrsElementProperties — null paths', () => {

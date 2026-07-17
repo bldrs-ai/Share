@@ -261,7 +261,12 @@ const STREAM_FLUSH_CHARS = 65536
  *
  * Two sweeps, identical decoded output to the old capture-then-filter
  * fast path:
- *   1. Linear scan of every parsed entity via sync `proxy.getLine`.
+ *   1. Root-seed scan via sync `proxy.getLine`. Preferred enumeration
+ *      is conway's `RootExpressIDs` (≥1.380) — the type index yields
+ *      just the IfcRoot-derived ids, skipping the ~96% of records that
+ *      are geometric resources without materialising a descriptor per
+ *      record. Fallback (older conway, degenerate iterators) is the
+ *      legacy linear scan of every parsed entity. Either way,
  *      IfcRoot-derived entities (`GlobalId` present — products, rels,
  *      psets) are serialized into the stream immediately and their
  *      non-geometric refs queued. `IfcRelDefinesByProperties` entities
@@ -319,6 +324,22 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
     return null
   }
 
+  // Roots-only enumeration (conway ≥1.380): `RootExpressIDs` yields the
+  // express IDs of exactly the IfcRoot-derived records (everything with
+  // a GlobalId — products, rels, psets, quantities) straight from the
+  // type index, without materialising an entity descriptor per record.
+  // On PSB-class models that skips ~96% of the ~9.7M records the full
+  // scan below would otherwise touch just to discard. Older conway (or
+  // non-IFC schemas) returns undefined → full scan.
+  let rootExpressIDs = null
+  if (typeof ifcAPI.RootExpressIDs === 'function') {
+    // eslint-disable-next-line new-cap
+    const iterated = ifcAPI.RootExpressIDs(modelID)
+    if (iterated && typeof iterated[Symbol.iterator] === 'function') {
+      rootExpressIDs = iterated
+    }
+  }
+
   const startMs = Date.now()
   const deflator = new pako.Deflate({gzip: true})
   let textBuf = []
@@ -369,21 +390,14 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   try {
     pushText('{"itemProperties":{')
 
-    // Sweep 1: linear scan — emit IfcRoot seeds, build the pset
-    // index, queue the ref frontier.
-    for (const entity of stepModel) {
-      if (++iterCount % ENTITIES_PER_YIELD === 0) {
-        // Yield to the browser between chunks. The scan is pure JS
-        // object construction (no I/O, no Promise per entity), so
-        // without explicit yields it would block the main thread for
-        // the entire ~10s walk on a 100MB IFC. The user feels this as
-        // a hover-pick freeze immediately post-render.
-        await yieldToBrowser()
-      }
-      const expressID = entity?.expressID
-      if (typeof expressID !== 'number') {
-        continue
-      }
+    /**
+     * Sweep-1 record body, shared by the roots-only and full-scan
+     * enumerations below: decode one record via sync `getLine`, feed
+     * the pset index, emit IfcRoot seeds, queue the ref frontier.
+     *
+     * @param {number} expressID
+     */
+    const scanRecord = (expressID) => {
       let props
       try {
         // Sync — no Promise allocation, no microtask hop. This is the
@@ -394,10 +408,10 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
         // Per-entity failures are non-fatal — skip and continue. The
         // wit-three slow path swallows the same way (one entity gap
         // means one missing Properties row; not a cache abort).
-        continue
+        return
       }
       if (!props || typeof props !== 'object') {
-        continue
+        return
       }
       sawEntity = true
 
@@ -447,9 +461,12 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       // `IfcPropertySet` / `IfcElementQuantity`), and any future IFC
       // schema additions automatically. Non-root entities are dropped
       // here; the ones reachable from a root get re-fetched by id in
-      // the drain sweep.
+      // the drain sweep. The roots-only enumeration pre-filters to
+      // exactly this set, so there the test is just a formality (and
+      // the `visited` guard dedupes multi-mapped entities, which the
+      // type index may yield once per mapping).
       if (props.GlobalId === undefined || visited.has(expressID)) {
-        continue
+        return
       }
       visited.add(expressID)
       emitRecord(expressID, props)
@@ -460,6 +477,48 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
           visited.add(refId)
           queue.push(refId)
         }
+      }
+    }
+
+    // Sweep 1: emit IfcRoot seeds, build the pset index, queue the
+    // ref frontier. Preferred enumeration is roots-only via the type
+    // index; fallback is the legacy linear scan of every parsed
+    // entity. Both feed the identical `scanRecord` body, so the wire
+    // payload is the same either way (key order aside — the reader
+    // looks entries up by id).
+    if (rootExpressIDs) {
+      for (const expressID of rootExpressIDs) {
+        if (++iterCount % ENTITIES_PER_YIELD === 0) {
+          // Yield to the browser between chunks — the scan is pure JS
+          // (no I/O, no Promise per entity), so without explicit
+          // yields it would block the main thread for the whole walk.
+          await yieldToBrowser()
+        }
+        if (typeof expressID !== 'number') {
+          continue
+        }
+        scanRecord(expressID)
+      }
+      if (!sawEntity) {
+        // Degenerate: the iterator yielded nothing usable (nothing has
+        // been emitted either), so rescan everything the legacy way —
+        // it distinguishes "empty parser state" from "no roots".
+        rootExpressIDs = null
+      }
+    }
+    if (!rootExpressIDs) {
+      for (const entity of stepModel) {
+        if (++iterCount % ENTITIES_PER_YIELD === 0) {
+          // Same cooperative yield as above; this walk touches every
+          // parsed entity (millions on big models) and would otherwise
+          // freeze hover-pick / camera controls until it finishes.
+          await yieldToBrowser()
+        }
+        const expressID = entity?.expressID
+        if (typeof expressID !== 'number') {
+          continue
+        }
+        scanRecord(expressID)
       }
     }
 
@@ -516,7 +575,8 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
 
     glbInfo(
       `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streamed ${emittedCount} ` +
-      `reachable-from-IfcRoot entities (of ${iterCount} scanned; ` +
+      `reachable-from-IfcRoot entities (of ${iterCount} scanned, ` +
+      `${rootExpressIDs ? 'roots-only' : 'full'} scan; ` +
       `${psetRelCount} IfcRelDefinesByProperties → ` +
       `${Object.keys(propertySets).length} products with psets) into ` +
       `${deflator.result.byteLength}B gzip in ${Date.now() - startMs}ms`)
