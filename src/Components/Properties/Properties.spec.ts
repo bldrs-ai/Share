@@ -52,8 +52,12 @@ describe('View 100: Access elements property', () => {
       const propertiesTable = propertiesPanel.locator('table')
       await expect(propertiesTable).toBeVisible()
 
-      const ifcTypeRow = propertiesPanel.locator('tr').filter({hasText: 'IFC Type'})
-      await expect(ifcTypeRow).toBeVisible()
+      // Renamed from 'IFC Type' for STEP compatibility; value comes from the
+      // entity's own type field ('IFCBUILDINGELEMENTPROXY'-style), no longer
+      // constructor.name. `first()` because 'Type' is a substring of other
+      // row text the panel may add later.
+      const typeRow = propertiesPanel.locator('tr').filter({hasText: 'Type'}).first()
+      await expect(typeRow).toBeVisible()
 
       await assertPropertyValue(propertiesPanel, 'Express Id', '621')
       await assertPropertyValue(propertiesPanel, 'Name', 'Together')

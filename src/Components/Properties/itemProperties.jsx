@@ -70,15 +70,23 @@ function entityTypeName(model, ifcProps) {
   if (typeof rawType === 'string' && rawType.length > 0) {
     return rawType
   }
-  if (typeof rawType === 'number' &&
-      typeof model?.ifcManager?.getIfcType === 'function') {
-    try {
-      const name = model.ifcManager.getIfcType(0, rawType)
-      if (typeof name === 'string' && name.length > 0) {
-        return name
+  if (typeof rawType === 'number') {
+    // Two manager shapes exist: ShareIfcManager's `getIfcType(modelID,
+    // typeCode)` and the Conway-direct shim, which lacks it but exposes
+    // the compat surface's `properties.getIfcType(typeCode)` directly.
+    const lookups = [
+      () => model?.ifcManager?.getIfcType?.(0, rawType),
+      () => model?.ifcManager?.ifcAPI?.properties?.getIfcType?.(rawType),
+    ]
+    for (const lookup of lookups) {
+      try {
+        const name = lookup()
+        if (typeof name === 'string' && name.length > 0) {
+          return name
+        }
+      } catch {
+        // Try the next shape, then the constructor heuristic.
       }
-    } catch {
-      // Fall through to the constructor heuristic.
     }
   }
   const ctorName = ifcProps?.constructor?.name
