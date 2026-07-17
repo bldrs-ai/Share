@@ -287,6 +287,28 @@ export async function waitForModel(page: Page) {
   // Wait for model ready attribute on dropzone (matching working homepage test)
   const dropzone = page.getByTestId('cadview-dropzone')
   await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: 30_000})
+  await dismissLoadGrace(page)
+}
+
+
+/**
+ * Dismiss the post-load "grace" snackbar (conway #301). After every load the
+ * snackbar lingers ~5s on "Model Loaded. Total …" before handing off to the
+ * "i" report control (see AlertDialogAndSnackbar). That transient toast would
+ * otherwise pollute steady-state screenshots and shadow the shared snackbar
+ * that the snackMessage tests assert on — so tests that have waited for the
+ * model clear it and assert the settled page. Real users still see it. No-op
+ * when the store isn't exposed on window (non-test builds).
+ *
+ * @param page - Playwright page object
+ */
+export async function dismissLoadGrace(page: Page) {
+  await page.evaluate(() => {
+    const withStore = window as unknown as {
+      store?: {getState: () => {setLoadResult?: (result: unknown) => void}}
+    }
+    withStore.store?.getState().setLoadResult?.(null)
+  })
 }
 
 

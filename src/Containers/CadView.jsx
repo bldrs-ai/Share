@@ -12,6 +12,12 @@ import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {
+  attachLoadFailureContext,
+  beginLoadProgress,
+  endLoadProgress,
+  reportLoadProgress,
+} from '../loader/loadProgress'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
@@ -310,6 +316,10 @@ export default function CadView({
       }
 
       console.error(e)
+      // load.* tags + context from the last progress event, so this
+      // capture groups by phase in Sentry instead of landing in one
+      // detail-free "model loading failed" bucket (conway #301 §7).
+      attachLoadFailureContext()
       captureException(e)
       return
     } finally {
@@ -418,23 +428,25 @@ export default function CadView({
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
 
-    const onProgress = (progressMsg) => {
-      let msg
-      if (progressMsg && typeof progressMsg === 'object') {
-        const loadedBytes = progressMsg.loaded ?? progressMsg.receivedLength
-        if (Number.isFinite(loadedBytes)) {
-          // eslint-disable-next-line no-magic-numbers
-          const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-          msg = `${loadedMegs} MB`
-        } else {
-          msg = JSON.stringify(progressMsg)
-        }
-      } else {
-        msg = progressMsg
-      }
-      setSnackMessage(`${loadingMessageBase}: ${msg}`)
-    }
+    // Per-load progress reporter (conway #301): accumulates the normalized
+    // load-log report (status-bar expando + post-load dialog + console
+    // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
+    // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
+    // so the snackbar keeps only the base "Loading <file>" message.
+    beginLoadProgress({
+      fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
+      onStall: (lastEvent) => {
+        const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
+        setSnackMessage(`${loadingMessageBase}: still working${where}…`)
+      },
+    })
+
+    const onProgress = (progressMsg) => reportLoadProgress(progressMsg)
     let loadedModel
+    // Captured in the catch so the finally can tell endLoadProgress whether
+    // the load succeeded (success grace line) or failed (error grace line),
+    // even though the error is re-raised to onViewerInternal's handler.
+    let loadError = null
     try {
       if (isGoogleResult) {
         const connection = connections.find((c) => c.providerId === 'google-drive')
@@ -458,6 +470,7 @@ export default function CadView({
           (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
       }
     } catch (error) {
+      loadError = error
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
       }
@@ -473,6 +486,12 @@ export default function CadView({
       // generalises that pattern to every loader error.
       throw error
     } finally {
+      // Freeze the report (Total line) + stall watchdog off. The
+      // reporter's last-event state stays queryable after end —
+      // onViewerInternal's catch stamps it onto Sentry via
+      // attachLoadFailureContext before capturing. The captured error (or
+      // null on success) drives the end-of-load grace snackbar.
+      endLoadProgress(loadError)
       setIsModelLoading(false)
     }
 

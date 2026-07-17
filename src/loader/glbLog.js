@@ -4,8 +4,16 @@
 // silenced — which made the writer/reader effectively undetectable. These
 // helpers route milestone events through console.info with a stable
 // `[glb]` prefix so users can grep the console without flipping the debug
-// level globally. Verbose detail (cache-key descriptor, modelID, etc.) is
-// gated on the `glbVerbose` feature flag.
+// level globally.
+//
+// Console policy (conway #301 §6 — a clean load should leave a quiet
+// console): `glbInfo` is for per-load milestones a user/triager needs at a
+// glance — cache HIT/MISS, parse summary, anomalies (0 meshes, lookup
+// failures), writer completion. Everything else (cache keys, BVH/instance-
+// map/NavTree hydration detail, picking sources) goes through `glbVerbose`
+// and is gated on the `glbVerbose` feature flag. When adding a call site,
+// default to `glbVerbose` unless the line earns its place in every load's
+// console.
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
