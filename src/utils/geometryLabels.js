@@ -62,23 +62,28 @@ export function geometryItemLabel(expressID, item = null) {
 
 
 /**
- * Resolve + label in one step: fetch the item identity from Conway's
- * properties surface (feature-detected; an older engine or a lookup failure
- * degrades to "Item #<expressID>") and synthesize the label.
+ * Resolve + label in one step: fetch the item identity through the model's
+ * uniform one-arg properties surface and synthesize the label.
  *
- * @param {object} ifcAPI Conway IfcAPI (needs `properties.getItemProperties`)
- * @param {number} modelID
+ * `model.getItemProperties(expressID)` is the same surface the Properties
+ * panel uses, so labels resolve wherever it does: live Conway parse
+ * (arbitrary-id fallback, ≥1.389), and cache-hit GLB (the
+ * `BLDRS_element_properties` table plus the face_ids geometry-identity
+ * fallback). An older engine, a missing surface, or a lookup failure
+ * degrades to "Item #<expressID>".
+ *
+ * @param {object} model Share model (needs `getItemProperties(expressID)`)
  * @param {number} expressID
  * @return {Promise<string>}
  */
-export async function labelForGeometryId(ifcAPI, modelID, expressID) {
+export async function labelForGeometryId(model, expressID) {
   let item = null
   try {
-    if (typeof ifcAPI?.properties?.getItemProperties === 'function') {
-      item = await ifcAPI.properties.getItemProperties(modelID, expressID)
+    if (typeof model?.getItemProperties === 'function') {
+      item = await model.getItemProperties(expressID)
     }
   } catch {
     // Label degradation only — the id itself is still the identity.
   }
-  return geometryItemLabel(expressID, item)
+  return geometryItemLabel(expressID, item ?? null)
 }

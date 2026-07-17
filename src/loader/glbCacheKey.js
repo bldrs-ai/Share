@@ -15,6 +15,16 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.12.0 — extended `BLDRS_face_ids` with a geometry-piece identity table
+ *         (`geometryItemIdentities`: distinct geometry express id →
+ *         {type, name}, resolved through the live parser at write time).
+ *         Cache-hit loads can now label anonymous below-product pieces
+ *         ("Face #6321" transient NavTree rows, Properties-panel Type)
+ *         without re-parsing the STEP — the ids themselves already
+ *         travelled in `geometryExpressIds` (0.11.0), but their identity
+ *         didn't. Older 0.11.0 artifacts read as miss; next miss rewrites
+ *         with the table attached. IFC artifacts are unaffected (no
+ *         geometry-express-id table). See conway#387.
  * 0.11.0 — extended `BLDRS_face_ids` with a global per-instance geometry
  *         (solid) express-id table (`geometryExpressIds`, index = synthetic
  *         instance id), and the spatial tree with Conway's ephemeral solid
@@ -86,7 +96,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.11.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.12.0'
 
 
 /**

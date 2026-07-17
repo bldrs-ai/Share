@@ -326,7 +326,11 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model, transientT
     }
     // Anonymous-geometry affordances (conway#387). Both are session-only
     // and reconstructed on the fly — nothing here persists to the cache.
-    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0) {
+    // Ephemeral solid rows share their parent part's occurrence path, so
+    // without the `ephemeral` guard every solid of a multibody part would
+    // re-inject the same transient rows the part already carries.
+    if (Array.isArray(node.occurrencePath) && node.occurrencePath.length > 0 &&
+        node.ephemeral !== true) {
       const pathKey = occurrencePathKey(node.occurrencePath)
       // Transient rows: pieces a pick / permalink / "more" expansion
       // materialized under this part. Rendered as ephemeral solid rows —
@@ -433,10 +437,9 @@ const RenderRow = ({index, style, data}) => {
     if (fresh.length === 0) {
       return
     }
-    const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
     const pathKey = occurrencePathKey(node.parentPath)
     Promise.all(fresh.map((geometryExpressId) =>
-      labelForGeometryId(ifcAPI, 0, geometryExpressId)
+      labelForGeometryId(model, geometryExpressId)
         .then((label) => ({expressID: geometryExpressId, label})),
     )).then((rows) => addTransientTreeNodes(pathKey, rows))
   }

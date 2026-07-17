@@ -1238,6 +1238,46 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
       `(${elementProperties.compressed.byteLength}B compressed; ` +
       'decode on first access)')
   }
+
+  // Cache-hit fallback for anonymous geometry pieces (conway#387). The
+  // element-properties table above only holds entities reachable from
+  // spatial-tree nodes; the ids a below-product pick or permalink names
+  // (faces / solids from `BLDRS_face_ids.geometryExpressIds`) aren't in
+  // it. The face_ids extension carries their identity ({type, name}) in a
+  // small side table — layer it under whatever `getItemProperties` surface
+  // exists so transient-row labels ("Face #6321") and the Properties
+  // panel's Type row resolve without a live parser. The synthesized shape
+  // mirrors Conway's arbitrary-id fallback ({expressID, type, Name}).
+  const geometryItemIdentities = model.userData?.bldrsFaceIds?.geometryItemIdentities
+  if (geometryItemIdentities && typeof geometryItemIdentities === 'object') {
+    const priorGetItemProperties = model.getItemProperties
+    model.getItemProperties = async (expressID) => {
+      let found
+      try {
+        found = typeof priorGetItemProperties === 'function' ?
+          await priorGetItemProperties.call(model, expressID) :
+          undefined
+      } catch {
+        found = undefined
+      }
+      if (found !== undefined && found !== null) {
+        return found
+      }
+      const identity = geometryItemIdentities[expressID]
+      if (!identity) {
+        return found
+      }
+      const IFC_LABEL_TYPE = 1
+      return {
+        expressID,
+        type: identity.type,
+        Name: {type: IFC_LABEL_TYPE, value: identity.name ?? ''},
+      }
+    }
+    glbInfo(
+      'reader: hydrated anonymous-geometry identities from BLDRS_face_ids ' +
+      `(${Object.keys(geometryItemIdentities).length} distinct geometry ids)`)
+  }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
   // expressID attribute on any mesh). When the model came from our IFC→

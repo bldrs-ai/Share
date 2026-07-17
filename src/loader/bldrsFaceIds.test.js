@@ -5,7 +5,9 @@ import {
   BldrsFaceIdsReader,
   base64ToUint32Array,
   buildFaceIdsExtensionData,
+  captureGeometryItemIdentities,
   capturePerTriangleIds,
+  sanitizeGeometryItemIdentities,
 } from './bldrsFaceIds'
 import {
   injectGlbExtensions,
@@ -277,6 +279,32 @@ describe('loader/bldrsFaceIds', () => {
       expect(gltf.scene.userData.bldrsFaceIds.occurrencePaths).toEqual([[10, 20], [11, 20]])
     })
 
+    it('round-trips the geometry-piece identity table', async () => {
+      const indices = new Uint32Array([0, 1, 2, 3, 4, 5])
+      const expressIdsPerVertex = new Uint32Array([700000, 700000, 700000, 700000, 700000, 700000])
+      const instanceIdsPerVertex = new Uint32Array([0, 0, 0, 1, 1, 1])
+      const glb = makeGlbWithIds({indices, expressIdsPerVertex, instanceIdsPerVertex})
+      const {json, bin} = parseGlb(glb)
+      const captured = capturePerTriangleIds(json, bin)
+      captured.geometryExpressIds = [431, 7859]
+      captured.geometryItemIdentities = {
+        431: {type: 'MANIFOLD_SOLID_BREP', name: 'Body1'},
+        7859: {type: 'ADVANCED_FACE'},
+      }
+      const extensionData = buildFaceIdsExtensionData(captured)
+      const {bytes: withExt} = injectGlbExtensions(glb, [
+        {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: extensionData, compress: true},
+      ])
+
+      const reader = new BldrsFaceIdsReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      expect(gltf.scene.userData.bldrsFaceIds.geometryItemIdentities).toEqual({
+        431: {type: 'MANIFOLD_SOLID_BREP', name: 'Body1'},
+        7859: {type: 'ADVANCED_FACE'},
+      })
+    })
+
     it('leaves occurrencePaths null when the source carries none (IFC)', async () => {
       const indices = new Uint32Array([0, 1, 2])
       const expressIdsPerVertex = new Uint32Array([42, 42, 42])
@@ -357,6 +385,54 @@ describe('loader/bldrsFaceIds', () => {
       // Base64-encoded JSON should be ~4/3 × raw. Compressed should be
       // smaller than raw (gzip on Base64 still recovers some redundancy).
       expect(compressed.byteLength).toBeLessThan(rawSize * 2)
+    })
+  })
+
+  describe('sanitizeGeometryItemIdentities', () => {
+    it('keeps string fields and drops malformed entries', () => {
+      const clean = sanitizeGeometryItemIdentities({
+        1: {type: 'ADVANCED_FACE', name: 'ok'},
+        2: {type: 42, name: null},
+        3: 'not-an-object',
+        4: {},
+      })
+      expect(clean).toEqual({1: {type: 'ADVANCED_FACE', name: 'ok'}})
+    })
+
+    it('returns null for non-objects and empty tables', () => {
+      expect(sanitizeGeometryItemIdentities(null)).toBeNull()
+      expect(sanitizeGeometryItemIdentities([1, 2])).toBeNull()
+      expect(sanitizeGeometryItemIdentities({})).toBeNull()
+    })
+  })
+
+  describe('captureGeometryItemIdentities', () => {
+    it('resolves distinct ids through the live manager, skipping typeless shapes', async () => {
+      // Conway ≥1.389's arbitrary-id fallback shape for known ids; a bare
+      // {expressID, Name} (unknown id / older engine) contributes nothing.
+      const byId = {
+        431: {expressID: 431, type: 'MANIFOLD_SOLID_BREP', Name: {value: 'Body1'}},
+        7859: {expressID: 7859, type: 'ADVANCED_FACE', Name: {value: ''}},
+        999: {expressID: 999, Name: {value: ''}},
+      }
+      const manager = {getItemProperties: jest.fn(
+        (_modelID, id) => Promise.resolve(byId[id]))}
+      const identities = await captureGeometryItemIdentities(
+        manager, 0, [431, 7859, 7859, null, 999])
+      expect(identities).toEqual({
+        431: {type: 'MANIFOLD_SOLID_BREP', name: 'Body1'},
+        7859: {type: 'ADVANCED_FACE'},
+      })
+      // Duplicates collapse — one lookup per distinct id.
+      expect(manager.getItemProperties).toHaveBeenCalledTimes(3)
+    })
+
+    it('returns null without a manager, without ids, or when lookups all fail', async () => {
+      expect(await captureGeometryItemIdentities(null, 0, [1])).toBeNull()
+      expect(await captureGeometryItemIdentities(
+        {getItemProperties: () => Promise.resolve(null)}, 0, [1])).toBeNull()
+      expect(await captureGeometryItemIdentities(
+        {getItemProperties: () => Promise.reject(new Error('boom'))}, 0, [1])).toBeNull()
     })
   })
 })

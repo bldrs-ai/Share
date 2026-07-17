@@ -34,6 +34,7 @@ import {
 import {
   BLDRS_FACE_IDS_EXTENSION_NAME,
   buildFaceIdsExtensionData,
+  captureGeometryItemIdentities,
   capturePerTriangleIds,
 } from './bldrsFaceIds'
 import {
@@ -305,6 +306,13 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       const geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId
       if (Array.isArray(geometryExpressIds)) {
         faceIds.geometryExpressIds = geometryExpressIds
+        // Identity table for those geometry pieces (conway#387): distinct
+        // id → {type, name}, resolved through the live parser we have RIGHT
+        // NOW so a cache-hit load can label transient NavTree rows and the
+        // Properties panel without one. Small: one entry per distinct
+        // geometry id (hundreds on NEMA-class parts), not per instance.
+        faceIds.geometryItemIdentities = await captureGeometryItemIdentities(
+          ifcManager, modelId, geometryExpressIds)
       }
     }
     await yieldToBrowser()

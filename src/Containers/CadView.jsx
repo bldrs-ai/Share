@@ -1133,8 +1133,7 @@ export default function CadView({
    */
   function materializeTransientNode(occurrencePath, geometryExpressId) {
     const pathKey = occurrencePathKey(occurrencePath)
-    const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
-    labelForGeometryId(ifcAPI, 0, geometryExpressId).then((label) => {
+    labelForGeometryId(useStore.getState().model, geometryExpressId).then((label) => {
       useStore.getState().addTransientTreeNodes(
         pathKey, [{expressID: geometryExpressId, label}])
     })

@@ -190,6 +190,28 @@ describe('NavTreePanel/getVisibleNodes — transient anonymous-geometry rows (co
     expect(done.map(({node: n}) => n).some((n) => n.isMoreRow === true)).toBe(false)
   })
 
+  it('injects each transient row once — not under every ephemeral solid', () => {
+    // A multibody part's solid rows share the part's occurrence path; the
+    // path-keyed injection must attach transient rows at the part only,
+    // or the same "Face #…" rows repeat under every expanded solid.
+    const SOLID_B_ID = 251
+    const solids = [SOLID_ID, SOLID_B_ID].map((id) => ({
+      ...node(id, `Boss-Extrude${id}`),
+      occurrencePath: [PART_NAUO],
+      ephemeral: true,
+    }))
+    const tree = stepTree({children: solids})
+    const transient = {[PART_NAUO]: [{expressID: FACE_ID, label: 'Face #4462'}]}
+    const visible = getVisibleNodes(
+      tree, ['1', `${PART_NAUO}`, `${SOLID_ID}`, `${SOLID_B_ID}`], true, model, transient)
+    const faceRows = visible.map(({node: n}) => n).filter((n) => n.expressID === FACE_ID)
+    expect(faceRows.length).toBe(1)
+    // No solid grew synthetic children either.
+    const solidRows = visible.map(({node: n}) => n)
+      .filter((n) => n.ephemeral === true && n.transient !== true)
+    expect(solidRows.every((n) => n.hasChildren === false)).toBe(true)
+  })
+
   it('leaves IFC nodes (no occurrence path) untouched', () => {
     const ifcRoot = node(1, 'project', [node(2, 'storey')])
     const transient = {2: [{expressID: 99, label: 'Item #99'}]}

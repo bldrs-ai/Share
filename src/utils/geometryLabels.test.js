@@ -35,18 +35,29 @@ describe('utils/geometryLabels', () => {
   })
 
   describe('labelForGeometryId', () => {
-    it('resolves through the properties surface', async () => {
-      const ifcAPI = {properties: {getItemProperties: jest.fn().mockResolvedValue(
-        {expressID: NEMA_FACE_ID, type: 'ADVANCED_FACE', Name: {value: 'NONE'}})}}
-      await expect(labelForGeometryId(ifcAPI, 0, NEMA_FACE_ID)).resolves.toBe('Face #29')
-      expect(ifcAPI.properties.getItemProperties).toHaveBeenCalledWith(0, NEMA_FACE_ID)
+    it('resolves through the model\'s uniform properties surface', async () => {
+      // The one-arg `model.getItemProperties(expressID)` contract — live
+      // Conway parse and cache-hit GLB expose the same shape.
+      const model = {getItemProperties: jest.fn().mockResolvedValue(
+        {expressID: NEMA_FACE_ID, type: 'ADVANCED_FACE', Name: {value: 'NONE'}})}
+      await expect(labelForGeometryId(model, NEMA_FACE_ID)).resolves.toBe('Face #29')
+      expect(model.getItemProperties).toHaveBeenCalledWith(NEMA_FACE_ID)
     })
 
-    it('degrades gracefully when the surface is absent or throws', async () => {
-      await expect(labelForGeometryId(null, 0, 5)).resolves.toBe('Item #5')
-      const throwing = {properties: {getItemProperties: jest.fn().mockRejectedValue(
-        new Error('boom'))}}
-      await expect(labelForGeometryId(throwing, 0, 6)).resolves.toBe('Item #6')
+    it('resolves a sync (cache-hit table) surface too', async () => {
+      const model = {getItemProperties: (expressID) =>
+        ({expressID, type: 'MANIFOLD_SOLID_BREP', Name: {value: ''}})}
+      await expect(labelForGeometryId(model, SOLID_ID)).resolves.toBe('Solid #250')
+    })
+
+    it('degrades gracefully when the surface is absent, empty, or throws', async () => {
+      await expect(labelForGeometryId(null, 5)).resolves.toBe('Item #5')
+      const throwing = {getItemProperties: jest.fn().mockRejectedValue(
+        new Error('boom'))}
+      await expect(labelForGeometryId(throwing, 6)).resolves.toBe('Item #6')
+      // A cache-hit table without this id returns undefined.
+      const missing = {getItemProperties: () => undefined}
+      await expect(labelForGeometryId(missing, 7)).resolves.toBe('Item #7')
     })
   })
 })

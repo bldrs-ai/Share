@@ -76,15 +76,30 @@ export default function createNavTreeSlice(set, get) {
     transientTreeNodes: {},
     addTransientTreeNodes: (pathKey, nodes) => set((state) => {
       const existing = state.transientTreeNodes[pathKey] ?? []
+      const incomingById = new Map(nodes.map((node) => [node.expressID, node]))
+      let upgraded = false
+      // A row that first arrived without a resolvable identity carries the
+      // degraded "Item #<id>" label; a later arrival with a real label (the
+      // properties surface came up, or a pick followed a permalink) upgrades
+      // it in place — the id, not the label, is the row's identity.
+      const merged = existing.map((node) => {
+        const incoming = incomingById.get(node.expressID)
+        if (incoming && incoming.label !== node.label &&
+            node.label === `Item #${node.expressID}`) {
+          upgraded = true
+          return {...node, label: incoming.label}
+        }
+        return node
+      })
       const known = new Set(existing.map((node) => node.expressID))
       const fresh = nodes.filter((node) => !known.has(node.expressID))
-      if (fresh.length === 0) {
+      if (fresh.length === 0 && !upgraded) {
         return {}
       }
       return {
         transientTreeNodes: {
           ...state.transientTreeNodes,
-          [pathKey]: [...existing, ...fresh],
+          [pathKey]: [...merged, ...fresh],
         },
       }
     }),
