@@ -65,5 +65,46 @@ export default function createNavTreeSlice(set, get) {
     // row highlight/scroll, per-solid hide (H), permalink round-trip.
     selectedSolidExpressId: null,
     setSelectedSolidExpressId: (id) => set(() => ({selectedSolidExpressId: id})),
+
+    // Transient NavTree rows for anonymous below-product geometry
+    // (conway#387): parent occurrence-path key → [{expressID, label}].
+    // Session-only by design — rows materialize from a scene pick, a
+    // permalink, or a "N more…" expansion and are reconstructed on the fly;
+    // they are never persisted to the GLB cache, so a reload only recreates
+    // the one a permalink names. Keyed additively with per-id dedup because
+    // the same piece can arrive from several sources (pick then permalink).
+    transientTreeNodes: {},
+    addTransientTreeNodes: (pathKey, nodes) => set((state) => {
+      const existing = state.transientTreeNodes[pathKey] ?? []
+      const incomingById = new Map(nodes.map((node) => [node.expressID, node]))
+      let upgraded = false
+      // A row that first arrived without a resolvable identity carries the
+      // degraded "Item #<id>" label; a later arrival with a real label (the
+      // properties surface came up, or a pick followed a permalink) upgrades
+      // it in place — the id, not the label, is the row's identity.
+      const merged = existing.map((node) => {
+        const incoming = incomingById.get(node.expressID)
+        if (incoming && incoming.label !== node.label &&
+            node.label === `Item #${node.expressID}`) {
+          upgraded = true
+          return {...node, label: incoming.label}
+        }
+        return node
+      })
+      const known = new Set(existing.map((node) => node.expressID))
+      const fresh = nodes.filter((node) => !known.has(node.expressID))
+      if (fresh.length === 0 && !upgraded) {
+        return {}
+      }
+      return {
+        transientTreeNodes: {
+          ...state.transientTreeNodes,
+          [pathKey]: [...merged, ...fresh],
+        },
+      }
+    }),
+    // New model load: ids are only unique within one file, so stale rows
+    // from the previous model must not leak into the next tree.
+    clearTransientTreeNodes: () => set(() => ({transientTreeNodes: {}})),
   }
 }

@@ -118,3 +118,105 @@ describe('NavTreePanel/getVisibleNodes — scenegraph ordering policy', () => {
     expect(visible.map(({node: n}) => n.label)).toEqual(['Scene'])
   })
 })
+
+
+describe('NavTreePanel/getVisibleNodes — transient anonymous-geometry rows (conway#387)', () => {
+  const model = {getIfcType: (eltType) => eltType}
+  const PART_NAUO = 14107
+  const FACE_ID = 4462
+  const SOLID_ID = 250
+
+  /**
+   * A STEP part node with an occurrence path, in the shape the spatial
+   * tree hands to getVisibleNodes.
+   *
+   * @param {object} [extras] merged onto the node (droppedSolids, children…)
+   * @return {object} tree root with one part under it
+   */
+  function stepTree(extras = {}) {
+    return node(1, 'assembly', [{
+      ...node(PART_NAUO, 'part'),
+      occurrencePath: [PART_NAUO],
+      ...extras,
+    }])
+  }
+
+  it('injects transient rows under their part, as ephemeral solid rows', () => {
+    const transient = {[PART_NAUO]: [{expressID: FACE_ID, label: 'Face #4462'}]}
+    const visible = getVisibleNodes(stepTree(), ['1', `${PART_NAUO}`], true, model, transient)
+    const row = visible.map(({node: n}) => n).find((n) => n.expressID === FACE_ID)
+    expect(row).toBeDefined()
+    expect(row.label).toBe('Face #4462')
+    expect(row.ephemeral).toBe(true)
+    expect(row.transient).toBe(true)
+    // Path-scoped nodeId: reused parts must not alias expansion state, and
+    // the row inherits the part's occurrence path for (path, id) selection.
+    expect(row.nodeId).toBe('14107:4462')
+    expect(row.occurrencePath).toEqual([PART_NAUO])
+  })
+
+  it('does not duplicate a piece the tree already carries as a solid node', () => {
+    const solidChild = {
+      ...node(SOLID_ID, 'Boss-Extrude7'),
+      occurrencePath: [PART_NAUO],
+      ephemeral: true,
+    }
+    const tree = stepTree({children: [solidChild]})
+    const transient = {[PART_NAUO]: [{expressID: SOLID_ID, label: 'Solid #250'}]}
+    const visible = getVisibleNodes(tree, ['1', `${PART_NAUO}`], true, model, transient)
+    const rows = visible.map(({node: n}) => n).filter((n) => n.expressID === SOLID_ID)
+    expect(rows.length).toBe(1)
+    expect(rows[0].transient).toBe(void 0)
+  })
+
+  it('emits a "more" row for droppedSolids and retires it as rows materialize', () => {
+    const twoDropped = getVisibleNodes(
+      stepTree({droppedSolids: 2}), ['1', `${PART_NAUO}`], true, model, {})
+    const moreRow = twoDropped.map(({node: n}) => n).find((n) => n.isMoreRow === true)
+    expect(moreRow).toBeDefined()
+    expect(moreRow.remaining).toBe(2)
+    expect(moreRow.parentPath).toEqual([PART_NAUO])
+    // The known-id set the click handler dedups against covers tree children
+    // AND already-materialized transient rows.
+    const transient = {[PART_NAUO]: [{expressID: FACE_ID, label: 'Item #4462'}]}
+    const oneLeft = getVisibleNodes(
+      stepTree({droppedSolids: 2}), ['1', `${PART_NAUO}`], true, model, transient)
+    const remainingRow = oneLeft.map(({node: n}) => n).find((n) => n.isMoreRow === true)
+    expect(remainingRow.remaining).toBe(1)
+    expect(remainingRow.knownIds).toContain(FACE_ID)
+    // Fully materialized → the row retires.
+    const done = getVisibleNodes(
+      stepTree({droppedSolids: 1}), ['1', `${PART_NAUO}`], true, model, transient)
+    expect(done.map(({node: n}) => n).some((n) => n.isMoreRow === true)).toBe(false)
+  })
+
+  it('injects each transient row once — not under every ephemeral solid', () => {
+    // A multibody part's solid rows share the part's occurrence path; the
+    // path-keyed injection must attach transient rows at the part only,
+    // or the same "Face #…" rows repeat under every expanded solid.
+    const SOLID_B_ID = 251
+    const solids = [SOLID_ID, SOLID_B_ID].map((id) => ({
+      ...node(id, `Boss-Extrude${id}`),
+      occurrencePath: [PART_NAUO],
+      ephemeral: true,
+    }))
+    const tree = stepTree({children: solids})
+    const transient = {[PART_NAUO]: [{expressID: FACE_ID, label: 'Face #4462'}]}
+    const visible = getVisibleNodes(
+      tree, ['1', `${PART_NAUO}`, `${SOLID_ID}`, `${SOLID_B_ID}`], true, model, transient)
+    const faceRows = visible.map(({node: n}) => n).filter((n) => n.expressID === FACE_ID)
+    expect(faceRows.length).toBe(1)
+    // No solid grew synthetic children either.
+    const solidRows = visible.map(({node: n}) => n)
+      .filter((n) => n.ephemeral === true && n.transient !== true)
+    expect(solidRows.every((n) => n.hasChildren === false)).toBe(true)
+  })
+
+  it('leaves IFC nodes (no occurrence path) untouched', () => {
+    const ifcRoot = node(1, 'project', [node(2, 'storey')])
+    const transient = {2: [{expressID: 99, label: 'Item #99'}]}
+    const visible = getVisibleNodes(ifcRoot, ['1', '2'], true, model, transient)
+    expect(visible.length).toBe(2)
+    expect(visible.map(({node: n}) => n).some((n) => n.transient === true)).toBe(false)
+  })
+})

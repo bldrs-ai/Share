@@ -595,6 +595,30 @@ describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
       viewer, 0, [10], {includeDescendants: false, geometryExpressId: 424242})).toEqual([])
   })
 
+  it('enumerates distinct geometry ids under a path (getGeometryIdsForOccurrencePath)', () => {
+    // The discovery half of anonymous-geometry addressing (conway#387): a
+    // multibody part's pieces share its (SRR-extended) path; the "N more…"
+    // expansion lists their geometry ids. Duplicated ids across instances
+    // dedup; a sibling part's pieces stay out.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 4462},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [11], geometryExpressId: 9751},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(viewer, 0, [10]))
+      .toEqual([250, 4462])
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(viewer, 0, [11]))
+      .toEqual([9751])
+    // No geometry-id table (IFC / old cache) → empty, callers degrade.
+    const bare = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10]},
+    ])
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(
+      makeResolverViewer(bare), 0, [10])).toEqual([])
+  })
+
   it('is prefix-inclusive: an assembly path lights up every leaf beneath it', () => {
     // Two leaves under assembly-occurrence [10]; a lookup on [10] returns both,
     // a lookup on the exact leaf returns just one.

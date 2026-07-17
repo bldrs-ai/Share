@@ -1135,6 +1135,54 @@ export class ShareViewer {
 
 
   /**
+   * Enumerate the distinct geometry (solid/face piece) express ids placed
+   * at — or under — a STEP occurrence path, across every child Mesh of the
+   * model. This is the discovery half of anonymous-geometry addressing
+   * (conway#387): the NavTree's "N more…" expansion lists what exists below
+   * a part when the tree itself carries no nodes for it, and each returned
+   * id is permalink-addressable as `[root, ...path, id]`.
+   *
+   * Prefix-inclusive like the instance resolver above (geometry paths can be
+   * SRR-extended below the tree leaf's path). Returns ids in first-seen
+   * (emission) order, deduplicated across meshes and instances; empty when
+   * the model carries no geometry-id table (IFC, pre-0.11.0 caches).
+   *
+   * @param {number} modelID
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @return {number[]} distinct geometry express ids (empty when none)
+   */
+  getGeometryIdsForOccurrencePath(modelID, occurrencePath) {
+    const model = this._modelById(modelID)
+    if (!model || !Array.isArray(occurrencePath) || occurrencePath.length === 0) {
+      return []
+    }
+    const target = occurrencePathKey(occurrencePath)
+    const descendantPrefix = `${target}/`
+    const seen = new Set()
+    const ids = []
+    model.traverse((obj) => {
+      const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
+      if (!byPath || typeof obj.instanceMap.getGeometryExpressIdByInstance !== 'function') {
+        return
+      }
+      for (const [key, list] of byPath) {
+        if (key !== target && !key.startsWith(descendantPrefix)) {
+          continue
+        }
+        for (let i = 0; i < list.length; i++) {
+          const geometryExpressId = obj.instanceMap.getGeometryExpressIdByInstance(list[i])
+          if (geometryExpressId !== null && !seen.has(geometryExpressId)) {
+            seen.add(geometryExpressId)
+            ids.push(geometryExpressId)
+          }
+        }
+      }
+    })
+    return ids
+  }
+
+
+  /**
    * Traverse a Conway-direct model, build a subset Mesh from every
    * child Mesh's `instanceMap` via `buildSubset(mesh)`, parent each
    * subset under the corresponding source mesh's parent (so the
