@@ -30,13 +30,6 @@ const GRACE_MS = 5000
 // any manual dismiss (OK) is instant.
 const ANIM_SHRINK_MS = 450
 const ANIM_FADE_MS = 2000
-// One frame between pinning the box at its current rect (FLIP step 1) and
-// animating it to the target, so the browser commits the start state first.
-const FLIP_SETTLE_MS = 20
-// Keep the animating circle above the bottom bar (where the "i" lives) once it
-// leaves the snackbar's stacking context via position:fixed. MUI's snackbar
-// z-index is 1400.
-const DISMISS_Z_INDEX = 1400
 // Extra ms past a phase before the safety timer force-finalizes (covers
 // environments — jsdom — where transitions don't run).
 const ANIM_SAFETY_PAD_MS = 80
@@ -181,12 +174,16 @@ export default function AlertAndSnackbar() {
    * is revealed — the eye follows the report to where it now lives. Runs only
    * on the automatic success dismiss.
    *
-   * FLIP with explicit viewport coordinates: pin the box (position:fixed) at
-   * its current rect, then animate top/left/width/height to an icon-centred
-   * square. Explicit coords land exactly on the icon — a transform+size
-   * shrink instead drifts, because changing width/height also moves the box's
-   * layout origin. Falls back to an instant clear if either endpoint can't be
-   * measured (jsdom in tests, or the "i" not mounted yet).
+   * Pure CSS transform (translate + non-uniform scale), not position:fixed:
+   * the Snackbar root carries `transform: translateX(-50%)` for horizontal
+   * centring, and a transformed ancestor makes position:fixed resolve
+   * relative to *it*, not the viewport — so absolute coords fly off-screen.
+   * A transform composes correctly through that ancestor and doesn't reflow.
+   * scaleX/scaleY squish the box to a `size` square (so `border-radius:50%`,
+   * which scales with the box, renders a true circle); transform-origin
+   * center keeps the centre fixed under the scale, and the translate lands
+   * that centre on the icon. Falls back to an instant clear if either
+   * endpoint can't be measured (jsdom in tests, or the "i" not mounted yet).
    */
   const startDismissAnimation = () => {
     const contentEl = typeof document !== 'undefined' ?
@@ -195,54 +192,35 @@ export default function AlertAndSnackbar() {
       document.querySelector(INFO_CONTROL_SELECTOR) : null
     const from = contentEl?.getBoundingClientRect?.()
     const to = infoEl?.getBoundingClientRect?.()
-    if (!from || !to || !from.width || !to.width) {
+    if (!from || !to || !from.width || !to.width || !from.height) {
       finishGrace()
       return
     }
     const size = Math.max(to.width, to.height)
-    const targetLeft = to.left + (to.width / HALF) - (size / HALF)
-    const targetTop = to.top + (to.height / HALF) - (size / HALF)
-    const pinnedStyle = {
-      position: 'fixed',
-      margin: 0,
-      zIndex: DISMISS_Z_INDEX,
-      pointerEvents: 'none',
-    }
+    const scaleX = size / from.width
+    const scaleY = size / from.height
+    const dx = (to.left + (to.width / HALF)) - (from.left + (from.width / HALF))
+    const dy = (to.top + (to.height / HALF)) - (from.top + (from.height / HALF))
     setIsDismissing(true)
-    // FLIP step 1: pin at the current viewport rect, no transition.
+    // Phase 1: shrink to an icon-sized circle centred on the "i".
     setAnimStyle({
-      ...pinnedStyle,
-      top: `${from.top}px`,
-      left: `${from.left}px`,
-      width: `${from.width}px`,
-      height: `${from.height}px`,
-      transition: 'none',
+      transformOrigin: 'center center',
+      transform: `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`,
+      borderRadius: '50%',
+      overflow: 'hidden',
+      pointerEvents: 'none',
+      transition:
+        `transform ${ANIM_SHRINK_MS}ms ease-in, border-radius ${ANIM_SHRINK_MS}ms ease-in`,
     })
-    // FLIP step 2: next frame, animate to an icon-sized circle centred on "i".
+    // Phase 2: once shrunk, fade the circle out so it "becomes" the icon.
     graceTimerRef.current = setTimeout(() => {
-      setAnimStyle({
-        ...pinnedStyle,
-        top: `${targetTop}px`,
-        left: `${targetLeft}px`,
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: '50%',
-        overflow: 'hidden',
-        transition:
-          `top ${ANIM_SHRINK_MS}ms ease-in, left ${ANIM_SHRINK_MS}ms ease-in, ` +
-          `width ${ANIM_SHRINK_MS}ms ease-in, height ${ANIM_SHRINK_MS}ms ease-in, ` +
-          `border-radius ${ANIM_SHRINK_MS}ms ease-in`,
-      })
-      // Phase 2: once shrunk, fade the circle out so it "becomes" the icon.
-      graceTimerRef.current = setTimeout(() => {
-        setAnimStyle((prev) => ({
-          ...prev,
-          opacity: 0,
-          transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
-        }))
-        graceTimerRef.current = setTimeout(completeDismiss, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
-      }, ANIM_SHRINK_MS)
-    }, FLIP_SETTLE_MS)
+      setAnimStyle((prev) => ({
+        ...prev,
+        opacity: 0,
+        transition: `opacity ${ANIM_FADE_MS}ms ease-out`,
+      }))
+      graceTimerRef.current = setTimeout(completeDismiss, ANIM_FADE_MS + ANIM_SAFETY_PAD_MS)
+    }, ANIM_SHRINK_MS)
   }
 
 

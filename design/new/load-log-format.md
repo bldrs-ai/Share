@@ -29,10 +29,11 @@ report control with a short grace period, driven by the store's `loadResult`
   reporter's filename — the STEP header's `fileName` is unreliable, so it's
   not used. The animation runs *only* on this automatic dismiss; MUI's own
   Grow transition is disabled for the load view so it can't fight the fade.
-  The collapse uses a FLIP (pin `position:fixed` at the current rect, then
-  animate `top/left/width/height` to an icon-centred square) so the circle
-  lands exactly on the "i" — a transform+size shrink drifts because resizing
-  moves the box's layout origin.
+  The collapse is a pure CSS transform (translate + non-uniform scale, with
+  `border-radius:50%` scaling into a circle) — not `position:fixed`, which
+  would resolve against the Snackbar root's `translateX(-50%)` transform and
+  fly off-screen. `transform-origin:center` keeps the centre fixed under the
+  scale and the translate lands it on the icon's measured centre.
 - **Error** shows the failure summary (`Load failed: …`, red) with an OK
   action and **no timer and no animation** — it waits for an explicit OK,
   which clears it instantly.
