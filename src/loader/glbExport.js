@@ -376,9 +376,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ]
     // Scene-level metadata that rides along in the same inject pass
-    // — no extra parse/serialize. Today: just the project title under
-    // `BLDRS_TITLE_EXTRAS_KEY`. Set to null when no title is
-    // available so `injectGlbExtensions` no-ops the scene mutation.
+    // — no extra parse/serialize. The project title is stamped twice:
+    // under `BLDRS_TITLE_EXTRAS_KEY` in `scenes[0].extras` (the
+    // Bldrs-only carrier the reader hydrates the page title from) AND
+    // into the standard glTF `scenes[0].name` field (#1595) so
+    // generic viewers — the three.js editor's navtree, Babylon
+    // sandbox — show the model name instead of GLTFExporter's
+    // 'AuxScene' placeholder. Null when no title is available so
+    // `injectGlbExtensions` no-ops both scene mutations.
     const sceneExtrasForInject = titleForExtras ?
       {[BLDRS_TITLE_EXTRAS_KEY]: titleForExtras} :
       null
@@ -390,12 +395,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         mode,
         extensions: extensionsForInject,
         sceneExtras: sceneExtrasForInject,
+        sceneName: titleForExtras,
       })
       packed = workerResult.bytes
       extStats = workerResult.extStats
     } catch (workerErr) {
       glbInfo('writer: worker dispatch failed, running inline on main thread:', workerErr)
-      const inline = injectGlbExtensions(compressedBytes, extensionsForInject, sceneExtrasForInject)
+      const inline = injectGlbExtensions(
+        compressedBytes, extensionsForInject, sceneExtrasForInject, titleForExtras)
       extStats = inline.stats
       packed = packGlbChunks([inline.bytes], mode)
     }
@@ -406,6 +413,9 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     if (extStats.addedSceneExtras > 0) {
       glbVerbose(
         `writer: stamped ${extStats.addedSceneExtras} scene.extras key(s) (title="${titleForExtras}")`)
+    }
+    if (extStats.addedSceneName > 0) {
+      glbVerbose(`writer: stamped standard scenes[0].name = "${titleForExtras}"`)
     }
     const schemaVer = schemaVersionFor(mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})

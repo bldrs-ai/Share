@@ -216,6 +216,14 @@ export function serializeGlb(json, bin) {
  * non-empty input, we still parse+serialize so the new keys land in
  * the output.
  *
+ * **sceneName**: optionally sets the standard glTF `scenes[n].name`
+ * field (#1595) — the name generic viewers (three.js editor, Babylon
+ * sandbox…) display for the scene. Overwrites any existing scene name:
+ * GLTFExporter labels a wrapped non-Scene root 'AuxScene', and the
+ * caller's title is the authoritative replacement for that
+ * placeholder. Like sceneExtras, a GLB with no scenes[] array is
+ * skipped silently.
+ *
  * **precompressed**: an extension entry may carry `precompressed`
  * (a Uint8Array of already-gzipped wire JSON) instead of `data`.
  * The bytes are embedded verbatim as the bufferView payload and the
@@ -231,54 +239,69 @@ export function serializeGlb(json, bin) {
  *   into `scenes[json.scene ?? 0].extras`. Each value must be a
  *   JSON-serialisable scalar / object; entries with `null`/`undefined`
  *   values are skipped (so callers can opt-out per-key by passing nullish).
+ * @param {string} [sceneName] optional standard glTF name to set on
+ *   `scenes[json.scene ?? 0].name` (overwrites any existing name).
+ *   Nullish / empty / non-string opts out.
  * @return {{
  *   bytes: Uint8Array,
  *   stats: {
  *     addedExtensions: number,
  *     addedBinBytes: number,
  *     addedSceneExtras: number,
+ *     addedSceneName: number,
  *     skippedNames: Array<string>,
  *   },
  * }} `bytes` is the modified GLB (or the input unchanged in pass-through);
  *   `stats` describes what changed so callers can log delta metrics
  *   without inspecting the byte stream.
  */
-export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
+export function injectGlbExtensions(glbBytes, extensions, sceneExtras, sceneName) {
   const active = (extensions ?? []).filter((e) =>
     e && ((e.data !== null && e.data !== undefined) || e.precompressed instanceof Uint8Array))
   const sceneExtraEntries = sceneExtras ?
     Object.entries(sceneExtras).filter(([, v]) => v !== null && v !== undefined) :
     []
-  if (active.length === 0 && sceneExtraEntries.length === 0) {
+  const sceneNameToSet = (typeof sceneName === 'string' && sceneName !== '') ? sceneName : null
+  if (active.length === 0 && sceneExtraEntries.length === 0 && sceneNameToSet === null) {
     return {
       bytes: glbBytes,
-      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames: []},
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, addedSceneName: 0, skippedNames: []},
     }
   }
 
   const {json, bin} = parseGlb(glbBytes)
 
-  // Stamp scene.extras BEFORE the bufferView-appending path so we
-  // can early-return cleanly when only sceneExtras was provided.
-  // `json.scene` is the default-scene index; per glTF spec it's
-  // optional but conventionally 0 when present. Fall back to scene 0
-  // for the (extremely rare) GLBs that omit the field.
+  // Stamp scene.extras + scene.name BEFORE the bufferView-appending
+  // path so we can early-return cleanly when only scene-level metadata
+  // was provided. `json.scene` is the default-scene index; per glTF
+  // spec it's optional but conventionally 0 when present. Fall back to
+  // scene 0 for the (extremely rare) GLBs that omit the field.
   let addedSceneExtras = 0
-  if (sceneExtraEntries.length > 0) {
+  let addedSceneName = 0
+  if (sceneExtraEntries.length > 0 || sceneNameToSet !== null) {
     const sceneIdx = (typeof json.scene === 'number') ? json.scene : 0
     if (Array.isArray(json.scenes) && json.scenes[sceneIdx]) {
-      json.scenes[sceneIdx].extras = json.scenes[sceneIdx].extras ?? {}
-      for (const [key, value] of sceneExtraEntries) {
-        json.scenes[sceneIdx].extras[key] = value
-        addedSceneExtras++
+      if (sceneExtraEntries.length > 0) {
+        json.scenes[sceneIdx].extras = json.scenes[sceneIdx].extras ?? {}
+        for (const [key, value] of sceneExtraEntries) {
+          json.scenes[sceneIdx].extras[key] = value
+          addedSceneExtras++
+        }
+      }
+      if (sceneNameToSet !== null) {
+        // Deliberate overwrite: GLTFExporter names a wrapped non-Scene
+        // root 'AuxScene'; the caller's title replaces that placeholder
+        // so standard viewers show the real model name (#1595).
+        json.scenes[sceneIdx].name = sceneNameToSet
+        addedSceneName = 1
       }
     } else {
       // Spec-legal but degenerate: a GLB with no scenes array has no
       // place to attach scene-level metadata. Skip silently — the
-      // sceneExtras path is best-effort metadata; failure to stamp
-      // must not block the rest of the inject.
+      // scene-metadata path is best-effort; failure to stamp must not
+      // block the rest of the inject.
       glbInfo(
-        'injectGlbExtensions: sceneExtras provided but no scenes[] array; ' +
+        'injectGlbExtensions: scene metadata provided but no scenes[] array; ' +
         'skipping scene-level metadata stamp')
     }
   }
@@ -313,18 +336,18 @@ export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
     toInject.push(ext)
   }
   if (toInject.length === 0) {
-    // No top-level extensions to add. If sceneExtras was the only
+    // No top-level extensions to add. If scene metadata was the only
     // input, the JSON mutation above already happened — we still need
     // to serialise. Otherwise return the input bytes unchanged.
-    if (addedSceneExtras > 0) {
+    if (addedSceneExtras > 0 || addedSceneName > 0) {
       return {
         bytes: serializeGlb(json, bin),
-        stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras, skippedNames},
+        stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras, addedSceneName, skippedNames},
       }
     }
     return {
       bytes: glbBytes,
-      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, skippedNames},
+      stats: {addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0, addedSceneName: 0, skippedNames},
     }
   }
 
@@ -398,6 +421,7 @@ export function injectGlbExtensions(glbBytes, extensions, sceneExtras) {
       addedExtensions: additions.length,
       addedBinBytes: nextOffset - oldLen,
       addedSceneExtras,
+      addedSceneName,
       skippedNames,
     },
   }

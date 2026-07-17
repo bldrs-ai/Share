@@ -203,6 +203,31 @@ export default function NavTreePanel({
 }
 
 /**
+ * Display-order comparator for scenegraph-tree siblings: plain UTF-16
+ * ordinal comparison on the label, i.e. lexicographic with capitals
+ * first (uppercase < '_' < lowercase in ASCII). On authored GLBs this
+ * ranks real names above underscore-prefixed exporter scaffolding —
+ * e.g. NASA's ISS model (#1595) lists "ECOStress", "OCO3", … above
+ * "_root" and the lowercase panel/hinge noise, matching how the
+ * three.js editor presents it. Deliberately NOT localeCompare: locale
+ * collation is case-insensitive-ish and locale-dependent, which would
+ * lose the caps-first property and make order vary per user.
+ *
+ * @param {object} a mapped node with a `label`
+ * @param {object} b mapped node with a `label`
+ * @return {number}
+ */
+export function compareNodeLabels(a, b) {
+  const la = typeof a?.label === 'string' ? a.label : ''
+  const lb = typeof b?.label === 'string' ? b.label : ''
+  if (la < lb) {
+    return -1
+  }
+  return la > lb ? 1 : 0
+}
+
+
+/**
  * Get visible nodes
  *
  * @param {Array} treeData - The tree data
@@ -213,6 +238,17 @@ export default function NavTreePanel({
  */
 function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
   const visibleNodes = []
+
+  // Ordering policy discriminant. An IFC / STEP spatial structure (live
+  // parse, Conway-direct, or BLDRS_spatial_tree cache-hit) arrives as
+  // plain JS objects whose sibling order is meaningful — storeys in
+  // elevation order, STEP occurrence order — so it renders as-is. A
+  // raw scenegraph tree (plain GLB / OBJ / FBX: `convertToShareModel`
+  // hands the Object3D hierarchy itself to the NavTree) carries only
+  // authoring-tool insertion order, so its siblings sort by label via
+  // `compareNodeLabels` instead. `isObject3D` is three.js's own marker
+  // and never appears on the IFC-shaped trees.
+  const isSceneGraphTree = treeData?.isObject3D === true
 
   /**
    * traverse nodes
@@ -248,12 +284,18 @@ function getVisibleNodes(treeData, expandedNodeIds, isNavTree, model) {
     const childArray = Array.isArray(node.children) ?
       node.children.filter((c) => c && c.expressID !== undefined) :
       []
+    const mappedChildren = childArray.map(mapSpatialNode)
+    if (isSceneGraphTree) {
+      // Stable sort: unnamed siblings (shared 'Object' placeholder
+      // label) keep their scenegraph order relative to each other.
+      mappedChildren.sort(compareNodeLabels)
+    }
     const mapped = {
       nodeId: node.expressID.toString(),
       label: reifyName({properties: model}, node),
       expressID: node.expressID,
       hasChildren: childArray.length > 0,
-      children: childArray.map(mapSpatialNode),
+      children: mappedChildren,
     }
     // Preserve the STEP occurrence path (NAUO express ids) so RenderRow's
     // `isSelected` and the scroll effect can distinguish a reused part's
@@ -463,6 +505,10 @@ function Actions({navigationMode, setNavigationMode}) {
 
 
 export const TITLE = 'Navigation'
+
+// Exported for tests: exercising the flatten + ordering policy
+// directly beats rendering the whole virtualized panel.
+export {getVisibleNodes as __getVisibleNodesForTest}
 
 NavTreePanel.propTypes = {
   model: PropTypes.object.isRequired,

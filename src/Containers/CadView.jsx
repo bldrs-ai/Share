@@ -591,10 +591,21 @@ export default function CadView({
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     initSearch(m, rootElt)
+    // Root display name, in preference order: real properties from the
+    // parser (IFC project Name/LongName), then whatever the tree root
+    // already carries (convertToShareModel's composed
+    // "<sceneName> (<fileName>)" for plain GLB/OBJ — see #1595), then
+    // the generic 'Model' placeholder. The previous unconditional
+    // overwrite stamped 'Model' over every non-IFC root because
+    // getProperties has nothing for unstructured models.
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
-    const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
-    rootElt.Name = rootProps.Name
-    rootElt.LongName = rootProps.LongName
+    if (tmpProps && (tmpProps.Name || tmpProps.LongName)) {
+      rootElt.Name = tmpProps.Name ?? rootElt.Name
+      rootElt.LongName = tmpProps.LongName ?? rootElt.LongName
+    } else if (!rootElt.Name && !rootElt.LongName) {
+      rootElt.Name = {value: 'Model'}
+      rootElt.LongName = {value: 'Model'}
+    }
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
     // Load-time property reads are done: drop Conway's materialised

@@ -82,7 +82,14 @@ streaming capture that gzips the wire JSON incrementally:
   kept are dropped on the spot.
 - **Sweep 2** — drain the ref closure by id.
 - Memoization off during the sweep (restored, throw-safe); descriptor cache
-  released every 200 k materialisations + once at the end.
+  released once when the sweep ends. (An earlier revision also released it
+  every 200 k materialisations mid-sweep; once that release became real on
+  conway ≥ 1.373 it regressed the sweep 1.5–2.5× **and** doubled process
+  heap through wipe/re-growth churn — SKYLARK bench: 19–22 s / 1.6 GB
+  without the tick vs 31–47 s / 3.3 GB with it, CPU profile 18 % GC + 12 %
+  descriptor re-materialisation. Removed in #1591; the SoA descriptor
+  transient (~1 GB on 9 M-entity IFCs) rides the sweep and is returned by
+  the end-of-sweep release.)
 - **Peak retained: O(reachable ids + pset index + one record + compressed
   output)** instead of O(all parsed records).
 
