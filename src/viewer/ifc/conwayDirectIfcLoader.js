@@ -84,9 +84,13 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
  *   silently ignored by engines that predate it (real web-ifc, old pins).
+ * @param {Function} [onMeshBatch] demand/tiled slice A: receives each
+ *   extracted batch's FlatMesh[] as it lands (only on the
+ *   `demandGeometry` deferred path) so callers can render progressively;
+ *   `captured` still accumulates everything for one-shot consumers.
  * @return {Promise<{modelID: number, captured: Array}>}
  */
-export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, onProgress = undefined) {
+export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -116,6 +120,44 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
       ON_MODEL_INFO: (info) => onProgress({modelInfo: info}),
     }
   }
+  // Demand/tiled rendering slice A (`demandGeometry` flag, #1613):
+  // deferred open + batch pump. The open returns in parse time; meshes
+  // then stream in file-order batches through `onMeshBatch` (and
+  // accumulate into `captured` for the classic one-shot consumers),
+  // yielding to the event loop between batches so the scene can render
+  // progressively. Feature-detected; engines without the pump fall
+  // through to the classic selection below.
+  if (isFeatureEnabled('demandGeometry') &&
+      !isFeatureEnabled('disableStreamOpen') &&
+      typeof ifcAPI.OpenModelStreamed === 'function' &&
+      typeof ifcAPI.ExtractGeometryBatch === 'function') {
+    // eslint-disable-next-line new-cap
+    const modelID = await ifcAPI.OpenModelStreamed(
+      data, {...openSettings, DEFER_GEOMETRY: true})
+    if (typeof modelID !== 'number' || modelID < 0) {
+      throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+    }
+    const captured = []
+    for (;;) {
+      const batch = []
+      // eslint-disable-next-line new-cap
+      const {extracted, remaining} = ifcAPI.ExtractGeometryBatch(
+        modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+      if (batch.length > 0) {
+        captured.push(...batch)
+        if (onMeshBatch) {
+          onMeshBatch(batch)
+        }
+      }
+      if (remaining === 0 && extracted === 0) {
+        break
+      }
+      // Yield so the renderer paints between batches.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    return {modelID, captured}
+  }
+
   // Open-path selection, most preferred first:
   //   1. OpenModelStreamed (conway #390, default): streamed columnar
   //      parse — no per-record object phase, the dominant JS-heap cost
@@ -152,6 +194,12 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
   })
   return {modelID, captured}
 }
+
+
+// Products extracted per demand batch: large enough that per-batch
+// capture/render overhead amortizes, small enough that first pixels
+// arrive within a couple of seconds of parse completing.
+const DEMAND_EXTRACT_BATCH_SIZE = 64
 
 
 // web-ifc numeric log levels (conway's SetLogLevel shim uses the same

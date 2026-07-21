@@ -86,6 +86,13 @@ export const flags = [
   // A/Bs the same build); flipping this to true is the prod-wide kill
   // switch.
   {name: 'disableStreamOpen', isActive: false},
+  // Demand/tiled rendering slice A (design/new/demand-tiled-rendering.md,
+  // #1613): cache-miss IFC parses open with DEFER_GEOMETRY and pump
+  // Conway's ExtractGeometryBatch, so meshes stream into the scene in
+  // file-order batches instead of one 30s+ whole-model extraction.
+  // Off by default while the incremental render path burns in on
+  // previews; flip on via `?feature=demandGeometry`.
+  {name: 'demandGeometry', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

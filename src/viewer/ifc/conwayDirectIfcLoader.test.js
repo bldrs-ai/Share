@@ -137,6 +137,89 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       expect(ifcAPI.OpenModel.mock.calls[0][1]).toBe(settings)
     })
 
+    describe('demandGeometry deferred open + batch pump (slice A)', () => {
+      beforeEach(() => mockIsFeatureEnabled.mockReset())
+      afterAll(() => mockIsFeatureEnabled.mockReset())
+
+      /**
+       * @param {number} products total products the fake engine holds
+       * @return {object} IfcAPI stub with the deferred pump surface
+       */
+      function makeDemandAPI(products) {
+        let cursor = 0
+        return {
+          wasmModule: {},
+          OpenModelStreamed: jest.fn(() => Promise.resolve(5)),
+          OpenModelAsync: jest.fn(() => Promise.resolve(8)),
+          OpenModel: jest.fn(() => 9),
+          StreamAllMeshes: jest.fn(),
+          ExtractGeometryBatch: jest.fn((modelID, batchSize, cb) => {
+            const take = Math.min(batchSize, products - cursor)
+            for (let i = 0; i < take; i++) {
+              cb({expressID: 1000 + cursor + i, geometries: {size: () => 1}})
+            }
+            cursor += take
+            return {extracted: take, remaining: products - cursor}
+          }),
+        }
+      }
+
+      it('opens deferred and pumps batches to completion', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const batches = []
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
+        expect(result.modelID).toBe(5)
+        // Deferred settings rode the open.
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.DEFER_GEOMETRY).toBe(true)
+        // 150 products in batches of 64 → 3 extraction rounds; all
+        // meshes accumulate AND stream incrementally.
+        expect(result.captured).toHaveLength(150)
+        expect(batches).toEqual([64, 64, 22])
+        // The one-shot capture path is not used on this branch.
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+      })
+
+      it('falls through to the classic selection when the engine lacks the pump', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        delete ifcAPI.ExtractGeometryBatch
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        // Classic streamed open (no defer), one-shot capture.
+        expect(result.modelID).toBe(5)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings?.DEFER_GEOMETRY).toBeUndefined()
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+      })
+
+      it('stays on the classic path when the flag is off', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+      })
+
+      it('disableStreamOpen also disables the demand path', async () => {
+        mockIsFeatureEnabled.mockImplementation(
+          (name) => name === 'demandGeometry' || name === 'disableStreamOpen')
+        const ifcAPI = makeDemandAPI(10)
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        // Full classic fallback: OpenModelAsync, not the deferred open.
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
+      })
+
+      it('demandGeometry ships default-off in FeatureFlags', () => {
+        const {flags} = jest.requireActual('../../FeatureFlags')
+        const flag = flags.find((f) => f.name === 'demandGeometry')
+        expect(flag).toBeDefined()
+        expect(flag.isActive).toBe(false)
+      })
+    })
+
     describe('open-path selection (disableStreamOpen flag)', () => {
       // Share's jest config doesn't clearMocks, so a per-test
       // implementation would otherwise leak into later tests — reset to
