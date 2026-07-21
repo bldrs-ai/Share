@@ -138,6 +138,12 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
     })
 
     describe('open-path selection (streamOpen flag)', () => {
+      // Share's jest config doesn't clearMocks, so a per-test
+      // implementation would otherwise leak into later tests — reset to
+      // the default (everything off) around this block.
+      beforeEach(() => mockIsFeatureEnabled.mockReset())
+      afterAll(() => mockIsFeatureEnabled.mockReset())
+
       /** @return {object} IfcAPI stub exposing all three open entries */
       function makeTriplePathAPI() {
         return {
