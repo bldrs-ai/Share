@@ -255,7 +255,7 @@ export default function ViewCube() {
     <Box
       sx={{
         'position': 'absolute',
-        'top': `${TOP_INSET_PX}px`,
+        'bottom': `${BOTTOM_INSET_PX}px`,
         'right': `${rightInset}px`,
         'width': `${WIDGET_SIZE_PX}px`,
         'height': `${WIDGET_SIZE_PX}px`,
@@ -459,7 +459,7 @@ const CUBE_SIZE_PX = 96
 // so the right-column buttons (Rotate right, Home) stay inside the widget
 // instead of overflowing off-screen / onto an open drawer.
 const WIDGET_SIZE_PX = 200
-const TOP_INSET_PX = 80
+const BOTTOM_INSET_PX = 80
 const MARGIN_PX = 20
 const NEAR_PLANE = 0.1
 const FAR_PLANE = 100
