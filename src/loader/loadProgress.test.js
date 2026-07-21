@@ -91,6 +91,41 @@ describe('loadProgress', () => {
       expect(useStore.getState().currentLoadLine).toMatch(/^Geometry/)
     })
 
+    it('rebases engine elapsedMs so legacy→engine stage boundaries never go negative', () => {
+      // Regression: engine events carry elapsedMs from the ENGINE clock
+      // (conway's tracker starts at OpenModel), while legacy strings are
+      // stamped from load start. Closing a legacy stage with a raw engine
+      // timestamp produced "Parsing model geometry: -1.6s" whenever the
+      // pre-parse stages (download, read) took longer than the engine's
+      // first-event offset.
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      // 5s of Share-side wall clock passes before the engine starts
+      // (download + read stages under fake timers).
+      const shareSideStagesMs = 5000
+      reportLoadProgress('Preparing file download...')
+      jest.advanceTimersByTime(shareSideStagesMs)
+      reportLoadProgress('Parsing model geometry...')
+      // Engine's first event: 10ms on ITS clock — far behind Share's.
+      reportLoadProgress({phase: 'dataParse', completed: 0, total: 100, elapsedMs: 10})
+      reportLoadProgress({phase: 'geometry', completed: 0, total: 100, elapsedMs: 250})
+      const frozen = reportLines()
+      // Every closed stage line carries a non-negative duration (the legacy
+      // "Parsing model geometry" line closes at 0.000s, not -4.99s).
+      const durations = frozen
+        .map((line) => / (-?[\d.]+)s/.exec(line))
+        .filter((match) => match !== null)
+        .map((match) => Number(match[1]))
+      expect(durations.length).toBeGreaterThan(0)
+      for (const duration of durations) {
+        expect(duration).toBeGreaterThanOrEqual(0)
+      }
+      expect(frozen.some((line) => /^Parsing model geometry: 0\.000s/.test(line))).toBe(true)
+      // Engine-to-engine deltas are preserved exactly: the Parsing stage
+      // (frozen mid-flight, so it keeps its bar) closes at the geometry
+      // event, 250-10 = 240ms on the engine clock.
+      expect(frozen.some((line) => /^Parsing \[.*0\.240s/.test(line))).toBe(true)
+    })
+
     it('normalizes legacy strings into stages with stamped deltas', () => {
       beginLoadProgress({fileInfo: 'model.fbx'})
       reportLoadProgress('Downloading model data...')
