@@ -115,6 +115,13 @@ class LoadProgressReporter {
     this.stallTimer = null
     this.stallReported = false
     this.startTime = Date.now()
+    // Engine events carry their own elapsedMs measured from the ENGINE's
+    // clock (conway's tracker starts at OpenModel), not from load start.
+    // This offset rebases them onto the load clock — set once at the first
+    // engine-stamped event — so stage boundaries between Share-stamped
+    // legacy strings and engine events never go backwards (the
+    // "Parsing model geometry: -1.6s" negative-duration line).
+    this.engineElapsedBase = null
     this.ended = false
     // Distinct console warning/error text → occurrence count, captured via
     // the console tee below and appended after the Total line (issue #301
@@ -230,9 +237,22 @@ class LoadProgressReporter {
     // Share-side stages (download/convert/legacy strings) don't carry
     // engine timings — stamp wall clock + heap so every stage line has its
     // owned deltas (the normalized form's format-independent core).
+    // Engine-stamped events are rebased onto the load clock (see
+    // engineElapsedBase above): engine-to-engine deltas are preserved
+    // exactly, and the boundary against Share-stamped stages stays
+    // monotonic.
+    let elapsedMs
+    if (event.elapsedMs === undefined) {
+      elapsedMs = Date.now() - this.startTime
+    } else {
+      if (this.engineElapsedBase === null) {
+        this.engineElapsedBase = (Date.now() - this.startTime) - event.elapsedMs
+      }
+      elapsedMs = event.elapsedMs + this.engineElapsedBase
+    }
     event = {
       ...event,
-      elapsedMs: event.elapsedMs ?? (Date.now() - this.startTime),
+      elapsedMs,
       memoryMb: event.memoryMb ?? usedHeapMb(),
     }
 
