@@ -14,6 +14,15 @@ import {
   parseIfcWithConway,
 } from './conwayDirectIfcLoader'
 
+// Controllable flag surface: defaults to "everything off" (matching
+// the real module for every flag these tests touch except
+// `streamOpen`, whose default-on is pinned separately against the
+// real module below). The open-path tests flip it per case.
+const mockIsFeatureEnabled = jest.fn()
+jest.mock('../../FeatureFlags', () => ({
+  isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
+}))
+
 
 /* eslint-disable no-magic-numbers */
 describe('viewer/ifc/conwayDirectIfcLoader', () => {
@@ -126,6 +135,68 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       const settings = {COORDINATE_TO_ORIGIN: false, USE_FAST_BOOLS: false}
       await parseIfcWithConway(new ArrayBuffer(0), ifcAPI, settings)
       expect(ifcAPI.OpenModel.mock.calls[0][1]).toBe(settings)
+    })
+
+    describe('open-path selection (streamOpen flag)', () => {
+      /** @return {object} IfcAPI stub exposing all three open entries */
+      function makeTriplePathAPI() {
+        return {
+          wasmModule: {},
+          OpenModelStreamed: jest.fn(() => Promise.resolve(7)),
+          OpenModelAsync: jest.fn(() => Promise.resolve(8)),
+          OpenModel: jest.fn(() => 9),
+          StreamAllMeshes: jest.fn(),
+        }
+      }
+
+      it('streamOpen is default-on in FeatureFlags', () => {
+        // The mock above hides the real module from the loader; this
+        // pins the shipped default so a revert (flipping the flag off)
+        // is a deliberate diff here too.
+        const {flags} = jest.requireActual('../../FeatureFlags')
+        expect(flags.find((f) => f.name === 'streamOpen')?.isActive).toBe(true)
+      })
+
+      it('prefers OpenModelStreamed when the flag is on and the engine has it', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'streamOpen')
+        const ifcAPI = makeTriplePathAPI()
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(7)
+        expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+        const [data, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(data).toBeInstanceOf(Uint8Array)
+        expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true})
+        expect(ifcAPI.OpenModelAsync).not.toHaveBeenCalled()
+        expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
+      })
+
+      it('falls back to OpenModelAsync when the engine predates OpenModelStreamed', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'streamOpen')
+        const ifcAPI = makeTriplePathAPI()
+        delete ifcAPI.OpenModelStreamed
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
+      })
+
+      it('uses OpenModelAsync when the flag is off, even with OpenModelStreamed present', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeTriplePathAPI()
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
+        expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
+      })
+
+      it('throws when OpenModelStreamed reports failure (-1)', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'streamOpen')
+        const ifcAPI = makeTriplePathAPI()
+        ifcAPI.OpenModelStreamed = jest.fn(() => Promise.resolve(-1))
+        await expect(parseIfcWithConway(new ArrayBuffer(4), ifcAPI)).rejects.toThrow(
+          /OpenModel returned -1/)
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+      })
     })
   })
 
