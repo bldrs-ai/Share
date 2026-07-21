@@ -54,6 +54,7 @@ import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
 import {DEFAULT_LOOK} from '../viewer/looks'
+import ViewCube from '../Components/ViewCube/ViewCube'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
 import {
@@ -1509,6 +1510,7 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100vw', height: isMobile ? `${vh}px` : '100vh', m: 0, p: 0}}>
       {<ViewerContainer/>}
+      {viewer && <ViewCube/>}
       {viewer && (
         <RootLandscape
           pathPrefix={pathPrefix}
