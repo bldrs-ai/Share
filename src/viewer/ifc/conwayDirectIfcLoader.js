@@ -84,9 +84,10 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
  *   silently ignored by engines that predate it (real web-ifc, old pins).
- * @param {Function} [onMeshBatch] demand/tiled slice A: receives each
- *   extracted batch's FlatMesh[] as it lands (only on the
- *   `demandGeometry` deferred path) so callers can render progressively;
+ * @param {Function} [onMeshBatch] demand/tiled slice A: receives
+ *   `(flatMeshes, modelID)` for each extracted batch as it lands (only
+ *   on the `demandGeometry` deferred path) so callers can render
+ *   progressively;
  *   `captured` still accumulates everything for one-shot consumers.
  * @return {Promise<{modelID: number, captured: Array}>}
  */
@@ -146,7 +147,7 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
       if (batch.length > 0) {
         captured.push(...batch)
         if (onMeshBatch) {
-          onMeshBatch(batch)
+          onMeshBatch(batch, modelID)
         }
       }
       if (remaining === 0 && extracted === 0) {

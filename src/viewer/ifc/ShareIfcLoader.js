@@ -17,9 +17,11 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
+import {Group, Mesh} from 'three'
 import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
@@ -157,13 +159,53 @@ export default class ShareIfcLoader {
       // model...' carries real per-phase counts (headerParse / dataParse /
       // geometry — conway #301). Engines without the extension just keep
       // the coarse strings.
-      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress)
+      const scene = typeof ifc.context?.getScene === 'function' ?
+        ifc.context.getScene() : null
+
+      // Demand/tiled rendering slice A (#1613): while the batch pump
+      // runs, stream each batch into a render-only preview group so
+      // first pixels arrive right after the parse. The final model is
+      // then built exactly as before (full picking/decoration) and the
+      // preview is swapped out — identical end state, progressive
+      // arrival. Every preview step is best-effort: a preview failure
+      // must never break the load (mirrors the batchedMesh guard).
+      const demandPreview = scene !== null && isFeatureEnabled('demandGeometry') ?
+        new Group() : null
+      let previewInstalled = false
+      const onMeshBatch = demandPreview === null ? undefined : (batch, batchModelID) => {
+        try {
+          const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+          demandPreview.add(new Mesh(assembled.geometry, assembled.materials))
+          if (!previewInstalled) {
+            previewInstalled = true
+            scene.add(demandPreview)
+            // Placed transforms are already coordinated; stamp the
+            // model-level coordination like the final build does, then
+            // frame the first batch so the user sees geometry
+            // immediately. Async + best-effort by design.
+            // eslint-disable-next-line new-cap
+            Promise.resolve(ifcAPI.GetCoordinationMatrix(batchModelID))
+              .then((matrixArr) => {
+                if (demandPreview.matrix &&
+                    typeof demandPreview.matrix.fromArray === 'function') {
+                  demandPreview.matrix.fromArray(matrixArr)
+                  demandPreview.matrixAutoUpdate = false
+                }
+                ifc.context.fitToFrame()
+              })
+              .catch((e) => debug(WARN).warn('demand preview coordination failed:', e))
+          }
+        } catch (e) {
+          debug(WARN).warn('demand preview batch skipped:', e)
+        }
+      }
+
+      const {modelID, captured} =
+        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch)
 
       if (onProgress) {
         onProgress('Building model...')
       }
-      const scene = typeof ifc.context?.getScene === 'function' ?
-        ifc.context.getScene() : null
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
       // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
@@ -184,6 +226,23 @@ export default class ShareIfcLoader {
         ifcModel = merged.mesh
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+      }
+
+      // Swap the preview out before the real model installs — dispose
+      // per-batch geometry/materials so the preview leaves no residue.
+      if (demandPreview !== null && previewInstalled) {
+        try {
+          scene.remove(demandPreview)
+          for (const child of demandPreview.children) {
+            child.geometry?.dispose?.()
+            const materials = Array.isArray(child.material) ? child.material : [child.material]
+            for (const material of materials) {
+              material?.dispose?.()
+            }
+          }
+        } catch (e) {
+          debug(WARN).warn('demand preview teardown failed:', e)
+        }
       }
 
       ifc.addIfcModel(ifcModel)
