@@ -222,6 +222,28 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(flag.isActive).toBe(true)
       })
 
+      it('serves the one-shot capture when the pump no-ops (STEP / classic fallback)', async () => {
+        // The deferred columnar open is IFC-only: STEP input falls back
+        // internally to a classic fully-extracted open whose pump returns
+        // {0,0} immediately. The loader must serve StreamAllMeshes then,
+        // not an empty scene.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.ExtractGeometryBatch = jest.fn(() => ({extracted: 0, remaining: 0}))
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          for (let i = 0; i < 5; i++) {
+            cb({expressID: 2000 + i, geometries: {size: () => 1}})
+          }
+        })
+        const batches = []
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
+        expect(result.captured).toHaveLength(5)
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        // No preview batches for an already-complete extraction.
+        expect(batches).toEqual([])
+      })
+
       it('threads onPreviewMesh into the deferred open as ON_PREVIEW_MESH (slice A2)', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)

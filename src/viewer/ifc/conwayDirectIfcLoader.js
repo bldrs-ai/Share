@@ -170,6 +170,20 @@ export async function parseIfcWithConway(
       // Yield so the renderer paints between batches.
       await yieldToEventLoop()
     }
+    if (captured.length === 0) {
+      // The deferred columnar open is IFC-only: for STEP input (and any
+      // streamed-parse failure) conway falls back internally to a
+      // classic, fully-extracted open where the batch pump is a no-op —
+      // the model is fine, it just has nothing to pump. Serve the
+      // one-shot capture instead of returning an empty scene.
+      // No onMeshBatch here: extraction is already complete, so a
+      // preview would just double the geometry conversion right before
+      // the final build renders the same thing.
+      // eslint-disable-next-line new-cap
+      ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
+        captured.push(flatMesh)
+      })
+    }
     return {modelID, captured}
   }
 
