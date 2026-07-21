@@ -1,5 +1,5 @@
 import {BoxGeometry, Mesh, Vector3} from 'three'
-import {pickDirection, snapToDirection} from './ViewCube'
+import {dragRotation, pickDirection, snapToDirection} from './ViewCube'
 
 
 // Cube half-edge and a small in-face offset, kept as named values so the
@@ -7,6 +7,7 @@ import {pickDirection, snapToDirection} from './ViewCube'
 const HALF = 0.5
 const NEAR_CENTER = 0.05
 const SMALL = 0.01
+const SENSITIVITY = 0.008
 
 describe('ViewCube', () => {
   const cube = new Mesh(new BoxGeometry(1, 1, 1))
@@ -75,6 +76,20 @@ describe('ViewCube', () => {
 
     it('is a no-op when controls are missing', () => {
       expect(() => snapToDirection(null, new Vector3(0, 0, 1))).not.toThrow()
+    })
+  })
+
+  describe('dragRotation', () => {
+    it('maps horizontal drag to negated azimuth', () => {
+      const {azimuth, polar} = dragRotation(10, 0, SENSITIVITY)
+      expect(azimuth).toBeCloseTo(-10 * SENSITIVITY)
+      expect(polar).toBeCloseTo(0)
+    })
+
+    it('maps vertical drag to negated polar', () => {
+      const {azimuth, polar} = dragRotation(0, 10, SENSITIVITY)
+      expect(azimuth).toBeCloseTo(0)
+      expect(polar).toBeCloseTo(-10 * SENSITIVITY)
     })
   })
 })

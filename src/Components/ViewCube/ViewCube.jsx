@@ -30,8 +30,9 @@ import debug from '../../utils/debug'
  * ViewCube is an Autodesk-style navigation gizmo rendered in the top-right
  * corner of the viewer.  It shows a labeled cube whose orientation mirrors the
  * main camera; clicking a face or corner snaps the main camera to that standard
- * view.  A ring of arrows around the cube orbits the view in 90/45 degree steps
- * and a home button returns to an isometric view.
+ * view and fits the model to frame.  Dragging the cube orbits the view freely
+ * (fine rotation), and a ring of arrows around the cube orbits in fixed steps
+ * with an isometric home button.
  *
  * The cube is drawn in its own tiny Three.js scene (independent of the main
  * viewer) so face/corner picking stays simple and self-contained.  The main
@@ -42,9 +43,16 @@ import debug from '../../utils/debug'
  */
 export default function ViewCube() {
   const viewer = useStore((state) => state.viewer)
+  // Right-drawer state so the widget can sit clear of any open drawer.
+  const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const isAppsVisible = useStore((state) => state.isAppsVisible)
+  const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
+  const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+
   const mountRef = useRef(null)
-  // Holds the live camera-controls handle so the ring buttons can drive it.
+  // Live handles so the ring buttons and fit calls can reach the viewer.
   const controlsRef = useRef(null)
+  const contextRef = useRef(null)
 
   useEffect(() => {
     const context = viewer && viewer.IFC && viewer.IFC.context
@@ -58,6 +66,7 @@ export default function ViewCube() {
 
     const cameraControls = context.ifcCamera.cameraControls
     controlsRef.current = cameraControls
+    contextRef.current = context
 
     // --- Mini scene: a fixed orthographic camera looking at a rotating cube ---
     const scene = new Scene()
@@ -93,10 +102,15 @@ export default function ViewCube() {
     }
     renderLoop()
 
-    // --- Picking: click a face/corner to snap the main camera to that view ---
+    // --- Pointer handling: click a face/corner to snap, drag to orbit freely ---
     const raycaster = new Raycaster()
     const pointer = new Vector2()
-    const onClick = (event) => {
+    let isPointerDown = false
+    let isDragging = false
+    let lastX = 0
+    let lastY = 0
+
+    const snapFromPointer = (event) => {
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
       pointer.y = (-((event.clientY - rect.top) / rect.height) * 2) + 1
@@ -107,15 +121,56 @@ export default function ViewCube() {
       }
       const direction = pickDirection(hits[0], cube)
       snapToDirection(cameraControls, direction)
+      fitModelToFrame()
       debug().log('ViewCube: snap to', direction)
     }
-    renderer.domElement.addEventListener('click', onClick)
-    renderer.domElement.style.cursor = 'pointer'
+
+    const onPointerDown = (event) => {
+      isPointerDown = true
+      isDragging = false
+      lastX = event.clientX
+      lastY = event.clientY
+      renderer.domElement.setPointerCapture(event.pointerId)
+    }
+    const onPointerMove = (event) => {
+      if (!isPointerDown) {
+        return
+      }
+      const dx = event.clientX - lastX
+      const dy = event.clientY - lastY
+      if (!isDragging && (Math.abs(dx) + Math.abs(dy)) < DRAG_THRESHOLD_PX) {
+        return
+      }
+      isDragging = true
+      lastX = event.clientX
+      lastY = event.clientY
+      const {azimuth, polar} = dragRotation(dx, dy, ROTATE_SENSITIVITY)
+      cameraControls.rotate(azimuth, polar, false)
+    }
+    const onPointerUp = (event) => {
+      if (isPointerDown && renderer.domElement.hasPointerCapture(event.pointerId)) {
+        renderer.domElement.releasePointerCapture(event.pointerId)
+      }
+      if (isPointerDown && !isDragging) {
+        // A click (not a drag): snap to the picked view.
+        snapFromPointer(event)
+      }
+      isPointerDown = false
+      isDragging = false
+    }
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
+    renderer.domElement.addEventListener('pointermove', onPointerMove)
+    renderer.domElement.addEventListener('pointerup', onPointerUp)
+    renderer.domElement.style.cursor = 'grab'
+    renderer.domElement.style.touchAction = 'none'
 
     return () => {
       cancelAnimationFrame(frameId)
-      renderer.domElement.removeEventListener('click', onClick)
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      renderer.domElement.removeEventListener('pointermove', onPointerMove)
+      renderer.domElement.removeEventListener('pointerup', onPointerUp)
       controlsRef.current = null
+      contextRef.current = null
       cube.geometry.dispose()
       materials.forEach((m) => {
         if (m.map) {
@@ -130,6 +185,15 @@ export default function ViewCube() {
     }
   }, [viewer])
 
+  /** Fit the loaded model to the frame, preserving the current view direction. */
+  const fitModelToFrame = () => {
+    const context = contextRef.current
+    const navMode = context && context.ifcCamera && context.ifcCamera.currentNavMode
+    if (navMode && typeof navMode.fitModelToFrame === 'function') {
+      navMode.fitModelToFrame()
+    }
+  }
+
   /**
    * Orbit the main camera by a relative step, guarding against an unmounted
    * viewer.
@@ -143,19 +207,25 @@ export default function ViewCube() {
     }
   }
 
-  /** Snap to a front-right-top isometric "home" view. */
+  /** Snap to a front-right-top isometric "home" view and fit the model. */
   const goHome = () => {
     if (controlsRef.current) {
       snapToDirection(controlsRef.current, ISO_DIRECTION.clone())
+      fitModelToFrame()
     }
   }
+
+  // Sit clear of any open right-side drawer (Notes, Apps).
+  const rightInset = MARGIN_PX +
+    (isNotesVisible ? rightDrawerWidth : 0) +
+    (isAppsVisible ? appsDrawerWidth : 0)
 
   return (
     <Box
       sx={{
         'position': 'absolute',
-        'top': '80px',
-        'right': '20px',
+        'top': `${TOP_INSET_PX}px`,
+        'right': `${rightInset}px`,
         'width': `${WIDGET_SIZE_PX}px`,
         'height': `${WIDGET_SIZE_PX}px`,
         'display': 'grid',
@@ -164,6 +234,7 @@ export default function ViewCube() {
         'placeItems': 'center',
         'zIndex': 100,
         'pointerEvents': 'none',
+        'transition': 'right 0.2s ease',
         '& > *': {pointerEvents: 'auto'},
       }}
       data-testid='view-cube'
@@ -279,6 +350,21 @@ export function snapToDirection(cameraControls, direction) {
 
 
 /**
+ * Convert a pointer drag delta (in pixels) into a relative camera-controls
+ * rotation.  Horizontal drag maps to azimuth, vertical drag to polar; both are
+ * negated so the model appears to follow the cursor.
+ *
+ * @param {number} dx Horizontal pixels moved
+ * @param {number} dy Vertical pixels moved
+ * @param {number} sensitivity Radians per pixel
+ * @return {{azimuth: number, polar: number}} Relative rotation in radians
+ */
+export function dragRotation(dx, dy, sensitivity) {
+  return {azimuth: -dx * sensitivity, polar: -dy * sensitivity}
+}
+
+
+/**
  * Bucket a cube-local coordinate (range [-0.5, 0.5]) into -1, 0 or 1 by which
  * third of the face it falls in.
  *
@@ -337,11 +423,15 @@ const CUBE_FACES = [
 
 const CUBE_SIZE_PX = 96
 const WIDGET_SIZE_PX = 150
+const TOP_INSET_PX = 80
+const MARGIN_PX = 20
 const NEAR_PLANE = 0.1
 const FAR_PLANE = 100
 const ORBIT_STEP_RAD = Math.PI / 2 // 90 degrees
 const TILT_STEP_RAD = Math.PI / 4 // 45 degrees
 const POLAR_EPS = 0.001
+const DRAG_THRESHOLD_PX = 4
+const ROTATE_SENSITIVITY = 0.008 // radians per pixel of drag
 // Half the cube's edge length; a face spans [-CUBE_HALF, CUBE_HALF] locally.
 const CUBE_HALF = 0.5
 const FACE_THIRDS = 3
