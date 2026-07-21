@@ -117,19 +117,22 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
     }
   }
   // Open-path selection, most preferred first:
-  //   1. OpenModelStreamed (conway #390, `streamOpen` flag): streamed
-  //      columnar parse — no per-record object phase, the dominant
-  //      JS-heap cost on large models. Conway falls back to the
-  //      classic open internally on any streamed-parse failure, so
-  //      this path never fails a load the classic one would survive;
-  //      the flag exists to revert the call site itself in prod.
+  //   1. OpenModelStreamed (conway #390, default): streamed columnar
+  //      parse — no per-record object phase, the dominant JS-heap cost
+  //      on large models. Conway falls back to the classic open
+  //      internally on any streamed-parse failure, so this path never
+  //      fails a load the classic one would survive. Opt out with the
+  //      `disableStreamOpen` flag (inverted because `?feature=` can
+  //      only turn flags on — `?feature=disableStreamOpen` reverts a
+  //      session; flipping the flag's isActive is the prod kill
+  //      switch).
   //   2. OpenModelAsync (conway #301 §2): yields to the event loop
   //      between progress ticks, so the backdrop/snackbar actually
   //      repaint and the browser stops flagging the tab as stalled.
   //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
-  if (isFeatureEnabled('streamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+  if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
   } else if (typeof ifcAPI.OpenModelAsync === 'function') {

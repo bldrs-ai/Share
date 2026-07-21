@@ -71,17 +71,21 @@ export const flags = [
   // `ifcItemsMapParity` shares the same capture.
   // Design: design/new/viewer-replacement.md §3b.
   {name: 'conwayDirectIfc', isActive: true},
-  // Streamed columnar IFC open (conway epic #390). When on, the
-  // cache-miss IFC parse calls Conway's `OpenModelStreamed` instead of
-  // `OpenModelAsync`: the model's record index is columnar from birth
-  // (no per-record object phase — the dominant JS-heap cost of parsing
-  // large models). Everything downstream (mesh capture, properties,
-  // spatial tree, OPFS source spill) is unchanged, and Conway falls
-  // back to the classic open internally on any streamed-parse failure,
-  // so this flag can never make a load fail that would have succeeded.
-  // Default-on; kill switch for prod is flipping this to false (or
-  // dropping the flag branch entirely once burned in).
-  {name: 'streamOpen', isActive: true},
+  // OFF-switch for the streamed columnar IFC open (conway epic #390).
+  // By default the cache-miss IFC parse calls Conway's
+  // `OpenModelStreamed` instead of `OpenModelAsync`: the model's record
+  // index is columnar from birth (no per-record object phase — the
+  // dominant JS-heap cost of parsing large models). Everything
+  // downstream (mesh capture, properties, spatial tree, OPFS source
+  // spill) is unchanged, and Conway falls back to the classic open
+  // internally on any streamed-parse failure, so streaming can never
+  // fail a load the classic path would survive.
+  // Inverted semantics on purpose: `?feature=` can only turn flags ON,
+  // so the runtime escape hatch for a default-on behavior must be an
+  // off-flag — `?feature=disableStreamOpen` reverts one session (and
+  // A/Bs the same build); flipping this to true is the prod-wide kill
+  // switch.
+  {name: 'disableStreamOpen', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
