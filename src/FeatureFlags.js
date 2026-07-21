@@ -90,9 +90,10 @@ export const flags = [
   // #1613): cache-miss IFC parses open with DEFER_GEOMETRY and pump
   // Conway's ExtractGeometryBatch, so meshes stream into the scene in
   // file-order batches instead of one 30s+ whole-model extraction.
-  // Off by default while the incremental render path burns in on
-  // previews; flip on via `?feature=demandGeometry`.
-  {name: 'demandGeometry', isActive: false},
+  // TEMPORARILY default-on ON THIS BRANCH for preview burn-in (DnD
+  // loads can't carry `?feature=` params) — flip back to false before
+  // merging to main.
+  {name: 'demandGeometry', isActive: true},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

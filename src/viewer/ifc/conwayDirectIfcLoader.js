@@ -168,7 +168,7 @@ export async function parseIfcWithConway(
         break
       }
       // Yield so the renderer paints between batches.
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await yieldToEventLoop()
     }
     return {modelID, captured}
   }
@@ -215,6 +215,34 @@ export async function parseIfcWithConway(
 // capture/render overhead amortizes, small enough that first pixels
 // arrive within a couple of seconds of parse completing.
 const DEMAND_EXTRACT_BATCH_SIZE = 64
+
+
+/**
+ * Yield to the event loop without background-tab timer throttling:
+ * backgrounded tabs clamp setTimeout to >=1s, collapsing the pump to a
+ * ~5% duty cycle. scheduler.yield() (and a MessageChannel fallback)
+ * post ordinary tasks, which are not clamped, so loads keep their CPU
+ * when the tab is backgrounded.
+ *
+ * @return {Promise<void>} resolves on the next event-loop task
+ */
+function yieldToEventLoop() {
+  if (typeof globalThis.scheduler?.yield === 'function') {
+    return globalThis.scheduler.yield()
+  }
+  if (typeof globalThis.MessageChannel === 'function') {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => {
+        channel.port1.close()
+        resolve()
+      }
+      channel.port2.postMessage(null)
+    })
+  }
+  // Non-browser environments (tests); throttling doesn't apply there.
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
 
 
 // web-ifc numeric log levels (conway's SetLogLevel shim uses the same

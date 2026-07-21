@@ -212,11 +212,14 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
       })
 
-      it('demandGeometry ships default-off in FeatureFlags', () => {
+      it('demandGeometry flag exists (temporarily default-on for branch burn-in)', () => {
+        // Default-off is the mainline contract; this branch flips it on so
+        // DnD loads (which can't carry ?feature=) exercise the demand path.
+        // Restore the isActive=false assertion before merging to main.
         const {flags} = jest.requireActual('../../FeatureFlags')
         const flag = flags.find((f) => f.name === 'demandGeometry')
         expect(flag).toBeDefined()
-        expect(flag.isActive).toBe(false)
+        expect(flag.isActive).toBe(true)
       })
 
       it('threads onPreviewMesh into the deferred open as ON_PREVIEW_MESH (slice A2)', async () => {
