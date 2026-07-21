@@ -32,10 +32,14 @@ describe('ViewCube', () => {
       expect(pickDirection(hit, cube)).toStrictEqual(new Vector3(0, 0, 1))
     })
 
-    it('resolves an edge click to the clicked face normal', () => {
-      // Near the top edge of the front face: two coords are at the boundary.
+    it('resolves an edge click to a normalized edge diagonal', () => {
+      // Near the top edge of the front face: the front and top axes are active.
       const hit = makeHit([NEAR_CENTER, HALF, HALF], [0, 0, 1])
-      expect(pickDirection(hit, cube)).toStrictEqual(new Vector3(0, 0, 1))
+      const dir = pickDirection(hit, cube)
+      const expected = new Vector3(0, 1, 1).normalize()
+      expect(dir.x).toBeCloseTo(expected.x)
+      expect(dir.y).toBeCloseTo(expected.y)
+      expect(dir.z).toBeCloseTo(expected.z)
     })
 
     it('resolves a corner click to a normalized diagonal', () => {

@@ -22,6 +22,7 @@ import {
   RotateLeft as RotateLeftIcon,
   RotateRight as RotateRightIcon,
 } from '@mui/icons-material'
+import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 
@@ -48,6 +49,8 @@ export default function ViewCube() {
   const isAppsVisible = useStore((state) => state.isAppsVisible)
   const rightDrawerWidth = useStore((state) => state.rightDrawerWidth)
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
+  // On mobile the drawers are bottom sheets, so they don't push the widget aside.
+  const isMobile = useIsMobile()
 
   const mountRef = useRef(null)
   // Live handles so the ring buttons and fit calls can reach the viewer.
@@ -102,24 +105,45 @@ export default function ViewCube() {
     }
     renderLoop()
 
-    // --- Pointer handling: click a face/corner to snap, drag to orbit freely ---
+    // --- Pointer handling: click a face/corner to snap, drag to orbit freely,
+    // hover to highlight the face under the cursor. ---
     const raycaster = new Raycaster()
     const pointer = new Vector2()
     let isPointerDown = false
     let isDragging = false
     let lastX = 0
     let lastY = 0
+    let hoveredIndex = -1
 
-    const snapFromPointer = (event) => {
+    const raycastFromPointer = (event) => {
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
       pointer.y = (-((event.clientY - rect.top) / rect.height) * 2) + 1
       raycaster.setFromCamera(pointer, camera)
       const hits = raycaster.intersectObject(cube)
-      if (hits.length === 0) {
+      return hits.length > 0 ? hits[0] : null
+    }
+
+    // Tint the face under the cursor by multiplying its texture with a highlight.
+    const setHover = (index) => {
+      if (index === hoveredIndex) {
         return
       }
-      const direction = pickDirection(hits[0], cube)
+      if (hoveredIndex >= 0) {
+        materials[hoveredIndex].color.setHex(BASE_HEX)
+      }
+      if (index >= 0) {
+        materials[index].color.setHex(HOVER_HEX)
+      }
+      hoveredIndex = index
+    }
+
+    const snapFromPointer = (event) => {
+      const hit = raycastFromPointer(event)
+      if (!hit) {
+        return
+      }
+      const direction = pickDirection(hit, cube)
       snapToDirection(cameraControls, direction)
       fitModelToFrame()
       debug().log('ViewCube: snap to', direction)
@@ -134,6 +158,8 @@ export default function ViewCube() {
     }
     const onPointerMove = (event) => {
       if (!isPointerDown) {
+        const hit = raycastFromPointer(event)
+        setHover(hit ? hit.face.materialIndex : -1)
         return
       }
       const dx = event.clientX - lastX
@@ -142,6 +168,7 @@ export default function ViewCube() {
         return
       }
       isDragging = true
+      setHover(-1) // Clear the highlight while dragging.
       lastX = event.clientX
       lastY = event.clientY
       const {azimuth, polar} = dragRotation(dx, dy, ROTATE_SENSITIVITY)
@@ -158,9 +185,11 @@ export default function ViewCube() {
       isPointerDown = false
       isDragging = false
     }
+    const onPointerLeave = () => setHover(-1)
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointermove', onPointerMove)
     renderer.domElement.addEventListener('pointerup', onPointerUp)
+    renderer.domElement.addEventListener('pointerleave', onPointerLeave)
     renderer.domElement.style.cursor = 'grab'
     renderer.domElement.style.touchAction = 'none'
 
@@ -169,6 +198,7 @@ export default function ViewCube() {
       renderer.domElement.removeEventListener('pointerdown', onPointerDown)
       renderer.domElement.removeEventListener('pointermove', onPointerMove)
       renderer.domElement.removeEventListener('pointerup', onPointerUp)
+      renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
       controlsRef.current = null
       contextRef.current = null
       cube.geometry.dispose()
@@ -215,10 +245,11 @@ export default function ViewCube() {
     }
   }
 
-  // Sit clear of any open right-side drawer (Notes, Apps).
-  const rightInset = MARGIN_PX +
-    (isNotesVisible ? rightDrawerWidth : 0) +
-    (isAppsVisible ? appsDrawerWidth : 0)
+  // Sit clear of any open right-side drawer (Notes, Apps).  On mobile the
+  // drawers are bottom sheets, so only the base margin applies.
+  const drawerInset = isMobile ? 0 :
+    (isNotesVisible ? rightDrawerWidth : 0) + (isAppsVisible ? appsDrawerWidth : 0)
+  const rightInset = MARGIN_PX + drawerInset
 
   return (
     <Box
@@ -303,9 +334,10 @@ function RingButton({title, onClick, icon, sx}) {
 /**
  * Determine the model-space view direction for a click on the cube.  Because
  * the cube's local axes map to the model's axes (local +Z is the model front),
- * the clicked zone in cube-local space is the direction to look from.  Corner
- * clicks (all three coordinates near an edge) yield a diagonal isometric
- * direction; face and edge clicks resolve to the clicked face normal.
+ * the clicked zone in cube-local space is the direction to look from.  A click
+ * near a corner (three active axes) or an edge (two active axes) yields the
+ * corresponding diagonal direction; a face-center click (one or zero active
+ * axes) resolves to the clicked face's outward normal.
  *
  * @param {object} hit Raycaster intersection against the cube
  * @param {Mesh} cube The cube mesh
@@ -318,12 +350,13 @@ export function pickDirection(hit, cube) {
     zoneSign(local.y),
     zoneSign(local.z),
   )
-  const cornerAxes = 3
-  const isCorner = (Math.abs(zone.x) + Math.abs(zone.y) + Math.abs(zone.z)) === cornerAxes
-  if (isCorner) {
+  const activeAxes = Math.abs(zone.x) + Math.abs(zone.y) + Math.abs(zone.z)
+  // Two active axes = edge, three = corner; both look along the diagonal.
+  const edgeAxes = 2
+  if (activeAxes >= edgeAxes) {
     return zone.normalize()
   }
-  // Face or edge: snap to the clicked face's outward normal.
+  // Face center: snap to the clicked face's outward normal.
   return hit.face.normal.clone().normalize()
 }
 
@@ -432,6 +465,8 @@ const TILT_STEP_RAD = Math.PI / 4 // 45 degrees
 const POLAR_EPS = 0.001
 const DRAG_THRESHOLD_PX = 4
 const ROTATE_SENSITIVITY = 0.008 // radians per pixel of drag
+const BASE_HEX = 0xffffff // Face texture shown untinted.
+const HOVER_HEX = 0xbfe0ff // Light-blue tint for the hovered face.
 // Half the cube's edge length; a face spans [-CUBE_HALF, CUBE_HALF] locally.
 const CUBE_HALF = 0.5
 const FACE_THIRDS = 3
