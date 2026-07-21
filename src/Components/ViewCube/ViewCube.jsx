@@ -455,7 +455,10 @@ const CUBE_FACES = [
 ]
 
 const CUBE_SIZE_PX = 96
-const WIDGET_SIZE_PX = 150
+// Wide enough to contain the 96px cube plus a ~48px ring button on each side,
+// so the right-column buttons (Rotate right, Home) stay inside the widget
+// instead of overflowing off-screen / onto an open drawer.
+const WIDGET_SIZE_PX = 200
 const TOP_INSET_PX = 80
 const MARGIN_PX = 20
 const NEAR_PLANE = 0.1
