@@ -23,6 +23,7 @@ import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
+import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
@@ -172,6 +173,39 @@ export default class ShareIfcLoader {
       const demandPreview = scene !== null && isFeatureEnabled('demandGeometry') ?
         new Group() : null
       let previewInstalled = false
+
+      // Slice A2 (parse-time preview channel): conway emits
+      // self-contained preview payloads WHILE THE PARSE RUNS — preview
+      // quality (openings/materials can be missing), replaced wholesale
+      // by the durable batches below. Same group, same frame (payload
+      // transforms carry the pinned coordination), best-effort like
+      // every other preview step.
+      const previewGeometryCache = new Map()
+      const previewMaterialCache = new Map()
+      let parsePreviewCount = 0
+      const PARSE_PREVIEW_REFIT_EVERY = 256
+      const onPreviewMesh = demandPreview === null ? undefined : (payload) => {
+        try {
+          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
+          if (mesh === null) {
+            return
+          }
+          demandPreview.add(mesh)
+          if (!previewInstalled) {
+            previewInstalled = true
+            scene.add(demandPreview)
+          }
+          // Frame the very first geometry immediately, then refit
+          // occasionally as the preview grows (the first durable batch
+          // refits again).
+          if (++parsePreviewCount === 1 || parsePreviewCount % PARSE_PREVIEW_REFIT_EVERY === 0) {
+            ifc.context.fitToFrame()
+          }
+        } catch (e) {
+          debug(WARN).warn('parse preview mesh skipped:', e)
+        }
+      }
+
       const onMeshBatch = demandPreview === null ? undefined : (batch, batchModelID) => {
         try {
           const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
@@ -201,7 +235,7 @@ export default class ShareIfcLoader {
       }
 
       const {modelID, captured} =
-        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch)
+        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
 
       if (onProgress) {
         onProgress('Building model...')

@@ -89,9 +89,16 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   on the `demandGeometry` deferred path) so callers can render
  *   progressively;
  *   `captured` still accumulates everything for one-shot consumers.
+ * @param {Function} [onPreviewMesh] demand/tiled slice A2: receives
+ *   conway PreviewMeshPayloads WHILE THE PARSE RUNS (self-contained
+ *   copied geometry, preview quality — openings/materials can be
+ *   missing; replaced wholesale by the durable batches). Only on the
+ *   `demandGeometry` deferred path with engines that support
+ *   ON_PREVIEW_MESH; silently ignored otherwise.
  * @return {Promise<{modelID: number, captured: Array}>}
  */
-export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined) {
+export async function parseIfcWithConway(
+  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -132,9 +139,16 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined, o
       !isFeatureEnabled('disableStreamOpen') &&
       typeof ifcAPI.OpenModelStreamed === 'function' &&
       typeof ifcAPI.ExtractGeometryBatch === 'function') {
+    const deferSettings = {...openSettings, DEFER_GEOMETRY: true}
+    if (onPreviewMesh) {
+      // Slice A2 (parse-time preview channel): conway emits preview
+      // payloads between the parse's cooperative yields. Passing the
+      // callback to an engine without the channel is harmless (unknown
+      // settings are ignored), so no feature detection is needed here.
+      deferSettings.ON_PREVIEW_MESH = onPreviewMesh
+    }
     // eslint-disable-next-line new-cap
-    const modelID = await ifcAPI.OpenModelStreamed(
-      data, {...openSettings, DEFER_GEOMETRY: true})
+    const modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
     if (typeof modelID !== 'number' || modelID < 0) {
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }

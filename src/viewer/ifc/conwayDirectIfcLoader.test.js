@@ -218,6 +218,25 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(flag).toBeDefined()
         expect(flag.isActive).toBe(false)
       })
+
+      it('threads onPreviewMesh into the deferred open as ON_PREVIEW_MESH (slice A2)', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const onPreviewMesh = jest.fn()
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, onPreviewMesh)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.DEFER_GEOMETRY).toBe(true)
+        expect(settings.ON_PREVIEW_MESH).toBe(onPreviewMesh)
+      })
+
+      it('omits ON_PREVIEW_MESH when no preview callback is given', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.ON_PREVIEW_MESH).toBeUndefined()
+      })
     })
 
     describe('open-path selection (disableStreamOpen flag)', () => {

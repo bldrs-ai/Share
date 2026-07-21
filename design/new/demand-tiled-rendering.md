@@ -64,6 +64,33 @@ Exit gate: PSB first-pixels < 20s in a preview; final scene
 mesh-parity with the classic path (same product set, same triangle
 counts); all flows green with the flag off.
 
+### A2 — Parse-time preview channel (first pixels in the first seconds)
+
+Slice A's first pixels still wait for the parse (~13s on PSB). A2
+moves them into the parse itself. Durable extraction mid-parse is
+structurally impossible for typical IFC — relationship records
+(rel-voids, rel-materials, styled items) extend to ~92–97% of file
+depth (measured on Schependomlaan), so a prefix extraction can miss
+openings and materials. Conway therefore emits **throwaway preview
+payloads** (`Loadersettings.ON_PREVIEW_MESH`): prefix snapshots of the
+live columnar index, extracted through disposable prefix models under
+a per-tick time budget, geometry copied out of the wasm heap
+(self-contained, byte/product-capped), coordination frame pinned so
+preview and durable placements coincide. The durable pump re-extracts
+everything after the parse and replaces the preview — final parity
+untouched by construction.
+
+Share side: `parseIfcWithConway(..., onPreviewMesh)` threads the
+callback into the deferred open; `payloadToPreviewMesh` builds pooled
+render-only meshes (geometry cached by geometryExpressID for mapped
+sharing) into the same preview group the slice-A batches use.
+Preview meshes for products the durable batches later re-emit overlap
+identically until the swap — invisible, and gone with the group.
+
+Measured (node, Schependomlaan 49MB): first payload 583ms into a
+1199ms parse. On PSB-class parses this is first pixels at ~1–2s of
+parse instead of ~13s.
+
 ### B — Budgeted residency + eviction (the memory endgame)
 
 Wire the full pump→queue→tile-pool→extractor composition. Renderer
