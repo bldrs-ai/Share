@@ -35,6 +35,7 @@ import {
   CleaningServicesOutlined as CleaningServicesOutlinedIcon,
 } from '@mui/icons-material'
 import {clearOPFSCache} from '../../OPFS/utils'
+import {reloadAfterCacheClear} from '../../utils/navigate'
 
 
 /**
@@ -47,6 +48,7 @@ export default function ProfileControl() {
   const appMetadata = useStore((state) => state.appMetadata)
   const setAccessToken = useStore((state) => state.setAccessToken)
   const viewer = useStore((state) => state.viewer)
+  const appPrefix = useStore((state) => state.appPrefix)
   // The §6e Neutral/Flat render toggle only appears when the whole look system
   // is enabled (`?feature=look`); off, there's no look to switch.
   const isLookEnabled = isFeatureEnabled('look')
@@ -359,7 +361,10 @@ export default function ProfileControl() {
               console.error('Clear OPFS cache failed (reloading anyway)', err)
               captureException(err)
             } finally {
-              window.location.reload()
+              // On a temporary (uploaded) model the just-cleared OPFS was the
+              // only copy, so reloading the same URL would error; go to the
+              // home model instead. Normal models just reload from source.
+              reloadAfterCacheClear(appPrefix)
             }
           }}
           data-testid='clear-local-cache'
