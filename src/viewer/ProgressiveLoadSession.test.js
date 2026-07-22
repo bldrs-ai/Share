@@ -10,6 +10,11 @@ function makeControls() {
   return {
     fits: [],
     listeners: {},
+    // The activation defaults (orbit-control.js#activateOrbitControls):
+    // fitToSphere dollies are CLAMPED to maxDistance, so the session
+    // must grow it with the model or big models overflow the window.
+    minDistance: 1,
+    maxDistance: 300,
     fitToSphere(sphere, withTransition) {
       this.fits.push({center: sphere.center.clone(), radius: sphere.radius, withTransition})
     },
@@ -135,6 +140,22 @@ describe('ProgressiveLoadSession', () => {
     bare.addPreviewMesh(cubeAt(0))
     bare.finish()
     expect(bare.state).toBe(SessionState.FINISHED)
+  })
+
+  it('grows the dolly clamp past the activation default for big models', () => {
+    // A model whose fit distance far exceeds maxDistance = 300: without
+    // growing the clamp, camera-controls parks the dolly at 300 and the
+    // model overflows the window (PSB / Arty symptom).
+    session.addPreviewMesh(cubeAt(0, 2000))
+    expect(controls.fits).toHaveLength(1)
+    expect(controls.maxDistance).toBeGreaterThan(controls.fits[0].radius)
+    expect(camera.far).toBeGreaterThan(controls.maxDistance)
+    // Growth is monotonic: a smaller later fit never shrinks the range.
+    const grown = controls.maxDistance
+    session.lastFitMs = Date.now() - 10000
+    session.overflowPending = true
+    session.maybeRefit_()
+    expect(controls.maxDistance).toBe(grown)
   })
 
   it('stampCoordination re-frames the union under the group transform', () => {

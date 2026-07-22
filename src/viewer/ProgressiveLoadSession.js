@@ -22,7 +22,10 @@ const CAMERA_FOLLOW_MAX_MS = 1000
 /** Per-refit cadence growth factor. */
 const CAMERA_FOLLOW_GROWTH = 1.5
 const HALF = 0.5
-const FAR_PLANE_SLACK = 4
+/** Far plane must clear the whole zoom-out range plus the model. */
+const FAR_PLANE_SLACK = 1.5
+/** Zoom-out headroom over the fit distance (mirrors fitModelToFrame). */
+const MAX_DISTANCE_HEADROOM = 10
 /** Box corner count for the sphere-containment test. */
 const BOX_CORNERS = 8
 
@@ -372,7 +375,20 @@ export default class ProgressiveLoadSession {
     const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
     const limitingFov = camera.aspect > 1 ? vFov : hFov
     const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
-    const wantFar = (fitDistance + sphere.radius) * FAR_PLANE_SLACK
+    // camera-controls clamps every dolly to [minDistance, maxDistance],
+    // and the activation default is maxDistance = 300 scene units — on
+    // any model whose fit distance exceeds that, fitToSphere silently
+    // parks the camera at the clamp and the model overflows the window.
+    // Scale the zoom-out range with the growing union exactly like the
+    // final fitModelToFrame does (10x headroom), only ever outward —
+    // the union is monotonic, so the range never needs to shrink
+    // mid-follow and the final fit re-derives it anyway.
+    const wantMaxDistance = fitDistance * MAX_DISTANCE_HEADROOM
+    if (typeof controls.maxDistance === 'number' &&
+        controls.maxDistance < wantMaxDistance) {
+      controls.maxDistance = wantMaxDistance
+    }
+    const wantFar = (wantMaxDistance + sphere.radius) * FAR_PLANE_SLACK
     if (camera.far < wantFar) {
       camera.far = wantFar
       camera.updateProjectionMatrix()
