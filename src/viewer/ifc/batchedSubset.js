@@ -63,6 +63,11 @@ const VEC3 = 3
  * @param {Set<number>} idSet parent IFC product expressIDs to keep
  * @param {object} [opts]
  * @param {object} [opts.material] subset material (defaults to the batch's)
+ * @param {Set<number>} [opts.excludeInstances] global occurrence ids
+ *   (`instanceOccurrenceIds`) to omit even when their parent matches — the
+ *   seam that lets the isolator hide ONE STEP occurrence of a reused part
+ *   while its siblings stay shown (mirrors the merged path's
+ *   `createSubsetMeshByParent` opt of the same name).
  * @return {Mesh|null}
  */
 export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
@@ -71,12 +76,18 @@ export function buildBatchedSubsetMesh(mesh, idSet, opts = {}) {
   }
   const parents = mesh.instanceParents
   const geometries = mesh.instanceGeometry
+  const occurrenceIds = mesh.instanceOccurrenceIds
+  const exclude = (opts.excludeInstances && opts.excludeInstances.size > 0 && occurrenceIds) ?
+    opts.excludeInstances : null
   // First pass: which batchIds match, and how big the merged buffers get.
   const selected = []
   let vertexTotal = 0
   let indexTotal = 0
   for (let batchId = 0; batchId < parents.length; batchId++) {
     if (!idSet.has(parents[batchId])) {
+      continue
+    }
+    if (exclude !== null && exclude.has(occurrenceIds[batchId])) {
       continue
     }
     const geom = geometries[batchId]
@@ -230,11 +241,15 @@ export function attachBatchedSubsets(model, fallbackParent, defaults = {}) {
       customID = 'default',
       removePrevious = true,
       material = defaults.material,
+      // Per-occurrence hide (STEP): omit these occurrence ids from the
+      // re-bake — see buildBatchedSubsetMesh. Same opt name as the merged
+      // path's attachInstanceMapSubsets, so IfcIsolator passes it blindly.
+      excludeInstances = undefined,
     } = opts || {}
     if (removePrevious) {
       removeSubset(customID)
     }
-    const meshes = buildBatchedModelSubsets(model, ids ?? [], {material})
+    const meshes = buildBatchedModelSubsets(model, ids ?? [], {material, excludeInstances})
     if (meshes.length === 0) {
       return []
     }

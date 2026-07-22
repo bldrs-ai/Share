@@ -69,6 +69,36 @@ function highlightState(mesh) {
 
 
 /**
+ * Lazily build + cache the occurrence-id → batchIds index for per-instance
+ * narrowing (`instanceOccurrenceIds` is the global emission-order id the
+ * pick tables and the store's `selectedInstanceIds` speak). Built only when
+ * per-instance selection is actually used, so parent-level-only models pay
+ * nothing. One occurrence id maps to at most one batchId within a mesh, but
+ * the list shape mirrors `parentIndex` so `setLayer` treats both alike.
+ *
+ * @param {object} mesh BatchedMesh carrying `instanceOccurrenceIds`
+ * @param {object} state this mesh's highlight state
+ * @return {Map<number, Array<number>>}
+ */
+function occurrenceIndexOf(mesh, state) {
+  if (!state.occurrenceIndex) {
+    const occurrenceIndex = new Map()
+    const occIds = mesh.instanceOccurrenceIds
+    for (let b = 0; b < occIds.length; b++) {
+      const list = occurrenceIndex.get(occIds[b])
+      if (list) {
+        list.push(b)
+      } else {
+        occurrenceIndex.set(occIds[b], [b])
+      }
+    }
+    state.occurrenceIndex = occurrenceIndex
+  }
+  return state.occurrenceIndex
+}
+
+
+/**
  * Repaint one instance to its current layered colour: preselection wins
  * over selection wins over the instance's original colour. Alpha always
  * comes from the original (keeps a highlighted glass pane translucent).
@@ -93,16 +123,21 @@ function paint(mesh, batchId) {
 
 
 /**
- * Replace a highlight layer with the instances whose parent product is in
- * `expressIds`, repainting everything whose membership changed.
+ * Replace a highlight layer with the matched instances, repainting
+ * everything whose membership changed. `ids` are parent product express ids
+ * by default; with `byOccurrence` they are global occurrence ids
+ * (`instanceOccurrenceIds`) — the per-instance narrowing the no-shift scene
+ * pick and NavTree occurrence selection use.
  *
  * @param {object} model BatchedMesh or Group
- * @param {Array<number>|Set<number>} expressIds parent IFC product ids
+ * @param {Array<number>|Set<number>} matchIds parent IFC product ids, or
+ *   occurrence ids when `byOccurrence`
  * @param {object|null} color `{r,g,b}` (0..1) highlight, or null to clear
  * @param {'sel'|'pre'} layer which layer to set
+ * @param {boolean} [byOccurrence] resolve ids through the occurrence index
  */
-function setLayer(model, expressIds, color, layer) {
-  const ids = expressIds instanceof Set ? expressIds : new Set(expressIds ?? [])
+function setLayer(model, matchIds, color, layer, byOccurrence = false) {
+  const ids = matchIds instanceof Set ? matchIds : new Set(matchIds ?? [])
   const setKey = layer === 'pre' ? 'preSet' : 'selSet'
   const colorKey = layer === 'pre' ? 'preColor' : 'selColor'
   eachBatch(model, (mesh) => {
@@ -112,14 +147,18 @@ function setLayer(model, expressIds, color, layer) {
     if (!mesh.instanceParents || !mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
       return
     }
+    if (byOccurrence && !mesh.instanceOccurrenceIds) {
+      return
+    }
     const state = highlightState(mesh)
     state[colorKey] = color ?? undefined
-    // O(matched): walk the requested products' batchIds via the index, not
+    // O(matched): walk the requested ids' batchIds via the index, not
     // all N instances.
+    const index = byOccurrence ? occurrenceIndexOf(mesh, state) : state.parentIndex
     const next = new Set()
     if (color && ids.size > 0) {
       for (const id of ids) {
-        const list = state.parentIndex.get(id)
+        const list = index.get(id)
         if (list) {
           for (const b of list) {
             next.add(b)
@@ -152,6 +191,24 @@ function setLayer(model, expressIds, color, layer) {
  */
 export function applyBatchedSelection(model, expressIds, color = DEFAULT_HIGHLIGHT) {
   setLayer(model, expressIds, color, 'sel')
+}
+
+
+/**
+ * Narrow the sticky selection highlight to specific occurrences (global
+ * emission-order occurrence ids off `instanceOccurrenceIds`). REPLACES the
+ * selection layer, so calling it after `applyBatchedSelection` (which paints
+ * every instance of the selected product) restores the product's other
+ * instances to their original colours and leaves only the named
+ * occurrence(s) highlighted — the batched counterpart of the merged path's
+ * `setInstanceSelection` one-instance subset.
+ *
+ * @param {object} model BatchedMesh or Group
+ * @param {Array<number>|Set<number>} occurrenceIds global occurrence ids
+ * @param {object} [color] `{r,g,b}` 0..1; defaults to cyan
+ */
+export function applyBatchedInstanceSelection(model, occurrenceIds, color = DEFAULT_HIGHLIGHT) {
+  setLayer(model, occurrenceIds, color, 'sel', true)
 }
 
 

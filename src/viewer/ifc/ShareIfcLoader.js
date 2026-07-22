@@ -17,13 +17,18 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
-import {buildBatchedConwayModel} from './buildBatchedConwayModel'
+import {Mesh} from 'three'
+import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
+import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
+import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
+import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import ShareIfcManager from './ShareIfcManager'
 import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
 
@@ -147,30 +152,110 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
+    // The progressive-load session owns the format-neutral load
+    // instrumentation — demand-preview lifecycle, strict-fit camera
+    // follow, and progress/summary reporting. IFC and STEP both route
+    // through this parse, so both trigger the same session; format
+    // knowledge stays below (payload/batch → mesh conversion).
+    const scene = typeof ifc.context?.getScene === 'function' ?
+      ifc.context.getScene() : null
+    const session = new ProgressiveLoadSession({
+      scene: scene !== null && isFeatureEnabled('demandGeometry') ? scene : null,
+      getControls: () => ifc.context?.ifcCamera?.cameraControls,
+      getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
+      onProgress,
+    })
+
+    let builder = null
+
     try {
-      if (onProgress) {
-        onProgress('Parsing model geometry...')
-      }
+      session.report('Opening model...')
       const ifcAPI = this.ifcManager.ifcAPI
       // onProgress is threaded into conway's ON_PROGRESS extension so the
       // opaque gap between 'Parsing model geometry...' and 'Building
       // model...' carries real per-phase counts (headerParse / dataParse /
       // geometry — conway #301). Engines without the extension just keep
       // the coarse strings.
-      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress)
+      //
+      // Demand/tiled rendering (#1613): the parse-time preview payloads
+      // (slice A2) and the durable pump batches (slice A) both stream
+      // into the session's preview group — format-specific here is only
+      // the conversion to meshes; lifecycle, fitting, and reporting are
+      // the session's. Every preview step is best-effort: a preview
+      // failure must never break the load.
+      const usePreview = session.previewGroup !== null
+      const previewGeometryCache = new Map()
+      const previewMaterialCache = new Map()
 
-      if (onProgress) {
-        onProgress('Building model...')
+      const onPreviewMesh = !usePreview ? undefined : (payload) => {
+        try {
+          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
+          if (mesh !== null) {
+            session.addPreviewMesh(mesh)
+          }
+        } catch (e) {
+          debug(WARN).warn('parse preview mesh skipped:', e)
+        }
       }
-      const scene = typeof ifc.context?.getScene === 'function' ?
-        ifc.context.getScene() : null
+
+      // Slice B1: pump deltas assemble the DURABLE BatchedMesh model
+      // incrementally — the on-screen group IS the final model, so
+      // there is no monolithic end-of-load build and no swap. Falls
+      // back to the render-only preview mesh (and the end-of-load
+      // builds below) on any builder failure.
+      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
+        try {
+          if (builder === null) {
+            builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
+              onBounds: (box) => session.notifyBounds(box),
+            })
+            scene.add(builder.root)
+          }
+          builder.appendBatch(batch)
+        } catch (e) {
+          debug(WARN).warn('incremental batch append failed; preview fallback:', e)
+          try {
+            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+            session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
+          } catch (previewError) {
+            debug(WARN).warn('demand preview batch skipped:', previewError)
+          }
+        }
+      }
+
+      const {modelID, captured} =
+        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
+
+      session.beginAssembly()
+
+      let ifcModel
+      let buildStats
+
+      // Slice B1: the incrementally assembled batches only need
+      // decoration — the group already on screen becomes the durable
+      // model. Fallback on any error: remove the partial group and run
+      // the end-of-load builds below from `captured` as before.
+      if (builder !== null && builder.hasContent()) {
+        try {
+          const incremental = builder.finalize()
+          ifcModel = assembleBatchedModel(
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
+          buildStats = incremental.stats
+        } catch (e) {
+          debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
+          try {
+            scene.remove(builder.root)
+          } catch {
+            // best-effort
+          }
+          ifcModel = undefined
+        }
+      }
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
       // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
       // path on any construction error so the flag can never break a load.
-      let ifcModel
-      let buildStats
-      if (isFeatureEnabled('batchedMesh')) {
+      if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
           const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
           ifcModel = batched.model
@@ -186,11 +271,12 @@ export default class ShareIfcLoader {
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
       }
 
+      // Swap the preview out before the real model installs — the
+      // session stops the camera follow and disposes preview meshes.
+      session.finish()
+
       ifc.addIfcModel(ifcModel)
 
-      if (onProgress) {
-        onProgress('Setting up coordinate system...')
-      }
       // eslint-disable-next-line new-cap
       const matrixArr = await ifcAPI.GetCoordinationMatrix(modelID)
       // Apply the coordination matrix to the model directly. Wit-three's
@@ -207,14 +293,8 @@ export default class ShareIfcLoader {
         ifcModel.matrixAutoUpdate = false
       }
 
-      if (onProgress) {
-        onProgress('Fitting model to frame...')
-      }
       ifc.context.fitToFrame()
 
-      if (onProgress) {
-        onProgress('Gathering model statistics...')
-      }
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
       // doesn't expose them. The model mesh is already built + added above,
@@ -238,9 +318,29 @@ export default class ShareIfcLoader {
         }
       }
 
-      if (onProgress) {
-        onProgress('Model loaded successfully!')
+      // Model summary onto the report's Total line (replaces the old
+      // per-stage stats/coordinate-system lines): mesh shape from the
+      // build, units from the feature-detected scaling factor
+      // (1 = m, 0.001 = mm).
+      try {
+        const parts = []
+        if (buildStats) {
+          parts.push(`vertices=${buildStats.vertexCount ?? buildStats.totalVerts ?? '?'}`)
+          parts.push(`triangles=${buildStats.triangleCount ?? buildStats.totalTriangles ?? '?'}`)
+        }
+        if (typeof ifcAPI.GetLinearScalingFactor === 'function') {
+          // eslint-disable-next-line new-cap
+          const metresPerUnit = ifcAPI.GetLinearScalingFactor(modelID)
+          const MM = 0.001
+          const unitLabel = metresPerUnit === 1 ? 'm' :
+            metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
+          parts.push(`units=${unitLabel}`)
+        }
+        session.setSummary(parts)
+      } catch (e) {
+        debug(WARN).warn('load summary skipped:', e)
       }
+
 
       // Parallel-run the new IfcItemsMap populators against the live
       // model and log the diff. Diagnostic only — no behavior change.
@@ -274,6 +374,17 @@ export default class ShareIfcLoader {
 
       return ifcModel
     } catch (err) {
+      session.abort()
+      // A partially assembled incremental group must not survive a
+      // failed load — remove it (its wasm-side twin is released by the
+      // engine's own error paths).
+      try {
+        if (builder !== null && builder.root.parent) {
+          builder.root.parent.remove(builder.root)
+        }
+      } catch {
+        // best-effort
+      }
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.

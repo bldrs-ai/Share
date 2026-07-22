@@ -5,6 +5,7 @@ import {
   attachConwayDirectModelMethods,
   makeConwayDirectIfcManager,
 } from './conwayDirectIfcLoader'
+import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
 /**
@@ -32,10 +33,13 @@ import {
  *     (design/new/viewer-replacement.md §3b.iv).
  *
  * Capabilities: `expressIdPicking` + `batchedPicking` (NOT `instancePicking`
- * — per-occurrence narrowing is still a follow-up; a click highlights every
- * occurrence of the picked product). `setInstanceSelection` guards on
- * `instancePicking` and so no-ops safely; the parent-level recolor from
- * `setSelection` stands.
+ * — that flag means "has an IfcInstanceMap"; the batched path carries its
+ * per-occurrence identity in the per-batch tables instead:
+ * `instanceOccurrenceIds` / `instanceOccurrencePaths` / `instanceGeometryIds`
+ * plus the reverse `occurrencePathToBatchIds` index). `setInstanceSelection`
+ * and `getInstanceIdsForOccurrencePath` branch on `batchedPicking` / the
+ * tables directly, so per-occurrence selection highlight and per-occurrence
+ * hide work like the merged path.
  *
  * @param {Array} capturedFlatMeshes FlatMeshes captured during the parse
  * @param {object} ifcAPI Conway-compatible IfcAPI
@@ -49,7 +53,60 @@ import {
  */
 export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
   const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID)
+  return {model: assembleBatchedModel(batches, ifcAPI, modelID, opts), stats}
+}
 
+
+/**
+ * Reverse index for the batched NavTree→scene join: occurrence-path key
+ * (`occurrencePathKey`) → the batchIds placed at that exact path. Only
+ * non-empty paths are indexed (an empty root path can't disambiguate
+ * occurrences) — the same rule `instanceMapFromOrderedPlacedRanges` applies
+ * on the merged path. Null in → null out (IFC / no occurrence data).
+ *
+ * @param {Array<Array<number>|null>|null} instanceOccurrencePaths
+ * @return {Map<string, Array<number>>|null}
+ */
+function buildOccurrencePathIndex(instanceOccurrencePaths) {
+  if (!instanceOccurrencePaths) {
+    return null
+  }
+  const byPath = new Map()
+  for (let batchId = 0; batchId < instanceOccurrencePaths.length; batchId++) {
+    const path = instanceOccurrencePaths[batchId]
+    if (!path || path.length === 0) {
+      continue
+    }
+    const key = occurrencePathKey(path)
+    const list = byPath.get(key)
+    if (list) {
+      list.push(batchId)
+    } else {
+      byPath.set(key, [batchId])
+    }
+  }
+  return byPath
+}
+
+
+/**
+ * Decorate prepared batches into the final batched model — shared by the
+ * one-shot path above and the incremental demand-path builder (slice B1,
+ * `incrementalBatchedBuilder.js`), which assembles the same BatchHandle
+ * shape progressively during the pump and only needs this decoration at
+ * the end.
+ *
+ * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {number} modelID
+ * @param {object} [opts]
+ * @param {object} [opts.scene] subset fallbackParent (see above)
+ * @param {object} [opts.root] existing Group already holding the batch
+ *   meshes (the incremental path's scene-installed root) — used as the
+ *   model object so the on-screen group IS the durable model, no swap.
+ * @return {object} the decorated model
+ */
+export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
   if (batches.length === 0) {
     // Degenerate (no renderable geometry). Throw so ShareIfcLoader falls
     // back to the merged path rather than adding an empty model.
@@ -64,6 +121,15 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
     batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.instanceColors = batch.instanceColors
+    // Per-occurrence identity tables (STEP): solid geometry ids + NAUO
+    // occurrence paths, plus the reverse path→batchIds index ShareViewer's
+    // `getInstanceIdsForOccurrencePath` reads (the NavTree→scene join).
+    // `?? null` keeps older BatchHandle shapes (tests, external callers)
+    // working — consumers treat a missing table as "no occurrence data".
+    batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
+    batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
+    batch.mesh.occurrencePathToBatchIds =
+      buildOccurrencePathIndex(batch.mesh.instanceOccurrencePaths)
     batch.mesh.computeBoundingBox?.()
     batch.mesh.computeBoundingSphere?.()
     // Per-geometry BVH for the batch. `ShareIfc` patches
@@ -78,8 +144,9 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   }
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
-  const model = batches.length === 1 ? batches[0].mesh : new Group()
-  if (model.isGroup) {
+  // The incremental path passes its scene-installed root instead.
+  const model = opts.root ?? (batches.length === 1 ? batches[0].mesh : new Group())
+  if (model.isGroup && opts.root === undefined) {
     for (const batch of batches) {
       model.add(batch.mesh)
     }
@@ -120,5 +187,5 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   // STEP/IFC metadata surface is unchanged.
   attachConwayDirectModelMethods(model, ifcAPI, modelID)
 
-  return {model, stats}
+  return model
 }

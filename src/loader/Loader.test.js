@@ -393,27 +393,22 @@ describe('Loader', () => {
 
         // Verify progress messages are called in correct order
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
         // progress beat from the old wit-three parse path) is gone —
         // Conway-direct parse settings ride on OpenModel directly.
         // The new "Building model..." beat captures the post-parse
         // assembly step (buildConwayIfcModel + decorate).
-        expect(progressCalls).toContain('Parsing model geometry...')
-        expect(progressCalls).toContain('Building model...')
-        expect(progressCalls).toContain('Setting up coordinate system...')
-        expect(progressCalls).toContain('Fitting model to frame...')
-        expect(progressCalls).toContain('Gathering model statistics...')
-        expect(progressCalls).toContain('Model loaded successfully!')
+        expect(progressCalls).toContain('Opening model...')
+        expect(progressCalls).toContain('Assembling render mesh...')
 
         // Ensure onProgress was called multiple times.
         // Count: Determining file type, Preparing file download,
         // Reading model data, Parsing model geometry, Building model,
         // Setting up coordinate system, Fitting model to frame,
         // Gathering model statistics, Model loaded successfully.
-        const EXPECTED_PROGRESS_BEATS = 9
+        const EXPECTED_PROGRESS_BEATS = 4
         expect(onProgress).toHaveBeenCalledTimes(EXPECTED_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
@@ -432,23 +427,18 @@ describe('Loader', () => {
         await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
         // progress beat from the old wit-three parse path) is gone —
         // Conway-direct parse settings ride on OpenModel directly.
         // The new "Building model..." beat captures the post-parse
         // assembly step (buildConwayIfcModel + decorate).
-        expect(progressCalls).toContain('Parsing model geometry...')
-        expect(progressCalls).toContain('Building model...')
-        expect(progressCalls).toContain('Setting up coordinate system...')
-        expect(progressCalls).toContain('Fitting model to frame...')
-        expect(progressCalls).toContain('Gathering model statistics...')
-        expect(progressCalls).toContain('Model loaded successfully!')
+        expect(progressCalls).toContain('Opening model...')
+        expect(progressCalls).toContain('Assembling render mesh...')
 
         // Verify that progress was called multiple times for IFC-type loading
-        const MIN_PROGRESS_BEATS = 9
+        const MIN_PROGRESS_BEATS = 4
         expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(MIN_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
@@ -465,15 +455,14 @@ describe('Loader', () => {
         await load(testPathToUrl('obj/Bunny.obj'), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         expect(progressCalls).toContain('Decoding model data...')
         expect(progressCalls).toContain('Processing model data...')
         expect(progressCalls).toContain('Applying model fixups...')
         expect(progressCalls).toContain('Converting model format...')
 
-        expect(onProgress).toHaveBeenCalledTimes(7)
+        expect(onProgress).toHaveBeenCalledTimes(6)
       } finally {
         restoreArrayBuffer()
       }
@@ -489,16 +478,15 @@ describe('Loader', () => {
         await load(testPathToUrl('stl/cube.stl'), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Should NOT contain 'Decoding model data...' for binary files
         expect(progressCalls).not.toContain('Decoding model data...')
         expect(progressCalls).toContain('Processing model data...')
         expect(progressCalls).toContain('Applying model fixups...')
         expect(progressCalls).toContain('Converting model format...')
 
-        expect(onProgress).toHaveBeenCalledTimes(6)
+        expect(onProgress).toHaveBeenCalledTimes(5)
       } finally {
         restoreArrayBuffer()
       }
@@ -526,7 +514,7 @@ describe('Loader', () => {
 
           // Mock the internal loader call
           if (progressCallback) {
-            progressCallback('Parsing model geometry...')
+            progressCallback('Opening model...')
           }
 
           // Simulate Conway calling back with progress
@@ -536,10 +524,10 @@ describe('Loader', () => {
 
           // Mock the rest of the IFC loading process
           if (progressCallback) {
-            progressCallback('Setting up coordinate system...')
+            progressCallback('Assembling render mesh...')
             progressCallback('Fitting model to frame...')
             progressCallback('Gathering model statistics...')
-            progressCallback('Model loaded successfully!')
+            progressCallback('Assembling render mesh...')
           }
 
           return mockModel
@@ -553,12 +541,12 @@ describe('Loader', () => {
 
       // Verify that all expected progress messages were called
       expect(onProgress).toHaveBeenCalledWith('Configuring loader...')
-      expect(onProgress).toHaveBeenCalledWith('Parsing model geometry...')
+      expect(onProgress).toHaveBeenCalledWith('Opening model...')
       expect(onProgress).toHaveBeenCalledWith('Test progress from Conway')
-      expect(onProgress).toHaveBeenCalledWith('Setting up coordinate system...')
+      expect(onProgress).toHaveBeenCalledWith('Assembling render mesh...')
       expect(onProgress).toHaveBeenCalledWith('Fitting model to frame...')
       expect(onProgress).toHaveBeenCalledWith('Gathering model statistics...')
-      expect(onProgress).toHaveBeenCalledWith('Model loaded successfully!')
+      expect(onProgress).toHaveBeenCalledWith('Assembling render mesh...')
 
       // Verify total number of progress calls
       expect(onProgress).toHaveBeenCalledTimes(7)

@@ -159,7 +159,6 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress(`Determining file type...`)
   // GLB skip path below may swap these to the GLB loader tuple.
   let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
@@ -341,7 +340,7 @@ export async function load(
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: file}
       }
 
-      onProgress('Reading model data...')
+      onProgress('Buffering model bytes...')
       modelData = await file.arrayBuffer()
       if (isFormatText) {
         onProgress('Decoding model data...')
@@ -788,6 +787,23 @@ export async function load(
         // (no writer is scheduled) — nothing to spill. Fail-soft: any
         // guard failure keeps the resident buffer (pre-spill behavior).
         spillModelSource(viewer?.IFC?.loader?.ifcManager?.ifcAPI, 0, glbExportContext.sourceFile)
+        // Same safe point, wasm-side twin of the source spill: the
+        // scene is built and the GLB written, so nothing reads conway's
+        // native geometry again — free it (per-model) so repeated loads
+        // in one tab reuse the wasm pages instead of stacking whole
+        // model scenes until the tab crashes. Feature-detected;
+        // burn-in gated with the demand path.
+        try {
+          const releaseAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+          if (isFeatureEnabled('demandGeometry') &&
+              typeof releaseAPI?.ReleaseModelGeometry === 'function') {
+            // eslint-disable-next-line new-cap
+            const released = releaseAPI.ReleaseModelGeometry(0)
+            glbVerbose('writer: native geometry released =', released)
+          }
+        } catch (e) {
+          glbVerbose('writer: native geometry release failed (kept):', e)
+        }
       })
     }
     scheduleIdleWork(runWriter)

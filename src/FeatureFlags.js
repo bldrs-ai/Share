@@ -86,6 +86,14 @@ export const flags = [
   // A/Bs the same build); flipping this to true is the prod-wide kill
   // switch.
   {name: 'disableStreamOpen', isActive: false},
+  // Demand/tiled rendering (design/new/demand-tiled-rendering.md,
+  // #1613): cache-miss IFC/STEP parses open with DEFER_GEOMETRY and
+  // pump Conway's ExtractGeometryBatch — parse-time preview + the
+  // durable model assembling incrementally on screen instead of one
+  // 30s+ whole-model extraction. Default ON (shipped with the
+  // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
+  // the classic-path escape hatch and this flag the demand kill switch.
+  {name: 'demandGeometry', isActive: true},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

@@ -373,7 +373,11 @@ class LoadProgressReporter {
     if (closedLine !== undefined) {
       this.addReportLine(closedLine)
     }
-    this.addReportLine(this.log.totalLine())
+    // Model stats ride the Total line (products/triangles/units etc. —
+    // set by the loader via setLoadSummary) instead of their own
+    // stage lines.
+    const total = this.log.totalLine()
+    this.addReportLine(this.summary ? `${total} | ${this.summary}` : total)
 
     // Warnings & errors captured from the console during the load, appended
     // after Total (issue #301 preview feedback #4). Restore the console
@@ -520,6 +524,20 @@ export function attachLoadFailureContext() {
     } catch (e) {
       debug().log('loadProgress#attachLoadFailureContext: ', e)
     }
+  }
+}
+
+
+/**
+ * Attach a one-line model summary (products, triangles, units, ...) to the
+ * in-flight load report — appended to the Total line at finish. No-op when
+ * no load is being reported.
+ *
+ * @param {string} text the summary segment
+ */
+export function setLoadSummary(text) {
+  if (activeReporter && !activeReporter.ended) {
+    activeReporter.summary = text
   }
 }
 
