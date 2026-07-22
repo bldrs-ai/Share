@@ -14,30 +14,61 @@
 // `design/new/viewer-replacement.md` §3b.iii default-on gating and
 // `design/new/glb-model-sharing.md` §"Extension catalogue".
 //
-// Wire shape (compressed JSON in a glTF bufferView):
+// Wire shape (binary container in a glTF bufferView) — the
+// **block-indexed** format, schema 0.13.0+:
+//
+//   [0..3]   magic  "BPRI" (Bldrs PRoperties Indexed)
+//   [4..7]   u32 LE container format version (currently 1)
+//   [8..11]  u32 LE byteLength of the gzipped header JSON
+//   [12..)   gzipped header JSON
+//   [then]   concatenated per-block gzip members
+//
+// Header JSON:
 //
 //   {
-//     itemProperties: { [expressID]: { ...shallow IFC entity data } },
-//     propertySets:   { [productExpressID]: [psetExpressID, ...] },
+//     blocks:       [[byteOffset, byteLength], ...],  // into the block
+//                                                     // region (starts
+//                                                     // right after the
+//                                                     // header bytes)
+//     blockIds:     [[expressID, ...], ...],          // ids per block,
+//                                                     // same order
+//     propertySets: { [productExpressID]: [psetExpressID, ...] },
 //   }
 //
-// `itemProperties` is the full closure of entities reachable via
-// references from spatial-tree elements (products, their properties,
-// referenced types, owner histories, etc.). `propertySets` is the
-// product→psetIds index — the consumer side rebuilds the full pset
-// array per product by indexing back into `itemProperties`.
+// Each block decompresses to a standalone JSON object
+// `{"<expressID>": {...shallow IFC entity data}, ...}` of about
+// BLOCK_TARGET_CHARS uncompressed. The union of all blocks is the
+// `itemProperties` closure: every entity reachable via references
+// from spatial-tree elements (products, their properties, referenced
+// types, owner histories, etc.). `propertySets` is the product→psetIds
+// index — the consumer rebuilds the pset array per product by
+// fetching each pset id as a record.
 //
-// Why split into two tables instead of inlining psets per product:
+// Why blocks + an index instead of one gzipped JSON document (the
+// pre-0.13.0 format): decompressing a monolithic payload needs the
+// whole JSON as ONE JS string, and V8 caps strings at ~512MiB —
+// PSB-class models exceed that and the old reader died in pako's
+// string join (`RangeError: Invalid string length`) before
+// `JSON.parse` even ran. Worse, even under the cap the parse
+// materialised the full multi-GB object graph for a panel that shows
+// one element at a time. The indexed format keeps reads bounded: one
+// ~1MB block inflates + parses per miss, LRU-cached. There is no
+// legacy-format read path — an old payload raises a "clear your
+// local cache" alert instead (the cache-key schema bump already
+// makes locally cached old artifacts read as a miss; the alert
+// covers GLBs that arrive as files).
+//
+// Why split psets into an id index instead of inlining per product:
 // psets are shared across many products in typical IFCs (one
 // `Pset_WallCommon` referenced by every wall). Deduplicating
 // via shared IDs keeps the artifact 3-5× smaller than inlining.
 //
-// Reader is **lazy** — the `afterRoot` hook stores the compressed
-// bytes and a decode closure on `userData.bldrsElementProperties`.
-// First call to `model.getItemProperties` / `model.getPropertySets`
-// triggers a one-shot decompress + JSON.parse, cached for subsequent
-// calls. Avoids paying the parse cost on a load that never opens
-// the Properties panel.
+// Reader is **lazy** — the `afterRoot` hook stores the container
+// bytes and per-entity accessors on `userData.bldrsElementProperties`.
+// The header (index + pset table) decodes on the first
+// `model.getItemProperties` / `model.getPropertySets` call; record
+// blocks decode on demand. A load that never opens the Properties
+// panel pays nothing.
 //
 // TODO(viewer-replacement Phase 5+): same untrusted-input concern as
 // `bldrsSpatialTree.js`. Today the writer is in-browser and trusted;
@@ -50,11 +81,199 @@
 // as a product in `itemProperties`).
 import * as pako from 'pako'
 import {IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
+import useStore from '../store/useStore'
 import {yieldToBrowser} from '../utils/scheduling'
 import {glbInfo, glbVerbose} from './glbLog'
 
 
 export const BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME = 'BLDRS_element_properties'
+
+// Container magic "BPRI" as a LE u32 (bytes 0x42 0x50 0x52 0x49 on
+// disk). Distinct from the gzip magic (0x1f 0x8b) that opened every
+// pre-0.13.0 payload — the reader tells the two formats apart by
+// these leading bytes alone.
+const CONTAINER_MAGIC = 0x49525042
+const CONTAINER_VERSION = 1
+// magic u32 + version u32 + headerByteLength u32.
+const CONTAINER_HEADER_BYTES = 12
+const GZIP_MAGIC_0 = 0x1f
+const GZIP_MAGIC_1 = 0x8b
+
+// Target uncompressed JSON chars per record block. Bounds every
+// reader-side string/parse to ~this size regardless of model scale
+// (the whole point of the format — see the header comment), while
+// keeping the block count low enough that the header's per-block
+// index stays trivial (a PSB-class ~800MB closure is ~800 blocks).
+// Also the writer-side flush threshold: records concatenate into a
+// small string buffer until a block fills — per-record gzip calls
+// would pay setup overhead millions of times; one giant join would
+// recreate the whole-payload-resident problem the streaming writer
+// exists to avoid.
+const BLOCK_TARGET_CHARS = 1048576 // 1 MiB
+
+// Decoded (inflated + parsed) blocks the reader keeps hot, LRU.
+// Properties-panel access patterns hop between a product's block and
+// the blocks holding its psets / owner history / material refs —
+// a handful of ~1MB blocks covers that working set.
+const BLOCK_CACHE_MAX = 16
+
+
+/**
+ * Incremental writer for the block-indexed container. Both capture
+ * paths feed it: the streaming sweep adds records as it walks the
+ * parsed model (never holding the closure as one object graph), the
+ * slow BFS path adds them from its materialised map. Memory held is
+ * O(compressed blocks + id lists + one uncompressed block).
+ */
+export class ElementPropertiesContainerWriter {
+  /**
+   * @param {number} [blockTargetChars] uncompressed chars per block —
+   *   tests pass a small value to force multi-block containers
+   */
+  constructor(blockTargetChars = BLOCK_TARGET_CHARS) {
+    this.blockTargetChars = blockTargetChars
+    this.gzippedBlocks = []
+    this.blockIds = []
+    this.curParts = []
+    this.curIds = []
+    this.curChars = 0
+    this.recordCount = 0
+  }
+
+  /**
+   * Append one entity record to the container.
+   *
+   * @param {number} expressID
+   * @param {object} props shallow IFC entity data (JSON-serialisable)
+   */
+  addRecord(expressID, props) {
+    const rec = `"${expressID}":${JSON.stringify(props)}`
+    this.curParts.push(rec)
+    this.curIds.push(expressID)
+    this.curChars += rec.length
+    this.recordCount++
+    if (this.curChars >= this.blockTargetChars) {
+      this.flushBlock()
+    }
+  }
+
+  /** Gzip the pending records into a finished block. */
+  flushBlock() {
+    if (this.curIds.length === 0) {
+      return
+    }
+    this.gzippedBlocks.push(pako.gzip(`{${this.curParts.join(',')}}`))
+    this.blockIds.push(this.curIds)
+    this.curParts = []
+    this.curIds = []
+    this.curChars = 0
+  }
+
+  /**
+   * Flush and assemble the final container bytes.
+   *
+   * @param {object} [propertySets] product→psetIds index
+   * @return {Uint8Array}
+   */
+  finish(propertySets) {
+    this.flushBlock()
+    const blocks = []
+    let offset = 0
+    for (const block of this.gzippedBlocks) {
+      blocks.push([offset, block.byteLength])
+      offset += block.byteLength
+    }
+    const header = {blocks, blockIds: this.blockIds, propertySets: propertySets ?? {}}
+    const headerGz = pako.gzip(JSON.stringify(header))
+    const out = new Uint8Array(CONTAINER_HEADER_BYTES + headerGz.byteLength + offset)
+    const dv = new DataView(out.buffer)
+    dv.setUint32(0, CONTAINER_MAGIC, true)
+    dv.setUint32(4, CONTAINER_VERSION, true)
+    dv.setUint32(8, headerGz.byteLength, true)
+    out.set(headerGz, CONTAINER_HEADER_BYTES)
+    let p = CONTAINER_HEADER_BYTES + headerGz.byteLength
+    for (const block of this.gzippedBlocks) {
+      out.set(block, p)
+      p += block.byteLength
+    }
+    return out
+  }
+}
+
+
+/**
+ * Encode a fully-materialised `{itemProperties, propertySets}` pair
+ * into container bytes. Used by the slow capture path (whose BFS
+ * already holds the closure as one object) and by tests.
+ *
+ * @param {object} itemProperties expressID → record
+ * @param {object} propertySets productID → psetIds
+ * @param {number} [blockTargetChars]
+ * @return {Uint8Array}
+ */
+export function encodeElementProperties(itemProperties, propertySets, blockTargetChars = BLOCK_TARGET_CHARS) {
+  const writer = new ElementPropertiesContainerWriter(blockTargetChars)
+  for (const id of Object.keys(itemProperties)) {
+    writer.addRecord(Number(id), itemProperties[id])
+  }
+  return writer.finish(propertySets)
+}
+
+
+/**
+ * Parse a container's fixed preamble + gzipped header. Throws on
+ * anything malformed — callers translate to their own degrade path.
+ *
+ * @param {Uint8Array} bytes
+ * @return {{header: object, blocksStart: number}} `blocksStart` is
+ *   the byte offset of the block region within `bytes`
+ */
+function parseContainerHeader(bytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < CONTAINER_HEADER_BYTES) {
+    throw new Error('container too short')
+  }
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (dv.getUint32(0, true) !== CONTAINER_MAGIC) {
+    throw new Error('bad container magic')
+  }
+  const version = dv.getUint32(4, true)
+  if (version !== CONTAINER_VERSION) {
+    throw new Error(`unsupported container version ${version}`)
+  }
+  const headerLen = dv.getUint32(8, true)
+  const blocksStart = CONTAINER_HEADER_BYTES + headerLen
+  if (blocksStart > bytes.byteLength) {
+    throw new Error(`header length ${headerLen} exceeds container ${bytes.byteLength}`)
+  }
+  const header = JSON.parse(pako.ungzip(bytes.subarray(CONTAINER_HEADER_BYTES, blocksStart), {to: 'string'}))
+  if (!header || typeof header !== 'object' ||
+      !Array.isArray(header.blocks) || !Array.isArray(header.blockIds) ||
+      header.blocks.length !== header.blockIds.length ||
+      !header.propertySets || typeof header.propertySets !== 'object') {
+    throw new Error('malformed container header')
+  }
+  return {header, blocksStart}
+}
+
+
+/**
+ * Decode an entire container back to the materialised
+ * `{itemProperties, propertySets}` pair. Test/tooling helper — the
+ * runtime read path stays per-block (`makeElementPropertiesPayload`)
+ * precisely so it never has to do this.
+ *
+ * @param {Uint8Array} bytes container bytes
+ * @return {object} `{itemProperties, propertySets}`
+ */
+export function decodeElementProperties(bytes) {
+  const {header, blocksStart} = parseContainerHeader(bytes)
+  const itemProperties = {}
+  for (const [offset, byteLength] of header.blocks) {
+    const blockBytes = bytes.subarray(blocksStart + offset, blocksStart + offset + byteLength)
+    Object.assign(itemProperties, JSON.parse(pako.ungzip(blockBytes, {to: 'string'})))
+  }
+  return {itemProperties, propertySets: header.propertySets}
+}
 
 // Cooperative-yield interval for the fast-path entity walk + the
 // reachability BFS. The fast path iterates every parsed IFC entity
@@ -194,20 +413,17 @@ function collectSpatialTreeIds(root) {
  * BFS for environments that don't expose the adapter internals
  * (tests, non-Conway loaders).
  *
- * Both paths produce the same decoded wire JSON (same entity set,
+ * Both paths produce the same decoded record set (same entities,
  * same pset index) so the cached artifact is equivalent regardless
  * of which path ran. The streaming path is ~100× faster on large
  * IFCs (no Promise per entity) AND fixed-memory: peak retained heap
  * is O(reachable ids + one record) instead of O(all parsed records).
  *
- * Return shape is a discriminated union:
- *   - `{compressedBytes: Uint8Array}` — streaming path; already the
- *     gzipped wire JSON, ready to embed as a bufferView payload
- *     (pass to `injectGlbExtensions` as `precompressed`).
- *   - `{itemProperties, propertySets}` — slow path; the decoded wire
- *     object, compressed later by the inject step (`compress: true`).
- *   - `null` — no manager available (non-IFC sources, cache-hit GLB
- *     with no live parser).
+ * Returns `{compressedBytes: Uint8Array}` — the block-indexed
+ * container (see the header comment), ready to embed as a bufferView
+ * payload (pass to `injectGlbExtensions` as `precompressed`) — or
+ * `null` when no manager is available (non-IFC sources, cache-hit
+ * GLB with no live parser).
  *
  * @param {object|null|undefined} ifcManager IfcManager-like.
  * @param {number} modelID
@@ -224,17 +440,13 @@ export async function captureBldrsElementProperties(ifcManager, modelID, spatial
   if (compressedBytes !== null) {
     return {compressedBytes}
   }
-  return await captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTree)
+  const slow = await captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTree)
+  if (slow === null) {
+    return null
+  }
+  return {compressedBytes: encodeElementProperties(slow.itemProperties, slow.propertySets)}
 }
 
-
-// Text-buffer flush threshold for the streaming deflate. Records are
-// concatenated into a small string buffer and pushed into pako's
-// streaming Deflate in ~64KB slabs — per-record push calls would pay
-// deflate-call overhead millions of times; one giant join would
-// recreate the whole-payload-resident problem the streaming path
-// exists to avoid.
-const STREAM_FLUSH_CHARS = 65536
 
 // NOTE (bench, SKYLARK 7.8M entities, conway 1.372-1.374): an earlier
 // revision also released conway's entity cache every 200k getLines
@@ -252,8 +464,9 @@ const STREAM_FLUSH_CHARS = 65536
 /**
  * Streaming sync-bulk capture path. Reaches into the Conway adapter's
  * internal `IfcApiProxyIfc` to get the upstream Conway `IfcStepModel`
- * and walks it synchronously, gzipping the wire JSON incrementally —
- * the full property closure is NEVER resident as one JS object graph.
+ * and walks it synchronously, gzipping records into container blocks
+ * incrementally — the full property closure is NEVER resident as one
+ * JS object graph.
  * Peak retained memory is O(reachable ids + pset index + one record +
  * compressed output) instead of the old fast path's O(every parsed
  * record) (~GBs on 100MB-class IFCs before the reachability filter
@@ -295,7 +508,7 @@ const STREAM_FLUSH_CHARS = 65536
  *     `ifcAPI.getPassthrough`, non-Conway IFC backends)
  *   - the proxy's internal `model` field isn't where we expect
  *   - the iteration yields zero entities (parser state empty)
- *   - the streaming deflate reports an error
+ *   - assembling the container throws (gzip failure)
  *
  * Coupling notes: this reaches `ifcAPI.getPassthrough(modelID)` and
  * then `proxy.model[0]` (the IfcStepModel) — both are stable on
@@ -305,9 +518,9 @@ const STREAM_FLUSH_CHARS = 65536
  *
  * @param {object} ifcManager IfcManager-like with `.ifcAPI`.
  * @param {number} modelID
- * @return {Promise<Uint8Array|null>} gzipped wire JSON (the exact
- *   bytes a reader `pako.ungzip` + `JSON.parse` expects) or `null`
- *   when the streaming path is unavailable.
+ * @return {Promise<Uint8Array|null>} block-indexed container bytes
+ *   (what `makeElementPropertiesPayload` reads) or `null` when the
+ *   streaming path is unavailable.
  */
 async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   const ifcAPI = ifcManager.ifcAPI
@@ -341,33 +554,12 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   }
 
   const startMs = Date.now()
-  const deflator = new pako.Deflate({gzip: true})
-  let textBuf = []
-  let textLen = 0
-  const flushText = () => {
-    if (textLen > 0) {
-      deflator.push(textBuf.join(''), false)
-      textBuf = []
-      textLen = 0
-    }
-  }
-  const pushText = (chunk) => {
-    textBuf.push(chunk)
-    textLen += chunk.length
-    if (textLen >= STREAM_FLUSH_CHARS) {
-      flushText()
-    }
-  }
-  let emittedCount = 0
+  // Records land in the container writer in BFS discovery order (not
+  // ascending-integer) — block assignment is arbitrary anyway; the
+  // reader looks entries up through the header's id→block index.
+  const writer = new ElementPropertiesContainerWriter()
   const emitRecord = (id, props) => {
-    // Same wire JSON as `JSON.stringify({itemProperties: {...}})`
-    // would produce for this entry — numeric-string key, record value.
-    // Key ORDER differs from the legacy one-shot stringify (BFS
-    // discovery order vs ascending-integer), which is byte-different
-    // but decode-identical: the reader JSON.parses into a plain object
-    // and every consumer looks entries up by id.
-    pushText(`${emittedCount === 0 ? '' : ','}"${id}":${JSON.stringify(props)}`)
-    emittedCount++
+    writer.addRecord(id, props)
   }
 
   // `visited` = "serialized or queued for serialization" — every id
@@ -388,8 +580,6 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
   const hadMemoization = stepModel.elementMemoization
   stepModel.elementMemoization = false
   try {
-    pushText('{"itemProperties":{')
-
     /**
      * Sweep-1 record body, shared by the roots-only and full-scan
      * enumerations below: decode one record via sync `getLine`, feed
@@ -563,25 +753,26 @@ async function captureBldrsElementPropertiesStreaming(ifcManager, modelID) {
       }
     }
 
-    pushText(`},"propertySets":${JSON.stringify(propertySets)}}`)
-    flushText()
-    deflator.push('', true)
-    if (deflator.err) {
+    let containerBytes
+    try {
+      containerBytes = writer.finish(propertySets)
+    } catch (e) {
       glbInfo(
-        `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streaming deflate error ` +
-        `${deflator.err} (${deflator.msg}); falling back to slow path`)
+        `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: container finish failed ` +
+        `(${e}); falling back to slow path`)
       return null
     }
 
     glbInfo(
-      `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streamed ${emittedCount} ` +
+      `${BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME}: streamed ${writer.recordCount} ` +
       `reachable-from-IfcRoot entities (of ${iterCount} scanned, ` +
       `${rootExpressIDs ? 'roots-only' : 'full'} scan; ` +
       `${psetRelCount} IfcRelDefinesByProperties → ` +
       `${Object.keys(propertySets).length} products with psets) into ` +
-      `${deflator.result.byteLength}B gzip in ${Date.now() - startMs}ms`)
+      `${containerBytes.byteLength}B container ` +
+      `(${writer.gzippedBlocks.length} blocks) in ${Date.now() - startMs}ms`)
 
-    return deflator.result
+    return containerBytes
   } finally {
     stepModel.elementMemoization = hadMemoization
     // Drop the descriptors the sweep materialised; they rematerialise
@@ -718,18 +909,26 @@ async function captureBldrsElementPropertiesSlow(ifcManager, modelID, spatialTre
 
 /**
  * GLTFLoader plugin that registers the BLDRS_element_properties
- * extension. Stores the compressed bytes + a `decode()` closure on
- * `gltf.scene.userData.bldrsElementProperties`; the actual
- * `pako.ungzip` + `JSON.parse` runs only on the first
- * `model.getItemProperties` / `model.getPropertySets` call (the
- * Properties panel may never open).
+ * extension. Stores the container bytes + per-entity accessors
+ * (`getRecord` / `getPsetIds`) on
+ * `gltf.scene.userData.bldrsElementProperties`; the header index
+ * decodes on the first access and record blocks decode on demand
+ * (the Properties panel may never open).
+ *
+ * A payload in the pre-0.13.0 monolithic-gzip format is NOT decoded
+ * — there is deliberately no legacy read path. It raises a
+ * "clear your local cache" alert instead and attaches nothing, so
+ * the panel degrades the same as a GLB without the extension.
+ * Locally cached old artifacts never reach here (the schema-version
+ * bump in `glbCacheKey.js` makes them read as a cache miss); this
+ * covers old GLBs arriving as files.
  *
  * Register at GLTFLoader construction:
  *   loader.register((parser) => new BldrsElementPropertiesReader(parser))
  *
- * The userData payload shape is intentionally not the decoded tree
- * — `Loader.js#convertToShareModel` reads `.decode()` lazily when it
- * hydrates `model.getItemProperties`.
+ * The userData payload shape is intentionally not the decoded tables
+ * — `Loader.js#convertToShareModel` wires `model.getItemProperties`
+ * through the lazy accessors.
  */
 export class BldrsElementPropertiesReader {
   /**
@@ -773,9 +972,24 @@ export class BldrsElementPropertiesReader {
       const arrayBuffer = await this.parser.getDependency('buffer', bufferIndex)
       // Hold a Uint8Array view (not a copy) over the parsed BIN
       // chunk. Cheap: no allocation, no decompression. The first
-      // `decode()` call below pays the full cost.
+      // accessor call below pays the decode cost.
       const compressed = new Uint8Array(arrayBuffer, byteOffset, byteLength)
-      const payload = makeLazyPayload(compressed, this.name)
+      // Pre-0.13.0 payloads were one monolithic gzip (leading bytes
+      // 0x1f 0x8b) — a format the reader deliberately no longer
+      // decodes (see class comment). Alert instead of attaching so
+      // the Properties panel's silence is explained and actionable.
+      if (compressed.byteLength >= 2 &&
+          compressed[0] === GZIP_MAGIC_0 && compressed[1] === GZIP_MAGIC_1) {
+        glbInfo(
+          `${this.name}: payload is the pre-0.13.0 monolithic gzip format; ` +
+          'not decoding — alerting to clear cache')
+        useStore.getState().setAlert(
+          'This model was cached in an older format that this version of Share ' +
+          'no longer reads, so element properties are unavailable. ' +
+          'Clear the local cache (Profile menu → Clear Local Cache) and reload the model to rebuild it.')
+        return gltf
+      }
+      const payload = makeElementPropertiesPayload(compressed, this.name)
       if (gltf.scene) {
         gltf.scene.userData.bldrsElementProperties = payload
       } else {
@@ -790,59 +1004,116 @@ export class BldrsElementPropertiesReader {
 
 
 /**
- * Build a lazy-decode payload object that holds the compressed bytes
- * and decodes on first `decode()` call. Cached after first decode.
- * Exposed so `Loader.js#convertToShareModel` can construct the same
- * shape directly for testing or for non-GLTFLoader code paths.
+ * Build a lazy per-entity payload over container bytes. Exposed so
+ * `Loader.js#convertToShareModel` consumers and tests can construct
+ * the same shape directly for non-GLTFLoader code paths.
  *
- * Validation on decode is shape-only: must JSON-parse to an object
- * with `itemProperties` (record) and optional `propertySets` (record).
- * A failed validation logs and yields an empty-but-well-shaped payload
- * — consumers degrade to "no props" rather than crash.
+ * The header (id→block index + pset table) decodes on the first
+ * accessor call; each record block inflates + parses only when one
+ * of its entities is requested, then rides a small LRU. Nothing here
+ * ever materialises the whole closure — the strings and object
+ * graphs in play are bounded by BLOCK_TARGET_CHARS per block, which
+ * is what makes arbitrarily large models decodable at all (V8 caps
+ * a single string at ~512MiB; see the header comment).
  *
- * @param {Uint8Array} compressed gzipped JSON bytes
+ * Any decode failure (bad magic, truncated bytes, corrupt block)
+ * logs and degrades to "no record found" — consumers show "no props"
+ * rather than crash.
+ *
+ * @param {Uint8Array} compressed container bytes
  * @param {string} [tag] log-prefix tag (e.g. extension name)
- * @return {object} `{compressed, decode(): {itemProperties, propertySets}}`
+ * @return {object} `{compressed, getRecord(expressID), getPsetIds(expressID)}`
  */
-export function makeLazyPayload(compressed, tag = BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME) {
-  let cached = null
+export function makeElementPropertiesPayload(compressed, tag = BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME) {
+  let header = null
+  let blocksStart = 0
+  let idToBlock = null
+  let headerFailed = false
+  // blockIndex → parsed record object. Insertion-ordered Map as LRU:
+  // a hit re-inserts, eviction takes the oldest key.
+  const blockCache = new Map()
+
+  const ensureHeader = () => {
+    if (header !== null || headerFailed) {
+      return
+    }
+    try {
+      const parsed = parseContainerHeader(compressed)
+      header = parsed.header
+      blocksStart = parsed.blocksStart
+      idToBlock = new Map()
+      header.blockIds.forEach((ids, blockIndex) => {
+        for (const id of ids) {
+          idToBlock.set(id, blockIndex)
+        }
+      })
+      // One-shot per cache hit — visible by default so user-reported
+      // "panel is empty" issues can be triaged from the console
+      // without flipping a feature flag. The entity/pset counts are
+      // the most useful diagnostic: a count of 0 means the writer
+      // captured nothing (likely no spatial tree on the source IFC);
+      // a non-zero count with empty panel points at consumer wiring.
+      glbInfo(
+        `${tag}: decoded payload index (${compressed.byteLength}B container, ` +
+        `${header.blocks.length} blocks, ` +
+        `${idToBlock.size} entities, ` +
+        `${Object.keys(header.propertySets).length} products with psets)`)
+    } catch (e) {
+      glbInfo(`${tag}: decode failed:`, e)
+      headerFailed = true
+    }
+  }
+
+  const getBlock = (blockIndex) => {
+    const cached = blockCache.get(blockIndex)
+    if (cached !== undefined) {
+      blockCache.delete(blockIndex)
+      blockCache.set(blockIndex, cached)
+      return cached
+    }
+    let records
+    try {
+      const [offset, byteLength] = header.blocks[blockIndex]
+      const blockBytes = compressed.subarray(blocksStart + offset, blocksStart + offset + byteLength)
+      records = JSON.parse(pako.ungzip(blockBytes, {to: 'string'}))
+    } catch (e) {
+      glbInfo(`${tag}: block ${blockIndex} decode failed:`, e)
+      // Cache the failure as an empty block so a corrupt block logs
+      // once instead of re-inflating on every access to its entities.
+      records = {}
+    }
+    blockCache.set(blockIndex, records)
+    if (blockCache.size > BLOCK_CACHE_MAX) {
+      blockCache.delete(blockCache.keys().next().value)
+    }
+    return records
+  }
+
   return {
     compressed,
-    decode() {
-      if (cached !== null) {
-        return cached
+    /**
+     * @param {number} expressID
+     * @return {object|undefined} the entity record, undefined if absent
+     */
+    getRecord(expressID) {
+      ensureHeader()
+      if (header === null) {
+        return undefined
       }
-      try {
-        const text = pako.ungzip(compressed, {to: 'string'})
-        const parsed = JSON.parse(text)
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-          glbInfo(`${tag}: decoded payload is not an object; using empty`)
-          cached = {itemProperties: {}, propertySets: {}}
-          return cached
-        }
-        cached = {
-          itemProperties: (parsed.itemProperties && typeof parsed.itemProperties === 'object' && !Array.isArray(parsed.itemProperties)) ?
-            parsed.itemProperties : {},
-          propertySets: (parsed.propertySets && typeof parsed.propertySets === 'object' && !Array.isArray(parsed.propertySets)) ?
-            parsed.propertySets : {},
-        }
-        // One-shot per cache hit — visible by default so user-reported
-        // "panel is empty" issues can be triaged from the console
-        // without flipping a feature flag. The entity/pset counts are
-        // the most useful diagnostic: a count of 0 means the writer
-        // captured nothing (likely no spatial tree on the source IFC);
-        // a non-zero count with empty panel points at consumer wiring.
-        glbInfo(
-          `${tag}: decoded payload (${compressed.byteLength}B compressed → ` +
-          `${text.length}B JSON, ` +
-          `${Object.keys(cached.itemProperties).length} entities, ` +
-          `${Object.keys(cached.propertySets).length} products with psets)`)
-        return cached
-      } catch (e) {
-        glbInfo(`${tag}: decode failed:`, e)
-        cached = {itemProperties: {}, propertySets: {}}
-        return cached
+      const blockIndex = idToBlock.get(Number(expressID))
+      if (blockIndex === undefined) {
+        return undefined
       }
+      return getBlock(blockIndex)[expressID]
+    },
+    /**
+     * @param {number} expressID product id
+     * @return {Array<number>} pset expressIDs, [] if none
+     */
+    getPsetIds(expressID) {
+      ensureHeader()
+      const psetIds = header?.propertySets?.[expressID]
+      return Array.isArray(psetIds) ? psetIds : []
     },
   }
 }

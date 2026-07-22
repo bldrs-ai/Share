@@ -7,6 +7,7 @@
 
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
+import {encodeElementProperties, makeElementPropertiesPayload} from './bldrsElementProperties'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
@@ -271,27 +272,27 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
 
   it('cache-hit BLDRS_element_properties hydrates getItemProperties and getPropertySets', () => {
     // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
-    // `{compressed, decode}` lazy payload. The hydration block in
-    // convertToShareModel attaches closures that read the maps for
-    // entity / pset lookups via the payload's `decode()` (which caches
-    // internally — see makeLazyPayload). Each closure call hits
-    // `decode()` but the gzip / JSON.parse work happens once.
-    const decoded = {
-      itemProperties: {
-        100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
-        500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
-      },
-      propertySets: {100: [500]},
+    // `{compressed, getRecord, getPsetIds}` lazy per-entity payload.
+    // The hydration block in convertToShareModel attaches closures
+    // that delegate lookups to the payload's accessors (which decode
+    // the header index + record blocks lazily — see
+    // makeElementPropertiesPayload).
+    const records = {
+      100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
+      500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
     }
-    // Realistic mock: decode() returns the same object every time
-    // (proves the closures use the cached payload, not re-parse).
+    const psetIndex = {100: [500]}
     const mesh = new Mesh(new BufferGeometry())
-    let decodeReturns = 0
+    let accessorCalls = 0
     mesh.userData.bldrsElementProperties = {
       compressed: new Uint8Array([0]),
-      decode() {
-        decodeReturns++
-        return decoded
+      getRecord(id) {
+        accessorCalls++
+        return records[id]
+      },
+      getPsetIds(id) {
+        accessorCalls++
+        return psetIndex[id] ?? []
       },
     }
     convertToShareModel(mesh, makeViewerStub())
@@ -299,12 +300,8 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     expect(typeof mesh.getItemProperties).toBe('function')
     expect(typeof mesh.getPropertySets).toBe('function')
     // No decode happens at hydration time — closures defer the work.
-    expect(decodeReturns).toBe(0)
+    expect(accessorCalls).toBe(0)
 
-    // Each closure invocation calls decode() but the real
-    // makeLazyPayload caches internally so the actual decompress +
-    // parse happens once. Our mock returns the same object reference
-    // each time; that's what we assert.
     const wall = mesh.getItemProperties(100)
     expect(wall.Name.value).toBe('Wall A')
     const pset = mesh.getItemProperties(500)
@@ -314,22 +311,16 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // matching the Properties.jsx consumer contract.
     const psets = mesh.getPropertySets(100)
     expect(psets).toHaveLength(1)
-    expect(psets[0]).toEqual(decoded.itemProperties[500])
-
-    // Caching invariant: every decode() call returned the same object
-    // ref (i.e. the closures consume the payload's cached form rather
-    // than asking for a fresh parse). That's what makes the lazy
-    // wrapper a one-shot decompress instead of one-per-lookup.
-    expect(decodeReturns).toBeGreaterThan(0)
+    expect(psets[0]).toEqual(records[500])
+    expect(accessorCalls).toBeGreaterThan(0)
   })
 
   it('cache-hit Properties: getPropertySets returns [] for a product with no psets', () => {
-    const decoded = {itemProperties: {100: {expressID: 100}}, propertySets: {}}
+    // Real payload over real container bytes — pins the
+    // encode → lazy-read integration on the consumer surface.
     const mesh = new Mesh(new BufferGeometry())
-    mesh.userData.bldrsElementProperties = {
-      compressed: new Uint8Array([0]),
-      decode: () => decoded,
-    }
+    mesh.userData.bldrsElementProperties = makeElementPropertiesPayload(
+      encodeElementProperties({100: {expressID: 100}}, {}))
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getPropertySets(100)).toEqual([])
     // Also for an expressID that isn't in the index at all.
@@ -343,10 +334,8 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // undefined lets the consumer's null-guard kick in. Critical: no
     // throw on lookup miss.
     const mesh = new Mesh(new BufferGeometry())
-    mesh.userData.bldrsElementProperties = {
-      compressed: new Uint8Array([0]),
-      decode: () => ({itemProperties: {1: {x: 1}}, propertySets: {}}),
-    }
+    mesh.userData.bldrsElementProperties = makeElementPropertiesPayload(
+      encodeElementProperties({1: {x: 1}}, {}))
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getItemProperties(1)).toEqual({x: 1})
     expect(mesh.getItemProperties(9999)).toBeUndefined()

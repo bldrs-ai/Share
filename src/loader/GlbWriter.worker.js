@@ -4,9 +4,9 @@
 // parse write.
 //
 // What this worker handles (post-GLTFExporter, post-compression):
-//   - JSON.stringify on the per-extension payload (heavy on
-//     `BLDRS_element_properties` — multi-MB nested objects on big
-//     IFCs)
+//   - JSON.stringify on the per-extension payload (multi-MB nested
+//     objects on big IFCs; `BLDRS_element_properties` arrives as
+//     precompressed container bytes and skips this)
 //   - pako.gzip on the resulting bytes (CPU-bound)
 //   - injectGlbExtensions byte-splice (sync but fast once stringify
 //     + gzip are done)
@@ -39,7 +39,7 @@
 //     mode: 'draco' | 'meshopt' | null,
 //     extensions: [
 //       {name: 'BLDRS_spatial_tree',      data: object|null, compress: true},
-//       {name: 'BLDRS_element_properties', data: object|null, compress: true},
+//       {name: 'BLDRS_element_properties', precompressed: Uint8Array|undefined},
 //       {name: 'BLDRS_face_ids',          data: object|null, compress: true},
 //     ],
 //     sceneExtras: {                  // optional small string-keyed

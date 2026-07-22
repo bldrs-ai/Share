@@ -1,10 +1,13 @@
 /* eslint-disable no-magic-numbers */
-import * as pako from 'pako'
+import useStore from '../store/useStore'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
   BldrsElementPropertiesReader,
+  ElementPropertiesContainerWriter,
   captureBldrsElementProperties,
-  makeLazyPayload,
+  decodeElementProperties,
+  encodeElementProperties,
+  makeElementPropertiesPayload,
 } from './bldrsElementProperties'
 import {
   injectGlbExtensions,
@@ -14,31 +17,32 @@ import {
 
 
 describe('loader/bldrsElementProperties', () => {
+  /**
+   * Decode a capture result (both paths return the block-indexed
+   * container as `{compressedBytes}`) back to the materialised
+   * tables so assertions can run on content. Asserts the result
+   * shape on the way through.
+   *
+   * @param {object} result `{compressedBytes: Uint8Array}`
+   * @return {object} `{itemProperties, propertySets}`
+   */
+  function decodeCaptured(result) {
+    expect(result).not.toBeNull()
+    expect(result.compressedBytes).toBeInstanceOf(Uint8Array)
+    return decodeElementProperties(result.compressedBytes)
+  }
+
   describe('captureBldrsElementProperties — streaming path via Conway adapter', () => {
     // The streaming path reaches into `ifcAPI.getPassthrough(modelID)`
     // and iterates the upstream Conway `IfcStepModel` synchronously,
     // calling `proxy.getLine(expressID)` per entity to convert raw
     // STEP-tape data to the wit-three-shape object consumers expect.
-    // Records are gzipped into the wire JSON incrementally (never all
-    // resident at once), so the capture returns `{compressedBytes}` —
-    // tests decode it back to assert on content. Pset extraction
+    // Records are gzipped into container blocks incrementally (never
+    // all resident at once), so the capture returns `{compressedBytes}`
+    // — tests decode it back to assert on content. Pset extraction
     // happens inline — `IfcRelDefinesByProperties` entities
     // encountered during the walk build the product→psetIds index in
     // one pass. No spatial tree needed.
-
-    /**
-     * Decode a streaming-path capture result back to the wire object
-     * so assertions can run on content. Asserts the discriminated-
-     * union shape on the way through.
-     *
-     * @param {object} result `{compressedBytes: Uint8Array}`
-     * @return {object} `{itemProperties, propertySets}`
-     */
-    function decodeCaptured(result) {
-      expect(result).not.toBeNull()
-      expect(result.compressedBytes).toBeInstanceOf(Uint8Array)
-      return JSON.parse(pako.ungzip(result.compressedBytes, {to: 'string'}))
-    }
 
     /**
      * Build a fake ifcManager that mimics the adapter surface:
@@ -400,8 +404,7 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: () => Promise.resolve([]),
       }
       const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
-      expect(captured).not.toBeNull()
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.itemProperties[1]).toBeDefined()
     })
 
@@ -555,8 +558,7 @@ describe('loader/bldrsElementProperties', () => {
         })),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
-      expect(captured).not.toBeNull()
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '2', '3'])
       expect(captured.itemProperties[1]).toEqual({
         expressID: 1, Name: {type: 1, value: 'Entity 1'},
@@ -589,7 +591,7 @@ describe('loader/bldrsElementProperties', () => {
         }),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.itemProperties[1]).toBeDefined()
       expect(captured.itemProperties[2]).toBeUndefined() // skipped
       expect(captured.itemProperties[3]).toBeDefined()
@@ -612,7 +614,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '100', '200', '300'])
     })
 
@@ -641,7 +643,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort())
         .toEqual(['1', '10', '11', '12'])
     })
@@ -658,7 +660,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '2', '3'])
       // Each entity fetched exactly once despite the cycle.
       expect(mgr.getItemProperties).toHaveBeenCalledTimes(3)
@@ -680,7 +682,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties)).toEqual(['1'])
       // Only the seed was fetched — no chasing of {type:1} or {type:2}.
       expect(mgr.getItemProperties).toHaveBeenCalledTimes(1)
@@ -700,7 +702,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve({expressID: id})),
         getPropertySets: jest.fn((mid, id) => Promise.resolve(id === 100 ? psets : [])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.propertySets[100]).toEqual([500, 501])
       // psets themselves are entities → in itemProperties.
       expect(captured.itemProperties[500]).toBeDefined()
@@ -713,7 +715,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn(() => Promise.resolve({})),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.propertySets).toEqual({})
     })
 
@@ -730,7 +732,7 @@ describe('loader/bldrsElementProperties', () => {
           return Promise.resolve([])
         }),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       // Item properties for both still captured; pset index just lacks 2.
       expect(captured.itemProperties[1]).toBeDefined()
       expect(captured.itemProperties[2]).toBeDefined()
@@ -738,52 +740,62 @@ describe('loader/bldrsElementProperties', () => {
     })
   })
 
-  describe('makeLazyPayload — lazy decode', () => {
-    /**
-     * @param {object} obj data to wrap
-     * @return {Uint8Array} gzipped JSON bytes
-     */
-    function compressed(obj) {
-      return pako.gzip(new TextEncoder().encode(JSON.stringify(obj)))
-    }
-
+  describe('makeElementPropertiesPayload — lazy indexed decode', () => {
     it('does not decode at construction', () => {
-      // The compressed input is intentionally invalid; constructor must
+      // The container input is intentionally invalid; constructor must
       // not touch it (proof that decode is truly lazy).
       const badBytes = new Uint8Array([0x42, 0x4c, 0x44, 0x52])
-      const payload = makeLazyPayload(badBytes)
+      const payload = makeElementPropertiesPayload(badBytes)
       expect(payload.compressed).toBe(badBytes)
       // No throw, no work done.
     })
 
-    it('decodes on first call and caches the result', () => {
-      const bytes = compressed({itemProperties: {1: {x: 1}}, propertySets: {1: [10]}})
-      const payload = makeLazyPayload(bytes)
-      const a = payload.decode()
-      const b = payload.decode()
-      expect(a).toBe(b) // same object reference — cached
-      expect(a.itemProperties[1]).toEqual({x: 1})
-      expect(a.propertySets[1]).toEqual([10])
+    it('returns records and pset ids from an encoded container', () => {
+      const bytes = encodeElementProperties({1: {x: 1}, 2: {y: 2}}, {1: [10]})
+      const payload = makeElementPropertiesPayload(bytes)
+      expect(payload.getRecord(1)).toEqual({x: 1})
+      expect(payload.getRecord(2)).toEqual({y: 2})
+      expect(payload.getRecord(999)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([10])
+      expect(payload.getPsetIds(2)).toEqual([])
     })
 
-    it('returns empty-shape payload on a malformed compressed blob', () => {
-      const payload = makeLazyPayload(new Uint8Array([0xff, 0xff, 0xff, 0xff]))
-      const decoded = payload.decode()
-      expect(decoded).toEqual({itemProperties: {}, propertySets: {}})
+    it('degrades to no-records on a malformed container', () => {
+      const payload = makeElementPropertiesPayload(new Uint8Array([0xff, 0xff, 0xff, 0xff]))
+      expect(payload.getRecord(1)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([])
     })
 
-    it('returns empty-shape payload on a non-object JSON payload', () => {
-      const bytes = compressed([1, 2, 3])
-      const payload = makeLazyPayload(bytes)
-      expect(payload.decode()).toEqual({itemProperties: {}, propertySets: {}})
+    it('reads records back across many blocks (and through LRU eviction)', () => {
+      // A tiny block target forces one block per record — 50 blocks is
+      // well past the reader's LRU capacity, so the sequential reads
+      // below also exercise eviction + re-inflate of cold blocks.
+      const writer = new ElementPropertiesContainerWriter(8)
+      const records = {}
+      for (let id = 1; id <= 50; id++) {
+        records[id] = {Name: {type: 1, value: `Entity ${id}`}}
+        writer.addRecord(id, records[id])
+      }
+      const bytes = writer.finish({7: [8]})
+      const payload = makeElementPropertiesPayload(bytes)
+      for (let id = 1; id <= 50; id++) {
+        expect(payload.getRecord(id)).toEqual(records[id])
+      }
+      // Revisit an early (long-evicted) block.
+      expect(payload.getRecord(1)).toEqual(records[1])
+      expect(payload.getPsetIds(7)).toEqual([8])
+      // The materialising test helper agrees with the lazy reader.
+      const decoded = decodeElementProperties(bytes)
+      expect(decoded.itemProperties).toEqual(records)
+      expect(decoded.propertySets).toEqual({7: [8]})
     })
 
-    it('isolates missing fields — keeps the ones that ARE valid objects', () => {
-      // Only itemProperties present, no propertySets.
-      const bytes = compressed({itemProperties: {99: {a: 1}}})
-      const decoded = makeLazyPayload(bytes).decode()
-      expect(decoded.itemProperties[99]).toEqual({a: 1})
-      expect(decoded.propertySets).toEqual({})
+    it('round-trips an empty capture', () => {
+      const bytes = encodeElementProperties({}, {})
+      const payload = makeElementPropertiesPayload(bytes)
+      expect(payload.getRecord(1)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([])
+      expect(decodeElementProperties(bytes)).toEqual({itemProperties: {}, propertySets: {}})
     })
   })
 
@@ -807,15 +819,14 @@ describe('loader/bldrsElementProperties', () => {
     }
 
     it('parks a lazy payload on gltf.scene.userData', async () => {
-      const data = {
-        itemProperties: {1: {Name: {type: 1, value: 'X'}}},
-        propertySets: {1: [2]},
-      }
+      const container = encodeElementProperties(
+        {1: {Name: {type: 1, value: 'X'}}},
+        {1: [2]})
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: container},
       ])
       const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
       const gltf = {scene: {userData: {}}}
@@ -823,10 +834,33 @@ describe('loader/bldrsElementProperties', () => {
       const payload = gltf.scene.userData.bldrsElementProperties
       expect(payload).toBeDefined()
       expect(payload.compressed).toBeInstanceOf(Uint8Array)
-      expect(typeof payload.decode).toBe('function')
+      expect(typeof payload.getRecord).toBe('function')
       // Decode now and assert content.
-      expect(payload.decode().itemProperties[1]).toEqual({Name: {type: 1, value: 'X'}})
-      expect(payload.decode().propertySets[1]).toEqual([2])
+      expect(payload.getRecord(1)).toEqual({Name: {type: 1, value: 'X'}})
+      expect(payload.getPsetIds(1)).toEqual([2])
+    })
+
+    it('alerts and attaches nothing for a pre-0.13.0 monolithic-gzip payload', async () => {
+      // The old wire format was one gzip of the whole
+      // `{itemProperties, propertySets}` JSON — exactly what the
+      // inject step's `{data, compress: true}` path produces, so use
+      // it to build the legacy fixture. The reader must refuse it
+      // (no legacy decode path exists), leave userData untouched, and
+      // raise the clear-cache alert.
+      useStore.getState().setAlert(null)
+      const legacy = {itemProperties: {1: {x: 1}}, propertySets: {}}
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: legacy, compress: true},
+      ])
+      const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
+      expect(gltf.scene.userData.bldrsElementProperties).toBeUndefined()
+      expect(useStore.getState().alert).toMatch(/Clear Local Cache/)
+      useStore.getState().setAlert(null)
     })
 
     it('is a no-op when the GLB has no extension', async () => {
@@ -862,7 +896,7 @@ describe('loader/bldrsElementProperties', () => {
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: {itemProperties: {}}, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: encodeElementProperties({}, {})},
       ])
       const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
       const gltf = {/* no .scene */}
@@ -873,10 +907,10 @@ describe('loader/bldrsElementProperties', () => {
   describe('end-to-end: capture → inject → reader → decode', () => {
     it('streams an adapter capture through precompressed inject + reader decode', async () => {
       // The streaming writer's full production pipeline: adapter
-      // capture emits gzipped wire bytes → injectGlbExtensions embeds
-      // them verbatim as `precompressed` → the reader's single decode
-      // branch (ungzip + JSON.parse) recovers the same tables the
-      // legacy object-capture path produced.
+      // capture emits block-indexed container bytes →
+      // injectGlbExtensions embeds them verbatim as `precompressed` →
+      // the reader's lazy per-entity accessors recover the same
+      // records the capture serialised.
       const entities = {
         100: {
           expressID: 100, type: 3124254112,
@@ -920,11 +954,14 @@ describe('loader/bldrsElementProperties', () => {
       })
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
-      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+      const payload = gltf.scene.userData.bldrsElementProperties
 
+      expect(payload.getRecord(100)).toEqual(entities[100])
+      expect(payload.getRecord(500)).toEqual(entities[500])
+      expect(payload.getPsetIds(100)).toEqual([500])
+      // Full-set check via the materialising helper on the same bytes.
+      const decoded = decodeElementProperties(payload.compressed)
       expect(Object.keys(decoded.itemProperties).sort()).toEqual(['100', '500', '999'])
-      expect(decoded.itemProperties[100]).toEqual(entities[100])
-      expect(decoded.itemProperties[500]).toEqual(entities[500])
       expect(decoded.propertySets).toEqual({100: [500]})
     })
 
@@ -945,7 +982,8 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: (mid, id) => Promise.resolve(id === 100 ? [entities[500]] : []),
       }
 
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const capturedResult = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(capturedResult)
       expect(captured.itemProperties[100]).toBeDefined()
       expect(captured.itemProperties[999]).toBeDefined() // followed via BFS
       expect(captured.itemProperties[500]).toBeDefined() // captured via psets
@@ -955,7 +993,7 @@ describe('loader/bldrsElementProperties', () => {
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: captured, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: capturedResult.compressedBytes},
       ])
 
       // Now read back.
@@ -967,7 +1005,7 @@ describe('loader/bldrsElementProperties', () => {
       })
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
-      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+      const decoded = decodeElementProperties(gltf.scene.userData.bldrsElementProperties.compressed)
 
       expect(decoded.itemProperties).toEqual(captured.itemProperties)
       expect(decoded.propertySets).toEqual(captured.propertySets)
@@ -1020,7 +1058,8 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: () => Promise.resolve([]),
       }
 
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const capturedResult = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(capturedResult)
       // BFS reaches entities via OwnerHistory's `OwningUser` /
       // `OwningApplication` refs — those field names aren't in
       // `GEOMETRIC_FIELD_NAMES`. But `ObjectPlacement` (→559) and
@@ -1035,12 +1074,12 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured.itemProperties[559]).toBeUndefined()
       expect(captured.itemProperties[611]).toBeUndefined()
 
-      // Round-trip through compress + inject + parse + decode.
+      // Round-trip through inject + parse + lazy read.
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: captured, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: capturedResult.compressedBytes},
       ])
       const {json, bin} = parseGlb(withExt)
       const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
@@ -1050,22 +1089,22 @@ describe('loader/bldrsElementProperties', () => {
       })
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
-      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+      const payload = gltf.scene.userData.bldrsElementProperties
 
       // Byte-for-byte (key-for-key) preservation of the IFC site shape,
       // including null-valued fields, numeric `type` discriminant, and
       // every typed-primitive / reference. This is the contract that
       // `@bldrs-ai/ifclib`'s `deref` builds the Properties panel on.
-      const decodedSite = decoded.itemProperties[621]
+      const decodedSite = payload.getRecord(621)
       expect(decodedSite).toEqual(ifcSiteEntity)
       expect(decodedSite.GlobalId).toEqual({type: 1, value: '02uD5Qe8H3mek2PYnMWHk1'})
       expect(decodedSite.OwnerHistory).toEqual({type: 5, value: 28})
       expect(decodedSite.Description).toBeNull()
       expect(decodedSite.PredefinedType).toEqual({type: 3, value: 'NOTDEFINED'})
 
-      // Following the OwnerHistory ref via the same decoded map must
+      // Following the OwnerHistory ref via the same payload must
       // resolve — that's the deref chain the Properties panel walks.
-      const referenced = decoded.itemProperties[decodedSite.OwnerHistory.value]
+      const referenced = payload.getRecord(decodedSite.OwnerHistory.value)
       expect(referenced).toEqual(ownerHistory)
     })
   })

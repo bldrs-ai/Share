@@ -15,6 +15,20 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.13.0 — replaced `BLDRS_element_properties`' monolithic gzipped-JSON
+ *         payload with a block-indexed binary container ("BPRI" magic:
+ *         gzipped header carrying an id→block index + the pset table,
+ *         followed by independently gzipped ~1MB record blocks). The
+ *         old format required inflating the whole payload into ONE JS
+ *         string — V8 caps strings at ~512MiB, so PSB-class models
+ *         died in pako's string join (`RangeError: Invalid string
+ *         length`) and even smaller models materialised the full
+ *         object graph for a panel that reads one element at a time.
+ *         The reader now decodes the header index on first access and
+ *         one block per record miss (LRU-cached). NO legacy read
+ *         path: older 0.12.0 artifacts read as miss and rewrite; an
+ *         old-format payload arriving as a shared GLB file raises a
+ *         "clear local cache" alert instead of decoding.
  * 0.12.0 — extended `BLDRS_face_ids` with a geometry-piece identity table
  *         (`geometryItemIdentities`: distinct geometry express id →
  *         {type, name}, resolved through the live parser at write time).
@@ -96,7 +110,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.12.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.13.0'
 
 
 /**
