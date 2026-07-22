@@ -159,7 +159,6 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress(`Determining file type...`)
   // GLB skip path below may swap these to the GLB loader tuple.
   let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
@@ -341,7 +340,7 @@ export async function load(
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: file}
       }
 
-      onProgress('Reading model data...')
+      onProgress('Buffering model bytes...')
       modelData = await file.arrayBuffer()
       if (isFormatText) {
         onProgress('Decoding model data...')

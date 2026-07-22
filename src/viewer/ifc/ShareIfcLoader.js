@@ -29,6 +29,7 @@ import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ShareIfcManager from './ShareIfcManager'
 import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
+import {setLoadSummary} from '../../loader/loadProgress'
 
 
 /**
@@ -215,6 +216,25 @@ export default class ShareIfcLoader {
       }
       controls.fitToSphere(sphere, withTransition)
     }
+    let lastFollowFitMs = 0
+    const maybeFollowRefit = () => {
+      if (cameraFollowStopped || !previewGeometryDirty) {
+        return
+      }
+      const now = Date.now()
+      if (now - lastFollowFitMs < cameraFollowDelayMs) {
+        return
+      }
+      lastFollowFitMs = now
+      cameraFollowDelayMs =
+        Math.min(cameraFollowDelayMs * CAMERA_FOLLOW_GROWTH, CAMERA_FOLLOW_MAX_MS)
+      previewGeometryDirty = false
+      try {
+        fitPreviewToFrame(true)
+      } catch (e) {
+        debug(WARN).warn('camera follow refit failed:', e)
+      }
+    }
     const followTick = () => {
       cameraFollowTimer = null
       if (cameraFollowStopped) {
@@ -256,7 +276,7 @@ export default class ShareIfcLoader {
 
     try {
       if (onProgress) {
-        onProgress('Parsing model geometry...')
+        onProgress('Opening model...')
       }
       const ifcAPI = this.ifcManager.ifcAPI
       // onProgress is threaded into conway's ON_PROGRESS extension so the
@@ -302,9 +322,14 @@ export default class ShareIfcLoader {
           }
           // Frame the very first geometry immediately (inside
           // startCameraFollow), then let the follower keep it framed
-          // as the preview grows.
+          // as the preview grows. Refits ride the geometry events
+          // themselves: the load pipeline's scheduler-priority yields
+          // starve setTimeout in browsers, so the timer alone fired
+          // rarely (one refit at the very end).
           if (++parsePreviewCount === 1) {
             startCameraFollow(demandPreview)
+          } else {
+            maybeFollowRefit()
           }
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
@@ -316,6 +341,7 @@ export default class ShareIfcLoader {
           const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
           demandPreview.add(new Mesh(assembled.geometry, assembled.materials))
           previewGeometryDirty = true
+          maybeFollowRefit()
           if (!previewInstalled) {
             previewInstalled = true
             scene.add(demandPreview)
@@ -344,7 +370,7 @@ export default class ShareIfcLoader {
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
 
       if (onProgress) {
-        onProgress('Building model...')
+        onProgress('Assembling render mesh...')
       }
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
@@ -389,9 +415,6 @@ export default class ShareIfcLoader {
 
       ifc.addIfcModel(ifcModel)
 
-      if (onProgress) {
-        onProgress('Setting up coordinate system...')
-      }
       // eslint-disable-next-line new-cap
       const matrixArr = await ifcAPI.GetCoordinationMatrix(modelID)
       // Apply the coordination matrix to the model directly. Wit-three's
@@ -408,14 +431,8 @@ export default class ShareIfcLoader {
         ifcModel.matrixAutoUpdate = false
       }
 
-      if (onProgress) {
-        onProgress('Fitting model to frame...')
-      }
       ifc.context.fitToFrame()
 
-      if (onProgress) {
-        onProgress('Gathering model statistics...')
-      }
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
       // doesn't expose them. The model mesh is already built + added above,
@@ -439,9 +456,31 @@ export default class ShareIfcLoader {
         }
       }
 
-      if (onProgress) {
-        onProgress('Model loaded successfully!')
+      // Model summary onto the report's Total line (replaces the old
+      // per-stage stats/coordinate-system lines): mesh shape from the
+      // build, units from the feature-detected scaling factor
+      // (1 = m, 0.001 = mm).
+      try {
+        const parts = []
+        if (buildStats) {
+          parts.push(`vertices=${buildStats.vertexCount ?? buildStats.totalVerts ?? '?'}`)
+          parts.push(`triangles=${buildStats.triangleCount ?? buildStats.totalTriangles ?? '?'}`)
+        }
+        if (typeof ifcAPI.GetLinearScalingFactor === 'function') {
+          // eslint-disable-next-line new-cap
+          const metresPerUnit = ifcAPI.GetLinearScalingFactor(modelID)
+          const MM = 0.001
+          const unitLabel = metresPerUnit === 1 ? 'm' :
+            metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
+          parts.push(`units=${unitLabel}`)
+        }
+        if (parts.length > 0) {
+          setLoadSummary(parts.join(' '))
+        }
+      } catch (e) {
+        debug(WARN).warn('load summary skipped:', e)
       }
+
 
       // Parallel-run the new IfcItemsMap populators against the live
       // model and log the diff. Diagnostic only — no behavior change.
