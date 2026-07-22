@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useRef} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {
   BufferGeometry,
   CanvasTexture,
@@ -17,6 +17,8 @@ import {
 } from 'three'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Tooltip from '@mui/material/Tooltip'
 import {
   Home as HomeIcon,
@@ -56,6 +58,11 @@ export default function ViewCube() {
   const appsDrawerWidth = useStore((state) => state.appsDrawerWidth)
   // On mobile the drawers are bottom sheets, so they don't push the widget aside.
   const isMobile = useIsMobile()
+
+  // Which corner the widget sits in, chosen via right-click; persisted locally.
+  const [position, setPosition] = useState(readStoredPosition)
+  // Cursor anchor for the right-click position menu ({top, left} or null).
+  const [menuAnchor, setMenuAnchor] = useState(null)
 
   const mountRef = useRef(null)
   // Live handles so the ring buttons and fit calls can reach the viewer.
@@ -152,6 +159,9 @@ export default function ViewCube() {
     }
 
     const onPointerDown = (event) => {
+      if (event.button !== 0) {
+        return // Let right/middle click through to the context menu.
+      }
       isPointerDown = true
       isDragging = false
       lastX = event.clientX
@@ -241,6 +251,27 @@ export default function ViewCube() {
     }
   }
 
+  /**
+   * Open the position menu at the cursor (right-click on the cube).
+   *
+   * @param {object} event The context-menu event
+   */
+  const openMenu = (event) => {
+    event.preventDefault()
+    setMenuAnchor({top: event.clientY, left: event.clientX})
+  }
+
+  /**
+   * Move the widget to the chosen corner and remember the choice.
+   *
+   * @param {string} pos One of the POSITION_OPTIONS keys
+   */
+  const choosePosition = (pos) => {
+    setPosition(pos)
+    storePosition(pos)
+    setMenuAnchor(null)
+  }
+
   // Sit clear of any open right-side drawer (Notes, Apps).  On mobile the
   // drawers are bottom sheets, so only the base margin applies.
   const drawerInset = isMobile ? 0 :
@@ -251,8 +282,7 @@ export default function ViewCube() {
     <Box
       sx={{
         'position': 'absolute',
-        'bottom': `${BOTTOM_INSET_PX}px`,
-        'right': `${rightInset}px`,
+        ...anchorSx(position, rightInset),
         'width': `${WIDGET_SIZE_PX}px`,
         'height': `${WIDGET_SIZE_PX}px`,
         'display': 'grid',
@@ -278,7 +308,11 @@ export default function ViewCube() {
         icon={<RotateLeftIcon/>}
         sx={{gridColumn: 1, gridRow: 2}}
       />
-      <Box ref={mountRef} sx={{gridColumn: 2, gridRow: 2, lineHeight: 0}}/>
+      <Box
+        ref={mountRef}
+        onContextMenu={openMenu}
+        sx={{gridColumn: 2, gridRow: 2, lineHeight: 0}}
+      />
       <RingButton
         title='Rotate right'
         onClick={() => orbit(ORBIT_STEP_RAD, 0)}
@@ -297,6 +331,22 @@ export default function ViewCube() {
         icon={<HomeIcon/>}
         sx={{gridColumn: 3, gridRow: 3}}
       />
+      <Menu
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+        anchorReference='anchorPosition'
+        anchorPosition={menuAnchor || undefined}
+      >
+        {POSITION_OPTIONS.map(({key, label}) => (
+          <MenuItem
+            key={key}
+            selected={key === position}
+            onClick={() => choosePosition(key)}
+          >
+            {label}
+          </MenuItem>
+        ))}
+      </Menu>
     </Box>
   )
 }
@@ -531,7 +581,7 @@ const CUBE_FACES = [
 
 const CUBE_SIZE_PX = 96
 const WIDGET_SIZE_PX = 200
-const BOTTOM_INSET_PX = 80
+const VERTICAL_INSET_PX = 80 // top/bottom offset, clear of the toolbars
 const MARGIN_PX = 20
 const NEAR_PLANE = 0.1
 const FAR_PLANE = 100
@@ -549,3 +599,62 @@ const CHAMFER_GREY_HEX = 0xd8d8d8 // edge/corner bevel base color
 const FACE_BASE_HEX = 0xffffff // face texture shown untinted
 const FACE_HOVER_HEX = 0xbfe0ff // light-blue tint for a hovered face
 const ISO_DIRECTION = new Vector3(1, 1, 1).normalize()
+
+const DEFAULT_POSITION = 'bottom-right'
+const VIEWCUBE_POSITION_KEY = 'bldrs-viewcube-position'
+// Corner options offered by the right-click menu.
+const POSITION_OPTIONS = [
+  {key: 'upper-left', label: 'Upper left'},
+  {key: 'upper-center', label: 'Upper center'},
+  {key: 'upper-right', label: 'Upper right'},
+  {key: 'bottom-left', label: 'Bottom left'},
+  {key: 'bottom-right', label: 'Bottom right'},
+]
+
+
+/**
+ * Absolute-position styles for the chosen corner.  Right-anchored positions
+ * respect the drawer inset; the centered position is centered horizontally.
+ *
+ * @param {string} position One of the POSITION_OPTIONS keys
+ * @param {number} rightInset Right offset in px (accounts for open drawers)
+ * @return {object} sx position fragment
+ */
+function anchorSx(position, rightInset) {
+  const top = `${VERTICAL_INSET_PX}px`
+  const bottom = `${VERTICAL_INSET_PX}px`
+  const left = `${MARGIN_PX}px`
+  const right = `${rightInset}px`
+  switch (position) {
+    case 'upper-left': return {top, left}
+    case 'upper-center': return {top, left: '50%', transform: 'translateX(-50%)'}
+    case 'upper-right': return {top, right}
+    case 'bottom-left': return {bottom, left}
+    default: return {bottom, right}
+  }
+}
+
+
+/** @return {string} The persisted widget position, or the default. */
+function readStoredPosition() {
+  try {
+    const stored = window.localStorage.getItem(VIEWCUBE_POSITION_KEY)
+    return POSITION_OPTIONS.some((o) => o.key === stored) ? stored : DEFAULT_POSITION
+  } catch {
+    return DEFAULT_POSITION
+  }
+}
+
+
+/**
+ * Persist the chosen widget position.
+ *
+ * @param {string} position One of the POSITION_OPTIONS keys
+ */
+function storePosition(position) {
+  try {
+    window.localStorage.setItem(VIEWCUBE_POSITION_KEY, position)
+  } catch (e) {
+    debug().warn('ViewCube: could not persist position', e)
+  }
+}
