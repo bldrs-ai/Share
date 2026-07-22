@@ -140,18 +140,95 @@ tweened, stops forever on user input.
 
 ### B — Budgeted residency + eviction (the memory endgame)
 
-Wire the full pump→queue→tile-pool→extractor composition. Renderer
-holds BatchedMesh instances only for resident products; eviction
-removes instances and releases tiles (refcounted shared assets make
-mapped-item sharing safe). Priority = camera (frustum + screen-space
-extent) once bounds exist — bounds come from first extraction and are
-cached; pre-first-extraction ordering falls back to file order +
-storey/spatial heuristics. Budget defaults device-sized, overridable.
+Sequenced plan as of the v1.431 field milestone (PSB 77s = 47.9s
+parse + 27.1s assemble; Arty 14.5s). Each step is a separate PR round.
 
-Exit gate: PSB interactive under a ~1.5GB geometry budget; walkthrough
-keeps a stable frame rate while the resident set turns over; no leaks
-across evict/re-extract cycles (pool accounting invariants already
-tested conway-side).
+**B1 — incremental durable assembly (dissolve the 27s assemble
+stage).** Today the demand pump streams render-only preview meshes,
+and the durable model is STILL built monolithically at the end
+(merged BufferGeometry by default, BatchedMesh behind the flag) and
+swapped in. B1 makes the BatchedMesh itself the durable object,
+assembled incrementally during the pump: each delta batch appends
+geometries + instances (capacity reserved with a growth factor —
+BatchedMesh reallocation copies), picking decoration (expressID ↔
+instance ranges) accumulates per batch, opaque/transparent split as
+today. The preview group and the end-of-load build/swap disappear on
+this path; end-of-load work shrinks to nav/spatial wiring + stats.
+The merged path stays as the non-demand fallback. Expected: PSB
+Total ≈ parse + ~0, from 77s to ~50s.
+
+**B2 — residency slider + eviction (the feature, not just the
+policy).** User-accessible control: a glasses icon in OperationsGroup
+opens a popup with a residency slider (100% = whole model resident …
+0% = fully evicted) and a priority-metric selector for eviction
+ordering:
+  a. screen occupancy — projected bounds area, frustum-weighted;
+  b. memory limit — slider maps to a byte budget vs the full model;
+  c. distance from selection — when a part is selected, priority is
+     inverse distance from its bounds.
+Architecture: a ResidencyController scores products with the selected
+metric, keeps the top set that fits the slider's target, and applies
+deltas — evict removes BatchedMesh instances and releases tiles
+(refcounted shared assets keep mapped-item sharing safe), re-infill
+re-extracts through the demand queue (conway tile-pool machinery,
+Phase B InstanceAssetSource). Smoothness rules: rescore throttled
+(~150ms), bounded churn per frame, hysteresis band so the boundary
+doesn't flap. The slider doubles as the instrumentation surface for
+choosing a DEFAULT eviction policy later — dialing it by hand on real
+models is how the intuition gets built.
+
+Exit gate: PSB interactive under a ~1.5GB geometry budget; slider
+drag from 100→10→100 re-infills smoothly with a stable frame rate;
+no leaks across evict/re-extract cycles (pool accounting invariants
+already tested conway-side).
+
+### Parallelism plan (consistent with the #1612 spike findings)
+
+The isolation spike (Share #1612, parked) proved the COOP/COEP + MT
+wasm infrastructure works and refuted the payoff: browser geometry is
+~75% serial JS driver, so MT wasm nets zero-to-negative on real
+machines (PSB 45s MT vs 31s ST) while carrying the MT tax and the
+auth/Picker breakage. The plan that is consistent with that data
+parallelizes the DRIVER, not the inner loops, and needs no headers:
+
+**P1 — props worker (first use of the transfer plane).** The GLB
+props capture + spatial tree + export currently waits for the whole
+load, then runs on idle. Instead: at parse end ("indexReady"), ship
+the serialized columnar index (M4 sidecar machinery) plus the source
+bytes (transfer or OPFS handle) to a worker running its own ST wasm.
+The worker opens a properties-only model (no geometry; windowed
+OPFS-backed BufferProvider keeps residency at a fraction of main) and
+produces the BLDRS props/tree payloads while the MAIN thread is still
+extracting geometry — the props latency disappears into the pump
+window, and the idle cores (M2: 4P+4E far from saturated) do real
+work. Main merges the payloads at writer time.
+
+**P2 — geometry worker sharding (the 30s push).** Generalize the same
+transfer plane: K workers, each with its own ST wasm + model open
+from the shared index sidecar, each extracting a SHARD of the demand
+unit list and posting transferable geometry payloads (the
+PreviewMeshPayload/tile shape) back to the main thread's incremental
+BatchedMesh assembly (B1). This parallelizes the serial JS driver
+itself — the thing the spike showed MT wasm cannot touch — with no
+SAB, no COOP/COEP, no MT tax, no auth/Picker phases. Memory cost of
+K model opens is bounded by the windowed provider + names-only trees.
+
+**P3 — revisit MT wasm** only if P2 profiling shows in-wasm parallel
+sections dominating again, or worker sharding hits a wall SAB would
+fix. The parked #1612 phases (auth relay over BroadcastChannel,
+Picker popup) resume unchanged in that case.
+
+### Load session → observer plane
+
+ProgressiveLoadSession (the format-neutral state machine) grows an
+observer registration: the session emits lifecycle events — opened,
+indexReady(sidecar), previewMesh, meshBatch, assembling, modelReady,
+finished/aborted — and the current preview+camera-follow behavior
+becomes the first observer (render infill). The props worker (P1) is
+the second (kicks its worker on indexReady). Geometry sharding (P2)
+rides the same events. This is the generalization that lets every
+latency-hiding consumer start AS SOON as its inputs exist instead of
+at load end.
 
 ### C — Tiles as truth + GPU picking (Phase C flip)
 
