@@ -150,6 +150,54 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
+    // Camera follow: fitToFrame already tweens (camera-controls
+    // fitToSphere with a transition), but a payload-count refit
+    // cadence let growing geometry drift offscreen between refits on
+    // sparse-payload stretches (PSB). Follow time-based instead —
+    // once per second while new geometry arrived — and stop forever
+    // the moment the user takes the camera (never fight input) or
+    // the load finishes.
+    const CAMERA_FOLLOW_MS = 1000
+    let previewGeometryDirty = false
+    let cameraFollowStopped = false
+    let cameraFollowInterval = null
+    let followedControls = null
+    const stopCameraFollow = () => {
+      cameraFollowStopped = true
+      if (cameraFollowInterval !== null) {
+        clearInterval(cameraFollowInterval)
+        cameraFollowInterval = null
+      }
+      try {
+        followedControls?.removeEventListener?.('controlstart', stopCameraFollow)
+      } catch {
+        // best-effort
+      }
+      followedControls = null
+    }
+    const startCameraFollow = () => {
+      if (cameraFollowStopped || cameraFollowInterval !== null) {
+        return
+      }
+      try {
+        followedControls = ifc.context?.ifcCamera?.cameraControls ?? null
+        followedControls?.addEventListener?.('controlstart', stopCameraFollow)
+      } catch {
+        followedControls = null
+      }
+      cameraFollowInterval = setInterval(() => {
+        if (!previewGeometryDirty) {
+          return
+        }
+        previewGeometryDirty = false
+        try {
+          ifc.context.fitToFrame()
+        } catch (e) {
+          debug(WARN).warn('camera follow refit failed:', e)
+        }
+      }, CAMERA_FOLLOW_MS)
+    }
+
     try {
       if (onProgress) {
         onProgress('Parsing model geometry...')
@@ -183,7 +231,7 @@ export default class ShareIfcLoader {
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
       let parsePreviewCount = 0
-      const PARSE_PREVIEW_REFIT_EVERY = 256
+
       const onPreviewMesh = demandPreview === null ? undefined : (payload) => {
         try {
           const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
@@ -191,15 +239,16 @@ export default class ShareIfcLoader {
             return
           }
           demandPreview.add(mesh)
+          previewGeometryDirty = true
           if (!previewInstalled) {
             previewInstalled = true
             scene.add(demandPreview)
           }
-          // Frame the very first geometry immediately, then refit
-          // occasionally as the preview grows (the first durable batch
-          // refits again).
-          if (++parsePreviewCount === 1 || parsePreviewCount % PARSE_PREVIEW_REFIT_EVERY === 0) {
+          // Frame the very first geometry immediately, then let the
+          // follower keep it in frame as the preview grows.
+          if (++parsePreviewCount === 1) {
             ifc.context.fitToFrame()
+            startCameraFollow()
           }
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
@@ -210,6 +259,7 @@ export default class ShareIfcLoader {
         try {
           const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
           demandPreview.add(new Mesh(assembled.geometry, assembled.materials))
+          previewGeometryDirty = true
           if (!previewInstalled) {
             previewInstalled = true
             scene.add(demandPreview)
@@ -226,6 +276,7 @@ export default class ShareIfcLoader {
                   demandPreview.matrixAutoUpdate = false
                 }
                 ifc.context.fitToFrame()
+                startCameraFollow()
               })
               .catch((e) => debug(WARN).warn('demand preview coordination failed:', e))
           }
@@ -261,6 +312,8 @@ export default class ShareIfcLoader {
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
       }
+
+      stopCameraFollow()
 
       // Swap the preview out before the real model installs — dispose
       // per-batch geometry/materials so the preview leaves no residue.
@@ -367,6 +420,7 @@ export default class ShareIfcLoader {
 
       return ifcModel
     } catch (err) {
+      stopCameraFollow()
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.
