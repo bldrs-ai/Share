@@ -73,6 +73,15 @@ export const OPAQUE_ALPHA = 1
  *   expressID`.
  * @property {Uint32Array} instanceOccurrenceIds `batchId → synthetic 0-based
  *   occurrence id` (global emission order across both batches).
+ * @property {Uint32Array} instanceGeometryIds `batchId → the placement's
+ *   geometryExpressID` (the solid's own id for STEP). Lets per-solid
+ *   selection narrow a multibody part's shared occurrence path to one body,
+ *   mirroring the merged path's `getGeometryExpressIdByInstance`.
+ * @property {Array<Array<number>|null>|null} instanceOccurrencePaths
+ *   `batchId → STEP occurrence path` (NAUO express ids, root→leaf) off
+ *   `PlacedGeometry.occurrencePath`. Null (whole table) for IFC / engines
+ *   that don't emit paths, so nothing downstream pays; per-entry null when
+ *   a single placement has no path.
  * @property {Array<BufferGeometry>} instanceGeometry `batchId → the shared
  *   local-space shape geometry` this instance was added from. Retained so
  *   `batchedSubset` can re-bake a selection/isolation subset (the packed
@@ -203,7 +212,18 @@ function collectGroups(flatMeshes, api, modelID) {
         totals.indexCount += indexSize
       }
       const color = placed.color ?? DEFAULT_COLOR
-      group.placements.push({matrix: placed.flatTransformation, color, parentExpressId, occurrenceId})
+      group.placements.push({
+        matrix: placed.flatTransformation,
+        color,
+        parentExpressId,
+        occurrenceId,
+        // Per-occurrence identity (STEP): the NAUO path disambiguates a
+        // reused part's placements; the geometry id names the solid. Both
+        // ride into the per-batch pick tables so the batched path can
+        // narrow selection / hide to one occurrence like the merged path.
+        occurrencePath: placed.occurrencePath ?? null,
+        geometryExpressId: geomExpressID,
+      })
       occurrenceId++
       totals.placements++
       if (color.w < OPAQUE_ALPHA) {
@@ -253,6 +273,9 @@ function buildBatch(groups, transparent) {
   const mesh = new BatchedMesh(instanceCount, vertexCount, indexCount, material)
   const instanceParents = new Uint32Array(instanceCount)
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
+  const instanceGeometryIds = new Uint32Array(instanceCount)
+  const instanceOccurrencePaths = new Array(instanceCount)
+  let hasOccurrencePaths = false
   const instanceGeometry = new Array(instanceCount)
   const instanceColors = new Array(instanceCount)
   const matrix = new Matrix4()
@@ -268,6 +291,11 @@ function buildBatch(groups, transparent) {
         placement.color.x, placement.color.y, placement.color.z, placement.color.w))
       instanceParents[batchId] = placement.parentExpressId
       instanceOccurrenceIds[batchId] = placement.occurrenceId
+      instanceGeometryIds[batchId] = placement.geometryExpressId
+      instanceOccurrencePaths[batchId] = placement.occurrencePath
+      if (placement.occurrencePath) {
+        hasOccurrencePaths = true
+      }
       instanceGeometry[batchId] = group.geometry
       instanceColors[batchId] = placement.color
     }
@@ -275,6 +303,10 @@ function buildBatch(groups, transparent) {
   return {
     mesh, material, transparent,
     instanceParents, instanceOccurrenceIds, instanceGeometry, instanceColors,
+    instanceGeometryIds,
+    // Null (not an all-null array) for IFC so consumers can cheaply skip
+    // occurrence lookups — mirrors the merged path's IfcInstanceMap.
+    instanceOccurrencePaths: hasOccurrencePaths ? instanceOccurrencePaths : null,
   }
 }
 
