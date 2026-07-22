@@ -40,7 +40,10 @@ export function isTempModelPath(pathname) {
 /**
  * Full path to the home model (`index.ifc`) with the default camera, as a
  * plain string suitable for a hard `window.location.assign`. Mirrors the
- * destination `navToDefault` computes for SPA navigation.
+ * destination `navToDefault` computes for SPA navigation, including
+ * carrying the current query string forward — feature flags live there
+ * (`?feature=…`, read from `window.location.search` at runtime) and would
+ * otherwise be dropped by the cache-clear redirect.
  *
  * @param {?string} [appPrefix] e.g. '/share'; derived from the current
  *   install prefix when omitted (matches BaseRoutes' computation).
@@ -49,8 +52,9 @@ export function isTempModelPath(pathname) {
 export function homeModelPath(appPrefix) {
   const prefix = appPrefix ||
     `${window.location.pathname.startsWith('/Share') ? '/Share' : ''}/share`
+  const search = window.location.search || ''
   const cameraHash = `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
-  return `${prefix}/v/p/index.ifc${cameraHash}`
+  return `${prefix}/v/p/index.ifc${search}${cameraHash}`
 }
 
 

@@ -82,6 +82,13 @@ describe('homeModelPath', () => {
     expect(homeModelPath()).toBe(
       '/Share/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
   })
+
+  it('carries the current query string forward (feature flags)', () => {
+    locationGetter = jest.spyOn(window, 'location', 'get')
+      .mockReturnValue({pathname: '/share/v/new/uuid.ifc', search: '?feature=bot'})
+    expect(homeModelPath('/share')).toBe(
+      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+  })
 })
 
 
@@ -90,11 +97,12 @@ describe('reloadAfterCacheClear', () => {
   let reloadCalls
   let locationGetter
 
-  const mockLocation = (pathname) => {
+  const mockLocation = (pathname, search = '') => {
     assignCalls = []
     reloadCalls = 0
     locationGetter = jest.spyOn(window, 'location', 'get').mockReturnValue({
       pathname,
+      search,
       assign: (url) => assignCalls.push(url),
       reload: () => {
         reloadCalls += 1
@@ -114,6 +122,14 @@ describe('reloadAfterCacheClear', () => {
     reloadAfterCacheClear('/share')
     expect(assignCalls).toEqual([
       '/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
+    expect(reloadCalls).toBe(0)
+  })
+
+  it('preserves the query string when navigating home', () => {
+    mockLocation('/share/v/new/uuid.ifc', '?feature=bot')
+    reloadAfterCacheClear('/share')
+    expect(assignCalls).toEqual([
+      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
     expect(reloadCalls).toBe(0)
   })
 
