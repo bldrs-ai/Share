@@ -17,7 +17,7 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
-import {Group, Mesh} from 'three'
+import {Box3, Group, MathUtils, Mesh, Sphere} from 'three'
 import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
@@ -150,23 +150,32 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
-    // Camera follow: fitToFrame already tweens (camera-controls
-    // fitToSphere with a transition), but a payload-count refit
-    // cadence let growing geometry drift offscreen between refits on
-    // sparse-payload stretches (PSB). Follow time-based instead —
-    // once per second while new geometry arrived — and stop forever
-    // the moment the user takes the camera (never fight input) or
-    // the load finishes.
-    const CAMERA_FOLLOW_MS = 1000
+    // Camera follow for the demand preview. Does NOT go through
+    // ifc.context.fitToFrame(): that frames scene.children[last]
+    // (#1561), which is only accidentally the preview group — when it
+    // isn't, every "fit" targets something else (geometry grows
+    // offscreen and the camera never visibly moves). The follower
+    // frames the preview group EXPLICITLY with camera-controls
+    // fitToSphere: the first fit is instant (get eyes on the first
+    // geometry immediately), later fits tween, and the cadence grows
+    // exponentially from 250ms to 1s so the early burst tracks tightly
+    // without churning all load long. Stops forever the moment the
+    // user takes the camera (never fight input) or the load finishes.
+    const CAMERA_FOLLOW_MIN_MS = 250
+    const CAMERA_FOLLOW_MAX_MS = 1000
+    const CAMERA_FOLLOW_GROWTH = 1.5
+    const FRAMING_MARGIN = 1.5
+    let cameraFollowTarget = null
     let previewGeometryDirty = false
     let cameraFollowStopped = false
-    let cameraFollowInterval = null
+    let cameraFollowTimer = null
+    let cameraFollowDelayMs = CAMERA_FOLLOW_MIN_MS
     let followedControls = null
     const stopCameraFollow = () => {
       cameraFollowStopped = true
-      if (cameraFollowInterval !== null) {
-        clearInterval(cameraFollowInterval)
-        cameraFollowInterval = null
+      if (cameraFollowTimer !== null) {
+        clearTimeout(cameraFollowTimer)
+        cameraFollowTimer = null
       }
       try {
         followedControls?.removeEventListener?.('controlstart', stopCameraFollow)
@@ -175,27 +184,74 @@ export default class ShareIfcLoader {
       }
       followedControls = null
     }
-    const startCameraFollow = () => {
-      if (cameraFollowStopped || cameraFollowInterval !== null) {
+    const fitPreviewToFrame = (withTransition) => {
+      const controls = ifc.context?.ifcCamera?.cameraControls
+      const camera = ifc.context?.ifcCamera?.perspectiveCamera
+      if (!controls || !camera || cameraFollowTarget === null) {
         return
       }
+      const box = new Box3().setFromObject(cameraFollowTarget)
+      if (box.isEmpty()) {
+        return
+      }
+      const sphere = new Sphere()
+      box.getBoundingSphere(sphere)
+      if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
+        return
+      }
+      sphere.radius *= FRAMING_MARGIN
+      // Keep the whole zoom range inside the frustum as the model
+      // grows, but only push the planes OUT (monotonic) so successive
+      // refits never pop the projection.
+      const HALF = 0.5
+      const vFov = MathUtils.degToRad(camera.fov)
+      const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
+      const limitingFov = camera.aspect > 1 ? vFov : hFov
+      const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
+      const wantFar = (fitDistance + sphere.radius) * 4
+      if (camera.far < wantFar) {
+        camera.far = wantFar
+        camera.updateProjectionMatrix()
+      }
+      controls.fitToSphere(sphere, withTransition)
+    }
+    const followTick = () => {
+      cameraFollowTimer = null
+      if (cameraFollowStopped) {
+        return
+      }
+      if (previewGeometryDirty) {
+        previewGeometryDirty = false
+        try {
+          fitPreviewToFrame(true)
+        } catch (e) {
+          debug(WARN).warn('camera follow refit failed:', e)
+        }
+      }
+      cameraFollowDelayMs =
+        Math.min(cameraFollowDelayMs * CAMERA_FOLLOW_GROWTH, CAMERA_FOLLOW_MAX_MS)
+      cameraFollowTimer = setTimeout(followTick, cameraFollowDelayMs)
+    }
+    const startCameraFollow = (target) => {
+      if (cameraFollowStopped || cameraFollowTimer !== null) {
+        return
+      }
+      cameraFollowTarget = target
       try {
         followedControls = ifc.context?.ifcCamera?.cameraControls ?? null
         followedControls?.addEventListener?.('controlstart', stopCameraFollow)
       } catch {
         followedControls = null
       }
-      cameraFollowInterval = setInterval(() => {
-        if (!previewGeometryDirty) {
-          return
-        }
-        previewGeometryDirty = false
-        try {
-          ifc.context.fitToFrame()
-        } catch (e) {
-          debug(WARN).warn('camera follow refit failed:', e)
-        }
-      }, CAMERA_FOLLOW_MS)
+      // Immediate first frame (no tween — get eyes on it), then the
+      // exponentially growing tweened follow-ups.
+      try {
+        fitPreviewToFrame(false)
+      } catch (e) {
+        debug(WARN).warn('camera follow initial fit failed:', e)
+      }
+      cameraFollowDelayMs = CAMERA_FOLLOW_MIN_MS
+      cameraFollowTimer = setTimeout(followTick, cameraFollowDelayMs)
     }
 
     try {
@@ -244,11 +300,11 @@ export default class ShareIfcLoader {
             previewInstalled = true
             scene.add(demandPreview)
           }
-          // Frame the very first geometry immediately, then let the
-          // follower keep it in frame as the preview grows.
+          // Frame the very first geometry immediately (inside
+          // startCameraFollow), then let the follower keep it framed
+          // as the preview grows.
           if (++parsePreviewCount === 1) {
-            ifc.context.fitToFrame()
-            startCameraFollow()
+            startCameraFollow(demandPreview)
           }
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
@@ -275,8 +331,7 @@ export default class ShareIfcLoader {
                   demandPreview.matrix.fromArray(matrixArr)
                   demandPreview.matrixAutoUpdate = false
                 }
-                ifc.context.fitToFrame()
-                startCameraFollow()
+                startCameraFollow(demandPreview)
               })
               .catch((e) => debug(WARN).warn('demand preview coordination failed:', e))
           }
