@@ -36,18 +36,33 @@
   functions = "netlify/functions"
   framework = "#custom"
 
-# COOP same-origin-allow-popups lets Google Identity Services deliver OAuth
-# tokens via postMessage without nulling window.opener in the cross-origin
-# popup. COEP is intentionally omitted (docs.google.com/picker sends
-# CORP: same-site, which Chrome enforces under any COEP value and blocks the
-# Picker iframe), so crossOriginIsolated is already false here — stricter
-# COOP: same-origin would block GIS OAuth without gaining any isolation. The
-# long-term fix is to load the Picker in a popup window that isn't subject
-# to the parent page's COEP policy (TODO).
+# Cross-origin isolation (issue #1610): COOP same-origin + COEP
+# credentialless makes `crossOriginIsolated` true, which unlocks
+# SharedArrayBuffer and Conway's multithreaded wasm (~2.8x geometry
+# extraction). conway-geom's loader auto-selects the MT build at
+# runtime when isolation is present, and both wasm variants already
+# ship in /static/js — no build changes needed.
+#
+# KNOWN BREAKAGE under these headers, to be fixed in the follow-up
+# phases of #1610 before this merges:
+#  - GIS OAuth popup: COOP same-origin severs window.opener, so
+#    Google's postMessage delivery fails. Fix: our own popup running
+#    the redirect flow into a same-origin /auth callback that relays
+#    the code over BroadcastChannel (channel scope is the origin, not
+#    the browsing-context group, so COOP doesn't sever it).
+#  - Google Drive Picker iframe: docs.google.com sends CORP:
+#    same-site; credentialless COEP loads non-consenting subresources
+#    cookie-less, and a cookie-less Picker session is broken UX. Fix:
+#    host the Picker in our own popup window (popups are not embedded
+#    content, so COEP does not apply to them), relaying the selection
+#    over the same channel.
+# credentialless (vs require-corp) keeps stray cross-origin images/
+# fonts loading (cookie-less) instead of hard-failing them.
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "credentialless"
 
 # Override headers for the /subscribe route so that no strict isolation is enforced.
 [[headers]]
