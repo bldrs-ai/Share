@@ -127,6 +127,12 @@ export class IncrementalBatchedBuilder {
       }
       state.mesh.instanceParents = Uint32Array.from(state.instanceParents)
       state.mesh.instanceOccurrenceIds = Uint32Array.from(state.instanceOccurrenceIds)
+      state.mesh.instanceGeometryIds = Uint32Array.from(state.instanceGeometryIds)
+      // Null (not an all-null array) for IFC — matches the one-shot
+      // builder so consumers can cheaply skip occurrence lookups.
+      state.mesh.instanceOccurrencePaths =
+        state.instanceOccurrencePaths.some((p) => p !== null) ?
+          state.instanceOccurrencePaths.slice() : null
       state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
       batches.push({
@@ -135,6 +141,8 @@ export class IncrementalBatchedBuilder {
         transparent: state.transparentFlag,
         instanceParents: state.mesh.instanceParents,
         instanceOccurrenceIds: state.mesh.instanceOccurrenceIds,
+        instanceGeometryIds: state.mesh.instanceGeometryIds,
+        instanceOccurrencePaths: state.mesh.instanceOccurrencePaths,
         instanceGeometry: state.mesh.instanceGeometry,
         instanceColors: state.mesh.instanceColors,
       })
@@ -195,6 +203,10 @@ export class IncrementalBatchedBuilder {
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
     state.instanceParents.push(parentExpressId)
     state.instanceOccurrenceIds.push(this.occurrenceId)
+    // Per-occurrence identity (STEP): NAUO path + solid geometry id, so
+    // the batched consumers can narrow selection / hide to one occurrence.
+    state.instanceGeometryIds.push(geomExpressID)
+    state.instanceOccurrencePaths.push(placed.occurrencePath ?? null)
     state.instanceGeometry.push(entry.geometry)
     state.instanceColors.push(color)
     state.cursor++
@@ -293,6 +305,8 @@ export class IncrementalBatchedBuilder {
       usedIndices: 0,
       instanceParents: [],
       instanceOccurrenceIds: [],
+      instanceGeometryIds: [],
+      instanceOccurrencePaths: [],
       instanceGeometry: [],
       instanceColors: [],
     }

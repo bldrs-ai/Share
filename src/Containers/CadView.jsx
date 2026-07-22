@@ -687,14 +687,13 @@ export default function CadView({
       // viewer-replacement work, so it wins the modifier slot. Models
       // without an instanceMap (today's wit-three path, GLB cache hit)
       // keep the legacy Shift behavior unchanged.
-      // BatchedMesh render path (`?feature=batchedMesh`): the raycast sets
-      // `batchId` (the per-instance id); resolve it to the parent IFC
-      // product through the tables `buildBatchedConwayModel` attached.
-      // Selection highlights every occurrence of that product (parent-level
-      // subset, via the model's `createSubset`). Per-occurrence narrowing
-      // would need `instancePicking`, which the batched model doesn't carry
-      // yet — so we pass no instanceIds (avoids a no-op `setInstanceSelection`
-      // + its warn). See design/new/viewer-replacement.md §3b.iv.
+      // BatchedMesh render path (`?feature=batchedMesh` / demandGeometry):
+      // the raycast sets `batchId` (the per-instance id); resolve it to the
+      // parent IFC product, its global occurrence id (the batched "instance
+      // id" `setInstanceSelection` narrows the recolor with), and its STEP
+      // occurrence path / solid geometry id through the per-batch tables
+      // `assembleBatchedModel` attached — the same per-instance pick the
+      // merged path resolves through `mesh.instanceMap`.
       if (mesh.isBatchedMesh && mesh.instanceParents) {
         const batchId = picked.batchId
         if (batchId === undefined || batchId < 0) {
@@ -704,7 +703,19 @@ export default function CadView({
         if (parentExpressId === undefined || !viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        selectItemsInScene([parentExpressId], true, [])
+        const instanceId = mesh.instanceOccurrenceIds?.[batchId]
+        if (instanceId === undefined) {
+          // Undecorated batch (no occurrence table): parent-level only.
+          selectItemsInScene([parentExpressId], true, [])
+          return
+        }
+        selectFromInstancePick({
+          parentExpressId,
+          instanceId,
+          rawOccurrencePath: mesh.instanceOccurrencePaths?.[batchId] ?? null,
+          pickedGeometryId: mesh.instanceGeometryIds?.[batchId] ?? null,
+          isShiftKeyDown: event.shiftKey,
+        })
         return
       }
       if (mesh.instanceMap) {
@@ -720,69 +731,13 @@ export default function CadView({
         if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        // Route through selectItemsInScene (the single selection
-        // funnel) so a scene pick gets the same treatment as every
-        // other source: store update + element-path permalink in the
-        // URL. Previously this set the store directly and skipped the
-        // funnel, so scene selections never produced a shareable
-        // permalink. The parent expressID is always the "selection" so
-        // the properties panel / nav tree / search respond normally;
-        // `instanceIds` only narrows what the OutlineEffect draws.
-        // Shift = the whole IFC element (every instance) → no
-        // per-instance restriction; no-shift = just this PlacedGeometry.
-        const instanceIds = event.shiftKey ? [] : [instanceId]
-        // STEP: the picked instance's occurrence path so the NavTree highlights
-        // the one occurrence, not every reuse of the part type. Null on shift
-        // (whole element) and for IFC / single-occurrence parts.
-        //
-        // The geometry path can be deeper than any tree node's — Conway
-        // appends a segment per child shape_representation level, and an
-        // SRR-attached brep (Alibre exports) adds a non-NAUO id below the
-        // leaf — so trim to the deepest tree-known prefix or the NavTree's
-        // exact-key matches (row highlight, scroll) find nothing. The store
-        // is read imperatively: this handler is installed once from
-        // `onModel`, before that render's `rootElement` is set.
-        const rawOccurrencePath = event.shiftKey ? null :
-          (mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null)
-        const rootEltForPick = useStore.getState().rootElement
-        const occurrencePath = rawOccurrencePath ?
-          trimToTreeOccurrencePath(
-            rawOccurrencePath,
-            occurrencePathKeySetForTree(rootEltForPick)) :
-          null
-        // Ephemeral solid resolution: when the tree surfaces the picked
-        // body as a `type:'solid'` child of the node at this path (Conway's
-        // multibody solid layer), select THAT node — its express id is the
-        // picked instance's PlacedGeometry.geometryExpressID — so the
-        // NavTree highlights the one body, not the whole part. Falls back
-        // to the part-level selection when the tree has no matching solid
-        // (single-solid parts, suppressed anonymous dumps, old caches).
-        let targetId = parentExpressId
-        let solidExpressId = null
-        if (occurrencePath) {
-          const pickedGeometryId =
-            mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null
-          const pathNode = pickedGeometryId !== null ?
-            findNodeByOccurrencePath(rootEltForPick, occurrencePath) : null
-          const solidNode = pathNode?.children?.find?.(
-            (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
-          if (solidNode) {
-            targetId = solidNode.expressID
-            solidExpressId = solidNode.expressID
-          } else if (pickedGeometryId !== null && pathNode &&
-              occurrenceInstanceIds(occurrencePath, false).length > 1) {
-            // Anonymous piece of a multi-piece part (conway#387): no tree
-            // node exists, but (path, geometry id) is a complete identity —
-            // select it as a solid and materialize a transient NavTree row
-            // so highlight/scroll/eye/permalink all work. The >1-instance
-            // guard keeps single-solid parts (as1's nut, the NEMA screws)
-            // on the part-level selection, where the part node IS the piece.
-            targetId = pickedGeometryId
-            solidExpressId = pickedGeometryId
-            materializeTransientNode(occurrencePath, pickedGeometryId)
-          }
-        }
-        selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
+        selectFromInstancePick({
+          parentExpressId,
+          instanceId,
+          rawOccurrencePath: mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null,
+          pickedGeometryId: mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null,
+          isShiftKeyDown: event.shiftKey,
+        })
         return
       }
       // Non-instance branch: elementSelection funnels through
@@ -805,6 +760,82 @@ export default function CadView({
     } catch (e) {
       console.error(e)
     }
+  }
+
+
+  /**
+   * Shared tail of the per-instance scene-pick funnel — used by both the
+   * merged (`mesh.instanceMap`) and batched (per-batch tables) double-click
+   * branches so the two can't drift on the selection contract.
+   *
+   * Routes through selectItemsInScene (the single selection funnel) so a
+   * scene pick gets the same treatment as every other source: store update
+   * + element-path permalink in the URL. The parent expressID is always the
+   * "selection" so the properties panel / nav tree / search respond
+   * normally; `instanceIds` only narrows what the scene highlight draws.
+   * Shift = the whole IFC element (every instance) → no per-instance
+   * restriction; no-shift = just this PlacedGeometry.
+   *
+   * STEP: the picked instance's occurrence path makes the NavTree highlight
+   * the one occurrence, not every reuse of the part type (null on shift and
+   * for IFC / single-occurrence parts). The geometry path can be deeper
+   * than any tree node's — Conway appends a segment per child
+   * shape_representation level, and an SRR-attached brep (Alibre exports)
+   * adds a non-NAUO id below the leaf — so trim to the deepest tree-known
+   * prefix or the NavTree's exact-key matches (row highlight, scroll) find
+   * nothing. The store is read imperatively: the click handler is installed
+   * once from `onModel`, before that render's `rootElement` is set.
+   *
+   * Ephemeral solid resolution: when the tree surfaces the picked body as a
+   * `type:'solid'` child of the node at this path (Conway's multibody solid
+   * layer), select THAT node — its express id is the picked instance's
+   * `PlacedGeometry.geometryExpressID` — so the NavTree highlights the one
+   * body, not the whole part. Falls back to the part-level selection when
+   * the tree has no matching solid (single-solid parts, suppressed
+   * anonymous dumps, old caches).
+   *
+   * @param {object} pick
+   * @param {number} pick.parentExpressId the geometry-owner product id
+   * @param {number} pick.instanceId synthetic per-instance id (IfcInstanceMap
+   *   id on the merged path; global occurrence id on the batched path)
+   * @param {Array<number>|null} pick.rawOccurrencePath untrimmed STEP path
+   * @param {number|null} pick.pickedGeometryId the instance's own geometry
+   *   (solid) express id
+   * @param {boolean} pick.isShiftKeyDown
+   */
+  function selectFromInstancePick({
+    parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
+  }) {
+    const instanceIds = isShiftKeyDown ? [] : [instanceId]
+    const rawPath = isShiftKeyDown ? null : rawOccurrencePath
+    const rootEltForPick = useStore.getState().rootElement
+    const occurrencePath = rawPath ?
+      trimToTreeOccurrencePath(rawPath, occurrencePathKeySetForTree(rootEltForPick)) :
+      null
+    let targetId = parentExpressId
+    let solidExpressId = null
+    if (occurrencePath) {
+      const pathNode = pickedGeometryId !== null ?
+        findNodeByOccurrencePath(rootEltForPick, occurrencePath) : null
+      const solidNode = pathNode?.children?.find?.(
+        (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
+      if (solidNode) {
+        targetId = solidNode.expressID
+        solidExpressId = solidNode.expressID
+      } else if (pickedGeometryId !== null && pathNode &&
+          occurrenceInstanceIds(occurrencePath, false).length > 1) {
+        // Anonymous piece of a multi-piece part (conway#387): no tree
+        // node exists, but (path, geometry id) is a complete identity —
+        // select it as a solid and materialize a transient NavTree row
+        // so highlight/scroll/eye/permalink all work. The >1-instance
+        // guard keeps single-solid parts (as1's nut, the NEMA screws)
+        // on the part-level selection, where the part node IS the piece.
+        targetId = pickedGeometryId
+        solidExpressId = pickedGeometryId
+        materializeTransientNode(occurrencePath, pickedGeometryId)
+      }
+    }
+    selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
   }
 
 

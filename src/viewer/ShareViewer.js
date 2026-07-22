@@ -38,6 +38,7 @@ import {occurrencePathKey} from '../utils/occurrencePaths'
 import {modelHasCapability} from './ShareModel'
 import {isFeatureEnabled} from '../FeatureFlags'
 import {
+  applyBatchedInstanceSelection,
   applyBatchedPreselection,
   applyBatchedSelection,
   clearBatchedPreselection,
@@ -944,7 +945,9 @@ export class ShareViewer {
         // (setColorAt) rather than overlay a coplanar subset Mesh — see
         // batchedHighlight.js for why the overlay approach can't render
         // reliably on a BatchedMesh. Selection covers every occurrence of
-        // each requested product (per-occurrence narrowing is a follow-up).
+        // each requested product; a follow-on `setInstanceSelection` call
+        // (the click handler / NavTree occurrence funnel) narrows the
+        // recolor to one occurrence via `applyBatchedInstanceSelection`.
         const selMat = this.selector.getSelectionMaterial()
         applyBatchedSelection(model, toBeSelected, selMat?.color)
       } else if (modelHasCapability(model, 'ifcSubsets')) {
@@ -1011,6 +1014,21 @@ export class ShareViewer {
    */
   setInstanceSelection(modelID, instanceIds) {
     const model = this._modelById(modelID)
+    if (modelHasCapability(model, 'batchedPicking')) {
+      // BatchedMesh render path: narrow the selection recolor to just the
+      // named occurrences (global `instanceOccurrenceIds`). Replaces the
+      // parent-level recolor `setSelection` painted, restoring the other
+      // instances of the product to their original colours — the recolor
+      // counterpart of the merged path's one-instance subset.
+      if (!Array.isArray(instanceIds) || instanceIds.length === 0) {
+        // Same "no per-instance highlight" contract as below: leave the
+        // parent-level selection recolor alone.
+        return
+      }
+      const selMat = this.selector.getSelectionMaterial()
+      applyBatchedInstanceSelection(model, instanceIds, selMat?.color)
+      return
+    }
     if (!modelHasCapability(model, 'instancePicking')) {
       debug().warn('setInstanceSelection: model lacks instancePicking capability')
       return
@@ -1086,6 +1104,38 @@ export class ShareViewer {
     const collect = (matchDescendants) => {
       const ids = []
       model.traverse((obj) => {
+        // BatchedMesh render path: the reverse index maps path keys to
+        // batchIds (stamped by `assembleBatchedModel`); resolve each to its
+        // global occurrence id — the "instance id" the batched pick tables
+        // and `setInstanceSelection` speak. The geometry filter goes through
+        // the per-batch `instanceGeometryIds` table.
+        if (obj.isBatchedMesh && obj.occurrencePathToBatchIds) {
+          const byBatchPath = obj.occurrencePathToBatchIds
+          const occurrenceIds = obj.instanceOccurrenceIds
+          const geometryIds = obj.instanceGeometryIds
+          const pushBatchIds = (list) => {
+            for (let i = 0; i < list.length; i++) {
+              const batchId = list[i]
+              if (geometryExpressId === null ||
+                  (geometryIds && geometryIds[batchId] === geometryExpressId)) {
+                ids.push(occurrenceIds[batchId])
+              }
+            }
+          }
+          if (!matchDescendants) {
+            const exact = byBatchPath.get(target)
+            if (exact) {
+              pushBatchIds(exact)
+            }
+            return
+          }
+          for (const [key, list] of byBatchPath) {
+            if (key === target || key.startsWith(descendantPrefix)) {
+              pushBatchIds(list)
+            }
+          }
+          return
+        }
         const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
         if (!byPath) {
           return
@@ -1161,6 +1211,28 @@ export class ShareViewer {
     const seen = new Set()
     const ids = []
     model.traverse((obj) => {
+      // BatchedMesh render path: geometry (solid) ids live in the per-batch
+      // `instanceGeometryIds` table, keyed through the same reverse
+      // path→batchIds index the instance resolver uses.
+      if (obj.isBatchedMesh && obj.occurrencePathToBatchIds) {
+        const geometryIds = obj.instanceGeometryIds
+        if (!geometryIds) {
+          return
+        }
+        for (const [key, list] of obj.occurrencePathToBatchIds) {
+          if (key !== target && !key.startsWith(descendantPrefix)) {
+            continue
+          }
+          for (let i = 0; i < list.length; i++) {
+            const geometryExpressId = geometryIds[list[i]]
+            if (geometryExpressId !== undefined && !seen.has(geometryExpressId)) {
+              seen.add(geometryExpressId)
+              ids.push(geometryExpressId)
+            }
+          }
+        }
+        return
+      }
       const byPath = obj.isMesh ? obj.instanceMap?.occurrencePathToInstanceIds : null
       if (!byPath || typeof obj.instanceMap.getGeometryExpressIdByInstance !== 'function') {
         return
