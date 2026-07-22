@@ -115,6 +115,32 @@ suspicion. What's robust:
 - **Neither step moves the 448 MB / ~150–200 s geometry write** — that's
   identical across prod/#1588/#1589 and is the compression track (below).
 
+### Step 3.5 — reader-side block-indexed properties container (GLB schema 0.13.0)
+
+The streaming writer (#1589) fixed the *write* side but the reader
+still inflated the whole payload as ONE string (`pako.ungzip(...,
+{to: 'string'})`) and `JSON.parse`d it into one object graph. Two
+failures: V8 caps a single string at ~512MiB, so a PSB-class model's
+properties died in pako's string join (`RangeError: Invalid string
+length` — observed in the field 2026-07) with the panel silently
+empty; and even under the cap, the parse materialised a multi-GB
+graph for a panel that reads one element at a time.
+
+Replaced the wire format with a block-indexed container ("BPRI"
+magic): gzipped header (id→block index + pset table) + independently
+gzipped ~1MB record blocks. The reader decodes the header on first
+access and one block per record miss (16-block LRU) — every string
+and object graph on the read path is bounded by the block size. Both
+capture paths emit the same container (the streaming sweep feeds
+blocks incrementally; the slow BFS encodes its map), so
+`injectGlbExtensions` always gets `precompressed` bytes.
+
+**No legacy read path** (deliberate — the extension was unannounced):
+the 0.13.0 cache-key bump makes old local artifacts read as a miss
+and rewrite; an old-format payload arriving as a shared GLB *file*
+raises a "Clear Local Cache" alert instead of decoding. See
+`bldrsElementProperties.js` header comment for the byte layout.
+
 > **Merge-order note (why it mattered):** #1588 and #1589 are independent
 > branches, but #1588 alone keeps the *eager* capture and rode the OOM;
 > #1589 has the fix. #1588's `ReleaseEntityCache` releases are also no-ops

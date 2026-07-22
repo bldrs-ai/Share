@@ -359,28 +359,24 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // eliminates that block — the main thread only pays the
     // structured-clone cost across postMessage (~50ms on a
     // Schependomlaan payload, scales sublinearly with size).
-    // (The element-properties payload usually arrives already gzipped
-    // from the streaming capture — see below — so for it the worker
-    // only splices bytes; the stringify+gzip offload still applies to
-    // its slow-path object form and to the other extensions.)
+    // (The element-properties payload always arrives as already-
+    // compressed container bytes from the capture — see below — so
+    // for it the worker only splices bytes; the stringify+gzip
+    // offload applies to the other extensions.)
     //
     // The fallback path runs everything inline (no worker) — used
     // when the worker fails to construct (Safari edge cases,
     // module-worker support detection failure). Same result either
     // way; the only observable difference is main-thread freeze
     // duration.
-    // The element-properties capture is a discriminated union: the
-    // streaming path (Conway adapter available) hands back already-
-    // gzipped wire bytes — pass them through as `precompressed` so
-    // neither this thread nor the worker re-materialises the payload;
-    // the slow path hands back the decoded object, compressed by the
-    // inject step as before.
-    const elementPropertiesExt = elementProperties?.compressedBytes instanceof Uint8Array ?
-      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties.compressedBytes} :
-      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true}
+    // The element-properties capture (both streaming and slow paths)
+    // hands back the block-indexed container bytes — pass them
+    // through as `precompressed` so neither this thread nor the
+    // worker re-materialises the payload. Nullish when no capture ran
+    // (non-IFC source); the inject filter drops the entry.
     const extensionsForInject = [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
-      elementPropertiesExt,
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties?.compressedBytes},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ]
     // Scene-level metadata that rides along in the same inject pass
