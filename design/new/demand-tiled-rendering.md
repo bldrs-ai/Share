@@ -91,6 +91,19 @@ Measured (node, Schependomlaan 49MB): first payload 583ms into a
 1199ms parse. On PSB-class parses this is first pixels at ~1–2s of
 parse instead of ~13s.
 
+### STEP parity (shipped alongside A2)
+
+The whole demand surface is schema-parametric as of conway 1.428:
+AP214/AP203/AP242 get the streamed columnar open, the deferred pump
+(assembly-tree units — one per part, so single-root assemblies like
+Arty stream progressively; conway maps the consumer batch size onto
+part granularity), and the parse-time preview channel via a
+per-schema adapter. The loader needed zero changes — the demand
+branch feature-detects the same pump either way. STEP loads are
+geometry-dominated (Arty: 0.8s parse / 11.5s extraction), so the
+pump is the visible win there; the preview channel is future-proofing
+for large STEP parses.
+
 ### B — Budgeted residency + eviction (the memory endgame)
 
 Wire the full pump→queue→tile-pool→extractor composition. Renderer
