@@ -17,7 +17,7 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
-import {Box3, Group, MathUtils, Mesh, Sphere} from 'three'
+import {Mesh} from 'three'
 import {buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
@@ -27,9 +27,9 @@ import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError} from '../../utils/oom'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
+import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import ShareIfcManager from './ShareIfcManager'
 import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
-import {setLoadSummary} from '../../loader/loadProgress'
 
 
 /**
@@ -151,214 +151,64 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
-    // Camera follow for the demand preview. Does NOT go through
-    // ifc.context.fitToFrame(): that frames scene.children[last]
-    // (#1561), which is only accidentally the preview group — when it
-    // isn't, every "fit" targets something else (geometry grows
-    // offscreen and the camera never visibly moves). The follower
-    // frames the preview group EXPLICITLY with camera-controls
-    // fitToSphere: the first fit is instant (get eyes on the first
-    // geometry immediately), later fits tween, and the cadence grows
-    // exponentially from 250ms to 1s so the early burst tracks tightly
-    // without churning all load long. Stops forever the moment the
-    // user takes the camera (never fight input) or the load finishes.
-    const CAMERA_FOLLOW_MIN_MS = 250
-    const CAMERA_FOLLOW_MAX_MS = 1000
-    const CAMERA_FOLLOW_GROWTH = 1.5
-    const FRAMING_MARGIN = 1.5
-    let cameraFollowTarget = null
-    let previewGeometryDirty = false
-    let cameraFollowStopped = false
-    let cameraFollowTimer = null
-    let cameraFollowDelayMs = CAMERA_FOLLOW_MIN_MS
-    let followedControls = null
-    const stopCameraFollow = () => {
-      cameraFollowStopped = true
-      if (cameraFollowTimer !== null) {
-        clearTimeout(cameraFollowTimer)
-        cameraFollowTimer = null
-      }
-      try {
-        followedControls?.removeEventListener?.('controlstart', stopCameraFollow)
-      } catch {
-        // best-effort
-      }
-      followedControls = null
-    }
-    const fitPreviewToFrame = (withTransition) => {
-      const controls = ifc.context?.ifcCamera?.cameraControls
-      const camera = ifc.context?.ifcCamera?.perspectiveCamera
-      if (!controls || !camera || cameraFollowTarget === null) {
-        return
-      }
-      const box = new Box3().setFromObject(cameraFollowTarget)
-      if (box.isEmpty()) {
-        return
-      }
-      const sphere = new Sphere()
-      box.getBoundingSphere(sphere)
-      if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
-        return
-      }
-      sphere.radius *= FRAMING_MARGIN
-      // Keep the whole zoom range inside the frustum as the model
-      // grows, but only push the planes OUT (monotonic) so successive
-      // refits never pop the projection.
-      const HALF = 0.5
-      const vFov = MathUtils.degToRad(camera.fov)
-      const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
-      const limitingFov = camera.aspect > 1 ? vFov : hFov
-      const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
-      const wantFar = (fitDistance + sphere.radius) * 4
-      if (camera.far < wantFar) {
-        camera.far = wantFar
-        camera.updateProjectionMatrix()
-      }
-      controls.fitToSphere(sphere, withTransition)
-    }
-    let lastFollowFitMs = 0
-    const maybeFollowRefit = () => {
-      if (cameraFollowStopped || !previewGeometryDirty) {
-        return
-      }
-      const now = Date.now()
-      if (now - lastFollowFitMs < cameraFollowDelayMs) {
-        return
-      }
-      lastFollowFitMs = now
-      cameraFollowDelayMs =
-        Math.min(cameraFollowDelayMs * CAMERA_FOLLOW_GROWTH, CAMERA_FOLLOW_MAX_MS)
-      previewGeometryDirty = false
-      try {
-        fitPreviewToFrame(true)
-      } catch (e) {
-        debug(WARN).warn('camera follow refit failed:', e)
-      }
-    }
-    const followTick = () => {
-      cameraFollowTimer = null
-      if (cameraFollowStopped) {
-        return
-      }
-      if (previewGeometryDirty) {
-        previewGeometryDirty = false
-        try {
-          fitPreviewToFrame(true)
-        } catch (e) {
-          debug(WARN).warn('camera follow refit failed:', e)
-        }
-      }
-      cameraFollowDelayMs =
-        Math.min(cameraFollowDelayMs * CAMERA_FOLLOW_GROWTH, CAMERA_FOLLOW_MAX_MS)
-      cameraFollowTimer = setTimeout(followTick, cameraFollowDelayMs)
-    }
-    const startCameraFollow = (target) => {
-      if (cameraFollowStopped || cameraFollowTimer !== null) {
-        return
-      }
-      cameraFollowTarget = target
-      try {
-        followedControls = ifc.context?.ifcCamera?.cameraControls ?? null
-        followedControls?.addEventListener?.('controlstart', stopCameraFollow)
-      } catch {
-        followedControls = null
-      }
-      // Immediate first frame (no tween — get eyes on it), then the
-      // exponentially growing tweened follow-ups.
-      try {
-        fitPreviewToFrame(false)
-      } catch (e) {
-        debug(WARN).warn('camera follow initial fit failed:', e)
-      }
-      cameraFollowDelayMs = CAMERA_FOLLOW_MIN_MS
-      cameraFollowTimer = setTimeout(followTick, cameraFollowDelayMs)
-    }
+    // The progressive-load session owns the format-neutral load
+    // instrumentation — demand-preview lifecycle, strict-fit camera
+    // follow, and progress/summary reporting. IFC and STEP both route
+    // through this parse, so both trigger the same session; format
+    // knowledge stays below (payload/batch → mesh conversion).
+    const scene = typeof ifc.context?.getScene === 'function' ?
+      ifc.context.getScene() : null
+    const session = new ProgressiveLoadSession({
+      scene: scene !== null && isFeatureEnabled('demandGeometry') ? scene : null,
+      getControls: () => ifc.context?.ifcCamera?.cameraControls,
+      getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
+      onProgress,
+    })
 
     try {
-      if (onProgress) {
-        onProgress('Opening model...')
-      }
+      session.report('Opening model...')
       const ifcAPI = this.ifcManager.ifcAPI
       // onProgress is threaded into conway's ON_PROGRESS extension so the
       // opaque gap between 'Parsing model geometry...' and 'Building
       // model...' carries real per-phase counts (headerParse / dataParse /
       // geometry — conway #301). Engines without the extension just keep
       // the coarse strings.
-      const scene = typeof ifc.context?.getScene === 'function' ?
-        ifc.context.getScene() : null
-
-      // Demand/tiled rendering slice A (#1613): while the batch pump
-      // runs, stream each batch into a render-only preview group so
-      // first pixels arrive right after the parse. The final model is
-      // then built exactly as before (full picking/decoration) and the
-      // preview is swapped out — identical end state, progressive
-      // arrival. Every preview step is best-effort: a preview failure
-      // must never break the load (mirrors the batchedMesh guard).
-      const demandPreview = scene !== null && isFeatureEnabled('demandGeometry') ?
-        new Group() : null
-      let previewInstalled = false
-
-      // Slice A2 (parse-time preview channel): conway emits
-      // self-contained preview payloads WHILE THE PARSE RUNS — preview
-      // quality (openings/materials can be missing), replaced wholesale
-      // by the durable batches below. Same group, same frame (payload
-      // transforms carry the pinned coordination), best-effort like
-      // every other preview step.
+      //
+      // Demand/tiled rendering (#1613): the parse-time preview payloads
+      // (slice A2) and the durable pump batches (slice A) both stream
+      // into the session's preview group — format-specific here is only
+      // the conversion to meshes; lifecycle, fitting, and reporting are
+      // the session's. Every preview step is best-effort: a preview
+      // failure must never break the load.
+      const usePreview = session.previewGroup !== null
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
-      let parsePreviewCount = 0
 
-      const onPreviewMesh = demandPreview === null ? undefined : (payload) => {
+      const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
           const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
-          if (mesh === null) {
-            return
-          }
-          demandPreview.add(mesh)
-          previewGeometryDirty = true
-          if (!previewInstalled) {
-            previewInstalled = true
-            scene.add(demandPreview)
-          }
-          // Frame the very first geometry immediately (inside
-          // startCameraFollow), then let the follower keep it framed
-          // as the preview grows. Refits ride the geometry events
-          // themselves: the load pipeline's scheduler-priority yields
-          // starve setTimeout in browsers, so the timer alone fired
-          // rarely (one refit at the very end).
-          if (++parsePreviewCount === 1) {
-            startCameraFollow(demandPreview)
-          } else {
-            maybeFollowRefit()
+          if (mesh !== null) {
+            session.addPreviewMesh(mesh)
           }
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
         }
       }
 
-      const onMeshBatch = demandPreview === null ? undefined : (batch, batchModelID) => {
+      let firstBatch = true
+      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
         try {
           const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
-          demandPreview.add(new Mesh(assembled.geometry, assembled.materials))
-          previewGeometryDirty = true
-          maybeFollowRefit()
-          if (!previewInstalled) {
-            previewInstalled = true
-            scene.add(demandPreview)
+          session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
+          if (firstBatch) {
+            firstBatch = false
             // Placed transforms are already coordinated; stamp the
-            // model-level coordination like the final build does, then
-            // frame the first batch so the user sees geometry
-            // immediately. Async + best-effort by design.
+            // model-level coordination like the final build does
+            // (identity on the deferred path by contract). Async +
+            // best-effort by design.
             // eslint-disable-next-line new-cap
             Promise.resolve(ifcAPI.GetCoordinationMatrix(batchModelID))
-              .then((matrixArr) => {
-                if (demandPreview.matrix &&
-                    typeof demandPreview.matrix.fromArray === 'function') {
-                  demandPreview.matrix.fromArray(matrixArr)
-                  demandPreview.matrixAutoUpdate = false
-                }
-                startCameraFollow(demandPreview)
-              })
+              .then((matrixArr) => session.stampCoordination(matrixArr))
               .catch((e) => debug(WARN).warn('demand preview coordination failed:', e))
           }
         } catch (e) {
@@ -369,9 +219,7 @@ export default class ShareIfcLoader {
       const {modelID, captured} =
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
 
-      if (onProgress) {
-        onProgress('Assembling render mesh...')
-      }
+      session.beginAssembly()
 
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
       // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
@@ -394,24 +242,9 @@ export default class ShareIfcLoader {
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
       }
 
-      stopCameraFollow()
-
-      // Swap the preview out before the real model installs — dispose
-      // per-batch geometry/materials so the preview leaves no residue.
-      if (demandPreview !== null && previewInstalled) {
-        try {
-          scene.remove(demandPreview)
-          for (const child of demandPreview.children) {
-            child.geometry?.dispose?.()
-            const materials = Array.isArray(child.material) ? child.material : [child.material]
-            for (const material of materials) {
-              material?.dispose?.()
-            }
-          }
-        } catch (e) {
-          debug(WARN).warn('demand preview teardown failed:', e)
-        }
-      }
+      // Swap the preview out before the real model installs — the
+      // session stops the camera follow and disposes preview meshes.
+      session.finish()
 
       ifc.addIfcModel(ifcModel)
 
@@ -474,9 +307,7 @@ export default class ShareIfcLoader {
             metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
           parts.push(`units=${unitLabel}`)
         }
-        if (parts.length > 0) {
-          setLoadSummary(parts.join(' '))
-        }
+        session.setSummary(parts)
       } catch (e) {
         debug(WARN).warn('load summary skipped:', e)
       }
@@ -514,7 +345,7 @@ export default class ShareIfcLoader {
 
       return ifcModel
     } catch (err) {
-      stopCameraFollow()
+      session.abort()
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.

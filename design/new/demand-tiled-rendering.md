@@ -104,6 +104,40 @@ geometry-dominated (Arty: 0.8s parse / 11.5s extraction), so the
 pump is the visible win there; the preview channel is future-proofing
 for large STEP parses.
 
+Three follow-up fixes (conway #431) made the STEP preview channel
+actually live — it was silently dead and could corrupt the durable
+open: (1) `ColumnarIndexSink` snapshots now CLONE retained complex
+(multi-mapping) entries, because models stamp lazy vtable/buffer
+state onto them in place and AP214's transforms are complex
+instances — a throwaway prefix model was poisoning the durable model
+(Arty pump: 49 → 0 meshes); IFC was immune only because IFC files
+have no complex instances. (2) AP214 `prepareDemandExtraction`
+contains per-record getter throws, so a truncated prefix yields
+partial units instead of aborting (one dangling record used to kill
+the channel on tick #1). (3) `retryEmptyUnits` adapter semantics:
+AP214's unit list is fixed at the file head while geometry arrives
+throughout the file, so the channel re-runs units that captured
+nothing against each richer prefix generation instead of consuming
+the list once before any geometry exists.
+
+### Progressive-load session (format-neutral instrumentation)
+
+`src/viewer/ProgressiveLoadSession.js` — a small state machine
+(idle → previewing → assembling → finished/aborted) that owns
+everything the user sees/reads while a model loads, shared by IFC and
+STEP (both route through `ShareIfcLoader.parse`): demand-preview
+group lifecycle, the camera follow, and progress/summary reporting.
+Format loaders only convert their streams (preview payloads, pump
+batches) to meshes and trigger it.
+
+The camera follow is a STRICT fit: the session keeps a running union
+box of everything shown, and refits only when new geometry lands
+outside the currently framed sphere (overflow-triggered,
+event-driven, min 250ms apart growing to 1s) — so existing geometry
+is never pushed offscreen between timer beats, and contained infill
+causes no camera churn at all. First fit instant, follow-ups
+tweened, stops forever on user input.
+
 ### B — Budgeted residency + eviction (the memory endgame)
 
 Wire the full pump→queue→tile-pool→extractor composition. Renderer
