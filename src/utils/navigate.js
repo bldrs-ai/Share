@@ -24,6 +24,63 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
+ * True when `pathname` addresses a temporary (uploaded) model. These live
+ * under the `/v/new/<uuid>` route and are stored only in OPFS — there is
+ * no remote source to reload them from, so clearing the cache leaves the
+ * URL pointing at a model that no longer exists.
+ *
+ * @param {string} pathname e.g. window.location.pathname
+ * @return {boolean}
+ */
+export function isTempModelPath(pathname) {
+  return typeof pathname === 'string' && pathname.includes('/v/new/')
+}
+
+
+/**
+ * Full path to the home model (`index.ifc`) with the default camera, as a
+ * plain string suitable for a hard `window.location.assign`. Mirrors the
+ * destination `navToDefault` computes for SPA navigation, including
+ * carrying the current query string forward — feature flags live there
+ * (`?feature=…`, read from `window.location.search` at runtime) and would
+ * otherwise be dropped by the cache-clear redirect.
+ *
+ * @param {?string} [appPrefix] e.g. '/share'; derived from the current
+ *   install prefix when omitted (matches BaseRoutes' computation).
+ * @return {string}
+ */
+export function homeModelPath(appPrefix) {
+  const prefix = appPrefix ||
+    `${window.location.pathname.startsWith('/Share') ? '/Share' : ''}/share`
+  const search = window.location.search || ''
+  const cameraHash = `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+  return `${prefix}/v/p/index.ifc${search}${cameraHash}`
+}
+
+
+/**
+ * Refresh the page after a Clear-Local-Cache reset. A normal model reloads
+ * from its remote source, so a plain page reload is enough. But a temporary
+ * (uploaded) model exists only in the OPFS cache we just cleared — reloading
+ * its `/v/new/<uuid>` URL would parse as a local model that is no longer
+ * present, and the loader would raise a "file not found" error dialog (with
+ * a Reset button). Detect that case and navigate to the home model instead,
+ * so the user gets a fresh session with no error — exactly what hitting
+ * Reset would have produced.
+ *
+ * @param {?string} [appPrefix] e.g. '/share'
+ */
+export function reloadAfterCacheClear(appPrefix) {
+  if (isTempModelPath(window.location.pathname)) {
+    disablePageReloadApprovalCheck()
+    window.location.assign(homeModelPath(appPrefix))
+    return
+  }
+  window.location.reload()
+}
+
+
+/**
  * Helper for calling navigate that will append search query to path,
  * if present, before appending an optional hash.
  *
