@@ -1,7 +1,10 @@
 import React, {ReactElement, useEffect, useRef} from 'react'
 import {
-  BoxGeometry,
+  BufferGeometry,
   CanvasTexture,
+  DoubleSide,
+  Float32BufferAttribute,
+  Group,
   LinearFilter,
   Mesh,
   MeshBasicMaterial,
@@ -28,17 +31,19 @@ import debug from '../../utils/debug'
 
 
 /**
- * ViewCube is an Autodesk-style navigation gizmo rendered in the top-right
- * corner of the viewer.  It shows a labeled cube whose orientation mirrors the
- * main camera; clicking a face or corner snaps the main camera to that standard
- * view and fits the model to frame.  Dragging the cube orbits the view freely
- * (fine rotation), and a ring of arrows around the cube orbits in fixed steps
- * with an isometric home button.
+ * ViewCube is an Autodesk-style navigation gizmo rendered in a corner of the
+ * viewer.  It shows a chamfered, labeled cube whose orientation mirrors the
+ * main camera.  Clicking a face, chamfered edge, or corner snaps the main
+ * camera to that standard view and fits the model to frame; hovering a region
+ * highlights it (edges/corners in the bldrs green).  Dragging the cube orbits
+ * the view freely, and a ring of arrows orbits in fixed steps with a home
+ * button.
  *
  * The cube is drawn in its own tiny Three.js scene (independent of the main
- * viewer) so face/corner picking stays simple and self-contained.  The main
- * camera is read from `viewer.IFC.context` and driven via the camera-controls
- * instance the rest of Share already uses (see CameraControl.jsx).
+ * viewer): 6 face quads, 12 edge bevels and 8 corner triangles, each a
+ * pickable sub-mesh carrying its own view direction.  The main camera is read
+ * from `viewer.IFC.context` and driven via the camera-controls instance the
+ * rest of Share already uses (see CameraControl.jsx).
  *
  * @return {ReactElement}
  */
@@ -84,12 +89,8 @@ export default function ViewCube() {
     renderer.setSize(CUBE_SIZE_PX, CUBE_SIZE_PX)
     mount.appendChild(renderer.domElement)
 
-    const materials = CUBE_FACES.map((face) => new MeshBasicMaterial({
-      map: makeFaceTexture(face.label),
-      transparent: true,
-    }))
-    const cube = new Mesh(new BoxGeometry(1, 1, 1), materials)
-    scene.add(cube)
+    const {group, regions, dispose: disposeCube} = createViewCube()
+    scene.add(group)
 
     // --- Keep the cube oriented to match what the main camera sees ---
     let frameId = 0
@@ -98,44 +99,45 @@ export default function ViewCube() {
       if (active) {
         // Rotating the cube by the inverse of the camera rotation reproduces the
         // model's on-screen orientation inside the gizmo.
-        cube.quaternion.copy(active.quaternion).invert()
+        group.quaternion.copy(active.quaternion).invert()
       }
       renderer.render(scene, camera)
       frameId = requestAnimationFrame(renderLoop)
     }
     renderLoop()
 
-    // --- Pointer handling: click a face/corner to snap, drag to orbit freely,
-    // hover to highlight the face under the cursor. ---
+    // --- Pointer handling: click a region to snap, drag to orbit freely,
+    // hover to highlight the region under the cursor. ---
     const raycaster = new Raycaster()
     const pointer = new Vector2()
     let isPointerDown = false
     let isDragging = false
     let lastX = 0
     let lastY = 0
-    let hoveredIndex = -1
+    let hoveredMesh = null
 
     const raycastFromPointer = (event) => {
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
       pointer.y = (-((event.clientY - rect.top) / rect.height) * 2) + 1
       raycaster.setFromCamera(pointer, camera)
-      const hits = raycaster.intersectObject(cube)
+      const hits = raycaster.intersectObjects(regions, false)
       return hits.length > 0 ? hits[0] : null
     }
 
-    // Tint the face under the cursor by multiplying its texture with a highlight.
-    const setHover = (index) => {
-      if (index === hoveredIndex) {
+    // Highlight the region under the cursor; edges/corners use the bldrs green.
+    const setHover = (mesh) => {
+      if (mesh === hoveredMesh) {
         return
       }
-      if (hoveredIndex >= 0) {
-        materials[hoveredIndex].color.setHex(BASE_HEX)
+      if (hoveredMesh) {
+        hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor)
       }
-      if (index >= 0) {
-        materials[index].color.setHex(HOVER_HEX)
+      if (mesh) {
+        const hl = mesh.userData.kind === 'face' ? FACE_HOVER_HEX : BLDRS_GREEN_HEX
+        mesh.material.color.setHex(hl)
       }
-      hoveredIndex = index
+      hoveredMesh = mesh
     }
 
     const snapFromPointer = (event) => {
@@ -143,10 +145,10 @@ export default function ViewCube() {
       if (!hit) {
         return
       }
-      const direction = pickDirection(hit, cube)
+      const direction = hit.object.userData.dir
       snapToDirection(cameraControls, direction)
       fitModelToFrame()
-      debug().log('ViewCube: snap to', direction)
+      debug().log('ViewCube: snap to', hit.object.userData.kind, direction)
     }
 
     const onPointerDown = (event) => {
@@ -159,7 +161,7 @@ export default function ViewCube() {
     const onPointerMove = (event) => {
       if (!isPointerDown) {
         const hit = raycastFromPointer(event)
-        setHover(hit ? hit.face.materialIndex : -1)
+        setHover(hit ? hit.object : null)
         return
       }
       const dx = event.clientX - lastX
@@ -168,7 +170,7 @@ export default function ViewCube() {
         return
       }
       isDragging = true
-      setHover(-1) // Clear the highlight while dragging.
+      setHover(null) // Clear the highlight while dragging.
       lastX = event.clientX
       lastY = event.clientY
       const {azimuth, polar} = dragRotation(dx, dy, ROTATE_SENSITIVITY)
@@ -185,7 +187,7 @@ export default function ViewCube() {
       isPointerDown = false
       isDragging = false
     }
-    const onPointerLeave = () => setHover(-1)
+    const onPointerLeave = () => setHover(null)
     renderer.domElement.addEventListener('pointerdown', onPointerDown)
     renderer.domElement.addEventListener('pointermove', onPointerMove)
     renderer.domElement.addEventListener('pointerup', onPointerUp)
@@ -201,13 +203,7 @@ export default function ViewCube() {
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave)
       controlsRef.current = null
       contextRef.current = null
-      cube.geometry.dispose()
-      materials.forEach((m) => {
-        if (m.map) {
-          m.map.dispose()
-        }
-        m.dispose()
-      })
+      disposeCube()
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) {
         mount.removeChild(renderer.domElement)
@@ -332,36 +328,6 @@ function RingButton({title, onClick, icon, sx}) {
 
 
 /**
- * Determine the model-space view direction for a click on the cube.  Because
- * the cube's local axes map to the model's axes (local +Z is the model front),
- * the clicked zone in cube-local space is the direction to look from.  A click
- * near a corner (three active axes) or an edge (two active axes) yields the
- * corresponding diagonal direction; a face-center click (one or zero active
- * axes) resolves to the clicked face's outward normal.
- *
- * @param {object} hit Raycaster intersection against the cube
- * @param {Mesh} cube The cube mesh
- * @return {Vector3} Unit direction, in model space, to place the camera along
- */
-export function pickDirection(hit, cube) {
-  const local = cube.worldToLocal(hit.point.clone())
-  const zone = new Vector3(
-    zoneSign(local.x),
-    zoneSign(local.y),
-    zoneSign(local.z),
-  )
-  const activeAxes = Math.abs(zone.x) + Math.abs(zone.y) + Math.abs(zone.z)
-  // Two active axes = edge, three = corner; both look along the diagonal.
-  const edgeAxes = 2
-  if (activeAxes >= edgeAxes) {
-    return zone.normalize()
-  }
-  // Face center: snap to the clicked face's outward normal.
-  return hit.face.normal.clone().normalize()
-}
-
-
-/**
  * Snap the main camera to look from `direction`, keeping the current target and
  * distance.  Converts the direction to the camera-controls (azimuth, polar)
  * spherical angles and animates there.
@@ -398,20 +364,129 @@ export function dragRotation(dx, dy, sensitivity) {
 
 
 /**
- * Bucket a cube-local coordinate (range [-0.5, 0.5]) into -1, 0 or 1 by which
- * third of the face it falls in.
+ * Build the chamfered ViewCube as a group of pickable sub-meshes: 6 labeled
+ * face quads, 12 edge bevels and 8 corner triangles.  Each mesh carries its
+ * view direction and highlight base color in userData.
  *
- * @param {number} coord
- * @return {number} -1, 0 or 1
+ * @return {{group: Group, regions: Array<Mesh>, dispose: Function}}
  */
-function zoneSign(coord) {
-  if (coord > ZONE_THRESHOLD) {
-    return 1
+export function createViewCube() {
+  const group = new Group()
+  const regions = []
+  const disposables = []
+  const H = CUBE_HALF
+  const S = FACE_HALF
+  const vec = (x, y, z) => new Vector3(x, y, z)
+
+  const addRegion = (geometry, material, dir, kind, baseColor) => {
+    const mesh = new Mesh(geometry, material)
+    mesh.userData = {dir, kind, baseColor}
+    group.add(mesh)
+    regions.push(mesh)
+    disposables.push(geometry, material)
   }
-  if (coord < -ZONE_THRESHOLD) {
-    return -1
+
+  // Faces: an inset quad on each of the 6 outer planes, carrying its label.
+  CUBE_FACES.forEach(({n, u, v, label}) => {
+    const nn = vec(...n)
+    const uu = vec(...u)
+    const vv = vec(...v)
+    const center = nn.clone().multiplyScalar(H)
+    const corner = (su, sv) =>
+      center.clone().addScaledVector(uu, su * S).addScaledVector(vv, sv * S)
+    const bl = corner(-1, -1)
+    const br = corner(1, -1)
+    const tr = corner(1, 1)
+    const tl = corner(-1, 1)
+    const geo = geomFromTris(
+      [bl, br, tr, bl, tr, tl],
+      [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1])
+    const tex = makeFaceTexture(label)
+    disposables.push(tex)
+    const mat = new MeshBasicMaterial({map: tex, side: DoubleSide})
+    addRegion(geo, mat, nn.clone().normalize(), 'face', FACE_BASE_HEX)
+  })
+
+  // Edge bevels: a chamfer strip between each pair of perpendicular faces.
+  const normals = CUBE_FACES.map((f) => vec(...f.n))
+  for (let i = 0; i < normals.length; i++) {
+    for (let j = i + 1; j < normals.length; j++) {
+      const nA = normals[i]
+      const nB = normals[j]
+      if (nA.dot(nB) !== 0) {
+        continue // Opposite (or same) faces share no edge.
+      }
+      const axisA = nonZeroAxis(nA)
+      const axisB = nonZeroAxis(nB)
+      const axisC = THREE_AXES - axisA - axisB
+      const sgnA = nA.getComponent(axisA)
+      const sgnB = nB.getComponent(axisB)
+      const at = (onA, onB, onC) => {
+        const out = new Vector3()
+        out.setComponent(axisA, onA)
+        out.setComponent(axisB, onB)
+        out.setComponent(axisC, onC)
+        return out
+      }
+      const pA1 = at(H * sgnA, S * sgnB, S)
+      const pA2 = at(H * sgnA, S * sgnB, -S)
+      const pB2 = at(S * sgnA, H * sgnB, -S)
+      const pB1 = at(S * sgnA, H * sgnB, S)
+      const geo = geomFromTris([pA1, pA2, pB2, pA1, pB2, pB1])
+      const mat = new MeshBasicMaterial({color: CHAMFER_GREY_HEX, side: DoubleSide})
+      addRegion(geo, mat, nA.clone().add(nB).normalize(), 'edge', CHAMFER_GREY_HEX)
+    }
   }
-  return 0
+
+  // Corner triangles: a chamfer at each of the 8 cube corners.
+  const signs = [-1, 1]
+  signs.forEach((sx) => signs.forEach((sy) => signs.forEach((sz) => {
+    const pX = vec(H * sx, S * sy, S * sz)
+    const pY = vec(S * sx, H * sy, S * sz)
+    const pZ = vec(S * sx, S * sy, H * sz)
+    const geo = geomFromTris([pX, pY, pZ])
+    const mat = new MeshBasicMaterial({color: CHAMFER_GREY_HEX, side: DoubleSide})
+    addRegion(geo, mat, vec(sx, sy, sz).normalize(), 'corner', CHAMFER_GREY_HEX)
+  })))
+
+  const dispose = () => disposables.forEach((d) => d.dispose && d.dispose())
+  return {group, regions, dispose}
+}
+
+
+/**
+ * Build a BufferGeometry from a flat list of triangle vertices.
+ *
+ * @param {Array<Vector3>} verts Triangle vertices (length a multiple of 3)
+ * @param {Array<number>} [uvs] Optional UV pairs, one per vertex
+ * @return {BufferGeometry}
+ */
+function geomFromTris(verts, uvs) {
+  const geo = new BufferGeometry()
+  const pos = new Float32Array(verts.length * 3)
+  verts.forEach((vtx, i) => {
+    pos[i * 3] = vtx.x
+    pos[(i * 3) + 1] = vtx.y
+    pos[(i * 3) + 2] = vtx.z
+  })
+  geo.setAttribute('position', new Float32BufferAttribute(pos, 3))
+  if (uvs) {
+    geo.setAttribute('uv', new Float32BufferAttribute(new Float32Array(uvs), 2))
+  }
+  geo.computeVertexNormals()
+  return geo
+}
+
+
+/**
+ * @param {Vector3} axisVector A unit vector aligned to one axis
+ * @return {number} The index (0, 1 or 2) of its non-zero component
+ */
+function nonZeroAxis(axisVector) {
+  if (axisVector.x !== 0) {
+    return 0
+  }
+  return axisVector.y !== 0 ? 1 : 2
 }
 
 
@@ -443,21 +518,18 @@ function makeFaceTexture(label) {
 }
 
 
-// BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z.
-// Model space (Y-up, loader-aligned): +Z front, +X right, +Y top.
+// Model space (Y-up, loader-aligned): +Z front, +X right, +Y top.  Each face
+// has a right (u) and up (v) tangent with u x v = n so labels read upright.
 const CUBE_FACES = [
-  {label: 'RIGHT'},
-  {label: 'LEFT'},
-  {label: 'TOP'},
-  {label: 'BOTTOM'},
-  {label: 'FRONT'},
-  {label: 'BACK'},
+  {n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], label: 'FRONT'},
+  {n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0], label: 'BACK'},
+  {n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], label: 'RIGHT'},
+  {n: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], label: 'LEFT'},
+  {n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], label: 'TOP'},
+  {n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], label: 'BOTTOM'},
 ]
 
 const CUBE_SIZE_PX = 96
-// Wide enough to contain the 96px cube plus a ~48px ring button on each side,
-// so the right-column buttons (Rotate right, Home) stay inside the widget
-// instead of overflowing off-screen / onto an open drawer.
 const WIDGET_SIZE_PX = 200
 const BOTTOM_INSET_PX = 80
 const MARGIN_PX = 20
@@ -468,11 +540,12 @@ const TILT_STEP_RAD = Math.PI / 4 // 45 degrees
 const POLAR_EPS = 0.001
 const DRAG_THRESHOLD_PX = 4
 const ROTATE_SENSITIVITY = 0.008 // radians per pixel of drag
-const BASE_HEX = 0xffffff // Face texture shown untinted.
-const HOVER_HEX = 0xbfe0ff // Light-blue tint for the hovered face.
-// Half the cube's edge length; a face spans [-CUBE_HALF, CUBE_HALF] locally.
-const CUBE_HALF = 0.5
-const FACE_THIRDS = 3
-// The center third of a face (a face view) is |coord| < CUBE_HALF / 3.
-const ZONE_THRESHOLD = CUBE_HALF / FACE_THIRDS
+const THREE_AXES = 3 // axis indices 0, 1, 2 sum to 3
+const CUBE_HALF = 0.5 // half the cube's edge length
+const CHAMFER = 0.16 // how far faces are inset to form the chamfer
+const FACE_HALF = CUBE_HALF - CHAMFER // face half-span
+const BLDRS_GREEN_HEX = 0x459a47 // brand green (Logo_Buildings.svg)
+const CHAMFER_GREY_HEX = 0xd8d8d8 // edge/corner bevel base color
+const FACE_BASE_HEX = 0xffffff // face texture shown untinted
+const FACE_HOVER_HEX = 0xbfe0ff // light-blue tint for a hovered face
 const ISO_DIRECTION = new Vector3(1, 1, 1).normalize()
