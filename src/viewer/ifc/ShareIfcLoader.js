@@ -18,7 +18,8 @@
 // attached to it. Now we own the loader so we hold direct refs.
 
 import {Mesh} from 'three'
-import {buildBatchedConwayModel} from './buildBatchedConwayModel'
+import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
+import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
@@ -165,6 +166,8 @@ export default class ShareIfcLoader {
       onProgress,
     })
 
+    let builder = null
+
     try {
       session.report('Opening model...')
       const ifcAPI = this.ifcManager.ifcAPI
@@ -195,24 +198,28 @@ export default class ShareIfcLoader {
         }
       }
 
-      let firstBatch = true
+      // Slice B1: pump deltas assemble the DURABLE BatchedMesh model
+      // incrementally — the on-screen group IS the final model, so
+      // there is no monolithic end-of-load build and no swap. Falls
+      // back to the render-only preview mesh (and the end-of-load
+      // builds below) on any builder failure.
       const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
         try {
-          const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
-          session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
-          if (firstBatch) {
-            firstBatch = false
-            // Placed transforms are already coordinated; stamp the
-            // model-level coordination like the final build does
-            // (identity on the deferred path by contract). Async +
-            // best-effort by design.
-            // eslint-disable-next-line new-cap
-            Promise.resolve(ifcAPI.GetCoordinationMatrix(batchModelID))
-              .then((matrixArr) => session.stampCoordination(matrixArr))
-              .catch((e) => debug(WARN).warn('demand preview coordination failed:', e))
+          if (builder === null) {
+            builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
+              onBounds: (box) => session.notifyBounds(box),
+            })
+            scene.add(builder.root)
           }
+          builder.appendBatch(batch)
         } catch (e) {
-          debug(WARN).warn('demand preview batch skipped:', e)
+          debug(WARN).warn('incremental batch append failed; preview fallback:', e)
+          try {
+            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+            session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
+          } catch (previewError) {
+            debug(WARN).warn('demand preview batch skipped:', previewError)
+          }
         }
       }
 
@@ -221,12 +228,34 @@ export default class ShareIfcLoader {
 
       session.beginAssembly()
 
+      let ifcModel
+      let buildStats
+
+      // Slice B1: the incrementally assembled batches only need
+      // decoration — the group already on screen becomes the durable
+      // model. Fallback on any error: remove the partial group and run
+      // the end-of-load builds below from `captured` as before.
+      if (builder !== null && builder.hasContent()) {
+        try {
+          const incremental = builder.finalize()
+          ifcModel = assembleBatchedModel(
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
+          buildStats = incremental.stats
+        } catch (e) {
+          debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
+          try {
+            scene.remove(builder.root)
+          } catch {
+            // best-effort
+          }
+          ifcModel = undefined
+        }
+      }
+
       // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
       // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
       // path on any construction error so the flag can never break a load.
-      let ifcModel
-      let buildStats
-      if (isFeatureEnabled('batchedMesh')) {
+      if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
           const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
           ifcModel = batched.model
@@ -346,6 +375,16 @@ export default class ShareIfcLoader {
       return ifcModel
     } catch (err) {
       session.abort()
+      // A partially assembled incremental group must not survive a
+      // failed load — remove it (its wasm-side twin is released by the
+      // engine's own error paths).
+      try {
+        if (builder !== null && builder.root.parent) {
+          builder.root.parent.remove(builder.root)
+        }
+      } catch {
+        // best-effort
+      }
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.

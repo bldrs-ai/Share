@@ -149,6 +149,38 @@ export default class ProgressiveLoadSession {
 
 
   /**
+   * Track world-space bounds for geometry the caller renders OUTSIDE
+   * the preview group (slice B1: the incremental durable batches).
+   * Same strict-fit semantics as addPreviewMesh — grow the union,
+   * refit on overflow — without the group membership.
+   *
+   * @param {Box3} box world-space bounds of the appended geometry
+   */
+  notifyBounds(box) {
+    if (this.state === SessionState.FINISHED || this.state === SessionState.ABORTED ||
+        !box || box.isEmpty()) {
+      return
+    }
+    try {
+      this.unionBox.union(box)
+      if (this.state === SessionState.IDLE) {
+        this.state = SessionState.PREVIEWING
+      }
+      if (this.fittedSphere !== null && !this.sphereContainsBox_(this.fittedSphere, box)) {
+        this.overflowPending = true
+      }
+      if (this.fittedSphere === null) {
+        this.startFollow_()
+      } else {
+        this.maybeRefit_()
+      }
+    } catch (e) {
+      debug(WARN).warn('bounds notify skipped:', e)
+    }
+  }
+
+
+  /**
    * Stamp the preview group's model-level transform (the deferred-open
    * coordination contract makes this identity in practice, but the
    * batch path stamps it for exactness — mirroring the final build).

@@ -49,7 +49,28 @@ import {
  */
 export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
   const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID)
+  return {model: assembleBatchedModel(batches, ifcAPI, modelID, opts), stats}
+}
 
+
+/**
+ * Decorate prepared batches into the final batched model — shared by the
+ * one-shot path above and the incremental demand-path builder (slice B1,
+ * `incrementalBatchedBuilder.js`), which assembles the same BatchHandle
+ * shape progressively during the pump and only needs this decoration at
+ * the end.
+ *
+ * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {number} modelID
+ * @param {object} [opts]
+ * @param {object} [opts.scene] subset fallbackParent (see above)
+ * @param {object} [opts.root] existing Group already holding the batch
+ *   meshes (the incremental path's scene-installed root) — used as the
+ *   model object so the on-screen group IS the durable model, no swap.
+ * @return {object} the decorated model
+ */
+export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
   if (batches.length === 0) {
     // Degenerate (no renderable geometry). Throw so ShareIfcLoader falls
     // back to the merged path rather than adding an empty model.
@@ -78,8 +99,9 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   }
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
-  const model = batches.length === 1 ? batches[0].mesh : new Group()
-  if (model.isGroup) {
+  // The incremental path passes its scene-installed root instead.
+  const model = opts.root ?? (batches.length === 1 ? batches[0].mesh : new Group())
+  if (model.isGroup && opts.root === undefined) {
     for (const batch of batches) {
       model.add(batch.mesh)
     }
@@ -120,5 +142,5 @@ export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opt
   // STEP/IFC metadata surface is unchanged.
   attachConwayDirectModelMethods(model, ifcAPI, modelID)
 
-  return {model, stats}
+  return model
 }

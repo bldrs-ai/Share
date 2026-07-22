@@ -48,19 +48,19 @@ import {makeSurfaceMaterial} from '../lookMaterial'
 
 
 /** Fallback colour used when a PlacedGeometry has no `.color` field. */
-const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
+export const DEFAULT_COLOR = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 
 /** Interleaved vertex stride from Conway: `[px, py, pz, nx, ny, nz]`. */
-const VERT_STRIDE = 6
+export const VERT_STRIDE = 6
 
 /** Floats per position / normal vector. */
 const VEC3 = 3
 
 /** Indices per triangle. */
-const INDICES_PER_TRIANGLE = 3
+export const INDICES_PER_TRIANGLE = 3
 
 /** An instance is transparent (own blended batch) when alpha is below this. */
-const OPAQUE_ALPHA = 1
+export const OPAQUE_ALPHA = 1
 
 
 /**
@@ -104,7 +104,7 @@ const OPAQUE_ALPHA = 1
  * @param {number} vertCount vertices
  * @return {BufferGeometry}
  */
-function localGeometry(rawVerts, rawIndices, vertCount) {
+export function localGeometry(rawVerts, rawIndices, vertCount) {
   const positions = new Float32Array(vertCount * VEC3)
   const normals = new Float32Array(vertCount * VEC3)
   for (let v = 0; v < vertCount; v++) {
