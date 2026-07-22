@@ -1230,17 +1230,20 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   }
 
   // Cache-hit hydration for BLDRS_element_properties. The reader
-  // plugin parked a lazy-decode payload on
-  // `model.userData.bldrsElementProperties` (compressed bytes + a
-  // `decode()` closure). Promote it to `model.getItemProperties(id)`
-  // and `model.getPropertySets(id)` so the Properties panel
-  // (`Components/Properties/Properties.jsx`,
+  // plugin parked a lazy per-entity payload on
+  // `model.userData.bldrsElementProperties` (block-indexed container
+  // bytes + `getRecord`/`getPsetIds` accessors). Promote it to
+  // `model.getItemProperties(id)` and `model.getPropertySets(id)` so
+  // the Properties panel (`Components/Properties/Properties.jsx`,
   // `Components/Properties/itemProperties.jsx`) renders on cache-hit
   // without touching the (shared, parser-stateless) `ifcManager`.
   //
-  // First call to either method triggers the lazy `decode()` (one-shot
-  // pako.ungzip + JSON.parse, then cached). A load that never opens
-  // the Properties panel pays nothing.
+  // First call to either method decodes the payload's header index;
+  // each record block inflates only when one of its entities is
+  // requested (LRU-cached). A load that never opens the Properties
+  // panel pays nothing, and no call ever materialises the whole
+  // closure — which is what keeps >512MiB-JSON models (over V8's max
+  // string length) working at all. See `bldrsElementProperties.js`.
   //
   // Signature note: the closures take one arg (expressID), matching
   // `web-ifc-three.IFCModel.getItemProperties(id)` / `getPropertySets(id)`
@@ -1253,19 +1256,11 @@ export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   // from the propertySets index, matching the existing consumer
   // expectation in Properties.jsx#createPsetsList.
   const elementProperties = model.userData?.bldrsElementProperties
-  if (elementProperties && typeof elementProperties.decode === 'function') {
-    model.getItemProperties = (expressID) => {
-      const data = elementProperties.decode()
-      return data.itemProperties[expressID]
-    }
+  if (elementProperties && typeof elementProperties.getRecord === 'function') {
+    model.getItemProperties = (expressID) => elementProperties.getRecord(expressID)
     model.getPropertySets = (expressID) => {
-      const data = elementProperties.decode()
-      const psetIds = data.propertySets[expressID]
-      if (!Array.isArray(psetIds) || psetIds.length === 0) {
-        return []
-      }
-      return psetIds
-        .map((pid) => data.itemProperties[pid])
+      return elementProperties.getPsetIds(expressID)
+        .map((pid) => elementProperties.getRecord(pid))
         .filter((p) => p !== null && p !== undefined)
     }
     glbVerbose(

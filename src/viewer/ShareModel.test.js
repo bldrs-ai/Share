@@ -224,14 +224,16 @@ describe('viewer/ShareModel', () => {
 
     it('promotes typedProperties when userData carries a BLDRS_element_properties payload', () => {
       // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
-      // `{compressed, decode}` lazy-decode object on userData.
-      // `Loader.js#convertToShareModel` hangs `getItemProperties` /
-      // `getPropertySets` off it. Capability flip is independent of
-      // the consumer wiring — presence of the payload is the signal.
+      // `{compressed, getRecord, getPsetIds}` lazy per-entity payload
+      // on userData. `Loader.js#convertToShareModel` hangs
+      // `getItemProperties` / `getPropertySets` off it. Capability
+      // flip is independent of the consumer wiring — presence of the
+      // payload is the signal.
       const root = new Group()
       root.userData.bldrsElementProperties = {
         compressed: new Uint8Array([0]),
-        decode: () => ({itemProperties: {}, propertySets: {}}),
+        getRecord: () => undefined,
+        getPsetIds: () => [],
       }
       const caps = inferModelCapabilities(root)
       expect(caps.typedProperties).toBe(true)
