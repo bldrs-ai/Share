@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useMemo, useRef, useState} from 'react'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {
   Box,
   FormControlLabel,
@@ -39,15 +39,24 @@ export default function ResidencyControl() {
   const [metric, setMetric] = useState(ResidencyMetric.OCCUPANCY)
   const selectedRef = useRef(null)
 
-  const controller = useMemo(() => {
+  // Controller lifecycle belongs to an EFFECT, not useMemo: React
+  // StrictMode's simulated unmount runs effect cleanups once on mount,
+  // and disposing a memoized controller there would gut the instance
+  // table the surviving UI keeps driving (slider moves, nothing
+  // evicts). The effect recreates the controller after its own
+  // cleanup, so the live one is always intact.
+  const [controller, setController] = useState(null)
+  useEffect(() => {
     if (!model) {
-      return null
+      setController(null)
+      return undefined
     }
     const instance = new ResidencyController(model, {
       getCamera: () => viewer?.context?.ifcCamera?.perspectiveCamera ?? null,
       getSelectionCenter: () => selectedRef.current,
     })
-    return instance.instanceCount > 0 ? instance : null
+    setController(instance.instanceCount > 0 ? instance : null)
+    return () => instance.dispose()
   }, [model, viewer])
 
   // Selection center for the DISTANCE metric — resolved lazily from the
@@ -63,11 +72,6 @@ export default function ResidencyControl() {
       }
     }
   }, [controller, selectedElement, metric])
-
-  // Restore full residency when the model (and controller) go away.
-  useEffect(() => {
-    return () => controller?.dispose()
-  }, [controller])
 
   if (!controller) {
     return null
