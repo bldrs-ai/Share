@@ -17,7 +17,7 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
-import {Mesh} from 'three'
+import {Matrix4, Mesh} from 'three'
 import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
@@ -289,7 +289,16 @@ export default class ShareIfcLoader {
       // mocked Mesh instances don't have a real `Matrix4` for
       // `ifcModel.matrix`. Real three.js Mesh always does.
       if (ifcModel.matrix && typeof ifcModel.matrix.fromArray === 'function') {
-        ifcModel.matrix.fromArray(matrixArr)
+        if (ifcModel.userData?.floatingOrigin) {
+          // Incremental batched model: the root matrix carries the
+          // floating-origin translation the instances were rebased
+          // against — COMPOSE the coordination onto it (identity on the
+          // deferred path by contract) instead of clobbering it.
+          const stamp = new Matrix4().fromArray(matrixArr)
+          ifcModel.matrix.premultiply(stamp)
+        } else {
+          ifcModel.matrix.fromArray(matrixArr)
+        }
         ifcModel.matrixAutoUpdate = false
       }
 

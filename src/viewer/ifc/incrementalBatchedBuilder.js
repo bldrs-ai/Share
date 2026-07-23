@@ -66,6 +66,9 @@ export class IncrementalBatchedBuilder {
     this.initialVertices = opts.initialVertices ?? INITIAL_VERTICES
     this.initialIndices = opts.initialIndices ?? INITIAL_INDICES
     this.root = new Group()
+    // First-instance translation the batches are rebased against (see
+    // appendPlacement_); null until the first placement lands.
+    this.origin = null
     // geometryExpressID → {geometry, vertCount, indexCount, box,
     // idByBatch: Map(batchState → geometryId)} — geometry fetched from
     // Conway exactly once per model.
@@ -199,6 +202,34 @@ export class IncrementalBatchedBuilder {
     }
     const batchId = state.mesh.addInstance(geometryId)
     const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
+    // Floating origin: BatchedMesh keeps per-instance matrices in a
+    // float32 TEXTURE composed on the GPU, so a large translation (a
+    // georeferenced model whose content sits far from conway's
+    // coordination point) quantizes at ~0.3m per float32 ULP — janky
+    // placement + rotation jitter. Rebase every instance against the
+    // first instance's translation (kept full-double on the ROOT group
+    // matrix, which three composes with the camera in float64 on the
+    // CPU): stored instance translations stay small, so the float32
+    // texture is lossless where it matters. World-frame consumers
+    // (camera follow, GLB export, subsets parented under the root)
+    // inherit the offset through the root's matrix.
+    if (this.onBounds !== null) {
+      try {
+        this.onBounds(this.scratchBox.copy(entry.box).applyMatrix4(matrix))
+      } catch {
+        // Camera follow is best-effort — never break the append.
+      }
+    }
+    const elements = matrix.elements
+    if (this.origin === null) {
+      this.origin = [elements[12], elements[13], elements[14]]
+      this.root.matrix.makeTranslation(this.origin[0], this.origin[1], this.origin[2])
+      this.root.matrixAutoUpdate = false
+      this.root.userData.floatingOrigin = this.origin
+    }
+    elements[12] -= this.origin[0]
+    elements[13] -= this.origin[1]
+    elements[14] -= this.origin[2]
     state.mesh.setMatrixAt(batchId, matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
     state.instanceParents.push(parentExpressId)
@@ -214,13 +245,6 @@ export class IncrementalBatchedBuilder {
     this.totals.placements++
     if (isTransparent) {
       this.totals.transparentPlacements++
-    }
-    if (this.onBounds !== null) {
-      try {
-        this.onBounds(this.scratchBox.copy(entry.box).applyMatrix4(matrix))
-      } catch {
-        // Camera follow is best-effort — never break the append.
-      }
     }
   }
 

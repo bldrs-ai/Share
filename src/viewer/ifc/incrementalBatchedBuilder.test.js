@@ -4,6 +4,10 @@ import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
 
+// First rebased instance must land exactly at the origin (fp-exact
+// subtraction of its own translation).
+const ORIGIN_EPSILON = 1e-6
+
 const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 const OPAQUE = {x: 0.8, y: 0.8, z: 0.8, w: 1}
 const GLASS = {x: 0.6, y: 0.8, z: 1, w: 0.4}
@@ -110,6 +114,41 @@ describe('IncrementalBatchedBuilder', () => {
     expect(stats.uniqueGeometryCount).toBe(2)
     expect(batches).toHaveLength(1)
     expect(batches[0].instanceParents).toHaveLength(10)
+  })
+
+  it('rebases instances against a floating origin at georeferenced scale', () => {
+    // A Swiss-LV95-magnitude placement: the stored instance matrix must
+    // be SMALL (float32-texture safe) with the big translation carried
+    // on the root group's matrix; bounds still report in world frame.
+    const EAST = 2_600_000.25
+    const NORTH = 1_200_000.5
+    const bigMat = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, EAST, NORTH, 0, 1]
+    const boxes = []
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {
+      onBounds: (box) => boxes.push(box.clone()),
+    })
+    builder.appendBatch([{
+      expressID: 1,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: bigMat, color: OPAQUE},
+        {geometryExpressID: 888,
+          flatTransformation: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, EAST + 5, NORTH, 0, 1],
+          color: OPAQUE},
+      ],
+    }])
+    // Root carries the origin; userData advertises it for the loader's
+    // coordination-stamp composition.
+    expect(builder.root.userData.floatingOrigin).toEqual([EAST, NORTH, 0])
+    expect(builder.root.matrix.elements[12]).toBe(EAST)
+    // Stored instance translations are near zero (first) and small (second).
+    const {batches} = builder.finalize()
+    const m = new (require('three').Matrix4)()
+    batches[0].mesh.getMatrixAt(0, m)
+    expect(Math.abs(m.elements[12])).toBeLessThan(ORIGIN_EPSILON)
+    batches[0].mesh.getMatrixAt(1, m)
+    expect(m.elements[12]).toBeCloseTo(5, 5)
+    // Bounds stayed world-frame (camera follow / final fit read these).
+    expect(boxes[0].max.x).toBeGreaterThan(EAST - 1)
   })
 
   it('reports bounds per appended instance and skips bad geometry', () => {

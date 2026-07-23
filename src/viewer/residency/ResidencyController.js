@@ -63,6 +63,10 @@ export class ResidencyController {
       if (!geometries || typeof mesh.setVisibleAt !== 'function') {
         continue
       }
+      // Instance matrices are rebased against the root's floating
+      // origin (see incrementalBatchedBuilder) — compose the mesh's
+      // world matrix so centers score in the same frame as the camera.
+      mesh.updateWorldMatrix?.(true, false)
       // Amortize each geometry's bytes over its instance count so a
       // heavily shared shape is cheap per instance.
       const geometryUses = new Map()
@@ -79,6 +83,9 @@ export class ResidencyController {
         }
         const sphere = geometry.boundingSphere
         mesh.getMatrixAt(index, scratchMatrix)
+        if (mesh.matrixWorld) {
+          scratchMatrix.premultiply(mesh.matrixWorld)
+        }
         const center = new Vector3().copy(sphere.center).applyMatrix4(scratchMatrix)
         const scale = new Vector3().setFromMatrixScale(scratchMatrix)
         const radius = sphere.radius * Math.max(scale.x, scale.y, scale.z)
