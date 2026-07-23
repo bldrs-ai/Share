@@ -7,6 +7,7 @@ import ImagineControl from '../Components/Imagine/ImagineControl'
 import NotesControl from '../Components/Notes/NotesControl'
 import ProfileControl from '../Components/Profile/ProfileControl'
 import PropertiesControl from '../Components/Properties/PropertiesControl'
+import ResidencyControl from '../Components/Residency/ResidencyControl'
 import ShareControl from '../Components/Share/ShareControl'
 import useStore from '../store/useStore'
 
@@ -57,6 +58,7 @@ export default function OperationsGroup() {
           />
         )}
         {isImagineEnabled && <ImagineControl/>}
+        {(viewer && isModelReady) && <ResidencyControl/>}
         {/* Invisible */}
         <CameraControl/>
       </Stack>
