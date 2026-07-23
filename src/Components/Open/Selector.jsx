@@ -224,9 +224,12 @@ export default function Selector({
               </IconButton>
             ),
           }}
+          // Keydown lives on the input element (not the TextField root) so
+          // tabbing to the clear button and pressing Enter clears the entry
+          // rather than bubbling up and accepting an exact match.
+          inputProps={{onKeyDown: handleKeyDown}}
           {...props}
           onChange={handleTextChange}
-          onKeyDown={handleKeyDown}
           onBlur={handleBlur}
         />
         {statusText && (
@@ -298,112 +301,113 @@ export default function Selector({
   const pageEnd = Math.min(pageStart + PAGE_SIZE, list.length)
   const pageItems = list.slice(pageStart, pageEnd)
   const isPaged = list.length > PAGE_SIZE
+  // The clear (×) lives OUTSIDE the input (a sibling), so the field is a
+  // single logical unit: it either holds a value (× shown beside it to
+  // reset) or it doesn't (no ×). Keeping × out of the input also stops it
+  // from sitting in the tab/Enter flow or overlaying the dropdown arrow.
+  const showClear = onClear && !isEmpty && selected !== '' && selected !== null && selected !== undefined
 
   return (
-    <TextField
-      value={isEmpty ? '' : selected}
-      onChange={(e) => handleSelect(e)}
-      variant='outlined'
-      label={label}
-      select
-      size='small'
-      sx={{
-        'width': '100%',
-        'marginBottom': '.5em',
-        '& .MuiSelect-select': {textAlign: 'left'},
-      }}
-      SelectProps={isEmpty ? {
-        displayEmpty: true,
-        renderValue: () => <span style={{opacity: 1}}>{emptyText}</span>,
-      } : {
-        open: isOpen,
-        onOpen: () => {
+    <Stack direction='row' alignItems='center' sx={{width: '100%', marginBottom: '.5em'}}>
+      <TextField
+        value={isEmpty ? '' : selected}
+        onChange={(e) => handleSelect(e)}
+        variant='outlined'
+        label={label}
+        select
+        size='small'
+        sx={{
+          'flex': 1,
+          'minWidth': 0,
+          '& .MuiSelect-select': {textAlign: 'left'},
+        }}
+        SelectProps={isEmpty ? {
+          displayEmpty: true,
+          renderValue: () => <span style={{opacity: 1}}>{emptyText}</span>,
+        } : {
+          open: isOpen,
+          onOpen: () => {
           // Jump to the page holding the current selection so its row is
           // rendered (keeps the highlight correct, avoids MUI's
           // out-of-range warning) and paging starts from context.
-          if (typeof selected === 'number' && selected >= 0) {
-            setPage(Math.floor(selected / PAGE_SIZE))
-          }
-          setIsOpen(true)
-        },
-        onClose: () => {
+            if (typeof selected === 'number' && selected >= 0) {
+              setPage(Math.floor(selected / PAGE_SIZE))
+            }
+            setIsOpen(true)
+          },
+          onClose: () => {
           // A pager row requested a page change — keep the menu open.
-          if (pagerClickRef.current) {
-            pagerClickRef.current = false
-            return
-          }
-          setIsOpen(false)
-        },
-        // Derive the field label straight from the value so a selection on
-        // any page still shows once the menu closes / repaginates. `?? ''`
-        // keeps a stale/out-of-range index from rendering `undefined`.
-        renderValue: (val) => (typeof val === 'number' ? (list[val] ?? '') : (val ?? '')),
-      }}
-      InputProps={(onClear && !isEmpty && selected !== '' && selected !== null && selected !== undefined) ? {
-        endAdornment: (
-          <IconButton
-            aria-label='clear'
-            data-testid={`selector-clear-select-${label.toLowerCase()}`}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              onClear()
-            }}
-            sx={{mr: 2.5, p: 0.25}}
-          >
-            <ClearIcon fontSize='small'/>
-          </IconButton>
-        ),
-      } : undefined}
-      InputLabelProps={isEmpty ? {shrink: true} : undefined}
-      {...props}
-    >
-      {isEmpty ? (
-        <MenuItem value='' disabled>
-          <Typography variant='p'>{emptyText}</Typography>
-        </MenuItem>
-      ) : [
-        ...(validate ? [
-          <MenuItem key='other' value={OTHER_VALUE}>
-            <Typography variant='p'>Enter name...</Typography>
-          </MenuItem>,
-          <Divider key='divider'/>,
-        ] : []),
-        ...(isPaged ? [
-          <MenuItem
-            key='prev'
-            value={PREV_VALUE}
-            disabled={clampedPage === 0}
-            data-testid={`selector-prev-${label.toLowerCase()}`}
-          >
-            <PrevIcon fontSize='small' sx={{mr: 0.5}}/>
-            <Typography variant='caption'>
-              {`Prev · ${pageStart + 1}–${pageEnd} of ${list.length}`}
-            </Typography>
-          </MenuItem>,
-          <MenuItem
-            key='next'
-            value={NEXT_VALUE}
-            disabled={clampedPage >= pageCount - 1}
-            data-testid={`selector-next-${label.toLowerCase()}`}
-          >
-            <NextIcon fontSize='small' sx={{mr: 0.5}}/>
-            <Typography variant='caption'>Next</Typography>
-          </MenuItem>,
-          <Divider key='pager-divider'/>,
-        ] : []),
-        ...pageItems.map((listMember, j) => {
-          const globalIndex = pageStart + j
-          if (listMember === null || listMember === undefined) {
-            return null
-          }
-          return (
-            <MenuItem key={globalIndex} value={globalIndex}>
-              <Typography variant='p'>{listMember}</Typography>
-            </MenuItem>
-          )
-        }),
-      ]}
-    </TextField>
+            if (pagerClickRef.current) {
+              pagerClickRef.current = false
+              return
+            }
+            setIsOpen(false)
+          },
+          // Derive the field label straight from the value so a selection on
+          // any page still shows once the menu closes / repaginates. `?? ''`
+          // keeps a stale/out-of-range index from rendering `undefined`.
+          renderValue: (val) => (typeof val === 'number' ? (list[val] ?? '') : (val ?? '')),
+        }}
+        InputLabelProps={isEmpty ? {shrink: true} : undefined}
+        {...props}
+      >
+        {isEmpty ? (
+          <MenuItem value='' disabled>
+            <Typography variant='p'>{emptyText}</Typography>
+          </MenuItem>
+        ) : [
+          ...(validate ? [
+            <MenuItem key='other' value={OTHER_VALUE}>
+              <Typography variant='p'>Enter name...</Typography>
+            </MenuItem>,
+            <Divider key='divider'/>,
+          ] : []),
+          ...(isPaged ? [
+            <MenuItem
+              key='prev'
+              value={PREV_VALUE}
+              disabled={clampedPage === 0}
+              data-testid={`selector-prev-${label.toLowerCase()}`}
+            >
+              <PrevIcon fontSize='small' sx={{mr: 0.5}}/>
+              <Typography variant='caption'>
+                {`Prev · ${pageStart + 1}–${pageEnd} of ${list.length}`}
+              </Typography>
+            </MenuItem>,
+            <MenuItem
+              key='next'
+              value={NEXT_VALUE}
+              disabled={clampedPage >= pageCount - 1}
+              data-testid={`selector-next-${label.toLowerCase()}`}
+            >
+              <NextIcon fontSize='small' sx={{mr: 0.5}}/>
+              <Typography variant='caption'>Next</Typography>
+            </MenuItem>,
+            <Divider key='pager-divider'/>,
+          ] : []),
+          ...pageItems.map((listMember, j) => {
+            const globalIndex = pageStart + j
+            if (listMember === null || listMember === undefined) {
+              return null
+            }
+            return (
+              <MenuItem key={globalIndex} value={globalIndex}>
+                <Typography variant='p'>{listMember}</Typography>
+              </MenuItem>
+            )
+          }),
+        ]}
+      </TextField>
+      {showClear && (
+        <IconButton
+          aria-label='clear'
+          data-testid={`selector-clear-select-${label.toLowerCase()}`}
+          onClick={onClear}
+          sx={{ml: 0.5, p: 0.5, flexShrink: 0}}
+        >
+          <ClearIcon fontSize='small'/>
+        </IconButton>
+      )}
+    </Stack>
   )
 }
