@@ -1,6 +1,6 @@
 
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
-import {Button, Stack, Tooltip, Typography} from '@mui/material'
+import {Button, Checkbox, FormControlLabel, Stack, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
@@ -74,6 +74,9 @@ export default function GitHubFileBrowser({
   // repo — i.e. the token already carries the `repo` scope, so the
   // "Enable private repos" opt-in is hidden.
   const [hasPrivateRepos, setHasPrivateRepos] = useState(false)
+  // True from the moment the user opts into private repos until the token
+  // refresh + refetch lands — drives the checkbox's transient checked state.
+  const [grantPending, setGrantPending] = useState(false)
   const appMetadata = useStore((state) => state.appMetadata)
   const isProUser = PRO_STATUSES.includes(appMetadata?.subscriptionStatus)
   // Restore-once + refetch-on-token-change bookkeeping (see effects below).
@@ -191,6 +194,7 @@ export default function GitHubFileBrowser({
   const enablePrivateRepos = () => {
     if (isProUser) {
       awaitingGrantRef.current = true
+      setGrantPending(true)
       window.open('/popup-auth?scope=repo&connection=github', 'authPopup', 'width=600,height=600')
     } else {
       window.open('/subscribe/', '_blank', 'noopener')
@@ -205,6 +209,7 @@ export default function GitHubFileBrowser({
       prevTokenRef.current = accessToken
       if (awaitingGrantRef.current && accessToken && selectedOrgName !== '') {
         awaitingGrantRef.current = false
+        setGrantPending(false)
         selectOrg(selectedOrgName)
       }
     }
@@ -368,22 +373,30 @@ export default function GitHubFileBrowser({
           data-testid='openRepository'
         />
         {selectedOrgName !== '' && !hasPrivateRepos && (
-          <Tooltip
-            title={isProUser ?
-              'Grants Share read access to your private repositories across all your GitHub organizations.' :
-              'Browsing private repositories is a Pro feature.'}
-            placement='top'
-          >
-            <Button
-              onClick={enablePrivateRepos}
-              size='small'
-              variant='text'
-              sx={{textTransform: 'none', alignSelf: 'flex-start', mt: -0.75, mb: 0.5}}
-              data-testid='enable-private-repos'
-            >
-              {isProUser ? 'Enable private repos' : 'Private repos (Pro)'}
-            </Button>
-          </Tooltip>
+          <Stack sx={{alignSelf: 'flex-start', width: '100%', px: 0.5, py: 0.5, mb: 0.5}}>
+            <FormControlLabel
+              sx={{ml: 0, mr: 0}}
+              control={
+                <Checkbox
+                  size='small'
+                  checked={grantPending}
+                  onChange={enablePrivateRepos}
+                  sx={{py: 0, pl: 0, pr: 1}}
+                  data-testid='enable-private-repos'
+                />
+              }
+              label={
+                <Typography variant='body2'>
+                  {isProUser ? 'Enable private repos' : 'Enable private repos (Pro)'}
+                </Typography>
+              }
+            />
+            <Typography variant='caption' sx={{color: 'text.secondary', mt: 0.25}}>
+              {isProUser ?
+                'Grants Share read access to your private repos across all your GitHub orgs.' :
+                'Browsing private repositories is a Pro feature.'}
+            </Typography>
+          </Stack>
         )}
         <Selector
           label='Branch'
