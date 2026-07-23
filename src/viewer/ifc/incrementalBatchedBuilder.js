@@ -28,7 +28,7 @@ const GROWTH = 2
  * model incrementally from the demand pump's delta FlatMesh batches, so
  * there is no monolithic end-of-load build and no preview→model swap.
  *
- * Feed each pump delta to {@link appendBatch}; the builder deduplicates
+ * Feed each pump delta to `appendBatch`; the builder deduplicates
  * geometry by `geometryExpressID` across batches (fetched from Conway
  * once), appends instances into an opaque and/or transparent
  * `THREE.BatchedMesh` (created lazily, grown in place with 2x
@@ -37,7 +37,7 @@ const GROWTH = 2
  * `instanceGeometry`, `instanceColors`).
  *
  * `root` is a stable `Group` — install it in the scene on the first
- * batch and geometry simply appears as it extracts. {@link finalize}
+ * batch and geometry simply appears as it extracts. `finalize`
  * stamps the pick tables, computes bounds + BVHs, and returns
  * `{batches, stats}` in exactly the `flatMeshToBatchedModel` shape, so
  * `buildBatchedConwayModel`'s decoration applies unchanged.
