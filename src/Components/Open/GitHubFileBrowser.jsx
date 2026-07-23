@@ -161,7 +161,10 @@ export default function GitHubFileBrowser({
     if (selectedFolderName_ === '[Parent Directory]') {
       const pathSegments = currentPath.split('/').filter(Boolean)
       pathSegments.pop()
-      newPath = pathSegments.join('/')
+      // Keep the same leading-'/' shape drilling-down produces (e.g. '/step'),
+      // not a bare 'step' — otherwise the path is malformed for the next
+      // fetch / for navigateToFile and the picker gets stuck.
+      newPath = pathSegments.length > 0 ? `/${pathSegments.join('/')}` : ''
     } else {
       newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/')
     }
@@ -181,6 +184,22 @@ export default function GitHubFileBrowser({
 
   const selectBranch = (branchOrIndex) => {
     setSelectedBranchName(branchOrIndex)
+  }
+
+  // Jump straight to a folder path (used by restore) without walking each
+  // level — fetch its listing and set the path + folder/file options.
+  const restoreFolderPath = async (path) => {
+    try {
+      const {files, directories} = await getFilesAndFolders(repoName, orgName, path, accessToken)
+      const fileNames = files.map((file) => file.name)
+      const directoryNames = directories.map((directory) => directory.name)
+      const navigationOptions = path ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
+      setCurrentPath(path)
+      setFilesArr(fileNames)
+      setFoldersArr(navigationOptions)
+    } catch {
+      // Best-effort — a path that no longer exists just leaves the root listing.
+    }
   }
 
   // --- Cascading clear ---------------------------------------------------
@@ -267,21 +286,25 @@ export default function GitHubFileBrowser({
   }, [accessToken])
 
   // --- Dialog state persistence ------------------------------------------
-  // Persist the resolved selections so the dialog reopens where it left off
-  // (across sessions, localStorage). Skips the empty initial render so a
-  // good saved state is not clobbered before the restore below runs.
+  // Persist org / repo / branch / folder-path so the dialog reopens where it
+  // left off (across sessions, localStorage). Gated on `restoredRef` — not on
+  // a non-empty org — so it stays quiet until the restore below has run (no
+  // clobbering saved state), but AFTER that it persists every change,
+  // INCLUDING a deliberate clear, so cleared fields stay cleared even if the
+  // dialog is closed without opening a file. The file is intentionally not
+  // persisted (reopen lands in the same folder, ready for a new file).
   useEffect(() => {
-    if (!orgName) {
+    if (!restoredRef.current) {
       return
     }
     try {
       localStorage.setItem(GH_BROWSER_STATE_KEY, JSON.stringify({
-        org: orgName, repo: repoName || '', branch: branchName || '',
+        org: orgName || '', repo: repoName || '', branch: branchName || '', path: currentPath || '',
       }))
     } catch {
       // localStorage can throw (quota / private mode); persistence is best-effort.
     }
-  }, [orgName, repoName, branchName])
+  }, [orgName, repoName, branchName, currentPath])
 
   // Restore once, after the org list loads: reselect the saved org, then let
   // the repo + branch restores below chain as each list arrives. Every step
@@ -304,7 +327,7 @@ export default function GitHubFileBrowser({
     if (orgIdx < 0) {
       return
     }
-    pendingRestoreRef.current = {repo: saved.repo, branch: saved.branch}
+    pendingRestoreRef.current = {repo: saved.repo, branch: saved.branch, path: saved.path}
     selectOrg(orgIdx)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgNamesArr])
@@ -320,24 +343,31 @@ export default function GitHubFileBrowser({
       pendingRestoreRef.current = null
       return
     }
-    // Keep the branch for the next stage; drop the repo so this runs once.
-    pendingRestoreRef.current = {branch: pending.branch}
+    // Keep the branch + path for the next stage; drop the repo so this runs once.
+    pendingRestoreRef.current = {branch: pending.branch, path: pending.path}
     selectRepo(repoIdx)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoNamesArr])
 
-  // Restore the saved branch once the repo's branch list has loaded.
+  // Restore the saved branch + folder path once the repo's branch list has
+  // loaded (selectRepo has set the root listing). The file is NOT restored.
   useEffect(() => {
     const pending = pendingRestoreRef.current
-    if (!pending || pending.repo || !pending.branch ||
-        branchesArr.length === 0 || branchesArr[0] === '') {
+    if (!pending || pending.repo || branchesArr.length === 0 || branchesArr[0] === '') {
       return
     }
+    const savedPath = pending.path
     pendingRestoreRef.current = null
-    const branchIdx = branchesArr.indexOf(pending.branch)
-    if (branchIdx >= 0) {
-      selectBranch(branchIdx)
+    if (pending.branch) {
+      const branchIdx = branchesArr.indexOf(pending.branch)
+      if (branchIdx >= 0) {
+        selectBranch(branchIdx)
+      }
     }
+    if (savedPath) {
+      restoreFolderPath(savedPath)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchesArr])
 
   const validateOrg = async (name) => {
