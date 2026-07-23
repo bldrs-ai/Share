@@ -423,7 +423,7 @@ export default function GitHubFileBrowser({
           onClear={clearRepo}
           data-testid='openRepository'
         />
-        {selectedOrgName !== '' && !hasPrivateRepos && (
+        {selectedOrgName !== '' && repoNamesArr.length > 0 && repoNamesArr[0] !== '' && !hasPrivateRepos && (
           <Stack sx={{alignSelf: 'flex-start', width: '100%', px: 0.5, py: 0.5, mb: 0.5}}>
             <FormControlLabel
               sx={{ml: 0, mr: 0}}
