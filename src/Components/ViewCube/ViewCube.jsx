@@ -132,17 +132,27 @@ export default function ViewCube() {
       return hits.length > 0 ? hits[0] : null
     }
 
-    // Highlight the region under the cursor; edges/corners use the bldrs green.
+    // Highlight the region under the cursor in the bldrs green.  Faces get a
+    // translucent wash (so the label stays legible); edges/corners stay solid.
     const setHover = (mesh) => {
       if (mesh === hoveredMesh) {
         return
       }
       if (hoveredMesh) {
-        hoveredMesh.material.color.setHex(hoveredMesh.userData.baseColor)
+        const prev = hoveredMesh.material
+        prev.color.setHex(hoveredMesh.userData.baseColor)
+        prev.opacity = 1
+        prev.transparent = false
+        prev.needsUpdate = true
       }
       if (mesh) {
-        const hl = mesh.userData.kind === 'face' ? FACE_HOVER_HEX : BLDRS_GREEN_HEX
-        mesh.material.color.setHex(hl)
+        const mat = mesh.material
+        mat.color.setHex(BLDRS_GREEN_HEX)
+        if (mesh.userData.kind === 'face') {
+          mat.opacity = FACE_HOVER_OPACITY
+          mat.transparent = true
+          mat.needsUpdate = true
+        }
       }
       hoveredMesh = mesh
     }
@@ -597,7 +607,7 @@ const FACE_HALF = CUBE_HALF - CHAMFER // face half-span
 const BLDRS_GREEN_HEX = 0x459a47 // brand green (Logo_Buildings.svg)
 const CHAMFER_GREY_HEX = 0xd8d8d8 // edge/corner bevel base color
 const FACE_BASE_HEX = 0xffffff // face texture shown untinted
-const FACE_HOVER_HEX = 0xbfe0ff // light-blue tint for a hovered face
+const FACE_HOVER_OPACITY = 0.6 // translucent green wash for a hovered face
 const ISO_DIRECTION = new Vector3(1, 1, 1).normalize()
 
 const DEFAULT_POSITION = 'bottom-right'
