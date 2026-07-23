@@ -1,6 +1,6 @@
 
-import React, {ReactElement, useEffect, useState} from 'react'
-import {Button, Stack, Typography} from '@mui/material'
+import React, {ReactElement, useEffect, useRef, useState} from 'react'
+import {Button, Stack, Tooltip, Typography} from '@mui/material'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {navigateToModel} from '../../utils/navigate'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
@@ -13,6 +13,12 @@ import useStore from '../../store/useStore'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
+
+
+/** localStorage key for remembering the GitHub browser's last selections. */
+const GH_BROWSER_STATE_KEY = 'bldrs.openDialog.github'
+/** subscriptionStatus values that carry (or will carry) Pro entitlements. */
+const PRO_STATUSES = ['sharePro', 'shareProPendingReauth']
 
 
 /**
@@ -64,6 +70,16 @@ export default function GitHubFileBrowser({
   const [filesArr, setFilesArr] = useState([''])
   const [branchesArr, setBranchesArr] = useState([''])
   const [selectedBranchName, setSelectedBranchName] = useState('')
+  // True once the current org's repo list is known to include a private
+  // repo — i.e. the token already carries the `repo` scope, so the
+  // "Enable private repos" opt-in is hidden.
+  const [hasPrivateRepos, setHasPrivateRepos] = useState(false)
+  const appMetadata = useStore((state) => state.appMetadata)
+  const isProUser = PRO_STATUSES.includes(appMetadata?.subscriptionStatus)
+  // Restore-once + refetch-on-token-change bookkeeping (see effects below).
+  const restoredRef = useRef(false)
+  const pendingRestoreRef = useRef(null)
+  const prevTokenRef = useRef(accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((name) => `@${name}`)
   const orgName = resolveValue(selectedOrgName, orgNamesArr)
   const repoName = resolveValue(selectedRepoName, repoNamesArr)
@@ -105,6 +121,9 @@ export default function GitHubFileBrowser({
     }
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
+    // A private repo in the list means the token already has `repo` scope;
+    // otherwise GitHub filtered private repos out and the opt-in should show.
+    setHasPrivateRepos(Object.values(repos).some((repo) => repo?.private))
     setCurrentPath('')
     setFoldersArr([''])
     setSelectedFolderName('')
@@ -160,6 +179,112 @@ export default function GitHubFileBrowser({
   const selectBranch = (branchOrIndex) => {
     setSelectedBranchName(branchOrIndex)
   }
+
+  // --- Private-repo opt-in (A) -------------------------------------------
+  // Explicit, Pro-gated action to grant the GitHub `repo` scope. OAuth
+  // scopes are global (not per-org): this grants read access to private
+  // repos across ALL of the user's orgs, labelled as such. Non-Pro users
+  // route to subscribe. On success popup-callback flips localStorage
+  // `refreshAuth`, ProfileControl refreshes the token, and the effect below
+  // refetches the current org so newly-visible private repos appear.
+  const awaitingGrantRef = useRef(false)
+  const enablePrivateRepos = () => {
+    if (isProUser) {
+      awaitingGrantRef.current = true
+      window.open('/popup-auth?scope=repo&connection=github', 'authPopup', 'width=600,height=600')
+    } else {
+      window.open('/subscribe/', '_blank', 'noopener')
+    }
+  }
+
+  // Refetch the selected org's repos after a private-repo grant lands (the
+  // token changes). Gated on `awaitingGrantRef` so the routine background
+  // token refresh (BaseRoutes fresh-claims) never wipes a live selection.
+  useEffect(() => {
+    if (prevTokenRef.current !== accessToken) {
+      prevTokenRef.current = accessToken
+      if (awaitingGrantRef.current && accessToken && selectedOrgName !== '') {
+        awaitingGrantRef.current = false
+        selectOrg(selectedOrgName)
+      }
+    }
+    // Runs only on a token change, by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken])
+
+  // --- Dialog state persistence ------------------------------------------
+  // Persist the resolved selections so the dialog reopens where it left off
+  // (across sessions, localStorage). Skips the empty initial render so a
+  // good saved state is not clobbered before the restore below runs.
+  useEffect(() => {
+    if (!orgName) {
+      return
+    }
+    try {
+      localStorage.setItem(GH_BROWSER_STATE_KEY, JSON.stringify({
+        org: orgName, repo: repoName || '', branch: branchName || '',
+      }))
+    } catch {
+      // localStorage can throw (quota / private mode); persistence is best-effort.
+    }
+  }, [orgName, repoName, branchName])
+
+  // Restore once, after the org list loads: reselect the saved org, then let
+  // the repo + branch restores below chain as each list arrives. Every step
+  // is best-effort — anything no longer present is silently skipped.
+  useEffect(() => {
+    if (restoredRef.current || orgNamesArr.length === 0 || orgNamesArr[0] === '') {
+      return
+    }
+    restoredRef.current = true
+    let saved = null
+    try {
+      saved = JSON.parse(localStorage.getItem(GH_BROWSER_STATE_KEY) || 'null')
+    } catch {
+      saved = null
+    }
+    if (!saved || !saved.org) {
+      return
+    }
+    const orgIdx = orgNamesArr.indexOf(saved.org)
+    if (orgIdx < 0) {
+      return
+    }
+    pendingRestoreRef.current = {repo: saved.repo, branch: saved.branch}
+    selectOrg(orgIdx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgNamesArr])
+
+  // Restore the saved repo once its org's repo list has loaded.
+  useEffect(() => {
+    const pending = pendingRestoreRef.current
+    if (!pending || !pending.repo || repoNamesArr.length === 0 || repoNamesArr[0] === '') {
+      return
+    }
+    const repoIdx = repoNamesArr.indexOf(pending.repo)
+    if (repoIdx < 0) {
+      pendingRestoreRef.current = null
+      return
+    }
+    // Keep the branch for the next stage; drop the repo so this runs once.
+    pendingRestoreRef.current = {branch: pending.branch}
+    selectRepo(repoIdx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoNamesArr])
+
+  // Restore the saved branch once the repo's branch list has loaded.
+  useEffect(() => {
+    const pending = pendingRestoreRef.current
+    if (!pending || pending.repo || !pending.branch ||
+        branchesArr.length === 0 || branchesArr[0] === '') {
+      return
+    }
+    pendingRestoreRef.current = null
+    const branchIdx = branchesArr.indexOf(pending.branch)
+    if (branchIdx >= 0) {
+      selectBranch(branchIdx)
+    }
+  }, [branchesArr])
 
   const validateOrg = async (name) => {
     if (!name.trim()) {
@@ -242,6 +367,24 @@ export default function GitHubFileBrowser({
           validate={validateRepo}
           data-testid='openRepository'
         />
+        {selectedOrgName !== '' && !hasPrivateRepos && (
+          <Tooltip
+            title={isProUser ?
+              'Grants Share read access to your private repositories across all your GitHub organizations.' :
+              'Browsing private repositories is a Pro feature.'}
+            placement='top'
+          >
+            <Button
+              onClick={enablePrivateRepos}
+              size='small'
+              variant='text'
+              sx={{textTransform: 'none', alignSelf: 'flex-start', mt: -0.75, mb: 0.5}}
+              data-testid='enable-private-repos'
+            >
+              {isProUser ? 'Enable private repos' : 'Private repos (Pro)'}
+            </Button>
+          </Tooltip>
+        )}
         <Selector
           label='Branch'
           list={branchesArr}
