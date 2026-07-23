@@ -100,6 +100,55 @@ describe('Selector — dropdown mode', () => {
 })
 
 
+describe('Selector — dropdown pagination', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const longList = Array.from({length: 25}, (_, i) => `repo-${i}`)
+
+  it('shows no pager when the list fits on one page', async () => {
+    renderSelector({list: ['a', 'b', 'c']})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.queryByTestId('selector-next-organization')).not.toBeInTheDocument()
+  })
+
+  it('shows only the first page plus a pager for a long list', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.getByText('repo-0')).toBeInTheDocument()
+    expect(screen.getByText('repo-9')).toBeInTheDocument()
+    expect(screen.queryByText('repo-10')).not.toBeInTheDocument()
+    expect(screen.getByTestId('selector-next-organization')).toBeInTheDocument()
+  })
+
+  it('pages forward to the next set of options without closing', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    await waitFor(() => screen.getByText('repo-10'))
+    expect(screen.getByText('repo-19')).toBeInTheDocument()
+    expect(screen.queryByText('repo-0')).not.toBeInTheDocument()
+    // Menu stayed open across the page change.
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
+  it('selects a later-page option with its global list index', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    const target = 'repo-12'
+    await waitFor(() => screen.getByText(target))
+    fireEvent.click(screen.getByText(target))
+    expect(mockSetSelected).toHaveBeenCalledWith(longList.indexOf(target))
+  })
+})
+
+
 describe('Selector — text mode', () => {
   beforeEach(() => {
     jest.clearAllMocks()

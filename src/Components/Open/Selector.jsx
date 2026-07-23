@@ -1,11 +1,20 @@
 import React, {ReactElement, useEffect, useRef, useState} from 'react'
 import {Divider, IconButton, MenuItem, Stack, TextField, Typography} from '@mui/material'
-import {Close as ClearIcon} from '@mui/icons-material'
+import {
+  Close as ClearIcon,
+  KeyboardArrowLeft as PrevIcon,
+  KeyboardArrowRight as NextIcon,
+} from '@mui/icons-material'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 
 
 const DEBOUNCE_MS = 300
 const OTHER_VALUE = '__other__'
+/** Sentinel option values for the dropdown pager rows. */
+const PREV_VALUE = '__prev__'
+const NEXT_VALUE = '__next__'
+/** Options shown per dropdown page before the prev/next pager appears. */
+const PAGE_SIZE = 10
 
 
 /**
@@ -30,18 +39,39 @@ export default function Selector({
   const [isTextMode, setIsTextMode] = useState(false)
   const [inputText, setInputText] = useState('')
   const [validationStatus, setValidationStatus] = useState('idle')
+  const [page, setPage] = useState(0)
+  const [isOpen, setIsOpen] = useState(false)
+  const pagerClickRef = useRef(false)
   const debounceRef = useRef(null)
   const textInputRef = useRef(null)
 
+  // Reset to the first page whenever the option set changes (e.g. a new
+  // org is picked and the repo list is replaced).
+  useEffect(() => {
+    setPage(0)
+  }, [list])
+
   const handleSelect = (e) => {
-    if (e.target.value === OTHER_VALUE) {
+    const value = e.target.value
+    // Pager rows change the visible page without selecting or closing —
+    // pagerClickRef tells onClose to keep the menu open (see the Select).
+    if (value === PREV_VALUE || value === NEXT_VALUE) {
+      pagerClickRef.current = true
+      const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+      setPage((p) => {
+        const next = value === PREV_VALUE ? p - 1 : p + 1
+        return Math.min(pageCount - 1, Math.max(0, next))
+      })
+      return
+    }
+    if (value === OTHER_VALUE) {
       setIsTextMode(true)
       setInputText('')
       setValidationStatus('idle')
       return
     }
     disablePageReloadApprovalCheck()
-    setSelected(e.target.value)
+    setSelected(value)
   }
 
   const handleTextChange = (e) => {
@@ -161,6 +191,12 @@ export default function Selector({
   }
 
   const isEmpty = list.length === 0
+  const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE))
+  const clampedPage = Math.min(page, pageCount - 1)
+  const pageStart = clampedPage * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, list.length)
+  const pageItems = list.slice(pageStart, pageEnd)
+  const isPaged = list.length > PAGE_SIZE
 
   return (
     <TextField
@@ -178,7 +214,29 @@ export default function Selector({
       SelectProps={isEmpty ? {
         displayEmpty: true,
         renderValue: () => <span style={{opacity: 1}}>{emptyText}</span>,
-      } : undefined}
+      } : {
+        open: isOpen,
+        onOpen: () => {
+          // Jump to the page holding the current selection so its row is
+          // rendered (keeps the highlight correct, avoids MUI's
+          // out-of-range warning) and paging starts from context.
+          if (typeof selected === 'number' && selected >= 0) {
+            setPage(Math.floor(selected / PAGE_SIZE))
+          }
+          setIsOpen(true)
+        },
+        onClose: () => {
+          // A pager row requested a page change — keep the menu open.
+          if (pagerClickRef.current) {
+            pagerClickRef.current = false
+            return
+          }
+          setIsOpen(false)
+        },
+        // Derive the field label straight from the value so a selection on
+        // any page still shows once the menu closes / repaginates.
+        renderValue: (val) => (typeof val === 'number' ? list[val] : val),
+      }}
       InputLabelProps={isEmpty ? {shrink: true} : undefined}
       {...props}
     >
@@ -193,9 +251,37 @@ export default function Selector({
           </MenuItem>,
           <Divider key='divider'/>,
         ] : []),
-        ...list.map((listMember, i) => (
-          <MenuItem key={i} value={i}><Typography variant='p'>{listMember}</Typography></MenuItem>
-        )),
+        ...(isPaged ? [
+          <MenuItem
+            key='prev'
+            value={PREV_VALUE}
+            disabled={clampedPage === 0}
+            data-testid={`selector-prev-${label.toLowerCase()}`}
+          >
+            <PrevIcon fontSize='small' sx={{mr: 0.5}}/>
+            <Typography variant='caption'>
+              {`Prev · ${pageStart + 1}–${pageEnd} of ${list.length}`}
+            </Typography>
+          </MenuItem>,
+          <MenuItem
+            key='next'
+            value={NEXT_VALUE}
+            disabled={clampedPage >= pageCount - 1}
+            data-testid={`selector-next-${label.toLowerCase()}`}
+          >
+            <NextIcon fontSize='small' sx={{mr: 0.5}}/>
+            <Typography variant='caption'>Next</Typography>
+          </MenuItem>,
+          <Divider key='pager-divider'/>,
+        ] : []),
+        ...pageItems.map((listMember, j) => {
+          const globalIndex = pageStart + j
+          return (
+            <MenuItem key={globalIndex} value={globalIndex}>
+              <Typography variant='p'>{listMember}</Typography>
+            </MenuItem>
+          )
+        }),
       ]}
     </TextField>
   )
