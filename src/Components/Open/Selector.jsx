@@ -24,6 +24,8 @@ const PAGE_SIZE = 10
  * @property {Array} list list of elements to populate select options
  * @property {Function} [validate] Optional async fn (value: string) => boolean. When provided, adds "Other..." option.
  * @property {string} [emptyText] Placeholder shown when list is empty. Default: '<None>'
+ * @property {Function} [onClear] Optional. When provided and a value is selected, shows a
+ *   clear (×) affordance on the dropdown; the parent handles the reset (e.g. cascading clear).
  * @property {string} [data-testid] id for testing
  * @return {ReactElement}
  */
@@ -34,6 +36,7 @@ export default function Selector({
   list,
   validate,
   emptyText = '<None>',
+  onClear,
   ...props
 }) {
   const [isTextMode, setIsTextMode] = useState(false)
@@ -91,7 +94,7 @@ export default function Selector({
     // The live filter below already handles names present in the list, so
     // only fall back to async validation for a typed value that is NOT in
     // the list (e.g. an exact repo the API can resolve but wasn't fetched).
-    const hasListMatch = list.some((item) => String(item).toLowerCase().includes(query))
+    const hasListMatch = list.some((item) => item !== null && item !== undefined && String(item).toLowerCase().includes(query))
     if (hasListMatch || !validate) {
       return
     }
@@ -137,6 +140,16 @@ export default function Selector({
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
+      // Enter accepts an EXACT (case-insensitive) in-list match — e.g.
+      // "test-models" selects that entry even though it's also a prefix of
+      // "test-models-private". A prefix-only query is left as-is so the user
+      // keeps typing; the API-validate fallback still handles out-of-list names.
+      const typed = inputText.trim().toLowerCase()
+      const exactIdx = list.findIndex((item) => typeof item === 'string' && item.toLowerCase() === typed)
+      if (exactIdx >= 0) {
+        selectMatch(exactIdx)
+        return
+      }
       handleAccept()
     } else if (e.key === 'Escape') {
       handleClear()
@@ -180,7 +193,8 @@ export default function Selector({
     const query = inputText.trim().toLowerCase()
     const matches = list
       .map((item, i) => ({item, i}))
-      .filter(({item}) => item !== '' && (query === '' || String(item).toLowerCase().includes(query)))
+      .filter(({item}) => item !== null && item !== undefined && item !== '' &&
+        (query === '' || String(item).toLowerCase().includes(query)))
     const matchPageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE))
     const matchPage = Math.min(page, matchPageCount - 1)
     const matchStart = matchPage * PAGE_SIZE
@@ -321,9 +335,26 @@ export default function Selector({
           setIsOpen(false)
         },
         // Derive the field label straight from the value so a selection on
-        // any page still shows once the menu closes / repaginates.
-        renderValue: (val) => (typeof val === 'number' ? list[val] : val),
+        // any page still shows once the menu closes / repaginates. `?? ''`
+        // keeps a stale/out-of-range index from rendering `undefined`.
+        renderValue: (val) => (typeof val === 'number' ? (list[val] ?? '') : (val ?? '')),
       }}
+      InputProps={(onClear && !isEmpty && selected !== '' && selected !== null && selected !== undefined) ? {
+        endAdornment: (
+          <IconButton
+            aria-label='clear'
+            data-testid={`selector-clear-select-${label.toLowerCase()}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClear()
+            }}
+            sx={{mr: 2.5, p: 0.25}}
+          >
+            <ClearIcon fontSize='small'/>
+          </IconButton>
+        ),
+      } : undefined}
       InputLabelProps={isEmpty ? {shrink: true} : undefined}
       {...props}
     >
@@ -363,6 +394,9 @@ export default function Selector({
         ] : []),
         ...pageItems.map((listMember, j) => {
           const globalIndex = pageStart + j
+          if (listMember === null || listMember === undefined) {
+            return null
+          }
           return (
             <MenuItem key={globalIndex} value={globalIndex}>
               <Typography variant='p'>{listMember}</Typography>

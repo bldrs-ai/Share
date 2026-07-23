@@ -202,6 +202,49 @@ describe('Selector — text-mode live filter', () => {
     })
     expect(mockValidate).not.toHaveBeenCalled()
   })
+
+  it('accepts an exact in-list match on Enter (even when it is also a prefix)', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-models'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(mockSetSelected).toHaveBeenCalledWith(repoList.indexOf('test-models'))
+  })
+
+  it('does not accept a prefix-only query on Enter', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-mod'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(mockSetSelected).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Selector — clear (×) affordance', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('shows the clear × only when onClear is set and a value is selected', () => {
+    renderSelector({onClear: jest.fn(), selected: 0})
+    expect(screen.getByTestId('selector-clear-select-organization')).toBeInTheDocument()
+  })
+
+  it('does not show the clear × without a selection', () => {
+    renderSelector({onClear: jest.fn(), selected: ''})
+    expect(screen.queryByTestId('selector-clear-select-organization')).not.toBeInTheDocument()
+  })
+
+  it('does not show the clear × without an onClear handler', () => {
+    renderSelector({selected: 0})
+    expect(screen.queryByTestId('selector-clear-select-organization')).not.toBeInTheDocument()
+  })
+
+  it('calls onClear when the × is clicked', () => {
+    const onClear = jest.fn()
+    renderSelector({onClear, selected: 0})
+    fireEvent.click(screen.getByTestId('selector-clear-select-organization'))
+    expect(onClear).toHaveBeenCalled()
+  })
 })
 
 
