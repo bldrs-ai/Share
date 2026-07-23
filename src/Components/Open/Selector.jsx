@@ -68,6 +68,7 @@ export default function Selector({
       setIsTextMode(true)
       setInputText('')
       setValidationStatus('idle')
+      setPage(0)
       return
     }
     disablePageReloadApprovalCheck()
@@ -77,12 +78,21 @@ export default function Selector({
   const handleTextChange = (e) => {
     const value = e.target.value
     setInputText(value)
+    setPage(0)
     setValidationStatus('idle')
 
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
-    if (!value.trim()) {
+    const query = value.trim().toLowerCase()
+    if (!query) {
+      return
+    }
+    // The live filter below already handles names present in the list, so
+    // only fall back to async validation for a typed value that is NOT in
+    // the list (e.g. an exact repo the API can resolve but wasn't fetched).
+    const hasListMatch = list.some((item) => String(item).toLowerCase().includes(query))
+    if (hasListMatch || !validate) {
       return
     }
     setValidationStatus('checking')
@@ -111,6 +121,18 @@ export default function Selector({
     setIsTextMode(false)
     setInputText('')
     setValidationStatus('idle')
+  }
+
+  // Pick one of the live-filtered matches by its index into the full list.
+  const selectMatch = (index) => {
+    disablePageReloadApprovalCheck()
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+    setIsTextMode(false)
+    setInputText('')
+    setValidationStatus('idle')
+    setSelected(index)
   }
 
   const handleKeyDown = (e) => {
@@ -148,9 +170,21 @@ export default function Selector({
       statusColor = 'success.main'
       statusText = 'Found'
     } else if (validationStatus === 'no-match') {
-      statusColor = 'error.main'
       statusText = 'No match'
+      statusColor = 'error.main'
     }
+
+    // Live-filter the list by the typed query, then paginate the matches
+    // (same PAGE_SIZE + pager as the dropdown). Empty query shows the full
+    // list so the text input doubles as a paged browser.
+    const query = inputText.trim().toLowerCase()
+    const matches = list
+      .map((item, i) => ({item, i}))
+      .filter(({item}) => item !== '' && (query === '' || String(item).toLowerCase().includes(query)))
+    const matchPageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE))
+    const matchPage = Math.min(page, matchPageCount - 1)
+    const matchStart = matchPage * PAGE_SIZE
+    const visibleMatches = matches.slice(matchStart, matchStart + PAGE_SIZE)
 
     return (
       <Stack sx={{marginBottom: '.5em', width: '100%'}}>
@@ -185,6 +219,59 @@ export default function Selector({
           <Typography variant='caption' sx={{color: statusColor, ml: 1, mt: 0.25}}>
             {statusText}
           </Typography>
+        )}
+        {visibleMatches.length > 0 && (
+          <Stack
+            data-testid={`selector-matches-${label.toLowerCase()}`}
+            sx={{
+              mt: 0.25,
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              maxHeight: '320px',
+              overflowY: 'auto',
+            }}
+          >
+            {matches.length > PAGE_SIZE && (
+              <Stack
+                direction='row'
+                sx={{alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.25}}
+              >
+                <IconButton
+                  size='small'
+                  aria-label='previous page'
+                  data-testid={`selector-prev-${label.toLowerCase()}`}
+                  disabled={matchPage === 0}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setPage(Math.max(0, matchPage - 1))}
+                >
+                  <PrevIcon fontSize='small'/>
+                </IconButton>
+                <Typography variant='caption' sx={{color: 'text.secondary'}}>
+                  {`${matchStart + 1}–${matchStart + visibleMatches.length} of ${matches.length}`}
+                </Typography>
+                <IconButton
+                  size='small'
+                  aria-label='next page'
+                  data-testid={`selector-next-${label.toLowerCase()}`}
+                  disabled={matchPage >= matchPageCount - 1}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setPage(Math.min(matchPageCount - 1, matchPage + 1))}
+                >
+                  <NextIcon fontSize='small'/>
+                </IconButton>
+              </Stack>
+            )}
+            {visibleMatches.map(({item, i}) => (
+              <MenuItem
+                key={i}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectMatch(i)}
+              >
+                <Typography variant='p'>{item}</Typography>
+              </MenuItem>
+            ))}
+          </Stack>
         )}
       </Stack>
     )

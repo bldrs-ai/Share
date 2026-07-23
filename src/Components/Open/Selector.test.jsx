@@ -149,6 +149,62 @@ describe('Selector — dropdown pagination', () => {
 })
 
 
+describe('Selector — text-mode live filter', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  const repoList = ['acme', 'test-models', 'test-models-private', 'zeta']
+  const longList = Array.from({length: 25}, (_, i) => `repo-${i}`)
+
+  /**
+   * @param {Array} list option list
+   * @return {HTMLElement} the text input
+   */
+  async function enterFilterMode(list) {
+    renderSelector({validate: mockValidate, list})
+    openDropdown()
+    const other = await screen.findByText('Enter name...')
+    fireEvent.click(other)
+    return screen.getByRole('textbox')
+  }
+
+  it('filters the list live as the user types', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-models'}})
+    expect(screen.getByText('test-models')).toBeInTheDocument()
+    expect(screen.getByText('test-models-private')).toBeInTheDocument()
+    expect(screen.queryByText('acme')).not.toBeInTheDocument()
+  })
+
+  it('selects a filtered match with its list index', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'private'}})
+    fireEvent.click(screen.getByText('test-models-private'))
+    expect(mockSetSelected).toHaveBeenCalledWith(repoList.indexOf('test-models-private'))
+  })
+
+  it('paginates a long filtered result set', async () => {
+    const input = await enterFilterMode(longList)
+    fireEvent.change(input, {target: {value: 'repo-'}})
+    expect(screen.getByText('repo-0')).toBeInTheDocument()
+    expect(screen.queryByText('repo-10')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    await waitFor(() => screen.getByText('repo-10'))
+  })
+
+  it('does not call the API validator for a query already in the list', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test'}})
+    act(() => {
+      jest.runAllTimers()
+    })
+    expect(mockValidate).not.toHaveBeenCalled()
+  })
+})
+
+
 describe('Selector — text mode', () => {
   beforeEach(() => {
     jest.clearAllMocks()
