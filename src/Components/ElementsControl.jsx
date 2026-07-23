@@ -3,6 +3,7 @@ import {ButtonGroup, Stack} from '@mui/material'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneMenu from './CutPlane/CutPlaneMenu'
+import ResidencyControl from './Residency/ResidencyControl'
 import {
   Close as CloseIcon,
   FilterCenterFocus as FilterCenterFocusIcon,
@@ -61,6 +62,14 @@ export default function ElementsControl({deselectItems}) {
          * (which replaces the model's geometry slot).
          */}
         {!isTempIsolationModeOn && <CutPlaneMenu/>}
+
+        {/*
+         * Residency (demand-model eviction / infill). Grouped with the
+         * cut plane here in the bottom bar — both are "how much of the
+         * model am I looking at" controls. Self-gates: renders nothing
+         * unless the loaded model has batched instances to dial.
+         */}
+        <ResidencyControl/>
 
         {/*
          * Isolate toggle. Visible whenever there's something to
