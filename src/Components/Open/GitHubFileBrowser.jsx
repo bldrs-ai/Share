@@ -183,6 +183,39 @@ export default function GitHubFileBrowser({
     setSelectedBranchName(branchOrIndex)
   }
 
+  // --- Cascading clear ---------------------------------------------------
+  // Clearing a field (× on its dropdown) resets it and every field below it
+  // to its default state — one click back to whatever level you want.
+  const resetFolderAndFile = () => {
+    setSelectedFolderName('')
+    setCurrentPath('')
+    setFoldersArr([''])
+    setFilesArr([''])
+    setSelectedFileIndex('')
+  }
+  const clearBranch = () => {
+    setSelectedBranchName('')
+    resetFolderAndFile()
+  }
+  const clearRepo = () => {
+    setSelectedRepoName('')
+    setBranchesArr([''])
+    setSelectedBranchName('')
+    resetFolderAndFile()
+  }
+  const clearOrg = () => {
+    setSelectedOrgName('')
+    setRepoNamesArr([''])
+    setSelectedRepoName('')
+    setHasPrivateRepos(false)
+    setBranchesArr([''])
+    setSelectedBranchName('')
+    resetFolderAndFile()
+  }
+  const clearFile = () => {
+    setSelectedFileIndex('')
+  }
+
   // --- Private-repo opt-in (A) -------------------------------------------
   // Explicit, Pro-gated action to grant the GitHub `repo` scope. OAuth
   // scopes are global (not per-org): this grants read access to private
@@ -192,6 +225,10 @@ export default function GitHubFileBrowser({
   // refetches the current org so newly-visible private repos appear.
   const awaitingGrantRef = useRef(false)
   const enablePrivateRepos = () => {
+    // Guard against a second popup while one grant is already in flight.
+    if (grantPending) {
+      return
+    }
     if (isProUser) {
       awaitingGrantRef.current = true
       setGrantPending(true)
@@ -200,6 +237,18 @@ export default function GitHubFileBrowser({
       window.open('/subscribe/', '_blank', 'noopener')
     }
   }
+
+  // Reset the pending flag when the popup closes (main window regains focus),
+  // so a cancelled grant doesn't leave the checkbox stuck checked. A
+  // successful grant hides the whole affordance via `hasPrivateRepos` anyway.
+  useEffect(() => {
+    if (!grantPending) {
+      return undefined
+    }
+    const onFocus = () => setGrantPending(false)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [grantPending])
 
   // Refetch the selected org's repos after a private-repo grant lands (the
   // token changes). Gated on `awaitingGrantRef` so the routine background
@@ -362,6 +411,7 @@ export default function GitHubFileBrowser({
           selected={selectedOrgName}
           setSelected={selectOrg}
           validate={validateOrg}
+          onClear={clearOrg}
           data-testid='openOrganization'
         />
         <Selector
@@ -370,6 +420,7 @@ export default function GitHubFileBrowser({
           selected={selectedRepoName}
           setSelected={selectRepo}
           validate={validateRepo}
+          onClear={clearRepo}
           data-testid='openRepository'
         />
         {selectedOrgName !== '' && !hasPrivateRepos && (
@@ -380,6 +431,7 @@ export default function GitHubFileBrowser({
                 <Checkbox
                   size='small'
                   checked={grantPending}
+                  disabled={grantPending}
                   onChange={enablePrivateRepos}
                   sx={{py: 0, pl: 0, pr: 1}}
                   data-testid='enable-private-repos'
@@ -404,6 +456,7 @@ export default function GitHubFileBrowser({
           selected={selectedBranchName}
           setSelected={selectBranch}
           validate={validateBranch}
+          onClear={clearBranch}
           data-testid='openBranch'
         />
         <SelectorSeparator
@@ -420,6 +473,7 @@ export default function GitHubFileBrowser({
           list={filesArr}
           selected={selectedFileIndex}
           setSelected={setSelectedFileIndex}
+          onClear={clearFile}
           data-testid='openFile'
         />
       </Stack>
