@@ -92,7 +92,8 @@ export default function ResidencyControl() {
         title='Residency'
         icon={<ResidencyIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
-        placement='left'
+        placement='top'
+        variant='solid'
         selected={anchorEl !== null || percent < FULL}
         dataTestId='control-button-residency'
       />
@@ -100,8 +101,11 @@ export default function ResidencyControl() {
         open={anchorEl !== null}
         anchorEl={anchorEl}
         onClose={() => setAnchorEl(null)}
-        anchorOrigin={{vertical: 'center', horizontal: 'left'}}
-        transformOrigin={{vertical: 'center', horizontal: 'right'}}
+        // Opens UPWARD from the bottom bar (popover bottom pinned to the
+        // button top). MUI flips/repositions if it would overflow the
+        // viewport, so it stays on-screen on mobile.
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
         <Stack spacing={1} sx={{p: 2, width: '16em'}}>
           <Typography variant='subtitle2'>Residency: {percent}%</Typography>
