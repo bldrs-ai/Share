@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {BatchedMesh} from 'three'
+import {BatchedMesh, Matrix4} from 'three'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
 
@@ -135,6 +135,41 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
     expect(stats.skippedPlacedGeometries).toBe(2) // each bad placement counted
     // GetGeometry called once for 999 + once for 777 (not twice) = 2.
     expect(getGeometryCalls).toBe(2)
+  })
+
+  it('recenters a georeferenced model to the origin and reports the offset', () => {
+    // Conway's browser demand open hands back raw source-world (e.g. Swiss
+    // LV95) placements at ~1e6-1e7 m, where float32 loses ~1m — the model
+    // must be recentered or it swims on rotate. Column-major translation in
+    // elements 12/13/14.
+    const far = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000.4, 5, -8000000.6, 1]
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [{geometryExpressID: 999, flatTransformation: far, color: OPAQUE}],
+    }]
+    const {batches, coordinationOffset} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    // Offset is the rounded translation of the first placement.
+    expect(coordinationOffset).toEqual([2000000, 5, -8000001])
+    // The instance renders back near the origin (raw − offset).
+    const m = new Matrix4()
+    batches[0].mesh.getMatrixAt(0, m)
+    expect(m.elements[12]).toBeCloseTo(0.4)
+    expect(m.elements[13]).toBeCloseTo(0)
+    expect(m.elements[14]).toBeCloseTo(0.4)
+  })
+
+  it('leaves a near-origin model untouched (no recenter)', () => {
+    const near = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 12, 3, -45, 1]
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [{geometryExpressID: 999, flatTransformation: near, color: OPAQUE}],
+    }]
+    const {batches, coordinationOffset} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(coordinationOffset).toBeNull()
+    const m = new Matrix4()
+    batches[0].mesh.getMatrixAt(0, m)
+    expect(m.elements[12]).toBeCloseTo(12)
+    expect(m.elements[14]).toBeCloseTo(-45)
   })
 
   it('skips FlatMeshes without an expressID', () => {

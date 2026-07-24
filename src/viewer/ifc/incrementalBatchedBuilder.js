@@ -6,6 +6,7 @@ import {
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
+  coordinationOffsetFor,
   localGeometry,
 } from './flatMeshToBatchedModel'
 
@@ -71,6 +72,10 @@ export class IncrementalBatchedBuilder {
     // Conway exactly once per model.
     this.geometryCache = new Map()
     this.badGeometry = new Set()
+    // Origin-recenter offset for georeferenced models (see
+    // coordinationOffsetFor). `undefined` until the first placement decides
+    // it; then `[x,y,z]` (subtracted from every instance) or null (no-op).
+    this.coordOffset = undefined
     // Lazily created per transparency: see ensureBatch_.
     this.opaque = null
     this.transparent = null
@@ -199,6 +204,22 @@ export class IncrementalBatchedBuilder {
     }
     const batchId = state.mesh.addInstance(geometryId)
     const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
+    // Decide the model-wide origin-recenter offset from the first placement,
+    // then subtract it from every instance so a georeferenced model renders at
+    // the origin (float32-precise) instead of at ~1e7 m. See
+    // coordinationOffsetFor. Stamped on the root for consumers that need to
+    // map a rendered point back to true world coordinates.
+    if (this.coordOffset === undefined) {
+      this.coordOffset = coordinationOffsetFor(placed.flatTransformation)
+      if (this.coordOffset !== null) {
+        this.root.userData.coordinationOffset = this.coordOffset
+      }
+    }
+    if (this.coordOffset !== null) {
+      matrix.elements[12] -= this.coordOffset[0]
+      matrix.elements[13] -= this.coordOffset[1]
+      matrix.elements[14] -= this.coordOffset[2]
+    }
     state.mesh.setMatrixAt(batchId, matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
     state.instanceParents.push(parentExpressId)

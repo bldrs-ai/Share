@@ -62,6 +62,45 @@ export const INDICES_PER_TRIANGLE = 3
 /** An instance is transparent (own blended batch) when alpha is below this. */
 export const OPAQUE_ALPHA = 1
 
+/**
+ * Translation magnitude (metres) past which a placement is treated as
+ * georeferenced and its whole model recentered to the origin for the render.
+ *
+ * Why: Conway's `COORDINATE_TO_ORIGIN` recenters a model's geometry to the
+ * origin on the classic open, but the browser demand open (`OpenModelStreamed`,
+ * shipped default-on in #1614) hands back RAW source-world placements. Swiss
+ * LV95 and other national grids put those at ~1e6–1e7 m, where float32 (the
+ * GPU vertex + BatchedMesh instance-matrix format) resolves to ~1 m — so the
+ * whole model swims by up to a metre as the camera rotates. Subtracting a
+ * single model-wide offset brings the render back to the origin (the local
+ * geometry is only ~100 m), restoring float32 precision. Normal near-origin
+ * models never cross this threshold, so the recenter is a strict no-op for
+ * them.
+ */
+export const LARGE_COORD_THRESHOLD = 1e4
+
+
+/**
+ * The origin-recenter offset for a georeferenced placement, or null when the
+ * placement is near enough to the origin to leave untouched. Rounded to whole
+ * metres so the offset is exactly float-representable and stable across the
+ * incremental demand batches (every batch subtracts the same value).
+ *
+ * @param {Array<number>} flatTransformation 16-element column-major matrix
+ * @return {?Array<number>} `[x, y, z]` to subtract, or null
+ */
+export function coordinationOffsetFor(flatTransformation) {
+  const x = flatTransformation[12]
+  const y = flatTransformation[13]
+  const z = flatTransformation[14]
+  if (Math.abs(x) > LARGE_COORD_THRESHOLD ||
+      Math.abs(y) > LARGE_COORD_THRESHOLD ||
+      Math.abs(z) > LARGE_COORD_THRESHOLD) {
+    return [Math.round(x), Math.round(y), Math.round(z)]
+  }
+  return null
+}
+
 
 /**
  * @typedef {object} BatchHandle
@@ -150,6 +189,9 @@ function collectGroups(flatMeshes, api, modelID) {
   const totals = {
     placements: 0, transparentPlacements: 0, vertexCount: 0, indexCount: 0,
     skippedFlatMeshes: 0, skippedPlacedGeometries: 0,
+    // Origin-recenter offset for georeferenced models, decided from the first
+    // placement (see coordinationOffsetFor); null for near-origin models.
+    coordOffset: undefined,
   }
   let occurrenceId = 0 // global, emission order — shared across both batches
   forEachVectorItem(flatMeshes, (flatMesh) => {
@@ -212,6 +254,9 @@ function collectGroups(flatMeshes, api, modelID) {
         totals.indexCount += indexSize
       }
       const color = placed.color ?? DEFAULT_COLOR
+      if (totals.coordOffset === undefined) {
+        totals.coordOffset = coordinationOffsetFor(placed.flatTransformation)
+      }
       group.placements.push({
         matrix: placed.flatTransformation,
         color,
@@ -241,9 +286,11 @@ function collectGroups(flatMeshes, api, modelID) {
  *
  * @param {Map} groups geometryExpressID → group
  * @param {boolean} transparent select transparent (alpha<1) placements
+ * @param {?Array<number>} coordOffset `[x,y,z]` origin-recenter offset to
+ *   subtract from every instance matrix, or null for no recenter.
  * @return {BatchHandle|null}
  */
-function buildBatch(groups, transparent) {
+function buildBatch(groups, transparent, coordOffset) {
   // Size the batch up front: a geometry slot for each shape with a matching
   // placement, an instance slot per matching placement.
   let vertexCount = 0
@@ -285,7 +332,15 @@ function buildBatch(groups, transparent) {
     const geometryId = mesh.addGeometry(group.geometry)
     for (const placement of placements) {
       const batchId = mesh.addInstance(geometryId)
-      mesh.setMatrixAt(batchId, matrix.fromArray(placement.matrix))
+      matrix.fromArray(placement.matrix)
+      if (coordOffset !== null && coordOffset !== undefined) {
+        // Recenter a georeferenced model to the origin (see
+        // coordinationOffsetFor) so its float32 render stays precise.
+        matrix.elements[12] -= coordOffset[0]
+        matrix.elements[13] -= coordOffset[1]
+        matrix.elements[14] -= coordOffset[2]
+      }
+      mesh.setMatrixAt(batchId, matrix)
       // Vector4 carries alpha into the batch's RGBA colours texture.
       mesh.setColorAt(batchId, rgba.set(
         placement.color.x, placement.color.y, placement.color.z, placement.color.w))
@@ -322,8 +377,12 @@ function buildBatch(groups, transparent) {
  */
 export function flatMeshToBatchedModel(flatMeshes, api, modelID) {
   const {groups, totals} = collectGroups(flatMeshes, api, modelID)
+  const coordOffset = totals.coordOffset ?? null
 
-  const batches = [buildBatch(groups, false), buildBatch(groups, true)].filter(Boolean)
+  const batches = [
+    buildBatch(groups, false, coordOffset),
+    buildBatch(groups, true, coordOffset),
+  ].filter(Boolean)
 
   const parents = new Set()
   for (const batch of batches) {
@@ -348,5 +407,9 @@ export function flatMeshToBatchedModel(flatMeshes, api, modelID) {
       skippedFlatMeshes: totals.skippedFlatMeshes,
       skippedPlacedGeometries: totals.skippedPlacedGeometries,
     },
+    // `[x,y,z]` origin offset already subtracted from the batch matrices for a
+    // georeferenced model (null for near-origin models). The caller stamps it
+    // on the model root so a rendered point maps back to true world coords.
+    coordinationOffset: coordOffset,
   }
 }

@@ -133,6 +133,42 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     expect(Array.from(geometry.getIndex().array)).toEqual([0, 1, 2])
   })
 
+  it('recenters a georeferenced model, folding the offset into baked vertices', () => {
+    // Raw ~1e7 m (LV95) placement from the browser demand open: the baked
+    // world vertices must come back near the origin (raw − offset), or the
+    // float32 merged buffer would quantize to ~1 m and jitter on rotate.
+    const api = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 1,
+        get: () => ({geometryExpressID: 999, flatTransformation: translation(2000000, 5, -8000000)}),
+      },
+    }]
+    const {geometry, coordinationOffset} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(coordinationOffset).toEqual([2000000, 5, -8000000])
+    // unit-triangle vertex 0 is the local origin → bakes to exactly (0,0,0).
+    const pos = geometry.getAttribute('position')
+    expect(pos.getX(0)).toBeCloseTo(0)
+    expect(pos.getY(0)).toBeCloseTo(0)
+    expect(pos.getZ(0)).toBeCloseTo(0)
+  })
+
+  it('leaves a near-origin merged model untouched (no offset)', () => {
+    const api = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})},
+    }]
+    const {geometry, coordinationOffset} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(coordinationOffset).toBeNull()
+    expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(7)
+  })
+
   it('carries each PlacedGeometry.occurrencePath onto its range (STEP)', () => {
     // Two occurrences of one reused part-type: same parentExpressId, distinct
     // occurrence paths. The ranges must preserve each path so the downstream
