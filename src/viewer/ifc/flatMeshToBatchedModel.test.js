@@ -103,6 +103,10 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
     expect(opaque.material.transparent).toBe(false)
     expect(transparent.material.transparent).toBe(true)
     expect(transparent.material.depthWrite).toBe(false)
+    // Coplanar-tie stability: opaque draws in insertion order (no
+    // per-frame camera sort); transparent must keep sorting for blending.
+    expect(opaque.mesh.sortObjects).toBe(false)
+    expect(transparent.mesh.sortObjects).toBe(true)
     expect(stats.transparentInstanceCount).toBe(1)
     expect(stats.materialCount).toBe(2)
     // The occurrence id space is global across both batches (emission order).
