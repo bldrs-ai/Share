@@ -125,16 +125,33 @@ order; BVH permutes only the index buffer, not the numbering).
 
 - **Cache-hit parity.** The occurrence tables also survive the GLB cache. The
   writer persists the global `instanceId → occurrencePath` table on
-  `BLDRS_face_ids` (`glbExport` reads it off `model.instanceMap`); the reader
-  decodes it to `userData.bldrsFaceIds.occurrencePaths`, and `Loader.js`
-  reattaches it to each restored per-mesh map via
-  `IfcInstanceMap.attachOccurrencePaths` (only for the instance ids that mesh
-  actually holds, since the GLB splits into per-material primitives). Schema
-  bumped `0.8.0 → 0.9.0` so stale occurrence-less caches read as a miss and get
-  rewritten. **This is why an already-cached STEP model (e.g. one loaded on the
-  same preview origin before this change) has to be re-fetched once: OPFS holds
-  the old 0.8.0 artifact with no occurrence data until the schema bump forces a
-  re-parse.**
+  `BLDRS_face_ids`; the reader decodes it to
+  `userData.bldrsFaceIds.occurrencePaths`, and `Loader.js` reattaches it to each
+  restored per-mesh map via `IfcInstanceMap.attachOccurrencePaths` (only for the
+  instance ids that mesh actually holds, since the GLB splits into per-material
+  primitives). Schema bumped `0.8.0 → 0.9.0` so stale occurrence-less caches read
+  as a miss and get rewritten. **This is why an already-cached STEP model (e.g.
+  one loaded on the same preview origin before this change) has to be re-fetched
+  once: OPFS holds the old 0.8.0 artifact with no occurrence data until the
+  schema bump forces a re-parse.**
+
+  - **Where the writer reads the table matters once the render path changed.**
+    The merged Conway-direct path keeps the table on `model.instanceMap`, and
+    `glbExport` read it straight off there. But the **default render path is now
+    the demandGeometry BatchedMesh** (`incrementalBatchedBuilder` →
+    `assembleBatchedModel`), which has **no `instanceMap`** — its per-occurrence
+    data lives on the batch meshes as `instanceOccurrencePaths` /
+    `instanceGeometryIds`, keyed by `batchId`. So a batched-first load wrote a
+    cache with the occurrence table silently dropped, and a cache-hit reload
+    (new tab, same origin — the batched model bakes down to a merged GLB on
+    read) restored the **NavTree** occurrence highlight (the spatial tree
+    persists paths independently) but **not the scene** per-occurrence highlight
+    (`getInstanceIdsForOccurrencePath` found no mesh table). `glbExport` now
+    re-keys the batch side tables to the global occurrence id — the `instanceID`
+    `batchedModelToMergedMesh` bakes per vertex, i.e. the synthetic instance id
+    the reader rebuilds its map on — via
+    `batchedToMergedMesh.batchedModelOccurrenceTables`, so the batched write is
+    at parity with the merged one (paths **and** the per-solid geometry ids).
 
 - **Per-occurrence hide.** The NavTree eye and the `H` shortcut hide one
   occurrence's geometry, not every reuse of the part. `IfcIsolator` tracks
