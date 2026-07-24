@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Code_Remote__subscribe_pr_activity",
+      "mcp__Claude_Code_Remote__unsubscribe_pr_activity",
+      "mcp__github__actions_get",
+      "mcp__github__actions_list",
+      "mcp__github__get_job_logs",
+      "mcp__github__get_check_run",
+      "mcp__github__pull_request_read",
+      "mcp__github__list_pull_requests",
+      "mcp__github__search_pull_requests",
+      "mcp__github__get_commit",
+      "mcp__github__list_commits",
+      "mcp__github__list_branches",
+      "mcp__github__list_tags",
+      "mcp__github__get_file_contents",
+      "mcp__github__issue_read",
+      "mcp__github__list_issues",
+      "mcp__github__search_issues",
+      "mcp__github__search_code",
+      "mcp__github__get_me",
+      "mcp__github__get_latest_release",
+      "mcp__github__list_releases",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git fetch:*)",
+      "Bash(yarn lint:*)",
+      "Bash(yarn typecheck:*)",
+      "Bash(yarn test:*)",
+      "Bash(yarn test-flows:*)",
+      "Bash(yarn jest:*)"
+    ]
+  }
+}

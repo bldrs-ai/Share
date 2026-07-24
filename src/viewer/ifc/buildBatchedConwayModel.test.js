@@ -6,7 +6,7 @@
 
 import {Color} from 'three'
 import {flatMeshToBatchedModel, DEFAULT_COLOR} from './flatMeshToBatchedModel'
-import {isDefaultColor, productPaletteRgb} from './productPalette'
+import {PRODUCT_PALETTE, isDefaultColor} from './productPalette'
 import {assembleBatchedModel} from './buildBatchedConwayModel'
 
 
@@ -110,8 +110,9 @@ describe('viewer/ifc/assembleBatchedModel colorless palette', () => {
     // Restore table (`batchedHighlight` reads it to un-highlight) carries
     // the exact palette color the buffer was painted with — keyed by the
     // part's geometry id (998 for product 100), not the occurrence id.
+    // Dense index over sorted parts [998, 999] -> 998 is palette slot 0.
     const restore100 = mesh.instanceColors[mesh.instanceParents.indexOf(100)]
-    const expected100 = productPaletteRgb(998)
+    const expected100 = PRODUCT_PALETTE[0]
     expect(restore100).toMatchObject({x: expected100.x, y: expected100.y, z: expected100.z, w: 1})
     expect(c100.x).toBeCloseTo(expected100.x, 5)
   })

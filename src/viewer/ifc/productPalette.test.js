@@ -2,9 +2,8 @@
 import {
   PRODUCT_PALETTE,
   applyProductPalette,
-  hashKey,
+  assignPartColors,
   isDefaultColor,
-  productPaletteRgb,
 } from './productPalette'
 import {DEFAULT_COLOR} from './flatMeshToBatchedModel'
 
@@ -38,45 +37,42 @@ function fakeBatch(instanceColors, instanceParents, instanceGeometryIds) {
 }
 
 
-describe('hashKey', () => {
-  it('is deterministic and stable across string/number forms of a key', () => {
-    expect(hashKey(42)).toBe(hashKey(42))
-    expect(hashKey(42)).toBe(hashKey('42'))
+describe('assignPartColors', () => {
+  it('is collision-free for up to palette-size parts', () => {
+    // The jet's case: 9 distinct parts must map to 9 distinct colors.
+    const keys = [18538, 18862, 38147, 130231, 234366, 270832, 271423, 271914, 273867]
+    const colors = assignPartColors(keys)
+    expect(colors.size).toBe(9)
+    expect(new Set(colors.values()).size).toBe(9)
   })
 
-  it('returns an unsigned 32-bit integer', () => {
-    for (const key of [0, 1, 999999, 'FRONTFAN', '']) {
-      const h = hashKey(key)
-      expect(Number.isInteger(h)).toBe(true)
-      expect(h).toBeGreaterThanOrEqual(0)
-      expect(h).toBeLessThanOrEqual(0xffffffff)
-    }
+  it('gives distinct colors to every part when count === palette size', () => {
+    const keys = Array.from({length: PRODUCT_PALETTE.length}, (_, i) => (i * 7) + 3)
+    const colors = assignPartColors(keys)
+    expect(new Set(colors.values()).size).toBe(PRODUCT_PALETTE.length)
   })
 
-  it('spreads distinct keys (no collision across a small product set)', () => {
-    const slots = new Set()
-    for (let id = 1; id <= PRODUCT_PALETTE.length; id++) {
-      slots.add(hashKey(id) % PRODUCT_PALETTE.length)
-    }
-    // Not a guarantee in general, but these small ids must not all collide.
-    expect(slots.size).toBeGreaterThan(1)
-  })
-})
-
-
-describe('productPaletteRgb', () => {
-  it('is deterministic per key', () => {
-    expect(productPaletteRgb(7)).toBe(productPaletteRgb(7))
+  it('is deterministic and order-independent (dedupes + sorts)', () => {
+    const a = assignPartColors([30, 10, 20, 10])
+    const b = assignPartColors([10, 20, 30])
+    expect(a.size).toBe(3)
+    expect([...a.entries()]).toEqual([...b.entries()])
   })
 
-  it('only ever returns palette members', () => {
-    for (let id = 0; id < 100; id++) {
-      expect(PRODUCT_PALETTE).toContain(productPaletteRgb(id))
-    }
+  it('wraps only beyond palette size', () => {
+    const n = PRODUCT_PALETTE.length + 1
+    const keys = Array.from({length: n}, (_, i) => i)
+    const colors = assignPartColors(keys)
+    // Part 0 and part `palette.length` (a full wrap apart) share a color;
+    // everything in between is distinct.
+    expect(colors.get(0)).toBe(colors.get(PRODUCT_PALETTE.length))
+    expect(new Set(colors.values()).size).toBe(PRODUCT_PALETTE.length)
   })
 
-  it('no palette entry is the fallback grey', () => {
-    for (const c of PRODUCT_PALETTE) {
+  it('only ever returns palette members, none the fallback grey', () => {
+    const colors = assignPartColors([5, 9, 1])
+    for (const c of colors.values()) {
+      expect(PRODUCT_PALETTE).toContain(c)
       expect(isDefaultColor(c)).toBe(false)
     }
   })

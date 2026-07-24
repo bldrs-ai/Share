@@ -1,5 +1,5 @@
-
-import {BatchedMesh} from 'three'
+/* eslint-disable no-magic-numbers */
+import {BatchedMesh, Matrix4} from 'three'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
@@ -138,6 +138,37 @@ describe('IncrementalBatchedBuilder', () => {
     const {stats} = builder.finalize()
     expect(stats.instanceCount).toBe(2)
     expect(stats.skippedCoincidentPlacements).toBe(0)
+  })
+
+  it('recenters a georeferenced model across batches with one shared offset', () => {
+    // The browser demand open hands back raw LV95-scale placements. The
+    // offset is decided on the first placement and every later batch subtracts
+    // the SAME value, so the model stays coherent as it streams in.
+    const far = (tx, ty, tz) => ({
+      expressID: 1,
+      geometries: [{geometryExpressID: 999, flatTransformation:
+        [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
+    })
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([far(2000000, 5, -8000000)]) // first: sets the offset
+    builder.appendBatch([far(2000010, 5, -8000020)]) // 10m / 20m away
+    const {batches} = builder.finalize()
+    expect(builder.root.userData.coordinationOffset).toEqual([2000000, 5, -8000000])
+    const m = new Matrix4()
+    batches[0].mesh.getMatrixAt(0, m)
+    expect(m.elements[12]).toBeCloseTo(0)
+    expect(m.elements[14]).toBeCloseTo(0)
+    batches[0].mesh.getMatrixAt(1, m) // second instance recentered by the same offset
+    expect(m.elements[12]).toBeCloseTo(10)
+    expect(m.elements[14]).toBeCloseTo(-20)
+  })
+
+  it('leaves a near-origin model untouched (no offset stamped)', () => {
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+    builder.finalize()
+    expect(builder.coordOffset).toBeNull()
+    expect(builder.root.userData.coordinationOffset).toBeUndefined()
   })
 
   it('reports bounds per appended instance and skips bad geometry', () => {
