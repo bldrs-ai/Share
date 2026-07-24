@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import Selector from './Selector'
 
@@ -215,6 +215,51 @@ describe('Selector — text-mode live filter', () => {
     fireEvent.change(input, {target: {value: 'test-mod'}})
     fireEvent.keyDown(input, {key: 'Enter'})
     expect(mockSetSelected).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Selector — defensive value handling', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  it('skips null/undefined entries in the dropdown but keeps their list index', async () => {
+    const sparse = ['acme', null, 'beta', undefined, 'gamma']
+    renderSelector({list: sparse})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.getByText('acme')).toBeInTheDocument()
+    expect(screen.getByText('beta')).toBeInTheDocument()
+    expect(screen.getByText('gamma')).toBeInTheDocument()
+    // 'gamma' is at index 4 in the full list — selecting it must report 4,
+    // not a compacted index, so the parent resolves the right entry.
+    fireEvent.click(screen.getByText('gamma'))
+    expect(mockSetSelected).toHaveBeenCalledWith(sparse.indexOf('gamma'))
+  })
+
+  it('filters null/undefined/empty entries out of the text-mode match list', async () => {
+    const sparse = ['acme', null, '', undefined, 'beta']
+    renderSelector({validate: mockValidate, list: sparse})
+    openDropdown()
+    fireEvent.click(await screen.findByText('Enter name...'))
+    const input = screen.getByRole('textbox')
+    // Empty query shows the full list, but the holes must not render as blank
+    // rows — only the two real names should appear as matches.
+    const matches = screen.getByTestId('selector-matches-organization')
+    expect(within(matches).getByText('acme')).toBeInTheDocument()
+    expect(within(matches).getByText('beta')).toBeInTheDocument()
+    // Exactly two rows render — the null/undefined/'' holes produce no blanks.
+    expect(within(matches).getAllByText(/\w/)).toHaveLength(2)
+    expect(input).toBeInTheDocument()
+  })
+
+  it('renders an out-of-range numeric selection as empty, never "undefined"', () => {
+    renderSelector({list: ['a', 'b'], selected: 99})
+    // A stale index past the end of the list must not surface the literal
+    // string "undefined" in the closed field.
+    expect(screen.getByRole('combobox').textContent).not.toMatch(/undefined/)
   })
 })
 
