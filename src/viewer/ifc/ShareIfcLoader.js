@@ -226,6 +226,20 @@ export default class ShareIfcLoader {
       const {modelID, captured} =
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
 
+      try {
+        const first = captured && captured[0]
+        const geoms = first && first.geometries
+        const g0 = geoms && (typeof geoms.get === 'function' ? geoms.get(0) : geoms[0])
+        const t = g0 && g0.flatTransformation
+        if (t) {
+          const tr = `(${t[12].toFixed(1)},${t[13].toFixed(1)},${t[14].toFixed(1)})`
+          // eslint-disable-next-line no-console
+          console.log(`[DEBUG-COORD] first conway flatTransform trans=${tr} capturedCount=${captured.length}`)
+        }
+      } catch (e) {
+        // ignore
+      }
+
       session.beginAssembly()
 
       let ifcModel
