@@ -327,6 +327,11 @@ export class IncrementalBatchedBuilder {
     }
     const mesh = new BatchedMesh(
       this.initialInstances, this.initialVertices, this.initialIndices, material)
+    // Exactly-coplanar BIM interfaces tie on depth and resolve by draw
+    // order: keep insertion order for the opaque batch (three's default
+    // per-frame camera sort flips the coplanar winner as the camera
+    // moves); the transparent batch must still sort for blending.
+    mesh.sortObjects = transparent
     const state = {
       mesh,
       material,
