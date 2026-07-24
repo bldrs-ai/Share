@@ -87,6 +87,23 @@ export function stashPendingGithubScope(scope) {
 
 
 /**
+ * Drop any stale stash. PopupAuth calls this for every request that does
+ * not carry an explicit scope: the `authPopup` window is reused by name
+ * across window.open calls, so an abandoned-but-still-open grant popup
+ * keeps its sessionStorage — without this reset, a later unrelated login
+ * navigating that same window would commit a scope change that was never
+ * consented.
+ */
+export function clearPendingGithubScope() {
+  try {
+    sessionStorage.removeItem(PENDING_SCOPE_KEY)
+  } catch {
+    // Best-effort, as above.
+  }
+}
+
+
+/**
  * Commit the stashed scope after a successful auth round trip (called by
  * PopupCallback). `repo` records the widened grant; any other explicit
  * scope (e.g. the `public_repo` downgrade for a lapsed-Pro reauth) resets

@@ -64,6 +64,20 @@ describe('PopupAuth', () => {
     expect(params.connection_scope).toBeUndefined()
   })
 
+  it('a plain login clears a stale stash left by an abandoned grant popup', async () => {
+    // The named authPopup window is reused, so an abandoned grant's stash
+    // can still be present when an unrelated login navigates the window.
+    sessionStorage.setItem('bldrs.github.pendingScope', 'repo')
+    await renderAt('?connection=github')
+    expect(sessionStorage.getItem('bldrs.github.pendingScope')).toBeNull()
+  })
+
+  it('a non-github login clears a stale stash too', async () => {
+    sessionStorage.setItem('bldrs.github.pendingScope', 'repo')
+    await renderAt('?connection=google-oauth2')
+    expect(sessionStorage.getItem('bldrs.github.pendingScope')).toBeNull()
+  })
+
   it('forwards a linkToken alongside the remembered scope', async () => {
     localStorage.setItem('bldrs.github.grantedScope', 'repo')
     const params = await renderAt('?connection=github&linkToken=tok123')

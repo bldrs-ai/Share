@@ -1,6 +1,6 @@
 import React, {useEffect} from 'react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {getGrantedGithubScope, stashPendingGithubScope} from '../../Auth0/githubGrant'
+import {clearPendingGithubScope, getGrantedGithubScope, stashPendingGithubScope} from '../../Auth0/githubGrant'
 
 
 /**
@@ -26,6 +26,11 @@ function PopupAuth() {
     // re-request any previously granted widening (`repo`, from the
     // private-repos opt-in) or GitHub silently narrows the grant back to the
     // connection defaults and private access vanishes. See githubGrant.js.
+    // The named `authPopup` window is reused across window.open calls, so a
+    // stash left by an abandoned (still-open) grant popup would survive into
+    // an unrelated login and get committed by its callback. Reset it; only
+    // an explicit github scope request below re-stashes.
+    clearPendingGithubScope()
     let connectionScope = requestedScope
     if (connection === 'github') {
       if (requestedScope) {
