@@ -42,7 +42,11 @@ import {
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
 import {eachBatch} from '../viewer/ifc/batchedModel'
-import {batchedModelToMergedMesh, disposeMergedMesh} from '../viewer/ifc/batchedToMergedMesh'
+import {
+  batchedModelOccurrenceTables,
+  batchedModelToMergedMesh,
+  disposeMergedMesh,
+} from '../viewer/ifc/batchedToMergedMesh'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -295,15 +299,28 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // model can restore per-occurrence NavTree↔scene selection instead of
     // collapsing to the shared part-type id. Absent for IFC.
     if (faceIds) {
-      const occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath
-      if (Array.isArray(occurrencePaths)) {
-        faceIds.occurrencePaths = occurrencePaths
-      }
+      let occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath ?? null
       // Per-instance geometry (solid) express ids — the other half of the
       // (occurrencePath, solid expressID) identity per-solid selection of
       // multibody STEP parts joins on. Same rationale as the paths above:
       // per-triangle arrays carry only the scalar instance id. Absent for IFC.
-      const geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId
+      let geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId ?? null
+      // Batched render path (demandGeometry default / ?feature=batchedMesh):
+      // the model is a THREE.BatchedMesh with NO `instanceMap` — its
+      // per-occurrence tables live on the batch meshes, keyed by batchId.
+      // `batchedModelToMergedMesh` (above) baked each vertex's `instanceID`
+      // from the global occurrence id, so re-key the occurrence tables to that
+      // same id space; otherwise a batched-first load caches with no occurrence
+      // data and the scene per-occurrence highlight can't restore on cache-hit
+      // (the NavTree still can — the spatial tree persists paths separately).
+      if (!Array.isArray(occurrencePaths) && isBatched) {
+        const batchedTables = batchedModelOccurrenceTables(model)
+        occurrencePaths = batchedTables.occurrencePaths
+        geometryExpressIds = batchedTables.geometryExpressIds
+      }
+      if (Array.isArray(occurrencePaths)) {
+        faceIds.occurrencePaths = occurrencePaths
+      }
       if (Array.isArray(geometryExpressIds)) {
         faceIds.geometryExpressIds = geometryExpressIds
         // Identity table for those geometry pieces (conway#387): distinct
