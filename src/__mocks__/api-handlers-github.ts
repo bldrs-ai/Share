@@ -335,10 +335,10 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
+      // GitHub's `GET /orgs/{org}/repos` returns a bare array (as does the
+      // `/user/repos` handler above) — not a `{data: [...]}` envelope.
       return new Response(
-        JSON.stringify({
-          data: [MOCK_REPOSITORY],
-        }),
+        JSON.stringify([MOCK_REPOSITORY]),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},
