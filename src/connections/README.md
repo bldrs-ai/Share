@@ -69,6 +69,20 @@ path. **Don't add new auto-refresh paths hidden behind navigation.**
 email hints), also shared across tabs. The matching token in
 `bldrs:gdrive-token:<id>` is keyed by the same `connectionId`.
 
+Related keys on the **legacy Auth0-federated GitHub path** (not this
+directory's provider flow — they die with that path; see
+`src/Auth0/githubGrant.js`):
+
+- `localStorage['bldrs.github.grantedScope']` — the GitHub
+  `connection_scope` the user has granted (currently only `repo`, from the
+  private-repos opt-in). `PopupAuth` re-requests it on every GitHub login
+  because GitHub OAuth-App grants are last-request-wins on scope — without
+  this, any plain re-login silently narrows the grant back to the
+  connection defaults.
+- `sessionStorage['bldrs.github.pendingScope']` — per-popup-window stash of
+  an explicit scope change, committed to the key above by `PopupCallback`
+  only after the auth round trip succeeds.
+
 **Invariant:** never read tokens directly from storage in new code — go
 through `provider.getAccessToken(connection)` so the cache → localStorage
 → silent-refresh chain runs. Direct storage reads bypass the chain and

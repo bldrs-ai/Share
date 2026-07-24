@@ -11,6 +11,7 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
+import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
@@ -89,6 +90,18 @@ export default function GitHubFileBrowser({
   // repo — i.e. the token already carries the `repo` scope, so the
   // "Enable private repos" opt-in is hidden.
   const [hasPrivateRepos, setHasPrivateRepos] = useState(false)
+  // The `repo` grant is account-level (the whole federated token), while
+  // `hasPrivateRepos` is per-org evidence of it. The persisted record
+  // (githubGrant.js) keeps the checkbox checked in all-public orgs and —
+  // critically — makes PopupAuth re-request `repo` on every later login so
+  // GitHub's last-request-wins scope handling doesn't drop the grant. It
+  // only describes the legacy Auth0-federated token, so it's ignored (and
+  // never written) when a connection override token drives this browser.
+  const isLegacyAuthPath = accessTokenOverride === undefined || accessTokenOverride === null
+  const [hasPersistedGrant, setHasPersistedGrant] = useState(
+    () => isLegacyAuthPath && getGrantedGithubScope() === 'repo',
+  )
+  const privateReposEnabled = hasPrivateRepos || hasPersistedGrant
   // True from the moment the user opts into private repos until the token
   // refresh + refetch lands — drives the checkbox's transient checked state.
   const [grantPending, setGrantPending] = useState(false)
@@ -144,7 +157,15 @@ export default function GitHubFileBrowser({
     setRepoNamesArr(repoNames)
     // A private repo in the list means the token already has `repo` scope;
     // otherwise GitHub filtered private repos out and the opt-in should show.
-    setHasPrivateRepos(Object.values(repos).some((repo) => repo?.private))
+    const hasPrivate = Object.values(repos).some((repo) => repo?.private)
+    setHasPrivateRepos(hasPrivate)
+    if (hasPrivate && isLegacyAuthPath) {
+      // Evidence the federated token carries `repo` — persist it so PopupAuth
+      // keeps re-requesting the scope (covers grants that predate the
+      // persistence record, e.g. from before this fix shipped).
+      saveGrantedGithubScope('repo')
+      setHasPersistedGrant(true)
+    }
     setCurrentPath('')
     setFoldersArr([''])
     setSelectedFolderName('')
@@ -265,7 +286,7 @@ export default function GitHubFileBrowser({
     // The checkbox is disabled for non-Pro / in-flight / already-granted, so
     // this only fires for an eligible Pro user — guard defensively anyway, and
     // never open a second popup while one grant is in flight.
-    if (grantPending || hasPrivateRepos || !isProUser) {
+    if (grantPending || privateReposEnabled || !isProUser) {
       return
     }
     awaitingGrantRef.current = true
@@ -294,6 +315,10 @@ export default function GitHubFileBrowser({
       if (awaitingGrantRef.current && accessToken && selectedOrgName !== '') {
         awaitingGrantRef.current = false
         setGrantPending(false)
+        // PopupCallback committed the granted scope (popup window wrote
+        // localStorage) — pick it up so the checkbox locks in even when the
+        // refetched org has no private repos to evidence the grant.
+        setHasPersistedGrant(isLegacyAuthPath && getGrantedGithubScope() === 'repo')
         selectOrg(selectedOrgName)
       }
     }
@@ -486,8 +511,8 @@ export default function GitHubFileBrowser({
                 // (checked) and locked.
                 <Checkbox
                   size='small'
-                  checked={grantPending || hasPrivateRepos}
-                  disabled={grantPending || hasPrivateRepos || !isProUser}
+                  checked={grantPending || privateReposEnabled}
+                  disabled={grantPending || privateReposEnabled || !isProUser}
                   onChange={enablePrivateRepos}
                   sx={{py: 0, pl: 0, pr: 1}}
                   data-testid='enable-private-repos'
@@ -500,7 +525,7 @@ export default function GitHubFileBrowser({
               }
             />
             <Typography variant='caption' sx={{color: 'text.secondary', mt: 0.25}}>
-              {hasPrivateRepos ?
+              {privateReposEnabled ?
                 'Private repos are enabled for this account.' :
                 isProUser ?
                   'Grants Share read access to your private repos across all your GitHub orgs.' :
