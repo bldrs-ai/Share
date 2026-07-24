@@ -17,6 +17,11 @@
  * sessionStorage stash so the popup's callback page commits an explicit
  * scope change only after the auth round trip actually succeeds (a
  * cancelled popup must not record a grant that never happened).
+ *
+ * Lifespan: this exists only for the legacy Auth0-federated token path and
+ * should be deleted with it when the connection-based GitHub flow
+ * (src/connections/github/, which always requests `repo` itself) fully
+ * replaces it.
  */
 
 

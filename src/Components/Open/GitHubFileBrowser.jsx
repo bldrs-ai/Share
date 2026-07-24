@@ -11,7 +11,7 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
-import {getGrantedGithubScope, saveGrantedGithubScope} from '../Auth/githubGrant'
+import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 

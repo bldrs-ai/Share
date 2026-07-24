@@ -1,6 +1,6 @@
 import React, {useEffect} from 'react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
-import {commitPendingGithubScope} from './githubGrant'
+import {commitPendingGithubScope} from '../../Auth0/githubGrant'
 
 
 /**
