@@ -22,6 +22,13 @@ export class IfcRenderer extends IfcComponent {
       antialias: true,
       logarithmicDepthBuffer: true,
       preserveDrawingBuffer: pdbEnabled,
+      // three r163 flipped the default to false, and without a stencil
+      // ANGLE/Chrome may allocate a 16-bit depth buffer (~2.4mm depth
+      // resolution at 15m under log-depth, vs ~9µm with the packed
+      // 24-bit D24S8) — coplanar BIM interfaces (soffits, rakes,
+      // ridges) z-fight visibly. Explicit so a default change can't
+      // silently downgrade depth precision again.
+      stencil: true,
     })
     // For debugger tracing
     this.renderer.preserveDrawingBufferENABLED = pdbEnabled
@@ -73,6 +80,9 @@ export class IfcRenderer extends IfcComponent {
         antialias: true,
         logarithmicDepthBuffer: true,
         preserveDrawingBuffer: process.env.THREE_PDB_IS_ENABLED || false,
+        // Same depth-precision requirement as the main renderer above:
+        // screenshots must not z-fight where the live view doesn't.
+        stencil: true,
       })
       this.tempRenderer.localClippingEnabled = true
     }
