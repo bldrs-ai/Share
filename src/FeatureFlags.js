@@ -86,6 +86,16 @@ export const flags = [
   // A/Bs the same build); flipping this to true is the prod-wide kill
   // switch.
   {name: 'disableStreamOpen', isActive: false},
+  // Off-flag escape hatch for the OPFS GLB cache pipeline (default-on
+  // `glb`). `?feature=disableGlb` skips the pre-parse cache lookup AND
+  // the post-parse export, so the model is always parsed fresh through
+  // Conway and rendered from the live geometry — never a cached GLB.
+  // Needed to A/B the demand/batched render path against the cached GLB
+  // on the same model (a GLB cache hit bypasses Conway entirely, so
+  // `disableStreamOpen` alone has no effect on a cached load), and to
+  // work models whose GLB was baked by an older build. Same inverted
+  // semantics as `disableStreamOpen` (`?feature=` can only turn flags on).
+  {name: 'disableGlb', isActive: false},
   // Demand/tiled rendering (design/new/demand-tiled-rendering.md,
   // #1613): cache-miss IFC/STEP parses open with DEFER_GEOMETRY and
   // pump Conway's ExtractGeometryBatch — parse-time preview + the
