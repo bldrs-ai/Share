@@ -63,6 +63,56 @@ export const INDICES_PER_TRIANGLE = 3
 export const OPAQUE_ALPHA = 1
 
 /**
+ * Quantization for coincident-placement keys: 1e4 → 0.1 mm on translation,
+ * 1e-4 on the rotation/scale terms. Fine enough that two genuinely distinct
+ * placements never collide, coarse enough that float noise in an emitted
+ * matrix can't split a true duplicate.
+ */
+const COINCIDENCE_QUANT = 1e4
+
+/** Elements in a flat 4x4 matrix. */
+const MAT4_LENGTH = 16
+
+
+/**
+ * Stable identity key for a placement: parent product + geometry + its
+ * (quantized) world transform + colour. Two placements with the same key are
+ * the SAME geometry drawn the SAME way at the SAME spot — a coincident
+ * duplicate that renders as z-fighting (two coplanar `DoubleSide` surfaces
+ * fighting per pixel, the winner flipping as the camera moves). Conway's
+ * rel-aggregates re-extraction pass replaces a cut part's geometry under its
+ * existing `geometryExpressID` but *appends* a second placement instead of
+ * replacing the first, so georeferenced aggregate models (e.g. romana/DOWA)
+ * emit hundreds of these. De-duplicating on this key drops the redundant draw;
+ * the proper fix is in the conway pass, this is the belt-and-suspenders guard.
+ *
+ * Colour is part of the identity so a genuinely distinct draw of the same
+ * shape at the same spot in a different colour (e.g. an opaque solid plus a
+ * glass overlay) is kept — only an EXACT duplicate is dropped.
+ *
+ * @param {number} parentExpressId
+ * @param {number} geometryExpressId
+ * @param {Array<number>} matrix 16-element flatTransformation
+ * @param {{x: number, y: number, z: number, w: number}} color
+ * @return {string}
+ */
+export function coincidenceKey(parentExpressId, geometryExpressId, matrix, color) {
+  // `| 0` collapses -0 and +0 to the same token so a signed-zero component
+  // can't split a duplicate.
+  let key = `${parentExpressId}:${geometryExpressId}`
+  for (let i = 0; i < MAT4_LENGTH; i++) {
+    key += `:${Math.round(matrix[i] * COINCIDENCE_QUANT) | 0}`
+  }
+  const c = color ?? DEFAULT_COLOR
+  key += `:${Math.round(c.x * COINCIDENCE_QUANT) | 0}` +
+    `:${Math.round(c.y * COINCIDENCE_QUANT) | 0}` +
+    `:${Math.round(c.z * COINCIDENCE_QUANT) | 0}` +
+    `:${Math.round(c.w * COINCIDENCE_QUANT) | 0}`
+  return key
+}
+
+
+/**
  * Translation magnitude (metres) past which a placement is treated as
  * georeferenced and its whole model recentered to the origin for the render.
  *
@@ -186,9 +236,10 @@ export function localGeometry(rawVerts, rawIndices, vertCount) {
 function collectGroups(flatMeshes, api, modelID) {
   const groups = new Map()
   const bad = new Set() // geomExpressIDs that resolved to no usable geometry
+  const seen = new Set() // coincidenceKeys already placed (drop exact overlaps)
   const totals = {
     placements: 0, transparentPlacements: 0, vertexCount: 0, indexCount: 0,
-    skippedFlatMeshes: 0, skippedPlacedGeometries: 0,
+    skippedFlatMeshes: 0, skippedPlacedGeometries: 0, skippedCoincidentPlacements: 0,
     // Origin-recenter offset for georeferenced models, decided from the first
     // placement (see coordinationOffsetFor); null for near-origin models.
     coordOffset: undefined,
@@ -254,6 +305,14 @@ function collectGroups(flatMeshes, api, modelID) {
         totals.indexCount += indexSize
       }
       const color = placed.color ?? DEFAULT_COLOR
+      // Drop an exact coincident duplicate (same part + geometry + transform +
+      // colour): it would z-fight the one already placed. See coincidenceKey.
+      const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
+      if (seen.has(dedupKey)) {
+        totals.skippedCoincidentPlacements++
+        return
+      }
+      seen.add(dedupKey)
       if (totals.coordOffset === undefined) {
         totals.coordOffset = coordinationOffsetFor(placed.flatTransformation)
       }
@@ -406,6 +465,7 @@ export function flatMeshToBatchedModel(flatMeshes, api, modelID) {
       transparentInstanceCount: totals.transparentPlacements,
       skippedFlatMeshes: totals.skippedFlatMeshes,
       skippedPlacedGeometries: totals.skippedPlacedGeometries,
+      skippedCoincidentPlacements: totals.skippedCoincidentPlacements,
     },
     // `[x,y,z]` origin offset already subtracted from the batch matrices for a
     // georeferenced model (null for near-origin models). The caller stamps it
