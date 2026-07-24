@@ -148,19 +148,22 @@ describe('GitHubFileBrowser', () => {
 
 
   describe('private-repo opt-in', () => {
-    it('shows the Pro-gated opt-in for a free user once public repos load', async () => {
+    it('always shows the opt-in once repos load — greyed with a (Pro only) label for a free user', async () => {
       await renderBrowser()
       await selectOption('openOrganization', '@bldrs-ai')
-      const checkbox = await screen.findByTestId('enable-private-repos')
-      expect(checkbox).toBeInTheDocument()
-      expect(screen.getByText('Enable private repos (Pro)')).toBeInTheDocument()
+      expect(await screen.findByTestId('enable-private-repos')).toBeInTheDocument()
+      expect(screen.getByText('Enable private repos (Pro only)')).toBeInTheDocument()
+      // Free users see it, but disabled (greyed) so they can't act.
+      expect(screen.getByRole('checkbox')).toBeDisabled()
     })
 
-    it('a free user clicking the opt-in is routed to subscribe', async () => {
+    it('a free user cannot trigger a grant — the disabled checkbox opens nothing', async () => {
       await renderBrowser()
       await selectOption('openOrganization', '@bldrs-ai')
-      fireEvent.click(await screen.findByTestId('enable-private-repos'))
-      expect(openSpy).toHaveBeenCalledWith('/subscribe/', '_blank', 'noopener')
+      const checkbox = await screen.findByRole('checkbox')
+      expect(checkbox).toBeDisabled()
+      fireEvent.click(checkbox)
+      expect(openSpy).not.toHaveBeenCalled()
     })
 
     it('a Pro user clicking the opt-in launches the repo-scope grant popup', async () => {
@@ -170,8 +173,9 @@ describe('GitHubFileBrowser', () => {
       await renderBrowser()
       await selectOption('openOrganization', '@bldrs-ai')
       const checkbox = await screen.findByTestId('enable-private-repos')
-      // Pro users see the bare label (no "(Pro)" upsell suffix).
-      expect(screen.queryByText(/\(Pro\)/)).not.toBeInTheDocument()
+      // Pro users see the bare label (no "(Pro only)" suffix) and an enabled box.
+      expect(screen.queryByText(/\(Pro only\)/)).not.toBeInTheDocument()
+      expect(screen.getByRole('checkbox')).not.toBeDisabled()
       fireEvent.click(checkbox)
       expect(openSpy).toHaveBeenCalledWith(
         '/popup-auth?scope=repo&connection=github',
@@ -180,12 +184,62 @@ describe('GitHubFileBrowser', () => {
       )
     })
 
-    it('hides the opt-in when the org already exposes a private repo', async () => {
+    it('shows the opt-in as checked + locked when private repos are already visible', async () => {
       getRepositories.mockResolvedValue([{name: 'secret', private: true}])
       await renderBrowser()
       await selectOption('openOrganization', '@bldrs-ai')
       await waitFor(() => expect(getRepositories).toHaveBeenCalled())
-      expect(screen.queryByTestId('enable-private-repos')).not.toBeInTheDocument()
+      const checkbox = await screen.findByRole('checkbox')
+      expect(checkbox).toBeChecked()
+      expect(checkbox).toBeDisabled()
+      expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
+    })
+  })
+
+
+  describe('file listing', () => {
+    it('lists only files whose extension Share supports (case-insensitive)', async () => {
+      getFilesAndFolders.mockResolvedValue({
+        files: [
+          {name: 'window.ifc'},
+          {name: 'part.STP'},
+          {name: 'readme.md'},
+          {name: 'notes.txt'},
+        ],
+        directories: [],
+      })
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai')
+      await selectOption('openRepository', 'repoA')
+      await waitFor(() => expect(getBranches).toHaveBeenCalled())
+
+      fireEvent.mouseDown(within(screen.getByTestId('openFile')).getByRole('combobox'))
+      expect(await screen.findByRole('option', {name: 'window.ifc'})).toBeInTheDocument()
+      expect(screen.getByRole('option', {name: 'part.STP'})).toBeInTheDocument()
+      expect(screen.queryByRole('option', {name: 'readme.md'})).not.toBeInTheDocument()
+      expect(screen.queryByRole('option', {name: 'notes.txt'})).not.toBeInTheDocument()
+    })
+
+    it('lets the user type an unsupported filename and open it anyway', async () => {
+      const setIsDialogDisplayed = jest.fn()
+      await renderBrowser({setIsDialogDisplayed})
+      await selectOption('openOrganization', '@bldrs-ai')
+      await selectOption('openRepository', 'repoA')
+      await waitFor(() => expect(getBranches).toHaveBeenCalled())
+
+      // File → "Enter name..." → type an unsupported extension.
+      fireEvent.mouseDown(within(screen.getByTestId('openFile')).getByRole('combobox'))
+      fireEvent.click(await screen.findByRole('option', {name: 'Enter name...'}))
+      const input = within(screen.getByTestId('openFile')).getByRole('textbox')
+      fireEvent.change(input, {target: {value: 'design.skp'}})
+      await screen.findByText('Found')
+      fireEvent.keyDown(input, {key: 'Enter'})
+
+      const openButton = screen.getByTestId('button-openfromgithub')
+      await waitFor(() => expect(openButton).not.toBeDisabled())
+      fireEvent.click(openButton)
+      expect(navigateToModel).toHaveBeenCalled()
+      expect(setIsDialogDisplayed).toHaveBeenCalledWith(false)
     })
   })
 

@@ -34,6 +34,21 @@ function resolveValue(value, list) {
 
 
 /**
+ * Keep only the file names Share can open, matched by supported extension
+ * (case-insensitive, via {@link pathSuffixSupported}). GitHub's contents API
+ * has no server-side extension filter, so this is the enforcement point for
+ * the *listed* files; a name typed into the File field bypasses it on purpose
+ * (see validateFile / navigateToFile).
+ *
+ * @param {Array<{name: string}>} files
+ * @return {Array<string>}
+ */
+function supportedFileNames(files) {
+  return files.map((file) => file.name).filter((name) => pathSuffixSupported(name))
+}
+
+
+/**
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Function} setIsDialogDisplayed callback
  * @property {Function} onCancel Called when user clicks Cancel to go back
@@ -86,7 +101,10 @@ export default function GitHubFileBrowser({
   const orgNamesArrWithAt = orgNamesArr.map((name) => `@${name}`)
   const orgName = resolveValue(selectedOrgName, orgNamesArr)
   const repoName = resolveValue(selectedRepoName, repoNamesArr)
-  const fileName = filesArr[selectedFileIndex]
+  // selectedFileIndex is a list index (number) for a picked file, or the raw
+  // string a user typed in "Enter name..." mode — the latter lets any valid
+  // filename through even when its extension isn't in the listed set.
+  const fileName = typeof selectedFileIndex === 'number' ? filesArr[selectedFileIndex] : selectedFileIndex
   const branchName = resolveValue(selectedBranchName, branchesArr)
 
   // Lazy-fetch the user's GitHub organizations only when this browser is mounted
@@ -144,7 +162,7 @@ export default function GitHubFileBrowser({
     setBranchesArr(branchNames)
     setSelectedBranchName(branchNames.length > 0 ? branchNames.indexOf('main') >= 0 ? branchNames.indexOf('main') : 0 : '')
 
-    const fileNames = files.map((file) => file.name)
+    const fileNames = supportedFileNames(files)
     const directoryNames = directories.map((directory) => directory.name)
 
     setFilesArr(fileNames)
@@ -173,7 +191,7 @@ export default function GitHubFileBrowser({
     setCurrentPath(newPath)
 
     const {files, directories} = await getFilesAndFolders(repoName, orgName, newPath, accessToken)
-    const fileNames = files.map((file) => file.name)
+    const fileNames = supportedFileNames(files)
     const directoryNames = directories.map((directory) => directory.name)
 
     const navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
@@ -191,7 +209,7 @@ export default function GitHubFileBrowser({
   const restoreFolderPath = async (path) => {
     try {
       const {files, directories} = await getFilesAndFolders(repoName, orgName, path, accessToken)
-      const fileNames = files.map((file) => file.name)
+      const fileNames = supportedFileNames(files)
       const directoryNames = directories.map((directory) => directory.name)
       const navigationOptions = path ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
       setCurrentPath(path)
@@ -244,17 +262,15 @@ export default function GitHubFileBrowser({
   // refetches the current org so newly-visible private repos appear.
   const awaitingGrantRef = useRef(false)
   const enablePrivateRepos = () => {
-    // Guard against a second popup while one grant is already in flight.
-    if (grantPending) {
+    // The checkbox is disabled for non-Pro / in-flight / already-granted, so
+    // this only fires for an eligible Pro user — guard defensively anyway, and
+    // never open a second popup while one grant is in flight.
+    if (grantPending || hasPrivateRepos || !isProUser) {
       return
     }
-    if (isProUser) {
-      awaitingGrantRef.current = true
-      setGrantPending(true)
-      window.open('/popup-auth?scope=repo&connection=github', 'authPopup', 'width=600,height=600')
-    } else {
-      window.open('/subscribe/', '_blank', 'noopener')
-    }
+    awaitingGrantRef.current = true
+    setGrantPending(true)
+    window.open('/popup-auth?scope=repo&connection=github', 'authPopup', 'width=600,height=600')
   }
 
   // Reset the pending flag when the popup closes (main window regains focus),
@@ -410,8 +426,14 @@ export default function GitHubFileBrowser({
     }
   }
 
+  // Accept any non-empty file name. Listed files are already extension-filtered;
+  // a typed name is allowed through by design (unsupported/extensionless
+  // included), so the loader — not this dialog — has the final say. (Sync is
+  // fine; Selector awaits the result either way.)
+  const validateFile = (name) => name.trim().length > 0
+
   const navigateToFile = () => {
-    if (pathSuffixSupported(fileName)) {
+    if (fileName && fileName.trim().length > 0) {
       const branch = branchName || 'main'
       const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
       navigateToModel({pathname: sharePath}, navigate)
@@ -453,15 +475,19 @@ export default function GitHubFileBrowser({
           onClear={clearRepo}
           data-testid='openRepository'
         />
-        {selectedOrgName !== '' && repoNamesArr.length > 0 && repoNamesArr[0] !== '' && !hasPrivateRepos && (
+        {selectedOrgName !== '' && repoNamesArr.length > 0 && repoNamesArr[0] !== '' && (
           <Stack sx={{alignSelf: 'flex-start', width: '100%', px: 0.5, py: 0.5, mb: 0.5}}>
             <FormControlLabel
               sx={{ml: 0, mr: 0}}
               control={
+                // Always shown once an org's repos load, so the capability is
+                // discoverable. Non-Pro users see it greyed-out (disabled) with
+                // a "(Pro only)" label; already-granted tokens show it enabled
+                // (checked) and locked.
                 <Checkbox
                   size='small'
-                  checked={grantPending}
-                  disabled={grantPending}
+                  checked={grantPending || hasPrivateRepos}
+                  disabled={grantPending || hasPrivateRepos || !isProUser}
                   onChange={enablePrivateRepos}
                   sx={{py: 0, pl: 0, pr: 1}}
                   data-testid='enable-private-repos'
@@ -469,14 +495,16 @@ export default function GitHubFileBrowser({
               }
               label={
                 <Typography variant='body2'>
-                  {isProUser ? 'Enable private repos' : 'Enable private repos (Pro)'}
+                  {`Enable private repos${isProUser ? '' : ' (Pro only)'}`}
                 </Typography>
               }
             />
             <Typography variant='caption' sx={{color: 'text.secondary', mt: 0.25}}>
-              {isProUser ?
-                'Grants Share read access to your private repos across all your GitHub orgs.' :
-                'Browsing private repositories is a Pro feature.'}
+              {hasPrivateRepos ?
+                'Private repos are enabled for this account.' :
+                isProUser ?
+                  'Grants Share read access to your private repos across all your GitHub orgs.' :
+                  'Browsing private repositories is a Pro feature.'}
             </Typography>
           </Stack>
         )}
@@ -503,6 +531,7 @@ export default function GitHubFileBrowser({
           list={filesArr}
           selected={selectedFileIndex}
           setSelected={setSelectedFileIndex}
+          validate={validateFile}
           onClear={clearFile}
           data-testid='openFile'
         />

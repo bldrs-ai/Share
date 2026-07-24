@@ -250,8 +250,9 @@ describe('Selector — defensive value handling', () => {
     const matches = screen.getByTestId('selector-matches-organization')
     expect(within(matches).getByText('acme')).toBeInTheDocument()
     expect(within(matches).getByText('beta')).toBeInTheDocument()
-    // Exactly two rows render — the null/undefined/'' holes produce no blanks.
-    expect(within(matches).getAllByText(/\w/)).toHaveLength(2)
+    // Exactly the two real names render as rows — the null/undefined/'' holes
+    // produce no blank entries.
+    expect(within(matches).getAllByText(/^(acme|beta)$/)).toHaveLength(2)
     expect(input).toBeInTheDocument()
   })
 
@@ -260,6 +261,56 @@ describe('Selector — defensive value handling', () => {
     // A stale index past the end of the list must not surface the literal
     // string "undefined" in the closed field.
     expect(screen.getByRole('combobox').textContent).not.toMatch(/undefined/)
+  })
+
+  it('offers Enter name... even when the list is empty (validated field)', async () => {
+    renderSelector({list: [], validate: mockValidate})
+    openDropdown()
+    fireEvent.click(await screen.findByText('Enter name...'))
+    // A validated field must always allow typing a name, even with no options
+    // (e.g. a File the extension filter hid).
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+})
+
+
+describe('Selector — Escape in text mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  /**
+   * @param {Function} onParentKeyDown ancestor keydown spy
+   * @return {HTMLElement} the text input, already in text mode
+   */
+  async function enterTextModeUnder(onParentKeyDown) {
+    render(
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+      <div onKeyDown={onParentKeyDown}>
+        <Selector {...defaultProps} validate={mockValidate}/>
+      </div>,
+      {wrapper: HelmetStoreRouteThemeCtx},
+    )
+    fireEvent.mouseDown(screen.getByRole('combobox'))
+    fireEvent.click(await screen.findByText('Enter name...'))
+    return screen.getByRole('textbox')
+  }
+
+  it('exits text mode without letting Escape reach an ancestor (e.g. the Dialog)', async () => {
+    const onParentKeyDown = jest.fn()
+    const input = await enterTextModeUnder(onParentKeyDown)
+    fireEvent.keyDown(input, {key: 'Escape'})
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    // stopPropagation kept Escape from bubbling up to close the Dialog.
+    expect(onParentKeyDown).not.toHaveBeenCalled()
+  })
+
+  it('lets other keys (Enter) bubble to ancestors normally', async () => {
+    const onParentKeyDown = jest.fn()
+    const input = await enterTextModeUnder(onParentKeyDown)
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(onParentKeyDown).toHaveBeenCalled()
   })
 })
 

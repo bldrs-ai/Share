@@ -152,6 +152,10 @@ export default function Selector({
       }
       handleAccept()
     } else if (e.key === 'Escape') {
+      // Escape only exits the field's text mode. Stop it bubbling to the MUI
+      // Dialog, whose default Escape handler would otherwise close the whole
+      // Open dialog out from under the user.
+      e.stopPropagation()
       handleClear()
     }
   }
@@ -351,11 +355,19 @@ export default function Selector({
         InputLabelProps={isEmpty ? {shrink: true} : undefined}
         {...props}
       >
-        {isEmpty ? (
-          <MenuItem value='' disabled>
+        {isEmpty ? [
+          <MenuItem key='empty' value='' disabled>
             <Typography variant='p'>{emptyText}</Typography>
-          </MenuItem>
-        ) : [
+          </MenuItem>,
+          // Even with no options to pick, a validated field must still let the
+          // user type a name (e.g. a File the extension filter hid, or one in a
+          // folder with no listed matches).
+          ...(validate ? [
+            <MenuItem key='other' value={OTHER_VALUE}>
+              <Typography variant='p'>Enter name...</Typography>
+            </MenuItem>,
+          ] : []),
+        ] : [
           ...(validate ? [
             <MenuItem key='other' value={OTHER_VALUE}>
               <Typography variant='p'>Enter name...</Typography>
