@@ -194,6 +194,36 @@ describe('GitHubFileBrowser', () => {
       expect(checkbox).toBeDisabled()
       expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
     })
+
+    it('records the account-level grant when private repos are observed', async () => {
+      getRepositories.mockResolvedValue([{name: 'secret', private: true}])
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai')
+      // PopupAuth reads this record to re-request `repo` on every later
+      // login, so GitHub's last-request-wins scoping can't drop the grant.
+      await waitFor(() => expect(localStorage.getItem('bldrs.github.grantedScope')).toBe('repo'))
+    })
+
+    it('shows checked + locked from the recorded grant even when the org is all-public', async () => {
+      localStorage.setItem('bldrs.github.grantedScope', 'repo')
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai') // all-public fixtures
+      const checkbox = await screen.findByRole('checkbox')
+      expect(checkbox).toBeChecked()
+      expect(checkbox).toBeDisabled()
+      expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
+    })
+
+    it('does not record a grant when a connection override token drives the browser', async () => {
+      getRepositories.mockResolvedValue([{name: 'secret', private: true}])
+      await renderBrowser({accessTokenOverride: 'override-token'})
+      await selectOption('openOrganization', '@bldrs-ai')
+      const checkbox = await screen.findByRole('checkbox')
+      // The override token's own `repo` scope still shows as enabled…
+      await waitFor(() => expect(checkbox).toBeChecked())
+      // …but it says nothing about the legacy Auth0-federated grant.
+      expect(localStorage.getItem('bldrs.github.grantedScope')).toBeNull()
+    })
   })
 
 
