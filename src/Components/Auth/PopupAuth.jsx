@@ -21,13 +21,18 @@ function PopupAuth() {
     if (params.get('scope')) {
       const scope = params.get('scope')
 
-      // Trigger the Auth0 login redirect
+      // Trigger the Auth0 login redirect. `prompt: 'login'` forces Auth0 to
+      // re-authenticate through the upstream connection so a widened
+      // `connection_scope` (e.g. GitHub `repo`) is actually re-requested and
+      // consented — without it Auth0 can reuse the cached identity/token and
+      // the extra scope is silently dropped (token comes back unchanged).
       loginWithRedirect({
         authorizationParams: {
           redirect_uri: `${window.location.origin}/popup-callback`,
           scope: 'openid profile email offline_access',
           connection: connection,
           connection_scope: scope,
+          prompt: 'login',
           ...(linkToken && {linkToken}), // ← forward it
         },
       })
