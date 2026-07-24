@@ -6,6 +6,7 @@ import {
   INDICES_PER_TRIANGLE,
   OPAQUE_ALPHA,
   VERT_STRIDE,
+  coincidenceKey,
   coordinationOffsetFor,
   localGeometry,
 } from './flatMeshToBatchedModel'
@@ -72,6 +73,9 @@ export class IncrementalBatchedBuilder {
     // Conway exactly once per model.
     this.geometryCache = new Map()
     this.badGeometry = new Set()
+    // coincidenceKeys already appended, across all batches — drops exact
+    // duplicate placements that would z-fight (see coincidenceKey).
+    this.seenPlacements = new Set()
     // Origin-recenter offset for georeferenced models (see
     // coordinationOffsetFor). `undefined` until the first placement decides
     // it; then `[x,y,z]` (subtracted from every instance) or null (no-op).
@@ -82,7 +86,7 @@ export class IncrementalBatchedBuilder {
     this.occurrenceId = 0
     this.totals = {
       placements: 0, transparentPlacements: 0, vertexCount: 0, indexCount: 0,
-      skippedFlatMeshes: 0, skippedPlacedGeometries: 0,
+      skippedFlatMeshes: 0, skippedPlacedGeometries: 0, skippedCoincidentPlacements: 0,
     }
     this.scratchMatrix = new Matrix4()
     this.scratchRgba = new Vector4()
@@ -170,6 +174,7 @@ export class IncrementalBatchedBuilder {
         transparentInstanceCount: this.totals.transparentPlacements,
         skippedFlatMeshes: this.totals.skippedFlatMeshes,
         skippedPlacedGeometries: this.totals.skippedPlacedGeometries,
+        skippedCoincidentPlacements: this.totals.skippedCoincidentPlacements,
       },
     }
   }
@@ -193,6 +198,14 @@ export class IncrementalBatchedBuilder {
       return
     }
     const color = placed.color ?? DEFAULT_COLOR
+    // Drop an exact coincident duplicate (same part + geometry + transform +
+    // colour): it would z-fight the one already appended. See coincidenceKey.
+    const dedupKey = coincidenceKey(parentExpressId, geomExpressID, placed.flatTransformation, color)
+    if (this.seenPlacements.has(dedupKey)) {
+      this.totals.skippedCoincidentPlacements++
+      return
+    }
+    this.seenPlacements.add(dedupKey)
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
     this.ensureCapacity_(state, entry)
