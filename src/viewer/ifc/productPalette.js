@@ -19,10 +19,18 @@ import {DEFAULT_COLOR} from './flatMeshToBatchedModel'
  * when the model is entirely default-grey. Any real color (an IFC material,
  * a colored STEP part, even one) means the file has presentation intent, so
  * we honor it verbatim and skip the palette, colorless siblings included
- * (they stay grey, exactly as before). Keyed by the product's express id —
- * the caller has no synchronous product name at assembly time, and the id
- * is stable within a file; `hashKey` takes a string too, so swapping in a
- * name resolver later is a one-line change at the call site.
+ * (they stay grey, exactly as before).
+ *
+ * Keyed by the placement's GEOMETRY express id, not its product/occurrence
+ * id. A STEP assembly instances one part definition many times (e.g. the
+ * jet's ~130 turbine + compressor blades), and each instance is a distinct
+ * NAUO occurrence with its own product express id but shares the ONE
+ * geometry buffer the part was defined with (147 occurrences → 9 distinct
+ * geometries on Jetenginestep). Coloring by occurrence gives every blade a
+ * different color; coloring by geometry gives all instances of a part one
+ * color and a different part (the shaft, the casing) its own — which is
+ * what "color by product" means to a viewer. `hashKey` also takes a string,
+ * so a future by-name key is a one-line change at the call site.
  */
 
 
@@ -124,12 +132,23 @@ const _rgba = new Vector4()
  * hover restore to the palette color and a batched→merged export carries it.
  * Original alpha is preserved per instance.
  *
+ * The coloring key is `instanceGeometryIds` (per-part geometry) when present
+ * — so instanced parts get one color each — falling back to
+ * `instanceParents` (per-occurrence) only if a batch carries no geometry-id
+ * table.
+ *
  * @param {Array<object>} batches `assembleBatchedModel` batches, each with
- *   `mesh` (`setColorAt`), `instanceParents`, `instanceColors`
+ *   `mesh` (`setColorAt`), `instanceParents`, `instanceColors`, and
+ *   ideally `instanceGeometryIds`
  * @return {boolean} whether the palette was applied
  */
 export function applyProductPalette(batches) {
-  const products = new Set()
+  // Key each instance by its geometry (part) id, falling back to the
+  // product/occurrence id if a batch lacks the geometry-id table.
+  const keyOf = (batch, i) =>
+    (batch.instanceGeometryIds ? batch.instanceGeometryIds[i] : batch.instanceParents[i])
+
+  const parts = new Set()
   for (const batch of batches) {
     const {instanceColors, instanceParents} = batch
     if (!instanceColors || !instanceParents) {
@@ -141,21 +160,21 @@ export function applyProductPalette(batches) {
       if (!isDefaultColor(instanceColors[i])) {
         return false
       }
-      products.add(instanceParents[i])
+      parts.add(keyOf(batch, i))
     }
   }
 
-  if (products.size < 2) {
+  if (parts.size < 2) {
     return false
   }
 
   for (const batch of batches) {
-    const {mesh, instanceColors, instanceParents} = batch
+    const {mesh, instanceColors} = batch
     if (typeof mesh?.setColorAt !== 'function') {
       continue
     }
     for (let i = 0; i < instanceColors.length; i++) {
-      const rgb = productPaletteRgb(instanceParents[i])
+      const rgb = productPaletteRgb(keyOf(batch, i))
       const alpha = instanceColors[i].w
       instanceColors[i] = {x: rgb.x, y: rgb.y, z: rgb.z, w: alpha}
       mesh.setColorAt(i, _rgba.set(rgb.x, rgb.y, rgb.z, alpha))

@@ -40,9 +40,12 @@ function unitTriangleVerts() {
 }
 
 
-/** @return {object} api with one unit-triangle shape at id 999. */
+/** @return {object} api with a unit-triangle shape at ids 998 and 999. */
 function unitTriApi() {
-  const byId = {999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])}}
+  const byId = {
+    998: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+  }
   return {
     GetGeometry(_m, id) {
       const g = byId[id]
@@ -67,8 +70,10 @@ function unitTriApi() {
  * @return {Array<object>} batches from flatMeshToBatchedModel
  */
 function twoProductBatches(colorA, colorB) {
+  // Distinct geometries (998, 999) so the geometry-keyed palette sees two
+  // parts — matching real instanced assemblies where color is by part.
   const flatMeshes = [
-    {expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: colorA}]},
+    {expressID: 100, geometries: [{geometryExpressID: 998, flatTransformation: IDENTITY_MAT, color: colorA}]},
     {expressID: 200, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: colorB}]},
   ]
   return flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0).batches
@@ -103,11 +108,31 @@ describe('viewer/ifc/assembleBatchedModel colorless palette', () => {
     expect(c100).not.toEqual(c200)
 
     // Restore table (`batchedHighlight` reads it to un-highlight) carries
-    // the exact palette color the buffer was painted with.
+    // the exact palette color the buffer was painted with — keyed by the
+    // part's geometry id (998 for product 100), not the occurrence id.
     const restore100 = mesh.instanceColors[mesh.instanceParents.indexOf(100)]
-    const expected100 = productPaletteRgb(100)
+    const expected100 = productPaletteRgb(998)
     expect(restore100).toMatchObject({x: expected100.x, y: expected100.y, z: expected100.z, w: 1})
     expect(c100.x).toBeCloseTo(expected100.x, 5)
+  })
+
+  it('gives every instance of one part (shared geometry) the same color', () => {
+    mockIsFeatureEnabled.mockImplementation((name) => name === 'autoColorParts')
+    // Three blade occurrences (distinct product ids) sharing geometry 998,
+    // plus a shaft (geometry 999) — the Jetenginestep pattern.
+    const flatMeshes = [
+      {expressID: 31, geometries: [{geometryExpressID: 998, flatTransformation: IDENTITY_MAT, color: GREY}]},
+      {expressID: 32, geometries: [{geometryExpressID: 998, flatTransformation: IDENTITY_MAT, color: GREY}]},
+      {expressID: 33, geometries: [{geometryExpressID: 998, flatTransformation: IDENTITY_MAT, color: GREY}]},
+      {expressID: 40, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: GREY}]},
+    ]
+    const batches = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0).batches
+    const mesh = assembleBatchedModel(batches, unitTriApi(), 0)
+
+    const blade = (id) => mesh.instanceColors[mesh.instanceParents.indexOf(id)]
+    expect(blade(31)).toEqual(blade(32))
+    expect(blade(32)).toEqual(blade(33))
+    expect(blade(40)).not.toEqual(blade(31))
   })
 
   it('leaves colors untouched when autoColorParts is off', () => {

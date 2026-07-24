@@ -17,14 +17,17 @@ const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z,
  * live color buffer was repainted, not just the restore table.
  *
  * @param {Array<object>} instanceColors
- * @param {Array<number>} instanceParents
+ * @param {Array<number>} instanceParents per-occurrence product ids
+ * @param {Array<number>} [instanceGeometryIds] per-part geometry ids (the
+ *   preferred coloring key); omit to exercise the parent-id fallback
  * @return {object} batch with a recording `mesh.setColorAt`
  */
-function fakeBatch(instanceColors, instanceParents) {
+function fakeBatch(instanceColors, instanceParents, instanceGeometryIds) {
   const painted = new Map()
   return {
     instanceColors,
     instanceParents,
+    instanceGeometryIds,
     painted,
     mesh: {
       setColorAt(i, v) {
@@ -96,10 +99,26 @@ describe('isDefaultColor', () => {
 
 
 describe('applyProductPalette', () => {
-  it('repaints a fully-grey multi-product model, buffer and restore table', () => {
+  it('colors by geometry (part), so instances of one part share a color', () => {
+    // Two parts: geometry 500 instanced 3x (each its own occurrence id),
+    // geometry 600 once. The blades case: same part -> same color.
+    const colors = [grey(), grey(), grey(), grey()]
+    const parents = [11, 12, 13, 20] // all distinct occurrences
+    const geometryIds = [500, 500, 500, 600]
+    const batch = fakeBatch(colors, parents, geometryIds)
+
+    expect(applyProductPalette([batch])).toBe(true)
+    // The three instances of geometry 500 are identically colored...
+    expect(colors[0]).toEqual(colors[1])
+    expect(colors[1]).toEqual(colors[2])
+    // ...and geometry 600 is a different part -> different color.
+    expect(colors[3]).not.toEqual(colors[0])
+  })
+
+  it('falls back to the product/occurrence id when no geometry table', () => {
     const colors = [grey(), grey(), grey()]
     const parents = [10, 20, 10]
-    const batch = fakeBatch(colors, parents)
+    const batch = fakeBatch(colors, parents) // no instanceGeometryIds
 
     expect(applyProductPalette([batch])).toBe(true)
 
