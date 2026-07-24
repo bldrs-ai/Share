@@ -6,6 +6,7 @@ import {
   Matrix4,
 } from 'three'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
+import {coordinationOffsetFor} from './flatMeshToBatchedModel'
 
 
 /**
@@ -165,6 +166,16 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     }
   }
   const placedGeometryCount = entries.length
+  // Origin-recenter a georeferenced model (see coordinationOffsetFor): this
+  // merged path bakes each vertex into world space on the CPU, so a raw
+  // ~1e7 m placement would store ~1 m-quantized float32 positions and jitter
+  // on rotate. Decide one offset from the first (valid) placement and fold it
+  // into every baked translation below. Null (near-origin) → no-op.
+  const coordOffset = placedGeometryCount > 0 ?
+    coordinationOffsetFor(entries[0].placed.flatTransformation) : null
+  const offX = coordOffset ? coordOffset[0] : 0
+  const offY = coordOffset ? coordOffset[1] : 0
+  const offZ = coordOffset ? coordOffset[2] : 0
   // Bin entries by colour. Insertion order on the Map determines
   // material indices — first-seen colour becomes material 0, etc.
   // We emit triangles in this bin order so each colour's triangle
@@ -249,9 +260,10 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       const m13 = mat4.elements[8]
       const m23 = mat4.elements[9]
       const m33 = mat4.elements[10]
-      const m14 = mat4.elements[12]
-      const m24 = mat4.elements[13]
-      const m34 = mat4.elements[14]
+      // Fold the origin-recenter offset into the baked translation.
+      const m14 = mat4.elements[12] - offX
+      const m24 = mat4.elements[13] - offY
+      const m34 = mat4.elements[14] - offZ
       const n11 = normalMat.elements[0]
       const n21 = normalMat.elements[1]
       const n31 = normalMat.elements[2]
@@ -324,5 +336,9 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     placedGeometryCount,
     skippedFlatMeshes,
     skippedPlacedGeometries,
+    // `[x,y,z]` origin offset already folded into the baked vertices for a
+    // georeferenced model (null for near-origin), so a rendered point maps
+    // back to true world coordinates.
+    coordinationOffset: coordOffset,
   }
 }
