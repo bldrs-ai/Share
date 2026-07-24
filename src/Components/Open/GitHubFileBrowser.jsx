@@ -11,7 +11,8 @@ import {getRepositories, getUserRepositories} from '../../net/github/Repositorie
 import {getBranches} from '../../net/github/Branches'
 import useStore from '../../store/useStore'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
-import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
+import {clearGrantedGithubScope, getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
+import {getOAuthScopes} from '../../net/github/OAuthScopes'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 
@@ -119,6 +120,43 @@ export default function GitHubFileBrowser({
   // filename through even when its extension isn't in the listed set.
   const fileName = typeof selectedFileIndex === 'number' ? filesArr[selectedFileIndex] : selectedFileIndex
   const branchName = resolveValue(selectedBranchName, branchesArr)
+
+  // Reconcile the recorded grant against token truth. The record is written
+  // on request/observation, but the upstream widening can fail (e.g.
+  // connection_scope not reaching GitHub) or another environment can narrow
+  // the grant — either way the record would lie and freeze the checkbox
+  // checked with no repair path. GitHub reports the token's actual scopes on
+  // every API response; probe once per token and let that truth set BOTH the
+  // display state and the record (clearing a stale record re-enables the
+  // opt-in so the user can retry). Probe failure keeps the inference-based
+  // state — it can only ever be wrong in the harmless direction there.
+  useEffect(() => {
+    if (!accessToken || !isLegacyAuthPath) {
+      return undefined
+    }
+    let cancelled = false
+    getOAuthScopes(accessToken)
+      .then((scopes) => {
+        if (cancelled) {
+          return
+        }
+        const hasRepoScope = scopes.includes('repo')
+        setHasPersistedGrant(hasRepoScope)
+        if (hasRepoScope) {
+          saveGrantedGithubScope('repo')
+        } else {
+          clearGrantedGithubScope()
+        }
+      })
+      .catch(() => {
+        // Best-effort: e.g. the proxy may not forward GET /user.
+      })
+    return () => {
+      cancelled = true
+    }
+    // isLegacyAuthPath is derived from a prop that's fixed per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken])
 
   // Lazy-fetch the user's GitHub organizations only when this browser is mounted
   // (i.e. user clicked Browse on the GitHub tab). Avoids spurious /user/orgs

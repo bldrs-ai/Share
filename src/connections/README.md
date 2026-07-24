@@ -78,7 +78,10 @@ directory's provider flow — they die with that path; see
   private-repos opt-in). `PopupAuth` re-requests it on every GitHub login
   because GitHub OAuth-App grants are last-request-wins on scope — without
   this, any plain re-login silently narrows the grant back to the
-  connection defaults.
+  connection defaults. `GitHubFileBrowser` reconciles it against the
+  token's actual `X-OAuth-Scopes` (via `net/github/OAuthScopes`), so a
+  record that a failed widening or another environment made stale gets
+  cleared instead of freezing the opt-in checkbox.
 - `sessionStorage['bldrs.github.pendingScope']` — per-popup-window stash of
   an explicit scope change, committed to the key above by `PopupCallback`
   only after the auth round trip succeeds.
