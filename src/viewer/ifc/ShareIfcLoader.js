@@ -295,6 +295,25 @@ export default class ShareIfcLoader {
 
       ifc.context.fitToFrame()
 
+      try {
+        const {Box3, Vector3} = await import('three')
+        const wb = new Box3().setFromObject(ifcModel)
+        const c = wb.getCenter(new Vector3())
+        const cam = ifc.context.getCamera()
+        const p = cam.position
+        const m = ifcModel.matrix.elements
+        const f = (n) => n.toFixed(1)
+        const modelCenter = `center=(${f(c.x)},${f(c.y)},${f(c.z)})`
+        const modelBox = `min=(${f(wb.min.x)},${f(wb.min.y)},${f(wb.min.z)}) max=(${f(wb.max.x)},${f(wb.max.y)},${f(wb.max.z)})`
+        const camPos = `camera=(${f(p.x)},${f(p.y)},${f(p.z)})`
+        const modelMatrix = `modelMatrixTrans=(${f(m[12])},${f(m[13])},${f(m[14])})`
+        // eslint-disable-next-line no-console
+        console.log(`[DEBUG-COORD] model ${modelCenter} ${modelBox} | ${camPos} | ${modelMatrix}`)
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG-COORD] failed', e)
+      }
+
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
       // doesn't expose them. The model mesh is already built + added above,
