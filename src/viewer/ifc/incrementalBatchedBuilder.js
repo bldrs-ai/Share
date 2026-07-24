@@ -1,6 +1,7 @@
 import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import {
   DEFAULT_COLOR,
   INDICES_PER_TRIANGLE,
@@ -293,6 +294,14 @@ export class IncrementalBatchedBuilder {
     }
     const mesh = new BatchedMesh(
       this.initialInstances, this.initialVertices, this.initialIndices, material)
+    // Diagnostic (#1614 jitter bisect): pin the opaque batch to stable
+    // index order so coincident/coplanar faces don't flip their depth-test
+    // winner as the per-frame depth sort reorders them on camera rotation.
+    // Matches the pre-#1614 merged mesh's fixed draw order. Transparent
+    // keeps its blend sort. See flatMeshToBatchedModel + the flag comment.
+    if (!transparent && isFeatureEnabled('batchedStableSort')) {
+      mesh.sortObjects = false
+    }
     const state = {
       mesh,
       material,

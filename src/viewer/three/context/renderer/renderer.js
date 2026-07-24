@@ -7,6 +7,13 @@ import {Vector2, WebGLRenderer} from 'three'
 import {CSS2DRenderer} from 'three/examples/jsm/renderers/CSS2DRenderer.js'
 import {IfcComponent} from '../base-types'
 import {Postproduction} from './postproduction'
+import {isFeatureEnabled} from '../../../../FeatureFlags'
+
+
+// Diagnostic (#1614 jitter bisect): `?feature=noLogDepth` drops the
+// logarithmic depth buffer from both renderers so a single preview can
+// A/B it against the batched-sort lever on a real GPU. Default keeps it on.
+const USE_LOG_DEPTH = !isFeatureEnabled('noLogDepth')
 
 
 export class IfcRenderer extends IfcComponent {
@@ -20,7 +27,7 @@ export class IfcRenderer extends IfcComponent {
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
-      logarithmicDepthBuffer: true,
+      logarithmicDepthBuffer: USE_LOG_DEPTH,
       preserveDrawingBuffer: pdbEnabled,
     })
     // For debugger tracing
@@ -71,7 +78,7 @@ export class IfcRenderer extends IfcComponent {
       this.tempRenderer = new WebGLRenderer({
         canvas: tempCanvas,
         antialias: true,
-        logarithmicDepthBuffer: true,
+        logarithmicDepthBuffer: USE_LOG_DEPTH,
         preserveDrawingBuffer: process.env.THREE_PDB_IS_ENABLED || false,
       })
       this.tempRenderer.localClippingEnabled = true

@@ -8,6 +8,7 @@ import {
 } from 'three'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
+import {isFeatureEnabled} from '../../FeatureFlags'
 
 
 /**
@@ -271,6 +272,15 @@ function buildBatch(groups, transparent) {
     material.depthWrite = false
   }
   const mesh = new BatchedMesh(instanceCount, vertexCount, indexCount, material)
+  // Diagnostic (#1614 jitter bisect): opaque geometry needs no per-frame
+  // depth sort — the z-buffer resolves occlusion regardless of draw order,
+  // and sorting reorders coincident/coplanar faces every frame as the
+  // camera turns, flipping the depth-test winner (shimmer on rotate). Pin
+  // the opaque batch to stable index order. Transparent must keep its
+  // back-to-front sort to blend correctly. See the flag comment.
+  if (!transparent && isFeatureEnabled('batchedStableSort')) {
+    mesh.sortObjects = false
+  }
   const instanceParents = new Uint32Array(instanceCount)
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
   const instanceGeometryIds = new Uint32Array(instanceCount)

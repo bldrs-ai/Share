@@ -105,6 +105,23 @@ export const flags = [
   // follow-ups. Flip on via `?feature=batchedMesh`.
   // Design: design/new/viewer-replacement.md §3b.iv.
   {name: 'batchedMesh', isActive: false},
+  // Diagnostic (jitter bisect, #1614 regression): the demand-path
+  // Conway-direct render is a THREE.BatchedMesh, which sorts its
+  // instances front-to-back by camera depth EVERY frame. For faces that
+  // are coincident/coplanar across two elements (walls meeting slabs,
+  // abutting columns) the per-frame reorder flips the depth-test winner
+  // as the camera turns -> the whole model shimmers on rotate but is
+  // stable on zoom, only on real GPUs (fixed-point depth; SwiftShader's
+  // float depth never fights). The pre-#1614 merged mesh drew in fixed
+  // buffer order, so it was stable. `?feature=batchedStableSort` pins
+  // the opaque batch to a stable index order (sortObjects=false) to
+  // confirm/kill that cause on a real GPU before it flips to default.
+  {name: 'batchedStableSort', isActive: false},
+  // Diagnostic (jitter bisect): drop `logarithmicDepthBuffer` from the
+  // WebGL renderers. logdepth predates #1614 and the merged path shared
+  // it without shimmering, so it is the secondary suspect; this toggle
+  // exists so a single preview can A/B both levers on a real GPU.
+  {name: 'noLogDepth', isActive: false},
   // Synthetic per-part coloring for STEP/CAD models that carry no
   // presentation data. When a batched model comes back entirely
   // default-grey (no COLOUR_RGB / STYLED_ITEM, e.g. the Jetenginestep
