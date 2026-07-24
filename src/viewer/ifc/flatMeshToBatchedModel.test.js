@@ -65,7 +65,14 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
       expressID: 100,
       geometries: {
         size: () => 3,
-        get: () => ({geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}),
+        // Three real instances of the shared shape at DISTINCT transforms
+        // (translated along x). Distinct so the coincident-duplicate guard
+        // doesn't (correctly) fold them into one — see the dedup test below.
+        get: (where) => ({
+          geometryExpressID: 999,
+          flatTransformation: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, where, 0, 0, 1],
+          color: OPAQUE,
+        }),
       },
     }]
     const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
@@ -135,6 +142,38 @@ describe('viewer/ifc/flatMeshToBatchedModel', () => {
     expect(stats.skippedPlacedGeometries).toBe(2) // each bad placement counted
     // GetGeometry called once for 999 + once for 777 (not twice) = 2.
     expect(getGeometryCalls).toBe(2)
+  })
+
+  it('drops exact coincident duplicate placements (same part+geometry+transform+colour)', () => {
+    // Conway's rel-aggregates re-extraction appends a second placement of a
+    // cut part instead of replacing it → the same solid drawn twice at the
+    // same spot → z-fighting. The builder must keep only one.
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE}, // exact dup
+      ],
+    }]
+    const {batches, stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(stats.instanceCount).toBe(1)
+    expect(stats.skippedCoincidentPlacements).toBe(1)
+    expect(Array.from(batches[0].instanceParents)).toEqual([100])
+  })
+
+  it('keeps coincident placements that differ in transform or colour', () => {
+    const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 0, 0, 1] // same shape, +5 on x
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+        {geometryExpressID: 999, flatTransformation: moved, color: OPAQUE}, // different transform
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: GLASS}, // different colour
+      ],
+    }]
+    const {stats} = flatMeshToBatchedModel(flatMeshes, unitTriApi(), 0)
+    expect(stats.instanceCount).toBe(3)
+    expect(stats.skippedCoincidentPlacements).toBe(0)
   })
 
   it('recenters a georeferenced model to the origin and reports the offset', () => {

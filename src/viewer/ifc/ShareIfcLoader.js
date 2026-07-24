@@ -370,7 +370,8 @@ export default class ShareIfcLoader {
         `instances=${buildStats.instanceCount} parents=${buildStats.parentCount} ` +
         `materials=${buildStats.materialCount} ` +
         `skippedFlatMeshes=${buildStats.skippedFlatMeshes} ` +
-        `skippedPlaced=${buildStats.skippedPlacedGeometries}`)
+        `skippedPlaced=${buildStats.skippedPlacedGeometries} ` +
+        `skippedCoincident=${buildStats.skippedCoincidentPlacements ?? 0}`)
 
       return ifcModel
     } catch (err) {
