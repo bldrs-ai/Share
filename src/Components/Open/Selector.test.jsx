@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import Selector from './Selector'
 
@@ -96,6 +96,250 @@ describe('Selector — dropdown mode', () => {
     fireEvent.click(otherOption)
     expect(screen.getByRole('textbox')).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('Selector — dropdown pagination', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const longList = Array.from({length: 25}, (_, i) => `repo-${i}`)
+
+  it('shows no pager when the list fits on one page', async () => {
+    renderSelector({list: ['a', 'b', 'c']})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.queryByTestId('selector-next-organization')).not.toBeInTheDocument()
+  })
+
+  it('shows only the first page plus a pager for a long list', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.getByText('repo-0')).toBeInTheDocument()
+    expect(screen.getByText('repo-9')).toBeInTheDocument()
+    expect(screen.queryByText('repo-10')).not.toBeInTheDocument()
+    expect(screen.getByTestId('selector-next-organization')).toBeInTheDocument()
+  })
+
+  it('pages forward to the next set of options without closing', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    await waitFor(() => screen.getByText('repo-10'))
+    expect(screen.getByText('repo-19')).toBeInTheDocument()
+    expect(screen.queryByText('repo-0')).not.toBeInTheDocument()
+    // Menu stayed open across the page change.
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
+  it('selects a later-page option with its global list index', async () => {
+    renderSelector({list: longList})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    const target = 'repo-12'
+    await waitFor(() => screen.getByText(target))
+    fireEvent.click(screen.getByText(target))
+    expect(mockSetSelected).toHaveBeenCalledWith(longList.indexOf(target))
+  })
+})
+
+
+describe('Selector — text-mode live filter', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  const repoList = ['acme', 'test-models', 'test-models-private', 'zeta']
+  const longList = Array.from({length: 25}, (_, i) => `repo-${i}`)
+
+  /**
+   * @param {Array} list option list
+   * @return {HTMLElement} the text input
+   */
+  async function enterFilterMode(list) {
+    renderSelector({validate: mockValidate, list})
+    openDropdown()
+    const other = await screen.findByText('Enter name...')
+    fireEvent.click(other)
+    return screen.getByRole('textbox')
+  }
+
+  it('filters the list live as the user types', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-models'}})
+    expect(screen.getByText('test-models')).toBeInTheDocument()
+    expect(screen.getByText('test-models-private')).toBeInTheDocument()
+    expect(screen.queryByText('acme')).not.toBeInTheDocument()
+  })
+
+  it('selects a filtered match with its list index', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'private'}})
+    fireEvent.click(screen.getByText('test-models-private'))
+    expect(mockSetSelected).toHaveBeenCalledWith(repoList.indexOf('test-models-private'))
+  })
+
+  it('paginates a long filtered result set', async () => {
+    const input = await enterFilterMode(longList)
+    fireEvent.change(input, {target: {value: 'repo-'}})
+    expect(screen.getByText('repo-0')).toBeInTheDocument()
+    expect(screen.queryByText('repo-10')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('selector-next-organization'))
+    await waitFor(() => screen.getByText('repo-10'))
+  })
+
+  it('does not call the API validator for a query already in the list', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test'}})
+    act(() => {
+      jest.runAllTimers()
+    })
+    expect(mockValidate).not.toHaveBeenCalled()
+  })
+
+  it('accepts an exact in-list match on Enter (even when it is also a prefix)', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-models'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(mockSetSelected).toHaveBeenCalledWith(repoList.indexOf('test-models'))
+  })
+
+  it('does not accept a prefix-only query on Enter', async () => {
+    const input = await enterFilterMode(repoList)
+    fireEvent.change(input, {target: {value: 'test-mod'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(mockSetSelected).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Selector — defensive value handling', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  it('skips null/undefined entries in the dropdown but keeps their list index', async () => {
+    const sparse = ['acme', null, 'beta', undefined, 'gamma']
+    renderSelector({list: sparse})
+    openDropdown()
+    await waitFor(() => screen.getByRole('listbox'))
+    expect(screen.getByText('acme')).toBeInTheDocument()
+    expect(screen.getByText('beta')).toBeInTheDocument()
+    expect(screen.getByText('gamma')).toBeInTheDocument()
+    // 'gamma' is at index 4 in the full list — selecting it must report 4,
+    // not a compacted index, so the parent resolves the right entry.
+    fireEvent.click(screen.getByText('gamma'))
+    expect(mockSetSelected).toHaveBeenCalledWith(sparse.indexOf('gamma'))
+  })
+
+  it('filters null/undefined/empty entries out of the text-mode match list', async () => {
+    const sparse = ['acme', null, '', undefined, 'beta']
+    renderSelector({validate: mockValidate, list: sparse})
+    openDropdown()
+    fireEvent.click(await screen.findByText('Enter name...'))
+    const input = screen.getByRole('textbox')
+    // Empty query shows the full list, but the holes must not render as blank
+    // rows — only the two real names should appear as matches.
+    const matches = screen.getByTestId('selector-matches-organization')
+    expect(within(matches).getByText('acme')).toBeInTheDocument()
+    expect(within(matches).getByText('beta')).toBeInTheDocument()
+    // Exactly the two real names render as rows — the null/undefined/'' holes
+    // produce no blank entries.
+    expect(within(matches).getAllByText(/^(acme|beta)$/)).toHaveLength(2)
+    expect(input).toBeInTheDocument()
+  })
+
+  it('renders an out-of-range numeric selection as empty, never "undefined"', () => {
+    renderSelector({list: ['a', 'b'], selected: 99})
+    // A stale index past the end of the list must not surface the literal
+    // string "undefined" in the closed field.
+    expect(screen.getByRole('combobox').textContent).not.toMatch(/undefined/)
+  })
+
+  it('offers Enter name... even when the list is empty (validated field)', async () => {
+    renderSelector({list: [], validate: mockValidate})
+    openDropdown()
+    fireEvent.click(await screen.findByText('Enter name...'))
+    // A validated field must always allow typing a name, even with no options
+    // (e.g. a File the extension filter hid).
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+})
+
+
+describe('Selector — Escape in text mode', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockValidate.mockResolvedValue(false)
+  })
+
+  /**
+   * @param {Function} onParentKeyDown ancestor keydown spy
+   * @return {HTMLElement} the text input, already in text mode
+   */
+  async function enterTextModeUnder(onParentKeyDown) {
+    render(
+      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+      <div onKeyDown={onParentKeyDown}>
+        <Selector {...defaultProps} validate={mockValidate}/>
+      </div>,
+      {wrapper: HelmetStoreRouteThemeCtx},
+    )
+    fireEvent.mouseDown(screen.getByRole('combobox'))
+    fireEvent.click(await screen.findByText('Enter name...'))
+    return screen.getByRole('textbox')
+  }
+
+  it('exits text mode without letting Escape reach an ancestor (e.g. the Dialog)', async () => {
+    const onParentKeyDown = jest.fn()
+    const input = await enterTextModeUnder(onParentKeyDown)
+    fireEvent.keyDown(input, {key: 'Escape'})
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    // stopPropagation kept Escape from bubbling up to close the Dialog.
+    expect(onParentKeyDown).not.toHaveBeenCalled()
+  })
+
+  it('lets other keys (Enter) bubble to ancestors normally', async () => {
+    const onParentKeyDown = jest.fn()
+    const input = await enterTextModeUnder(onParentKeyDown)
+    fireEvent.keyDown(input, {key: 'Enter'})
+    expect(onParentKeyDown).toHaveBeenCalled()
+  })
+})
+
+
+describe('Selector — clear (×) affordance', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('shows the clear × only when onClear is set and a value is selected', () => {
+    renderSelector({onClear: jest.fn(), selected: 0})
+    expect(screen.getByTestId('selector-clear-select-organization')).toBeInTheDocument()
+  })
+
+  it('does not show the clear × without a selection', () => {
+    renderSelector({onClear: jest.fn(), selected: ''})
+    expect(screen.queryByTestId('selector-clear-select-organization')).not.toBeInTheDocument()
+  })
+
+  it('does not show the clear × without an onClear handler', () => {
+    renderSelector({selected: 0})
+    expect(screen.queryByTestId('selector-clear-select-organization')).not.toBeInTheDocument()
+  })
+
+  it('calls onClear when the × is clicked', () => {
+    const onClear = jest.fn()
+    renderSelector({onClear, selected: 0})
+    fireEvent.click(screen.getByTestId('selector-clear-select-organization'))
+    expect(onClear).toHaveBeenCalled()
   })
 })
 
