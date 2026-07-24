@@ -123,6 +123,27 @@ order; BVH permutes only the index buffer, not the numbering).
   just nicer: the node's NAUO id can't reach the PDS-keyed mesh, so without the
   path resolution a STEP node click highlights *nothing* in the scene.
 
+- **Cache-hit BVH must be order-preserving (`indirect: true`).** The
+  cache-hit reader builds the per-mesh `IfcInstanceMap`s from
+  `BLDRS_face_ids` in the GLB's *original* triangle order, then builds the
+  per-geometry BVHs (`Loader.js#restoreCacheHitPicking`). three-mesh-bvh's
+  default build sorts `geometry.index` in place into spatial leaf order,
+  which silently invalidates every triangle-keyed consumer built just
+  before it: a pick's `faceIndex` resolves through the stale table to the
+  wrong instance/element (an i-beam Properties-reports as a bolt; NavTree
+  can't sync), and the selection subsets draw the table's triangle ranges
+  against the permuted buffer — because BVH leaf order is spatially local,
+  the wrong highlight lands on *nearby other parts*, which reads as
+  "clicking selects stuff around it". The cache artifact itself is fine
+  (face_ids ↔ per-vertex ids verified aligned); only the runtime order
+  diverged. Fix: `computeBoundsTree({indirect: true})` — the index buffer
+  is never touched and raycasts report original-order `faceIndex`, so
+  tables, raycasts, and subsets stay aligned. The cache-miss path never
+  had the problem: `decorateConwayDirectIfcModel` rebuilds its map *from*
+  the geometry after its (permuting) build. Pinned by
+  `Loader.restoreCacheHitPicking.test.js` (including a contrast test that
+  the default build really does permute, so the pin can't pass vacuously).
+
 - **Cache-hit parity.** The occurrence tables also survive the GLB cache. The
   writer persists the global `instanceId → occurrencePath` table on
   `BLDRS_face_ids`; the reader decodes it to
