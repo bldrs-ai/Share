@@ -389,6 +389,40 @@ describe('loader/glbExport', () => {
       expect(Array.isArray(faceIdsExt.data.occurrencePaths)).toBe(true)
       expect(faceIdsExt.data.occurrencePaths).toContainEqual(OCC_PATH_A)
       expect(faceIdsExt.data.occurrencePaths).toContainEqual(OCC_PATH_B)
+      // Geometry ids ride along for STEP (occurrence paths present).
+      expect(Array.isArray(faceIdsExt.data.geometryExpressIds)).toBe(true)
+    })
+
+    it('skips geometry ids + identity sweep for an occurrence-less (IFC) batched model', async () => {
+      // The geometry-id table's only consumers are occurrence-path-gated
+      // (STEP per-solid selection, "Face #" rows), and the identity sweep
+      // costs one async property lookup per distinct geometry id while
+      // resolving nothing for IFC — so an occurrence-less model must persist
+      // NEITHER, keeping IFC cache writes at their pre-occurrence cost.
+      const batchedMesh = buildDecoratedBatchedMesh() // no occurrencePath on any placement
+      mockExporterParse.mockImplementation((_input, onDone) => {
+        onDone(makeGlbWithExpressIds({
+          expressIdsPerVertex: new Uint32Array([OCC_EXPRESS_A, OCC_EXPRESS_A]),
+          instanceIdsPerVertex: new Uint32Array([0, 1]),
+        }).buffer)
+      })
+      let injectedExtensions = null
+      mockInjectGlbExtensions.mockImplementation((bytes, extensions) => {
+        injectedExtensions = extensions
+        return {bytes, stats: {
+          addedExtensions: 0, addedBinBytes: 0, addedSceneExtras: 0,
+          addedSceneName: 0, skippedNames: [],
+        }}
+      })
+
+      const ok = await exportAndCacheGlb({model: batchedMesh, ...ctx})
+      expect(ok).toBe(true)
+
+      const faceIdsExt = injectedExtensions.find((e) => e.data && e.data.perPrimitive)
+      expect(faceIdsExt).toBeDefined()
+      expect(faceIdsExt.data.occurrencePaths).toBeUndefined()
+      expect(faceIdsExt.data.geometryExpressIds).toBeUndefined()
+      expect(faceIdsExt.data.geometryItemIdentities).toBeUndefined()
     })
 
     it('returns false (no throw) when the exporter produces no bytes', async () => {

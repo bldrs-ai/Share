@@ -704,25 +704,46 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
       if (faceIdsEntry && faceIdsEntry.expressIds) {
         // Sanity 1: per-triangle array length must match the geometry's
         // triangle count.
-        // Sanity 2: alignment canary — `firstExpressId` recorded at
-        // capture time must match `expressIds[0]` after decode.
-        // Catches a primitive-order mismatch between writer and
-        // reader (e.g. GLTFLoader traversal diverging from
-        // `json.meshes[].primitives[]`) that the length check alone
-        // wouldn't flag if two meshes happen to share triangle counts.
+        // Sanity 2: decode canary — `firstExpressId` recorded at capture
+        // time must match `expressIds[0]` after Base64 decode. This is
+        // self-referential (it compares the payload against itself), so it
+        // only guards decode integrity, NOT writer↔reader primitive-order
+        // pairing.
+        // Sanity 3: order cross-check — when the per-vertex ids are
+        // trustworthy (uncompressed artifact), triangle 0's per-vertex
+        // expressID must equal the table's first entry. Unlike the decode
+        // canary this reads the MESH's own data, so it genuinely catches a
+        // primitive-order divergence between `capturePerTriangleIds`'
+        // `json.meshes[].primitives[]` walk and GLTFLoader's traversal
+        // order. (Compressed artifacts can't be cross-checked — DRACO/
+        // Meshopt corrupt the per-vertex ids — so they rely on 1+2 alone.)
         const idxCount = obj.geometry?.index?.count ?? 0
         const expectedTriCount = (idxCount / 3) | 0
         const canaryOk = faceIdsEntry.firstExpressId === null ||
             faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
-        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
+        const attrExpr = perVertexTrusted ? obj.geometry?.attributes?.expressID : null
+        const geomIndex = obj.geometry?.index
+        const crossOk = !attrExpr || !geomIndex || geomIndex.count === 0 ||
+            faceIdsEntry.expressIds[0] === attrExpr.getX(geomIndex.getX(0))
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk && crossOk) {
           map = instanceMapFromTriangleIds(
             faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
           viaFaceIds++
-        } else if (!canaryOk) {
+        } else if (!canaryOk || !crossOk) {
+          // A failure here leaves `map` null, so the per-vertex fallback
+          // below still recovers picking when the attrs are trusted (the
+          // cross-check only runs in that case); a compressed artifact
+          // genuinely loses picking on this mesh.
+          const which = canaryOk ? 'order cross-check vs per-vertex ids' : 'decode canary'
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh'
           console.warn(
-            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
-              `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
-              `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
+            `[glb] reader: face_ids ${which} failed on mesh ${meshIndex} ` +
+              `(payload first expressID ${faceIdsEntry.expressIds[0]}, ` +
+              `recorded ${faceIdsEntry.firstExpressId}, ` +
+              `geometry ${attrExpr && geomIndex ? attrExpr.getX(geomIndex.getX(0)) : 'n/a'}); ` +
+              `${recovery}`)
         } else {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
