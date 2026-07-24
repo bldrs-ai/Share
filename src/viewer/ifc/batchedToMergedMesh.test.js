@@ -1,6 +1,10 @@
 /* eslint-disable no-magic-numbers */
 import {Group, Matrix4, Mesh} from 'three'
-import {batchedModelToMergedMesh, disposeMergedMesh} from './batchedToMergedMesh'
+import {
+  batchedModelOccurrenceTables,
+  batchedModelToMergedMesh,
+  disposeMergedMesh,
+} from './batchedToMergedMesh'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 
 
@@ -72,6 +76,10 @@ function batchedModel(flatMeshes) {
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
     batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.instanceColors = batch.instanceColors
+    // STEP per-occurrence side tables, wired exactly as buildBatchedConwayModel
+    // does — the source batchedModelOccurrenceTables re-keys for the cache.
+    batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
+    batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
   }
   if (batches.length === 1) {
     return batches[0].mesh
@@ -171,5 +179,51 @@ describe('viewer/ifc/batchedToMergedMesh', () => {
     for (const spy of matSpies) {
       expect(spy).toHaveBeenCalled()
     }
+  })
+
+  describe('batchedModelOccurrenceTables', () => {
+    it('re-keys occurrence paths + geometry ids by occurrence id (the baked instanceID)', () => {
+      const model = batchedModel([
+        {expressID: 100, geometries: [
+          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: GREY, occurrencePath: [10, 20]},
+        ]},
+        {expressID: 200, geometries: [
+          {geometryExpressID: 999, flatTransformation: TRANSLATE_X10, color: GREY, occurrencePath: [10, 30]},
+        ]},
+      ])
+      const {occurrencePaths, geometryExpressIds} = batchedModelOccurrenceTables(model)
+
+      // The tables must be indexed by the SAME id space the merged export bakes
+      // per vertex (occurrence id → instanceID), so the cache reader's rebuilt
+      // instance map lines up with the persisted occurrence data.
+      const merged = batchedModelToMergedMesh(model)
+      const instAttr = merged.geometry.attributes.instanceID
+      const exprAttr = merged.geometry.attributes.expressID
+      const occByExpress = new Map()
+      for (let v = 0; v < instAttr.count; v++) {
+        occByExpress.set(exprAttr.getX(v), instAttr.getX(v))
+      }
+      const occ100 = occByExpress.get(100)
+      const occ200 = occByExpress.get(200)
+      expect(occurrencePaths[occ100]).toEqual([10, 20])
+      expect(occurrencePaths[occ200]).toEqual([10, 30])
+      expect(geometryExpressIds[occ100]).toBe(999)
+      expect(geometryExpressIds[occ200]).toBe(999)
+    })
+
+    it('returns nulls when the model carries no occurrence data (IFC)', () => {
+      // No occurrencePath on any geometry → instanceOccurrencePaths is null,
+      // matching the merged path's absent instanceMap occurrence table.
+      const model = batchedModel([
+        {expressID: 100, geometries: [{geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: GREY}]},
+      ])
+      const {occurrencePaths} = batchedModelOccurrenceTables(model)
+      expect(occurrencePaths).toBeNull()
+    })
+
+    it('returns nulls for an empty / non-batched model', () => {
+      expect(batchedModelOccurrenceTables(new Group()).occurrencePaths).toBeNull()
+      expect(batchedModelOccurrenceTables(new Group()).geometryExpressIds).toBeNull()
+    })
   })
 })
