@@ -105,6 +105,16 @@ export const flags = [
   // follow-ups. Flip on via `?feature=batchedMesh`.
   // Design: design/new/viewer-replacement.md §3b.iv.
   {name: 'batchedMesh', isActive: false},
+  // Synthetic per-product coloring for STEP/CAD models that carry no
+  // presentation data. When a batched model comes back entirely
+  // default-grey (no COLOUR_RGB / STYLED_ITEM, e.g. the Jetenginestep
+  // AP203 export), each product is repainted from a curated palette by a
+  // deterministic hash of its express id — Onshape-style, so a multi-part
+  // assembly is legible instead of a grey blob. Strictly no-op the moment
+  // any real color is present, so IFC and colored STEP are untouched.
+  // Default-on; it only changes models that had zero color to begin with.
+  // See src/viewer/ifc/productPalette.js.
+  {name: 'autoColorParts', isActive: true},
 ]
 
 
