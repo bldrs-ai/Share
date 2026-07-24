@@ -50,7 +50,14 @@ export default {
   // behavior; the TODO that flagged "have had breakage without this"
   // predates the r184 upgrade and may no longer apply. Sourcemaps still
   // give debuggers readable names.
-  keepNames: false,
+  //
+  // DIAGNOSTIC (do not merge): temporarily restored to true to bisect
+  // the haus.ifc roof z-fighting that first appears at #1509 — this
+  // flip (4989a963) is one of only three flag-off changes in that PR.
+  // Compare this branch's deploy preview against prod on haus.ifc.
+  // Known cost while true: DRACO decode breaks on ?feature=glb,glbDraco
+  // cache hits (worker `__name` ReferenceError above) — gated path only.
+  keepNames: true,
   splitting: false,
   metafile: true,
   sourcemap: true,
