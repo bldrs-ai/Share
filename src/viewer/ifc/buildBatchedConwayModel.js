@@ -1,10 +1,12 @@
 import {Group} from 'three'
+import {isFeatureEnabled} from '../../FeatureFlags'
 import {attachBatchedSubsets} from './batchedSubset'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
 import {
   attachConwayDirectModelMethods,
   makeConwayDirectIfcManager,
 } from './conwayDirectIfcLoader'
+import {applyProductPalette} from './productPalette'
 import {occurrencePathKey} from '../../utils/occurrencePaths'
 
 
@@ -111,6 +113,16 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     // Degenerate (no renderable geometry). Throw so ShareIfcLoader falls
     // back to the merged path rather than adding an empty model.
     throw new Error('buildBatchedConwayModel: no renderable geometry')
+  }
+
+  // Colorless-model fallback: a STEP/CAD file with no presentation data
+  // comes back entirely default-grey. Repaint each product from a palette
+  // (Onshape-style) so a multi-part assembly is legible. Strictly no-op the
+  // moment any real color is present, so IFC and colored STEP are untouched.
+  // Runs before the pick-table stamp below so the `instanceColors` restore
+  // table `batchedHighlight` reads already carries the palette color.
+  if (isFeatureEnabled('autoColorParts')) {
+    applyProductPalette(batches)
   }
 
   // Each batch carries its own pick tables; CadView reads them off the
