@@ -7,7 +7,6 @@ import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
-import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
 import {reportModelInfo} from './loadProgress'
 import {
@@ -1573,10 +1572,14 @@ function newGltfLoader() {
     loader.setDRACOLoader(dracoLoader)
   }
   if (isFeatureEnabled('glbMeshopt')) {
-    // Lazy: MeshoptDecoder.ready resolves on first await; GLTFLoader
-    // awaits it internally before decoding a buffer view tagged with
-    // EXT_meshopt_compression, so registering here is cheap.
-    loader.setMeshoptDecoder(MeshoptDecoder)
+    // Dynamic import: meshopt_decoder runs WebAssembly.validate +
+    // WebAssembly.instantiate at module scope, so a top-level import
+    // executes that on EVERY page load, feature on or off. esbuild's
+    // lazy module wrapper defers evaluation to this first import()
+    // call. Registration may land after parse starts on the very first
+    // gated load; GLTFLoader awaits decoder.ready per buffer view.
+    import('meshoptimizer/decoder')
+      .then(({MeshoptDecoder}) => loader.setMeshoptDecoder(MeshoptDecoder))
   }
   return loader
 }
