@@ -521,219 +521,11 @@ export async function load(
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
-  // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
-  // models. The GLB write captured per-vertex `instanceID` alongside
-  // `expressID`; `inferModelCapabilities` flipped `instancePicking`
-  // when both are present. Build a map per child Mesh from its own
-  // geometry attributes.
-  //
-  // Why per-mesh, not single: GLTFExporter splits one indexed mesh
-  // into N primitives — one per `geometry.groups[]` entry — and
-  // duplicates shared vertices. So the cache-write turn this:
-  //   ifcModel (1 Mesh, geometry with M material groups, V verts)
-  // into this:
-  //   Group containing M child Meshes, each with its own vertex
-  //   subset + its own index buffer. Total V_cache ≈ V × avg_share_factor.
-  //
-  // On read, each child Mesh has its own copy of `expressID` +
-  // `instanceID` per-vertex; the instance IDs are globally unique
-  // across the meshes (GLTFExporter doesn't renumber attributes when
-  // splitting). So one IfcInstanceMap per child Mesh, attached as
-  // `mesh.instanceMap`, is the right shape. ShareViewer.setSelection
-  // and setInstanceSelection traverse the model and build subsets
-  // from each map. (Cache-miss is the degenerate single-Mesh case:
-  // `ifcModel` is itself the Mesh, traversal visits one node, same
-  // code path produces the same result.)
-  //
-  // Skip when a mesh already has an instanceMap attached — the
-  // Conway-direct cache-miss path attaches one directly during the
-  // parse swap; this block is only for cache-hit restoration.
-  // Cache-hit IfcInstanceMap restoration. Three sources, in order of
-  // preference:
-  //   1. BLDRS_face_ids extension (`userData.bldrsFaceIds.perPrimitive`)
-  //      — per-triangle expressID + instanceID arrays untouched by
-  //      compression. The source of truth when present; immune to
-  //      DRACO quantization and Meshopt vertex welding.
-  //   2. Per-vertex `_EXPRESSID` / `_INSTANCEID` attributes — the
-  //      legacy fallback for cache artifacts that predate face_ids.
-  //      Safe when no compression was applied (current default for
-  //      IFC GLBs); unreliable when DRACO/Meshopt ran.
-  //   3. Nothing — geometry-only model with no IFC IDs (drag-dropped
-  //      GLB / OBJ / etc.); skip the map.
-  //
-  // Walk meshes in traversal order. Match each Mesh to its face_ids
-  // perPrimitive entry by primitive index (writer's
-  // `capturePerTriangleIds` iterates `json.meshes[].primitives[]` in
-  // the same depth-first order GLTFLoader produces, so positional
-  // matching holds for both single-mesh and merged-container GLBs).
-  if (model.capabilities.instancePicking ||
-      model.userData?.bldrsFaceIds) {
-    const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
-    // Global STEP occurrence-path table (index = synthetic instance id),
-    // persisted by the writer so a cache-hit STEP model can rebuild the
-    // per-occurrence tables the cache-miss instance map carried. Null for
-    // IFC / pre-occurrence artifacts. Read before the userData is freed below.
-    const occurrencePaths = model.userData?.bldrsFaceIds?.occurrencePaths ?? null
-    // Global per-instance geometry (solid) express-id table, persisted the
-    // same way — restores per-solid selection of multibody STEP parts on
-    // cache-hit. Null for IFC / pre-0.10.0 artifacts.
-    const geometryExpressIds = model.userData?.bldrsFaceIds?.geometryExpressIds ?? null
-    // Per-vertex IDs are only trustworthy on uncompressed artifacts.
-    // DRACO quantises integer attributes and Meshopt welds shared
-    // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
-    // gate the legacy fallback on `bldrsCompressionMode == null`
-    // (set by parseBldrsGlbContainer above). When face_ids exists
-    // and fails its sanity check on a compressed artifact, we'd
-    // rather drop picking on that mesh than return wrong selections.
-    const compressionMode = model.userData?.bldrsCompressionMode ?? null
-    const perVertexTrusted = compressionMode === null
-    let meshIndex = 0
-    let attached = 0
-    let viaFaceIds = 0
-    let skippedCompressedNoFaceIds = 0
-    let totalInstances = 0
-    const allParents = new Set()
-    model.traverse((obj) => {
-      if (!obj.isMesh) {
-        return
-      }
-      if (obj.instanceMap) {
-        meshIndex++
-        return
-      }
-      let map = null
-      const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
-      if (faceIdsEntry && faceIdsEntry.expressIds) {
-        // Sanity 1: per-triangle array length must match the geometry's
-        // triangle count.
-        // Sanity 2: alignment canary — `firstExpressId` recorded at
-        // capture time must match `expressIds[0]` after decode.
-        // Catches a primitive-order mismatch between writer and
-        // reader (e.g. GLTFLoader traversal diverging from
-        // `json.meshes[].primitives[]`) that the length check alone
-        // wouldn't flag if two meshes happen to share triangle counts.
-        const idxCount = obj.geometry?.index?.count ?? 0
-        const expectedTriCount = (idxCount / 3) | 0
-        const canaryOk = faceIdsEntry.firstExpressId === null ||
-          faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
-        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
-          map = instanceMapFromTriangleIds(
-            faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
-          viaFaceIds++
-        } else if (!canaryOk) {
-          console.warn(
-            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
-            `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
-            `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
-        } else {
-          const recovery = perVertexTrusted ?
-            'falling back to per-vertex attributes' :
-            'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
-          console.warn(
-            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
-            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
-        }
-      }
-      if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
-        if (perVertexTrusted) {
-          map = instanceMapFromGeometry(obj.geometry)
-        } else if (!faceIdsEntry) {
-          // Compressed artifact with no face_ids entry — the per-vertex
-          // attrs exist but are corrupted by DRACO/Meshopt. Skip.
-          skippedCompressedNoFaceIds++
-        }
-      }
-      if (map) {
-        // Restore STEP per-occurrence tables from the persisted global
-        // table (no-op for IFC / when absent), so scene↔NavTree selection
-        // keys on the occurrence path — not the part-type id shared across
-        // every reuse — on cache-hit exactly as it does on cache-miss.
-        if (occurrencePaths) {
-          attachOccurrencePaths(map, occurrencePaths)
-        }
-        if (geometryExpressIds) {
-          attachGeometryExpressIds(map, geometryExpressIds)
-        }
-        obj.instanceMap = map
-        attached++
-        totalInstances += map.instanceCount
-        for (const pid of map.parentExpressIdToInstanceIds.keys()) {
-          allParents.add(pid)
-        }
-      }
-      meshIndex++
-    })
-    if (attached > 0) {
-      glbVerbose(
-        `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
-        `${totalInstances} instances under ${allParents.size} IFC products ` +
-        `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
-    }
-    if (skippedCompressedNoFaceIds > 0) {
-      console.warn(
-        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
-        `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
-        'per-vertex IDs would be corrupted')
-    }
-    // Free the per-triangle ID arrays now that IfcInstanceMap owns its
-    // own copies. For a 2.84M-triangle Snowdon model this reclaims
-    // ~22MB of JS heap that would otherwise be held for the life of
-    // the scene.
-    if (model.userData?.bldrsFaceIds) {
-      delete model.userData.bldrsFaceIds
-    }
-  }
-
-  // BVH build for fast picking on cache-hit GLB. The Conway-direct
-  // cache-MISS path already does this inside
-  // `decorateConwayDirectIfcModel` (Slice 5b), but cache-HIT meshes
-  // come straight off GLTFLoader and never see a `computeBoundsTree()`
-  // call. Without a BVH, the per-frame hover raycast falls back to
-  // `Mesh.prototype.raycast`'s O(triangles) brute force — on a ~3M-tri
-  // Snowdon split into 85 child meshes that drops hover-pick to ~1 FPS.
-  // With BVH, the same raycast is O(log N) per mesh and stays at 60 FPS.
-  //
-  // `BufferGeometry.prototype.computeBoundsTree` is the monkey-patch
-  // wit-three's `initializeMeshBVH` already installed at viewer init
-  // (`web-ifc-three/IFCLoader.js#initializeMeshBVH` writes it onto
-  // the prototype + replaces `Mesh.prototype.raycast` with
-  // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
-  // prototype but need their own `boundsTree` built per geometry.
-  //
-  // Gated on `cameFromGlbCache` so live IFC parses (which build
-  // their own BVH in `decorateConwayDirectIfcModel`) don't double-
-  // build.
-  if (cameFromGlbCache) {
-    const bvhStartMs = Date.now()
-    let bvhBuilt = 0
-    let bvhTris = 0
-    model.traverse((obj) => {
-      if (!obj.isMesh || !obj.geometry) {
-        return
-      }
-      // Skip if already has a BVH (defensive — shouldn't happen on
-      // cache-hit but won't rebuild if it does).
-      if (obj.geometry.boundsTree) {
-        return
-      }
-      if (typeof obj.geometry.computeBoundsTree !== 'function') {
-        return
-      }
-      try {
-        obj.geometry.computeBoundsTree()
-        bvhBuilt++
-        const idx = obj.geometry.index
-        bvhTris += idx ? (idx.count / 3) : 0
-      } catch (e) {
-        glbInfo(`reader: computeBoundsTree failed for one mesh; skipping:`, e)
-      }
-    })
-    if (bvhBuilt > 0) {
-      glbVerbose(
-        `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
-        `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
-    }
-  }
+  // Cache-hit picking restoration: per-mesh IfcInstanceMaps from
+  // BLDRS_face_ids / per-vertex ids, then the (order-preserving) BVH
+  // build. Extracted for direct unit testing of the triangle-order
+  // alignment invariant; see restoreCacheHitPicking below.
+  restoreCacheHitPicking(model, cameFromGlbCache)
 
   // Fire-and-forget: serialize the rendered model to GLB and stash in
   // OPFS so the next load of the same source can skip the IFC parse.
@@ -810,6 +602,271 @@ export async function load(
   }
 
   return model
+}
+
+
+/**
+ * Restore picking state for a cache-hit GLB model: rebuild per-mesh
+ * `IfcInstanceMap`s from `BLDRS_face_ids` (or per-vertex ids), reattach
+ * the persisted STEP occurrence/geometry tables, then build the BVHs.
+ * Extracted from `load()` so the triangle-order alignment between the
+ * face_ids-built maps and the raycast/subset consumers is unit-testable:
+ * the BVH build MUST NOT permute `geometry.index` (see the indirect note
+ * inside), or every triangle-keyed lookup after it silently scrambles.
+ *
+ * @param {object} model the converted Share model (Mesh or Group)
+ * @param {boolean} cameFromGlbCache true when the model was hydrated from
+ *   the OPFS GLB cache (gates the BVH build; live parses build their own)
+ */
+export function restoreCacheHitPicking(model, cameFromGlbCache) {
+  // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
+  // models. The GLB write captured per-vertex `instanceID` alongside
+  // `expressID`; `inferModelCapabilities` flipped `instancePicking`
+  // when both are present. Build a map per child Mesh from its own
+  // geometry attributes.
+  //
+  // Why per-mesh, not single: GLTFExporter splits one indexed mesh
+  // into N primitives — one per `geometry.groups[]` entry — and
+  // duplicates shared vertices. So the cache-write turn this:
+  //   ifcModel (1 Mesh, geometry with M material groups, V verts)
+  // into this:
+  //   Group containing M child Meshes, each with its own vertex
+  //   subset + its own index buffer. Total V_cache ≈ V × avg_share_factor.
+  //
+  // On read, each child Mesh has its own copy of `expressID` +
+  // `instanceID` per-vertex; the instance IDs are globally unique
+  // across the meshes (GLTFExporter doesn't renumber attributes when
+  // splitting). So one IfcInstanceMap per child Mesh, attached as
+  // `mesh.instanceMap`, is the right shape. ShareViewer.setSelection
+  // and setInstanceSelection traverse the model and build subsets
+  // from each map. (Cache-miss is the degenerate single-Mesh case:
+  // `ifcModel` is itself the Mesh, traversal visits one node, same
+  // code path produces the same result.)
+  //
+  // Skip when a mesh already has an instanceMap attached — the
+  // Conway-direct cache-miss path attaches one directly during the
+  // parse swap; this block is only for cache-hit restoration.
+  // Cache-hit IfcInstanceMap restoration. Three sources, in order of
+  // preference:
+  //   1. BLDRS_face_ids extension (`userData.bldrsFaceIds.perPrimitive`)
+  //      — per-triangle expressID + instanceID arrays untouched by
+  //      compression. The source of truth when present; immune to
+  //      DRACO quantization and Meshopt vertex welding.
+  //   2. Per-vertex `_EXPRESSID` / `_INSTANCEID` attributes — the
+  //      legacy fallback for cache artifacts that predate face_ids.
+  //      Safe when no compression was applied (current default for
+  //      IFC GLBs); unreliable when DRACO/Meshopt ran.
+  //   3. Nothing — geometry-only model with no IFC IDs (drag-dropped
+  //      GLB / OBJ / etc.); skip the map.
+  //
+  // Walk meshes in traversal order. Match each Mesh to its face_ids
+  // perPrimitive entry by primitive index (writer's
+  // `capturePerTriangleIds` iterates `json.meshes[].primitives[]` in
+  // the same depth-first order GLTFLoader produces, so positional
+  // matching holds for both single-mesh and merged-container GLBs).
+  if (model.capabilities.instancePicking ||
+        model.userData?.bldrsFaceIds) {
+    const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Global STEP occurrence-path table (index = synthetic instance id),
+    // persisted by the writer so a cache-hit STEP model can rebuild the
+    // per-occurrence tables the cache-miss instance map carried. Null for
+    // IFC / pre-occurrence artifacts. Read before the userData is freed below.
+    const occurrencePaths = model.userData?.bldrsFaceIds?.occurrencePaths ?? null
+    // Global per-instance geometry (solid) express-id table, persisted the
+    // same way — restores per-solid selection of multibody STEP parts on
+    // cache-hit. Null for IFC / pre-0.10.0 artifacts.
+    const geometryExpressIds = model.userData?.bldrsFaceIds?.geometryExpressIds ?? null
+    // Per-vertex IDs are only trustworthy on uncompressed artifacts.
+    // DRACO quantises integer attributes and Meshopt welds shared
+    // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
+    // gate the legacy fallback on `bldrsCompressionMode == null`
+    // (set by parseBldrsGlbContainer above). When face_ids exists
+    // and fails its sanity check on a compressed artifact, we'd
+    // rather drop picking on that mesh than return wrong selections.
+    const compressionMode = model.userData?.bldrsCompressionMode ?? null
+    const perVertexTrusted = compressionMode === null
+    let meshIndex = 0
+    let attached = 0
+    let viaFaceIds = 0
+    let skippedCompressedNoFaceIds = 0
+    let totalInstances = 0
+    const allParents = new Set()
+    model.traverse((obj) => {
+      if (!obj.isMesh) {
+        return
+      }
+      if (obj.instanceMap) {
+        meshIndex++
+        return
+      }
+      let map = null
+      const faceIdsEntry = faceIdsPerPrimitive ? faceIdsPerPrimitive[meshIndex] : null
+      if (faceIdsEntry && faceIdsEntry.expressIds) {
+        // Sanity 1: per-triangle array length must match the geometry's
+        // triangle count.
+        // Sanity 2: decode canary — `firstExpressId` recorded at capture
+        // time must match `expressIds[0]` after Base64 decode. This is
+        // self-referential (it compares the payload against itself), so it
+        // only guards decode integrity, NOT writer↔reader primitive-order
+        // pairing.
+        // Sanity 3: order cross-check — when the per-vertex ids are
+        // trustworthy (uncompressed artifact), triangle 0's per-vertex
+        // expressID must equal the table's first entry. Unlike the decode
+        // canary this reads the MESH's own data, so it genuinely catches a
+        // primitive-order divergence between `capturePerTriangleIds`'
+        // `json.meshes[].primitives[]` walk and GLTFLoader's traversal
+        // order. (Compressed artifacts can't be cross-checked — DRACO/
+        // Meshopt corrupt the per-vertex ids — so they rely on 1+2 alone.)
+        const idxCount = obj.geometry?.index?.count ?? 0
+        const expectedTriCount = (idxCount / 3) | 0
+        const canaryOk = faceIdsEntry.firstExpressId === null ||
+            faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
+        const attrExpr = perVertexTrusted ? obj.geometry?.attributes?.expressID : null
+        const geomIndex = obj.geometry?.index
+        const crossOk = !attrExpr || !geomIndex || geomIndex.count === 0 ||
+            faceIdsEntry.expressIds[0] === attrExpr.getX(geomIndex.getX(0))
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk && crossOk) {
+          map = instanceMapFromTriangleIds(
+            faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
+          viaFaceIds++
+        } else if (!canaryOk || !crossOk) {
+          // A failure here leaves `map` null, so the per-vertex fallback
+          // below still recovers picking when the attrs are trusted (the
+          // cross-check only runs in that case); a compressed artifact
+          // genuinely loses picking on this mesh.
+          const which = canaryOk ? 'order cross-check vs per-vertex ids' : 'decode canary'
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh'
+          console.warn(
+            `[glb] reader: face_ids ${which} failed on mesh ${meshIndex} ` +
+              `(payload first expressID ${faceIdsEntry.expressIds[0]}, ` +
+              `recorded ${faceIdsEntry.firstExpressId}, ` +
+              `geometry ${attrExpr && geomIndex ? attrExpr.getX(geomIndex.getX(0)) : 'n/a'}); ` +
+              `${recovery}`)
+        } else {
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
+          console.warn(
+            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+              `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
+        }
+      }
+      if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
+        if (perVertexTrusted) {
+          map = instanceMapFromGeometry(obj.geometry)
+        } else if (!faceIdsEntry) {
+          // Compressed artifact with no face_ids entry — the per-vertex
+          // attrs exist but are corrupted by DRACO/Meshopt. Skip.
+          skippedCompressedNoFaceIds++
+        }
+      }
+      if (map) {
+        // Restore STEP per-occurrence tables from the persisted global
+        // table (no-op for IFC / when absent), so scene↔NavTree selection
+        // keys on the occurrence path — not the part-type id shared across
+        // every reuse — on cache-hit exactly as it does on cache-miss.
+        if (occurrencePaths) {
+          attachOccurrencePaths(map, occurrencePaths)
+        }
+        if (geometryExpressIds) {
+          attachGeometryExpressIds(map, geometryExpressIds)
+        }
+        obj.instanceMap = map
+        attached++
+        totalInstances += map.instanceCount
+        for (const pid of map.parentExpressIdToInstanceIds.keys()) {
+          allParents.add(pid)
+        }
+      }
+      meshIndex++
+    })
+    if (attached > 0) {
+      glbVerbose(
+        `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
+          `${totalInstances} instances under ${allParents.size} IFC products ` +
+          `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
+    }
+    if (skippedCompressedNoFaceIds > 0) {
+      console.warn(
+        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+          `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
+          'per-vertex IDs would be corrupted')
+    }
+    // Free the per-triangle ID arrays now that IfcInstanceMap owns its
+    // own copies. For a 2.84M-triangle Snowdon model this reclaims
+    // ~22MB of JS heap that would otherwise be held for the life of
+    // the scene.
+    if (model.userData?.bldrsFaceIds) {
+      delete model.userData.bldrsFaceIds
+    }
+  }
+
+  // BVH build for fast picking on cache-hit GLB. The Conway-direct
+  // cache-MISS path already does this inside
+  // `decorateConwayDirectIfcModel` (Slice 5b), but cache-HIT meshes
+  // come straight off GLTFLoader and never see a `computeBoundsTree()`
+  // call. Without a BVH, the per-frame hover raycast falls back to
+  // `Mesh.prototype.raycast`'s O(triangles) brute force — on a ~3M-tri
+  // Snowdon split into 85 child meshes that drops hover-pick to ~1 FPS.
+  // With BVH, the same raycast is O(log N) per mesh and stays at 60 FPS.
+  //
+  // `BufferGeometry.prototype.computeBoundsTree` is the monkey-patch
+  // wit-three's `initializeMeshBVH` already installed at viewer init
+  // (`web-ifc-three/IFCLoader.js#initializeMeshBVH` writes it onto
+  // the prototype + replaces `Mesh.prototype.raycast` with
+  // `acceleratedRaycast`). Cache-hit GLB meshes inherit the patched
+  // prototype but need their own `boundsTree` built per geometry.
+  //
+  // Gated on `cameFromGlbCache` so live IFC parses (which build
+  // their own BVH in `decorateConwayDirectIfcModel`) don't double-
+  // build.
+  if (cameFromGlbCache) {
+    const bvhStartMs = Date.now()
+    let bvhBuilt = 0
+    let bvhTris = 0
+    model.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry) {
+        return
+      }
+      // Skip if already has a BVH (defensive — shouldn't happen on
+      // cache-hit but won't rebuild if it does).
+      if (obj.geometry.boundsTree) {
+        return
+      }
+      if (typeof obj.geometry.computeBoundsTree !== 'function') {
+        return
+      }
+      try {
+        // `indirect` is required for correctness here, not a perf knob. The
+        // default build sorts `geometry.index` in place (spatial leaf order),
+        // but the per-triangle `IfcInstanceMap`s were just built from
+        // `BLDRS_face_ids` in the GLB's ORIGINAL triangle order (the attach
+        // block above). A permuting build breaks every triangle-keyed
+        // consumer afterwards: a pick's `faceIndex` resolves to the wrong
+        // instance/element (an i-beam reads as a bolt), and the selection
+        // subsets draw the table's triangle ranges against the permuted
+        // buffer — highlighting spatially-nearby OTHER parts instead of the
+        // picked one. Indirect mode keeps the index untouched (the BVH holds
+        // its own indirection buffer) and reports `faceIndex` in original
+        // order, so tables, raycasts and subsets all stay aligned. The
+        // cache-MISS path never had this problem: `decorateConwayDirectIfcModel`
+        // rebuilds its map FROM the geometry after its (permuting) build.
+        obj.geometry.computeBoundsTree({indirect: true})
+        bvhBuilt++
+        const idx = obj.geometry.index
+        bvhTris += idx ? (idx.count / 3) : 0
+      } catch (e) {
+        glbInfo(`reader: computeBoundsTree failed for one mesh; skipping:`, e)
+      }
+    })
+    if (bvhBuilt > 0) {
+      glbVerbose(
+        `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
+          `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
+    }
+  }
 }
 
 

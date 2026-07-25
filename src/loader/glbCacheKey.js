@@ -15,6 +15,19 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.14.0 — fixed the batched writer dropping STEP per-occurrence data. The
+ *         default render path is now the demandGeometry BatchedMesh, which
+ *         has no `instanceMap`; the writer had read `occurrencePaths` /
+ *         `geometryExpressIds` straight off `model.instanceMap`, so a
+ *         batched-first load cached with both tables silently absent. On
+ *         cache-hit the spatial tree still restored occurrence paths (NavTree
+ *         highlighted) but the mesh table was gone, so scene per-occurrence
+ *         selection collapsed to the part-type id (permalink reload lost the
+ *         3D highlight). The writer now re-keys the batch side tables via
+ *         `batchedModelOccurrenceTables`; this bump retires the occurrence-less
+ *         0.13.0 artifacts those batched writes produced so the next miss
+ *         rewrites them complete. IFC artifacts are unaffected (no occurrence
+ *         data). See design/new/step-occurrence-selection.md.
  * 0.13.0 — replaced `BLDRS_element_properties`' monolithic gzipped-JSON
  *         payload with a block-indexed binary container ("BPRI" magic:
  *         gzipped header carrying an id→block index + the pset table,
@@ -110,7 +123,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.13.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.14.0'
 
 
 /**
