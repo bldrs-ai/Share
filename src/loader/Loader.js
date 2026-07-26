@@ -1,4 +1,5 @@
 import axios from 'axios'
+import {ZFIGHT_BAKE_XFORMS} from '../viewer/ifc/zfightProbe'
 import {Box3, BufferAttribute, Group, Mesh, Object3D, Vector3} from 'three'
 import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js'
 import {FBXLoader} from 'three/examples/jsm/loaders/FBXLoader.js'
@@ -177,7 +178,10 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
-  const wantGlb = isFeatureEnabled('glb') && isIfc
+  // Z-fight probe: a GLB cache HIT swaps to the GLB pipeline, so the
+  // batched builder (and the bakeXforms probe) would never run — and the
+  // first probe run would silently test the wrong renderer path.
+  const wantGlb = isFeatureEnabled('glb') && isIfc && !ZFIGHT_BAKE_XFORMS
   if (wantGlb) {
     glbVerbose('feature enabled')
   }

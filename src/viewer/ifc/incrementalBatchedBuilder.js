@@ -1,6 +1,7 @@
 import {BatchedMesh, Box3, DoubleSide, Group, Matrix4, Vector4} from 'three'
 import {forEachVectorItem} from './conwayVector'
 import {makeSurfaceMaterial} from '../lookMaterial'
+import {ZFIGHT_BAKE_XFORMS} from './zfightProbe'
 import {
   DEFAULT_COLOR,
   INDICES_PER_TRIANGLE,
@@ -99,7 +100,7 @@ export class IncrementalBatchedBuilder {
     // world coordinates of 10-50m is 1-4µm — the same scale as coplanar
     // BIM interface separations. Diagnostic only: defeats geometry
     // sharing, so memory scales with instance count.
-    this.bakeTransforms = zfightProbeFlag('bakeXforms')
+    this.bakeTransforms = ZFIGHT_BAKE_XFORMS
     if (this.bakeTransforms) {
       // eslint-disable-next-line no-console
       console.log('[zfight-probe] bakeXforms=1: baking instance transforms into batch geometry')
@@ -412,20 +413,5 @@ export class IncrementalBatchedBuilder {
     }
     state.usedVertices = needVertices
     state.usedIndices = needIndices
-  }
-}
-
-/**
- * Z-fight probe URL flag (diagnostic previews only), e.g. ?bakeXforms=1.
- * Safe under jest/node where `window` is undefined.
- *
- * @param {string} name query parameter name
- * @return {boolean} true when the parameter is exactly '1'
- */
-function zfightProbeFlag(name) {
-  try {
-    return new URLSearchParams(window.location.search).get(name) === '1'
-  } catch (e) {
-    return false
   }
 }
