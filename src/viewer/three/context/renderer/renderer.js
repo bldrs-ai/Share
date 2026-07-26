@@ -32,6 +32,17 @@ export class IfcRenderer extends IfcComponent {
     })
     // For debugger tracing
     this.renderer.preserveDrawingBufferENABLED = pdbEnabled
+    // Z-fight probe: report the depth/stencil format the driver actually
+    // granted, so real-GPU preview tests can read it from the console.
+    try {
+      const gl = this.renderer.getContext()
+      console.log('[zfight-probe] depthBits=', gl.getParameter(gl.DEPTH_BITS),
+        'stencilBits=', gl.getParameter(gl.STENCIL_BITS),
+        'samples=', gl.getParameter(gl.SAMPLES),
+        'contextAttributes=', JSON.stringify(gl.getContextAttributes()))
+    } catch (e) {
+      console.warn('[zfight-probe] context query failed', e)
+    }
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.setupRenderers()
     this.postProduction = new Postproduction(this.context, this.renderer)
