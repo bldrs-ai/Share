@@ -91,6 +91,20 @@ export class IncrementalBatchedBuilder {
     this.scratchMatrix = new Matrix4()
     this.scratchRgba = new Vector4()
     this.scratchBox = new Box3()
+    // Z-fight probe (?bakeXforms=1): bake each placement's transform into a
+    // per-instance copy of the geometry (CPU double precision, identity
+    // instance matrix), reproducing the classic merged-path vertex math
+    // inside the batched architecture. BatchedMesh normally applies the
+    // instance matrix in the float32 vertex shader, where one ulp at
+    // world coordinates of 10-50m is 1-4µm — the same scale as coplanar
+    // BIM interface separations. Diagnostic only: defeats geometry
+    // sharing, so memory scales with instance count.
+    this.bakeTransforms = zfightProbeFlag('bakeXforms')
+    if (this.bakeTransforms) {
+      // eslint-disable-next-line no-console
+      console.log('[zfight-probe] bakeXforms=1: baking instance transforms into batch geometry')
+    }
+    this.identityMatrix = new Matrix4()
   }
 
 
@@ -208,14 +222,8 @@ export class IncrementalBatchedBuilder {
     this.seenPlacements.add(dedupKey)
     const isTransparent = color.w < OPAQUE_ALPHA
     const state = this.ensureBatch_(isTransparent)
-    this.ensureCapacity_(state, entry)
+    this.ensureCapacity_(state, entry, this.bakeTransforms)
 
-    let geometryId = entry.idByBatch.get(state)
-    if (geometryId === undefined) {
-      geometryId = state.mesh.addGeometry(entry.geometry)
-      entry.idByBatch.set(state, geometryId)
-    }
-    const batchId = state.mesh.addInstance(geometryId)
     const matrix = this.scratchMatrix.fromArray(placed.flatTransformation)
     // Decide the model-wide origin-recenter offset from the first placement,
     // then subtract it from every instance so a georeferenced model renders at
@@ -233,7 +241,23 @@ export class IncrementalBatchedBuilder {
       matrix.elements[13] -= this.coordOffset[1]
       matrix.elements[14] -= this.coordOffset[2]
     }
-    state.mesh.setMatrixAt(batchId, matrix)
+    let geometryId
+    let renderGeometry = entry.geometry
+    if (this.bakeTransforms) {
+      // Vertices go through the placement matrix once here (JS double
+      // precision) instead of per-frame in the float32 vertex shader.
+      renderGeometry = entry.geometry.clone()
+      renderGeometry.applyMatrix4(matrix)
+      geometryId = state.mesh.addGeometry(renderGeometry)
+    } else {
+      geometryId = entry.idByBatch.get(state)
+      if (geometryId === undefined) {
+        geometryId = state.mesh.addGeometry(entry.geometry)
+        entry.idByBatch.set(state, geometryId)
+      }
+    }
+    const batchId = state.mesh.addInstance(geometryId)
+    state.mesh.setMatrixAt(batchId, this.bakeTransforms ? this.identityMatrix : matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
     state.instanceParents.push(parentExpressId)
     state.instanceOccurrenceIds.push(this.occurrenceId)
@@ -241,7 +265,7 @@ export class IncrementalBatchedBuilder {
     // the batched consumers can narrow selection / hide to one occurrence.
     state.instanceGeometryIds.push(geomExpressID)
     state.instanceOccurrencePaths.push(placed.occurrencePath ?? null)
-    state.instanceGeometry.push(entry.geometry)
+    state.instanceGeometry.push(renderGeometry)
     state.instanceColors.push(color)
     state.cursor++
     this.occurrenceId++
@@ -363,13 +387,16 @@ export class IncrementalBatchedBuilder {
    *
    * @param {object} state batch state
    * @param {object} entry geometry cache entry
+   * @param {boolean} [forceGeometry] account vertex/index space even when
+   *   the geometry is already in this batch (bakeXforms probe: every
+   *   instance appends its own baked copy).
    */
-  ensureCapacity_(state, entry) {
+  ensureCapacity_(state, entry, forceGeometry = false) {
     if (state.cursor + 1 > state.maxInstances) {
       state.maxInstances = Math.max(state.maxInstances * GROWTH, state.cursor + 1)
       state.mesh.setInstanceCount(state.maxInstances)
     }
-    if (entry.idByBatch.has(state)) {
+    if (!forceGeometry && entry.idByBatch.has(state)) {
       return
     }
     const needVertices = state.usedVertices + entry.vertCount
@@ -385,5 +412,20 @@ export class IncrementalBatchedBuilder {
     }
     state.usedVertices = needVertices
     state.usedIndices = needIndices
+  }
+}
+
+/**
+ * Z-fight probe URL flag (diagnostic previews only), e.g. ?bakeXforms=1.
+ * Safe under jest/node where `window` is undefined.
+ *
+ * @param {string} name query parameter name
+ * @return {boolean} true when the parameter is exactly '1'
+ */
+function zfightProbeFlag(name) {
+  try {
+    return new URLSearchParams(window.location.search).get(name) === '1'
+  } catch (e) {
+    return false
   }
 }

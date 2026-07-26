@@ -78,7 +78,10 @@ export class OrbitControl extends IfcComponent {
     // far must clear the pulled-back camera (maxDistance + model radius), near
     // must stay inside the closest dolly. Without this, zooming out on a large
     // model would clip it against the old far = 2000 plane.
-    camera.near = Math.max(controls.minDistance * 0.5, 0.1)
+    // Z-fight probe (?nearMin=1): raise the near-plane floor. Only
+    // meaningful with ?logDepth=0 — conventional depth resolution scales
+    // with near (dz ~ z^2/(near*2^24)); log depth doesn't depend on it.
+    camera.near = Math.max(controls.minDistance * 0.5, nearPlaneFloor())
     camera.far = (controls.maxDistance + sphere.radius) * 1.5
     camera.updateProjectionMatrix()
 
@@ -92,3 +95,20 @@ export class OrbitControl extends IfcComponent {
   }
 }
 // # sourceMappingURL=orbit-control.js.map
+
+/**
+ * Z-fight probe (?nearMin=1): near-plane floor override for depth
+ * strategy A/B tests. Defaults to the production floor of 0.1.
+ *
+ * @return {number} minimum near-plane distance in scene units
+ */
+function nearPlaneFloor() {
+  const PROD_NEAR_FLOOR = 0.1
+  try {
+    const raw = new URLSearchParams(window.location.search).get('nearMin')
+    const parsed = raw === null ? NaN : Number(raw)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : PROD_NEAR_FLOOR
+  } catch (e) {
+    return PROD_NEAR_FLOOR
+  }
+}

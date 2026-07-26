@@ -20,14 +20,12 @@ export class IfcRenderer extends IfcComponent {
     this.renderer = new WebGLRenderer({
       alpha: true,
       antialias: true,
-      logarithmicDepthBuffer: true,
+      logarithmicDepthBuffer: logDepthEnabled(),
       preserveDrawingBuffer: pdbEnabled,
-      // three r163 flipped the default to false, and without a stencil
-      // ANGLE/Chrome may allocate a 16-bit depth buffer (~2.4mm depth
-      // resolution at 15m under log-depth, vs ~9µm with the packed
-      // 24-bit D24S8) — coplanar BIM interfaces (soffits, rakes,
-      // ridges) z-fight visibly. Explicit so a default change can't
-      // silently downgrade depth precision again.
+      // Probe leftover: measurement on a real GPU showed Chrome grants
+      // 24-bit depth with or without stencil, so this is precision-
+      // neutral (theory falsified — see Share#1653). Kept on this
+      // diagnostic branch for A/B continuity only.
       stencil: true,
     })
     // For debugger tracing
@@ -39,6 +37,7 @@ export class IfcRenderer extends IfcComponent {
       console.log('[zfight-probe] depthBits=', gl.getParameter(gl.DEPTH_BITS),
         'stencilBits=', gl.getParameter(gl.STENCIL_BITS),
         'samples=', gl.getParameter(gl.SAMPLES),
+        'logDepth=', this.renderer.capabilities.logarithmicDepthBuffer,
         'contextAttributes=', JSON.stringify(gl.getContextAttributes()))
     } catch (e) {
       console.warn('[zfight-probe] context query failed', e)
@@ -89,7 +88,7 @@ export class IfcRenderer extends IfcComponent {
       this.tempRenderer = new WebGLRenderer({
         canvas: tempCanvas,
         antialias: true,
-        logarithmicDepthBuffer: true,
+        logarithmicDepthBuffer: logDepthEnabled(),
         preserveDrawingBuffer: process.env.THREE_PDB_IS_ENABLED || false,
         // Same depth-precision requirement as the main renderer above:
         // screenshots must not z-fight where the live view doesn't.
@@ -122,3 +121,18 @@ export class IfcRenderer extends IfcComponent {
   }
 }
 // # sourceMappingURL=renderer.js.map
+
+/**
+ * Z-fight probe (?logDepth=0): disable the logarithmic depth buffer so
+ * alternative depth strategies can be A/B tested on a live preview.
+ * Defaults to enabled — the production configuration.
+ *
+ * @return {boolean} whether the logarithmic depth buffer is enabled
+ */
+function logDepthEnabled() {
+  try {
+    return new URLSearchParams(window.location.search).get('logDepth') !== '0'
+  } catch (e) {
+    return true
+  }
+}
