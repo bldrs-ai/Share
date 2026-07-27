@@ -46,25 +46,49 @@ describe('Open 100: Open model dialog', () => {
   })
 
   describe('DnD file appears in recently used', () => {
+    // An upload's OPFS storage id is the blob UUID plus the type suffix;
+    // the user's filename is only ever a display label. Keeping the two
+    // distinct here is what makes this cover #1682 — an entry whose id
+    // and name are the same string can't catch navigation by the wrong
+    // field.
+    const STORAGE_ID = 'ADD77535-D1B6-49A9-915B-41343B08BF83.ifc'
+
+    /**
+     * Simulate a completed file drop by writing a recent file entry to
+     * localStorage, mirroring what handleFileDrop does via
+     * addRecentFileEntry after saving to OPFS.
+     */
+    const seedRecent = (storageId: string) => {
+      const entry = {
+        id: storageId,
+        source: 'local',
+        name: 'box.ifc',
+        lastModifiedUtc: null,
+      }
+      localStorage.setItem('bldrs:recent-files', JSON.stringify({version: 1, files: [entry]}))
+    }
+
     test('dropped file is shown in Local tab recent list', async ({page}) => {
       await returningUserVisitsHomepageWaitForModel(page)
-
-      // Simulate a completed file drop by writing a recent file entry to localStorage,
-      // mirroring what handleFileDrop does via addRecentFileEntry after saving to OPFS.
-      await page.evaluate(() => {
-        const entry = {
-          id: 'box.ifc',
-          source: 'local',
-          name: 'box.ifc',
-          lastModifiedUtc: null,
-        }
-        localStorage.setItem('bldrs:recent-files', JSON.stringify({version: 1, files: [entry]}))
-      })
+      await page.evaluate(seedRecent, STORAGE_ID)
 
       // Open dialog and verify the filename appears in the Local tab recent list
       await page.getByTestId('control-button-open').click()
       await page.getByTestId('tab-local').click()
       await expect(page.getByText('box.ifc')).toBeVisible()
+    })
+
+    test('opening a recent navigates to its OPFS storage id, not its display name', async ({page}) => {
+      await returningUserVisitsHomepageWaitForModel(page)
+      await page.evaluate(seedRecent, STORAGE_ID)
+
+      await page.getByTestId('control-button-open').click()
+      await page.getByTestId('tab-local').click()
+      await page.getByTestId(`link-open-recent-${STORAGE_ID}`).click()
+
+      // /v/new/box.ifc would miss OPFS entirely and fetch the SPA
+      // catch-all from the origin — the #1682 crash.
+      await expect(page).toHaveURL(new RegExp(`/v/new/${STORAGE_ID}$`))
     })
   })
 
