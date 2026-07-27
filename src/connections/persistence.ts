@@ -16,7 +16,11 @@ export type RecentFileSource = 'local' | 'google-drive' | 'github'
 
 
 export interface RecentFileEntry {
-  /** Dedup key: fileId (google-drive) | sharePath (github) | filename (local) */
+  /**
+   * Dedup key: fileId (google-drive) | sharePath (github) | OPFS storage
+   * id, `<blob-uuid>.<ext>` (local). For local entries this — not `name` —
+   * is what `/v/new/` navigation and `Loader#load` resolve against OPFS.
+   */
   id: string
   source: RecentFileSource
   /** Original filename — used as tooltip and display fallback */
@@ -25,7 +29,7 @@ export interface RecentFileEntry {
   modelTitle?: string
   mimeType?: string
   lastModifiedUtc?: number | null
-  /** Navigate path for local (/v/new/filename) and github (/v/gh/...) */
+  /** Navigate path for local (/v/new/[storage-id]) and github (/v/gh/...) */
   sharePath?: string
   /** google-drive only */
   connectionId?: string
