@@ -38,3 +38,40 @@ const PROD_NEAR_FLOOR = 0.1
 const parsedNearMin = Number(readParam('nearMin') ?? NaN)
 export const ZFIGHT_NEAR_FLOOR =
   Number.isFinite(parsedNearMin) && parsedNearMin > 0 ? parsedNearMin : PROD_NEAR_FLOOR
+
+/**
+ * ?depth16=1 — force offscreen depth renderbuffers back to
+ * DEPTH_COMPONENT16, the format three 0.135 allocated for the
+ * postprocessing composer's target (measured: the May-era stable build
+ * ran D16; the three 0.184 upgrade moved it to DEPTH_COMPONENT24).
+ * Coarse quantization makes sub-mm coplanar interfaces tie uniformly
+ * so draw order resolves them stably; D24 resolves fine enough that
+ * per-fragment log-depth rounding noise picks a random winner per
+ * pixel. Applied at module evaluation, before any GL context exists.
+ */
+export const ZFIGHT_DEPTH16 = readParam('depth16') === '1'
+if (ZFIGHT_DEPTH16) {
+  try {
+    const DEPTH_COMPONENT24 = 0x81A6
+    const DEPTH_COMPONENT16 = 0x81A5
+    const proto = WebGL2RenderingContext.prototype
+    const origSingle = proto.renderbufferStorage
+    const origMulti = proto.renderbufferStorageMultisample
+    const remap = (internalformat) => {
+      if (internalformat === DEPTH_COMPONENT24) {
+        // eslint-disable-next-line no-console
+        console.log('[zfight-probe] depth16=1: DEPTH_COMPONENT24 -> DEPTH_COMPONENT16')
+        return DEPTH_COMPONENT16
+      }
+      return internalformat
+    }
+    proto.renderbufferStorage = function(target, internalformat, width, height) {
+      return origSingle.call(this, target, remap(internalformat), width, height)
+    }
+    proto.renderbufferStorageMultisample = function(target, samples, internalformat, width, height) {
+      return origMulti.call(this, target, samples, remap(internalformat), width, height)
+    }
+  } catch (e) {
+    console.warn('[zfight-probe] depth16 patch failed', e)
+  }
+}
