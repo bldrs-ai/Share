@@ -14,6 +14,13 @@ export const flags = [
   // land in identity-decoupling PR2.
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
+  // Workspace shell (conversational-CAD epic assist-300, #1657): the
+  // ProjectsDrawer (projects → models, localStorage-persisted) leftmost in
+  // RootLandscape + the logo popup with marketing links. Flag-off layout
+  // must stay byte-identical to today's — the merge into production chrome
+  // is invisible until flipped.
+  // See design/new/conversational-cad.md §2.
+  {name: 'workspace', isActive: false},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).

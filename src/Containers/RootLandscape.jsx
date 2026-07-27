@@ -8,8 +8,10 @@ import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
+import ProjectsDrawer from './ProjectsDrawer'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 
 
@@ -24,6 +26,9 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const isMobile = useIsMobile()
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
+  // Workspace shell (epic assist-300, #1657): ProjectsDrawer sits left of
+  // the NavTree/Versions drawer. Desktop-only for now, like that drawer.
+  const isWorkspaceEnabled = useExistInFeature('workspace')
 
   return (
     <Stack
@@ -33,6 +38,14 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh', overflow: 'hidden'}}
       data-testid='RootLandscape-RootStack'
     >
+      {!isMobile && isWorkspaceEnabled &&
+       <Box
+         sx={{flex: '0 0 auto', flexShrink: 0}}
+         data-testid='ProjectsDrawer-Container'
+       >
+         <ProjectsDrawer/>
+       </Box>
+      }
       {!isMobile &&
        <Box
          sx={{
