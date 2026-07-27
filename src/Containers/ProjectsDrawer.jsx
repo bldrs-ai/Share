@@ -21,7 +21,7 @@ import {useTheme} from '@mui/material/styles'
 import {loadAllRecentFiles} from '../connections/persistence'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
-import {TOP_BAR_HEIGHT} from './layoutConstants'
+import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {recentDisplayName} from '../utils/modelDisplayName'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
@@ -46,7 +46,17 @@ const MODEL_ROUTE_RE = /\/v\//
 // instead of becoming an unusable sliver.
 const COLLAPSE_AT_WIDTH = 120
 const RESIZER_THICKNESS = 10
-const COLLAPSED_RAIL_WIDTH = '44px'
+// One control cell wide, so the rail's icons sit on the same grid as the
+// control groups across the canvas.
+const COLLAPSED_RAIL_WIDTH = `${ROW_PITCH}px`
+
+// Every row in the drawer is one control row: same square as the icons
+// in the adjacent NavTree/Versions group, same margins, same corner.
+const rowSx = {
+  height: `${CONTROL_SIZE}px`,
+  margin: `${CONTROL_MARGIN}px`,
+  borderRadius: '10px',
+}
 // Breathing room under the header row, mirroring the gap the top bar
 // leaves above the NavTree controls (theme spacing 1).
 const CONTENT_TOP_GAP = 8
@@ -219,6 +229,27 @@ export default function ProjectsDrawer() {
         data-testid='ProjectsDrawer'
       >
         {header}
+        {/* One cell per project, on the control grid. Clicking reopens
+            the drawer with that project expanded; the per-project quick
+            access menu that will live here is the follow-up (wireframe
+            screen 2). */}
+        <Stack alignItems='center' sx={{overflowY: 'auto'}}>
+          {workspaceProjects.map((project) => (
+            <TooltipIconButton
+              key={project.id}
+              title={project.name}
+              placement='right'
+              icon={<ApartmentIcon className='icon-share'/>}
+              onClick={() => {
+                if (!expandedProjectIds.includes(project.id)) {
+                  toggleWorkspaceProjectExpanded(project.id)
+                }
+                setIsCollapsed(false)
+              }}
+              dataTestId={`project-rail-${project.id}`}
+            />
+          ))}
+        </Stack>
         <Box sx={{flexGrow: 1}}/>
         {footer}
       </Paper>
@@ -278,6 +309,7 @@ export default function ProjectsDrawer() {
           return (
             <React.Fragment key={project.id}>
               <ListItemButton
+                sx={rowSx}
                 onClick={() => toggleWorkspaceProjectExpanded(project.id)}
                 data-testid={`project-${project.id}`}
               >
@@ -307,7 +339,7 @@ export default function ProjectsDrawer() {
                     return (
                       <ListItemButton
                         key={model.id}
-                        sx={{pl: 4}}
+                        sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
                         selected={location.pathname === model.path}
                         // Disarm first: opening a model that is already
                         // listed must not be adopted by a still-armed
@@ -339,7 +371,7 @@ export default function ProjectsDrawer() {
                     )
                   })}
                   <ListItemButton
-                    sx={{pl: 4}}
+                    sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
                     onClick={() => onAddModel(project.id)}
                     data-testid={`project-add-model-${project.id}`}
                   >

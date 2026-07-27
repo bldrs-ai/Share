@@ -4,7 +4,7 @@ import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
 import ProjectsDrawer from './ProjectsDrawer'
-import {TOP_BAR_HEIGHT} from './layoutConstants'
+import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
 
 
 describe('ProjectsDrawer', () => {
@@ -55,6 +55,30 @@ describe('ProjectsDrawer', () => {
     })
   })
 
+  // The drawer butts against the NavTree/Versions control group, so its
+  // rows step on the same control grid as those icons.
+  it('sizes rows to the control grid', () => {
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().addWorkspaceModel(projectId, {label: 'x.ifc', path: '/share/v/new/x.ifc'})
+    })
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    expect(screen.getByTestId(`project-${projectId}`)).toHaveStyle({
+      height: `${CONTROL_SIZE}px`,
+      margin: `${CONTROL_MARGIN}px`,
+    })
+    // Child rows keep the row height and vertical rhythm; only their
+    // left margin differs, to indent them under the project.
+    const childRow = screen.getByTestId(`project-add-model-${projectId}`)
+    expect(childRow).toHaveStyle({height: `${CONTROL_SIZE}px`})
+    expect(childRow).toHaveStyle({marginTop: `${CONTROL_MARGIN}px`})
+    expect(childRow).toHaveStyle({marginBottom: `${CONTROL_MARGIN}px`})
+  })
+
   it('aligns its header with the top bar, wordmark left of the toggle', () => {
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
@@ -85,6 +109,25 @@ describe('ProjectsDrawer', () => {
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
       expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+    })
+
+    // Placeholder for the per-project quick-access menu (wireframe 2).
+    it('shows one project icon per project on the rail, and reopens to it', () => {
+      act(() => {
+        useStore.getState().createWorkspaceProject('A')
+        useStore.getState().createWorkspaceProject('B')
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      const [projA, projB] = useStore.getState().workspaceProjects
+      expect(screen.getByTestId(`project-rail-${projA.id}`)).toBeInTheDocument()
+      expect(screen.getByTestId(`project-rail-${projB.id}`)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId(`project-rail-${projB.id}`))
+
+      expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(false)
+      expect(useStore.getState().expandedProjectIds).toContain(projB.id)
     })
 
     it('starts collapsed when that was the stored preference', () => {
