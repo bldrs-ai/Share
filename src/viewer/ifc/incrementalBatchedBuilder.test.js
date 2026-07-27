@@ -92,6 +92,10 @@ describe('IncrementalBatchedBuilder', () => {
       expect(Array.from(a.instanceParents)).toEqual(Array.from(b.instanceParents))
       expect(Array.from(a.instanceOccurrenceIds)).toEqual(Array.from(b.instanceOccurrenceIds))
       expect(a.mesh).toBeInstanceOf(BatchedMesh)
+      // Coplanar-tie stability: opaque batches draw in insertion order
+      // (no per-frame camera sort); transparent keeps sorting to blend.
+      expect(a.mesh.sortObjects).toBe(a.transparent)
+      expect(b.mesh.sortObjects).toBe(b.transparent)
     }
   })
 
@@ -110,6 +114,34 @@ describe('IncrementalBatchedBuilder', () => {
     expect(stats.uniqueGeometryCount).toBe(2)
     expect(batches).toHaveLength(1)
     expect(batches[0].instanceParents).toHaveLength(10)
+  })
+
+  it('drops an exact coincident duplicate that arrives in a later delta batch', () => {
+    // The demand pump can re-emit the same placement in a later batch
+    // (conway's rel-aggregates re-extraction). Across batches, the coincident
+    // duplicate must be dropped, not drawn twice (z-fighting).
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])]) // exact dup
+    const {stats, batches} = builder.finalize()
+    expect(stats.instanceCount).toBe(1)
+    expect(stats.skippedCoincidentPlacements).toBe(1)
+    expect(batches[0].instanceParents).toHaveLength(1)
+  })
+
+  it('keeps same-shape placements that differ in transform', () => {
+    const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 0, 0, 1]
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([{
+      expressID: 1,
+      geometries: [
+        {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, color: OPAQUE},
+        {geometryExpressID: 999, flatTransformation: moved, color: OPAQUE},
+      ],
+    }])
+    const {stats} = builder.finalize()
+    expect(stats.instanceCount).toBe(2)
+    expect(stats.skippedCoincidentPlacements).toBe(0)
   })
 
   it('recenters a georeferenced model across batches with one shared offset', () => {

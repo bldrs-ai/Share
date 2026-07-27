@@ -512,9 +512,20 @@ export default function CadView({
 
     viewer.context.getScene().add(loadedModel)
 
+    // Size the dolly range + near/far clip planes to the model *before*
+    // any camera pose is applied, so the first frame is already drawn
+    // with the right frustum. fitModelToFrame does this too, but a
+    // permalink with a `#c:` camera hash skips the fit — and then the
+    // model renders against the default far = 2000 plane and the first
+    // user input clamps the restored distance to maxDistance = 300
+    // (#1652).
+    viewer.context.fitCameraLimitsToModel(loadedModel)
+
     const isCamHashSet = onHash(location, viewer.context.getCameraControls())
     if (!isCamHashSet) {
-      viewer.context.fitModelToFrame()
+      // Framing target passed explicitly: the no-arg fallback frames the
+      // last scene child, which is the model only by luck of ordering.
+      viewer.context.fitModelToFrame(loadedModel)
     }
 
     // §6e: fit the contact-shadow ground + shadow frustum to the model's
@@ -1034,13 +1045,30 @@ export default function CadView({
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
   function selectElementBasedOnFilepath(filepath) {
+    // Normalize to the element path BELOW the model file. The two callers
+    // pass different shapes: the location watcher passes the already-split
+    // element path ('/120010/.../2867' — no file suffix, split is a no-op),
+    // while the post-load call passes the full source path (gitpath / srcUrl /
+    // installPrefix+filepath) whose last '/'-segment is the model FILENAME.
+    // Without this split, a filename with a digit prefix — an OPFS upload's
+    // hex UUID (~62% start with a digit) or a numeric-named file like
+    // 171210AISC_Sculpture_param.ifc — parseInt()s to a finite "element id"
+    // and CLOBBERS the selection the permalink restore just made (#1639
+    // follow-up: NavTree kept its highlight, the scene lost its own).
+    const suffixSplit = filepath.split(fileSuffixBoundaryRegex)
+    if (suffixSplit.length === 2) {
+      filepath = suffixSplit[1]
+    }
     if (filepath.startsWith('/')) {
       filepath = filepath.substring(1)
     }
     const parts = filepath.split(/\//)
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
-      const targetId = parseInt(parts[parts.length - 1])
+      // Whole-segment numeric only: app-written element paths are pure ids,
+      // and parseInt's prefix parsing would accept junk like '12abc'.
+      const lastPart = parts[parts.length - 1]
+      const targetId = /^\d+$/.test(lastPart) ? parseInt(lastPart, 10) : NaN
       if (!isFinite(targetId)) {
         return
       }
