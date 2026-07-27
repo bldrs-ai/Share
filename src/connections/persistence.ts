@@ -28,6 +28,11 @@ export interface RecentFileEntry {
   /** Extracted IFC model name — preferred for display when available */
   modelTitle?: string
   mimeType?: string
+  /**
+   * Epoch ms. Entries written by drag-and-drop before #1682 hold an
+   * ISO-8601 string instead; `RecentFilesList` coerces on read so those
+   * still render, but nothing should write one.
+   */
   lastModifiedUtc?: number | null
   /** Navigate path for local (/v/new/[storage-id]) and github (/v/gh/...) */
   sharePath?: string
