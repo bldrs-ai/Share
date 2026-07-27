@@ -1,6 +1,6 @@
 # Share × Conversational CAD — epic plan
 
-**Status:** Draft v0.1 — for review before any GH issues are created
+**Status:** v0.2 — plan agreed; roadmap v0.7 deltas applied; tracking issues live
 **Date:** 2026-07-27
 **Owner:** Pablo
 **Wireframes:** "Share × Conversational CAD — production merge wireframes"
@@ -27,12 +27,12 @@ structure. Epic 3 depends on `ai-workspace.md` existing first.
 The four-step sequence corresponds almost 1:1 to the roadmap's Assist group
 (§4.11) and pivot stages (§7.4) — only step 2 is genuinely new:
 
-| # | This plan | Roadmap ID | Pivot stage | Status |
+| # | This plan | Roadmap ID | Pivot stage | Tracking issue |
 |---|---|---|---|---|
-| 1 | Base UI reorg (projects drawer, top bar) | `assist-300` | AI.1 | ⬜ existing epic, scope extended here |
-| 2 | Search + Nav upgrade | **`search-320` (new)** | between AI.1 and AI.2 | proposed in §9 |
-| 3 | Conversational CAD w/ AI | `assist-310` + T10 + T11 | AI.2 | ⬜ existing epic |
-| 4 | Multi-user + Social | `assist-400` + **`assist-410` (new)** | AI.4 | ⬜ existing + proposed |
+| 1 | Base UI reorg (projects drawer, top bar) | `assist-300` | AI.1 | [#1657](https://github.com/bldrs-ai/Share/issues/1657) |
+| 2 | Search + Nav upgrade | `search-320` (new in roadmap v0.7) | AI.1a | [#1658](https://github.com/bldrs-ai/Share/issues/1658) |
+| 3 | Conversational CAD w/ AI | `assist-310` + T10 + T11 | AI.2 | [#1659](https://github.com/bldrs-ai/Share/issues/1659) |
+| 4 | Multi-user + Social | `assist-400` + `assist-410` (backlog) | AI.4 | [#1660](https://github.com/bldrs-ai/Share/issues/1660) |
 
 Why Search+Nav sits second, between shell and agent: the conversational
 panel constantly *references elements* — AI replies carry element chips, the
@@ -285,6 +285,13 @@ four epics have different prereqs and can be worked by different people).
 
 ## 8. Draft tracking issues
 
+**Created 2026-07-27** as `epic`-labeled issues with `story`-labeled native
+sub-issues (the drafts below are the record of what was filed):
+- `assist-300` → [#1657](https://github.com/bldrs-ai/Share/issues/1657), stories #1661–#1667
+- `search-320` → [#1658](https://github.com/bldrs-ai/Share/issues/1658), stories #1668–#1670 + existing #1254 attached
+- `assist-310` → [#1659](https://github.com/bldrs-ai/Share/issues/1659), stories #1671–#1677
+- `assist-400` → [#1660](https://github.com/bldrs-ai/Share/issues/1660), stories #1678–#1680
+
 ### epic: assist-300: Workspace shell — projects drawer + top bar
 > Turns Share into a workspace: ProjectsDrawer (leftmost), TopBar
 > (breadcrumb + search), relocated Profile/Share, logo popup. Behind
@@ -335,7 +342,7 @@ comment-only routing design. (`assist-410` social broadcast: backlog item
 only, no issue yet.)
 
 
-## 9. Proposed roadmap.md deltas (apply on sign-off, per its maintenance rules)
+## 9. Roadmap.md deltas (applied in roadmap v0.7, same PR as this revision)
 
 1. **New epic `search-320`** — block in §4.5 + row in §3.1 (Pro band, Phase
    AI, Tracks: —). Body per §3 above.
