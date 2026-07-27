@@ -3,12 +3,19 @@ import {act, fireEvent, render, screen, waitForElementToBeRemoved, within} from 
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
+import {navigateToModel} from '../utils/navigate'
 import ProjectsDrawer from './ProjectsDrawer'
 import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
 
 
+// navigateToModel does a full page load; the real one would tear down
+// jsdom's location. Its own suite covers the query-preserving behaviour.
+jest.mock('../utils/navigate', () => ({navigateToModel: jest.fn()}))
+
+
 describe('ProjectsDrawer', () => {
   beforeEach(() => {
+    jest.clearAllMocks()
     localStorage.clear()
     act(() => {
       useStore.setState({
@@ -128,6 +135,25 @@ describe('ProjectsDrawer', () => {
 
       expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(false)
       expect(useStore.getState().expandedProjectIds).toContain(projB.id)
+    })
+
+    it('abbreviates project names to two letters, falling back to the icon', () => {
+      act(() => {
+        // Multi-word, single-word, and nothing to abbreviate.
+        useStore.getState().createWorkspaceProject('Maple Street Tower')
+        useStore.getState().createWorkspaceProject('Warehouse')
+        useStore.getState().createWorkspaceProject('★')
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      const [multi, single, unabbreviable] = useStore.getState().workspaceProjects
+      expect(within(screen.getByTestId(`project-rail-${multi.id}`)).getByText('MS'))
+        .toBeInTheDocument()
+      expect(within(screen.getByTestId(`project-rail-${single.id}`)).getByText('WA'))
+        .toBeInTheDocument()
+      expect(within(screen.getByTestId(`project-rail-${unabbreviable.id}`)).queryByText(/\w/))
+        .toBeNull()
     })
 
     it('starts collapsed when that was the stored preference', () => {
@@ -332,6 +358,30 @@ describe('ProjectsDrawer', () => {
 
     expect(useStore.getState().workspaceProjects[0].models).toHaveLength(0)
     expect(useStore.getState().workspaceCapture).not.toBeNull()
+  })
+
+  // Regression: clicking a listed model used a bare SPA navigate, which
+  // dropped ?feature=... and kicked the user out of the workspace shell.
+  it('keeps the query string when opening a listed model', () => {
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().addWorkspaceModel(projectId, {
+        label: 'x.ifc',
+        path: '/share/v/new/x.ifc',
+      })
+    })
+    render(
+      <ShareMock initialEntries={['/share/v/p/index.ifc?feature=workspace']}>
+        <ProjectsDrawer/>
+      </ShareMock>,
+    )
+
+    fireEvent.click(screen.getByText('x.ifc'))
+
+    expect(navigateToModel).toHaveBeenCalledWith('/share/v/new/x.ifc', expect.any(Function))
   })
 
   it('disarms when an already-listed model is clicked', () => {

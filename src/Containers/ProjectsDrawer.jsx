@@ -23,6 +23,7 @@ import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
 import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {recentDisplayName} from '../utils/modelDisplayName'
+import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
 import LogoMenu from '../Components/Workspace/LogoMenu'
@@ -57,9 +58,6 @@ const rowSx = {
   margin: `${CONTROL_MARGIN}px`,
   borderRadius: '10px',
 }
-// Breathing room under the header row, mirroring the gap the top bar
-// leaves above the NavTree controls (theme spacing 1).
-const CONTENT_TOP_GAP = 8
 
 
 /**
@@ -91,6 +89,28 @@ function recentEntryForPath(pathname) {
 function labelForModelPath(pathname) {
   return recentDisplayName(recentEntryForPath(pathname)) ||
     decodeURIComponent(pathname.split('/').filter(Boolean).pop())
+}
+
+
+/**
+ * Two-letter abbreviation for a project name: initials of the first two
+ * words, or the first two characters of a single word. Undefined when
+ * the name has no letters or digits to work with (emoji-only, say), in
+ * which case the caller falls back to the generic project icon.
+ *
+ * @param {string} name
+ * @return {string|undefined}
+ */
+function projectInitials(name) {
+  const words = (name || '').trim().split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+  if (words.length === 0) {
+    return undefined
+  }
+  const twoLetters = 2
+  const initials = words.length >= twoLetters ?
+    `${words[0][0]}${words[1][0]}` :
+    words[0].slice(0, twoLetters)
+  return initials.length === twoLetters ? initials.toUpperCase() : undefined
 }
 
 
@@ -239,7 +259,11 @@ export default function ProjectsDrawer() {
               key={project.id}
               title={project.name}
               placement='right'
-              icon={<ApartmentIcon className='icon-share'/>}
+              icon={projectInitials(project.name) ?
+                <Typography variant='body2' sx={{fontWeight: 'bold'}}>
+                  {projectInitials(project.name)}
+                </Typography> :
+                <ApartmentIcon className='icon-share'/>}
               onClick={() => {
                 if (!expandedProjectIds.includes(project.id)) {
                   toggleWorkspaceProjectExpanded(project.id)
@@ -286,24 +310,31 @@ export default function ProjectsDrawer() {
         onCollapse={onCollapse}
       />
       {header}
-      {/* Sits below the header by the same gap the top bar leaves before
-          the NavTree controls, so the drawer and canvas columns start
-          their content on the same line. */}
-      <Box sx={{padding: `${CONTENT_TOP_GAP}px 1em 1em 1em`, minWidth: 0}}>
+      {/* Every row below the header is one control row tall, so this
+          column stays in step with the control groups across the canvas:
+          New project lands on the NavTree row and PROJECTS on the
+          Versions row. */}
+      <Box sx={{height: ROW_PITCH, flexShrink: 0, px: `${CONTROL_MARGIN}px`, minWidth: 0}}>
         <Button
           variant='contained'
           fullWidth
           onClick={() => setIsNewProjectOpen(true)}
-          sx={{minWidth: 0}}
+          sx={{...rowSx, marginLeft: 0, marginRight: 0, minWidth: 0}}
           data-testid='projects-new-button'
         >
           New project
         </Button>
       </Box>
-      <Typography variant='overline' color='text.secondary' sx={{px: 2}}>
-        Projects
-      </Typography>
-      <List dense sx={{flexGrow: 1, overflowY: 'auto'}} data-testid='projects-list'>
+      <Stack
+        justifyContent='center'
+        sx={{height: ROW_PITCH, flexShrink: 0, px: 2}}
+        data-testid='projects-section-label'
+      >
+        <Typography variant='overline' color='text.secondary'>
+          Projects
+        </Typography>
+      </Stack>
+      <List dense sx={{flexGrow: 1, overflowY: 'auto', paddingTop: 0}} data-testid='projects-list'>
         {workspaceProjects.map((project) => {
           const isExpanded = expandedProjectIds.includes(project.id)
           return (
@@ -346,7 +377,7 @@ export default function ProjectsDrawer() {
                         // capture from some other project.
                         onClick={() => {
                           disarmWorkspaceCapture()
-                          navigate(model.path)
+                          navigateToModel(model.path, navigate)
                         }}
                         data-testid={`project-model-${model.id}`}
                       >
