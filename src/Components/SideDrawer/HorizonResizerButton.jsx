@@ -14,6 +14,10 @@ import {isNumber} from '../../utils/strings'
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnLeft resizer is on the left.
  * @property {string} drawerWidth drawer width (...px, ...vw).
+ * @property {number} [minWidth] Drag narrower than this calls onCollapse.
+ *   Ignored unless onCollapse is given.
+ * @property {Function} [onCollapse] Called once when the drag crosses
+ *   below minWidth, so a drawer can collapse instead of bottoming out.
  * @return {ReactElement}
  */
 export default function HorizonResizerButton({
@@ -23,6 +27,8 @@ export default function HorizonResizerButton({
   drawerWidth,
   drawerWidthInitial,
   setDrawerWidth,
+  minWidth = 0,
+  onCollapse = null,
 }) {
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -70,6 +76,13 @@ export default function HorizonResizerButton({
         if (expansionDrawerWidth > window.innerWidth) {
           expansionDrawerWidth = window.innerWidth
         }
+        // Opt-in: dragging past the useful minimum collapses the drawer
+        // rather than bottoming out at a sliver (workspace shell).
+        if (onCollapse !== null && expansionDrawerWidth < minWidth) {
+          setIsResizing(false)
+          onCollapse()
+          return
+        }
         if (expansionDrawerWidth < thickness) {
           expansionDrawerWidth = thickness
         }
@@ -77,7 +90,7 @@ export default function HorizonResizerButton({
         // setIsExpanded(true)
       }
     },
-    [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness],
+    [isResizing, isOnLeft, setDrawerWidth, drawerRef, thickness, minWidth, onCollapse],
   )
 
 

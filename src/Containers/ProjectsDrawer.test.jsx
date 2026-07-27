@@ -9,8 +9,88 @@ describe('ProjectsDrawer', () => {
   beforeEach(() => {
     localStorage.clear()
     act(() => {
-      useStore.setState({workspaceProjects: [], workspaceCapture: null, isOpenModelVisible: false})
+      useStore.setState({
+        workspaceProjects: [],
+        workspaceCapture: null,
+        isOpenModelVisible: false,
+        expandedProjectIds: [],
+        isWorkspaceDrawerCollapsed: false,
+      })
     })
+  })
+
+  describe('collapse', () => {
+    it('collapses to a rail and back, persisting the choice', () => {
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
+
+      // Rail keeps the toggle and the logo, drops the project UI.
+      expect(screen.queryByTestId('projects-new-button')).toBeNull()
+      expect(screen.getByTestId('projects-collapse-toggle')).toBeInTheDocument()
+      expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
+      expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).isDrawerCollapsed).toBe(true)
+
+      fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
+      expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+    })
+
+    it('starts collapsed when that was the stored preference', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+      expect(screen.queryByTestId('projects-new-button')).toBeNull()
+    })
+  })
+
+  it('persists which projects are expanded', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    fireEvent.click(screen.getByTestId(`project-${projectId}`))
+
+    expect(useStore.getState().expandedProjectIds).toEqual([projectId])
+    expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).expandedProjectIds)
+      .toEqual([projectId])
+
+    fireEvent.click(screen.getByTestId(`project-${projectId}`))
+    expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).expandedProjectIds).toEqual([])
+  })
+
+  // A model recorded before its name was known keeps a storage-id label;
+  // resolving at render repairs the display without a migration.
+  it('renders a stored storage-id label as the model name', () => {
+    localStorage.setItem('bldrs:recent-files', JSON.stringify({
+      version: 1,
+      files: [{
+        id: 'abc-uuid.ifc',
+        source: 'local',
+        name: 'haus.ifc',
+        sharePath: '/share/v/new/abc-uuid.ifc',
+      }],
+    }))
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().addWorkspaceModel(projectId, {
+        label: 'abc-uuid.ifc',
+        path: '/share/v/new/abc-uuid.ifc',
+      })
+      useStore.getState().toggleWorkspaceProjectExpanded(projectId)
+    })
+
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    expect(screen.getByText('haus.ifc')).toBeInTheDocument()
+    expect(screen.queryByText('abc-uuid.ifc')).toBeNull()
   })
 
   it('creates a project through the New project dialog and persists it', () => {

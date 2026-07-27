@@ -1,8 +1,9 @@
 import React, {ReactElement, useState} from 'react'
-import {Divider, IconButton, Menu, MenuItem, Typography} from '@mui/material'
+import {Divider, Menu, MenuItem, Typography} from '@mui/material'
 import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import AboutDialog from '../About/AboutDialog'
+import {TooltipIconButton} from '../Buttons'
 import {LogoB} from '../Logo/Logo'
 import PkgJson from '../../../package.json'
 
@@ -50,14 +51,16 @@ export default function LogoMenu() {
   return (
     <>
       {/* Plain logo mark at the default icon size, matching the
-          AboutControl logo it replaces. */}
-      <IconButton
+          AboutControl logo it replaces — including the version in the
+          tooltip, via the same TooltipIconButton every other control
+          uses (a bare `title` attribute rendered inconsistently). */}
+      <TooltipIconButton
+        title={`Bldrs ${PkgJson.version}`}
+        placement='right'
+        icon={<LogoB/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
-        title={`Bldrs\n${PkgJson.version}`}
-        data-testid='workspace-logo-button'
-      >
-        <LogoB/>
-      </IconButton>
+        dataTestId='workspace-logo-button'
+      />
       <Menu
         anchorEl={anchorEl}
         open={anchorEl !== null}

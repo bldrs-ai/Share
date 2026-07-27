@@ -1,5 +1,6 @@
 import React from 'react'
 import {Box, Stack, Typography} from '@mui/material'
+import {recentDisplayName} from '../../utils/modelDisplayName'
 import {
   Description as DocIcon,
   InsertDriveFile as FileIcon,
@@ -128,7 +129,7 @@ export default function RecentFilesList({files, onOpen}) {
               sx={{minWidth: 0, textDecoration: 'underline'}}
               data-testid={`link-open-recent-${file.id}`}
             >
-              {file.modelTitle || file.name}
+              {recentDisplayName(file)}
             </Typography>
           </Stack>
           <Typography

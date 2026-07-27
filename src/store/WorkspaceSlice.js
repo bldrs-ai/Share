@@ -1,10 +1,16 @@
 import {
   loadWorkspaceCapture,
   loadWorkspaceProjects,
+  loadWorkspaceUiState,
   newWorkspaceId,
   saveWorkspaceCapture,
   saveWorkspaceProjects,
+  saveWorkspaceUiState,
 } from '../workspace/persistence'
+
+
+/** Starting width of the ProjectsDrawer, in px */
+export const WORKSPACE_DRAWER_WIDTH_INITIAL = 240
 
 
 /**
@@ -25,7 +31,40 @@ export default function createWorkspaceSlice(set, get) {
     return {workspaceProjects: projects}
   }
 
+  // Both toggles persist together; they're the drawer's UI preferences.
+  // Maps the stored shape onto the store's field names.
+  const persistUi = (uiState) => {
+    saveWorkspaceUiState(uiState)
+    return {
+      expandedProjectIds: uiState.expandedProjectIds,
+      isWorkspaceDrawerCollapsed: uiState.isDrawerCollapsed,
+    }
+  }
+
+  const initialUi = loadWorkspaceUiState()
+
   return {
+    // Width is in-memory only — it changes at drag frequency, and the
+    // other drawers don't persist theirs either.
+    workspaceDrawerWidth: WORKSPACE_DRAWER_WIDTH_INITIAL,
+    setWorkspaceDrawerWidth: (width) => set(() => ({workspaceDrawerWidth: width})),
+
+    isWorkspaceDrawerCollapsed: initialUi.isDrawerCollapsed,
+    setIsWorkspaceDrawerCollapsed: (is) =>
+      set((state) => persistUi({
+        expandedProjectIds: state.expandedProjectIds,
+        isDrawerCollapsed: is,
+      })),
+
+    expandedProjectIds: initialUi.expandedProjectIds,
+    toggleWorkspaceProjectExpanded: (projectId) =>
+      set((state) => persistUi({
+        expandedProjectIds: state.expandedProjectIds.includes(projectId) ?
+          state.expandedProjectIds.filter((id) => id !== projectId) :
+          [...state.expandedProjectIds, projectId],
+        isDrawerCollapsed: state.isWorkspaceDrawerCollapsed,
+      })),
+
     workspaceProjects: loadWorkspaceProjects(),
 
     createWorkspaceProject: (name) =>

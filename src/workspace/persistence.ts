@@ -1,6 +1,7 @@
 const WORKSPACE_PROJECTS_KEY = 'bldrs:workspace-projects'
 const WORKSPACE_PROJECTS_VERSION = 1
 const WORKSPACE_CAPTURE_KEY = 'bldrs:workspace-capture'
+const WORKSPACE_UI_KEY = 'bldrs:workspace-ui'
 const MS_PER_MINUTE = 60_000
 /** Armed captures expire after this long — see loadWorkspaceCapture */
 const CAPTURE_TTL_MINUTES = 10
@@ -121,6 +122,55 @@ export function saveWorkspaceCapture(capture: WorkspaceCapture | null): void {
       return
     }
     localStorage.setItem(WORKSPACE_CAPTURE_KEY, JSON.stringify(capture))
+  } catch {
+    // localStorage may be full or unavailable
+  }
+}
+
+
+/** Drawer/tree UI state that should outlive a reload */
+export interface WorkspaceUiState {
+  /** Projects whose model list is expanded */
+  expandedProjectIds: string[]
+  isDrawerCollapsed: boolean
+}
+
+
+const DEFAULT_UI_STATE: WorkspaceUiState = {
+  expandedProjectIds: [],
+  isDrawerCollapsed: false,
+}
+
+
+/**
+ * Load persisted drawer UI state. Toggling a project open or collapsing
+ * the drawer is a preference, not a transient — re-doing it after every
+ * reload is the kind of small friction that makes a shell feel cheap.
+ * Width is deliberately not persisted: it changes at drag frequency.
+ *
+ * @return Stored UI state, defaults on absence/corruption.
+ */
+export function loadWorkspaceUiState(): WorkspaceUiState {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_UI_KEY)
+    if (!raw) {
+      return {...DEFAULT_UI_STATE}
+    }
+    const parsed = JSON.parse(raw) as Partial<WorkspaceUiState>
+    return {
+      expandedProjectIds: Array.isArray(parsed.expandedProjectIds) ? parsed.expandedProjectIds : [],
+      isDrawerCollapsed: parsed.isDrawerCollapsed === true,
+    }
+  } catch {
+    return {...DEFAULT_UI_STATE}
+  }
+}
+
+
+/** @param uiState The UI state to persist */
+export function saveWorkspaceUiState(uiState: WorkspaceUiState): void {
+  try {
+    localStorage.setItem(WORKSPACE_UI_KEY, JSON.stringify(uiState))
   } catch {
     // localStorage may be full or unavailable
   }

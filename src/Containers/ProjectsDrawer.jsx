@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useCallback, useEffect, useRef, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router-dom'
 import {
   Box,
@@ -21,6 +21,10 @@ import {
 import {useTheme} from '@mui/material/styles'
 import {loadAllRecentFiles} from '../connections/persistence'
 import useStore from '../store/useStore'
+import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
+import {recentDisplayName} from '../utils/modelDisplayName'
+import {TooltipIconButton} from '../Components/Buttons'
+import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
 import LogoMenu from '../Components/Workspace/LogoMenu'
 import {
   Add as AddIcon,
@@ -29,6 +33,8 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   InsertDriveFileOutlined as InsertDriveFileOutlinedIcon,
+  VerticalSplit as VerticalSplitIcon,
+  VerticalSplitOutlined as VerticalSplitOutlinedIcon,
 } from '@mui/icons-material'
 
 
@@ -36,30 +42,43 @@ import {
 // /share/v/new/file.ifc, /share/v/gh/org/repo/branch/file.ifc.
 const MODEL_ROUTE_RE = /\/v\//
 
+// Narrower than this on drag-release and the drawer collapses to its rail
+// instead of becoming an unusable sliver.
+const COLLAPSE_AT_WIDTH = 120
+const RESIZER_THICKNESS = 10
+const COLLAPSED_RAIL_WIDTH = '44px'
+
 
 /**
- * Display label for a model route. A local upload routes by its OPFS
- * storage id (`/v/new/<blob-uuid>.ifc`) rather than the name the user
- * picked, so the raw path segment would list as a UUID. Recents already
- * carry that split — `id` is the storage id, `name` the original
- * filename (see the #1682 fix) — so prefer the recorded display name and
- * fall back to the path segment for anything not in recents.
+ * The recents entry for a model route, if we have one. A local upload
+ * routes by its OPFS storage id (`/v/new/<blob-uuid>.ifc`), so the path
+ * segment alone would display as a UUID; recents holds the id -> name
+ * mapping (see #1682).
+ *
+ * @param {string} pathname
+ * @return {object|undefined} RecentFileEntry
+ */
+function recentEntryForPath(pathname) {
+  const segment = decodeURIComponent(pathname.split('/').filter(Boolean).pop())
+  try {
+    return loadAllRecentFiles().find((f) => f.sharePath === pathname || f.id === segment)
+  } catch {
+    return undefined
+  }
+}
+
+
+/**
+ * Label for a model route: the model's own name where known, else the
+ * path segment.
  *
  * @param {string} pathname
  * @return {string}
  */
 function labelForModelPath(pathname) {
-  const segment = decodeURIComponent(pathname.split('/').filter(Boolean).pop())
-  try {
-    const entry = loadAllRecentFiles().find(
-      (f) => f.sharePath === pathname || f.id === segment)
-    return entry?.modelTitle || entry?.name || segment
-  } catch {
-    return segment
-  }
+  return recentDisplayName(recentEntryForPath(pathname)) ||
+    decodeURIComponent(pathname.split('/').filter(Boolean).pop())
 }
-
-const DRAWER_WIDTH = '240px'
 
 
 /**
@@ -68,8 +87,9 @@ const DRAWER_WIDTH = '240px'
  * RootLandscape, "further left" than NavTreeAndVersionsDrawer. Projects
  * expand to their model list; "Add model" routes through the existing
  * tabbed Open dialog and records the resulting navigation into the
- * project (the capture effects below). Footer carries the LogoMenu
- * marketing popup.
+ * project (the capture effect below). Collapses to an icon rail, and
+ * resizes with the same grip the other drawers use. Footer carries the
+ * LogoMenu.
  *
  * @return {ReactElement}
  */
@@ -83,18 +103,25 @@ export default function ProjectsDrawer() {
   const armWorkspaceCapture = useStore((state) => state.armWorkspaceCapture)
   const disarmWorkspaceCapture = useStore((state) => state.disarmWorkspaceCapture)
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
+  const expandedProjectIds = useStore((state) => state.expandedProjectIds)
+  const toggleWorkspaceProjectExpanded = useStore((state) => state.toggleWorkspaceProjectExpanded)
+  const isCollapsed = useStore((state) => state.isWorkspaceDrawerCollapsed)
+  const setIsCollapsed = useStore((state) => state.setIsWorkspaceDrawerCollapsed)
+  const drawerWidth = useStore((state) => state.workspaceDrawerWidth)
+  const setDrawerWidth = useStore((state) => state.setWorkspaceDrawerWidth)
 
-  const [expandedProjectIds, setExpandedProjectIds] = useState([])
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
 
   const location = useLocation()
   const navigate = useNavigate()
   const theme = useTheme()
+  const drawerRef = useRef(null)
 
-  // Capture effect 1: an armed capture + a navigation onto a model route
-  // records the opened model into the arming project. Runs only on real
-  // navigation — the arm-time pathname is excluded.
+  // An armed capture + a navigation onto a model route records the opened
+  // model into the arming project. Opening a model is a full page load,
+  // so this usually fires on mount of the *next* page — the capture is
+  // persisted for exactly that reason.
   useEffect(() => {
     if (workspaceCapture === null) {
       return
@@ -117,10 +144,7 @@ export default function ProjectsDrawer() {
   // before it could fire. Abandoned arms are cleaned up by the capture
   // TTL (workspace/persistence.ts) and by re-arming instead.
 
-  const toggleExpanded = (projectId) => {
-    setExpandedProjectIds((ids) =>
-      ids.includes(projectId) ? ids.filter((id) => id !== projectId) : [...ids, projectId])
-  }
+  const onCollapse = useCallback(() => setIsCollapsed(true), [setIsCollapsed])
 
   const onAddModel = (projectId) => {
     armWorkspaceCapture(projectId, location.pathname)
@@ -136,11 +160,49 @@ export default function ProjectsDrawer() {
     setIsNewProjectOpen(false)
   }
 
+  const collapseToggle = (
+    <TooltipIconButton
+      title={isCollapsed ? 'Show projects' : 'Hide projects'}
+      placement='right'
+      selected={!isCollapsed}
+      icon={isCollapsed ?
+        <VerticalSplitOutlinedIcon className='icon-share'/> :
+        <VerticalSplitIcon className='icon-share'/>}
+      onClick={() => setIsCollapsed(!isCollapsed)}
+      dataTestId='projects-collapse-toggle'
+    />
+  )
+
+  if (isCollapsed) {
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          width: COLLAPSED_RAIL_WIDTH,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          borderRadius: 0,
+          backgroundColor: theme.palette.secondary.workspaceBackground,
+          borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
+        }}
+        data-testid='ProjectsDrawer'
+      >
+        <Box sx={{padding: '.5em 0'}}>{collapseToggle}</Box>
+        <Box sx={{flexGrow: 1}}/>
+        <Box sx={{padding: '.5em 0'}}><LogoMenu/></Box>
+      </Paper>
+    )
+  }
+
   return (
     <Paper
       elevation={0}
+      ref={drawerRef}
       sx={{
-        width: DRAWER_WIDTH,
+        position: 'relative',
+        width: drawerWidth,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -150,16 +212,36 @@ export default function ProjectsDrawer() {
       }}
       data-testid='ProjectsDrawer'
     >
-      <Box sx={{padding: '1em'}}>
+      {/* Same grip the NavTree/Notes drawers use; dragging past
+          COLLAPSE_AT_WIDTH collapses instead of bottoming out, and
+          double-tapping it toggles full-window width. */}
+      <HorizonResizerButton
+        drawerRef={drawerRef}
+        thickness={RESIZER_THICKNESS}
+        isOnLeft={false}
+        drawerWidth={drawerWidth}
+        drawerWidthInitial={WORKSPACE_DRAWER_WIDTH_INITIAL}
+        setDrawerWidth={setDrawerWidth}
+        minWidth={COLLAPSE_AT_WIDTH}
+        onCollapse={onCollapse}
+      />
+      <Stack
+        direction='row'
+        alignItems='center'
+        spacing={1}
+        sx={{padding: '1em 1em 1em 1em', minWidth: 0}}
+      >
         <Button
           variant='contained'
           fullWidth
           onClick={() => setIsNewProjectOpen(true)}
+          sx={{minWidth: 0}}
           data-testid='projects-new-button'
         >
           New project
         </Button>
-      </Box>
+        {collapseToggle}
+      </Stack>
       <Typography variant='overline' color='text.secondary' sx={{px: 2}}>
         Projects
       </Typography>
@@ -169,7 +251,7 @@ export default function ProjectsDrawer() {
           return (
             <React.Fragment key={project.id}>
               <ListItemButton
-                onClick={() => toggleExpanded(project.id)}
+                onClick={() => toggleWorkspaceProjectExpanded(project.id)}
                 data-testid={`project-${project.id}`}
               >
                 <ListItemIcon sx={{minWidth: '2em'}}><ApartmentIcon fontSize='small'/></ListItemIcon>
@@ -188,39 +270,47 @@ export default function ProjectsDrawer() {
               </ListItemButton>
               {isExpanded && (
                 <>
-                  {project.models.map((model) => (
-                    <ListItemButton
-                      key={model.id}
-                      sx={{pl: 4}}
-                      selected={location.pathname === model.path}
-                      // Disarm first: opening a model that is already
-                      // listed must not be adopted by a still-armed
-                      // capture from some other project.
-                      onClick={() => {
-                        disarmWorkspaceCapture()
-                        navigate(model.path)
-                      }}
-                      data-testid={`project-model-${model.id}`}
-                    >
-                      <ListItemIcon sx={{minWidth: '2em'}}>
-                        <InsertDriveFileOutlinedIcon fontSize='small'/>
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={model.label}
-                        primaryTypographyProps={{noWrap: true, fontFamily: 'monospace', fontSize: '.9em'}}
-                      />
-                      <IconButton
-                        size='small'
-                        aria-label={`Remove model ${model.label}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          removeWorkspaceModel(project.id, model.id)
+                  {project.models.map((model) => {
+                    // Resolved at render, not read from the stored label:
+                    // a model's name can arrive after it was recorded
+                    // (the loader back-fills modelTitle into recents), and
+                    // entries captured before that resolution existed
+                    // would otherwise stay stuck showing a storage id.
+                    const label = labelForModelPath(model.path) || model.label
+                    return (
+                      <ListItemButton
+                        key={model.id}
+                        sx={{pl: 4}}
+                        selected={location.pathname === model.path}
+                        // Disarm first: opening a model that is already
+                        // listed must not be adopted by a still-armed
+                        // capture from some other project.
+                        onClick={() => {
+                          disarmWorkspaceCapture()
+                          navigate(model.path)
                         }}
+                        data-testid={`project-model-${model.id}`}
                       >
-                        <CloseIcon fontSize='inherit'/>
-                      </IconButton>
-                    </ListItemButton>
-                  ))}
+                        <ListItemIcon sx={{minWidth: '2em'}}>
+                          <InsertDriveFileOutlinedIcon fontSize='small'/>
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={label}
+                          primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
+                        />
+                        <IconButton
+                          size='small'
+                          aria-label={`Remove model ${label}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            removeWorkspaceModel(project.id, model.id)
+                          }}
+                        >
+                          <CloseIcon fontSize='inherit'/>
+                        </IconButton>
+                      </ListItemButton>
+                    )
+                  })}
                   <ListItemButton
                     sx={{pl: 4}}
                     onClick={() => onAddModel(project.id)}

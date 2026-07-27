@@ -1,5 +1,5 @@
 import React from 'react'
-import {fireEvent, render, screen, within} from '@testing-library/react'
+import {act, fireEvent, render, screen, within} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
 import PkgJson from '../../../package.json'
@@ -31,10 +31,19 @@ describe('LogoMenu', () => {
   })
 
   // Inherited from the AboutControl this replaces while the flag is on.
-  it('carries the version in the logo tooltip', () => {
+  it('carries the version in the logo tooltip', async () => {
+    // Help-tooltips mode pins tooltips open, so this doesn't race the
+    // hover enterDelay.
+    act(() => {
+      useStore.setState({isHelpTooltipsVisible: true})
+    })
     render(<ShareMock><LogoMenu/></ShareMock>)
-    expect(screen.getByTestId('workspace-logo-button'))
-      .toHaveAttribute('title', `Bldrs\n${PkgJson.version}`)
+
+    expect(await screen.findByText(`Bldrs ${PkgJson.version}`)).toBeInTheDocument()
+
+    act(() => {
+      useStore.setState({isHelpTooltipsVisible: false})
+    })
   })
 
   it('About opens the in-app dialog', () => {
