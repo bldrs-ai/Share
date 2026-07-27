@@ -377,6 +377,13 @@ function buildBatch(groups, transparent, coordOffset) {
     material.depthWrite = false
   }
   const mesh = new BatchedMesh(instanceCount, vertexCount, indexCount, material)
+  // Exactly-coplanar BIM interfaces (wall top vs roof underside, layer
+  // faces) tie on depth, so the depth test resolves by draw order. The
+  // opaque batch keeps insertion order — three's default per-frame
+  // camera-distance sort would flip the winning surface as the camera
+  // moves (visible speckle/shimmer at soffits, rakes, ridges). The
+  // transparent batch must still sort for blend correctness.
+  mesh.sortObjects = transparent
   const instanceParents = new Uint32Array(instanceCount)
   const instanceOccurrenceIds = new Uint32Array(instanceCount)
   const instanceGeometryIds = new Uint32Array(instanceCount)

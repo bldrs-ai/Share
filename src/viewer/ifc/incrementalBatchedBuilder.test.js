@@ -92,6 +92,10 @@ describe('IncrementalBatchedBuilder', () => {
       expect(Array.from(a.instanceParents)).toEqual(Array.from(b.instanceParents))
       expect(Array.from(a.instanceOccurrenceIds)).toEqual(Array.from(b.instanceOccurrenceIds))
       expect(a.mesh).toBeInstanceOf(BatchedMesh)
+      // Coplanar-tie stability: opaque batches draw in insertion order
+      // (no per-frame camera sort); transparent keeps sorting to blend.
+      expect(a.mesh.sortObjects).toBe(a.transparent)
+      expect(b.mesh.sortObjects).toBe(b.transparent)
     }
   })
 
