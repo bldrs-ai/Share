@@ -1,20 +1,24 @@
 import React from 'react'
-import {fireEvent, render, screen} from '@testing-library/react'
+import {fireEvent, render, screen, within} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
+import PkgJson from '../../../package.json'
 import LogoMenu from './LogoMenu'
 
 
 describe('LogoMenu', () => {
-  it('opens the marketing popup with About/Pricing/News links + tagline', () => {
+  it('opens the popup with the tagline and marketing links', () => {
     render(<ShareMock><LogoMenu/></ShareMock>)
 
     fireEvent.click(screen.getByTestId('workspace-logo-button'))
 
-    expect(screen.getByText('Build Every Thing Together')).toBeInTheDocument()
-    expect(screen.getByText('Fastest browser-based CAD')).toBeInTheDocument()
+    // Scoped to the menu: the About dialog this component also renders
+    // is open for first-time visitors and repeats the tagline.
+    const menu = within(screen.getByTestId('workspace-logo-menu'))
+    expect(menu.getByText('Build Every Thing Together')).toBeInTheDocument()
+    expect(menu.getByText('Fastest browser-based CAD')).toBeInTheDocument()
 
     const expectedLinks = [
-      ['workspace-logo-menu-about', 'https://bldrs.ai/about'],
       ['workspace-logo-menu-pricing', 'https://bldrs.ai/pricing'],
       ['workspace-logo-menu-news', 'https://bldrs.ai/blog'],
     ]
@@ -24,5 +28,21 @@ describe('LogoMenu', () => {
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     }
+  })
+
+  // Inherited from the AboutControl this replaces while the flag is on.
+  it('carries the version in the logo tooltip', () => {
+    render(<ShareMock><LogoMenu/></ShareMock>)
+    expect(screen.getByTestId('workspace-logo-button'))
+      .toHaveAttribute('title', `Bldrs\n${PkgJson.version}`)
+  })
+
+  it('About opens the in-app dialog', () => {
+    render(<ShareMock><LogoMenu/></ShareMock>)
+
+    fireEvent.click(screen.getByTestId('workspace-logo-button'))
+    fireEvent.click(screen.getByTestId('workspace-logo-menu-about'))
+
+    expect(useStore.getState().isAboutVisible).toBe(true)
   })
 })

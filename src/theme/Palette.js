@@ -47,8 +47,10 @@ export const day = {
     // Workspace shell chrome (ProjectsDrawer). Opaque on purpose — it
     // frames the app rather than floating over the scene like the
     // NavTree/Notes drawers. Tinted toward the tron cyan of
-    // primary.sceneHighlight so the chrome reads as ours.
-    workspaceBackground: '#E8F6F8',
+    // primary.sceneHighlight; it has to read as clearly distinct from the
+    // white scene background right next to it, so this is a real tint and
+    // not a near-white wash.
+    workspaceBackground: '#D3E9EE',
   },
 
   success: {
@@ -112,8 +114,9 @@ export const night = {
     backdropFilter: 'blur(1px)',
     link: colors.blue.lightest,
     // Workspace shell chrome — see day.secondary.workspaceBackground.
-    // Deep tron teal: reads as a lit panel against the black scene.
-    workspaceBackground: '#0E2429',
+    // Tron teal, light enough to read as a lit panel against the black
+    // scene background.
+    workspaceBackground: '#0F2E38',
   },
 
   success: {

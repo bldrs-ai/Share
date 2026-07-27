@@ -58,7 +58,6 @@ export default function ProjectsDrawer() {
   const workspaceCapture = useStore((state) => state.workspaceCapture)
   const armWorkspaceCapture = useStore((state) => state.armWorkspaceCapture)
   const disarmWorkspaceCapture = useStore((state) => state.disarmWorkspaceCapture)
-  const isOpenModelVisible = useStore((state) => state.isOpenModelVisible)
   const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
 
   const [expandedProjectIds, setExpandedProjectIds] = useState([])
@@ -84,17 +83,13 @@ export default function ProjectsDrawer() {
     }
   }, [location.pathname, workspaceCapture, addWorkspaceModel, disarmWorkspaceCapture])
 
-  // Capture effect 2: the Open dialog closed without navigating (user
-  // cancelled) — disarm so an unrelated later navigation isn't captured.
-  // When close and navigation land in the same commit, effect 1's path
-  // check has already consumed the capture and this is a no-op.
-  useEffect(() => {
-    if (!isOpenModelVisible &&
-        workspaceCapture !== null &&
-        location.pathname === workspaceCapture.armedPathname) {
-      disarmWorkspaceCapture()
-    }
-  }, [isOpenModelVisible, workspaceCapture, location.pathname, disarmWorkspaceCapture])
+  // NB: there is deliberately no "dialog closed => disarm" effect. The
+  // Open dialog closes *before* the model is chosen — `openFile` calls
+  // setIsDialogDisplayed(false) synchronously while the file picker is
+  // still open, and `navigateToModel` reloads the document rather than
+  // returning — so treating close as abandonment disarmed every capture
+  // before it could fire. Abandoned arms are cleaned up by the capture
+  // TTL (workspace/persistence.ts) and by re-arming instead.
 
   const toggleExpanded = (projectId) => {
     setExpandedProjectIds((ids) =>
@@ -172,7 +167,13 @@ export default function ProjectsDrawer() {
                       key={model.id}
                       sx={{pl: 4}}
                       selected={location.pathname === model.path}
-                      onClick={() => navigate(model.path)}
+                      // Disarm first: opening a model that is already
+                      // listed must not be adopted by a still-armed
+                      // capture from some other project.
+                      onClick={() => {
+                        disarmWorkspaceCapture()
+                        navigate(model.path)
+                      }}
                       data-testid={`project-model-${model.id}`}
                     >
                       <ListItemIcon sx={{minWidth: '2em'}}>

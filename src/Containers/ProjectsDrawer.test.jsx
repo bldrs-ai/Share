@@ -50,7 +50,10 @@ describe('ProjectsDrawer', () => {
     expect(useStore.getState().isOpenModelVisible).toBe(true)
   })
 
-  it('disarms capture when the Open dialog closes without navigation', () => {
+  // Regression: OpenModelDialog#openFile closes the dialog synchronously
+  // while the OS file picker is still open, so treating "dialog closed"
+  // as abandonment disarmed every capture before the model could load.
+  it('keeps the capture armed when the Open dialog closes', () => {
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
     act(() => {
@@ -64,6 +67,61 @@ describe('ProjectsDrawer', () => {
     act(() => {
       useStore.getState().setIsOpenModelVisible(false)
     })
+    expect(useStore.getState().workspaceCapture).not.toBeNull()
+  })
+
+  it('records the opened model when a model route renders while armed', () => {
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().armWorkspaceCapture(projectId, '/share')
+    })
+
+    // Mounting at the model route stands in for the post-open page load.
+    render(
+      <ShareMock initialEntries={['/share/v/new/haus.ifc']}>
+        <ProjectsDrawer/>
+      </ShareMock>,
+    )
+
+    const models = useStore.getState().workspaceProjects[0].models
+    expect(models).toHaveLength(1)
+    expect(models[0]).toMatchObject({label: 'haus.ifc', path: '/share/v/new/haus.ifc'})
+    expect(useStore.getState().workspaceCapture).toBeNull()
+  })
+
+  it('does not record a non-model route', () => {
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().armWorkspaceCapture(projectId, '/share')
+    })
+
+    render(<ShareMock initialEntries={['/share/about']}><ProjectsDrawer/></ShareMock>)
+
+    expect(useStore.getState().workspaceProjects[0].models).toHaveLength(0)
+    expect(useStore.getState().workspaceCapture).not.toBeNull()
+  })
+
+  it('disarms when an already-listed model is clicked', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().addWorkspaceModel(projectId, {label: 'tower.ifc', path: '/share/v/new/tower.ifc'})
+      useStore.getState().armWorkspaceCapture('other-project', '/share')
+    })
+
+    fireEvent.click(screen.getByTestId(`project-${projectId}`))
+    fireEvent.click(screen.getByText('tower.ifc'))
+
     expect(useStore.getState().workspaceCapture).toBeNull()
   })
 

@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import {Stack} from '@mui/material'
+import {Box, Stack} from '@mui/material'
 import AboutControl from '../Components/About/AboutControl'
 import BotControl from '../Components/Bot/BotControl'
 import ElementsControl from '../Components/ElementsControl'
@@ -17,6 +17,10 @@ import useExistInFeature from '../hooks/useExistInFeature'
  */
 export default function BottomBar({deselectItems}) {
   const isBotEnabled = useExistInFeature('bot')
+  // With the workspace shell on, the ProjectsDrawer footer carries the
+  // only logo (LogoMenu) — including the version tooltip and the About
+  // dialog — so this over-canvas copy would be a second brand mark.
+  const isWorkspaceEnabled = useExistInFeature('workspace')
   return (
     <Stack
       spacing={2}
@@ -26,7 +30,7 @@ export default function BottomBar({deselectItems}) {
       data-testid='BottomBar'
       sx={{position: 'relative'}}
     >
-      <AboutControl/>
+      {isWorkspaceEnabled ? <Box/> : <AboutControl/>}
       <ElementsControl deselectItems={deselectItems}/>
       {/*
         Sub-stack so the perf panel sits flush against the Help/Bot
