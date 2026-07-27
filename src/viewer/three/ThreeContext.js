@@ -119,6 +119,23 @@ export default class ThreeContext {
   }
 
 
+  /**
+   * Size the dolly range (`minDistance`/`maxDistance`) and the camera's
+   * near/far clip planes to `model`'s bounds, without moving the camera.
+   *
+   * Call this on every model load, including the ones that restore a
+   * permalinked camera pose instead of framing the model — see
+   * OrbitControl#fitCameraLimitsToModel for why skipping it clips the
+   * model against the default far plane (#1652).
+   *
+   * @param {Object3D} [model] framing target; defaults to the last scene
+   *   child
+   */
+  fitCameraLimitsToModel(model = null) {
+    this._legacy.ifcCamera.currentNavMode.fitCameraLimitsToModel?.(model)
+  }
+
+
   // -- Loaded-model registry -------------------------------------------------
 
 

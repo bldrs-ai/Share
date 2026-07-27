@@ -512,6 +512,14 @@ export default function CadView({
 
     viewer.context.getScene().add(loadedModel)
 
+    // Size the dolly range + near/far clip planes to the model *before*
+    // any camera pose is applied. fitModelToFrame does this too, but a
+    // permalink with a `#c:` camera hash skips the fit — and then the
+    // model renders against the default far = 2000 plane and the first
+    // user input clamps the restored distance to maxDistance = 300
+    // (#1652). Optional-chained: the Jest viewer mock is partial.
+    viewer.context.fitCameraLimitsToModel?.(loadedModel)
+
     const isCamHashSet = onHash(location, viewer.context.getCameraControls())
     if (!isCamHashSet) {
       viewer.context.fitModelToFrame()

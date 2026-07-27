@@ -35,4 +35,14 @@ export class PlanControl extends IfcComponent {
   fitModelToFrame() {
     // no-op
   }
+
+
+  /**
+   * No-op camera-limit sizing.
+   *
+   * @return {null}
+   */
+  fitCameraLimitsToModel() {
+    return null
+  }
 }
