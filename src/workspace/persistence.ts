@@ -1,5 +1,10 @@
 const WORKSPACE_PROJECTS_KEY = 'bldrs:workspace-projects'
 const WORKSPACE_PROJECTS_VERSION = 1
+const WORKSPACE_CAPTURE_KEY = 'bldrs:workspace-capture'
+const MS_PER_MINUTE = 60_000
+/** Armed captures expire after this long — see loadWorkspaceCapture */
+const CAPTURE_TTL_MINUTES = 10
+const CAPTURE_TTL_MS = CAPTURE_TTL_MINUTES * MS_PER_MINUTE
 
 
 /** A model reference inside a project — path is the in-app navigate path */
@@ -57,6 +62,65 @@ export function saveWorkspaceProjects(projects: WorkspaceProject[]): void {
       WORKSPACE_PROJECTS_KEY,
       JSON.stringify({version: WORKSPACE_PROJECTS_VERSION, projects: projects}),
     )
+  } catch {
+    // localStorage may be full or unavailable
+  }
+}
+
+
+/**
+ * An armed "record the next model I open into this project" intent.
+ * `armedPathname` is the location at arm time, so a dialog dismissed
+ * without navigating can be told apart from one that navigated.
+ */
+export interface WorkspaceCapture {
+  projectId: string
+  armedPathname: string
+  armedAtMs: number
+}
+
+
+/**
+ * Load the armed capture, if any. This has to survive a full page load:
+ * opening a model calls `navigateToModel`, which reloads the document
+ * (freeing viewer memory), so in-memory state is gone by the time the
+ * opened model's route renders.
+ *
+ * A capture older than CAPTURE_TTL_MS is dropped — otherwise an "Add
+ * model" abandoned days ago would silently adopt an unrelated model the
+ * next time one is opened.
+ *
+ * @return The armed capture, or null when absent/expired/corrupt.
+ */
+export function loadWorkspaceCapture(): WorkspaceCapture | null {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_CAPTURE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as WorkspaceCapture
+    if (typeof parsed?.projectId !== 'string' || typeof parsed?.armedAtMs !== 'number') {
+      return null
+    }
+    if (Date.now() - parsed.armedAtMs > CAPTURE_TTL_MS) {
+      localStorage.removeItem(WORKSPACE_CAPTURE_KEY)
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+
+/** @param capture The capture to persist, or null to clear */
+export function saveWorkspaceCapture(capture: WorkspaceCapture | null): void {
+  try {
+    if (capture === null) {
+      localStorage.removeItem(WORKSPACE_CAPTURE_KEY)
+      return
+    }
+    localStorage.setItem(WORKSPACE_CAPTURE_KEY, JSON.stringify(capture))
   } catch {
     // localStorage may be full or unavailable
   }

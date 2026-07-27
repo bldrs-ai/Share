@@ -124,7 +124,8 @@ export default function ProjectsDrawer() {
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 0,
-        backgroundColor: theme.palette.secondary.backgroundColor,
+        backgroundColor: theme.palette.secondary.workspaceBackground,
+        borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
       }}
       data-testid='ProjectsDrawer'
     >

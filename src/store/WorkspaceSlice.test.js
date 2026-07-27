@@ -70,8 +70,25 @@ describe('store/WorkspaceSlice', () => {
   it('arms and disarms capture', () => {
     const store = makeStore()
     store.getState().armWorkspaceCapture('p1', '/share')
-    expect(store.getState().workspaceCapture).toEqual({projectId: 'p1', armedPathname: '/share'})
+    expect(store.getState().workspaceCapture).toMatchObject({projectId: 'p1', armedPathname: '/share'})
     store.getState().disarmWorkspaceCapture()
     expect(store.getState().workspaceCapture).toBeNull()
+  })
+
+  // Opening a model reloads the document (navigateToModel), so the arm
+  // and the record happen in different page lifetimes.
+  it('an armed capture survives a store re-creation (page reload)', () => {
+    makeStore().getState().armWorkspaceCapture('p1', '/share')
+    expect(makeStore().getState().workspaceCapture).toMatchObject({
+      projectId: 'p1',
+      armedPathname: '/share',
+    })
+  })
+
+  it('a disarmed capture does not come back after reload', () => {
+    const store = makeStore()
+    store.getState().armWorkspaceCapture('p1', '/share')
+    store.getState().disarmWorkspaceCapture()
+    expect(makeStore().getState().workspaceCapture).toBeNull()
   })
 })

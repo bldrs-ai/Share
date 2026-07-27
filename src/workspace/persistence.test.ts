@@ -1,6 +1,8 @@
 import {
+  loadWorkspaceCapture,
   loadWorkspaceProjects,
   newWorkspaceId,
+  saveWorkspaceCapture,
   saveWorkspaceProjects,
 } from './persistence'
 
@@ -39,5 +41,44 @@ describe('workspace/persistence', () => {
 
   it('generates distinct ids', () => {
     expect(newWorkspaceId()).not.toBe(newWorkspaceId())
+  })
+})
+
+
+describe('workspace capture persistence', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('round-trips an armed capture', () => {
+    const capture = {projectId: 'p1', armedPathname: '/share', armedAtMs: Date.now()}
+    saveWorkspaceCapture(capture)
+    expect(loadWorkspaceCapture()).toEqual(capture)
+  })
+
+  it('clears on null', () => {
+    saveWorkspaceCapture({projectId: 'p1', armedPathname: '/share', armedAtMs: Date.now()})
+    saveWorkspaceCapture(null)
+    expect(loadWorkspaceCapture()).toBeNull()
+  })
+
+  it('drops a capture older than the TTL', () => {
+    // TTL is 10 minutes; this puts the capture safely past it.
+    const msPerMinute = 60_000
+    const minutesPastTtl = 11
+    const elevenMinutesMs = minutesPastTtl * msPerMinute
+    saveWorkspaceCapture({
+      projectId: 'p1',
+      armedPathname: '/share',
+      armedAtMs: Date.now() - elevenMinutesMs,
+    })
+    expect(loadWorkspaceCapture()).toBeNull()
+  })
+
+  it('returns null on corrupt or shapeless data', () => {
+    localStorage.setItem('bldrs:workspace-capture', '{not json')
+    expect(loadWorkspaceCapture()).toBeNull()
+    localStorage.setItem('bldrs:workspace-capture', JSON.stringify({nope: true}))
+    expect(loadWorkspaceCapture()).toBeNull()
   })
 })

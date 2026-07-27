@@ -1,6 +1,8 @@
 import {
+  loadWorkspaceCapture,
   loadWorkspaceProjects,
   newWorkspaceId,
+  saveWorkspaceCapture,
   saveWorkspaceProjects,
 } from '../workspace/persistence'
 
@@ -60,12 +62,24 @@ export default function createWorkspaceSlice(set, get) {
 
     // Armed by the drawer's "Add model" before it opens the Open dialog:
     // the next navigation to a model route is recorded into projectId.
-    // armedPathname is the location at arm time, so a dialog closed with
-    // no navigation can be told apart from one that navigated.
-    // See ProjectsDrawer's capture effects.
-    workspaceCapture: null,
+    // Persisted, because opening a model reloads the document
+    // (navigateToModel) — in-memory state would be gone by the time the
+    // opened model renders. See ProjectsDrawer's capture effects.
+    workspaceCapture: loadWorkspaceCapture(),
     armWorkspaceCapture: (projectId, armedPathname) =>
-      set(() => ({workspaceCapture: {projectId: projectId, armedPathname: armedPathname}})),
-    disarmWorkspaceCapture: () => set(() => ({workspaceCapture: null})),
+      set(() => {
+        const capture = {
+          projectId: projectId,
+          armedPathname: armedPathname,
+          armedAtMs: Date.now(),
+        }
+        saveWorkspaceCapture(capture)
+        return {workspaceCapture: capture}
+      }),
+    disarmWorkspaceCapture: () =>
+      set(() => {
+        saveWorkspaceCapture(null)
+        return {workspaceCapture: null}
+      }),
   }
 }

@@ -1,6 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {Divider, IconButton, Menu, MenuItem, Typography} from '@mui/material'
-import {LogoBWithDomain} from '../Logo/Logo'
+import {LogoB} from '../Logo/Logo'
 
 
 // Marketing pages live on the Next.js SSG build (marketing/ — see
@@ -27,13 +27,15 @@ export default function LogoMenu() {
 
   return (
     <>
+      {/* Plain logo mark at the default icon size, matching the
+          AboutControl logo — the domain lockup at a custom size read as a
+          second, oversized brand element. */}
       <IconButton
         onClick={(event) => setAnchorEl(event.currentTarget)}
         title='Bldrs'
-        sx={{'borderRadius': '8px', '& svg': {width: '90px', height: 'auto'}}}
         data-testid='workspace-logo-button'
       >
-        <LogoBWithDomain/>
+        <LogoB/>
       </IconButton>
       <Menu
         anchorEl={anchorEl}
