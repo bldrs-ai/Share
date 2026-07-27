@@ -8,7 +8,7 @@ import {
   ToneMappingEffect,
   ToneMappingMode,
 } from 'postprocessing'
-import {WebGLRenderer, Scene, Camera} from 'three'
+import {WebGLRenderer, Scene, Camera, UnsignedShortType} from 'three'
 import {isFeatureEnabled} from '../../FeatureFlags'
 
 
@@ -53,6 +53,32 @@ export default class CustomPostProcessor {
    */
   constructor(renderer, scene, camera) {
     this._composer = new EffectComposer(renderer)
+    // The scene depth-tests in this composer's input buffer, not the
+    // canvas. Pin its depth attachment to 16 bits — the format three
+    // 0.135 allocated here, which the 0.184 upgrade (#1514) silently
+    // widened to 24-bit. BIM models author exactly-coincident interface
+    // faces (haus.ifc: 758 coplanar pairs at 0-1.6µm separation); at
+    // 16-bit those quantize to the same depth code everywhere and the
+    // deterministic draw order picks one stable winner, while at 24-bit
+    // the per-fragment log-depth rounding noise (~1e-7 of depth range)
+    // crosses code boundaries and the per-pixel winner is random —
+    // visible speckle/shimmer at soffits, rakes and ridges. 16-bit is
+    // the depth resolution prod shipped for years (~1.4mm at 15m under
+    // log depth); per-surface resolution of coincident interfaces
+    // belongs in the engine (conway interface culling, tracked
+    // separately). postprocessing re-assigns `composer.depthTexture`
+    // onto the current input buffer every frame (its ping-pong swaps
+    // buffer identities), and three rebinds changed depth textures and
+    // sizes them to the target, so this single assignment covers both
+    // buffers and all resizes. Going through createDepthTexture (rather
+    // than assigning composer.depthTexture directly) also builds the
+    // stable-depth target addPass dereferences; its default depth type
+    // is FloatType (32-bit), so both textures get re-pinned to 16-bit.
+    if (renderer) {
+      const stableDepthTexture = this._composer.createDepthTexture()
+      stableDepthTexture.type = UnsignedShortType
+      this._composer.depthTexture.type = UnsignedShortType
+    }
     this._composer.addPass(new RenderPass(scene, camera))
     // Ambient occlusion (§6e). SSAO needs a scene-normal buffer (NormalPass)
     // + the depth the composer already provides. Added before tone mapping so
