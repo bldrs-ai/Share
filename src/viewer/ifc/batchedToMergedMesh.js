@@ -245,6 +245,78 @@ export function batchedModelToMergedMesh(model) {
 
 
 /**
+ * Extract a batched model's STEP per-occurrence tables, re-keyed from the
+ * per-`batchId` side tables to the **global occurrence id** — the value
+ * `batchedModelToMergedMesh` bakes into each vertex's `instanceID`, and thus
+ * the synthetic instance id the cache reader rebuilds its `IfcInstanceMap` on
+ * (`instanceMapFromGeometry` / `instanceMapFromTriangleIds`). This is what lets
+ * the GLB cache persist per-occurrence selection for a batched-first load: the
+ * batched model has no `instanceMap` (its occurrence data lives on the batch
+ * meshes as `instanceOccurrencePaths` / `instanceGeometryIds`, indexed by
+ * `batchId`), so `glbExport` can't read the merged-path
+ * `instanceMap.instanceIdToOccurrencePath` and would otherwise drop occurrence
+ * data on write — the scene per-occurrence highlight then can't restore on a
+ * cache-hit reload even though the NavTree (spatial tree) still can.
+ *
+ * Both returned arrays are indexed by occurrence id (length = max id + 1);
+ * entries with no data are `null`. Returns `{occurrencePaths: null,
+ * geometryExpressIds: null}` for a model with no occurrence tables (IFC /
+ * pre-occurrence engines) so callers can treat it exactly like the
+ * absent-`instanceMap` case.
+ *
+ * @param {object} model BatchedMesh or Group of BatchedMeshes
+ * @return {object} `{occurrencePaths, geometryExpressIds}` — each an array
+ *   indexed by occurrence id, or `null` when the model carries no such table
+ */
+export function batchedModelOccurrenceTables(model) {
+  let maxOccurrenceId = -1
+  let hasPaths = false
+  let hasGeometryIds = false
+  eachBatch(model, (mesh) => {
+    const occurrenceIds = mesh.instanceOccurrenceIds
+    if (!occurrenceIds) {
+      return
+    }
+    for (let batchId = 0; batchId < occurrenceIds.length; batchId++) {
+      if (occurrenceIds[batchId] > maxOccurrenceId) {
+        maxOccurrenceId = occurrenceIds[batchId]
+      }
+    }
+    if (mesh.instanceOccurrencePaths) {
+      hasPaths = true
+    }
+    if (mesh.instanceGeometryIds) {
+      hasGeometryIds = true
+    }
+  })
+  if (maxOccurrenceId < 0 || (!hasPaths && !hasGeometryIds)) {
+    return {occurrencePaths: null, geometryExpressIds: null}
+  }
+  const count = maxOccurrenceId + 1
+  const occurrencePaths = hasPaths ? new Array(count).fill(null) : null
+  const geometryExpressIds = hasGeometryIds ? new Array(count).fill(null) : null
+  eachBatch(model, (mesh) => {
+    const occurrenceIds = mesh.instanceOccurrenceIds
+    if (!occurrenceIds) {
+      return
+    }
+    const paths = mesh.instanceOccurrencePaths
+    const geometryIds = mesh.instanceGeometryIds
+    for (let batchId = 0; batchId < occurrenceIds.length; batchId++) {
+      const occurrenceId = occurrenceIds[batchId]
+      if (occurrencePaths && paths) {
+        occurrencePaths[occurrenceId] = paths[batchId] ?? null
+      }
+      if (geometryExpressIds && geometryIds) {
+        geometryExpressIds[occurrenceId] = geometryIds[batchId] ?? null
+      }
+    }
+  })
+  return {occurrencePaths, geometryExpressIds}
+}
+
+
+/**
  * Dispose a merged mesh built by `batchedModelToMergedMesh` — frees its
  * freshly-baked geometry + per-bin materials. The source batched model is
  * untouched (the merged mesh owns independent buffers).

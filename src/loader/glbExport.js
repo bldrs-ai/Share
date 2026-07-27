@@ -42,7 +42,11 @@ import {
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
 import {eachBatch} from '../viewer/ifc/batchedModel'
-import {batchedModelToMergedMesh, disposeMergedMesh} from '../viewer/ifc/batchedToMergedMesh'
+import {
+  batchedModelOccurrenceTables,
+  batchedModelToMergedMesh,
+  disposeMergedMesh,
+} from '../viewer/ifc/batchedToMergedMesh'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -295,32 +299,64 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // model can restore per-occurrence NavTree↔scene selection instead of
     // collapsing to the shared part-type id. Absent for IFC.
     if (faceIds) {
-      const occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath
-      if (Array.isArray(occurrencePaths)) {
-        faceIds.occurrencePaths = occurrencePaths
-      }
+      let occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath ?? null
       // Per-instance geometry (solid) express ids — the other half of the
       // (occurrencePath, solid expressID) identity per-solid selection of
       // multibody STEP parts joins on. Same rationale as the paths above:
       // per-triangle arrays carry only the scalar instance id. Absent for IFC.
-      const geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId
-      if (Array.isArray(geometryExpressIds)) {
+      let geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId ?? null
+      // Batched render path (demandGeometry default / ?feature=batchedMesh):
+      // the model is a THREE.BatchedMesh with NO `instanceMap` — its
+      // per-occurrence tables live on the batch meshes, keyed by batchId.
+      // `batchedModelToMergedMesh` (above) baked each vertex's `instanceID`
+      // from the global occurrence id, so re-key the occurrence tables to that
+      // same id space; otherwise a batched-first load caches with no occurrence
+      // data and the scene per-occurrence highlight can't restore on cache-hit
+      // (the NavTree still can — the spatial tree persists paths separately).
+      if (!Array.isArray(occurrencePaths) && isBatched) {
+        const batchedTables = batchedModelOccurrenceTables(model)
+        occurrencePaths = batchedTables.occurrencePaths
+        geometryExpressIds = batchedTables.geometryExpressIds
+      }
+      if (Array.isArray(occurrencePaths)) {
+        faceIds.occurrencePaths = occurrencePaths
+      }
+      // Geometry (solid) ids — and their identity table — are persisted only
+      // when the model also carries occurrence paths (STEP): every reader-side
+      // join on a geometry id is occurrence-path-gated (per-solid narrowing in
+      // getInstanceIdsForOccurrencePath, "Face #" transient rows), so for IFC
+      // the table has no consumer, and the identity sweep below provably
+      // resolves nothing (Conway IFC entities have numeric types, which the
+      // capture skips) while costing one async property lookup per DISTINCT
+      // geometry id — minutes of write-time on big IFCs for an empty result.
+      if (Array.isArray(occurrencePaths) && Array.isArray(geometryExpressIds)) {
         faceIds.geometryExpressIds = geometryExpressIds
         // Identity table for those geometry pieces (conway#387): distinct
         // id → {type, name}, resolved through the live parser we have RIGHT
         // NOW so a cache-hit load can label transient NavTree rows and the
         // Properties panel without one. Small: one entry per distinct
         // geometry id (hundreds on NEMA-class parts), not per instance.
+        const identitiesStartMs = Date.now()
         faceIds.geometryItemIdentities = await captureGeometryItemIdentities(
           ifcManager, modelId, geometryExpressIds)
+        glbVerbose(
+          `writer: geometry identity sweep took ${Date.now() - identitiesStartMs}ms ` +
+          `(${Object.keys(faceIds.geometryItemIdentities ?? {}).length} identities)`)
       }
     }
     await yieldToBrowser()
     const capturePromise = (async () => {
+      // Per-phase timing (glbVerbose): the writer's post-export phases are
+      // otherwise silent for minutes on big models, which makes write stalls
+      // unattributable from the console (#1639 follow-up observation).
+      const treeStartMs = Date.now()
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+      glbVerbose(`writer: spatial-tree capture took ${Date.now() - treeStartMs}ms`)
       await yieldToBrowser()
+      const propsStartMs = Date.now()
       const elementProperties = await captureBldrsElementProperties(
         ifcManager, modelId, spatialTree)
+      glbVerbose(`writer: element-properties capture took ${Date.now() - propsStartMs}ms`)
       return {spatialTree, elementProperties}
     })()
     // Compress FIRST, then inject. `@gltf-transform/core`'s `WebIO`
@@ -345,8 +381,10 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // matching schema slot. Otherwise a -draco / -meshopt suffix on
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
+    const compressStartMs = Date.now()
     const {bytes: compressedBytes, mode} = await compressGlb(
       rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
+    glbVerbose(`writer: compress phase took ${Date.now() - compressStartMs}ms (mode=${mode || 'none'})`)
     await yieldToBrowser()
     const {spatialTree, elementProperties} = await capturePromise
     await yieldToBrowser()
