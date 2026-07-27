@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material'
 import {useTheme} from '@mui/material/styles'
+import {loadAllRecentFiles} from '../connections/persistence'
 import useStore from '../store/useStore'
 import LogoMenu from '../Components/Workspace/LogoMenu'
 import {
@@ -34,6 +35,29 @@ import {
 // Model routes all live under the viewer path segment, e.g.
 // /share/v/new/file.ifc, /share/v/gh/org/repo/branch/file.ifc.
 const MODEL_ROUTE_RE = /\/v\//
+
+
+/**
+ * Display label for a model route. A local upload routes by its OPFS
+ * storage id (`/v/new/<blob-uuid>.ifc`) rather than the name the user
+ * picked, so the raw path segment would list as a UUID. Recents already
+ * carry that split — `id` is the storage id, `name` the original
+ * filename (see the #1682 fix) — so prefer the recorded display name and
+ * fall back to the path segment for anything not in recents.
+ *
+ * @param {string} pathname
+ * @return {string}
+ */
+function labelForModelPath(pathname) {
+  const segment = decodeURIComponent(pathname.split('/').filter(Boolean).pop())
+  try {
+    const entry = loadAllRecentFiles().find(
+      (f) => f.sharePath === pathname || f.id === segment)
+    return entry?.modelTitle || entry?.name || segment
+  } catch {
+    return segment
+  }
+}
 
 const DRAWER_WIDTH = '240px'
 
@@ -77,8 +101,10 @@ export default function ProjectsDrawer() {
     }
     const {projectId, armedPathname} = workspaceCapture
     if (location.pathname !== armedPathname && MODEL_ROUTE_RE.test(location.pathname)) {
-      const label = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop())
-      addWorkspaceModel(projectId, {label: label, path: location.pathname})
+      addWorkspaceModel(projectId, {
+        label: labelForModelPath(location.pathname),
+        path: location.pathname,
+      })
       disarmWorkspaceCapture()
     }
   }, [location.pathname, workspaceCapture, addWorkspaceModel, disarmWorkspaceCapture])

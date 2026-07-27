@@ -92,6 +92,34 @@ describe('ProjectsDrawer', () => {
     expect(useStore.getState().workspaceCapture).toBeNull()
   })
 
+  // Local uploads route by OPFS storage id, so the raw segment is a UUID.
+  it('labels a captured model with its recents display name', () => {
+    localStorage.setItem('bldrs:recent-files', JSON.stringify({
+      version: 1,
+      files: [{
+        id: 'e500a57d-d0e1-4d5d-8187-56388a548971.ifc',
+        source: 'local',
+        name: 'haus.ifc',
+        sharePath: '/share/v/new/e500a57d-d0e1-4d5d-8187-56388a548971.ifc',
+      }],
+    }))
+    act(() => {
+      useStore.getState().createWorkspaceProject('A')
+    })
+    const projectId = useStore.getState().workspaceProjects[0].id
+    act(() => {
+      useStore.getState().armWorkspaceCapture(projectId, '/share')
+    })
+
+    render(
+      <ShareMock initialEntries={['/share/v/new/e500a57d-d0e1-4d5d-8187-56388a548971.ifc']}>
+        <ProjectsDrawer/>
+      </ShareMock>,
+    )
+
+    expect(useStore.getState().workspaceProjects[0].models[0].label).toBe('haus.ifc')
+  })
+
   it('does not record a non-model route', () => {
     act(() => {
       useStore.getState().createWorkspaceProject('A')
