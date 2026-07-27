@@ -113,9 +113,12 @@ export default class ThreeContext {
   /**
    * Fit the current camera to the bounds of the loaded model(s) using
    * whichever nav mode is active.
+   *
+   * @param {Object3D} [model] framing target; defaults to the last scene
+   *   child
    */
-  fitModelToFrame() {
-    this._legacy.ifcCamera.currentNavMode.fitModelToFrame()
+  fitModelToFrame(model = null) {
+    this._legacy.ifcCamera.currentNavMode.fitModelToFrame(model)
   }
 
 
@@ -132,7 +135,7 @@ export default class ThreeContext {
    *   child
    */
   fitCameraLimitsToModel(model = null) {
-    this._legacy.ifcCamera.currentNavMode.fitCameraLimitsToModel?.(model)
+    this._legacy.ifcCamera.currentNavMode.fitCameraLimitsToModel(model)
   }
 
 

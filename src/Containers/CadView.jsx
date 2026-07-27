@@ -513,16 +513,19 @@ export default function CadView({
     viewer.context.getScene().add(loadedModel)
 
     // Size the dolly range + near/far clip planes to the model *before*
-    // any camera pose is applied. fitModelToFrame does this too, but a
+    // any camera pose is applied, so the first frame is already drawn
+    // with the right frustum. fitModelToFrame does this too, but a
     // permalink with a `#c:` camera hash skips the fit — and then the
     // model renders against the default far = 2000 plane and the first
     // user input clamps the restored distance to maxDistance = 300
-    // (#1652). Optional-chained: the Jest viewer mock is partial.
-    viewer.context.fitCameraLimitsToModel?.(loadedModel)
+    // (#1652).
+    viewer.context.fitCameraLimitsToModel(loadedModel)
 
     const isCamHashSet = onHash(location, viewer.context.getCameraControls())
     if (!isCamHashSet) {
-      viewer.context.fitModelToFrame()
+      // Framing target passed explicitly: the no-arg fallback frames the
+      // last scene child, which is the model only by luck of ordering.
+      viewer.context.fitModelToFrame(loadedModel)
     }
 
     // §6e: fit the contact-shadow ground + shadow frustum to the model's

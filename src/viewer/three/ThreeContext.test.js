@@ -83,6 +83,14 @@ describe('viewer/three/ThreeContext', () => {
     expect(legacy.ifcCamera.currentNavMode.fitModelToFrame).toHaveBeenCalled()
   })
 
+  it('passes the framing target through fitModelToFrame', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    const model = {id: 'model'}
+    ctx.fitModelToFrame(model)
+    expect(legacy.ifcCamera.currentNavMode.fitModelToFrame).toHaveBeenCalledWith(model)
+  })
+
   it('delegates fitCameraLimitsToModel to the current nav mode', () => {
     const legacy = makeFakeLegacyContext()
     const ctx = new ThreeContext(legacy)

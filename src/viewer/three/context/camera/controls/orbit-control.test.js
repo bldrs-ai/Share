@@ -126,6 +126,18 @@ describe('viewer/three/context/camera/controls/orbit-control', () => {
       expect(controls.fitToSphere).toHaveBeenCalled()
     })
 
+    it('frames the object it is handed, not the last scene child', async () => {
+      const scene = sceneWithCube(MODEL_SIZE)
+      const model = scene.children[0]
+      scene.add(new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial()))
+      const {control, controls} = makeControl(scene)
+
+      await control.fitModelToFrame(model)
+
+      const [fitted] = controls.fitToSphere.mock.calls[0]
+      expect(fitted.radius).toBeGreaterThan(MODEL_SIZE / 2)
+    })
+
     it('is a no-op while disabled', async () => {
       const {control, camera, controls} = makeControl(sceneWithCube(MODEL_SIZE))
       control.toggle(false)

@@ -113,10 +113,16 @@ export class OrbitControl extends IfcComponent {
     // clamped fitToSphere on large models — pinning the camera too close and
     // capping zoom-out before the whole model was visible.
     controls.minDistance = fitDistance * MIN_DISTANCE_FACTOR
-    // Never pull the range in under where the camera already sits:
-    // `setPosition` (the permalink path) does not clamp, but the first
-    // dolly afterwards does, so a pose beyond 10x the fit distance would
-    // snap inwards on the user's first drag.
+    // Never pull the range in under where the camera already sits —
+    // `setPosition` doesn't clamp, but the first dolly afterwards does,
+    // so a shrinking range would snap the camera inwards on the user's
+    // first drag. This reads the *settled* radius, so it covers a
+    // setCameraFromParams on an already-dollied-out camera (issue-card
+    // navigation); it can't see the pending radius of a still-
+    // transitioning setPosition, which camera-controls keeps in the
+    // protected `_sphericalEnd`. The initial permalink load is covered
+    // by the 10x headroom instead — the same bound the link's own
+    // maxDistance had when the link was created.
     const currentDistance = Number.isFinite(controls.distance) ? controls.distance : 0
     controls.maxDistance = Math.max(fitDistance * MAX_DISTANCE_HEADROOM, currentDistance)
 
@@ -131,11 +137,18 @@ export class OrbitControl extends IfcComponent {
     return sphere
   }
 
-  async fitModelToFrame() {
+  /**
+   * Size the camera limits to `object` and frame it.
+   *
+   * @param {object} [object] framing target; defaults to the last scene
+   *   child. Pass it explicitly where the caller knows the model —
+   *   the fallback picks up whatever was added last (see #1561).
+   */
+  async fitModelToFrame(object = null) {
     if (!this.enabled) {
       return
     }
-    const sphere = this.fitCameraLimitsToModel()
+    const sphere = this.fitCameraLimitsToModel(object)
     if (sphere === null) {
       return
     }
