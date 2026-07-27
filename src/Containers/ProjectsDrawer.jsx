@@ -47,6 +47,9 @@ const MODEL_ROUTE_RE = /\/v\//
 const COLLAPSE_AT_WIDTH = 120
 const RESIZER_THICKNESS = 10
 const COLLAPSED_RAIL_WIDTH = '44px'
+// Breathing room under the header row, mirroring the gap the top bar
+// leaves above the NavTree controls (theme spacing 1).
+const CONTENT_TOP_GAP = 8
 
 
 /**
@@ -162,9 +165,10 @@ export default function ProjectsDrawer() {
   }
 
   // Header row: same height as the top bar over the canvas, so the two
-  // align across the drawer edge. Holds the brand + collapse toggle; the
-  // brand is drawer-open only, the toggle is always present so a
-  // collapsed drawer can be brought back.
+  // align across the drawer edge. Wordmark on the left (drawer-open
+  // only), collapse toggle on the right — the toggle is always present
+  // so a collapsed drawer can be brought back. The logo *mark* and its
+  // menu stay in the footer, bottom-left, in both states.
   const header = (
     <Stack
       direction='row'
@@ -173,7 +177,10 @@ export default function ProjectsDrawer() {
       sx={{height: TOP_BAR_HEIGHT, flexShrink: 0, px: isCollapsed ? 0 : 1, minWidth: 0}}
       data-testid='projects-header'
     >
-      {!isCollapsed && <LogoMenu/>}
+      {!isCollapsed &&
+       <Typography variant='body1' sx={{fontWeight: 'bold', pl: 1}} noWrap>
+         bldrs.ai
+       </Typography>}
       <TooltipIconButton
         title={isCollapsed ? 'Show projects' : 'Hide projects'}
         placement='right'
@@ -183,6 +190,16 @@ export default function ProjectsDrawer() {
         onClick={() => setIsCollapsed(!isCollapsed)}
         dataTestId='projects-collapse-toggle'
       />
+    </Stack>
+  )
+
+  const footer = (
+    <Stack
+      direction='row'
+      justifyContent={isCollapsed ? 'center' : 'flex-start'}
+      sx={{padding: '.5em', flexShrink: 0}}
+    >
+      <LogoMenu/>
     </Stack>
   )
 
@@ -202,6 +219,8 @@ export default function ProjectsDrawer() {
         data-testid='ProjectsDrawer'
       >
         {header}
+        <Box sx={{flexGrow: 1}}/>
+        {footer}
       </Paper>
     )
   }
@@ -236,7 +255,10 @@ export default function ProjectsDrawer() {
         onCollapse={onCollapse}
       />
       {header}
-      <Box sx={{padding: '0 1em 1em 1em', minWidth: 0}}>
+      {/* Sits below the header by the same gap the top bar leaves before
+          the NavTree controls, so the drawer and canvas columns start
+          their content on the same line. */}
+      <Box sx={{padding: `${CONTENT_TOP_GAP}px 1em 1em 1em`, minWidth: 0}}>
         <Button
           variant='contained'
           fullWidth
@@ -330,6 +352,7 @@ export default function ProjectsDrawer() {
           )
         })}
       </List>
+      {footer}
       {/* Focus on entry rather than autoFocus, which jsx-a11y rejects. */}
       <Dialog
         open={isNewProjectOpen}

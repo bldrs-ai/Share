@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, fireEvent, render, screen, waitForElementToBeRemoved} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitForElementToBeRemoved, within} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
@@ -55,10 +55,16 @@ describe('ProjectsDrawer', () => {
     })
   })
 
-  it('aligns its header with the top bar', () => {
+  it('aligns its header with the top bar, wordmark left of the toggle', () => {
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
-    expect(screen.getByTestId('projects-header'))
-      .toHaveStyle({height: `${TOP_BAR_HEIGHT}px`})
+
+    const header = screen.getByTestId('projects-header')
+    expect(header).toHaveStyle({height: `${TOP_BAR_HEIGHT}px`})
+    expect(within(header).getByText('bldrs.ai')).toBeInTheDocument()
+    expect(within(header).getByTestId('projects-collapse-toggle')).toBeInTheDocument()
+    // The logo mark lives in the footer, not the header.
+    expect(within(header).queryByTestId('workspace-logo-button')).toBeNull()
+    expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
   })
 
   describe('collapse', () => {
@@ -69,11 +75,12 @@ describe('ProjectsDrawer', () => {
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
 
-      // Rail keeps only the toggle: brand and project UI are drawer-open
-      // affordances.
+      // Rail keeps the toggle and the footer logo; the wordmark and
+      // project UI are drawer-open affordances.
       expect(screen.queryByTestId('projects-new-button')).toBeNull()
-      expect(screen.queryByTestId('workspace-logo-button')).toBeNull()
+      expect(screen.queryByText('bldrs.ai')).toBeNull()
       expect(screen.getByTestId('projects-collapse-toggle')).toBeInTheDocument()
+      expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
       expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).isDrawerCollapsed).toBe(true)
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))

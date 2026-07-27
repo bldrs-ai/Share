@@ -190,6 +190,11 @@ export default function HorizonResizerButton({
         alignItems: 'center',
         resize: 'horizontal',
         cursor: 'col-resize',
+        // Drawer content sits above this without it: MUI ListItemButton
+        // (ButtonBase) is position:relative, and positioned siblings
+        // paint in DOM order, so the list swallowed both the col-resize
+        // cursor and the mousedown that starts a drag.
+        zIndex: 1,
         ...(isOnLeft ? {
           left: 0,
         } : {
