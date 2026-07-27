@@ -1,8 +1,10 @@
 import React from 'react'
-import {act, fireEvent, render, screen} from '@testing-library/react'
+import {act, fireEvent, render, screen, waitForElementToBeRemoved} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
+import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
 import ProjectsDrawer from './ProjectsDrawer'
+import {TOP_BAR_HEIGHT} from './layoutConstants'
 
 
 describe('ProjectsDrawer', () => {
@@ -19,6 +21,46 @@ describe('ProjectsDrawer', () => {
     })
   })
 
+  describe('resize', () => {
+    // Regression: the drag handlers used to sit on the grip dots alone,
+    // so a drag started anywhere else along the edge did nothing.
+    it('resizes when the edge is dragged, not just the grip dots', () => {
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+      const edge = screen.getByTestId(ID_RESIZE_HANDLE_X)
+
+      act(() => {
+        fireEvent.mouseDown(edge)
+      })
+      act(() => {
+        fireEvent.mouseMove(window, {clientX: 400})
+      })
+
+      // jsdom rects are all zero, so width tracks clientX less the grip.
+      const clearlyWiderThanInitial = 300
+      expect(useStore.getState().workspaceDrawerWidth).toBeGreaterThan(clearlyWiderThanInitial)
+    })
+
+    it('collapses when dragged narrower than the minimum', () => {
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+      const edge = screen.getByTestId(ID_RESIZE_HANDLE_X)
+
+      act(() => {
+        fireEvent.mouseDown(edge)
+      })
+      act(() => {
+        fireEvent.mouseMove(window, {clientX: 30})
+      })
+
+      expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(true)
+    })
+  })
+
+  it('aligns its header with the top bar', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+    expect(screen.getByTestId('projects-header'))
+      .toHaveStyle({height: `${TOP_BAR_HEIGHT}px`})
+  })
+
   describe('collapse', () => {
     it('collapses to a rail and back, persisting the choice', () => {
       render(<ShareMock><ProjectsDrawer/></ShareMock>)
@@ -27,10 +69,11 @@ describe('ProjectsDrawer', () => {
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
 
-      // Rail keeps the toggle and the logo, drops the project UI.
+      // Rail keeps only the toggle: brand and project UI are drawer-open
+      // affordances.
       expect(screen.queryByTestId('projects-new-button')).toBeNull()
+      expect(screen.queryByTestId('workspace-logo-button')).toBeNull()
       expect(screen.getByTestId('projects-collapse-toggle')).toBeInTheDocument()
-      expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
       expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).isDrawerCollapsed).toBe(true)
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
@@ -53,14 +96,17 @@ describe('ProjectsDrawer', () => {
       useStore.getState().createWorkspaceProject('A')
     })
     const projectId = useStore.getState().workspaceProjects[0].id
-    fireEvent.click(screen.getByTestId(`project-${projectId}`))
-
-    expect(useStore.getState().expandedProjectIds).toEqual([projectId])
+    // Created projects start expanded and persisted.
     expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).expandedProjectIds)
       .toEqual([projectId])
 
     fireEvent.click(screen.getByTestId(`project-${projectId}`))
+    expect(useStore.getState().expandedProjectIds).toEqual([])
     expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).expandedProjectIds).toEqual([])
+
+    fireEvent.click(screen.getByTestId(`project-${projectId}`))
+    expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).expandedProjectIds)
+      .toEqual([projectId])
   })
 
   // A model recorded before its name was known keeps a storage-id label;
@@ -84,7 +130,6 @@ describe('ProjectsDrawer', () => {
         label: 'abc-uuid.ifc',
         path: '/share/v/new/abc-uuid.ifc',
       })
-      useStore.getState().toggleWorkspaceProjectExpanded(projectId)
     })
 
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
@@ -93,7 +138,7 @@ describe('ProjectsDrawer', () => {
     expect(screen.queryByText('abc-uuid.ifc')).toBeNull()
   })
 
-  it('creates a project through the New project dialog and persists it', () => {
+  it('creates a project through the New project dialog and persists it', async () => {
     render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
     fireEvent.click(screen.getByTestId('projects-new-button'))
@@ -103,6 +148,32 @@ describe('ProjectsDrawer', () => {
     expect(screen.getByText('Maple Street Tower')).toBeInTheDocument()
     expect(JSON.parse(localStorage.getItem('bldrs:workspace-projects')).projects[0].name)
       .toBe('Maple Street Tower')
+    // The dialog is done once the project exists (MUI fades it out).
+    await waitForElementToBeRemoved(() => screen.queryByTestId('projects-new-create'))
+  })
+
+  it('closes the dialog when created with the Enter key', async () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    fireEvent.click(screen.getByTestId('projects-new-button'))
+    fireEvent.change(screen.getByTestId('projects-new-name'), {target: {value: 'Via keyboard'}})
+    fireEvent.keyDown(screen.getByTestId('projects-new-name'), {key: 'Enter'})
+
+    await waitForElementToBeRemoved(() => screen.queryByTestId('projects-new-create'))
+    expect(useStore.getState().workspaceProjects[0].name).toBe('Via keyboard')
+  })
+
+  // A new project is empty; Add model lives inside it, so it has to be
+  // reachable without a further click.
+  it('opens a newly created project so Add model is visible', () => {
+    render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+    fireEvent.click(screen.getByTestId('projects-new-button'))
+    fireEvent.change(screen.getByTestId('projects-new-name'), {target: {value: 'Fresh'}})
+    fireEvent.click(screen.getByTestId('projects-new-create'))
+
+    const projectId = useStore.getState().workspaceProjects[0].id
+    expect(screen.getByTestId(`project-add-model-${projectId}`)).toBeInTheDocument()
   })
 
   it('ignores a blank project name', () => {
@@ -123,7 +194,6 @@ describe('ProjectsDrawer', () => {
     })
     const projectId = useStore.getState().workspaceProjects[0].id
 
-    fireEvent.click(screen.getByTestId(`project-${projectId}`))
     fireEvent.click(screen.getByTestId(`project-add-model-${projectId}`))
 
     expect(useStore.getState().workspaceCapture.projectId).toBe(projectId)
@@ -140,7 +210,6 @@ describe('ProjectsDrawer', () => {
       useStore.getState().createWorkspaceProject('A')
     })
     const projectId = useStore.getState().workspaceProjects[0].id
-    fireEvent.click(screen.getByTestId(`project-${projectId}`))
     fireEvent.click(screen.getByTestId(`project-add-model-${projectId}`))
     expect(useStore.getState().workspaceCapture).not.toBeNull()
 
@@ -227,7 +296,6 @@ describe('ProjectsDrawer', () => {
       useStore.getState().armWorkspaceCapture('other-project', '/share')
     })
 
-    fireEvent.click(screen.getByTestId(`project-${projectId}`))
     fireEvent.click(screen.getByText('tower.ifc'))
 
     expect(useStore.getState().workspaceCapture).toBeNull()
@@ -244,7 +312,6 @@ describe('ProjectsDrawer', () => {
       useStore.getState().addWorkspaceModel(projectId, {label: 'tower.ifc', path: '/share/v/new/tower.ifc'})
     })
 
-    fireEvent.click(screen.getByTestId(`project-${projectId}`))
     expect(screen.getByText('tower.ifc')).toBeInTheDocument()
 
     fireEvent.click(screen.getByLabelText('Remove model tower.ifc'))

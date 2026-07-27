@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   List,
   ListItemButton,
@@ -22,6 +21,7 @@ import {useTheme} from '@mui/material/styles'
 import {loadAllRecentFiles} from '../connections/persistence'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
+import {TOP_BAR_HEIGHT} from './layoutConstants'
 import {recentDisplayName} from '../utils/modelDisplayName'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
@@ -117,6 +117,7 @@ export default function ProjectsDrawer() {
   const navigate = useNavigate()
   const theme = useTheme()
   const drawerRef = useRef(null)
+  const nameFieldRef = useRef(null)
 
   // An armed capture + a navigation onto a model route records the opened
   // model into the arming project. Opening a model is a full page load,
@@ -160,17 +161,29 @@ export default function ProjectsDrawer() {
     setIsNewProjectOpen(false)
   }
 
-  const collapseToggle = (
-    <TooltipIconButton
-      title={isCollapsed ? 'Show projects' : 'Hide projects'}
-      placement='right'
-      selected={!isCollapsed}
-      icon={isCollapsed ?
-        <VerticalSplitOutlinedIcon className='icon-share'/> :
-        <VerticalSplitIcon className='icon-share'/>}
-      onClick={() => setIsCollapsed(!isCollapsed)}
-      dataTestId='projects-collapse-toggle'
-    />
+  // Header row: same height as the top bar over the canvas, so the two
+  // align across the drawer edge. Holds the brand + collapse toggle; the
+  // brand is drawer-open only, the toggle is always present so a
+  // collapsed drawer can be brought back.
+  const header = (
+    <Stack
+      direction='row'
+      alignItems='center'
+      justifyContent={isCollapsed ? 'center' : 'space-between'}
+      sx={{height: TOP_BAR_HEIGHT, flexShrink: 0, px: isCollapsed ? 0 : 1, minWidth: 0}}
+      data-testid='projects-header'
+    >
+      {!isCollapsed && <LogoMenu/>}
+      <TooltipIconButton
+        title={isCollapsed ? 'Show projects' : 'Hide projects'}
+        placement='right'
+        icon={isCollapsed ?
+          <VerticalSplitOutlinedIcon className='icon-share'/> :
+          <VerticalSplitIcon className='icon-share'/>}
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        dataTestId='projects-collapse-toggle'
+      />
+    </Stack>
   )
 
   if (isCollapsed) {
@@ -182,16 +195,13 @@ export default function ProjectsDrawer() {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
           borderRadius: 0,
           backgroundColor: theme.palette.secondary.workspaceBackground,
           borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
         }}
         data-testid='ProjectsDrawer'
       >
-        <Box sx={{padding: '.5em 0'}}>{collapseToggle}</Box>
-        <Box sx={{flexGrow: 1}}/>
-        <Box sx={{padding: '.5em 0'}}><LogoMenu/></Box>
+        {header}
       </Paper>
     )
   }
@@ -225,12 +235,8 @@ export default function ProjectsDrawer() {
         minWidth={COLLAPSE_AT_WIDTH}
         onCollapse={onCollapse}
       />
-      <Stack
-        direction='row'
-        alignItems='center'
-        spacing={1}
-        sx={{padding: '1em 1em 1em 1em', minWidth: 0}}
-      >
+      {header}
+      <Box sx={{padding: '0 1em 1em 1em', minWidth: 0}}>
         <Button
           variant='contained'
           fullWidth
@@ -240,8 +246,7 @@ export default function ProjectsDrawer() {
         >
           New project
         </Button>
-        {collapseToggle}
-      </Stack>
+      </Box>
       <Typography variant='overline' color='text.secondary' sx={{px: 2}}>
         Projects
       </Typography>
@@ -325,14 +330,16 @@ export default function ProjectsDrawer() {
           )
         })}
       </List>
-      <Divider/>
-      <Stack direction='row' sx={{padding: '.5em'}}>
-        <LogoMenu/>
-      </Stack>
-      <Dialog open={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)}>
+      {/* Focus on entry rather than autoFocus, which jsx-a11y rejects. */}
+      <Dialog
+        open={isNewProjectOpen}
+        onClose={() => setIsNewProjectOpen(false)}
+        TransitionProps={{onEntered: () => nameFieldRef.current?.focus()}}
+      >
         <DialogTitle>New project</DialogTitle>
         <DialogContent>
           <TextField
+            inputRef={nameFieldRef}
             label='Project name'
             variant='outlined'
             margin='dense'

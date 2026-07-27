@@ -67,11 +67,19 @@ export default function createWorkspaceSlice(set, get) {
 
     workspaceProjects: loadWorkspaceProjects(),
 
+    // A just-created project is empty, and the only useful next action —
+    // Add model — lives inside it, so it opens expanded.
     createWorkspaceProject: (name) =>
-      set((state) => persist([
-        ...state.workspaceProjects,
-        {id: newWorkspaceId(), name: name, models: []},
-      ])),
+      set((state) => {
+        const project = {id: newWorkspaceId(), name: name, models: []}
+        return {
+          ...persist([...state.workspaceProjects, project]),
+          ...persistUi({
+            expandedProjectIds: [...state.expandedProjectIds, project.id],
+            isDrawerCollapsed: state.isWorkspaceDrawerCollapsed,
+          }),
+        }
+      }),
 
     removeWorkspaceProject: (projectId) =>
       set((state) => persist(

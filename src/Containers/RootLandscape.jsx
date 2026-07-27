@@ -9,6 +9,7 @@ import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
 import ProjectsDrawer from './ProjectsDrawer'
+import {TOP_BAR_HEIGHT} from './layoutConstants'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
 import useExistInFeature from '../hooks/useExistInFeature'
@@ -72,7 +73,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
             sx={{
               position: 'absolute',
               top: 0,
-              height: 58,
+              height: TOP_BAR_HEIGHT,
               width: '100%',
               backgroundColor: theme.palette.secondary.backgroundColor,
               borderRadius: 0,

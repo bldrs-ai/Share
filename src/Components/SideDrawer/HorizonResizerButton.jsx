@@ -173,6 +173,11 @@ export default function HorizonResizerButton({
   }, [isExpanded, drawerWidthInitial])
 
 
+  // The drag handlers live on this full-height edge rather than on the
+  // grip dots alone: the dots are ~15px tall and vertically centred, so
+  // handler-on-the-dots meant a drag started anywhere else along the
+  // edge silently did nothing. The dots stay purely decorative — they
+  // mark where the edge is, they aren't the only place you can grab it.
   return (
     <Box
       sx={{
@@ -184,12 +189,17 @@ export default function HorizonResizerButton({
         justifyContent: 'center',
         alignItems: 'center',
         resize: 'horizontal',
+        cursor: 'col-resize',
         ...(isOnLeft ? {
           left: 0,
         } : {
           right: 0,
         }),
       }}
+      ref={resizerRef}
+      data-testid={ID_RESIZE_HANDLE_X}
+      onMouseDown={startResizing}
+      {...onResizerDblTap}
     >
       <Box
         sx={{
@@ -200,12 +210,8 @@ export default function HorizonResizerButton({
           justifyContent: 'center',
           gap: `${gripSize}px`,
           background: theme.palette.primary.background,
-          cursor: 'col-resize',
+          pointerEvents: 'none',
         }}
-        ref={resizerRef}
-        data-testid={ID_RESIZE_HANDLE_X}
-        onMouseDown={startResizing}
-        {...onResizerDblTap}
       >
         {Array.from({length: 3}).map((v, i) =>
           <Box
