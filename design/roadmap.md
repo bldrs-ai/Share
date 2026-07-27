@@ -1,7 +1,7 @@
 # Bldrs Share Roadmap
 
-**Status:** Draft v0.6 — milestone-based tiers (MVP = paying trickle w/ estimable CAC)
-**Date:** 2026-07-03
+**Status:** Draft v0.7 — conversational-CAD epic plan folded in (`search-320`, `assist-*` scope)
+**Date:** 2026-07-27
 **Owner:** Pablo
 **Source baseline:** `Share Requirements` Google Doc (Aug 2021, last updated Nov 2022). PDF
 extract preserved in this commit's history; key Epic list inlined in §4.
@@ -107,6 +107,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | Search | `search-100` | Search current model | 🟡 | — | — |
 | Search | `search-300` | Search across GitHub repos (❤️ Oleg) | 🔮 | Post | — |
 | Search | `search-310` | Knowledge graph (🥇, ❤️ Johannes) | 🔮 | AI | T10 |
+| Search | `search-320` | Fluid NavTree + breadcrumb-scoped search (NEW) | ⬜ | AI | — |
 | Identity | `identity-100` | Auth0 primary login | ✔ | — | — |
 | Identity | `identity-110` | GitHub as Sources peer | 🟡 | B | T3 |
 | Identity | `identity-120` | Auth disambiguation (<a href="https://github.com/bldrs-ai/Share/issues/1422" target="_blank" rel="noopener noreferrer">#1422</a>) | 🟡 | B | — |
@@ -470,7 +471,8 @@ data graph.
 **Epic `search-100`: Search current model** 🟡
 *PDF Search.1 (MVP).*
 - Closed: <a href="https://github.com/bldrs-ai/Share/issues/1180" target="_blank" rel="noopener noreferrer">#1180</a> Search 100 Permalinks.
-- Open: <a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a> Search 100 Search model based on element name (highlighting in scene).
+- Open: <a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a> Search 100 Search model based on element name (highlighting in
+  scene) — folds into `search-320`'s E2E (attached as its sub-issue).
 - Story to file: cover NavTree + scene highlighting under the same E2E.
 
 **Epic `search-300`: Search across GitHub repos** 🔮 (❤️ Oleg)
@@ -487,6 +489,23 @@ data graph.
   first-class job of the conversational panel (`assist-310`); the knowledge-graph
   substrate becomes its retrieval layer (Track T10). Johannes stays the design
   partner.
+
+**Epic `search-320`: Fluid NavTree + breadcrumb-scoped search** ⬜ (NEW)
+*Not in PDF; introduced by the conversational-CAD plan
+(`design/new/conversational-cad.md` §3).*
+- NavTree stops being a parked side-drawer: summonable, virtualized,
+  type-to-filter dropdown from the TopBar breadcrumb; moving focus up/down the
+  breadcrumb segments broadens/restricts search scope.
+- Invariant: element-path (#1180) + STEP occurrence-path (PR #1581)
+  selection/permalinks round-trip unchanged through the new surfaces — the
+  dropdown is a new view over the `selectItemsInScene` funnel, not a new
+  selection source of truth.
+- Absorbs <a href="https://github.com/bldrs-ai/Share/issues/1254" target="_blank" rel="noopener noreferrer">#1254</a> (search by element name w/ scene highlighting).
+- Open design question: `NavTreeAndVersionsDrawer` retires entirely (Versions
+  re-homes) or shrinks to Versions-only.
+- Behind `?feature=navSearch`. Sits between AI.1 and AI.2 in the pivot
+  sequence (§7.4); renumbers to `search-200` if wanted independent of the
+  pivot.
 
 
 ### 4.6 Identity & Account (NEW Epic group — implicit in PDF "Federated authentication")
@@ -739,6 +758,11 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
   `?feature=workspace`.
 - Interacts with: `open-300` Sources tab (accounts live in the same nav), T4
   sharing (shared-with-me listing), `identity-300` profile drawer.
+- Plan + wireframe mapping: `design/new/conversational-cad.md` §2 (W1–W4).
+  Project persistence tiers: local-first (recents-class durability), then Auth0
+  `user_metadata` as a sync target for logged-in users. Also in scope: logo
+  popup (About/Pricing/News on the marketing SSG build + manage-account entry)
+  and the missing DS icon tokens.
 
 **Epic `assist-310`: Conversational agent panel (single-user)** ⬜ (NEW)
 - A Claude-Code-like conversation panel over the open project/model: prompt →
@@ -750,6 +774,10 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
   the pivot (§7.4 AI.2).
 - Absorbs `search-310`'s NL-QA ambition; T10 owns the runtime + conversation
   persistence.
+- Plan: `design/new/conversational-cad.md` §4 — conversations as the third
+  ProjectsDrawer level (project → models → convos); message element-chips /
+  anchors reuse the existing camera-hash + element-path/occurrence-path
+  permalink machinery. Behind `?feature=convo`.
 
 **Epic `assist-320`: AI-apps toolbelt (right drawer)** ⬜ (NEW)
 - The existing right-drawer AppsDrawer, upgraded: code the agent generates can be
@@ -775,6 +803,11 @@ vision, architecture, and sequencing. Design doc to draft: `design/new/ai-worksp
 - Depends on a shared conversation store with realtime sync (T10) and T4
   sharing/grants for channel membership. Largest new backend piece — last in the
   pivot sequence (§7.4 AI.4).
+- Plan: `design/new/conversational-cad.md` §5 — the §10 conversation-store
+  question sharpened into a **ChannelProvider** abstraction (permissions +
+  persistence plugins: matrix.org the structurally interesting candidate,
+  Discord/Slack as bridges), following the T3/T4 provider precedent. Presence
+  stubs behind `?feature=presence`.
 
 
 ## 5. Cross-cutting Tracks
@@ -1247,6 +1280,10 @@ can't destabilise the launch may start earlier behind flags.
   suite — the sandbox foundation must hold weight before anything is built on it.
 - **AI.1 — Workspace shell.** `assist-300` left drawer behind
   `?feature=workspace`. No AI dependency; can overlap MVP phases.
+- **AI.1a — Fluid Nav + scoped search.** `search-320` behind
+  `?feature=navSearch`: the element-referencing UX the convo panel's chips
+  point into — and standalone viewer value if AI.2 slips.
+  (`conversational-cad.md` §3.)
 - **AI.2 — Agent v0, single-user.** `assist-310`: viewer MCP tool surface (T11) +
   agent loop (T10) + conversation panel. One user, one conversation per
   project/model. **This is the demo that sells the pivot — and it must be run
@@ -1312,6 +1349,10 @@ reflects current product-pull:
 17. **PDF "Hangouts" (Miro, FPV, WebXR Bonanza)** — out of scope until use-case
     demand.
 18. **PDF "Social Updates" (ActivityPub federation)** — interesting; no current pull.
+19. **`assist-410` Social broadcast plugins** (YouTube/X screencasts) —
+    placeholder from `conversational-cad.md` §5; shares the plugin seam with
+    ChannelProvider, none of its urgency. Gets a §4.11 block when something
+    pulls on it.
 
 
 ## 9. Migration to GH issues + wiki
@@ -1486,6 +1527,16 @@ MVP band, the Assist/AI arc *out* to the Pro band. Rubric in §2.1; full ID
 lineage below; the exhaustive open-MVP checklist is §6.0. The "Pro-MVP plan" is renamed
 to just the **MVP plan** — under this rubric the MVP *is* the paying launch, so
 the prefix was redundant (and collided with the 300-band "Pro" milestone).
+
+
+**v0.7 (2026-07-27)** folds in the Conversational-CAD epic plan
+(`design/new/conversational-cad.md`, driven by the production-merge
+wireframes): new epic `search-320` (fluid NavTree + breadcrumb-scoped
+search, inserted as pivot stage AI.1a), scope extensions recorded on the
+`assist-300`/`assist-310`/`assist-400` blocks (persistence tiers, convo
+drawer level + permalink anchors, ChannelProvider abstraction), and the
+`assist-410` social-broadcast placeholder in §8. Epic tracking issues +
+sub-issues created per that doc's §8.
 
 
 ## ID lineage
