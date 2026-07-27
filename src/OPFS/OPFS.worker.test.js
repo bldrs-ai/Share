@@ -568,6 +568,38 @@ describe('OPFS writes on a handle without createWritable (Safari)', () => {
     await expect(rootDir.getFileHandle('safari-old.txt', {create: false})).rejects.toThrow('not found')
   })
 
+  /*
+   * `openSyncAccessHandleWithRetry` recovers from Safari's
+   * `InvalidStateError` by removing and RECREATING the entry, so the
+   * handle passed in goes stale and the bytes land in a fresh one. The
+   * copy must hand back the helper's handle, not the pre-retry object.
+   */
+  test('renameFileInOPFS copy fallback returns the handle the retry recreated', async () => {
+    const src = await rootDir.getFileHandle('retry-src.txt', {create: true})
+    src.data = new Uint8Array(Buffer.from('retry-payload'))
+
+    const realGetFileHandle = rootDir.getFileHandle.bind(rootDir)
+    let staleDest = null
+    rootDir.getFileHandle = jest.fn(async (name, opts) => {
+      const handle = await realGetFileHandle(name, opts)
+      if (name === 'retry-dest.txt' && staleDest === null) {
+        staleDest = handle
+        // First sync-handle attempt on this entry fails the way Safari
+        // does when it still holds an internal reference.
+        // eslint-disable-next-line require-await
+        handle.createSyncAccessHandle = jest.fn(async () => {
+          throw new DOMException('The object is in an invalid state.', 'InvalidStateError')
+        })
+      }
+      return handle
+    })
+
+    const dest = await worker.renameFileInOPFS(rootDir, src, 'retry-dest.txt')
+
+    expect(dest).not.toBe(staleDest)
+    expect(await (await dest.getFile()).text()).toBe('retry-payload')
+  })
+
   test('renameFileInOPFS copy fallback spans multiple chunks', async () => {
     // Larger than COPY_CHUNK_BYTES (4MiB), so the slice loop runs more
     // than once — the chunking is the reason this path exists on iOS.

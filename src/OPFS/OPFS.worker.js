@@ -1434,9 +1434,14 @@ export async function renameFileInOPFS(parentDirectory, fileHandle, newFileName,
   // interface, so we slice the source ourselves to hold the same memory
   // profile.
   const srcFile = await fileHandle.getFile()
-  const destHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
-  const {handle: destAccess} = await openSyncAccessHandleWithRetry(
-    parentDirectory, destHandle, newFileName)
+  const openedDest = await parentDirectory.getFileHandle(newFileName, {create: true})
+  // Take the handle the helper hands back, not the one we passed in: on
+  // the Safari `InvalidStateError` retry it removes and recreates the
+  // entry, so `openedDest` is stale from that point on and the bytes
+  // land in the fresh handle. Returning the stale one would hand the
+  // caller a handle to a file it never wrote.
+  const {handle: destAccess, fileHandle: destHandle} = await openSyncAccessHandleWithRetry(
+    parentDirectory, openedDest, newFileName)
   try {
     for (let at = 0; at < srcFile.size; at += COPY_CHUNK_BYTES) {
       const slice = await srcFile.slice(at, Math.min(at + COPY_CHUNK_BYTES, srcFile.size)).arrayBuffer()
