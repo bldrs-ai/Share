@@ -44,4 +44,15 @@ export class FirstPersonControl extends IfcComponent {
   fitModelToFrame() {
     // no-op
   }
+
+
+  /**
+   * Standard camera-limit shim. Never called — we only size the dolly
+   * range and clip planes in Orbit mode.
+   *
+   * @return {null}
+   */
+  fitCameraLimitsToModel() {
+    return null
+  }
 }

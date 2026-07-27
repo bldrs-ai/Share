@@ -73,6 +73,7 @@ const legacyContextMock = {
     return {
       currentNavMode: {
         fitModelToFrame: jest.fn(),
+        fitCameraLimitsToModel: jest.fn(),
       },
     }
   }),
@@ -114,6 +115,7 @@ const legacyContextMock = {
     },
     currentNavMode: {
       fitModelToFrame: jest.fn(),
+      fitCameraLimitsToModel: jest.fn(),
     },
   },
   items: {
