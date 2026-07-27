@@ -16,7 +16,11 @@ export type RecentFileSource = 'local' | 'google-drive' | 'github'
 
 
 export interface RecentFileEntry {
-  /** Dedup key: fileId (google-drive) | sharePath (github) | filename (local) */
+  /**
+   * Dedup key: fileId (google-drive) | sharePath (github) | OPFS storage
+   * id, `<blob-uuid>.<ext>` (local). For local entries this — not `name` —
+   * is what `/v/new/` navigation and `Loader#load` resolve against OPFS.
+   */
   id: string
   source: RecentFileSource
   /** Original filename — used as tooltip and display fallback */
@@ -24,8 +28,13 @@ export interface RecentFileEntry {
   /** Extracted IFC model name — preferred for display when available */
   modelTitle?: string
   mimeType?: string
+  /**
+   * Epoch ms. Entries written by drag-and-drop before #1682 hold an
+   * ISO-8601 string instead; `RecentFilesList` coerces on read so those
+   * still render, but nothing should write one.
+   */
   lastModifiedUtc?: number | null
-  /** Navigate path for local (/v/new/filename) and github (/v/gh/...) */
+  /** Navigate path for local (/v/new/[storage-id]) and github (/v/gh/...) */
   sharePath?: string
   /** google-drive only */
   connectionId?: string
