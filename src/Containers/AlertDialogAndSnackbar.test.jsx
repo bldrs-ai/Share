@@ -5,6 +5,22 @@ import useStore from '../store/useStore'
 import AlertAndSnackbar from './AlertDialogAndSnackbar'
 
 
+/**
+ * Every emitted CSS rule that targets one of an element's emotion classes,
+ * media queries included — jsdom's getComputedStyle can't see either.
+ *
+ * @param {Element} element
+ * @return {string}
+ */
+function cssOf(element) {
+  const classes = Array.from(element.classList).filter((name) => name.startsWith('css-'))
+  return Array.from(document.querySelectorAll('style'))
+    .flatMap((style) => style.textContent.split('\n'))
+    .filter((rule) => classes.some((name) => rule.includes(`.${name}`)))
+    .join('\n')
+}
+
+
 // Grace-period state machine (conway #301 UX). The shrink-to-"i" animation
 // itself has no measurable target in jsdom (no LoadReportControl rendered
 // here, and getBoundingClientRect is zeroed), so the success auto-dismiss
@@ -89,6 +105,30 @@ describe('AlertAndSnackbar grace period', () => {
     expect(line.textContent).toContain('1.114s, +89.034761 MB heap')
     // The bar is space-padded past "98%" so "]" holds a fixed column.
     expect(line.textContent).toMatch(/98% +\]/)
+  })
+
+  it('widens the content box when the report is expanded', () => {
+    render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+    act(() => {
+      useStore.getState().setLoadReportLines(['Model: Arty_Z7.stp — AP214, 38.1 MB'])
+      useStore.getState().setLoadResult({status: 'success', summaryLine: 'Loaded Arty_Z7.stp'})
+    })
+    const content = document.querySelector('[data-testid="snackbar"] .MuiSnackbarContent-root')
+    // Read the emitted rules rather than getComputedStyle: jsdom drops
+    // `fit-content` as an unsupported width and never applies media queries,
+    // so both bands are only visible in the stylesheet emotion inserted.
+    expect(cssOf(content)).toContain('max-width:94vw')
+
+    fireEvent.click(screen.getByTestId('LoadStatusExpandToggle'))
+    const expandedCss = cssOf(content)
+    // Mobile band (base declarations) — edge to edge.
+    expect(expandedCss).toContain('min-width:100%')
+    expect(expandedCss).toContain('max-width:100%')
+    // Desktop band (sm and up) — half the viewport at least, four fifths at most.
+    expect(expandedCss).toMatch(/@media \(min-width:600px\)[^}]*min-width:50vw/)
+    expect(expandedCss).toMatch(/@media \(min-width:600px\)[^}]*max-width:80vw/)
+    // The message slot grows with the box, or the extra width is dead space.
+    expect(expandedCss).toMatch(/MuiSnackbarContent-message\{[^}]*flex-grow:1/)
   })
 
   it('prefers the page-title model name for the success grace line', () => {

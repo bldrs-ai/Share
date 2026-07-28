@@ -54,6 +54,23 @@ const SNACK_CONTENT_SELECTOR = '[data-testid="snackbar"] .MuiSnackbarContent-roo
 // display layout only.
 const BAR_INNER_WIDTH = 22
 
+// Collapsed, the snackbar hugs its one line (no 288px MUI min-width sprawl)
+// so "Loaded <name>" doesn't leave a wide right gap.
+const COLLAPSED_CONTENT_SX = {minWidth: 'auto', width: 'fit-content', maxWidth: '94vw'}
+// Expanded, hugging is wrong: the report's lines are long (the Model line, the
+// diagnostics summary) and would render as a narrow column of clipped text.
+// Give the box a floor and a ceiling instead — half to four-fifths of the
+// viewport on desktop, edge-to-edge on mobile, where there's no room to be
+// choosy. MUI sizes the message slot to its content, so it needs flexGrow to
+// follow the wider box (otherwise the extra width is just a gap on the right);
+// minWidth:0 lets the inner overflow-x scroller shrink below its content.
+const EXPANDED_CONTENT_SX = {
+  'minWidth': {xs: '100%', sm: '50vw'},
+  'width': {xs: '100%', sm: 'fit-content'},
+  'maxWidth': {xs: '100%', sm: '80vw'},
+  '& .MuiSnackbarContent-message': {flexGrow: 1, minWidth: 0},
+}
+
 
 /**
  * Space-pad a live stage line's bar to a fixed inner width so the closing "]"
@@ -280,11 +297,17 @@ export default function AlertAndSnackbar() {
   )
 
   const loadMessage = (
-    // Hug the current line's width so the snackbar doesn't sprawl. The
-    // collapsed report history (a long "Model: …" line) would otherwise widen
-    // the box even while hidden — width:0 keeps it out of the width calc, and
-    // minWidth:100% stretches it to the box (scrolling) only once expanded.
-    <Box sx={{width: 'fit-content', maxWidth: '92vw'}} data-testid='LoadStatusMessage'>
+    // Collapsed: hug the current line's width so the snackbar doesn't sprawl
+    // (the hidden history's long "Model: …" line would otherwise widen the box
+    // even while collapsed — the history's width:0 below keeps it out of the
+    // width calc). Expanded: fill the widened content box so the history's
+    // minWidth:100% resolves against that width, not against one short line.
+    <Box
+      sx={isLoadExpanded ?
+        {width: '100%', maxWidth: '100%'} :
+        {width: 'fit-content', maxWidth: '92vw'}}
+      data-testid='LoadStatusMessage'
+    >
       <Collapse in={isLoadExpanded}>
         <Box
           sx={{...LOAD_LINE_SX, opacity: 0.8, mb: 0.5, width: 0, minWidth: '100%', overflowX: 'auto'}}
@@ -375,10 +398,13 @@ export default function AlertAndSnackbar() {
         // through the dismiss animation) so it can't fight or flash the
         // shrink-to-"i" animation, which drives the content box itself.
         transitionDuration={(showLoadView || isDismissing) ? 0 : undefined}
-        // Hug the content (no 288px min-width sprawl) so short lines like
-        // "Loaded <name>" don't leave a wide right gap; the animation's inline
-        // style overrides this while it runs.
-        ContentProps={{style: animStyle, sx: {minWidth: 'auto', width: 'fit-content', maxWidth: '94vw'}}}
+        // Hug one line when collapsed, take a viewport-relative band when
+        // expanded (see the two *_CONTENT_SX above); the animation's inline
+        // style overrides both while it runs.
+        ContentProps={{
+          style: animStyle,
+          sx: (showLoadView && isLoadExpanded) ? EXPANDED_CONTENT_SX : COLLAPSED_CONTENT_SX,
+        }}
         data-testid='snackbar'
       />
     </>
