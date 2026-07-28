@@ -29,6 +29,22 @@ describe('workspace/persistence', () => {
     expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
   })
 
+  // A model may legitimately be filed under two projects, so the
+  // element-path normalization below must not dedup across them.
+  it('keeps a model that is filed under more than one project', () => {
+    const shared = {id: 'm1', label: 'shared.ifc', path: '/share/v/gh/o/r/main/shared.ifc'}
+    saveWorkspaceContents({
+      projects: [
+        {id: 'p1', name: 'One', models: [shared]},
+        {id: 'p2', name: 'Two', models: [{...shared, id: 'm2'}]},
+      ],
+      ungrouped: [],
+    })
+    const loaded = loadWorkspaceContents()
+    expect(loaded.projects[0].models).toHaveLength(1)
+    expect(loaded.projects[1].models).toHaveLength(1)
+  })
+
   // Early builds recorded raw pathnames, so element selections minted
   // phantom "models" named by expressID. Loads self-heal those stores.
   it('normalizes element-path refs onto their model and drops duplicates', () => {

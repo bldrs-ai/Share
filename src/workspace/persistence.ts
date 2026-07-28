@@ -85,8 +85,11 @@ export function loadWorkspaceContents(): WorkspaceContents {
  * @return Contents with element-path refs collapsed onto their models.
  */
 function normalizeContents(contents: WorkspaceContents): WorkspaceContents {
-  const seen = new Set<string>()
-  const dedup = (models: WorkspaceModelRef[]) =>
+  // Deliberately per-list: the same model may be filed under two
+  // projects (`addWorkspaceModel` only touches its target), so a shared
+  // seen-set across projects would silently drop it from all but the
+  // first on the next load.
+  const dedupWithin = (models: WorkspaceModelRef[], seen: Set<string>) =>
     models.flatMap((model) => {
       const path = modelPathFromPathname(model.path)
       if (seen.has(path)) {
@@ -95,8 +98,12 @@ function normalizeContents(contents: WorkspaceContents): WorkspaceContents {
       seen.add(path)
       return [path === model.path ? model : {...model, path}]
     })
-  const projects = contents.projects.map((p) => ({...p, models: dedup(p.models)}))
-  return {projects, ungrouped: dedup(contents.ungrouped)}
+  const projects = contents.projects.map(
+    (p) => ({...p, models: dedupWithin(p.models, new Set<string>())}))
+  // Ungrouped is the leftovers bin, so it drops anything now filed —
+  // the same rule `addUngroupedModel` applies when recording.
+  const filed = new Set(projects.flatMap((p) => p.models.map((m) => m.path)))
+  return {projects, ungrouped: dedupWithin(contents.ungrouped, filed)}
 }
 
 
