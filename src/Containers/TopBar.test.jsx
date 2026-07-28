@@ -46,6 +46,14 @@ describe('TopBar', () => {
     expect(withoutSearch.queryByTestId('topbar-search')).toBeNull()
   })
 
+  // Element selections append numeric segments to the pathname; the
+  // crumb must keep naming the model, not the selected expressID.
+  it('names the model, not the selected element, on element-path routes', () => {
+    render(<ShareMock initialEntries={[`${MODEL_ROUTE}/81/621`]}><TopBar/></ShareMock>)
+
+    expect(screen.getByTestId('topbar-breadcrumb-model')).toHaveTextContent('index.ifc')
+  })
+
   it('shows no breadcrumb segments off model routes', () => {
     render(<ShareMock initialEntries={['/about']}><TopBar/></ShareMock>)
 

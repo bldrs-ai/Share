@@ -4,6 +4,7 @@ import {Breadcrumbs, Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import SearchBar from '../Components/Search/SearchBar'
 import useStore from '../store/useStore'
+import {modelPathFromPathname} from '../workspace/modelPath'
 import {labelForModelPath} from '../utils/modelDisplayName'
 import {ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 
@@ -14,8 +15,9 @@ const MODEL_ROUTE_RE = /\/v\//
 
 // The search field needs real width to be usable as both element search
 // and paste-a-link opener, but must not crowd the breadcrumb on narrow
-// panes.
-const SEARCH_MAX_WIDTH = '24em'
+// panes. Matches the SearchBar form's own desktop width — a smaller cap
+// here just reintroduces overflow.
+const SEARCH_MAX_WIDTH = '25em'
 
 
 /**
@@ -37,10 +39,14 @@ export default function TopBar() {
   const location = useLocation()
   const theme = useTheme()
 
-  const isModelRoute = MODEL_ROUTE_RE.test(location.pathname)
-  const modelLabel = isModelRoute ? labelForModelPath(location.pathname) : null
-  const project = isModelRoute ?
-    workspaceProjects.find((p) => p.models.some((m) => m.path === location.pathname)) :
+  // Element selections append numeric segments to the pathname — the
+  // crumb names the *model*, not the selected element's expressID.
+  const modelPath = MODEL_ROUTE_RE.test(location.pathname) ?
+    modelPathFromPathname(location.pathname) :
+    null
+  const modelLabel = modelPath ? labelForModelPath(modelPath) : null
+  const project = modelPath ?
+    workspaceProjects.find((p) => p.models.some((m) => m.path === modelPath)) :
     null
 
   return (
@@ -68,7 +74,10 @@ export default function TopBar() {
         justifyContent='space-between'
         spacing={2}
         sx={{
-          width: '100%',
+          // Flex-fill rather than width:100%: an explicit percentage
+          // width plus the left padding overflowed the bar and pushed
+          // the search field off the right edge of the window.
+          flex: '1 1 auto',
           minWidth: 0,
           // The ControlsGroup's first row (Open, and Save when signed
           // in) paints over the bar's left edge on the shared 58px

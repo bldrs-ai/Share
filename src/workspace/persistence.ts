@@ -1,3 +1,6 @@
+import {modelPathFromPathname} from './modelPath'
+
+
 const WORKSPACE_PROJECTS_KEY = 'bldrs:workspace-projects'
 const WORKSPACE_PROJECTS_VERSION = 1
 const WORKSPACE_CAPTURE_KEY = 'bldrs:workspace-capture'
@@ -60,13 +63,40 @@ export function loadWorkspaceContents(): WorkspaceContents {
     if (parsed.version !== WORKSPACE_PROJECTS_VERSION || !Array.isArray(parsed.projects)) {
       return empty
     }
-    return {
+    return normalizeContents({
       projects: parsed.projects,
       ungrouped: Array.isArray(parsed.ungrouped) ? parsed.ungrouped : [],
-    }
+    })
   } catch {
     return empty
   }
+}
+
+
+/**
+ * Self-heal stored model refs: early builds recorded raw pathnames, so
+ * an element selection (`…/Momentum.ifc/88/111/153/3768/199961`) minted
+ * a phantom "model" per element. Normalizing to the model's own route
+ * and dropping the resulting duplicates on load repairs those stores in
+ * place — a project's copy of a model wins over an Ungrouped copy, and
+ * the first ref wins within a list.
+ *
+ * @param contents Parsed store contents.
+ * @return Contents with element-path refs collapsed onto their models.
+ */
+function normalizeContents(contents: WorkspaceContents): WorkspaceContents {
+  const seen = new Set<string>()
+  const dedup = (models: WorkspaceModelRef[]) =>
+    models.flatMap((model) => {
+      const path = modelPathFromPathname(model.path)
+      if (seen.has(path)) {
+        return []
+      }
+      seen.add(path)
+      return [path === model.path ? model : {...model, path}]
+    })
+  const projects = contents.projects.map((p) => ({...p, models: dedup(p.models)}))
+  return {projects, ungrouped: dedup(contents.ungrouped)}
 }
 
 

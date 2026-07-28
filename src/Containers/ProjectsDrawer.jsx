@@ -26,6 +26,7 @@ import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
 import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {hasStoredWorkspaceUiState} from '../workspace/persistence'
+import {modelPathFromPathname} from '../workspace/modelPath'
 import {labelForModelPath} from '../utils/modelDisplayName'
 import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
@@ -134,17 +135,24 @@ export default function ProjectsDrawer() {
   const drawerRef = useRef(null)
   const nameFieldRef = useRef(null)
 
+  // The model's own route — element selections append numeric segments
+  // to the pathname, and treating those as identity minted a phantom
+  // "model" per selected element (named by its expressID) in Ungrouped.
+  const currentModelPath = MODEL_ROUTE_RE.test(location.pathname) ?
+    modelPathFromPathname(location.pathname) :
+    null
+
   // An armed capture + a navigation onto a model route records the opened
   // model into the arming project. Opening a model is a full page load,
   // so this usually fires on mount of the *next* page — the capture is
   // persisted for exactly that reason.
   useEffect(() => {
-    if (!MODEL_ROUTE_RE.test(location.pathname)) {
+    if (currentModelPath === null) {
       return
     }
     const model = {
-      label: labelForModelPath(location.pathname),
-      path: location.pathname,
+      label: labelForModelPath(currentModelPath),
+      path: currentModelPath,
     }
     if (workspaceCapture === null) {
       // No pending "Add model": the user got here some other way — a
@@ -154,12 +162,14 @@ export default function ProjectsDrawer() {
       addUngroupedModel(model)
       return
     }
-    if (location.pathname !== workspaceCapture.armedPathname) {
+    // Both sides normalized: arming while an element was selected must
+    // still recognize "same model" on the other side of the reload.
+    if (currentModelPath !== modelPathFromPathname(workspaceCapture.armedPathname)) {
       addWorkspaceModel(workspaceCapture.projectId, model)
       disarmWorkspaceCapture()
     }
   }, [
-    location.pathname,
+    currentModelPath,
     workspaceCapture,
     addWorkspaceModel,
     addUngroupedModel,
@@ -432,7 +442,7 @@ export default function ProjectsDrawer() {
                       <ListItemButton
                         key={model.id}
                         sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                        selected={location.pathname === model.path}
+                        selected={currentModelPath === model.path}
                         // Disarm first: opening a model that is already
                         // listed must not be adopted by a still-armed
                         // capture from some other project.
@@ -487,7 +497,7 @@ export default function ProjectsDrawer() {
                <ListItemButton
                  key={model.id}
                  sx={rowSx}
-                 selected={location.pathname === model.path}
+                 selected={currentModelPath === model.path}
                  onClick={() => navigateToModel(model.path, navigate)}
                  data-testid={`ungrouped-model-${model.id}`}
                >

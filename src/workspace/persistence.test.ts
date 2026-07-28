@@ -29,6 +29,35 @@ describe('workspace/persistence', () => {
     expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
   })
 
+  // Early builds recorded raw pathnames, so element selections minted
+  // phantom "models" named by expressID. Loads self-heal those stores.
+  it('normalizes element-path refs onto their model and drops duplicates', () => {
+    saveWorkspaceContents({
+      projects: [
+        {id: 'p1', name: 'Maple', models: [
+          {id: 'm1', label: 'Momentum.ifc', path: '/share/v/gh/o/r/main/Momentum.ifc'},
+          {id: 'm2', label: '199961', path: '/share/v/gh/o/r/main/Momentum.ifc/88/111/199961'},
+        ]},
+      ],
+      ungrouped: [
+        {id: 'u1', label: 'index.ifc', path: '/share/v/p/index.ifc'},
+        {id: 'u2', label: '621', path: '/share/v/p/index.ifc/81/621'},
+        // A project's copy of the model wins over an Ungrouped one.
+        {id: 'u3', label: '153', path: '/share/v/gh/o/r/main/Momentum.ifc/153'},
+      ],
+    })
+    expect(loadWorkspaceContents()).toEqual({
+      projects: [
+        {id: 'p1', name: 'Maple', models: [
+          {id: 'm1', label: 'Momentum.ifc', path: '/share/v/gh/o/r/main/Momentum.ifc'},
+        ]},
+      ],
+      ungrouped: [
+        {id: 'u1', label: 'index.ifc', path: '/share/v/p/index.ifc'},
+      ],
+    })
+  })
+
   it('returns empty on corrupt JSON', () => {
     localStorage.setItem('bldrs:workspace-projects', '{not json')
     expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
