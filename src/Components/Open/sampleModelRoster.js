@@ -32,25 +32,24 @@
  * in angle and often leaves the model small in frame.
  *
  * Hosting note: everything under bldrs-ai/test-models is Git-LFS-backed,
- * so those samples draw on that repo's bandwidth quota. The other samples
- * (Swiss-Property-AG, OlegMoshkovich, webaverse) are plain git blobs
- * served without LFS. Robot_hand is the full right-hand assembly of
- * Pollen Robotics' AmazingHand (CC-BY-4.0), an Onshape AP242 export
- * mirrored into test-models; Robot is the Mixamo Y Bot rig with embedded
- * animation clips.
+ * so those samples draw on that repo's bandwidth quota; the
+ * Swiss-Property-AG samples are plain git blobs served without LFS.
+ * Robot_hand is the full right-hand assembly of Pollen Robotics'
+ * AmazingHand (CC-BY-4.0), an Onshape AP242 export mirrored into
+ * test-models.
+ *
+ * No FBX sample right now: the Mixamo Y Bot that covered it rendered as
+ * a near-black silhouette at card size. FBX (and animation with it) is
+ * worth re-adding once there's a model that reads well as a thumbnail.
  */
 export const SAMPLE_MODELS = [
   {
     name: 'Momentum',
-    path: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
+    path: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-14.466,6.885,26.851,-4.707,0.121,0.769',
   },
   {
     name: 'Seestrasse',
     path: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
-  },
-  {
-    name: 'Bldrs_plaza',
-    path: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
   },
   {
     name: 'Gear',
@@ -66,11 +65,8 @@ export const SAMPLE_MODELS = [
   },
   {
     name: 'Robot_hand',
-    path: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/Right_Hand.step',
-  },
-  {
-    name: 'Robot',
-    path: '/share/v/gh/webaverse/assets/master/animations/ybot.fbx',
+    path: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/' +
+      'Right_Hand.step#c:-0.105,-0.189,-0.345,0.009,-0.049,-0.091',
   },
   {
     name: 'Caffeine',
