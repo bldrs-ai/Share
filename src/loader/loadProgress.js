@@ -29,9 +29,10 @@ import {LoadLogAccumulator, formatMb} from '@bldrs-ai/conway/src/core/progress_l
 
 const BREADCRUMB_INTERVAL_MS = 1000
 const STATUS_LINE_INTERVAL_MS = 100
-// Cap on distinct warning/error lines appended to the report so a model
-// that throws thousands of CDT exceptions stays copy-pasteable.
-const MAX_DIAGNOSTIC_LINES = 50
+// Cap on the sample message carried by the one-line diagnostics summary —
+// long enough to recognize which family of warning dominated, short enough
+// that the line still reads as a summary.
+const MAX_DIAGNOSTIC_SAMPLE_CHARS = 80
 
 /**
  * No event during a tickable phase for this long → stalled. Long enough
@@ -388,23 +389,38 @@ class LoadProgressReporter {
     useStore.getState().setCurrentLoadLine(null)
   }
 
-  /** Append the deduplicated console warnings/errors below the Total line. */
+  /**
+   * Summarize the captured console warnings/errors as a *single* line below
+   * Total: counts plus the most frequent message.
+   *
+   * Deliberately one line and not a listing. Engines emit per-entity
+   * diagnostics ("Error processing representation #NNN"), which dedup can't
+   * collapse because each is textually distinct — a STEP model can produce
+   * hundreds, which buried the rest of the report in the snackbar expando and
+   * in the copyable "i" report alike. Nothing is lost: the console tee passes
+   * every message through to the real console, so full detail stays one
+   * devtools panel away.
+   */
   appendDiagnostics() {
     if (this.diagnostics.size === 0) {
       return
     }
-    const total = Array.from(this.diagnostics.values()).reduce((sum, count) => sum + count, 0)
-    this.addReportLine(`Warnings & errors (${total}):`, false)
-
-    let shown = 0
+    let total = 0
+    let topText = ''
+    let topCount = 0
     for (const [text, count] of this.diagnostics) {
-      if (shown >= MAX_DIAGNOSTIC_LINES) {
-        this.addReportLine(`(+${this.diagnostics.size - shown} more distinct)`, false)
-        break
+      total += count
+      if (count > topCount) {
+        topCount = count
+        topText = text
       }
-      this.addReportLine(count > 1 ? `${text} (×${count})` : text, false)
-      shown++
     }
+    const distinctNote = this.diagnostics.size > 1 ? `, ${this.diagnostics.size} distinct` : ''
+    const sample = topText.length > MAX_DIAGNOSTIC_SAMPLE_CHARS ?
+      `${topText.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
+      topText
+    const sampleNote = topCount > 1 ? `${sample} (×${topCount})` : sample
+    this.addReportLine(`Warnings & errors (${total}${distinctNote}): ${sampleNote}`, false)
   }
 
   /** Stop watching (load finished or failed); restore the console tee. */
