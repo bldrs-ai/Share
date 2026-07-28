@@ -214,17 +214,18 @@ Slices, in order — each a story with desktop+mobile E2E per §7.1:
 1. **TopBar shell** (#1663, epic 1): ToolbarPaper becomes a real TopBar —
    breadcrumb (project / model from the workspace store) + relocated
    SearchBar — behind `?feature=workspace`. No NavTree changes.
-2. **Scope mechanic + SearchProvider seam**: anchor/scope UX per the
-   celestiary pattern; provider interface; model-elements provider wraps
-   today's `SearchIndex`; project provider over the drawer store; stubs
-   for outside-of-project and convo. Folds in #1254.
-3. **Pinned expansion ↔ NavTree convergence**: the autocomplete dropdown
-   pins into a virtualized tree panel. Deliberately *not* pre-deciding
-   NavTree's retirement — build the pinned expansion, dogfood both, then
-   retire the drawer tree (or shrink it to Versions-only) as its own
-   decision. Sharpens this section's existing open question into a
-   decide-by-experience.
-4. **Lazy spatial provider (memory)**: today NavTree + SearchIndex hold
+2. **Scope mechanic + SearchProvider seam** (#1669 UX + #1699 seam):
+   anchor/scope UX per the celestiary pattern; provider interface;
+   model-elements provider wraps today's `SearchIndex`; project provider
+   over the drawer store; stubs for outside-of-project and convo. Folds
+   in #1254.
+3. **Pinned expansion ↔ NavTree convergence** (#1668; retirement decision
+   #1670): the autocomplete dropdown pins into a virtualized tree panel.
+   Deliberately *not* pre-deciding NavTree's retirement — build the
+   pinned expansion, dogfood both, then retire the drawer tree (or
+   shrink it to Versions-only) as its own decision. Sharpens this
+   section's existing open question into a decide-by-experience.
+4. **Lazy spatial provider (memory)** (#1701): today NavTree + SearchIndex hold
    the *entire* deserialized spatial tree (`rootElement` in the store) —
    O(elements) JS memory on top of engine memory. Replace with a
    node-provider API: materialize O(roots) at load, fetch children on
@@ -232,7 +233,7 @@ Slices, in order — each a story with desktop+mobile E2E per §7.1:
    overhead. Tree view and breadcrumb both consume it.
    *Investigation:* what children-of-node / props queries conway exposes
    post-load.
-5. **Streaming search index**: search becomes a subscriber on the
+5. **Streaming search index** (#1702): search becomes a subscriber on the
    progressive-load session (the `onMeshBatch`-era architecture) —
    index per parsed batch, live match-as-load: enter a query during
    load and watch results accumulate. Replaces slice 2's one-shot
