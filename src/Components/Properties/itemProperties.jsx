@@ -101,6 +101,25 @@ export function entityTypeName(model, ifcProps) {
 
 
 /**
+ * The object `deref` needs to resolve a type-5 entity reference. Its
+ * second parameter is a **web-ifc API**, not our model: it calls
+ * `webIfc.properties.getItemProperties(...)`. Passing the model meant
+ * that call threw on `undefined.getItemProperties` the moment a
+ * property carried a reference — which aborted the whole table and left
+ * the previously selected element's properties on screen. Spatial
+ * containers (IfcSite, IfcBuilding) hit it; leaves mostly don't, which
+ * is why this hid for so long.
+ *
+ * @param {object} model IFC model
+ * @return {object} web-ifc-shaped API, falling back to the model so
+ *   backends that already expose `properties` keep working.
+ */
+function webIfcFor(model) {
+  return model?.ifcManager?.ifcAPI ?? model
+}
+
+
+/**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
  *
@@ -158,15 +177,19 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       if (propValue.type === 0) {
         return null
       }
+      // `deref` takes (ref, webIfc, indent) — the 4th "render nested
+      // entity" callback this used to pass was never invoked, so a
+      // resolved reference came back as a raw entity object and React
+      // threw "Objects are not valid as a React child", aborting the
+      // table. Nest it into its own table here instead. Arrays are left
+      // alone: React renders them, and deref has already resolved each
+      // member.
+      const derefed = await deref(propValue, webIfcFor(model), serial)
+      const isEntity = derefed !== null && typeof derefed === 'object' && !Array.isArray(derefed)
       return (
         <Row
           d1={label}
-          d2={
-            await deref(
-              propValue, model, serial,
-              // TODO(pablo): there's no 4th param in deref
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, false, srl))
-          }
+          d2={isEntity ? await createPropertyTable(model, derefed, false, serial) : derefed}
           key={serial}
         />
       )

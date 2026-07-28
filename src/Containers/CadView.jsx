@@ -1331,7 +1331,12 @@ export default function CadView({
 
 
   useEffect(() => {
-    (async () => {
+    // Same staleness guard as the Properties panel: this effect awaits
+    // the entity fetch before writing `selectedElement`, so a slow
+    // earlier selection could otherwise resolve last and leave every
+    // consumer (Properties, the TopBar crumb) showing the previous pick.
+    let isStale = false
+    ;(async () => {
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
@@ -1386,6 +1391,9 @@ export default function CadView({
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
         }
+        if (isStale) {
+          return
+        }
         setSelectedElement(props)
         // Reveal the selection in the NavTree by opening the path to it, merged
         // into the current expansion (see `expandedIdsForSelection`). For a STEP
@@ -1413,6 +1421,9 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
+    return () => {
+      isStale = true
+    }
   }, [selectedElements, selectedAnchorIds, selectedInstanceIds, selectedOccurrencePath])
   /* eslint-enable */
 
