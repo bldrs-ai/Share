@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import {Typography} from '@mui/material'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import debug from '../../utils/debug'
+import {prettyType} from '../../utils/ifc'
 import {stoi} from '../../utils/strings'
 
 
@@ -22,7 +23,9 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
   let rowKey = 0
   const typeName = entityTypeName(model, ifcProps)
   if (!isPset && typeName !== null && typeName !== 'IfcPropertySet') {
-    ROWS.push(<Row d1={'Type'} d2={typeName} key={`type-${serial}`}/>)
+    // Prettified for reading ('Element (generic proxy)'), not the raw
+    // schema constant ('IFCBUILDINGELEMENTPROXY').
+    ROWS.push(<Row d1={'Type'} d2={prettyType(typeName)} key={`type-${serial}`}/>)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
@@ -65,7 +68,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
  * @param {object} ifcProps the entity
  * @return {string|null}
  */
-function entityTypeName(model, ifcProps) {
+export function entityTypeName(model, ifcProps) {
   const rawType = ifcProps?.type
   if (typeof rawType === 'string' && rawType.length > 0) {
     return rawType

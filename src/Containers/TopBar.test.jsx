@@ -11,7 +11,7 @@ describe('TopBar', () => {
   beforeEach(() => {
     localStorage.clear()
     act(() => {
-      useStore.setState({workspaceProjects: [], isSearchEnabled: true})
+      useStore.setState({workspaceProjects: [], isSearchEnabled: true, model: null, selectedElement: null})
     })
   })
 
@@ -52,6 +52,39 @@ describe('TopBar', () => {
     render(<ShareMock initialEntries={[`${MODEL_ROUTE}/81/621`]}><TopBar/></ShareMock>)
 
     expect(screen.getByTestId('topbar-breadcrumb-model')).toHaveTextContent('index.ifc')
+  })
+
+  it('prefers the loader-extracted model name over the filename', () => {
+    act(() => {
+      useStore.setState({model: {name: 'Bldrs'}})
+    })
+    render(<ShareMock initialEntries={[MODEL_ROUTE]}><TopBar/></ShareMock>)
+
+    expect(screen.getByTestId('topbar-breadcrumb-model')).toHaveTextContent('Bldrs')
+  })
+
+  it('adds a named-element crumb for the current selection', () => {
+    act(() => {
+      useStore.setState({
+        model: {name: 'Bldrs'},
+        selectedElement: {expressID: 396, type: 'IFCBUILDINGELEMENTPROXY', Name: {value: 'Together'}},
+      })
+    })
+    render(<ShareMock initialEntries={[`${MODEL_ROUTE}/89/112/139/154/396`]}><TopBar/></ShareMock>)
+
+    expect(screen.getByTestId('topbar-breadcrumb-model')).toHaveTextContent('Bldrs')
+    expect(screen.getByTestId('topbar-breadcrumb-element')).toHaveTextContent('Together')
+  })
+
+  it('falls back to prettified type and id for anonymous elements', () => {
+    act(() => {
+      useStore.setState({
+        selectedElement: {expressID: 42, type: 'IFCWALLSTANDARDCASE'},
+      })
+    })
+    render(<ShareMock initialEntries={[`${MODEL_ROUTE}/81/42`]}><TopBar/></ShareMock>)
+
+    expect(screen.getByTestId('topbar-breadcrumb-element')).toHaveTextContent('Wall (std. case): 42')
   })
 
   it('shows no breadcrumb segments off model routes', () => {

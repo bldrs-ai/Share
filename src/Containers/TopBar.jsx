@@ -1,10 +1,13 @@
 import React, {ReactElement} from 'react'
 import {useLocation} from 'react-router-dom'
-import {Box, Breadcrumbs, Paper, Stack, Typography} from '@mui/material'
+import {Box, Breadcrumbs, Paper, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
+import {decodeIFCString} from '@bldrs-ai/ifclib'
 import SearchBar from '../Components/Search/SearchBar'
+import {entityTypeName} from '../Components/Properties/itemProperties'
 import useStore from '../store/useStore'
 import {modelPathFromPathname} from '../workspace/modelPath'
+import {prettyType} from '../utils/ifc'
 import {labelForModelPath} from '../utils/modelDisplayName'
 import {ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 
@@ -36,6 +39,8 @@ const SEARCH_MAX_WIDTH = '25em'
 export default function TopBar() {
   const workspaceProjects = useStore((state) => state.workspaceProjects)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+  const model = useStore((state) => state.model)
+  const selectedElement = useStore((state) => state.selectedElement)
   const location = useLocation()
   const theme = useTheme()
 
@@ -44,10 +49,26 @@ export default function TopBar() {
   const modelPath = MODEL_ROUTE_RE.test(location.pathname) ?
     modelPathFromPathname(location.pathname) :
     null
-  const modelLabel = modelPath ? labelForModelPath(modelPath) : null
+  // The model's own name where the loader extracted one ('Bldrs' for
+  // index.ifc), else the filename; the filename stays reachable as the
+  // tooltip either way.
+  const fileLabel = modelPath ? labelForModelPath(modelPath) : null
+  const modelLabel = (modelPath && model?.name) || fileLabel
   const project = modelPath ?
     workspaceProjects.find((p) => p.models.some((m) => m.path === modelPath)) :
     null
+
+  // Selected-element crumb: named elements show their name ('Together'),
+  // anonymous ones their prettified type; the tooltip always carries
+  // 'Type: expressID' for orientation.
+  let elementLabel = null
+  let elementTip = null
+  if (modelPath && selectedElement) {
+    const typeLabel = prettyType(entityTypeName(model, selectedElement)) || 'Element'
+    const name = decodeIFCString(selectedElement.Name?.value || '')
+    elementLabel = name || `${typeLabel}: ${selectedElement.expressID}`
+    elementTip = `${typeLabel}: ${selectedElement.expressID}`
+  }
 
   return (
     // Zero-height positioned anchor: CenterPane is statically
@@ -88,7 +109,10 @@ export default function TopBar() {
             // grid, so the breadcrumb starts past that column. Goes away
             // when OpenModelControl retires from the canvas (#1664).
             pl: `${ROW_PITCH * 2}px`,
-            pr: 2,
+            // Same reservation on the right for the OperationsGroup's
+            // first row (Profile / Apps / Share) until #1665 relocates
+            // those into this bar.
+            pr: `${ROW_PITCH * 3}px`,
           }}
         >
           <Breadcrumbs
@@ -101,9 +125,27 @@ export default function TopBar() {
              {project.name}
            </Typography>}
             {modelLabel &&
-           <Typography variant='body2' noWrap sx={{fontWeight: 'bold'}} data-testid='topbar-breadcrumb-model'>
-             {modelLabel}
-           </Typography>}
+           <Tooltip title={fileLabel} placement='bottom'>
+             <Typography
+               variant='body2'
+               noWrap
+               sx={{fontWeight: elementLabel ? 'normal' : 'bold'}}
+               data-testid='topbar-breadcrumb-model'
+             >
+               {modelLabel}
+             </Typography>
+           </Tooltip>}
+            {elementLabel &&
+           <Tooltip title={elementTip} placement='bottom'>
+             <Typography
+               variant='body2'
+               noWrap
+               sx={{fontWeight: 'bold'}}
+               data-testid='topbar-breadcrumb-element'
+             >
+               {elementLabel}
+             </Typography>
+           </Tooltip>}
           </Breadcrumbs>
           {isSearchEnabled &&
          <Stack sx={{flexGrow: 1, minWidth: 0, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
