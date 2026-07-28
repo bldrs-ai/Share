@@ -48,6 +48,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Load-log report format (CLI + console + snackbar expando + "i" report dialog), stage/Total line semantics, per-format cascade, `loadProgress.js` (deep-imports conway `core/progress_log`)/`AlertDialogAndSnackbar.jsx` (live expando)/`LoadReportControl` | [design/new/load-log-format.md](design/new/load-log-format.md) |
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 | Conversational-CAD epic plan (workspace shell / ProjectsDrawer + TopBar, fluid Nav+search, convo panel, multi-user channels), wireframe→issue mapping, epic/sub-issue process | [design/new/conversational-cad.md](design/new/conversational-cad.md) |
+| Persistence direction: OPFS as a git-versioned workspace (repo-as-workspace, LFS-pointer blobs, record-vs-stream convo split, wasm-git vs isomorphic-git investigation, exit plan) | [design/new/workspace-store.md](design/new/workspace-store.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
 

@@ -88,7 +88,9 @@ name), don't invent a second one.
   and read at login — so it's a sync/merge target for the local store, not a
   live database. If/when projects need sharing or org scope, that's a real
   store decision that belongs to the T10 conversation-store question — don't
-  solve it here.
+  solve it here. The direction for that decision is now pre-scoped in
+  `workspace-store.md` (repo-as-workspace); these tiers are the
+  stepping stones toward it, not rivals to it.
 
 ### 2.3 TopBar (W2)
 
@@ -249,7 +251,9 @@ design, not code.
   backends — matrix.org, Discord, Slack — following the provider-pattern
   precedent already in the codebase (T3 `ConnectionProvider`, T4 sharing
   providers). This *is* the roadmap §10 "conversation store" open question,
-  sharpened: matrix.org is the structurally interesting candidate (open
+  sharpened (and now pre-scoped in `workspace-store.md` §1.3: the repo is
+  the durable record, the ChannelProvider is the live layer, distillation
+  connects them): matrix.org is the structurally interesting candidate (open
   protocol, rooms ≈ channels, ACLs ≈ grants, federation ≈ BYOS — the same
   bring-your-own-storage shape as the rest of the product), with
   Discord/Slack as bridge plugins for where teams already live. The scoping
