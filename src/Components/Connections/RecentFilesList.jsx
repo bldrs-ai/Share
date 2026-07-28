@@ -38,11 +38,21 @@ function FileTypeIcon({mimeType}) {
 /**
  * Formats a UTC timestamp (ms) as a relative or absolute date string.
  *
- * @param {number|null|undefined} utcMs
+ * Tolerates an ISO-8601 string as well as epoch ms: the drag-and-drop
+ * handler stored ISO strings until #1682, and those entries are still
+ * sitting in users' localStorage — arithmetic on them yielded NaN and
+ * rendered "NaNm ago". Anything unparseable returns null, same as a
+ * missing timestamp.
+ *
+ * @param {number|string|null|undefined} utc
  * @return {string|null}
  */
-function formatRelativeTime(utcMs) {
-  if (!utcMs) {
+function formatRelativeTime(utc) {
+  if (!utc) {
+    return null
+  }
+  const utcMs = typeof utc === 'number' ? utc : Date.parse(utc)
+  if (isNaN(utcMs)) {
     return null
   }
   const diffMs = Date.now() - utcMs

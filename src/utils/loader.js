@@ -9,7 +9,7 @@ import debug from '../utils/debug'
 /**
  * Upload a local file for display.
  *
- * @param {Function} onLoad
+ * @param {Function} onLoad Called with (storageId, lastModifiedUtc, originalName)
  * @param {boolean} testingSkipAutoRemove
  */
 export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
@@ -28,7 +28,7 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
       const tmpUrl = parts[parts.length - 1]
       URL.revokeObjectURL(objectUrl)
       if (onLoad) {
-        onLoad(tmpUrl, lastModifiedUtc)
+        onLoad(tmpUrl, lastModifiedUtc, file.name)
       }
     },
     false,
@@ -44,7 +44,12 @@ export function loadLocalFileFallback(onLoad, testingSkipAutoRemove = false) {
 /**
  * Upload a local file for display.
  *
- * @param {Function} onLoad
+ * The first `onLoad` arg is the OPFS storage id the worker wrote under
+ * (`<blob-uuid>.<ext>`) — that's the `/v/new/` path segment. The third
+ * is the user's original filename, which callers need to keep as the
+ * recents display name (they are NOT interchangeable, see #1682).
+ *
+ * @param {Function} onLoad Called with (storageId, lastModifiedUtc, originalName)
  * @param {boolean} testingSkipAutoRemove
  * @param {boolean} testingDisableWebWorker
  */
@@ -83,12 +88,12 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
               debug().log('Worker finished writing file')
               workerRef.removeEventListener('message', listener)
               URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.fileName, lastModifiedUtc)
+              onLoad(workerEvent.data.fileName, lastModifiedUtc, file.name)
             } else if (workerEvent.data.event === 'read') {
               debug().log('Worker finished reading file')
               workerRef.removeEventListener('message', listener)
               URL.revokeObjectURL(tmpUrl)
-              onLoad(workerEvent.data.file.name, lastModifiedUtc)
+              onLoad(workerEvent.data.file.name, lastModifiedUtc, file.name)
             }
           }
         }
@@ -102,7 +107,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
         opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
       } else {
         URL.revokeObjectURL(tmpUrl)
-        onLoad(fileNametmpUrl, lastModifiedUtc)
+        onLoad(fileNametmpUrl, lastModifiedUtc, file.name)
       }
     },
     false,
