@@ -144,6 +144,26 @@ class FileHandle {
         return arr.length
       },
       /**
+       * Truncates the file to the given size.
+       *
+       * @param {number} size - New file size in bytes.
+       * @return {Promise<void>}
+       */
+      async truncate(size) {
+        await Promise.resolve()
+        const next = new Uint8Array(size)
+        next.set(handle.data.slice(0, Math.min(size, handle.data.length)))
+        handle.data = next
+      },
+      /**
+       * Flushes buffered writes. No-op for the in-memory stub.
+       *
+       * @return {Promise<void>}
+       */
+      async flush() {
+        await Promise.resolve()
+      },
+      /**
        * Closes the synchronous access handle.
        *
        * @return {Promise<void>}
@@ -488,6 +508,114 @@ test('renameFileInOPFS falls back to copy+delete when native move throws', async
   await expect(rootDir.getFileHandle('boom.txt', {create: false})).rejects.toThrow('not found')
   /* eslint-enable require-await */
 })
+
+// ------------------------------------------------------------
+// Safari-shaped writes (no createWritable)
+// ------------------------------------------------------------
+
+/*
+ * Safari implements OPFS writes ONLY through FileSystemSyncAccessHandle
+ * (worker-only) — `FileSystemFileHandle.createWritable` is undefined
+ * there. The stub above models Chrome by implementing both, which is
+ * exactly how #1686 shipped green: every GLB cache write threw on Safari,
+ * silently, because the writer is fail-soft. Pin the write paths against
+ * a handle that lacks the method.
+ */
+describe('OPFS writes on a handle without createWritable (Safari)', () => {
+  let savedCreateWritable
+
+  beforeEach(() => {
+    savedCreateWritable = FileHandle.prototype.createWritable
+    delete FileHandle.prototype.createWritable
+  })
+
+  afterEach(() => {
+    FileHandle.prototype.createWritable = savedCreateWritable
+  })
+
+  test('writeBytesByPathToOPFS writes the bytes and reports success', async () => {
+    const bytes = new Uint8Array(Buffer.from('glb-artifact-bytes'))
+
+    await worker.writeBytesByPathToOPFS(bytes, 'commit123', 'model.ifc', 'owner', 'repo', 'main')
+
+    expect(self.postMessage).toHaveBeenCalledWith({completed: true, event: 'wrote', commitHash: 'commit123'})
+    const dir = await (await (await rootDir.getDirectoryHandle('owner')).getDirectoryHandle('repo'))
+      .getDirectoryHandle('main')
+    const written = await dir.getFileHandle('model.ifc.null.commit123', {create: false})
+    expect(await (await written.getFile()).text()).toBe('glb-artifact-bytes')
+  })
+
+  test('writeBytesByPathToOPFS truncates a longer previous entry', async () => {
+    await worker.writeBytesByPathToOPFS(
+      new Uint8Array(Buffer.from('the-long-original-payload')), 'c1', 'model.ifc', 'o', 'r', 'main')
+    await worker.writeBytesByPathToOPFS(
+      new Uint8Array(Buffer.from('short')), 'c1', 'model.ifc', 'o', 'r', 'main')
+
+    const dir = await (await (await rootDir.getDirectoryHandle('o')).getDirectoryHandle('r'))
+      .getDirectoryHandle('main')
+    const written = await dir.getFileHandle('model.ifc.null.c1', {create: false})
+    // No stale tail from the longer first write.
+    expect(await (await written.getFile()).text()).toBe('short')
+  })
+
+  test('renameFileInOPFS copy fallback still copies when move is unavailable', async () => {
+    const oldHandle = await rootDir.getFileHandle('safari-old.txt', {create: true})
+    oldHandle.data = new Uint8Array(Buffer.from('safari-payload'))
+
+    const newHandle = await worker.renameFileInOPFS(rootDir, oldHandle, 'safari-new.txt')
+
+    expect(await (await newHandle.getFile()).text()).toBe('safari-payload')
+    await expect(rootDir.getFileHandle('safari-old.txt', {create: false})).rejects.toThrow('not found')
+  })
+
+  /*
+   * `openSyncAccessHandleWithRetry` recovers from Safari's
+   * `InvalidStateError` by removing and RECREATING the entry, so the
+   * handle passed in goes stale and the bytes land in a fresh one. The
+   * copy must hand back the helper's handle, not the pre-retry object.
+   */
+  test('renameFileInOPFS copy fallback returns the handle the retry recreated', async () => {
+    const src = await rootDir.getFileHandle('retry-src.txt', {create: true})
+    src.data = new Uint8Array(Buffer.from('retry-payload'))
+
+    const realGetFileHandle = rootDir.getFileHandle.bind(rootDir)
+    let staleDest = null
+    rootDir.getFileHandle = jest.fn(async (name, opts) => {
+      const handle = await realGetFileHandle(name, opts)
+      if (name === 'retry-dest.txt' && staleDest === null) {
+        staleDest = handle
+        // First sync-handle attempt on this entry fails the way Safari
+        // does when it still holds an internal reference.
+        // eslint-disable-next-line require-await
+        handle.createSyncAccessHandle = jest.fn(async () => {
+          throw new DOMException('The object is in an invalid state.', 'InvalidStateError')
+        })
+      }
+      return handle
+    })
+
+    const dest = await worker.renameFileInOPFS(rootDir, src, 'retry-dest.txt')
+
+    expect(dest).not.toBe(staleDest)
+    expect(await (await dest.getFile()).text()).toBe('retry-payload')
+  })
+
+  test('renameFileInOPFS copy fallback spans multiple chunks', async () => {
+    // Larger than COPY_CHUNK_BYTES (4MiB), so the slice loop runs more
+    // than once — the chunking is the reason this path exists on iOS.
+    // eslint-disable-next-line no-magic-numbers
+    const BIG = (4 * 1024 * 1024) + 1024
+    const src = await rootDir.getFileHandle('big.bin', {create: true})
+    src.data = new Uint8Array(BIG).fill(7)
+
+    const dest = await worker.renameFileInOPFS(rootDir, src, 'big-renamed.bin')
+
+    const copied = new Uint8Array(await (await dest.getFile()).arrayBuffer())
+    expect(copied.length).toBe(BIG)
+    expect(copied.every((b) => b === 7)).toBe(true)
+  })
+})
+
 
 // ------------------------------------------------------------
 // fetchLatestCommitHash tests

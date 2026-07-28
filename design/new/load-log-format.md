@@ -48,6 +48,14 @@ the metrics after it — hold a fixed column. This is browser display layout
 only — the canonical string still comes from conway's `progress_log`; the CLI
 renderer does its own terminal layout.
 
+The snackbar **hugs its one line while collapsed** (so `Loaded <name>` doesn't
+leave a wide right gap) but takes a **viewport-relative band while expanded** —
+50%–80% of the viewport on desktop, edge-to-edge below `sm` — because the
+report's lines (the Model line, the diagnostics summary) are long and a
+hugged box renders them as a narrow clipped column. Expanding also grows
+MUI's message slot (`flexGrow`), which otherwise stays content-sized and turns
+the extra width into empty space on the right.
+
 A user pasting any of these into a bug report produces the same text; Sentry
 receives the same trail as breadcrumbs plus the final report string in the
 `load` context.
@@ -70,9 +78,7 @@ Download: 2.145s, +40.001234 MB heap              ← 4. completed stage (no bar
 Parsing: 3.201s, +210.512000 MB heap
 Geometry [0%........56%] 41.004s, +388.250000 MB heap   ← live OR failed-at-56% stage
 Total: 46.310s, 214.000000 → 852.000000 MB heap   ← 5. separate before/after
-Warnings & errors (12):                           ← 6. captured console diagnostics
-CDT Exception (hemisphere: 0, svg: 2) … (×8)
-No basis found for brep!
+Warnings & errors (1247, 224 distinct): CDT Exception (hemisphere: 0) (×892)  ← 6. one-line summary
 ```
 
 1. **Host line** — Share version + used-JS-heap before the load begins
@@ -100,10 +106,17 @@ No basis found for brep!
 5. **Total line** — *not* a sum of stages: a separate before/after
    observation of wall clock and heap (`start → end MB heap`). Stages can
    overlap, skip, or leave gaps; Total stays honest regardless.
-6. **Warnings & errors** — the text of every `console.warn`/`console.error`
-   emitted during the load (this captures conway's engine warnings + CDT
-   exceptions, which route through the console), deduplicated with `(×N)`
-   counts and capped, appended below Total so the report is self-contained.
+6. **Warnings & errors** — a **single** summary line for every
+   `console.warn`/`console.error` emitted during the load (this captures
+   conway's engine warnings + CDT exceptions, which route through the
+   console): total count, distinct count when >1, and the most frequent
+   message with its `(×N)` count, truncated to ~80 chars. It is deliberately
+   not a listing — engines emit per-entity diagnostics ("Error processing
+   representation #NNN") that dedup can't collapse because each is textually
+   distinct, and a STEP model producing hundreds of them buried the rest of
+   the report in the snackbar expando and the copyable "i" report alike.
+   Nothing is lost: the console tee passes every message through to the real
+   console, so full detail is one devtools panel away.
 
 **Precision** — seconds to millisecond precision (3 decimals), memory to
 byte precision (6 decimals of MB), per the report's diagnostic purpose.

@@ -13,6 +13,14 @@ let GITHUB_BASE_URL_AUTHENTICATED = null
 let GITHUB_BASE_URL_UNAUTHENTICATED = null
 
 
+// Slice size for the chunked file copy in `renameFileInOPFS`'s fallback.
+// 4MiB matches the source-spill window size Conway pages from OPFS, and
+// keeps peak memory bounded on iOS where the whole point of copying in
+// pieces is to avoid materializing a large ArrayBuffer.
+// eslint-disable-next-line no-magic-numbers
+const COPY_CHUNK_BYTES = 4 * 1024 * 1024
+
+
 /**
  * Pick the GitHub API base URL: use the OAuth-injecting bldrs proxy when a
  * user token is present, otherwise hit GitHub directly.
@@ -1417,12 +1425,35 @@ export async function renameFileInOPFS(parentDirectory, fileHandle, newFileName,
     }
   }
 
-  // Fallback: stream copy + delete (avoids large ArrayBuffer on iOS).
+  // Fallback: chunked copy + delete (avoids large ArrayBuffer on iOS).
+  //
+  // Copied in slices rather than read whole: keeping peak memory to one
+  // chunk is the entire point of this fallback on iOS. This used to be a
+  // `stream().pipeTo(createWritable())`, but Safari has no
+  // `createWritable` (#1686) — and a sync access handle has no stream
+  // interface, so we slice the source ourselves to hold the same memory
+  // profile.
   const srcFile = await fileHandle.getFile()
-  const destHandle = await parentDirectory.getFileHandle(newFileName, {create: true})
-  const readable = srcFile.stream()
-  const writable = await destHandle.createWritable()
-  await readable.pipeTo(writable) // closes writable on completion
+  const openedDest = await parentDirectory.getFileHandle(newFileName, {create: true})
+  // Take the handle the helper hands back, not the one we passed in: on
+  // the Safari `InvalidStateError` retry it removes and recreates the
+  // entry, so `openedDest` is stale from that point on and the bytes
+  // land in the fresh handle. Returning the stale one would hand the
+  // caller a handle to a file it never wrote.
+  const {handle: destAccess, fileHandle: destHandle} = await openSyncAccessHandleWithRetry(
+    parentDirectory, openedDest, newFileName)
+  try {
+    for (let at = 0; at < srcFile.size; at += COPY_CHUNK_BYTES) {
+      const slice = await srcFile.slice(at, Math.min(at + COPY_CHUNK_BYTES, srcFile.size)).arrayBuffer()
+      await destAccess.write(new Uint8Array(slice), {at})
+    }
+    await destAccess.truncate(srcFile.size)
+    await destAccess.flush()
+  } finally {
+    try {
+      await destAccess.close()
+    } catch (_) {/* idempotent */}
+  }
 
   try {
     if (typeof fileHandle.remove === 'function') {
@@ -1513,13 +1544,28 @@ export async function writeBytesByPathToOPFS(bytes, commitHash, originalFilePath
       // writeFileToPath already posted an error message
       return
     }
+    const parentDirectory = handles[0]
     const fileHandle = handles[1]
-    const writable = await fileHandle.createWritable()
+    // Sync access handle, NOT createWritable(): Safari implements OPFS
+    // writes only through FileSystemSyncAccessHandle (worker-only), so
+    // `createWritable` is undefined there and every GLB cache write threw
+    // — silently, since the writer is fail-soft — leaving Safari with a
+    // permanently cold cache (#1686). Every other write in this worker
+    // already goes through the sync-handle path.
+    const {handle: accessHandle} = await openSyncAccessHandleWithRetry(
+      parentDirectory, fileHandle, fileHandle.name)
     try {
       const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-      await writable.write(payload)
+      await accessHandle.write(payload, {at: 0})
+      // Unlike a writable stream, a sync handle doesn't implicitly discard
+      // the previous contents — truncate so re-writing a shorter payload
+      // over an existing entry can't leave a stale tail.
+      await accessHandle.truncate(payload.byteLength)
+      await accessHandle.flush()
     } finally {
-      await writable.close()
+      try {
+        await accessHandle.close()
+      } catch (_) {/* idempotent */}
     }
     self.postMessage({completed: true, event: 'wrote', commitHash: commitHash})
   } catch (error) {

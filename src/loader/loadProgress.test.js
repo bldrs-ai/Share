@@ -145,7 +145,7 @@ describe('loadProgress', () => {
       expect(useStore.getState().currentLoadLine).toBe(null)
     })
 
-    it('appends captured console warnings/errors after the Total line', () => {
+    it('summarizes captured console warnings/errors after the Total line', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
       beginLoadProgress({fileInfo: 'index.ifc'})
       reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 50})
@@ -156,11 +156,50 @@ describe('loadProgress', () => {
 
       const lines = reportLines()
       const totalIndex = lines.findIndex((line) => /^Total: /.test(line))
-      const diagHeaderIndex = lines.findIndex((line) => /^Warnings & errors \(/.test(line))
+      const diagIndex = lines.findIndex((line) => /^Warnings & errors \(/.test(line))
       expect(totalIndex).toBeGreaterThanOrEqual(0)
-      expect(diagHeaderIndex).toBeGreaterThan(totalIndex)
-      expect(lines).toContain('CDT Exception (hemisphere: 0) (×2)')
+      expect(diagIndex).toBeGreaterThan(totalIndex)
+      // One line only: counts + the message. A single distinct message drops
+      // the "N distinct" note.
+      expect(lines[diagIndex]).toBe('Warnings & errors (2): CDT Exception (hemisphere: 0) (×2)')
       consoleErrorSpy.mockRestore()
+    })
+
+    it('collapses many distinct warnings into that one line', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+      // Per-entity engine diagnostics: textually distinct, so dedup can't
+      // collapse them — a STEP model emits hundreds.
+      const distinctCount = 200
+      for (let i = 0; i < distinctCount; i++) {
+        console.warn(`Error processing representation #${i}`)
+      }
+      // ...plus one repeated message, which wins the "most common" sample.
+      console.warn('No basis found for brep!')
+      console.warn('No basis found for brep!')
+      endLoadProgress()
+
+      const lines = reportLines()
+      const diagLines = lines.filter((line) => /^Warnings & errors/.test(line))
+      expect(diagLines).toHaveLength(1)
+      expect(diagLines[0]).toBe('Warnings & errors (202, 201 distinct): No basis found for brep! (×2)')
+      // Nothing else from the diagnostics leaks into the report.
+      expect(lines.some((line) => /Error processing representation/.test(line))).toBe(false)
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('truncates a long sample message', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const overlongChars = 200
+      const readableLineChars = 120
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      console.warn(`long ${'x'.repeat(overlongChars)}`)
+      endLoadProgress()
+
+      const diagLine = reportLines().find((line) => /^Warnings & errors/.test(line))
+      expect(diagLine).toMatch(/^Warnings & errors \(1\): long x+…$/)
+      expect(diagLine.length).toBeLessThan(readableLineChars)
+      consoleWarnSpy.mockRestore()
     })
 
     it('a new load clears the previous report', () => {
