@@ -308,6 +308,40 @@ tracker (fine as a *view* over the labeled issues, but a second source of
 truth to drift); and one mega-epic for the whole pivot (too coarse — the
 four epics have different prereqs and can be worked by different people).
 
+### 7.1 Definition of done: doc + test
+
+Two standing requirements for every PR that implements UI epic/story/task
+work, in the spirit of Jarred Sumner's "if it's not doc'd, it doesn't
+exist; if it's not tested, it doesn't work":
+
+1. **Doc — the work exists as issues.** The story/tasks a PR implements
+   are tracked with an epic-labeled tracking issue, native sub-issues per
+   story/task, and a shared epic name in every title so the whole family
+   is greppable. The workspace shell is the worked example:
+   `epic: assist-300: Workspace shell` (#1657) → `story: workspace:
+   ProjectsDrawer container` (#1661) → `flow: workspace: create project`
+   (#1689) and siblings #1690–#1696. Filing sub-issues retroactively at
+   PR time is fine — #1661's flow sub-issues were — but they must exist,
+   cross-linked with the PR, before the work is called done. Issue bodies
+   record shipped behaviour, where it lives, what covers it, and any
+   local decision that overrode the plan doc (§2.8 pattern).
+
+2. **Test — each task/sub-issue has a happy-path E2E test, desktop and
+   mobile.** Use `describeMobileAndDesktop` from
+   `src/tests/e2e/formFactor.ts`: one suite body run per form factor
+   (`[desktop]`/`[mobile]` suffixed), branching only where the UX
+   genuinely diverges. `useIsMobile` is a pure window-width check, so
+   the helper is just a viewport switch — shared flow bodies stay
+   shared, with per-feature helpers (e.g. `ensureProjectsDrawerOpen`,
+   `src/tests/e2e/workspace.ts`) absorbing systematic differences.
+   `src/Containers/ProjectsDrawer.spec.ts` is the worked example: one
+   test per flow sub-issue, so a regression names both the flow and the
+   layout it broke.
+
+When the implementing PR is submitted with its tests green, close the
+story's issue/sub-issues (referencing the PR); the epic stays open until
+all its stories close.
+
 
 ## 8. Draft tracking issues
 
