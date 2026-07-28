@@ -35,6 +35,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
+| Sample-model thumbnails (Open dialog Samples tab), regenerating them, aiming them via `#c:` permalink cameras | [tools/thumbnails/README.md](tools/thumbnails/README.md) |
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
 | Dev HTTPS certificate setup | [tools/esbuild/certificates/README.md](tools/esbuild/certificates/README.md) |
 | Cloud sources, OAuth flows, token storage, Auth0 gate | [src/connections/README.md](src/connections/README.md) |
