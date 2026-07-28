@@ -1,16 +1,6 @@
 import React, {ReactElement, useState} from 'react'
-import {Grid, Chip, Typography} from '@mui/material'
-import {
-  CoffeeOutlined as CoffeeIcon,
-  FlightOutlined as FlightIcon,
-  MemoryOutlined as MemoryIcon,
-  PrecisionManufacturingOutlined as PrecisionManufacturingIcon,
-  SmartToyOutlined as SmartToyIcon,
-} from '@mui/icons-material'
-import Bplaza from '../../assets/icons/Bplaza.svg'
-import Gear from '../../assets/icons/Gear.svg'
-import Momentum from '../../assets/icons/Momentum.svg'
-import Seestrasse from '../../assets/icons/Seestrasse.svg'
+import {Box, ButtonBase, Grid, Typography} from '@mui/material'
+import {SAMPLE_MODELS, sampleFormat, thumbnailUrl} from './sampleModelRoster'
 
 
 /**
@@ -22,54 +12,45 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
   // Lazy import to avoid circulars in tests
   const {navigateToModel} = require('../../utils/navigate')
   const [, setSelected] = useState('')
-  const iconsStyle = {height: '1.6em'}
-  // One sample per format family: 3 IFC, 4 STEP, 1 FBX, 1 PDB. Ordering
-  // is display order in the 2-col grid, and the e2e spec
-  // (OpenModelDialog.spec.ts) expects Momentum at chip index 0.
-  //
-  // Hosting note: everything under bldrs-ai/test-models is Git-LFS-backed,
-  // so those samples draw on that repo's LFS bandwidth quota. The other
-  // samples (Swiss-Property-AG, OlegMoshkovich, webaverse) are plain git
-  // blobs served without LFS. Robot_hand is the full right-hand assembly of
-  // Pollen Robotics' AmazingHand (CC-BY-4.0), an Onshape AP242 export
-  // mirrored into test-models — rendering it correctly needs conway's
-  // EDGE_CURVE same_sense fix (conway fix/step-edge-same-sense). Robot is
-  // the Mixamo Y Bot rig with embedded animation clips (same Mixamo
-  // provenance as the previous Vitruvius samba-dancing sample).
-  const modelPath = {
-    Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
-    Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
-    Bldrs_plaza: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
-    Gear: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
-    Arty: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/digilent-arty-z7-xilinx-artix-7-soc-fpga-board-1.snapshot.1/Arty_Z7.stp',
-    Jetengine: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/jet-engine-220.snapshot.1/Jetenginestep.stp',
-    Robot_hand: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/Right_Hand.step',
-    Robot: '/share/v/gh/webaverse/assets/master/animations/ybot.fbx',
-    Caffeine: '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb',
-  }
 
-  const modelIcon = {
-    Momentum: <Momentum style={iconsStyle}/>,
-    Seestrasse: <Seestrasse style={iconsStyle}/>,
-    Bldrs_plaza: <Bplaza style={iconsStyle}/>,
-    Gear: <Gear style={iconsStyle}/>,
-    Arty: <MemoryIcon style={iconsStyle}/>,
-    Jetengine: <FlightIcon style={iconsStyle}/>,
-    Robot_hand: <PrecisionManufacturingIcon style={iconsStyle}/>,
-    Robot: <SmartToyIcon style={iconsStyle}/>,
-    Caffeine: <CoffeeIcon style={iconsStyle}/>,
-  }
-
-  const handleSelect = (modelName, closeDialog) => {
-    setSelected(modelName)
-    navigateToModel({pathname: modelPath[modelName]}, navigate)
+  const handleSelect = (model, closeDialog) => {
+    setSelected(model.name)
+    navigateToModel({pathname: model.path}, navigate)
     closeDialog()
   }
 
-  const stackSx = {
-    // center the content of the stack
-    justifyContent: 'center',
-    alignItems: 'center',
+  const cardSx = {
+    'width': '100%',
+    'flexDirection': 'column',
+    'alignItems': 'stretch',
+    'borderRadius': 1,
+    'overflow': 'hidden',
+    'backgroundColor': 'action.hover',
+    '&:hover': {backgroundColor: 'action.selected'},
+  }
+
+  // Square keeps every card the same height regardless of how tall or
+  // wide its model is — the thumbnails are already trimmed and padded to
+  // a common fill by the generator.
+  const thumbnailSx = {
+    width: '100%',
+    aspectRatio: '1 / 1',
+    objectFit: 'contain',
+    display: 'block',
+  }
+
+  const badgeSx = {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    padding: '0 4px',
+    borderRadius: 0.5,
+    backgroundColor: 'action.selected',
+    // The roster is curated for format diversity (IFC/STEP/FBX/PDB);
+    // without this the mix is invisible to the user.
+    fontSize: '0.625rem',
+    lineHeight: 1.6,
+    letterSpacing: '0.04em',
   }
 
   return (
@@ -78,26 +59,34 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
       spacing={2}
       justifyContent='center'
       alignItems='center'
-      sx={stackSx}
+      sx={{justifyContent: 'center', alignItems: 'center'}}
       data-testid={`dialog-open-model-samples`}
     >
-      {Object.keys(modelPath).map((model, i) => (
-        <Grid item xs={6} key={i} sx={{padding: '0.5em !important'}}>
-          <Chip
-            label={
-              <>
-                {modelIcon[model]}
-                <Typography variant='caption' sx={{marginTop: '.5em'}}>{model}</Typography>
-              </>
-            }
-            variant='sampleModel'
+      {SAMPLE_MODELS.map((model, i) => (
+        <Grid item xs={6} key={model.name} sx={{padding: '0.5em !important'}}>
+          <ButtonBase
+            sx={cardSx}
             onClick={() => handleSelect(model, () => setIsDialogDisplayed(false))}
-            color='primary'
-            data-testid={`sample-model-chip-${i}`}
-          />
+            data-testid={`sample-model-card-${i}`}
+          >
+            <Box sx={{position: 'relative', width: '100%'}}>
+              <Box
+                component='img'
+                src={thumbnailUrl(model.name)}
+                alt={model.name}
+                loading='lazy'
+                sx={thumbnailSx}
+              />
+              <Typography variant='overline' sx={badgeSx}>
+                {sampleFormat(model.path)}
+              </Typography>
+            </Box>
+            <Typography variant='caption' sx={{padding: '4px 0 6px'}}>
+              {model.name}
+            </Typography>
+          </ButtonBase>
         </Grid>
       ))}
     </Grid>
   )
 }
-

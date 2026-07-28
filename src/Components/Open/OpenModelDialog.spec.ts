@@ -29,9 +29,14 @@ describe('Open 100: Open model dialog', () => {
       await page.getByTestId('control-button-open').click()
     })
 
-    test('Sample tab to be selected and Momentum sample model chip to be visible', async ({page}) => {
+    test('Sample tab to be selected and Momentum sample model card to be visible', async ({page}) => {
       await page.getByTestId('tab-samples').click()
-      await expect(page.getByTestId('sample-model-chip-0').locator('.MuiChip-label')).toContainText('Momentum')
+      await expect(page.getByTestId('sample-model-card-0')).toContainText('Momentum')
+      // The card carries a rendered thumbnail of the model plus a format
+      // badge; both are the point of the Samples gallery, so assert them
+      // rather than just the label.
+      await expect(page.getByTestId('sample-model-card-0').locator('img')).toBeVisible()
+      await expect(page.getByTestId('sample-model-card-0')).toContainText('IFC')
       await expectScreen(page, 'OpenModelDialog-samples-tab.png')
     })
 
