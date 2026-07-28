@@ -21,6 +21,11 @@ import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
  * @property {boolean} [fullWidth] Fill the host container instead of the
  *   self-sized widths below — for hosts like the TopBar that own the
  *   layout, where the fixed mobile width overflows the viewport.
+ * @property {Function} [onCancel] Called on Escape, and on clearing an
+ *   already-empty field — hosts that summon the bar (the TopBar's
+ *   anchored search) use it to put it away again.
+ * @property {boolean} [takeFocus] Focus the input on mount, for hosts
+ *   that render the bar in response to an explicit "open search".
  * @return {ReactElement}
  */
 export default function SearchBar({
@@ -28,6 +33,8 @@ export default function SearchBar({
   isGitHubSearch = false,
   onSuccess = null,
   fullWidth = false,
+  onCancel = null,
+  takeFocus = false,
 }) {
   assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
@@ -125,6 +132,14 @@ export default function SearchBar({
     searchInputRef.current.blur()
   }
 
+  // Summoned bars start focused: the user asked for the field, so
+  // making them click it too is a wasted interaction.
+  useEffect(() => {
+    if (takeFocus) {
+      searchInputRef.current?.focus()
+    }
+  }, [takeFocus])
+
   const twoButtonWidth = '120px'
   const isMobile = useIsMobile()
   // The container and paper are set to 100% width to fill the
@@ -159,6 +174,12 @@ export default function SearchBar({
               width: '100%',
             }}
             fullWidth
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && onCancel) {
+                event.stopPropagation()
+                onCancel()
+              }
+            }}
             data-testid='textfield-search-query'
           />
         )}

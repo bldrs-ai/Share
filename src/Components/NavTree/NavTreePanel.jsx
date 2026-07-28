@@ -40,6 +40,12 @@ export default function NavTreePanel({
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
+  // Row highlight follows what the user picked, not the descendants
+  // added so a container's geometry highlights in the scene — without
+  // this, selecting a storey lit up every child row too.
+  const selectedAnchorIds = useStore((state) => state.selectedAnchorIds)
+  const selectedRowIds = (selectedAnchorIds && selectedAnchorIds.length > 0) ?
+    selectedAnchorIds : selectedElements
   const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const selectedSolidExpressId = useStore((state) => state.selectedSolidExpressId)
   const transientTreeNodes = useStore((state) => state.transientTreeNodes)
@@ -194,7 +200,7 @@ export default function NavTreePanel({
               visibleNodes,
               expandedNodeIds,
               setExpandedNodeIds,
-              selectedNodeIds: selectedElements,
+              selectedNodeIds: selectedRowIds,
               selectedOccurrencePathKey,
               selectedSolidExpressId,
               selectWithShiftClickEvents,

@@ -42,6 +42,7 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     const viewportWidth = page.viewportSize()?.width ?? 0
     const barBox = await page.getByTestId('TopBar').boundingBox()
     expect((barBox?.x ?? 0) + (barBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+    await page.getByTestId('topbar-search-open').click()
     const searchBox = await page.getByTestId('topbar-search').boundingBox()
     expect((searchBox?.x ?? 0) + (searchBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
   })
@@ -57,8 +58,24 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     await expect(page.getByTestId('topbar-breadcrumb-model')).not.toHaveText('396')
   })
 
+  test('search opens from its anchor icon and closes on Escape', async ({page}) => {
+    await visitWithWorkspace(page)
+
+    // Closed by default — the icon is the affordance.
+    await expect(page.getByTestId('topbar-search')).toHaveCount(0)
+    await page.getByTestId('topbar-search-open').click()
+
+    const searchInput = page.getByTestId('topbar-search').locator('input')
+    await expect(searchInput).toBeFocused()
+    await searchInput.press('Escape')
+
+    await expect(page.getByTestId('topbar-search')).toHaveCount(0)
+    await expect(page.getByTestId('topbar-search-open')).toBeVisible()
+  })
+
   test('search from the TopBar sets the query param', async ({page}) => {
     await visitWithWorkspace(page)
+    await page.getByTestId('topbar-search-open').click()
 
     const searchInput = page.getByTestId('topbar-search').locator('input')
     await expect(searchInput).toBeVisible()

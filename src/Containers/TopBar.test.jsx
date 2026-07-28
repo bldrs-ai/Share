@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, render, screen} from '@testing-library/react'
+import {act, fireEvent, render, screen} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import TopBar from './TopBar'
@@ -34,16 +34,48 @@ describe('TopBar', () => {
     expect(screen.getByTestId('topbar-breadcrumb-model')).toHaveTextContent('index.ifc')
   })
 
-  it('carries the relocated SearchBar, honoring isSearchEnabled', () => {
-    const withSearch = render(<ShareMock initialEntries={[MODEL_ROUTE]}><TopBar/></ShareMock>)
-    expect(withSearch.getByTestId('topbar-search')).toBeInTheDocument()
-    withSearch.unmount()
+  it('offers search as an icon, opening the field only on click', () => {
+    render(<ShareMock initialEntries={[MODEL_ROUTE]}><TopBar/></ShareMock>)
 
+    expect(screen.queryByTestId('topbar-search')).toBeNull()
+    fireEvent.click(screen.getByTestId('topbar-search-open'))
+
+    expect(screen.getByTestId('topbar-search')).toBeInTheDocument()
+    expect(screen.queryByTestId('topbar-search-open')).toBeNull()
+  })
+
+  it('honors isSearchEnabled', () => {
     act(() => {
       useStore.setState({isSearchEnabled: false})
     })
-    const withoutSearch = render(<ShareMock initialEntries={[MODEL_ROUTE]}><TopBar/></ShareMock>)
-    expect(withoutSearch.queryByTestId('topbar-search')).toBeNull()
+    render(<ShareMock initialEntries={[MODEL_ROUTE]}><TopBar/></ShareMock>)
+
+    expect(screen.queryByTestId('topbar-search-open')).toBeNull()
+    expect(screen.queryByTestId('topbar-search')).toBeNull()
+  })
+
+  // Where the icon sits is the scope, so opening search hides the
+  // crumbs to its right.
+  it('anchors search to the deepest crumb, and to a hovered one instead', () => {
+    act(() => {
+      useStore.setState({
+        model: {name: 'Bldrs'},
+        selectedElement: {expressID: 396, type: 'IFCBUILDINGELEMENTPROXY', Name: {value: 'Together'}},
+      })
+    })
+    render(<ShareMock initialEntries={[`${MODEL_ROUTE}/89/112`]}><TopBar/></ShareMock>)
+
+    // Default anchor is the deepest crumb, so opening keeps them all.
+    expect(screen.getByTestId('topbar-breadcrumb-element')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('topbar-search-open'))
+    expect(screen.getByTestId('topbar-breadcrumb-element')).toBeInTheDocument()
+
+    // Hovering the model crumb moves the anchor up a level; the
+    // element crumb to its right gives way to the field.
+    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model'))
+    expect(screen.getByTestId('topbar-breadcrumb-model')).toBeInTheDocument()
+    expect(screen.queryByTestId('topbar-breadcrumb-element')).toBeNull()
+    expect(screen.getByTestId('topbar-search')).toBeInTheDocument()
   })
 
   // Element selections append numeric segments to the pathname; the
