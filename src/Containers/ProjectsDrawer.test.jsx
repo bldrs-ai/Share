@@ -24,6 +24,7 @@ describe('ProjectsDrawer', () => {
         isOpenModelVisible: false,
         expandedProjectIds: [],
         isWorkspaceDrawerCollapsed: false,
+        ungroupedModels: [],
       })
     })
   })
@@ -382,6 +383,59 @@ describe('ProjectsDrawer', () => {
     fireEvent.click(screen.getByText('x.ifc'))
 
     expect(navigateToModel).toHaveBeenCalledWith('/share/v/new/x.ifc', expect.any(Function))
+  })
+
+  describe('ungrouped', () => {
+    it('lists a model opened with no capture armed, under its own heading', () => {
+      render(
+        <ShareMock initialEntries={['/share/v/gh/o/r/main/shared.ifc']}>
+          <ProjectsDrawer/>
+        </ShareMock>,
+      )
+
+      expect(screen.getByTestId('ungrouped-section-label')).toBeInTheDocument()
+      expect(screen.getByText('shared.ifc')).toBeInTheDocument()
+      expect(useStore.getState().ungroupedModels).toHaveLength(1)
+    })
+
+    it('has no Ungrouped section when nothing is unfiled', () => {
+      // A non-model route, so mounting doesn't file anything itself.
+      render(<ShareMock initialEntries={['/share']}><ProjectsDrawer/></ShareMock>)
+      expect(screen.queryByTestId('ungrouped-section')).toBeNull()
+    })
+
+    it('files a model into a project from the row menu', () => {
+      act(() => {
+        useStore.getState().createWorkspaceProject('Maple Street Tower')
+        useStore.getState().addUngroupedModel({label: 'shared.ifc', path: '/share/v/x/shared.ifc'})
+      })
+      render(<ShareMock initialEntries={['/share']}><ProjectsDrawer/></ShareMock>)
+
+      const projectId = useStore.getState().workspaceProjects[0].id
+      const modelId = useStore.getState().ungroupedModels[0].id
+
+      fireEvent.click(screen.getByTestId(`ungrouped-menu-${modelId}`))
+      fireEvent.click(screen.getByTestId('ungrouped-add-to-project'))
+      fireEvent.click(screen.getByTestId(`ungrouped-add-to-${projectId}`))
+
+      expect(useStore.getState().ungroupedModels).toEqual([])
+      expect(useStore.getState().workspaceProjects[0].models.map((m) => m.label))
+        .toEqual(['shared.ifc'])
+      expect(screen.queryByTestId('ungrouped-section')).toBeNull()
+    })
+
+    it('says so when there is no project to file into', () => {
+      act(() => {
+        useStore.getState().addUngroupedModel({label: 'shared.ifc', path: '/share/v/x/shared.ifc'})
+      })
+      render(<ShareMock initialEntries={['/share']}><ProjectsDrawer/></ShareMock>)
+
+      const modelId = useStore.getState().ungroupedModels[0].id
+      fireEvent.click(screen.getByTestId(`ungrouped-menu-${modelId}`))
+      fireEvent.click(screen.getByTestId('ungrouped-add-to-project'))
+
+      expect(screen.getByText('No projects yet')).toBeInTheDocument()
+    })
   })
 
   it('disarms when an already-listed model is clicked', () => {

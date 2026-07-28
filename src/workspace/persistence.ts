@@ -25,43 +25,61 @@ export interface WorkspaceProject {
 }
 
 
+/** Models the user has open but hasn't filed under a project yet */
+export interface WorkspaceContents {
+  projects: WorkspaceProject[]
+  ungrouped: WorkspaceModelRef[]
+}
+
+
 interface WorkspaceProjectsStore {
   version: number
   projects: WorkspaceProject[]
+  ungrouped?: WorkspaceModelRef[]
 }
 
 
 /**
- * Load persisted workspace projects. Tier-1 persistence per
+ * Load the persisted workspace. Tier-1 persistence per
  * design/new/conversational-cad.md §2.2: localStorage only, the same
  * durability class as recents. A version mismatch drops the store rather
  * than migrating — acceptable while the flag is off by default.
+ * `ungrouped` is read defensively so stores written before it existed
+ * still load.
  *
- * @return Parsed projects array, empty on absence/corruption.
+ * @return Parsed contents, empty on absence/corruption.
  */
-export function loadWorkspaceProjects(): WorkspaceProject[] {
+export function loadWorkspaceContents(): WorkspaceContents {
+  const empty = {projects: [], ungrouped: []}
   try {
     const raw = localStorage.getItem(WORKSPACE_PROJECTS_KEY)
     if (!raw) {
-      return []
+      return empty
     }
     const parsed = JSON.parse(raw) as WorkspaceProjectsStore
     if (parsed.version !== WORKSPACE_PROJECTS_VERSION || !Array.isArray(parsed.projects)) {
-      return []
+      return empty
     }
-    return parsed.projects
+    return {
+      projects: parsed.projects,
+      ungrouped: Array.isArray(parsed.ungrouped) ? parsed.ungrouped : [],
+    }
   } catch {
-    return []
+    return empty
   }
 }
 
 
-/** @param projects The projects to persist */
-export function saveWorkspaceProjects(projects: WorkspaceProject[]): void {
+/** @param contents The workspace to persist */
+export function saveWorkspaceContents(contents: WorkspaceContents): void {
   try {
     localStorage.setItem(
       WORKSPACE_PROJECTS_KEY,
-      JSON.stringify({version: WORKSPACE_PROJECTS_VERSION, projects: projects}),
+      JSON.stringify({
+        version: WORKSPACE_PROJECTS_VERSION,
+        projects: contents.projects,
+        ungrouped: contents.ungrouped,
+      }),
     )
   } catch {
     // localStorage may be full or unavailable

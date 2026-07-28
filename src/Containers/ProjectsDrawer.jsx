@@ -7,11 +7,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -34,6 +37,7 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   InsertDriveFileOutlined as InsertDriveFileOutlinedIcon,
+  MoreVert as MoreVertIcon,
   VerticalSplit as VerticalSplitIcon,
   VerticalSplitOutlined as VerticalSplitOutlinedIcon,
 } from '@mui/icons-material'
@@ -140,11 +144,18 @@ export default function ProjectsDrawer() {
   const toggleWorkspaceProjectExpanded = useStore((state) => state.toggleWorkspaceProjectExpanded)
   const isCollapsed = useStore((state) => state.isWorkspaceDrawerCollapsed)
   const setIsCollapsed = useStore((state) => state.setIsWorkspaceDrawerCollapsed)
+  const ungroupedModels = useStore((state) => state.ungroupedModels)
+  const addUngroupedModel = useStore((state) => state.addUngroupedModel)
+  const removeUngroupedModel = useStore((state) => state.removeUngroupedModel)
+  const moveUngroupedModelToProject = useStore((state) => state.moveUngroupedModelToProject)
   const drawerWidth = useStore((state) => state.workspaceDrawerWidth)
   const setDrawerWidth = useStore((state) => state.setWorkspaceDrawerWidth)
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  // Row menu for an ungrouped model: anchor plus which row opened it.
+  const [rowMenu, setRowMenu] = useState(null)
+  const [isAddToProjectOpen, setIsAddToProjectOpen] = useState(false)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -157,18 +168,32 @@ export default function ProjectsDrawer() {
   // so this usually fires on mount of the *next* page — the capture is
   // persisted for exactly that reason.
   useEffect(() => {
-    if (workspaceCapture === null) {
+    if (!MODEL_ROUTE_RE.test(location.pathname)) {
       return
     }
-    const {projectId, armedPathname} = workspaceCapture
-    if (location.pathname !== armedPathname && MODEL_ROUTE_RE.test(location.pathname)) {
-      addWorkspaceModel(projectId, {
-        label: labelForModelPath(location.pathname),
-        path: location.pathname,
-      })
+    const model = {
+      label: labelForModelPath(location.pathname),
+      path: location.pathname,
+    }
+    if (workspaceCapture === null) {
+      // No pending "Add model": the user got here some other way — a
+      // shared permalink, a recent, the home model — so the model is
+      // listed under Ungrouped rather than dropped, and can be filed
+      // into a project from there.
+      addUngroupedModel(model)
+      return
+    }
+    if (location.pathname !== workspaceCapture.armedPathname) {
+      addWorkspaceModel(workspaceCapture.projectId, model)
       disarmWorkspaceCapture()
     }
-  }, [location.pathname, workspaceCapture, addWorkspaceModel, disarmWorkspaceCapture])
+  }, [
+    location.pathname,
+    workspaceCapture,
+    addWorkspaceModel,
+    addUngroupedModel,
+    disarmWorkspaceCapture,
+  ])
 
   // NB: there is deliberately no "dialog closed => disarm" effect. The
   // Open dialog closes *before* the model is chosen — `openFile` calls
@@ -223,6 +248,19 @@ export default function ProjectsDrawer() {
     </Stack>
   )
 
+  // Section headings occupy one control row, like every other row here.
+  const sectionLabel = (text, testId) => (
+    <Stack
+      justifyContent='center'
+      sx={{height: ROW_PITCH, flexShrink: 0, px: 2}}
+      data-testid={testId}
+    >
+      <Typography variant='overline' color='text.secondary'>
+        {text}
+      </Typography>
+    </Stack>
+  )
+
   const footer = (
     <Stack
       direction='row'
@@ -243,7 +281,10 @@ export default function ProjectsDrawer() {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 0,
-          backgroundColor: theme.palette.secondary.workspaceBackground,
+          // Same tint as the expanded drawer at half opacity: the rail
+          // still reads as one column from the toggle down to the logo,
+          // without competing with the canvas for attention.
+          backgroundColor: `${theme.palette.secondary.workspaceBackground}80`,
           borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
         }}
         data-testid='ProjectsDrawer'
@@ -325,15 +366,7 @@ export default function ProjectsDrawer() {
           New project
         </Button>
       </Box>
-      <Stack
-        justifyContent='center'
-        sx={{height: ROW_PITCH, flexShrink: 0, px: 2}}
-        data-testid='projects-section-label'
-      >
-        <Typography variant='overline' color='text.secondary'>
-          Projects
-        </Typography>
-      </Stack>
+      {sectionLabel('Projects', 'projects-section-label')}
       <List dense sx={{flexGrow: 1, overflowY: 'auto', paddingTop: 0}} data-testid='projects-list'>
         {workspaceProjects.map((project) => {
           const isExpanded = expandedProjectIds.includes(project.id)
@@ -415,7 +448,85 @@ export default function ProjectsDrawer() {
           )
         })}
       </List>
+      {ungroupedModels.length > 0 &&
+       <Box sx={{flexShrink: 0}} data-testid='ungrouped-section'>
+         <Divider/>
+         {sectionLabel('Ungrouped', 'ungrouped-section-label')}
+         <List dense sx={{paddingTop: 0}}>
+           {ungroupedModels.map((model) => {
+             const label = labelForModelPath(model.path) || model.label
+             return (
+               <ListItemButton
+                 key={model.id}
+                 sx={rowSx}
+                 selected={location.pathname === model.path}
+                 onClick={() => navigateToModel(model.path, navigate)}
+                 data-testid={`ungrouped-model-${model.id}`}
+               >
+                 <ListItemIcon sx={{minWidth: '2em'}}>
+                   <InsertDriveFileOutlinedIcon fontSize='small'/>
+                 </ListItemIcon>
+                 <ListItemText
+                   primary={label}
+                   primaryTypographyProps={{noWrap: true, fontSize: '.9em'}}
+                 />
+                 <IconButton
+                   size='small'
+                   aria-label={`Actions for ${label}`}
+                   onClick={(event) => {
+                     event.stopPropagation()
+                     setIsAddToProjectOpen(false)
+                     setRowMenu({anchorEl: event.currentTarget, modelId: model.id})
+                   }}
+                   data-testid={`ungrouped-menu-${model.id}`}
+                 >
+                   <MoreVertIcon fontSize='inherit'/>
+                 </IconButton>
+               </ListItemButton>
+             )
+           })}
+         </List>
+       </Box>}
       {footer}
+      <Menu
+        anchorEl={rowMenu?.anchorEl ?? null}
+        open={rowMenu !== null}
+        onClose={() => setRowMenu(null)}
+        data-testid='ungrouped-row-menu'
+      >
+        <MenuItem
+          onClick={() => setIsAddToProjectOpen(!isAddToProjectOpen)}
+          data-testid='ungrouped-add-to-project'
+        >
+          <ListItemText primary='Add to project'/>
+          {isAddToProjectOpen ? <ExpandLessIcon fontSize='small'/> : <ExpandMoreIcon fontSize='small'/>}
+        </MenuItem>
+        {isAddToProjectOpen && workspaceProjects.length === 0 &&
+         <MenuItem disabled sx={{pl: 4}}>No projects yet</MenuItem>}
+        {isAddToProjectOpen && workspaceProjects.map((project) => (
+          <MenuItem
+            key={project.id}
+            sx={{pl: 4}}
+            onClick={() => {
+              moveUngroupedModelToProject(rowMenu.modelId, project.id)
+              setRowMenu(null)
+              setIsAddToProjectOpen(false)
+            }}
+            data-testid={`ungrouped-add-to-${project.id}`}
+          >
+            {project.name}
+          </MenuItem>
+        ))}
+        <MenuItem
+          onClick={() => {
+            removeUngroupedModel(rowMenu.modelId)
+            setRowMenu(null)
+          }}
+          data-testid='ungrouped-remove'
+        >
+          Remove
+        </MenuItem>
+      </Menu>
       {/* Focus on entry rather than autoFocus, which jsx-a11y rejects. */}
       <Dialog
         open={isNewProjectOpen}

@@ -1,9 +1,9 @@
 import {
   loadWorkspaceCapture,
-  loadWorkspaceProjects,
+  loadWorkspaceContents,
   newWorkspaceId,
   saveWorkspaceCapture,
-  saveWorkspaceProjects,
+  saveWorkspaceContents,
 } from './persistence'
 
 
@@ -12,23 +12,26 @@ describe('workspace/persistence', () => {
     localStorage.clear()
   })
 
-  it('round-trips projects through localStorage', () => {
-    const projects = [
-      {id: 'p1', name: 'Maple Street Tower', models: [
-        {id: 'm1', label: 'tower.ifc', path: '/share/v/new/tower.ifc'},
-      ]},
-    ]
-    saveWorkspaceProjects(projects)
-    expect(loadWorkspaceProjects()).toEqual(projects)
+  it('round-trips projects and ungrouped models through localStorage', () => {
+    const contents = {
+      projects: [
+        {id: 'p1', name: 'Maple Street Tower', models: [
+          {id: 'm1', label: 'tower.ifc', path: '/share/v/new/tower.ifc'},
+        ]},
+      ],
+      ungrouped: [{id: 'u1', label: 'shared.ifc', path: '/share/v/gh/o/r/main/shared.ifc'}],
+    }
+    saveWorkspaceContents(contents)
+    expect(loadWorkspaceContents()).toEqual(contents)
   })
 
   it('returns empty on absence', () => {
-    expect(loadWorkspaceProjects()).toEqual([])
+    expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
   })
 
   it('returns empty on corrupt JSON', () => {
     localStorage.setItem('bldrs:workspace-projects', '{not json')
-    expect(loadWorkspaceProjects()).toEqual([])
+    expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
   })
 
   it('drops the store on version mismatch', () => {
@@ -36,7 +39,16 @@ describe('workspace/persistence', () => {
       'bldrs:workspace-projects',
       JSON.stringify({version: 999, projects: [{id: 'p1', name: 'x', models: []}]}),
     )
-    expect(loadWorkspaceProjects()).toEqual([])
+    expect(loadWorkspaceContents()).toEqual({projects: [], ungrouped: []})
+  })
+
+  // Stores written before Ungrouped existed must still load.
+  it('defaults ungrouped when the stored document predates it', () => {
+    localStorage.setItem(
+      'bldrs:workspace-projects',
+      JSON.stringify({version: 1, projects: [{id: 'p1', name: 'x', models: []}]}),
+    )
+    expect(loadWorkspaceContents().ungrouped).toEqual([])
   })
 
   it('generates distinct ids', () => {

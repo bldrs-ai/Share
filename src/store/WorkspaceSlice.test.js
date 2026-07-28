@@ -1,6 +1,6 @@
 import createStore from 'zustand/vanilla'
 import createWorkspaceSlice from './WorkspaceSlice'
-import {loadWorkspaceProjects} from '../workspace/persistence'
+import {loadWorkspaceContents} from '../workspace/persistence'
 
 
 /** @return {object} vanilla store containing only WorkspaceSlice */
@@ -36,7 +36,7 @@ describe('store/WorkspaceSlice', () => {
     const idA = store.getState().workspaceProjects[0].id
     store.getState().removeWorkspaceProject(idA)
     expect(store.getState().workspaceProjects.map((p) => p.name)).toEqual(['B'])
-    expect(loadWorkspaceProjects().map((p) => p.name)).toEqual(['B'])
+    expect(loadWorkspaceContents().projects.map((p) => p.name)).toEqual(['B'])
   })
 
   it('adds models, deduping by path (label refresh, no second row)', () => {
@@ -65,6 +65,66 @@ describe('store/WorkspaceSlice', () => {
 
     expect(store.getState().workspaceProjects[0].models).toHaveLength(0)
     expect(store.getState().workspaceProjects[1].models).toHaveLength(1)
+  })
+
+  describe('ungrouped models', () => {
+    it('records a model that no project owns', () => {
+      const store = makeStore()
+      store.getState().addUngroupedModel({label: 'shared.ifc', path: '/share/v/gh/o/r/main/shared.ifc'})
+      expect(store.getState().ungroupedModels.map((m) => m.label)).toEqual(['shared.ifc'])
+    })
+
+    it('dedups by path, refreshing the label', () => {
+      const store = makeStore()
+      store.getState().addUngroupedModel({label: 'a.ifc', path: '/v/x'})
+      store.getState().addUngroupedModel({label: 'a-renamed.ifc', path: '/v/x'})
+      expect(store.getState().ungroupedModels.map((m) => m.label)).toEqual(['a-renamed.ifc'])
+    })
+
+    it('ignores a model already filed under a project', () => {
+      const store = makeStore()
+      store.getState().createWorkspaceProject('A')
+      const projectId = store.getState().workspaceProjects[0].id
+      store.getState().addWorkspaceModel(projectId, {label: 'a.ifc', path: '/v/x'})
+
+      store.getState().addUngroupedModel({label: 'a.ifc', path: '/v/x'})
+
+      expect(store.getState().ungroupedModels).toEqual([])
+    })
+
+    it('moves a model into a project, out of ungrouped', () => {
+      const store = makeStore()
+      store.getState().createWorkspaceProject('A')
+      const projectId = store.getState().workspaceProjects[0].id
+      store.getState().addUngroupedModel({label: 'a.ifc', path: '/v/x'})
+      const modelId = store.getState().ungroupedModels[0].id
+
+      store.getState().moveUngroupedModelToProject(modelId, projectId)
+
+      expect(store.getState().ungroupedModels).toEqual([])
+      expect(store.getState().workspaceProjects[0].models.map((m) => m.label)).toEqual(['a.ifc'])
+      // ...and it survives a reload.
+      expect(loadWorkspaceContents().projects[0].models).toHaveLength(1)
+      expect(loadWorkspaceContents().ungrouped).toEqual([])
+    })
+
+    it('filing a model under a project clears any ungrouped copy', () => {
+      const store = makeStore()
+      store.getState().createWorkspaceProject('A')
+      const projectId = store.getState().workspaceProjects[0].id
+      store.getState().addUngroupedModel({label: 'a.ifc', path: '/v/x'})
+
+      store.getState().addWorkspaceModel(projectId, {label: 'a.ifc', path: '/v/x'})
+
+      expect(store.getState().ungroupedModels).toEqual([])
+    })
+
+    it('removes an ungrouped model', () => {
+      const store = makeStore()
+      store.getState().addUngroupedModel({label: 'a.ifc', path: '/v/x'})
+      store.getState().removeUngroupedModel(store.getState().ungroupedModels[0].id)
+      expect(store.getState().ungroupedModels).toEqual([])
+    })
   })
 
   it('arms and disarms capture', () => {
