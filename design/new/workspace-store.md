@@ -89,9 +89,8 @@ single-user convo panel (assist-310) and multi-user channels
 Either way this is an infrastructure project, not a dependency you add.
 
 - **wasm-git** (libgit2 → wasm): more complete git semantics. Costs:
-  browser→GitHub smart HTTP needs a CORS proxy (known territory —
-  `git.bldrs.dev`); libgit2's partial-clone/promisor support is limited;
-  the emscripten-FS↔OPFS bridge needs a worker + `syncAccessHandle` to
+  libgit2's partial-clone/promisor support is limited, and the
+  emscripten-FS↔OPFS bridge needs a worker + `syncAccessHandle` to
   perform.
 - **isomorphic-git** (pure JS): easier to embed, weaker merge, no
   rebase. **Prior finding to re-verify:** this came up before, and the
@@ -99,9 +98,33 @@ Either way this is an infrastructure project, not a dependency you add.
   semantics, which among other things caused shallow-clone trouble.
   Needs a real investigation with citations before the engine is chosen.
 
-The investigation should produce: protocol-v2 support status in both,
-shallow + partial clone behavior against GitHub through a CORS proxy,
-merge fidelity, OPFS throughput, and bundle-size cost.
+### 2.0 Do we need a CORS proxy? Only for the wire protocol
+
+Octokit works direct from the browser because `api.github.com` serves
+CORS headers. What doesn't is the **git smart-HTTP wire protocol**
+(`…/repo.git/info/refs`, `git-upload-pack`, `git-receive-pack`) —
+GitHub deliberately leaves CORS off those endpoints, which is the one
+and only reason browser git clients need a proxy (isomorphic-git's own
+hosted `cors.isomorphic-git.org` exists for exactly this).
+
+That gives sync two candidate paths, not one:
+
+- **Wire protocol through a CORS proxy** (known territory —
+  `git.bldrs.dev`): generic — works against any git remote, gets
+  packfiles/deltas — but adds hosted infrastructure on our side.
+- **GitHub Git Data API as the transport** (blobs/trees/commits/refs
+  via Octokit — CORS-clean, no proxy): the engine manages the local
+  OPFS repo, and push/fetch map onto REST calls. Chattier (a round
+  trip per object, no packfiles) and GitHub-only, but workspace repos
+  are small text files, so this may be entirely adequate for the
+  primary case — with the proxy path reserved for non-GitHub remotes.
+
+The investigation should produce: protocol-v2 support status in both
+engines, shallow + partial clone behavior against GitHub through a CORS
+proxy, a Data-API-transport feasibility check (round-trip counts for a
+realistic workspace sync, rate-limit exposure), whether the LFS batch
+endpoints are CORS-usable from the browser or also need proxying, merge
+fidelity, OPFS throughput, and bundle-size cost.
 
 ### 2.1 The rival to name: CRDTs
 
