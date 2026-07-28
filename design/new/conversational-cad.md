@@ -191,6 +191,56 @@ summon and filter; breadcrumbs become the scope control for search.
 Fold-in: `search-100`'s open story #1254 (search by element name with scene
 highlighting) naturally lands inside this epic's E2E.
 
+### 3.1 Slice plan (v0.2 — scoped with #1663 kickoff)
+
+Prior art: celestiary/web#61 (breadcrumb-anchored search) — breadcrumb
+chips with a movable search-icon anchor where **anchor position = search
+scope**, inline autocomplete, a `SearchProvider` interface with tiered
+indexes (fuzzy for small named sets, exact maps for large ID catalogs),
+committed-vs-preview state in a store slice. Share generalizes the
+breadcrumb to the workspace hierarchy:
+
+```
+[workspace] / project / model / element-path…        (convos join in Epic 3)
+```
+
+Each anchor position binds a provider: **outside-of-project** (other
+projects, GitHub — stub/placeholder first), **project contents** (drawer
+store), **model elements** (the real index), **convos** (Epic 3). Search
+is scoped to the subtree right of the anchor.
+
+Slices, in order — each a story with desktop+mobile E2E per §7.1:
+
+1. **TopBar shell** (#1663, epic 1): ToolbarPaper becomes a real TopBar —
+   breadcrumb (project / model from the workspace store) + relocated
+   SearchBar — behind `?feature=workspace`. No NavTree changes.
+2. **Scope mechanic + SearchProvider seam**: anchor/scope UX per the
+   celestiary pattern; provider interface; model-elements provider wraps
+   today's `SearchIndex`; project provider over the drawer store; stubs
+   for outside-of-project and convo. Folds in #1254.
+3. **Pinned expansion ↔ NavTree convergence**: the autocomplete dropdown
+   pins into a virtualized tree panel. Deliberately *not* pre-deciding
+   NavTree's retirement — build the pinned expansion, dogfood both, then
+   retire the drawer tree (or shrink it to Versions-only) as its own
+   decision. Sharpens this section's existing open question into a
+   decide-by-experience.
+4. **Lazy spatial provider (memory)**: today NavTree + SearchIndex hold
+   the *entire* deserialized spatial tree (`rootElement` in the store) —
+   O(elements) JS memory on top of engine memory. Replace with a
+   node-provider API: materialize O(roots) at load, fetch children on
+   expand from the engine, LRU-evict collapsed subtrees for fixed
+   overhead. Tree view and breadcrumb both consume it.
+   *Investigation:* what children-of-node / props queries conway exposes
+   post-load.
+5. **Streaming search index**: search becomes a subscriber on the
+   progressive-load session (the `onMeshBatch`-era architecture) —
+   index per parsed batch, live match-as-load: enter a query during
+   load and watch results accumulate. Replaces slice 2's one-shot
+   model-elements provider behind the same interface, no UI change.
+   *Investigation:* whether conway exposes a props/spatial stream during
+   parse (shares the engine seam with slice 4, hence sequenced after
+   the UX slices).
+
 Tier note (§9): proposed as `search-320` — Pro band, since it rides the
 pivot arc (§2.1 rubric: the milestone that doesn't happen without it is the
 pivot, not the MVP trickle). If we decide it's wanted regardless of the
