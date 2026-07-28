@@ -276,6 +276,13 @@ export default function ProjectsDrawer() {
       <Paper
         elevation={0}
         sx={{
+          // Positioned on purpose: #viewer-container is absolutely
+          // positioned and precedes RootLandscape in the DOM, so a
+          // static rail paints *under* the canvas — its background
+          // vanished while its buttons (ButtonBase is position:relative)
+          // still showed. The expanded drawer gets this for free from
+          // the resizer's positioning context.
+          position: 'relative',
           width: COLLAPSED_RAIL_WIDTH,
           height: '100%',
           display: 'flex',

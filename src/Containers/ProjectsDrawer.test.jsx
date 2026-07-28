@@ -157,6 +157,16 @@ describe('ProjectsDrawer', () => {
         .toBeNull()
     })
 
+    // Regression: a static rail paints under the absolutely-positioned
+    // 3D canvas, so its tint disappeared while its buttons still showed.
+    it('paints above the canvas', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+      expect(screen.getByTestId('ProjectsDrawer')).toHaveStyle({position: 'relative'})
+    })
+
     it('starts collapsed when that was the stored preference', () => {
       act(() => {
         useStore.getState().setIsWorkspaceDrawerCollapsed(true)
