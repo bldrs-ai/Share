@@ -54,8 +54,10 @@ describe('TopBar', () => {
     expect(screen.queryByTestId('topbar-search')).toBeNull()
   })
 
-  // Hover only *offers* the move — the icon it reveals must be clicked.
-  it('reveals a search icon on the hovered crumb, without moving the field', () => {
+  // Hover reveals the move affordance only while search is open, and
+  // it replaces that crumb's trailing separator rather than adding a
+  // control — so the path can't reflow under the pointer.
+  it('swaps a separator for the search icon on hover, only in search mode', () => {
     act(() => {
       useStore.setState({
         model: {name: 'Bldrs'},
@@ -64,23 +66,23 @@ describe('TopBar', () => {
     })
     render(<ShareMock initialEntries={[`${MODEL_ROUTE}/89/112`]}><TopBar/></ShareMock>)
 
-    // At rest the icon sits on the leaf crumb.
-    expect(screen.getByTestId('topbar-search-open')).toBeInTheDocument()
-    expect(screen.getByTestId('topbar-search-slot-model')).toBeInTheDocument()
-
-    // Hovering the model crumb moves the icon there — one icon at a
-    // time — but the field has not opened or moved.
-    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model').parentElement)
-    expect(screen.getByTestId('topbar-search-slot-element')).toBeInTheDocument()
+    // Search closed: hovering a crumb does nothing but its own tooltip.
+    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model'))
+    expect(screen.getAllByTestId('topbar-search-open')).toHaveLength(1)
     expect(screen.queryByTestId('topbar-search')).toBeNull()
-    expect(screen.getByTestId('topbar-breadcrumb-element')).toBeInTheDocument()
 
-    // Clicking it commits: the field opens there and clears the crumbs
-    // to its right.
+    // Open at the leaf, then hover the model crumb: its separator
+    // becomes the icon, but the field has not moved yet.
     fireEvent.click(screen.getByTestId('topbar-search-open'))
     expect(screen.getByTestId('topbar-search')).toBeInTheDocument()
+    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model'))
+    expect(screen.getByTestId('topbar-breadcrumb-element')).toBeInTheDocument()
+
+    // Clicking it commits the move, clearing the crumbs to its right.
+    fireEvent.click(screen.getByTestId('topbar-search-open'))
     expect(screen.getByTestId('topbar-breadcrumb-model')).toBeInTheDocument()
     expect(screen.queryByTestId('topbar-breadcrumb-element')).toBeNull()
+    expect(screen.getByTestId('topbar-search')).toBeInTheDocument()
   })
 
   // Dismissing returns to the initial placement, not the last one used.
@@ -93,7 +95,8 @@ describe('TopBar', () => {
     })
     render(<ShareMock initialEntries={[`${MODEL_ROUTE}/89/112`]}><TopBar/></ShareMock>)
 
-    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model').parentElement)
+    fireEvent.click(screen.getByTestId('topbar-search-open'))
+    fireEvent.mouseEnter(screen.getByTestId('topbar-breadcrumb-model'))
     fireEvent.click(screen.getByTestId('topbar-search-open'))
     expect(screen.queryByTestId('topbar-breadcrumb-element')).toBeNull()
 
@@ -101,8 +104,6 @@ describe('TopBar', () => {
 
     expect(screen.queryByTestId('topbar-search')).toBeNull()
     expect(screen.getByTestId('topbar-breadcrumb-element')).toBeInTheDocument()
-    // Back at the leaf, not parked where the search last was.
-    expect(screen.getByTestId('topbar-search-slot-model')).toBeInTheDocument()
   })
 
   // Element selections append numeric segments to the pathname; the

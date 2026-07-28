@@ -74,6 +74,29 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     await expect(page.getByTestId('topbar-search-open')).toBeVisible()
   })
 
+  // Regression: moving the anchor while the field was open blurred the
+  // input, and the blur-dismiss fired after the click — the field
+  // reappeared at the new crumb and then vanished.
+  test('moving the anchor mid-search keeps the field open', async ({page}) => {
+    await page.goto(`${HOME_MODEL}/89/112/139/154/396${WORKSPACE_FLAG}`, {waitUntil: 'domcontentloaded'})
+    await waitForModel(page)
+    // The element crumb resolves asynchronously; without it there is no
+    // separator to swap and nothing to move the anchor from.
+    await expect(page.getByTestId('topbar-breadcrumb-element')).toBeVisible()
+
+    await page.getByTestId('topbar-search-open').click()
+    await expect(page.getByTestId('topbar-search')).toBeVisible()
+
+    // Hover the model crumb; its separator becomes the anchor icon.
+    await page.getByTestId('topbar-breadcrumb-model').hover()
+    await page.getByTestId('topbar-search-open').click()
+
+    // Field moved up a level and stayed open.
+    await expect(page.getByTestId('topbar-search')).toBeVisible()
+    await expect(page.getByTestId('topbar-breadcrumb-element')).toHaveCount(0)
+    await expect(page.getByTestId('topbar-breadcrumb-model')).toBeVisible()
+  })
+
   test('search from the TopBar sets the query param', async ({page}) => {
     await visitWithWorkspace(page)
     await page.getByTestId('topbar-search-open').click()

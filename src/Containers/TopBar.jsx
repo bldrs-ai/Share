@@ -1,11 +1,10 @@
 import React, {ReactElement, useCallback, useEffect, useState} from 'react'
 import {useLocation} from 'react-router-dom'
-import {Box, Breadcrumbs, Paper, Stack, Tooltip, Typography} from '@mui/material'
+import {Box, IconButton, Paper, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import SearchBar from '../Components/Search/SearchBar'
 import {entityTypeName} from '../Components/Properties/itemProperties'
-import {TooltipIconButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
 import {modelPathFromPathname} from '../workspace/modelPath'
 import {prettyType} from '../utils/ifc'
@@ -24,9 +23,9 @@ const MODEL_ROUTE_RE = /\/v\//
 // here just reintroduces overflow.
 const SEARCH_MAX_WIDTH = '25em'
 
-// One small icon's width, reserved after every crumb so toggling the
-// icon's visibility never reflows the path mid-hover.
-const SEARCH_ICON_SLOT = '28px'
+// Separators are sized to the icon that replaces them on hover, so the
+// swap is width-neutral and the path never shifts under the pointer.
+const SEPARATOR_SLOT = '28px'
 
 
 /**
@@ -115,18 +114,11 @@ export default function TopBar() {
   // reads as "searching *inside* this scope".
   const visibleCrumbs = isSearchOpen ? crumbs.slice(0, anchorIndex + 1) : crumbs
 
-  // Exactly one icon is ever visible. Hover wins; with no hover the
-  // icon rests at the leaf when closed, and disappears when open (the
-  // field itself already marks the anchor).
-  let iconIndex = null
-  if (hoverIndex !== null && hoverIndex < visibleCrumbs.length) {
-    iconIndex = hoverIndex
-  } else if (!isSearchOpen && crumbs.length > 0) {
-    iconIndex = crumbs.length - 1
-  }
-  if (isSearchOpen && iconIndex === anchorIndex) {
-    iconIndex = null
-  }
+  // Hover reveals the move-anchor affordance ONLY while search is open.
+  // Off search, hovering the path does nothing — the crumbs' own
+  // tooltips are the hover behaviour there, and a second tooltip on a
+  // revealed icon just fought them.
+  const hoveredSeparator = isSearchOpen ? hoverIndex : null
 
   return (
     // Zero-height positioned anchor: CenterPane is statically
@@ -172,65 +164,78 @@ export default function TopBar() {
             pr: `${ROW_PITCH * 3}px`,
           }}
         >
-          <Breadcrumbs
+          {/* Own separators rather than MUI's: the slot between two
+              crumbs is what swaps to the search icon, and it needs a
+              fixed width so that swap can't reflow the path. */}
+          <Stack
+            component='nav'
+            direction='row'
+            alignItems='center'
             aria-label='Workspace location'
-            sx={{minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0}}
-            // Clearing on leave rather than per-crumb keeps the icon
-            // reachable: the pointer has to cross out of the label to
-            // click the icon sitting beside it.
+            // Shrinkable on purpose: the labels ellipsize rather than
+            // pushing the trailing search icon out under the
+            // OperationsGroup's controls, which is what a long path did
+            // on a phone. Goes away once #1665 moves those into the bar.
+            sx={{minWidth: 0, flexShrink: 1, overflow: 'hidden', whiteSpace: 'nowrap'}}
             onMouseLeave={() => setHoverIndex(null)}
             data-testid='topbar-breadcrumbs'
           >
-            {visibleCrumbs.map((crumb, i) => (
-              <Stack
-                key={crumb.key}
-                direction='row'
-                alignItems='center'
-                sx={{minWidth: 0}}
-                onMouseEnter={() => setHoverIndex(i)}
-              >
-                <Tooltip title={crumb.tip || ''} placement='bottom'>
-                  <Typography
-                    variant='body2'
-                    noWrap
-                    sx={{
-                      fontWeight: i === visibleCrumbs.length - 1 ? 'bold' : 'normal',
-                      cursor: 'default',
-                    }}
-                    data-testid={`topbar-breadcrumb-${crumb.key}`}
-                  >
-                    {crumb.label}
-                  </Typography>
-                </Tooltip>
-                {isSearchEnabled &&
-                 // Every crumb reserves this slot and toggles
-                 // `visibility`, so revealing the icon never reflows the
-                 // path under the pointer. Kept to one icon's width so
-                 // the reserved gaps stay cheap.
-                 <Box
-                   sx={{
-                     width: SEARCH_ICON_SLOT,
-                     flexShrink: 0,
-                     display: 'flex',
-                     justifyContent: 'center',
-                     visibility: iconIndex === i ? 'visible' : 'hidden',
-                     pointerEvents: iconIndex === i ? 'auto' : 'none',
-                   }}
-                 >
-                   <TooltipIconButton
-                     title={`Search in ${crumb.label}`}
-                     placement='bottom'
-                     size='small'
-                     icon={<SearchIcon className='icon-share'/>}
-                     onClick={() => setAnchorIndex(i)}
-                     dataTestId={iconIndex === i ?
-                       'topbar-search-open' :
-                       `topbar-search-slot-${crumb.key}`}
-                   />
-                 </Box>}
-              </Stack>
-            ))}
-          </Breadcrumbs>
+            {visibleCrumbs.map((crumb, i) => {
+              const isLastVisible = i === visibleCrumbs.length - 1
+              return (
+                <React.Fragment key={crumb.key}>
+                  <Tooltip title={crumb.tip || ''} placement='bottom'>
+                    <Typography
+                      variant='body2'
+                      noWrap
+                      onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
+                      sx={{fontWeight: isLastVisible ? 'bold' : 'normal', cursor: 'default'}}
+                      data-testid={`topbar-breadcrumb-${crumb.key}`}
+                    >
+                      {crumb.label}
+                    </Typography>
+                  </Tooltip>
+                  {!isLastVisible &&
+                   <Box
+                     onMouseEnter={isSearchOpen ? () => setHoverIndex(i) : undefined}
+                     sx={{
+                       width: SEPARATOR_SLOT,
+                       flexShrink: 0,
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                     }}
+                   >
+                     {hoveredSeparator === i ?
+                       <IconButton
+                         size='small'
+                         aria-label={`Search in ${crumb.label}`}
+                         // Keeps focus in the open search field, so the
+                         // click lands as an anchor move instead of a
+                         // blur-then-dismiss race.
+                         onMouseDown={(event) => event.preventDefault()}
+                         onClick={() => setAnchorIndex(i)}
+                         data-testid='topbar-search-open'
+                       >
+                         <SearchIcon className='icon-share' fontSize='inherit'/>
+                       </IconButton> :
+                       <Typography variant='body2' sx={{opacity: 0.4}}>/</Typography>}
+                   </Box>}
+                </React.Fragment>
+              )
+            })}
+            {isSearchEnabled && !isSearchOpen && crumbs.length > 0 &&
+             <Box sx={{width: SEPARATOR_SLOT, flexShrink: 0, display: 'flex', justifyContent: 'center'}}>
+               <IconButton
+                 size='small'
+                 aria-label={`Search in ${crumbs[crumbs.length - 1].label}`}
+                 onClick={() => setAnchorIndex(crumbs.length - 1)}
+                 data-testid='topbar-search-open'
+               >
+                 <SearchIcon className='icon-share' fontSize='inherit'/>
+               </IconButton>
+             </Box>}
+          </Stack>
           {isSearchEnabled && isSearchOpen &&
            <Stack sx={{flexGrow: 1, minWidth: 0, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
              <SearchBar
