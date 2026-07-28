@@ -50,7 +50,15 @@ export default function Properties() {
   }, [isCacheWriteInFlight])
 
   useEffect(() => {
-    (async () => {
+    // Guarded against out-of-order resolution: this effect awaits twice
+    // (entity fetch, then property-set assembly), and property sets can
+    // take far longer for a deep container than for the element clicked
+    // after it. Without the guard a slow earlier run resolved last and
+    // overwrote the panel — clicking a storey then its parent building
+    // left the storey's properties on screen, contradicting the
+    // NavTree highlight and the breadcrumb.
+    let isStale = false
+    ;(async () => {
       if (model && element) {
         // Resolve `element` to the full IFC entity before rendering.
         // `selectedElement` is a spatial-tree node — for cache-miss
@@ -77,10 +85,24 @@ export default function Properties() {
             console.warn('Properties: getItemProperties failed; using selected element directly', e)
           }
         }
-        setPropTable(await createPropertyTable(model, fullElement))
-        setPsetsList(await createPsetsList(model, fullElement, expandAll))
+        if (isStale) {
+          return
+        }
+        const table = await createPropertyTable(model, fullElement)
+        if (isStale) {
+          return
+        }
+        setPropTable(table)
+        const psets = await createPsetsList(model, fullElement, expandAll)
+        if (isStale) {
+          return
+        }
+        setPsetsList(psets)
       }
     })()
+    return () => {
+      isStale = true
+    }
   }, [model, element, expandAll])
 
   const propSeparatorBorderOpacity = 0.3

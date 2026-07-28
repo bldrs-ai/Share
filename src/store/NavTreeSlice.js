@@ -35,6 +35,13 @@ export default function createNavTreeSlice(set, get) {
 
     selectedElements: [],
     setSelectedElements: (elts) => set(() => ({selectedElements: elts})),
+    // The ids the user actually picked, without the descendants that
+    // `elementSelection` adds so a parent's geometry highlights in the
+    // scene. Surfaces that answer "what is selected?" — NavTree row
+    // highlight, Properties, the TopBar crumb — read this; the scene
+    // reads `selectedElements`.
+    selectedAnchorIds: [],
+    setSelectedAnchorIds: (ids) => set(() => ({selectedAnchorIds: ids})),
 
     // Synthetic IfcInstanceMap instance IDs (one per Conway
     // PlacedGeometry). Populated alongside `selectedElements` on the

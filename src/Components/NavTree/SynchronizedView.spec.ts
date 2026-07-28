@@ -179,4 +179,36 @@ describe('View 100: Synchronized View and NavTree', () => {
     const sceneIds = await getSceneSelectedIds(page)
     expect(sceneIds).toContain(LEAF_ID)
   })
+
+  // Picking a container selects its whole subtree in the *scene* — a
+  // container's geometry lives in its children — but the container
+  // itself stays the selection everywhere else. Regression covers both
+  // halves of what went wrong: the anchor (Properties followed a
+  // descendant instead of the clicked node) and the staleness guard
+  // (walking down to `Thing` then back up to `Build` left `Thing`'s
+  // slower property-set fetch resolving last and repainting the panel).
+  test('selecting a container keeps the container as the selection', async ({page}) => {
+    await visitHomepageWaitForModel(page)
+    const navPanel = await openNavTreeToLeaves(page)
+    // `Thing` is selected by the walk-down above; now go back up.
+    await navPanel.getByText('Build').click()
+
+    const BUILD_ID = 112
+    await expect.poll(async () => {
+      const el = await page.evaluate(() => {
+        const w = window as unknown as {store?: {getState: () => Record<string, unknown>}}
+        const sel = w.store?.getState().selectedElement as {expressID?: number}
+        return sel?.expressID ?? null
+      })
+      return el
+    }).toBe(BUILD_ID)
+
+    // The panel must agree with the selection, not with the deeper node
+    // visited on the way here.
+    await page.getByTestId('control-button-properties').click()
+    const propertiesPanel = page.getByTestId('PropertiesPanel')
+    await expect(propertiesPanel.locator('table').first()).toBeVisible()
+    const nameRow = propertiesPanel.locator('tr').filter({hasText: 'Name'}).first()
+    await expect(nameRow).toContainText('Build')
+  })
 })
