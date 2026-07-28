@@ -180,6 +180,23 @@ export default function SearchBar({
                 onCancel()
               }
             }}
+            // Blur dismisses a summoned bar, but only once focus has
+            // actually settled elsewhere: MUI renders the autocomplete
+            // popup in a portal, so picking an option blurs the input
+            // for a tick before focus returns to it. Checking on the
+            // next macrotask tells "clicked away" from "clicked a
+            // suggestion".
+            onBlur={() => {
+              if (!onCancel) {
+                return
+              }
+              setTimeout(() => {
+                const input = searchInputRef.current
+                if (input && document.activeElement !== input) {
+                  onCancel()
+                }
+              }, BLUR_SETTLE_MS)
+            }}
             data-testid='textfield-search-query'
           />
         )}
@@ -187,6 +204,11 @@ export default function SearchBar({
     </form>
   )
 }
+
+
+// Long enough for MUI's portal'd popup to hand focus back to the input
+// after an option click, short enough to feel immediate on click-away.
+const BLUR_SETTLE_MS = 150
 
 
 /** @type {string} */

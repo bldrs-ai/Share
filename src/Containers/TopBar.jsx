@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useCallback, useEffect, useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Box, Breadcrumbs, Paper, Stack, Tooltip, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
@@ -23,6 +23,10 @@ const MODEL_ROUTE_RE = /\/v\//
 // panes. Matches the SearchBar form's own desktop width — a smaller cap
 // here just reintroduces overflow.
 const SEARCH_MAX_WIDTH = '25em'
+
+// One small icon's width, reserved after every crumb so toggling the
+// icon's visibility never reflows the path mid-hover.
+const SEARCH_ICON_SLOT = '28px'
 
 
 /**
@@ -86,27 +90,43 @@ export default function TopBar() {
     crumbs.push({key: 'element', label: elementLabel, tip: elementTip})
   }
 
-  // Where the search icon sits, as an index into `crumbs`. Null tracks
-  // the deepest crumb as the path grows and shrinks; a hover pins it
-  // to that crumb instead.
-  const [pinnedAnchor, setPinnedAnchor] = useState(null)
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const lastCrumb = crumbs.length - 1
-  const anchorIndex = pinnedAnchor !== null && pinnedAnchor <= lastCrumb ? pinnedAnchor : lastCrumb
+  // Two pieces of state, deliberately separate: where the search field
+  // is *committed* (null = closed), and which crumb the pointer is over.
+  // Hover only offers the move — the icon is an intent affordance the
+  // user still has to click — so travelling across the path never
+  // disturbs an open search.
+  const [anchorIndex, setAnchorIndex] = useState(null)
+  const [hoverIndex, setHoverIndex] = useState(null)
+  const isSearchOpen = anchorIndex !== null && anchorIndex < crumbs.length
 
-  // Picking a new element (or changing model) ends the search and
-  // releases the pin, so the icon returns to tracking the deepest
-  // crumb — the "until a new sub-element is picked" half of the
-  // open/close contract.
+  // Escape/blur and any new pick return to the initial state — the
+  // icon back at the leaf — rather than to the last placement, so the
+  // path always settles somewhere predictable.
+  const resetSearch = useCallback(() => {
+    setAnchorIndex(null)
+    setHoverIndex(null)
+  }, [])
+
   useEffect(() => {
-    setIsSearchOpen(false)
-    setPinnedAnchor(null)
-  }, [modelPath, elementLabel])
+    resetSearch()
+  }, [modelPath, elementLabel, resetSearch])
 
   // Open search hides the crumbs right of the anchor, so the field
   // reads as "searching *inside* this scope".
   const visibleCrumbs = isSearchOpen ? crumbs.slice(0, anchorIndex + 1) : crumbs
-  const anchorLabel = crumbs[anchorIndex]?.label
+
+  // Exactly one icon is ever visible. Hover wins; with no hover the
+  // icon rests at the leaf when closed, and disappears when open (the
+  // field itself already marks the anchor).
+  let iconIndex = null
+  if (hoverIndex !== null && hoverIndex < visibleCrumbs.length) {
+    iconIndex = hoverIndex
+  } else if (!isSearchOpen && crumbs.length > 0) {
+    iconIndex = crumbs.length - 1
+  }
+  if (isSearchOpen && iconIndex === anchorIndex) {
+    iconIndex = null
+  }
 
   return (
     // Zero-height positioned anchor: CenterPane is statically
@@ -155,41 +175,69 @@ export default function TopBar() {
           <Breadcrumbs
             aria-label='Workspace location'
             sx={{minWidth: 0, whiteSpace: 'nowrap', flexShrink: 0}}
+            // Clearing on leave rather than per-crumb keeps the icon
+            // reachable: the pointer has to cross out of the label to
+            // click the icon sitting beside it.
+            onMouseLeave={() => setHoverIndex(null)}
             data-testid='topbar-breadcrumbs'
           >
             {visibleCrumbs.map((crumb, i) => (
-              <Tooltip key={crumb.key} title={crumb.tip || ''} placement='bottom'>
-                <Typography
-                  variant='body2'
-                  noWrap
-                  // Hovering an earlier crumb moves the search anchor
-                  // there; leaving does not release it, so the pointer
-                  // can travel to the icon without it jumping away.
-                  onMouseEnter={() => setPinnedAnchor(i)}
-                  sx={{fontWeight: i === lastCrumb ? 'bold' : 'normal', cursor: 'default'}}
-                  data-testid={`topbar-breadcrumb-${crumb.key}`}
-                >
-                  {crumb.label}
-                </Typography>
-              </Tooltip>
+              <Stack
+                key={crumb.key}
+                direction='row'
+                alignItems='center'
+                sx={{minWidth: 0}}
+                onMouseEnter={() => setHoverIndex(i)}
+              >
+                <Tooltip title={crumb.tip || ''} placement='bottom'>
+                  <Typography
+                    variant='body2'
+                    noWrap
+                    sx={{
+                      fontWeight: i === visibleCrumbs.length - 1 ? 'bold' : 'normal',
+                      cursor: 'default',
+                    }}
+                    data-testid={`topbar-breadcrumb-${crumb.key}`}
+                  >
+                    {crumb.label}
+                  </Typography>
+                </Tooltip>
+                {isSearchEnabled &&
+                 // Every crumb reserves this slot and toggles
+                 // `visibility`, so revealing the icon never reflows the
+                 // path under the pointer. Kept to one icon's width so
+                 // the reserved gaps stay cheap.
+                 <Box
+                   sx={{
+                     width: SEARCH_ICON_SLOT,
+                     flexShrink: 0,
+                     display: 'flex',
+                     justifyContent: 'center',
+                     visibility: iconIndex === i ? 'visible' : 'hidden',
+                     pointerEvents: iconIndex === i ? 'auto' : 'none',
+                   }}
+                 >
+                   <TooltipIconButton
+                     title={`Search in ${crumb.label}`}
+                     placement='bottom'
+                     size='small'
+                     icon={<SearchIcon className='icon-share'/>}
+                     onClick={() => setAnchorIndex(i)}
+                     dataTestId={iconIndex === i ?
+                       'topbar-search-open' :
+                       `topbar-search-slot-${crumb.key}`}
+                   />
+                 </Box>}
+              </Stack>
             ))}
           </Breadcrumbs>
-          {isSearchEnabled && crumbs.length > 0 && !isSearchOpen &&
-           <TooltipIconButton
-             title={anchorLabel ? `Search in ${anchorLabel}` : 'Search'}
-             placement='bottom'
-             size='small'
-             icon={<SearchIcon className='icon-share'/>}
-             onClick={() => setIsSearchOpen(true)}
-             dataTestId='topbar-search-open'
-           />}
           {isSearchEnabled && isSearchOpen &&
            <Stack sx={{flexGrow: 1, minWidth: 0, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
              <SearchBar
                fullWidth
                takeFocus
-               onSuccess={() => setIsSearchOpen(false)}
-               onCancel={() => setIsSearchOpen(false)}
+               onSuccess={resetSearch}
+               onCancel={resetSearch}
              />
            </Stack>}
         </Stack>

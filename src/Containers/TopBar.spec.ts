@@ -61,8 +61,9 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
   test('search opens from its anchor icon and closes on Escape', async ({page}) => {
     await visitWithWorkspace(page)
 
-    // Closed by default — the icon is the affordance.
+    // Closed by default — the icon on the leaf crumb is the affordance.
     await expect(page.getByTestId('topbar-search')).toHaveCount(0)
+    await expect(page.getByTestId('topbar-search-open')).toBeVisible()
     await page.getByTestId('topbar-search-open').click()
 
     const searchInput = page.getByTestId('topbar-search').locator('input')
