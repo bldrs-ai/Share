@@ -18,12 +18,16 @@ import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
  * @property {string} [placeholder] Text to display when search bar is inactive
  * @property {boolean} [isGitHubSearch] Strict screening for GH only links
  * @property {Function} [onSuccess] Optional callback when search succeeds
+ * @property {boolean} [fullWidth] Fill the host container instead of the
+ *   self-sized widths below — for hosts like the TopBar that own the
+ *   layout, where the fixed mobile width overflows the viewport.
  * @return {ReactElement}
  */
 export default function SearchBar({
   placeholder = SEARCH_BAR_PLACEHOLDER_TEXT,
   isGitHubSearch = false,
   onSuccess = null,
+  fullWidth = false,
 }) {
   assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
@@ -128,7 +132,13 @@ export default function SearchBar({
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{minWidth: '10em', width: isMobile ? `calc(100vw - ${twoButtonWidth})` : '25em'}}>
+    <form
+      onSubmit={onSubmit}
+      style={{
+        minWidth: fullWidth ? 0 : '10em',
+        width: fullWidth ? '100%' : (isMobile ? `calc(100vw - ${twoButtonWidth})` : '25em'),
+      }}
+    >
       <Autocomplete
         freeSolo
         options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}

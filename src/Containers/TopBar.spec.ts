@@ -31,6 +31,16 @@ describeMobileAndDesktop('TopBar (?feature=workspace)', () => {
     await visitWithWorkspace(page)
     await expect(page.getByTestId('TopBar')).toBeVisible()
     await expect(page.getByTestId('topbar-breadcrumb-model')).toHaveText('index.ifc')
+
+    // Regression: the bar is absolutely positioned, and with a
+    // statically-positioned center pane it resolved against the
+    // viewport — width:100% then overflowed the window by the
+    // ProjectsDrawer's width, pushing the search field off-screen.
+    const viewportWidth = page.viewportSize()?.width ?? 0
+    const barBox = await page.getByTestId('TopBar').boundingBox()
+    expect((barBox?.x ?? 0) + (barBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
+    const searchBox = await page.getByTestId('topbar-search').boundingBox()
+    expect((searchBox?.x ?? 0) + (searchBox?.width ?? 0)).toBeLessThanOrEqual(viewportWidth)
   })
 
   test('search from the TopBar sets the query param', async ({page}) => {

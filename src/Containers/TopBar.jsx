@@ -1,6 +1,6 @@
 import React, {ReactElement} from 'react'
 import {useLocation} from 'react-router-dom'
-import {Breadcrumbs, Paper, Stack, Typography} from '@mui/material'
+import {Box, Breadcrumbs, Paper, Stack, Typography} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import SearchBar from '../Components/Search/SearchBar'
 import useStore from '../store/useStore'
@@ -50,62 +50,67 @@ export default function TopBar() {
     null
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        // Positioned like the ToolbarPaper it replaces: the center pane
-        // owns the space, the bar floats at its top over the canvas
-        // (positioned elements paint above the earlier-in-DOM
-        // #viewer-container).
-        position: 'absolute',
-        top: 0,
-        height: TOP_BAR_HEIGHT,
-        width: '100%',
-        backgroundColor: theme.palette.secondary.backgroundColor,
-        borderRadius: 0,
-        display: 'flex',
-        alignItems: 'center',
-      }}
-      data-testid='TopBar'
-    >
-      <Stack
-        direction='row'
-        alignItems='center'
-        justifyContent='space-between'
-        spacing={2}
+    // Zero-height positioned anchor: CenterPane is statically
+    // positioned, so an absolute bar would otherwise resolve against
+    // the *viewport* — width:100% then overflowed the window by
+    // exactly the ProjectsDrawer's width, shoving the search field
+    // off-screen. (The flag-off ToolbarPaper gets away with it only
+    // because without the drawer the pane spans the viewport.)
+    <Box sx={{position: 'relative', width: '100%', height: 0}}>
+      <Paper
+        elevation={0}
         sx={{
-          // Flex-fill rather than width:100%: an explicit percentage
-          // width plus the left padding overflowed the bar and pushed
-          // the search field off the right edge of the window.
-          flex: '1 1 auto',
-          minWidth: 0,
-          // The ControlsGroup's first row (Open, and Save when signed
-          // in) paints over the bar's left edge on the shared 58px
-          // grid, so the breadcrumb starts past that column. Goes away
-          // when OpenModelControl retires from the canvas (#1664).
-          pl: `${ROW_PITCH * 2}px`,
-          pr: 2,
+          // The bar floats at the pane's top over the canvas
+          // (positioned elements paint above the earlier-in-DOM
+          // #viewer-container).
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: TOP_BAR_HEIGHT,
+          backgroundColor: theme.palette.secondary.backgroundColor,
+          borderRadius: 0,
+          display: 'flex',
+          alignItems: 'center',
         }}
+        data-testid='TopBar'
       >
-        <Breadcrumbs
-          aria-label='Workspace location'
-          sx={{minWidth: 0, whiteSpace: 'nowrap'}}
-          data-testid='topbar-breadcrumbs'
+        <Stack
+          direction='row'
+          alignItems='center'
+          justifyContent='space-between'
+          spacing={2}
+          sx={{
+            flex: '1 1 auto',
+            minWidth: 0,
+            // The ControlsGroup's first row (Open, and Save when signed
+            // in) paints over the bar's left edge on the shared 58px
+            // grid, so the breadcrumb starts past that column. Goes away
+            // when OpenModelControl retires from the canvas (#1664).
+            pl: `${ROW_PITCH * 2}px`,
+            pr: 2,
+          }}
         >
-          {project &&
+          <Breadcrumbs
+            aria-label='Workspace location'
+            sx={{minWidth: 0, whiteSpace: 'nowrap'}}
+            data-testid='topbar-breadcrumbs'
+          >
+            {project &&
            <Typography variant='body2' noWrap data-testid='topbar-breadcrumb-project'>
              {project.name}
            </Typography>}
-          {modelLabel &&
+            {modelLabel &&
            <Typography variant='body2' noWrap sx={{fontWeight: 'bold'}} data-testid='topbar-breadcrumb-model'>
              {modelLabel}
            </Typography>}
-        </Breadcrumbs>
-        {isSearchEnabled &&
-         <Stack sx={{flexGrow: 1, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
-           <SearchBar/>
+          </Breadcrumbs>
+          {isSearchEnabled &&
+         <Stack sx={{flexGrow: 1, minWidth: 0, maxWidth: SEARCH_MAX_WIDTH}} data-testid='topbar-search'>
+           <SearchBar fullWidth/>
          </Stack>}
-      </Stack>
-    </Paper>
+        </Stack>
+      </Paper>
+    </Box>
   )
 }
