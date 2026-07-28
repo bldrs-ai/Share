@@ -10,6 +10,9 @@
  */
 
 
+import {loadAllRecentFiles} from '../connections/persistence'
+
+
 /**
  * Display name for a recents entry. `modelTitle` is the name extracted
  * from the model itself (back-filled after load, see Share.jsx);
@@ -21,6 +24,38 @@
  */
 export function recentDisplayName(entry) {
   return entry?.modelTitle || entry?.name || undefined
+}
+
+
+/**
+ * The recents entry for a model route, if we have one. A local upload
+ * routes by its OPFS storage id (`/v/new/<blob-uuid>.ifc`), so the path
+ * segment alone would display as a UUID; recents holds the id -> name
+ * mapping (see #1682).
+ *
+ * @param {string} pathname
+ * @return {object|undefined} RecentFileEntry
+ */
+export function recentEntryForPath(pathname) {
+  const segment = decodeURIComponent(pathname.split('/').filter(Boolean).pop())
+  try {
+    return loadAllRecentFiles().find((f) => f.sharePath === pathname || f.id === segment)
+  } catch {
+    return undefined
+  }
+}
+
+
+/**
+ * Label for a model route: the model's own name where known, else the
+ * path segment.
+ *
+ * @param {string} pathname
+ * @return {string}
+ */
+export function labelForModelPath(pathname) {
+  return recentDisplayName(recentEntryForPath(pathname)) ||
+    decodeURIComponent(pathname.split('/').filter(Boolean).pop())
 }
 
 

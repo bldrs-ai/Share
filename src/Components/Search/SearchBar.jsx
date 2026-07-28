@@ -94,17 +94,29 @@ export default function SearchBar({
     }
 
 
-    // Searches from SearchBar clear current URL's IFC path.
+    // Searches from SearchBar clear current URL's IFC path. Existing
+    // params (feature flags in particular) ride along — replacing the
+    // whole query string here ejected workspace users from the shell
+    // on their first search.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
+      const sp = new URLSearchParams(location.search)
+      sp.set(QUERY_PARAM, inputText)
       disablePageReloadApprovalCheck()
       navigate({
         pathname: newPath,
-        search: `?q=${inputText}`,
+        search: `?${sp.toString()}`,
       })
     } else {
-      setSearchParams({q: inputText})
-      onSuccess()
+      // Not the functional updater form — that needs react-router 6.4+
+      // and this repo pins 6.3, where a function argument serializes
+      // into a garbage query string.
+      const sp = new URLSearchParams(location.search)
+      sp.set(QUERY_PARAM, inputText)
+      setSearchParams(sp)
+      if (onSuccess) {
+        onSuccess()
+      }
     }
     searchInputRef.current.blur()
   }
