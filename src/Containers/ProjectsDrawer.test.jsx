@@ -4,6 +4,7 @@ import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {ID_RESIZE_HANDLE_X} from '../Components/SideDrawer/HorizonResizerButton'
 import {navigateToModel} from '../utils/navigate'
+import {useIsMobile} from '../Components/Hooks'
 import ProjectsDrawer from './ProjectsDrawer'
 import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
 
@@ -11,11 +12,13 @@ import {CONTROL_MARGIN, CONTROL_SIZE, TOP_BAR_HEIGHT} from './layoutConstants'
 // navigateToModel does a full page load; the real one would tear down
 // jsdom's location. Its own suite covers the query-preserving behaviour.
 jest.mock('../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../Components/Hooks', () => ({useIsMobile: jest.fn(() => false)}))
 
 
 describe('ProjectsDrawer', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    useIsMobile.mockReturnValue(false)
     localStorage.clear()
     act(() => {
       useStore.setState({
@@ -491,5 +494,47 @@ describe('ProjectsDrawer', () => {
     })
     fireEvent.click(screen.getByLabelText('Delete project Doomed'))
     expect(useStore.getState().workspaceProjects).toHaveLength(0)
+  })
+
+  describe('on mobile', () => {
+    beforeEach(() => {
+      useIsMobile.mockReturnValue(true)
+    })
+
+    it('starts collapsed to just the logo, with no rail', () => {
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      expect(screen.getByTestId('projects-mobile-open')).toBeInTheDocument()
+      expect(screen.queryByTestId('projects-collapse-toggle')).toBeNull()
+      expect(screen.queryByTestId('projects-new-button')).toBeNull()
+    })
+
+    it('opens the drawer when the logo is tapped', () => {
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      fireEvent.click(screen.getByTestId('projects-mobile-open'))
+
+      expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(false)
+      expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+    })
+
+    it('opens full width and without a resize grip', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(false)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      expect(screen.getByTestId('ProjectsDrawer')).toHaveStyle({width: '100vw'})
+      expect(screen.queryByTestId(ID_RESIZE_HANDLE_X)).toBeNull()
+    })
+
+    // The preference is shared with desktop, so an explicit choice wins.
+    it('respects a stored open preference instead of forcing collapse', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(false)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+      expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+    })
   })
 })

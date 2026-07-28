@@ -22,14 +22,17 @@ import {
 } from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {loadAllRecentFiles} from '../connections/persistence'
+import {useIsMobile} from '../Components/Hooks'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
 import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
+import {hasStoredWorkspaceUiState} from '../workspace/persistence'
 import {recentDisplayName} from '../utils/modelDisplayName'
 import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
 import LogoMenu from '../Components/Workspace/LogoMenu'
+import {LogoB} from '../Components/Logo/Logo'
 import {
   Add as AddIcon,
   Apartment as ApartmentIcon,
@@ -157,6 +160,7 @@ export default function ProjectsDrawer() {
   const [rowMenu, setRowMenu] = useState(null)
   const [isAddToProjectOpen, setIsAddToProjectOpen] = useState(false)
 
+  const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
   const theme = useTheme()
@@ -202,6 +206,15 @@ export default function ProjectsDrawer() {
   // returning — so treating close as abandonment disarmed every capture
   // before it could fire. Abandoned arms are cleaned up by the capture
   // TTL (workspace/persistence.ts) and by re-arming instead.
+
+  // A full-width drawer covering the model is the wrong thing to greet a
+  // phone with, so mobile starts collapsed — but only when the user has
+  // never said otherwise, since the preference is shared with desktop.
+  useEffect(() => {
+    if (isMobile && !hasStoredWorkspaceUiState()) {
+      setIsCollapsed(true)
+    }
+  }, [isMobile, setIsCollapsed])
 
   const onCollapse = useCallback(() => setIsCollapsed(true), [setIsCollapsed])
 
@@ -271,6 +284,26 @@ export default function ProjectsDrawer() {
     </Stack>
   )
 
+  if (isCollapsed && isMobile) {
+    // No rail on a phone — a whole column of chrome for one toggle isn't
+    // worth the width. The logo is the affordance: it opens the drawer
+    // (the marketing menu lives on the footer logo once open).
+    return (
+      <Box
+        sx={{position: 'fixed', left: 0, bottom: 0, padding: '.5em'}}
+        data-testid='ProjectsDrawer'
+      >
+        <TooltipIconButton
+          title='Show projects'
+          placement='right'
+          icon={<LogoB/>}
+          onClick={() => setIsCollapsed(false)}
+          dataTestId='projects-mobile-open'
+        />
+      </Box>
+    )
+  }
+
   if (isCollapsed) {
     return (
       <Paper
@@ -335,7 +368,9 @@ export default function ProjectsDrawer() {
       ref={drawerRef}
       sx={{
         position: 'relative',
-        width: drawerWidth,
+        // Full-width on a phone: a 240px column next to a 3D canvas is
+        // too little of each. Resizing goes with it.
+        width: isMobile ? '100vw' : drawerWidth,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -348,16 +383,17 @@ export default function ProjectsDrawer() {
       {/* Same grip the NavTree/Notes drawers use; dragging past
           COLLAPSE_AT_WIDTH collapses instead of bottoming out, and
           double-tapping it toggles full-window width. */}
-      <HorizonResizerButton
-        drawerRef={drawerRef}
-        thickness={RESIZER_THICKNESS}
-        isOnLeft={false}
-        drawerWidth={drawerWidth}
-        drawerWidthInitial={WORKSPACE_DRAWER_WIDTH_INITIAL}
-        setDrawerWidth={setDrawerWidth}
-        minWidth={COLLAPSE_AT_WIDTH}
-        onCollapse={onCollapse}
-      />
+      {!isMobile &&
+       <HorizonResizerButton
+         drawerRef={drawerRef}
+         thickness={RESIZER_THICKNESS}
+         isOnLeft={false}
+         drawerWidth={drawerWidth}
+         drawerWidthInitial={WORKSPACE_DRAWER_WIDTH_INITIAL}
+         setDrawerWidth={setDrawerWidth}
+         minWidth={COLLAPSE_AT_WIDTH}
+         onCollapse={onCollapse}
+       />}
       {header}
       {/* Every row below the header is one control row tall, so this
           column stays in step with the control groups across the canvas:

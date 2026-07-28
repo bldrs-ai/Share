@@ -185,6 +185,21 @@ export function loadWorkspaceUiState(): WorkspaceUiState {
 }
 
 
+/**
+ * Whether the user has ever expressed a drawer preference. Lets a first
+ * visit pick a device-appropriate default without a second flag.
+ *
+ * @return True once any UI state has been written.
+ */
+export function hasStoredWorkspaceUiState(): boolean {
+  try {
+    return localStorage.getItem(WORKSPACE_UI_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
+
 /** @param uiState The UI state to persist */
 export function saveWorkspaceUiState(uiState: WorkspaceUiState): void {
   try {

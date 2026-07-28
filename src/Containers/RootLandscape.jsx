@@ -39,7 +39,7 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh', overflow: 'hidden'}}
       data-testid='RootLandscape-RootStack'
     >
-      {!isMobile && isWorkspaceEnabled &&
+      {isWorkspaceEnabled &&
        <Box
          sx={{flex: '0 0 auto', flexShrink: 0}}
          data-testid='ProjectsDrawer-Container'
