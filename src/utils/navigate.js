@@ -109,8 +109,35 @@ export function navWith(navigate, path, options = {
 
 
 /**
+ * Merge the current query string into `path` when it carries none of its
+ * own, inserting it before any hash. Opening a model is a full page load
+ * (see `navigateToModel`), and most call sites build their destination
+ * from path segments alone (`${appPrefix}/v/new/${filename}`), so without
+ * this the reload drops `?feature=…` and the user falls out of whatever
+ * flags they were running — same reason `homeModelPath` carries the query
+ * forward across the cache-clear redirect.
+ *
+ * @param {string} path Destination, may contain its own search and/or hash
+ * @return {string}
+ */
+function withCurrentSearch(path) {
+  const currentSearch = (typeof window !== 'undefined' && window.location && window.location.search) || ''
+  if (currentSearch === '' || path.includes('?')) {
+    return path
+  }
+  const hashAt = path.indexOf('#')
+  if (hashAt === -1) {
+    return `${path}${currentSearch}`
+  }
+  return `${path.slice(0, hashAt)}${currentSearch}${path.slice(hashAt)}`
+}
+
+
+/**
  * Navigate to a model path with a full page reload to free memory.
  * During unit tests, falls back to SPA navigate to avoid jsdom reloads.
+ * The current query string is carried forward when the target doesn't
+ * specify its own (see `withCurrentSearch`).
  *
  * @param {string|object} target Destination path or location-like object
  * @param {Function} [navigate] Optional react-router navigate for test fallback
@@ -131,6 +158,8 @@ export function navigateToModel(target, navigate) {
   } else {
     throw new Error('navigateToModel: invalid target')
   }
+
+  path = withCurrentSearch(path)
 
   // In tests, prefer SPA navigate to keep assertions stable
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {

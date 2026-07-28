@@ -43,6 +43,37 @@ describe('navigateToModel', () => {
   it('throws for invalid target', () => {
     expect(() => navigateToModel(null)).toThrow(/invalid target/)
   })
+
+  describe('carries the current query string forward (feature flags)', () => {
+    const prevEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development'
+      locationGetter.mockReturnValue({
+        search: '?feature=workspace',
+        assign: (url) => assignCalls.push(url),
+      })
+    })
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv
+    })
+
+    it('appends the current search to a bare path', () => {
+      navigateToModel('/share/v/new/haus.ifc')
+      expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=workspace'])
+    })
+
+    it('inserts the search before an existing hash', () => {
+      navigateToModel('/share/v/p/index.ifc#c:1,2,3')
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace#c:1,2,3'])
+    })
+
+    it('leaves a target that carries its own search alone', () => {
+      navigateToModel({pathname: '/share/v/new/haus.ifc', search: '?feature=bot'})
+      expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=bot'])
+    })
+  })
 })
 
 

@@ -134,6 +134,32 @@ persist → open model from drawer → element search from TopBar → all with
 `?feature=workspace`; and the default (flag off) layout byte-identical to
 today's screenshots.
 
+`src/Containers/ProjectsDrawer.spec.ts` covers all of that except the
+TopBar search and the flag-off screenshot, both of which wait on #1663.
+
+### 2.8 Shipped deltas from this plan (#1684)
+
+The drawer landed as a sequence of flows, each with its own sub-issue
+under #1661 — that decomposition, not this section, is the working
+record. Listed here are only the places where what shipped **differs
+from §2.1–2.5 above**; the issues carry the detail and the rationale.
+
+| Flow | Issue | Delta from this plan |
+|---|---|---|
+| Create project | #1689 | §2.1 puts the collapse toggle "next to New project". Shipped: header row (`bldrs.ai` + toggle) at exactly top-bar height, New project on the row below, so drawer rows align with the control groups across the canvas. |
+| Add model via the Open dialog | #1690 | §2.1 has `OpenModelControl` leaving `ControlsGroup` in this epic. Deferred to #1664; the control stays and the drawer *arms* the same dialog. |
+| Open from the drawer | #1691 | — (also fixed `?feature=` being dropped by every model open, all flags) |
+| Ungrouped + "Add to project" | #1692 | Not in this plan. Landing spot for models arriving outside a project; likely also where non-project convos go. |
+| Collapse to rail | #1693 | §2.5 has the logo popup as the logo's only job. Shipped: closed ⇒ the logo reopens the drawer, open ⇒ it opens the popup. |
+| Resize | #1694 | Not in this plan. Reuses `HorizonResizerButton` with opt-in `minWidth`/`onCollapse`. |
+| Mobile layout | #1695 | Not in this plan. Full-width open, no rail, logo bottom-left. |
+| E2E coverage | #1696 | — |
+
+Tier-1 persistence (§2.2) shipped as part of these flows; Tier 2 (Auth0
+`user_metadata`) is untouched and stays #1662. The logo popup (§2.5)
+shipped without the manage-account entry, which still waits on
+`identity-300`.
+
 
 ## 3. Epic 2 — Fluid Nav + scoped search (proposed `search-320`)
 
@@ -281,6 +307,40 @@ Considered and not recommended: a GitHub Project board as the primary
 tracker (fine as a *view* over the labeled issues, but a second source of
 truth to drift); and one mega-epic for the whole pivot (too coarse — the
 four epics have different prereqs and can be worked by different people).
+
+### 7.1 Definition of done: doc + test
+
+Two standing requirements for every PR that implements UI epic/story/task
+work, in the spirit of Jarred Sumner's "if it's not doc'd, it doesn't
+exist; if it's not tested, it doesn't work":
+
+1. **Doc — the work exists as issues.** The story/tasks a PR implements
+   are tracked with an epic-labeled tracking issue, native sub-issues per
+   story/task, and a shared epic name in every title so the whole family
+   is greppable. The workspace shell is the worked example:
+   `epic: assist-300: Workspace shell` (#1657) → `story: workspace:
+   ProjectsDrawer container` (#1661) → `flow: workspace: create project`
+   (#1689) and siblings #1690–#1696. Filing sub-issues retroactively at
+   PR time is fine — #1661's flow sub-issues were — but they must exist,
+   cross-linked with the PR, before the work is called done. Issue bodies
+   record shipped behaviour, where it lives, what covers it, and any
+   local decision that overrode the plan doc (§2.8 pattern).
+
+2. **Test — each task/sub-issue has a happy-path E2E test, desktop and
+   mobile.** Use `describeMobileAndDesktop` from
+   `src/tests/e2e/formFactor.ts`: one suite body run per form factor
+   (`[desktop]`/`[mobile]` suffixed), branching only where the UX
+   genuinely diverges. `useIsMobile` is a pure window-width check, so
+   the helper is just a viewport switch — shared flow bodies stay
+   shared, with per-feature helpers (e.g. `ensureProjectsDrawerOpen`,
+   `src/tests/e2e/workspace.ts`) absorbing systematic differences.
+   `src/Containers/ProjectsDrawer.spec.ts` is the worked example: one
+   test per flow sub-issue, so a regression names both the flow and the
+   layout it broke.
+
+When the implementing PR is submitted with its tests green, close the
+story's issue/sub-issues (referencing the PR); the epic stays open until
+all its stories close.
 
 
 ## 8. Draft tracking issues
