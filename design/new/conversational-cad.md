@@ -134,6 +134,32 @@ persist → open model from drawer → element search from TopBar → all with
 `?feature=workspace`; and the default (flag off) layout byte-identical to
 today's screenshots.
 
+`src/Containers/ProjectsDrawer.spec.ts` covers all of that except the
+TopBar search and the flag-off screenshot, both of which wait on #1663.
+
+### 2.8 Shipped deltas from this plan (#1684)
+
+The drawer landed as a sequence of flows, each with its own sub-issue
+under #1661 — that decomposition, not this section, is the working
+record. Listed here are only the places where what shipped **differs
+from §2.1–2.5 above**; the issues carry the detail and the rationale.
+
+| Flow | Issue | Delta from this plan |
+|---|---|---|
+| Create project | #1689 | §2.1 puts the collapse toggle "next to New project". Shipped: header row (`bldrs.ai` + toggle) at exactly top-bar height, New project on the row below, so drawer rows align with the control groups across the canvas. |
+| Add model via the Open dialog | #1690 | §2.1 has `OpenModelControl` leaving `ControlsGroup` in this epic. Deferred to #1664; the control stays and the drawer *arms* the same dialog. |
+| Open from the drawer | #1691 | — (also fixed `?feature=` being dropped by every model open, all flags) |
+| Ungrouped + "Add to project" | #1692 | Not in this plan. Landing spot for models arriving outside a project; likely also where non-project convos go. |
+| Collapse to rail | #1693 | §2.5 has the logo popup as the logo's only job. Shipped: closed ⇒ the logo reopens the drawer, open ⇒ it opens the popup. |
+| Resize | #1694 | Not in this plan. Reuses `HorizonResizerButton` with opt-in `minWidth`/`onCollapse`. |
+| Mobile layout | #1695 | Not in this plan. Full-width open, no rail, logo bottom-left. |
+| E2E coverage | #1696 | — |
+
+Tier-1 persistence (§2.2) shipped as part of these flows; Tier 2 (Auth0
+`user_metadata`) is untouched and stays #1662. The logo popup (§2.5)
+shipped without the manage-account entry, which still waits on
+`identity-300`.
+
 
 ## 3. Epic 2 — Fluid Nav + scoped search (proposed `search-320`)
 
