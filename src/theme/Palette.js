@@ -51,6 +51,13 @@ export const day = {
     // white scene background right next to it, so this is a real tint and
     // not a near-white wash.
     workspaceBackground: '#D3E9EE',
+    // Collapsed rail: half-opacity, but pre-doubled against the scene
+    // background so it still *reads* as the workspace tint. Half of the
+    // near-white workspaceBackground over a white scene lands ~4% off
+    // white — invisible. Solving 0.5*C + 0.5*white = workspaceBackground
+    // gives this, so the rail matches the drawer over the default scene
+    // and stays translucent over anything darker.
+    workspaceRailBackground: '#A7D3DD',
   },
 
   success: {
@@ -117,6 +124,9 @@ export const night = {
     // Tron teal, light enough to read as a lit panel against the black
     // scene background.
     workspaceBackground: '#0F2E38',
+    // See day.secondary.workspaceRailBackground — same derivation
+    // against the black night scene.
+    workspaceRailBackground: '#1E5C70',
   },
 
   success: {

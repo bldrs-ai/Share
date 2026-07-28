@@ -281,10 +281,11 @@ export default function ProjectsDrawer() {
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 0,
-          // Same tint as the expanded drawer at half opacity: the rail
-          // still reads as one column from the toggle down to the logo,
-          // without competing with the canvas for attention.
-          backgroundColor: `${theme.palette.secondary.workspaceBackground}80`,
+          // Half opacity, over a base chosen so the result matches the
+          // expanded drawer's tint against the scene (see
+          // secondary.workspaceRailBackground) — the rail reads as one
+          // continuous column from the toggle down to the logo.
+          backgroundColor: `${theme.palette.secondary.workspaceRailBackground}80`,
           borderRight: `1px solid ${theme.palette.primary.sceneHighlight}20`,
         }}
         data-testid='ProjectsDrawer'
