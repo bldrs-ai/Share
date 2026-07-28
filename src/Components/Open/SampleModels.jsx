@@ -29,11 +29,13 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
   //
   // Hosting note: everything under bldrs-ai/test-models is Git-LFS-backed,
   // so those samples draw on that repo's LFS bandwidth quota. The other
-  // samples (Swiss-Property-AG, OlegMoshkovich, pollen-robotics, webaverse)
-  // are plain git blobs served without LFS. Robot_hand is Pollen Robotics'
-  // AmazingHand (CC-BY-4.0); Robot is the Mixamo Y Bot rig with embedded
-  // animation clips (same Mixamo provenance as the previous Vitruvius
-  // samba-dancing sample).
+  // samples (Swiss-Property-AG, OlegMoshkovich, webaverse) are plain git
+  // blobs served without LFS. Robot_hand is the full right-hand assembly of
+  // Pollen Robotics' AmazingHand (CC-BY-4.0), an Onshape AP242 export
+  // mirrored into test-models — rendering it correctly needs conway's
+  // EDGE_CURVE same_sense fix (conway fix/step-edge-same-sense). Robot is
+  // the Mixamo Y Bot rig with embedded animation clips (same Mixamo
+  // provenance as the previous Vitruvius samba-dancing sample).
   const modelPath = {
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
@@ -41,7 +43,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
     Gear: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
     Arty: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/digilent-arty-z7-xilinx-artix-7-soc-fpga-board-1.snapshot.1/Arty_Z7.stp',
     Jetengine: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/jet-engine-220.snapshot.1/Jetenginestep.stp',
-    Robot_hand: '/share/v/gh/pollen-robotics/AmazingHand/main/cad/step/Amazing%20Hand%20base.STEP',
+    Robot_hand: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/Right_Hand.step',
     Robot: '/share/v/gh/webaverse/assets/master/animations/ybot.fbx',
     Caffeine: '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb',
   }

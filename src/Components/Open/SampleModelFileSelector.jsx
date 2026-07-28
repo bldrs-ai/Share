@@ -20,7 +20,7 @@ export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}
       3: '/share/v/gh/bldrs-ai/test-models/main/step/zoo.dev/a-gear.step',
       4: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/digilent-arty-z7-xilinx-artix-7-soc-fpga-board-1.snapshot.1/Arty_Z7.stp',
       5: '/share/v/gh/bldrs-ai/test-models/main/step/grabcad/jet-engine-220.snapshot.1/Jetenginestep.stp',
-      6: '/share/v/gh/pollen-robotics/AmazingHand/main/cad/step/Amazing%20Hand%20base.STEP',
+      6: '/share/v/gh/bldrs-ai/test-models/main/step/pollen-robotics/AmazingHand/Right_Hand.step',
       7: '/share/v/gh/webaverse/assets/master/animations/ybot.fbx',
       8: '/share/v/gh/bldrs-ai/test-models/main/pdb/caffeine.pdb',
     }
