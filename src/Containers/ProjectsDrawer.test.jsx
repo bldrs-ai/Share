@@ -433,6 +433,21 @@ describe('ProjectsDrawer', () => {
       expect(screen.queryByTestId('ungrouped-section')).toBeNull()
     })
 
+    // Element selections append numeric path segments; each selection
+    // was minting a phantom "model" named by its expressID.
+    it('records the model, not the selected element, on element-path routes', () => {
+      render(
+        <ShareMock initialEntries={['/share/v/gh/o/r/main/shared.ifc/88/111/199961']}>
+          <ProjectsDrawer/>
+        </ShareMock>,
+      )
+
+      const ungrouped = useStore.getState().ungroupedModels
+      expect(ungrouped).toHaveLength(1)
+      expect(ungrouped[0].path).toBe('/share/v/gh/o/r/main/shared.ifc')
+      expect(screen.getByText('shared.ifc')).toBeInTheDocument()
+    })
+
     it('files a model into a project from the row menu', () => {
       act(() => {
         useStore.getState().createWorkspaceProject('Maple Street Tower')

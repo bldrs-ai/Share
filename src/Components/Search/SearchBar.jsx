@@ -18,12 +18,23 @@ import {SEARCH_BAR_PLACEHOLDER_TEXT} from './component'
  * @property {string} [placeholder] Text to display when search bar is inactive
  * @property {boolean} [isGitHubSearch] Strict screening for GH only links
  * @property {Function} [onSuccess] Optional callback when search succeeds
+ * @property {boolean} [fullWidth] Fill the host container instead of the
+ *   self-sized widths below — for hosts like the TopBar that own the
+ *   layout, where the fixed mobile width overflows the viewport.
+ * @property {Function} [onCancel] Called on Escape, and on clearing an
+ *   already-empty field — hosts that summon the bar (the TopBar's
+ *   anchored search) use it to put it away again.
+ * @property {boolean} [takeFocus] Focus the input on mount, for hosts
+ *   that render the bar in response to an explicit "open search".
  * @return {ReactElement}
  */
 export default function SearchBar({
   placeholder = SEARCH_BAR_PLACEHOLDER_TEXT,
   isGitHubSearch = false,
   onSuccess = null,
+  fullWidth = false,
+  onCancel = null,
+  takeFocus = false,
 }) {
   assertDefined(placeholder, isGitHubSearch)
   const location = useLocation()
@@ -94,20 +105,40 @@ export default function SearchBar({
     }
 
 
-    // Searches from SearchBar clear current URL's IFC path.
+    // Searches from SearchBar clear current URL's IFC path. Existing
+    // params (feature flags in particular) ride along — replacing the
+    // whole query string here ejected workspace users from the shell
+    // on their first search.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
+      const sp = new URLSearchParams(location.search)
+      sp.set(QUERY_PARAM, inputText)
       disablePageReloadApprovalCheck()
       navigate({
         pathname: newPath,
-        search: `?q=${inputText}`,
+        search: `?${sp.toString()}`,
       })
     } else {
-      setSearchParams({q: inputText})
-      onSuccess()
+      // Not the functional updater form — that needs react-router 6.4+
+      // and this repo pins 6.3, where a function argument serializes
+      // into a garbage query string.
+      const sp = new URLSearchParams(location.search)
+      sp.set(QUERY_PARAM, inputText)
+      setSearchParams(sp)
+      if (onSuccess) {
+        onSuccess()
+      }
     }
     searchInputRef.current.blur()
   }
+
+  // Summoned bars start focused: the user asked for the field, so
+  // making them click it too is a wasted interaction.
+  useEffect(() => {
+    if (takeFocus) {
+      searchInputRef.current?.focus()
+    }
+  }, [takeFocus])
 
   const twoButtonWidth = '120px'
   const isMobile = useIsMobile()
@@ -116,7 +147,13 @@ export default function SearchBar({
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{minWidth: '10em', width: isMobile ? `calc(100vw - ${twoButtonWidth})` : '25em'}}>
+    <form
+      onSubmit={onSubmit}
+      style={{
+        minWidth: fullWidth ? 0 : '10em',
+        width: fullWidth ? '100%' : (isMobile ? `calc(100vw - ${twoButtonWidth})` : '25em'),
+      }}
+    >
       <Autocomplete
         freeSolo
         options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
@@ -137,6 +174,29 @@ export default function SearchBar({
               width: '100%',
             }}
             fullWidth
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && onCancel) {
+                event.stopPropagation()
+                onCancel()
+              }
+            }}
+            // Blur dismisses a summoned bar, but only once focus has
+            // actually settled elsewhere: MUI renders the autocomplete
+            // popup in a portal, so picking an option blurs the input
+            // for a tick before focus returns to it. Checking on the
+            // next macrotask tells "clicked away" from "clicked a
+            // suggestion".
+            onBlur={() => {
+              if (!onCancel) {
+                return
+              }
+              setTimeout(() => {
+                const input = searchInputRef.current
+                if (input && document.activeElement !== input) {
+                  onCancel()
+                }
+              }, BLUR_SETTLE_MS)
+            }}
             data-testid='textfield-search-query'
           />
         )}
@@ -144,6 +204,11 @@ export default function SearchBar({
     </form>
   )
 }
+
+
+// Long enough for MUI's portal'd popup to hand focus back to the input
+// after an option click, short enough to feel immediate on click-away.
+const BLUR_SETTLE_MS = 150
 
 
 /** @type {string} */

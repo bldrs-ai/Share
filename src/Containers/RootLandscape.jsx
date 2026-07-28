@@ -9,6 +9,7 @@ import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
 import ProjectsDrawer from './ProjectsDrawer'
+import TopBar from './TopBar'
 import {TOP_BAR_HEIGHT} from './layoutConstants'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
@@ -67,20 +68,22 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
-        <Box sx={{opacity: 0.5}}>
-          <Paper
-            elevation={0}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              height: TOP_BAR_HEIGHT,
-              width: '100%',
-              backgroundColor: theme.palette.secondary.backgroundColor,
-              borderRadius: 0,
-            }}
-            data-testid='RootLandscape-ToolbarPaper'
-          />
-        </Box>
+        {isWorkspaceEnabled ?
+          <TopBar/> :
+          <Box sx={{opacity: 0.5}}>
+            <Paper
+              elevation={0}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                height: TOP_BAR_HEIGHT,
+                width: '100%',
+                backgroundColor: theme.palette.secondary.backgroundColor,
+                borderRadius: 0,
+              }}
+              data-testid='RootLandscape-ToolbarPaper'
+            />
+          </Box>}
         <Stack
           direction='row'
           justifyContent='space-between'

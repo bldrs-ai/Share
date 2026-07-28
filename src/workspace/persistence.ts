@@ -1,3 +1,6 @@
+import {modelPathFromPathname} from './modelPath'
+
+
 const WORKSPACE_PROJECTS_KEY = 'bldrs:workspace-projects'
 const WORKSPACE_PROJECTS_VERSION = 1
 const WORKSPACE_CAPTURE_KEY = 'bldrs:workspace-capture'
@@ -60,13 +63,47 @@ export function loadWorkspaceContents(): WorkspaceContents {
     if (parsed.version !== WORKSPACE_PROJECTS_VERSION || !Array.isArray(parsed.projects)) {
       return empty
     }
-    return {
+    return normalizeContents({
       projects: parsed.projects,
       ungrouped: Array.isArray(parsed.ungrouped) ? parsed.ungrouped : [],
-    }
+    })
   } catch {
     return empty
   }
+}
+
+
+/**
+ * Self-heal stored model refs: early builds recorded raw pathnames, so
+ * an element selection (`…/Momentum.ifc/88/111/153/3768/199961`) minted
+ * a phantom "model" per element. Normalizing to the model's own route
+ * and dropping the resulting duplicates on load repairs those stores in
+ * place — a project's copy of a model wins over an Ungrouped copy, and
+ * the first ref wins within a list.
+ *
+ * @param contents Parsed store contents.
+ * @return Contents with element-path refs collapsed onto their models.
+ */
+function normalizeContents(contents: WorkspaceContents): WorkspaceContents {
+  // Deliberately per-list: the same model may be filed under two
+  // projects (`addWorkspaceModel` only touches its target), so a shared
+  // seen-set across projects would silently drop it from all but the
+  // first on the next load.
+  const dedupWithin = (models: WorkspaceModelRef[], seen: Set<string>) =>
+    models.flatMap((model) => {
+      const path = modelPathFromPathname(model.path)
+      if (seen.has(path)) {
+        return []
+      }
+      seen.add(path)
+      return [path === model.path ? model : {...model, path}]
+    })
+  const projects = contents.projects.map(
+    (p) => ({...p, models: dedupWithin(p.models, new Set<string>())}))
+  // Ungrouped is the leftovers bin, so it drops anything now filed —
+  // the same rule `addUngroupedModel` applies when recording.
+  const filed = new Set(projects.flatMap((p) => p.models.map((m) => m.path)))
+  return {projects, ungrouped: dedupWithin(contents.ungrouped, filed)}
 }
 
 

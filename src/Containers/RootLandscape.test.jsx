@@ -19,6 +19,17 @@ jest.mock('./ProjectsDrawer', () => ({
   default: () => <div data-testid='MockProjectsDrawer'/>,
 }))
 
+// Mocked like the other child containers, but also out of necessity:
+// the real TopBar mounts SearchBar, whose no-query cleanup effect
+// reads the *global* location.search (empty under jsdom) and so
+// navigates the MemoryRouter to a URL without ?feature=workspace,
+// unmounting the flag-gated tree mid-test. Harmless in production
+// where global and router locations agree.
+jest.mock('./TopBar', () => ({
+  __esModule: true,
+  default: () => <div data-testid='TopBar'/>,
+}))
+
 describe('RootLandscape', () => {
   it('center pane is flex and root does not overflow', () => {
     const {getByTestId} = render(
@@ -71,5 +82,26 @@ describe('RootLandscape', () => {
     expect(container).toBeInTheDocument()
     // Leftmost: the drawer container is the first child of the root stack.
     expect(getByTestId('RootLandscape-RootStack').firstChild).toBe(container)
+  })
+
+  // #1663: the ToolbarPaper placeholder becomes the real TopBar under
+  // the flag; flag-off keeps the placeholder byte-identical.
+  it('renders the ToolbarPaper placeholder by default, TopBar with ?feature=workspace', () => {
+    const flagOff = render(
+      <ShareMock>
+        <RootLandscape pathPrefix='' branch='' selectWithShiftClickEvents={jest.fn()} deselectItems={jest.fn()}/>
+      </ShareMock>,
+    )
+    expect(flagOff.getByTestId('RootLandscape-ToolbarPaper')).toBeInTheDocument()
+    expect(flagOff.queryByTestId('TopBar')).toBeNull()
+    flagOff.unmount()
+
+    const flagOn = render(
+      <ShareMock initialEntries={['/?feature=workspace']}>
+        <RootLandscape pathPrefix='' branch='' selectWithShiftClickEvents={jest.fn()} deselectItems={jest.fn()}/>
+      </ShareMock>,
+    )
+    expect(flagOn.getByTestId('TopBar')).toBeInTheDocument()
+    expect(flagOn.queryByTestId('RootLandscape-ToolbarPaper')).toBeNull()
   })
 })

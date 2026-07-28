@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import {Typography} from '@mui/material'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import debug from '../../utils/debug'
+import {prettyType} from '../../utils/ifc'
 import {stoi} from '../../utils/strings'
 
 
@@ -22,7 +23,9 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
   let rowKey = 0
   const typeName = entityTypeName(model, ifcProps)
   if (!isPset && typeName !== null && typeName !== 'IfcPropertySet') {
-    ROWS.push(<Row d1={'Type'} d2={typeName} key={`type-${serial}`}/>)
+    // Prettified for reading ('Element (generic proxy)'), not the raw
+    // schema constant ('IFCBUILDINGELEMENTPROXY').
+    ROWS.push(<Row d1={'Type'} d2={prettyType(typeName)} key={`type-${serial}`}/>)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
@@ -65,7 +68,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
  * @param {object} ifcProps the entity
  * @return {string|null}
  */
-function entityTypeName(model, ifcProps) {
+export function entityTypeName(model, ifcProps) {
   const rawType = ifcProps?.type
   if (typeof rawType === 'string' && rawType.length > 0) {
     return rawType
@@ -94,6 +97,25 @@ function entityTypeName(model, ifcProps) {
     return ctorName
   }
   return null
+}
+
+
+/**
+ * The object `deref` needs to resolve a type-5 entity reference. Its
+ * second parameter is a **web-ifc API**, not our model: it calls
+ * `webIfc.properties.getItemProperties(...)`. Passing the model meant
+ * that call threw on `undefined.getItemProperties` the moment a
+ * property carried a reference — which aborted the whole table and left
+ * the previously selected element's properties on screen. Spatial
+ * containers (IfcSite, IfcBuilding) hit it; leaves mostly don't, which
+ * is why this hid for so long.
+ *
+ * @param {object} model IFC model
+ * @return {object} web-ifc-shaped API, falling back to the model so
+ *   backends that already expose `properties` keep working.
+ */
+function webIfcFor(model) {
+  return model?.ifcManager?.ifcAPI ?? model
 }
 
 
@@ -155,15 +177,19 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       if (propValue.type === 0) {
         return null
       }
+      // `deref` takes (ref, webIfc, indent) — the 4th "render nested
+      // entity" callback this used to pass was never invoked, so a
+      // resolved reference came back as a raw entity object and React
+      // threw "Objects are not valid as a React child", aborting the
+      // table. Nest it into its own table here instead. Arrays are left
+      // alone: React renders them, and deref has already resolved each
+      // member.
+      const derefed = await deref(propValue, webIfcFor(model), serial)
+      const isEntity = derefed !== null && typeof derefed === 'object' && !Array.isArray(derefed)
       return (
         <Row
           d1={label}
-          d2={
-            await deref(
-              propValue, model, serial,
-              // TODO(pablo): there's no 4th param in deref
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, false, srl))
-          }
+          d2={isEntity ? await createPropertyTable(model, derefed, false, serial) : derefed}
           key={serial}
         />
       )

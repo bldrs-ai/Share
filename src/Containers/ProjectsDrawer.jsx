@@ -21,13 +21,13 @@ import {
   Typography,
 } from '@mui/material'
 import {useTheme} from '@mui/material/styles'
-import {loadAllRecentFiles} from '../connections/persistence'
 import {useIsMobile} from '../Components/Hooks'
 import useStore from '../store/useStore'
 import {WORKSPACE_DRAWER_WIDTH_INITIAL} from '../store/WorkspaceSlice'
 import {CONTROL_MARGIN, CONTROL_SIZE, ROW_PITCH, TOP_BAR_HEIGHT} from './layoutConstants'
 import {hasStoredWorkspaceUiState} from '../workspace/persistence'
-import {recentDisplayName} from '../utils/modelDisplayName'
+import {modelPathFromPathname} from '../workspace/modelPath'
+import {labelForModelPath} from '../utils/modelDisplayName'
 import {navigateToModel} from '../utils/navigate'
 import {TooltipIconButton} from '../Components/Buttons'
 import HorizonResizerButton from '../Components/SideDrawer/HorizonResizerButton'
@@ -64,38 +64,6 @@ const rowSx = {
   height: `${CONTROL_SIZE}px`,
   margin: `${CONTROL_MARGIN}px`,
   borderRadius: '10px',
-}
-
-
-/**
- * The recents entry for a model route, if we have one. A local upload
- * routes by its OPFS storage id (`/v/new/<blob-uuid>.ifc`), so the path
- * segment alone would display as a UUID; recents holds the id -> name
- * mapping (see #1682).
- *
- * @param {string} pathname
- * @return {object|undefined} RecentFileEntry
- */
-function recentEntryForPath(pathname) {
-  const segment = decodeURIComponent(pathname.split('/').filter(Boolean).pop())
-  try {
-    return loadAllRecentFiles().find((f) => f.sharePath === pathname || f.id === segment)
-  } catch {
-    return undefined
-  }
-}
-
-
-/**
- * Label for a model route: the model's own name where known, else the
- * path segment.
- *
- * @param {string} pathname
- * @return {string}
- */
-function labelForModelPath(pathname) {
-  return recentDisplayName(recentEntryForPath(pathname)) ||
-    decodeURIComponent(pathname.split('/').filter(Boolean).pop())
 }
 
 
@@ -167,17 +135,24 @@ export default function ProjectsDrawer() {
   const drawerRef = useRef(null)
   const nameFieldRef = useRef(null)
 
+  // The model's own route — element selections append numeric segments
+  // to the pathname, and treating those as identity minted a phantom
+  // "model" per selected element (named by its expressID) in Ungrouped.
+  const currentModelPath = MODEL_ROUTE_RE.test(location.pathname) ?
+    modelPathFromPathname(location.pathname) :
+    null
+
   // An armed capture + a navigation onto a model route records the opened
   // model into the arming project. Opening a model is a full page load,
   // so this usually fires on mount of the *next* page — the capture is
   // persisted for exactly that reason.
   useEffect(() => {
-    if (!MODEL_ROUTE_RE.test(location.pathname)) {
+    if (currentModelPath === null) {
       return
     }
     const model = {
-      label: labelForModelPath(location.pathname),
-      path: location.pathname,
+      label: labelForModelPath(currentModelPath),
+      path: currentModelPath,
     }
     if (workspaceCapture === null) {
       // No pending "Add model": the user got here some other way — a
@@ -187,12 +162,14 @@ export default function ProjectsDrawer() {
       addUngroupedModel(model)
       return
     }
-    if (location.pathname !== workspaceCapture.armedPathname) {
+    // Both sides normalized: arming while an element was selected must
+    // still recognize "same model" on the other side of the reload.
+    if (currentModelPath !== modelPathFromPathname(workspaceCapture.armedPathname)) {
       addWorkspaceModel(workspaceCapture.projectId, model)
       disarmWorkspaceCapture()
     }
   }, [
-    location.pathname,
+    currentModelPath,
     workspaceCapture,
     addWorkspaceModel,
     addUngroupedModel,
@@ -465,7 +442,7 @@ export default function ProjectsDrawer() {
                       <ListItemButton
                         key={model.id}
                         sx={{...rowSx, pl: 3, marginLeft: `${CONTROL_SIZE / 2}px`}}
-                        selected={location.pathname === model.path}
+                        selected={currentModelPath === model.path}
                         // Disarm first: opening a model that is already
                         // listed must not be adopted by a still-armed
                         // capture from some other project.
@@ -520,7 +497,7 @@ export default function ProjectsDrawer() {
                <ListItemButton
                  key={model.id}
                  sx={rowSx}
-                 selected={location.pathname === model.path}
+                 selected={currentModelPath === model.path}
                  onClick={() => navigateToModel(model.path, navigate)}
                  data-testid={`ungrouped-model-${model.id}`}
                >

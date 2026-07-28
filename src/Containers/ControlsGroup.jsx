@@ -7,6 +7,7 @@ import SaveModelControl from '../Components/Open/SaveModelControl'
 import SearchBar from '../Components/Search/SearchBar'
 import SearchControl from '../Components/Search/SearchControl'
 import VersionsControl from '../Components/Versions/VersionsControl'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 
 
@@ -22,6 +23,10 @@ export default function ControlsGroup() {
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
+  // With the workspace shell on, search lives in the TopBar (#1663) —
+  // this over-canvas toggle would be a second entry point to the same
+  // query state.
+  const isWorkspaceEnabled = useExistInFeature('workspace')
   const {isAuthenticated} = useAuth0()
   return (
     <Stack>
@@ -31,8 +36,8 @@ export default function ControlsGroup() {
            <OpenModelControl/>
            {isAuthenticated && <SaveModelControl/>}
          </>}
-        {isSearchEnabled && <SearchControl/>}
-        {isSearchEnabled &&
+        {isSearchEnabled && !isWorkspaceEnabled && <SearchControl/>}
+        {isSearchEnabled && !isWorkspaceEnabled &&
          isSearchBarVisible &&
          <SearchBar onSuccess={() => setIsSearchBarVisible(false)}/>}
       </Stack>

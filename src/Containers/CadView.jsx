@@ -95,6 +95,8 @@ export default function CadView({
   const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setSelectedAnchorIds = useStore((state) => state.setSelectedAnchorIds)
+  const selectedAnchorIds = useStore((state) => state.selectedAnchorIds)
   const setViewer = useStore((state) => state.setViewer)
   const viewer = useStore((state) => state.viewer)
 
@@ -962,10 +964,15 @@ export default function CadView({
    *   whole product/occurrence. Solid nodes share their parent's occurrence
    *   path, so this is what tells "the part" from "one body inside it" —
    *   NavTree row highlight, per-solid hide and the permalink all read it.
+   * @param {Array} anchorIds The ids the user actually picked, when the
+   *   caller expanded them into descendants for the scene highlight
+   *   (`elementSelection` does). Null (the default) means every result is
+   *   its own anchor. NavTree row highlight, Properties and the TopBar
+   *   crumb follow the anchors; only the scene uses the expanded set.
    */
   function selectItemsInScene(
     resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null,
-    solidExpressId = null) {
+    solidExpressId = null, anchorIds = null) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -974,6 +981,10 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
+      // Callers that expand a pick into descendants (elementSelection)
+      // pass the clicked ids explicitly; for everyone else every result
+      // is its own anchor.
+      setSelectedAnchorIds(anchorIds === null ? resIds : anchorIds.map((id) => `${id}`))
       setSelectedInstanceIds(instanceIds)
       // STEP per-occurrence key: a reused part's occurrences share one
       // expressID, so this disambiguates which NavTree node to highlight.
@@ -1320,7 +1331,12 @@ export default function CadView({
 
 
   useEffect(() => {
-    (async () => {
+    // Same staleness guard as the Properties panel: this effect awaits
+    // the entity fetch before writing `selectedElement`, so a slow
+    // earlier selection could otherwise resolve last and leave every
+    // consumer (Properties, the TopBar crumb) showing the previous pick.
+    let isStale = false
+    ;(async () => {
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
@@ -1352,8 +1368,13 @@ export default function CadView({
       }
       // If current selection is not empty
       if (selectedElements.length > 0) {
-        // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)[0]
+        // Properties follow the last *clicked* element. Reading
+        // `selectedElements` here showed a descendant instead: picking
+        // a container adds its whole subtree so the scene highlights,
+        // and the deepest child landed last in that array.
+        const anchors = (selectedAnchorIds && selectedAnchorIds.length > 0) ?
+          selectedAnchorIds : selectedElements
+        const lastId = anchors.slice(-1)[0]
         // Prefer the model-level `getItemProperties(id)` when present
         // — for cache-hit GLB it's the closure attached by
         // `Loader.js#convertToShareModel` from the
@@ -1369,6 +1390,9 @@ export default function CadView({
         }
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
+        }
+        if (isStale) {
+          return
         }
         setSelectedElement(props)
         // Reveal the selection in the NavTree by opening the path to it, merged
@@ -1397,7 +1421,10 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements, selectedInstanceIds, selectedOccurrencePath])
+    return () => {
+      isStale = true
+    }
+  }, [selectedElements, selectedAnchorIds, selectedInstanceIds, selectedOccurrencePath])
   /* eslint-enable */
 
 
