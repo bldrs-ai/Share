@@ -274,32 +274,49 @@ export default function ProjectsDrawer() {
     </Stack>
   )
 
+  // Bottom-left logo. While the drawer is closed it is the reopen
+  // affordance — the only one on mobile, and the one users reach for on
+  // desktop even though the rail header also has a toggle. The marketing
+  // menu hangs off it only when the drawer is open; a closed drawer's
+  // logo that popped a menu instead of opening read as broken.
+  const footerLogo = isCollapsed ?
+    <TooltipIconButton
+      title='Show projects'
+      placement='right'
+      icon={<LogoB/>}
+      onClick={() => setIsCollapsed(false)}
+      dataTestId='projects-logo-open'
+    /> :
+    <LogoMenu/>
+
   const footer = (
     <Stack
       direction='row'
       justifyContent={isCollapsed ? 'center' : 'flex-start'}
       sx={{padding: '.5em', flexShrink: 0}}
     >
-      <LogoMenu/>
+      {footerLogo}
     </Stack>
   )
 
   if (isCollapsed && isMobile) {
     // No rail on a phone — a whole column of chrome for one toggle isn't
-    // worth the width. The logo is the affordance: it opens the drawer
-    // (the marketing menu lives on the footer logo once open).
+    // worth the width. The logo alone is the affordance.
     return (
       <Box
-        sx={{position: 'fixed', left: 0, bottom: 0, padding: '.5em'}}
+        sx={{
+          position: 'fixed',
+          left: 0,
+          bottom: 0,
+          padding: '.5em',
+          // BottomBar's Stack is position:relative and later in the DOM,
+          // so it paints over this corner and swallows the click even
+          // though its left slot is an empty Box under this flag.
+          zIndex: 1,
+        }}
         data-testid='ProjectsDrawer'
       >
-        <TooltipIconButton
-          title='Show projects'
-          placement='right'
-          icon={<LogoB/>}
-          onClick={() => setIsCollapsed(false)}
-          dataTestId='projects-mobile-open'
-        />
+        {footerLogo}
       </Box>
     )
   }

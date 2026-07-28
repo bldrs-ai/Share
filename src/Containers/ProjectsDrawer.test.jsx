@@ -115,11 +115,27 @@ describe('ProjectsDrawer', () => {
       expect(screen.queryByTestId('projects-new-button')).toBeNull()
       expect(screen.queryByText('bldrs.ai')).toBeNull()
       expect(screen.getByTestId('projects-collapse-toggle')).toBeInTheDocument()
-      expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
+      expect(screen.getByTestId('projects-logo-open')).toBeInTheDocument()
       expect(JSON.parse(localStorage.getItem('bldrs:workspace-ui')).isDrawerCollapsed).toBe(true)
 
       fireEvent.click(screen.getByTestId('projects-collapse-toggle'))
       expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
+    })
+
+    // The footer logo is the affordance users reach for; popping the
+    // marketing menu off a closed drawer read as the reopen being broken.
+    it('reopens from the rail footer logo, which carries the menu only when open', () => {
+      act(() => {
+        useStore.getState().setIsWorkspaceDrawerCollapsed(true)
+      })
+      render(<ShareMock><ProjectsDrawer/></ShareMock>)
+
+      expect(screen.queryByTestId('workspace-logo-button')).toBeNull()
+      fireEvent.click(screen.getByTestId('projects-logo-open'))
+
+      expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(false)
+      expect(screen.getByTestId('workspace-logo-button')).toBeInTheDocument()
+      expect(screen.queryByTestId('projects-logo-open')).toBeNull()
     })
 
     // Placeholder for the per-project quick-access menu (wireframe 2).
@@ -504,15 +520,18 @@ describe('ProjectsDrawer', () => {
     it('starts collapsed to just the logo, with no rail', () => {
       render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
-      expect(screen.getByTestId('projects-mobile-open')).toBeInTheDocument()
+      expect(screen.getByTestId('projects-logo-open')).toBeInTheDocument()
       expect(screen.queryByTestId('projects-collapse-toggle')).toBeNull()
       expect(screen.queryByTestId('projects-new-button')).toBeNull()
+      // Regression: BottomBar is positioned and later in the DOM, so
+      // without this the logo is painted over and the tap never lands.
+      expect(screen.getByTestId('ProjectsDrawer')).toHaveStyle({zIndex: '1'})
     })
 
     it('opens the drawer when the logo is tapped', () => {
       render(<ShareMock><ProjectsDrawer/></ShareMock>)
 
-      fireEvent.click(screen.getByTestId('projects-mobile-open'))
+      fireEvent.click(screen.getByTestId('projects-logo-open'))
 
       expect(useStore.getState().isWorkspaceDrawerCollapsed).toBe(false)
       expect(screen.getByTestId('projects-new-button')).toBeInTheDocument()
