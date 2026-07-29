@@ -6,6 +6,15 @@ import useStore from '../../store/useStore'
 import ResidencyControl from './ResidencyControl'
 import {DEFAULT_COLOR} from '../../viewer/ifc/flatMeshToBatchedModel'
 import {activeColorMode} from '../../viewer/display/colorMode'
+import {activeShadingMode} from '../../viewer/display/shadingMode'
+
+
+// Shading is behind ?feature=displayControls; the color section is not. Mock
+// so a test can flip the flag without a real URL param.
+const mockIsFeatureEnabled = jest.fn()
+jest.mock('../../FeatureFlags', () => ({
+  isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
+}))
 
 
 const grey = () => ({x: DEFAULT_COLOR.x, y: DEFAULT_COLOR.y, z: DEFAULT_COLOR.z, w: 1})
@@ -27,6 +36,7 @@ function colorOnlyModel(sourceColors = [grey(), grey(), grey()]) {
     instanceColors: sourceColors.map((c) => ({...c})),
     instanceParents: [11, 12, 20],
     instanceGeometryIds: [500, 500, 600],
+    material: {wireframe: false},
     userData: {},
     setColorAt: jest.fn(),
   }
@@ -49,7 +59,11 @@ async function renderWithModel(model) {
 
 
 describe('ResidencyControl color section', () => {
+  // Default: displayControls OFF (so the color section is exercised in
+  // isolation — shading is hidden). Shading tests flip it on explicitly.
+  beforeEach(() => mockIsFeatureEnabled.mockReturnValue(false))
   afterEach(async () => {
+    mockIsFeatureEnabled.mockReset()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setModel(null)
@@ -98,5 +112,41 @@ describe('ResidencyControl color section', () => {
     fireEvent.click(getByTestId('color-mode-source').querySelector('input'))
     expect(activeColorMode(model)).toBe('source')
     expect(model.instanceColors).toEqual(model.instanceSourceColors)
+  })
+})
+
+
+describe('ResidencyControl shading section', () => {
+  afterEach(async () => {
+    mockIsFeatureEnabled.mockReset()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModel(null)
+      result.current.resetDisplayOverrides()
+    })
+  })
+
+  it('is hidden when displayControls is off', async () => {
+    mockIsFeatureEnabled.mockReturnValue(false)
+    const {getByTestId, queryByTestId} = await renderWithModel(colorOnlyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    expect(queryByTestId('shading-mode-group')).toBeNull()
+  })
+
+  it('appears behind the flag and toggles wireframe on the scene', async () => {
+    mockIsFeatureEnabled.mockImplementation((name) => name === 'displayControls')
+    const model = colorOnlyModel()
+    const {getByTestId} = await renderWithModel(model)
+    fireEvent.click(getByTestId('control-button-residency'))
+
+    expect(getByTestId('shading-mode-group')).toBeInTheDocument()
+    expect(activeShadingMode(model)).toBe('shaded')
+
+    fireEvent.click(getByTestId('shading-mode-wireframe').querySelector('input'))
+    expect(model.material.wireframe).toBe(true)
+    expect(activeShadingMode(model)).toBe('wireframe')
+
+    fireEvent.click(getByTestId('shading-mode-shaded').querySelector('input'))
+    expect(model.material.wireframe).toBe(false)
   })
 })

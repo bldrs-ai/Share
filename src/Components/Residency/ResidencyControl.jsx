@@ -15,11 +15,15 @@ import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {ResidencyController, ResidencyMetric} from '../../viewer/residency/ResidencyController'
 import {ColorMode} from '../../viewer/display/colorMode'
+import {ShadingMode} from '../../viewer/display/shadingMode'
 import {
   applyDisplayOverrides,
   modelHasColorChoice,
+  modelHasShadingChoice,
   resolvedColorMode,
+  resolvedShadingMode,
 } from '../../viewer/display/DisplayController'
+import {isFeatureEnabled} from '../../FeatureFlags'
 
 
 const FULL = 100
@@ -74,6 +78,11 @@ export default function ResidencyControl() {
   // Auto without the store having to seed an override.
   const colorMode = resolvedColorMode(model, Object.values(displayOverrides))
 
+  // Shading section (S4) — behind ?feature=displayControls (additive UI
+  // shipping dark), unlike the always-on color toggle. Whole-model scope.
+  const showShading = isFeatureEnabled('displayControls') && modelHasShadingChoice(model)
+  const shadingMode = resolvedShadingMode(model, Object.values(displayOverrides))
+
   // Controller lifecycle belongs to an EFFECT, not useMemo: React
   // StrictMode's simulated unmount runs effect cleanups once on mount,
   // and disposing a memoized controller there would gut the instance
@@ -108,7 +117,7 @@ export default function ResidencyControl() {
     }
   }, [controller, selectedElement, metric])
 
-  if (!controller && !showColor) {
+  if (!controller && !showColor && !showShading) {
     return null
   }
 
@@ -129,6 +138,11 @@ export default function ResidencyControl() {
     const next = [{scope: {kind: 'model'}, appearance: {color: mode}}]
     applyDisplayOverrides(model, next)
   }
+  const onShadingMode = (event) => {
+    const mode = event.target.value
+    setDisplayOverride({kind: 'model'}, {shading: mode})
+    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {shading: mode}}])
+  }
 
   return (
     <>
@@ -138,7 +152,8 @@ export default function ResidencyControl() {
         onClick={(event) => setAnchorEl(event.currentTarget)}
         placement='top'
         variant='solid'
-        selected={anchorEl !== null || percent < FULL || colorMode === ColorMode.SOURCE}
+        selected={anchorEl !== null || percent < FULL ||
+          colorMode === ColorMode.SOURCE || shadingMode === ShadingMode.WIREFRAME}
         dataTestId='control-button-residency'
       />
       <Popover
@@ -180,7 +195,32 @@ export default function ResidencyControl() {
               </RadioGroup>
             </>}
 
-          {showColor && controller && <Divider/>}
+          {showColor && showShading && <Divider/>}
+
+          {showShading &&
+            <>
+              <Typography variant='subtitle2'>Shading</Typography>
+              <RadioGroup
+                value={shadingMode}
+                onChange={onShadingMode}
+                data-testid='shading-mode-group'
+              >
+                <FormControlLabel
+                  value={ShadingMode.SHADED}
+                  control={<Radio size='small'/>}
+                  label='Shaded'
+                  data-testid='shading-mode-shaded'
+                />
+                <FormControlLabel
+                  value={ShadingMode.WIREFRAME}
+                  control={<Radio size='small'/>}
+                  label='Wireframe'
+                  data-testid='shading-mode-wireframe'
+                />
+              </RadioGroup>
+            </>}
+
+          {(showColor || showShading) && controller && <Divider/>}
 
           {controller &&
             <>

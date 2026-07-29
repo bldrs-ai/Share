@@ -1,4 +1,5 @@
 import {ColorMode, activeColorMode, hasAutoColor, setColorMode} from './colorMode'
+import {ShadingMode, activeShadingMode, modelSupportsShading, setShadingMode} from './shadingMode'
 import {resolveAppearance} from './overrideStack'
 
 
@@ -43,6 +44,9 @@ export function applyDisplayOverrides(model, overrides) {
   if (appearance.color !== undefined) {
     setColorMode(model, appearance.color)
   }
+  if (appearance.shading !== undefined) {
+    setShadingMode(model, appearance.shading)
+  }
 }
 
 
@@ -75,4 +79,33 @@ export function resolvedColorMode(model, overrides) {
  */
 export function modelHasColorChoice(model) {
   return model ? hasAutoColor(model) : false
+}
+
+
+/**
+ * The model-scope shading the stack resolves to, or the model's live mode
+ * when no shading override is set.
+ *
+ * @param {object} model
+ * @param {Array<{scope: object, appearance: object}>} overrides
+ * @return {string} a {@link ShadingMode}
+ */
+export function resolvedShadingMode(model, overrides) {
+  const appearance = resolveAppearance(overrides, {})
+  if (appearance.shading !== undefined) {
+    return appearance.shading
+  }
+  return model ? activeShadingMode(model) : ShadingMode.SHADED
+}
+
+
+/**
+ * Whether shading modes are worth offering for this model. Thin pass-through
+ * to the shading layer.
+ *
+ * @param {object} model
+ * @return {boolean}
+ */
+export function modelHasShadingChoice(model) {
+  return model ? modelSupportsShading(model) : false
 }

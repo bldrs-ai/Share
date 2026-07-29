@@ -123,6 +123,14 @@ export const flags = [
   // only changes models that had zero color to begin with.
   // See src/viewer/ifc/productPalette.js.
   {name: 'autoColorParts', isActive: true},
+  // Model display controls (view-140): additive Display-popover sections
+  // beyond the always-on color toggle — shading (Shaded/Wireframe, S4) now,
+  // scoped application (S5) next. Default off: these are new UI shipping dark
+  // until validated, same as batchedMesh/workspace. The S2 color toggle is
+  // NOT behind this flag — it makes existing default-on auto-coloring
+  // discoverable, so it ships on regardless.
+  // See design/new/model-display-controls.md §7.
+  {name: 'displayControls', isActive: false},
 ]
 
 
