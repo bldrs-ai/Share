@@ -74,6 +74,29 @@ export function hasAutoColor(model) {
 
 
 /**
+ * Which mode the model is currently showing, read off the scene rather than
+ * assumed from how it loaded — the load-time state depends on the
+ * `autoColorParts` flag, and later overrides can move it. Any instance whose
+ * live color differs from its source means the palette is on.
+ *
+ * @param {object} model BatchedMesh or Group
+ * @return {string} a {@link ColorMode}
+ */
+export function activeColorMode(model) {
+  for (const mesh of revertibleMeshes(model)) {
+    const source = mesh.instanceSourceColors
+    const live = mesh.instanceColors
+    for (let i = 0; i < source.length; i++) {
+      if (live[i].x !== source[i].x || live[i].y !== source[i].y || live[i].z !== source[i].z) {
+        return ColorMode.AUTO
+      }
+    }
+  }
+  return ColorMode.SOURCE
+}
+
+
+/**
  * Switch the model between the auto palette and its source colors.
  *
  * Writes the base color table for every instance and then repaints through
