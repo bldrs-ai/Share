@@ -245,6 +245,32 @@ export function clearBatchedPreselection(model) {
 }
 
 
+/**
+ * Repaint every instance from the current `instanceColors` through the
+ * layered resolution — the seam display overrides (view-140) use after
+ * rewriting the base color table underneath a live highlight.
+ *
+ * Callers mutate `mesh.instanceColors`, then call this. A blind `setColorAt`
+ * sweep would paint over an active selection / hover; going through `paint`
+ * keeps those layers lit and makes them restore to the NEW base color when
+ * they're eventually cleared. Highlight state is optional — `paint` treats a
+ * mesh with no layers as "everything resolves to its base color", so this is
+ * also the right call on a model that was never selected.
+ *
+ * @param {object} model BatchedMesh or Group
+ */
+export function repaintBatchedColors(model) {
+  eachBatch(model, (mesh) => {
+    if (!mesh.instanceColors || typeof mesh.setColorAt !== 'function') {
+      return
+    }
+    for (let batchId = 0; batchId < mesh.instanceColors.length; batchId++) {
+      paint(mesh, batchId)
+    }
+  })
+}
+
+
 // `isBatchedModel` moved to ./batchedModel; re-exported here so existing
 // call-sites (and tests) that import it from batchedHighlight keep working.
 export {isBatchedModel} from './batchedModel'

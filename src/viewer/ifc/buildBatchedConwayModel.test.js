@@ -150,4 +150,26 @@ describe('viewer/ifc/assembleBatchedModel colorless palette', () => {
     const grey = rgbAt(mesh, mesh.instanceParents.indexOf(100))
     expect(isDefaultColor(grey)).toBe(true)
   })
+
+  // The snapshot is what makes auto-coloring reversible — without it the
+  // palette write destroys the only copy of the file's own colors.
+  // See design/new/model-display-controls.md §1.1.
+  it('snapshots the pre-palette colors so the repaint can be undone', () => {
+    mockIsFeatureEnabled.mockImplementation((name) => name === 'autoColorParts')
+    const mesh = assembleBatchedModel(twoProductBatches(GREY, GREY), unitTriApi(), 0)
+
+    expect(mesh.instanceSourceColors).toHaveLength(mesh.instanceColors.length)
+    for (const source of mesh.instanceSourceColors) {
+      expect(isDefaultColor(source)).toBe(true)
+    }
+    // ...while the live table carries the palette. Two distinct layers.
+    expect(isDefaultColor(mesh.instanceColors[0])).toBe(false)
+  })
+
+  it('snapshots even when the palette never fires, so the table always exists', () => {
+    mockIsFeatureEnabled.mockReturnValue(false)
+    const mesh = assembleBatchedModel(twoProductBatches(GREY, ORANGE), unitTriApi(), 0)
+
+    expect(mesh.instanceSourceColors).toEqual(mesh.instanceColors)
+  })
 })

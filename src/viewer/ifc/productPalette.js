@@ -120,6 +120,105 @@ const _rgba = new Vector4()
 
 
 /**
+ * Key one instance by its geometry (part) id, falling back to the
+ * product/occurrence id when the unit carries no geometry-id table.
+ *
+ * @param {object} unit `{geometryIds, parents}`
+ * @param {number} i instance index
+ * @return {number} the part key
+ */
+function partKey(unit, i) {
+  return unit.geometryIds ? unit.geometryIds[i] : unit.parents[i]
+}
+
+
+/**
+ * Decide whether the synthetic palette applies to a model, and if so compute
+ * the part-key → color map — without writing anything.
+ *
+ * Pure, so the same decision serves both the load-time application below and
+ * the runtime auto/source toggle (`viewer/display/colorMode.js`), which has
+ * to recompute the palette from the *source* color table rather than from
+ * whatever is currently displayed. Splitting compute from write is what makes
+ * the palette reversible; see design/new/model-display-controls.md §1.1.
+ *
+ * Returns null when the palette must not fire: any instance carries real
+ * color (the file has presentation intent — honor it), a unit is missing the
+ * tables needed to classify it, or there are fewer than two distinct parts
+ * (nothing to tell apart).
+ *
+ * The units are shaped to fit both callers: `batches` at assemble time and
+ * decorated `BatchedMesh`es at runtime.
+ *
+ * @param {Array<object>} units each `{colors, geometryIds, parents}` —
+ *   `colors` is the per-instance `{x,y,z,w}` table to classify
+ * @return {Map<string|number, {x: number, y: number, z: number}>|null}
+ */
+export function computePartPalette(units) {
+  const keys = []
+  for (const unit of units) {
+    const {colors, parents} = unit
+    if (!colors || !parents) {
+      // A unit with no color/parent tables can't be classified; its
+      // presence means we can't prove the model is colorless. Bail.
+      return null
+    }
+    for (let i = 0; i < colors.length; i++) {
+      if (!isDefaultColor(colors[i])) {
+        return null
+      }
+      keys.push(partKey(unit, i))
+    }
+  }
+
+  // Dense-index the distinct parts so ≤ palette-size parts never collide.
+  const colors = assignPartColors(keys)
+
+  return colors.size < 2 ? null : colors
+}
+
+
+/**
+ * Shape a batch or a decorated mesh into a {@link computePartPalette} unit.
+ *
+ * @param {object} source batch or BatchedMesh carrying the instance tables
+ * @param {Array<object>} [colors] color table to classify; defaults to the
+ *   source's own `instanceColors`
+ * @return {object} `{colors, geometryIds, parents}`
+ */
+export function paletteUnit(source, colors = source.instanceColors) {
+  return {
+    colors,
+    geometryIds: source.instanceGeometryIds,
+    parents: source.instanceParents,
+  }
+}
+
+
+/**
+ * Write a computed palette into a batch/mesh's live color buffer and its
+ * `instanceColors` restore table, preserving each instance's original alpha.
+ *
+ * @param {object} target batch (with `.mesh`) or mesh, carrying the tables
+ * @param {Map<string|number, {x: number, y: number, z: number}>} palette
+ * @param {Array<object>} alphaFrom color table supplying per-instance alpha
+ */
+export function writePaletteColors(target, palette, alphaFrom) {
+  const mesh = target.mesh ?? target
+  if (typeof mesh?.setColorAt !== 'function') {
+    return
+  }
+  const unit = paletteUnit(target, alphaFrom)
+  for (let i = 0; i < alphaFrom.length; i++) {
+    const rgb = palette.get(partKey(unit, i))
+    const alpha = alphaFrom[i].w
+    target.instanceColors[i] = {x: rgb.x, y: rgb.y, z: rgb.z, w: alpha}
+    mesh.setColorAt(i, _rgba.set(rgb.x, rgb.y, rgb.z, alpha))
+  }
+}
+
+
+/**
  * If a model has no color information — every instance across every batch is
  * the fallback grey — repaint each instance by its product's palette color,
  * so a multi-part colorless assembly reads like Onshape's per-component
@@ -128,13 +227,16 @@ const _rgba = new Vector4()
  *
  * Updates both the live per-instance color buffer (`setColorAt`) and the
  * `instanceColors` restore table `batchedHighlight` reads, so selection /
- * hover restore to the palette color and a batched→merged export carries it.
- * Original alpha is preserved per instance.
+ * hover restore to the palette color. Original alpha is preserved per
+ * instance.
  *
  * The coloring key is `instanceGeometryIds` (per-part geometry) when present
  * — so instanced parts get one color each — falling back to
  * `instanceParents` (per-occurrence) only if a batch carries no geometry-id
  * table.
+ *
+ * Callers that want this reversible must snapshot `instanceColors` into
+ * `instanceSourceColors` first; `assembleBatchedModel` does, unconditionally.
  *
  * @param {Array<object>} batches `assembleBatchedModel` batches, each with
  *   `mesh` (`setColorAt`), `instanceParents`, `instanceColors`, and
@@ -142,45 +244,13 @@ const _rgba = new Vector4()
  * @return {boolean} whether the palette was applied
  */
 export function applyProductPalette(batches) {
-  // Key each instance by its geometry (part) id, falling back to the
-  // product/occurrence id if a batch lacks the geometry-id table.
-  const keyOf = (batch, i) =>
-    (batch.instanceGeometryIds ? batch.instanceGeometryIds[i] : batch.instanceParents[i])
-
-  const keys = []
-  for (const batch of batches) {
-    const {instanceColors, instanceParents} = batch
-    if (!instanceColors || !instanceParents) {
-      // A batch with no color/parent tables can't be classified; its
-      // presence means we can't prove the model is colorless. Bail.
-      return false
-    }
-    for (let i = 0; i < instanceColors.length; i++) {
-      if (!isDefaultColor(instanceColors[i])) {
-        return false
-      }
-      keys.push(keyOf(batch, i))
-    }
-  }
-
-  // Dense-index the distinct parts so ≤ palette-size parts never collide.
-  const colors = assignPartColors(keys)
-
-  if (colors.size < 2) {
+  const palette = computePartPalette(batches.map((batch) => paletteUnit(batch)))
+  if (!palette) {
     return false
   }
 
   for (const batch of batches) {
-    const {mesh, instanceColors} = batch
-    if (typeof mesh?.setColorAt !== 'function') {
-      continue
-    }
-    for (let i = 0; i < instanceColors.length; i++) {
-      const rgb = colors.get(keyOf(batch, i))
-      const alpha = instanceColors[i].w
-      instanceColors[i] = {x: rgb.x, y: rgb.y, z: rgb.z, w: alpha}
-      mesh.setColorAt(i, _rgba.set(rgb.x, rgb.y, rgb.z, alpha))
-    }
+    writePaletteColors(batch, palette, batch.instanceColors)
   }
 
   return true

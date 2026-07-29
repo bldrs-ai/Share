@@ -115,6 +115,22 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     throw new Error('buildBatchedConwayModel: no renderable geometry')
   }
 
+  // Snapshot the file's own colors before any display override repaints
+  // them. `applyProductPalette` REPLACES entries in `instanceColors` — the
+  // restore table `batchedHighlight` reads — so without this the source
+  // color is unrecoverable and the auto/source toggle has nothing to revert
+  // to (design/new/model-display-controls.md §1.1).
+  //
+  // Unconditional, not gated on the palette firing: call-sites ask for
+  // "source colors" without having to know whether this particular model
+  // happened to get repainted. A shallow copy suffices — the palette swaps
+  // array *elements* rather than mutating the color objects in place.
+  for (const batch of batches) {
+    if (batch.instanceColors) {
+      batch.instanceSourceColors = batch.instanceColors.slice()
+    }
+  }
+
   // Colorless-model fallback: a STEP/CAD file with no presentation data
   // comes back entirely default-grey. Repaint each product from a palette
   // (Onshape-style) so a multi-part assembly is legible. Strictly no-op the
@@ -133,6 +149,11 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
     batch.mesh.instanceGeometry = batch.instanceGeometry
     batch.mesh.instanceColors = batch.instanceColors
+    // The pre-override color table (see the snapshot above). `?? null` keeps
+    // older BatchHandle shapes (tests, external callers) working — consumers
+    // treat a missing table as "no source colors recorded", which the color
+    // toggle reads as "nothing to revert to".
+    batch.mesh.instanceSourceColors = batch.instanceSourceColors ?? null
     // Per-occurrence identity tables (STEP): solid geometry ids + NAUO
     // occurrence paths, plus the reverse path→batchIds index ShareViewer's
     // `getInstanceIdsForOccurrencePath` reads (the NavTree→scene join).
