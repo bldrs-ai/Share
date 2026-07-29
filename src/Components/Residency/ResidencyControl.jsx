@@ -14,7 +14,12 @@ import {Visibility as ResidencyIcon} from '@mui/icons-material'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {ResidencyController, ResidencyMetric} from '../../viewer/residency/ResidencyController'
-import {ColorMode, activeColorMode, hasAutoColor, setColorMode} from '../../viewer/display/colorMode'
+import {ColorMode} from '../../viewer/display/colorMode'
+import {
+  applyDisplayOverrides,
+  modelHasColorChoice,
+  resolvedColorMode,
+} from '../../viewer/display/DisplayController'
 
 
 const FULL = 100
@@ -51,22 +56,23 @@ export default function ResidencyControl() {
   const [metric, setMetric] = useState(ResidencyMetric.OCCUPANCY)
   const selectedRef = useRef(null)
 
-  // Color section state. Offered only when the synthetic palette actually
-  // applies — on a model that shipped its own colors both options render
-  // identically, and an inert radio group implies a choice that does
-  // nothing. (The residency section below already self-gates the same way,
-  // so "sections come and go" is the established shape of this popover.)
-  // Seeded from the scene, not from the `autoColorParts` flag, so a model
-  // that loaded with the flag off shows Source selected.
-  const [colorMode, setColorModeState] = useState(ColorMode.AUTO)
-  const [showColor, setShowColor] = useState(false)
-  useEffect(() => {
-    const applies = model ? hasAutoColor(model) : false
-    setShowColor(applies)
-    if (applies) {
-      setColorModeState(activeColorMode(model))
-    }
-  }, [model])
+  // Color section, now driven by the display-override stack (S3) rather than
+  // local state: the radio writes a model-scope color override into the
+  // store, and DisplayController applies it. Same on-screen behavior as S2,
+  // but the choice now lives where the permalink (S7) and future scoped
+  // controls (S5) can see it.
+  //
+  // Offered only when the synthetic palette actually applies — on a model
+  // that shipped its own colors both options render identically, and an
+  // inert radio group implies a choice that does nothing. (The residency
+  // section below self-gates the same way.)
+  const displayOverrides = useStore((state) => state.displayOverrides)
+  const setDisplayOverride = useStore((state) => state.setDisplayOverride)
+  const showColor = modelHasColorChoice(model)
+  // Resolved from the stack, falling back to the model's live mode when no
+  // override is set — so a freshly loaded (default auto-colored) model shows
+  // Auto without the store having to seed an override.
+  const colorMode = resolvedColorMode(model, Object.values(displayOverrides))
 
   // Controller lifecycle belongs to an EFFECT, not useMemo: React
   // StrictMode's simulated unmount runs effect cleanups once on mount,
@@ -115,8 +121,13 @@ export default function ResidencyControl() {
     controller.setMetric(event.target.value)
   }
   const onColorMode = (event) => {
-    setColorModeState(event.target.value)
-    setColorMode(model, event.target.value)
+    const mode = event.target.value
+    setDisplayOverride({kind: 'model'}, {color: mode})
+    // Apply immediately against the just-updated override list — the store
+    // set is async to this closure, so resolve from the explicit next value
+    // rather than reading `displayOverrides` back this tick.
+    const next = [{scope: {kind: 'model'}, appearance: {color: mode}}]
+    applyDisplayOverrides(model, next)
   }
 
   return (

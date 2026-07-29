@@ -53,6 +53,7 @@ describe('ResidencyControl color section', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setModel(null)
+      result.current.resetDisplayOverrides()
     })
   })
 
