@@ -322,7 +322,7 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 | S4 | Shading control | Shaded / Wireframe / Shaded+edges. Whole-model material fast-path only. | S3 |
 | S5 | Scoped application | Sub-tree / element / occurrence / mesh scopes; subset-overlay wireframe backend (§4); NavTree row affordance + selection-scoped menu. | S4 |
 | S6 | Residency backends | Backend interface; scene-graph + merged backends; ungate the control for GLB/OBJ/etc; drag-vs-commit. *(→ `view-130`, not `view-140` — it's the perf control.)* | S3 |
-| S7 | Permalink | `#d:` token, round-trip, size cap + degrade; absorbs #1250. | S5, S6 |
+| S7 | Permalink | `#d:` token, round-trip, size cap + degrade; absorbs #1250. **Landed model-scope first** (color + shading) ahead of S5 — model-scope axes can round-trip now, it's pure serialization (no scene-interaction risk), and it makes S1–S4 shareable. The token grammar is forward-compatible: scoped terms (`e<id>=`/`o<key>=`/`m<idx>=`) and `hide=` widen the same `d:` token when S5 + the hidden-list land, no grammar change for what's written today. Size cap + degrade apply once scoped terms exist. | (model-scope) S4; (scoped) S5 |
 | S8 | Docs | This doc's decisions folded back; roadmap rows; wiki Design:URLs `#d:` entry. | S7 |
 
 Sequencing note: S1 → S2 is worth landing on its own before the rest. It closes

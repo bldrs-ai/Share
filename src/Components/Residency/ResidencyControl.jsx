@@ -24,6 +24,7 @@ import {
   resolvedShadingMode,
 } from '../../viewer/display/DisplayController'
 import {isFeatureEnabled} from '../../FeatureFlags'
+import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
 
 
 const FULL = 100
@@ -117,6 +118,23 @@ export default function ResidencyControl() {
     }
   }, [controller, selectedElement, metric])
 
+  // Cold-load: apply a shared `#d:` permalink's display state to the freshly
+  // loaded model, and seed the store so the radios reflect it. Mirrors how
+  // CutPlaneMenu restores `cp:` on model load. Model-scope only (S7); scoped
+  // terms follow with S5. Runs once per model — the model swap is the load
+  // event, and re-running on override changes would fight the user's clicks.
+  useEffect(() => {
+    if (!model) {
+      return
+    }
+    const appearance = readModelDisplayHash(window.location)
+    if (Object.keys(appearance).length > 0) {
+      setDisplayOverride({kind: 'model'}, appearance)
+      applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance}])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
+
   if (!controller && !showColor && !showShading) {
     return null
   }
@@ -135,13 +153,16 @@ export default function ResidencyControl() {
     // Apply immediately against the just-updated override list — the store
     // set is async to this closure, so resolve from the explicit next value
     // rather than reading `displayOverrides` back this tick.
-    const next = [{scope: {kind: 'model'}, appearance: {color: mode}}]
-    applyDisplayOverrides(model, next)
+    applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {color: mode}}])
+    // Persist to the `#d:` permalink — the new color plus the shading axis
+    // as it currently stands (unchanged this tick).
+    writeModelDisplayHash(window.location, mode, shadingMode)
   }
   const onShadingMode = (event) => {
     const mode = event.target.value
     setDisplayOverride({kind: 'model'}, {shading: mode})
     applyDisplayOverrides(model, [{scope: {kind: 'model'}, appearance: {shading: mode}}])
+    writeModelDisplayHash(window.location, colorMode, mode)
   }
 
   return (
