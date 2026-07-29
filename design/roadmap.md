@@ -87,6 +87,7 @@ B identity, C sharing, D subscribe+ads, E launch checklist); G = growth funnel
 | View | `view-110` | Cut planes | ✔ | — | T1 |
 | View | `view-120` | Shareable camera position | ✔ | — | — |
 | View | `view-130` | Performance + large-model viewing | 🟡 | A | T1, T2 |
+| View | `view-140` | Scoped display controls + shareable display state | ⬜ | C | T1, T2 |
 | View | `view-200` | Persistent visibility / Isolate | 🟡 | Post | T1 |
 | View | `view-210` | Selection-based camera + measurement | ⬜ | Post | — |
 | View | `view-220` | Common view ops (nav-cube, explode, undo, IDS) | ⬜ | Post | — |
@@ -285,13 +286,49 @@ multi-worker; etc.*
   Mesh emission spike; `batchedMesh` always-on flip + per-occurrence selection
   narrowing on the batched path; `EXT_mesh_gpu_instancing` batched-native GLB cache
   (§3b.v) so the round-trip stays instanced and the artifact shrinks.
+- Open: **residency backends** — the B2 slider is gated on the batched path
+  (`isBatchedMesh` + `instanceGeometry`), so it's invisible for GLB, OBJ and
+  friends. Extract a backend interface and add a scene-graph backend
+  (`Object3D.visible`) plus a merged backend (index compaction over
+  `IfcInstanceMap`'s per-instance triangle ranges) so the cached GLB re-load of
+  an IFC/STEP is dialable too. The merged backend sunsets when the
+  `EXT_mesh_gpu_instancing` cache above restores a real `BatchedMesh` on cache
+  hit. Planned as `view-140` S6; see
+  [`design/new/model-display-controls.md`](new/model-display-controls.md) §5.
 - Pre-public-launch gate: 4-angle screenshot harness + GLB bit-level diff (called out
   in `viewer-replacement.md` §3b.iii final paragraph). **Required for MVP.**
+
+**Epic `view-140`: Scoped display controls + shareable display state** ⬜
+*Not in the PDF — arrived from use. Five asks that are one feature: an
+appearance decision, applied to a scope, that survives a share.*
+- Auto-coloring (PR <a href="https://github.com/bldrs-ai/Share/pull/1626" target="_blank" rel="noopener noreferrer">#1626</a>) is default-on, invisible and irreversible —
+  needs a control that shows it's active and can turn it off.
+- Wireframe (and shaded+edges) as alternative shading modes in the same
+  control area.
+- Both applied to a *scope*: whole model, NavTree sub-tree, leaf part,
+  individual mesh — reusing the existing subset builders (`batchedSubset`,
+  `IfcInstanceMap`) and the residency `setVisibleAt` primitive.
+- Residency (the eyeball slider) generalized past the batched IFC/STEP path
+  to every format — especially the cached GLB we build from IFC/STEP. That
+  slice sits in `view-130` below, since it's the perf control.
+- Display state in permalinks via a new `#d:` token, which **absorbs
+  `view-200`'s <a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a>** (hidden is an appearance axis on a scope — same
+  serializer, same scope vocabulary, same size cap).
+- Two prerequisites the design surfaced: the palette is written destructively
+  over the color restore table (nothing to revert to), and it's baked into the
+  GLB cache artifact (so a cache-hit model can't be un-colored at all).
+- Design: [`design/new/model-display-controls.md`](new/model-display-controls.md).
+  Behind `?feature=displayControls`; the color toggle alone goes default-on
+  since it exposes behavior that already ships.
+- Track dependency: T1 (subset builders, batched path), T2 (the override
+  schema is what T2 Phase 4's view-states embed for anything past the URL cap).
 
 **Epic `view-200`: Persistent visibility / Isolate** 🟡
 *PDF "View element subsets" — partial.*
 - Open: <a href="https://github.com/bldrs-ai/Share/issues/1250" target="_blank" rel="noopener noreferrer">#1250</a> View 200 Implement persistent visibility (URL-encoded
-  `hiddenExpressIDs[]`).
+  `hiddenExpressIDs[]`) — **now planned as a slice of `view-140`'s `#d:`
+  token** rather than its own encoding, so hidden + color + shading +
+  residency round-trip together.
 - Track dependency: T1 §3b.iii isolate routing through IfcInstanceMap (landed).
   Persistence to URL is the remaining slice.
 
