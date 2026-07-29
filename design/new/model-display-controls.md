@@ -92,6 +92,24 @@ generic GLTF viewer. That is arguably correct — the palette is Share's display
 decision, not the model's data — but it is a visible change to the artifact and
 worth confirming before implementing.
 
+**Decision (2026-07-29): (b) is deferred to the batched-native GLB, NOT done
+in S1.** S1 as shipped makes the palette reversible *in memory* (the
+`instanceSourceColors` snapshot) — enough for the live cache-miss path S2's
+control runs on. It deliberately does **not** touch the export or the reader,
+so today a cache-hit GLB still bakes the palette and reload comes back grey-
+free but non-reversible, with no Display menu (the menu gates on the batched
+tables a merged reload lacks — §5). Reason: (b)'s read half — re-derive the
+palette onto the *merged* reload without regressing it to grey — needs the
+same merged-mesh recolor primitive as a merged residency backend, and §5 flags
+that primitive as a **bridge that the `EXT_mesh_gpu_instancing` batched-native
+GLB cache (`viewer-replacement.md` §3b.v) deletes**. Rather than write throwaway
+recolor code that also can't be exercised by a GLB round-trip in a flow test,
+display-controls-on-reload (color *and* residency) is folded into the
+batched-native GLB work under `view-130`: when reload returns a real
+`BatchedMesh`, S1's snapshot + S2's control light up on it unchanged, and the
+export just needs to bake source colors so the snapshot has something to hold.
+Until then, cache-hit reload is display-control-less by design, not by bug.
+
 
 ## 2. The model: a display-override stack
 
@@ -297,7 +315,8 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 
 | # | Story | Content | Depends on |
 |---|---|---|---|
-| S1 | Source-color preservation | `instanceSourceColors` table; stop baking the palette into the GLB export, re-derive on read (§1.2b); palette becomes reversible. No UI. | — |
+| S1 | Source-color preservation (in memory) | `instanceSourceColors` snapshot at assemble time; palette reversible on the live batched path. No UI. **Shipped.** The export/reader half of §1.2b (bake source, re-derive on read) is NOT in S1 — see §1.2's 2026-07-29 decision; it moves to S9. | — |
+| S9 | Display controls on cache reload | Bake source colors into the GLB and light up color + residency on reload — via the `EXT_mesh_gpu_instancing` batched-native cache (§3b.v) so reload returns a `BatchedMesh` and S1/S2/S6 all apply unchanged, rather than a throwaway merged recolor backend. *(→ `view-130`; it's the batched-GLB perf item.)* | S2, §3b.v |
 | S2 | Color control | Display section in the eyeball popover: Auto (Share-assigned) / Source. Model scope. **Default-on** — makes existing behavior discoverable. | S1 |
 | S3 | Display-override stack | `DisplaySlice` + `DisplayController` + specificity resolution; S2's toggle re-homed onto it. Behind `?feature=displayControls`. | S2 |
 | S4 | Shading control | Shaded / Wireframe / Shaded+edges. Whole-model material fast-path only. | S3 |

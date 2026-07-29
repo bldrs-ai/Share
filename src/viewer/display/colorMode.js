@@ -20,6 +20,16 @@ import {computePartPalette, paletteUnit, writePaletteColors} from '../ifc/produc
  * test keeps testing the file's colors rather than the palette's own output
  * (which would classify as "has real color" and refuse to reapply).
  *
+ * SCOPE: the live batched path only (cache-miss IFC/STEP under the
+ * Conway-direct batched build). A cache-hit GLB reloads as a single merged
+ * `Mesh` with no per-instance `instanceColors` / `instanceSourceColors`
+ * tables, so `eachBatch` finds nothing and `hasAutoColor` returns false —
+ * the Display menu's color section self-gates off on reload. That's by
+ * design, not a miss: reload display-control support rides the
+ * `EXT_mesh_gpu_instancing` batched-native GLB cache (viewer-replacement
+ * §3b.v), which restores a BatchedMesh so this module applies unchanged. See
+ * model-display-controls.md §1.2 (2026-07-29 decision) + §7 S9.
+ *
  * @see productPalette — the palette itself and its compute/write split.
  * @see batchedHighlight#repaintBatchedColors — why writes go through paint().
  */

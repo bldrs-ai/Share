@@ -94,6 +94,15 @@ function collectInstanceEntries(model) {
     const parents = mesh.instanceParents
     const occurrences = mesh.instanceOccurrenceIds
     const geometries = mesh.instanceGeometry
+    // KNOWN-LOSSY (view-140): this bakes the *displayed* colors, which for a
+    // colorless auto-colored model (productPalette) are the palette, not the
+    // file's grey. So a cache-hit GLB carries the palette and the source is
+    // unrecoverable on reload — which is why the display-controls color toggle
+    // can't appear on a merged reload. The fix (bake `instanceSourceColors`
+    // and re-derive the palette on read, model-display-controls.md §1.2b) is
+    // deferred to the batched-native GLB cache (viewer-replacement §3b.v /
+    // that doc's S9), where reload returns a BatchedMesh and the snapshot +
+    // control apply directly — rather than a throwaway merged-mesh recolor.
     const colors = mesh.instanceColors
     for (let batchId = 0; batchId < parents.length; batchId++) {
       const geom = geometries[batchId]
