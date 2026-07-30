@@ -4,7 +4,9 @@ const {ClientWidgetApi, PostmessageTransport} = mxwidgets()
 /** @param {string} msg */
 function log(msg) {
   const logElt = document.getElementById('logItems')
-  logElt.innerHTML += `<li>${msg}</li>`
+  const li = document.createElement('li')
+  li.textContent = msg
+  logElt.appendChild(li)
 }
 
 // Define the widget configuration
