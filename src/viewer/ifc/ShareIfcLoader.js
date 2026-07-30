@@ -26,6 +26,8 @@ import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError} from '../../utils/oom'
+import {hasParams} from '../../utils/location'
+import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
 import ProgressiveLoadSession from '../ProgressiveLoadSession'
@@ -159,10 +161,19 @@ export default class ShareIfcLoader {
     // knowledge stays below (payload/batch → mesh conversion).
     const scene = typeof ifc.context?.getScene === 'function' ?
       ifc.context.getScene() : null
+    // A `#c:` permalink pins the camera to an exact pose — the user asked
+    // for THAT view, not an auto-frame. Suppress the load-time camera
+    // follow so streaming geometry can't drag the camera off the pinned
+    // pose (the follow's last portrait fit was overriding the permalink on
+    // uncached mobile loads, where a desktop cache-hit — which runs no
+    // progressive session — showed the permalink correctly). The preview
+    // meshes still render; only the camera stays put.
+    const frameCamera = !hasParams(HASH_PREFIX_CAMERA)
     const session = new ProgressiveLoadSession({
       scene: scene !== null && isFeatureEnabled('demandGeometry') ? scene : null,
       getControls: () => ifc.context?.ifcCamera?.cameraControls,
       getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
+      frameCamera,
       onProgress,
     })
 
@@ -293,7 +304,15 @@ export default class ShareIfcLoader {
         ifcModel.matrixAutoUpdate = false
       }
 
-      ifc.context.fitToFrame()
+      // Framing the freshly loaded model is the cross-format caller's job
+      // (CadView, right after it adds the model to the scene): it applies a
+      // `#c:` permalink pose when the URL carries one, and only auto-frames
+      // otherwise. A loader-local `fitToFrame()` here fought that — it ran
+      // unconditionally, so on the IFC/STEP path a permalink camera got
+      // overwritten by the auto-fit (the mobile "camera way off" bug),
+      // while other formats framed correctly through CadView alone. Keep
+      // scene/camera management uniform across formats: no format-specific
+      // fit lives in the loader.
 
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
