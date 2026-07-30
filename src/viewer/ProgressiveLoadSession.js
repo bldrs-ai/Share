@@ -63,13 +63,19 @@ export default class ProgressiveLoadSession {
    * @param {Function} [args.getControls] () => camera-controls instance
    *   (resolved lazily — controls may not exist at construction).
    * @param {Function} [args.getCamera] () => perspective camera.
+   * @param {boolean} [args.frameCamera] whether the load-time camera
+   *   follow may move the camera. Default true. Pass false when a `#c:`
+   *   permalink pins the camera to an exact pose: the preview still
+   *   renders, but the follow leaves the camera where the permalink put
+   *   it instead of framing the streaming geometry.
    * @param {Function} [args.onProgress] stage-label reporter.
    */
-  constructor({scene = null, getControls, getCamera, onProgress}) {
+  constructor({scene = null, getControls, getCamera, frameCamera = true, onProgress}) {
     this.state = SessionState.IDLE
     this.scene = scene
     this.getControls = getControls ?? (() => null)
     this.getCamera = getCamera ?? (() => null)
+    this.frameCamera = frameCamera
     this.onProgress = onProgress ?? null
     this.previewGroup = scene !== null ? new Group() : null
     this.previewInstalled = false
@@ -324,6 +330,12 @@ export default class ProgressiveLoadSession {
 
   /** Start the follow: instant first fit + the timer backstop chain. */
   startFollow_() {
+    // A permalink pinned the camera: render the preview but never move the
+    // camera. Latching followStopped keeps maybeRefit_/followTick_ inert too.
+    if (!this.frameCamera) {
+      this.followStopped = true
+      return
+    }
     if (this.followStopped || this.followTimer !== null) {
       return
     }

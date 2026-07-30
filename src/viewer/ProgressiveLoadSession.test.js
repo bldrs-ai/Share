@@ -158,6 +158,25 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.maxDistance).toBe(grown)
   })
 
+  it('with frameCamera:false, previews render but the camera never moves', () => {
+    // A `#c:` permalink pinned the camera: streaming geometry must not drag
+    // it off the pinned pose. The preview still installs; no fit is issued,
+    // even for a mesh far outside any framed volume.
+    const pinned = new ProgressiveLoadSession({
+      scene,
+      getControls: () => controls,
+      getCamera: () => camera,
+      frameCamera: false,
+      onProgress: jest.fn(),
+    })
+    pinned.addPreviewMesh(cubeAt(0))
+    expect(scene.children).toContain(pinned.previewGroup)
+    pinned.lastFitMs = Date.now() - 10000
+    pinned.addPreviewMesh(cubeAt(100))
+    expect(controls.fits).toHaveLength(0)
+    pinned.finish()
+  })
+
   it('stampCoordination re-frames the union under the group transform', () => {
     session.addPreviewMesh(cubeAt(0))
     session.lastFitMs = Date.now() - 10000
