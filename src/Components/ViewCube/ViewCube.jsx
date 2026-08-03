@@ -21,6 +21,7 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Tooltip from '@mui/material/Tooltip'
 import {
+  Close as CloseIcon,
   Home as HomeIcon,
   KeyboardArrowDown as TiltDownIcon,
   KeyboardArrowUp as TiltUpIcon,
@@ -51,6 +52,7 @@ import debug from '../../utils/debug'
  */
 export default function ViewCube() {
   const viewer = useStore((state) => state.viewer)
+  const setIsViewCubeVisible = useStore((state) => state.setIsViewCubeVisible)
   // Right-drawer state so the widget can sit clear of any open drawer.
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isAppsVisible = useStore((state) => state.isAppsVisible)
@@ -306,6 +308,12 @@ export default function ViewCube() {
       }}
       data-testid='view-cube'
     >
+      <RingButton
+        title='Close view cube'
+        onClick={() => setIsViewCubeVisible(false)}
+        icon={<CloseIcon/>}
+        sx={{gridColumn: 3, gridRow: 1}}
+      />
       <RingButton
         title='Rotate up'
         onClick={() => orbit(0, -TILT_STEP_RAD)}
