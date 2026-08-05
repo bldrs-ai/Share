@@ -177,7 +177,10 @@ export async function load(
   // Set when we swap the IFC source with a cached GLB. Drives post-parse
   // diagnostics so the user can see what the GLTF parser produced.
   let cameFromGlbCache = false
-  const wantGlb = isFeatureEnabled('glb') && isIfc
+  // `?feature=disableGlb` forces the live Conway render (skips the OPFS
+  // GLB cache lookup + post-parse export), so a cached GLB never masks
+  // the live geometry — the A/B escape hatch for the batched render path.
+  const wantGlb = isFeatureEnabled('glb') && isIfc && !isFeatureEnabled('disableGlb')
   if (wantGlb) {
     glbVerbose('feature enabled')
   }
