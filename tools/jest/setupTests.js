@@ -38,3 +38,19 @@ global.context = describe
 if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView = jest.fn()
 }
+
+// jsdom implements neither canvas method below: calling them routes through
+// jsdom's "not implemented" path, which logs a noisy Error via its
+// VirtualConsole (console.error) before returning a falsy value. App code that
+// draws to a canvas (PerfMonitor's 2d overlay, screenshot capture) already
+// treats a missing context / empty data URL as "headless — skip", so return
+// those directly. Same runtime values the code already sees under jsdom, minus
+// the per-call error spam in the test logs. A test that needs a real context
+// still overrides these on its own canvas object (e.g. CustomPostProcessor).
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = jest.fn(() => null)
+  // Return null (not ''), matching the value jsdom's un-implemented toDataURL
+  // already yielded — snapshots recorded against a headless canvas (svg sprite
+  // texture `url`) expect null, and callers treat a falsy data URL as "none".
+  HTMLCanvasElement.prototype.toDataURL = jest.fn(() => null)
+}

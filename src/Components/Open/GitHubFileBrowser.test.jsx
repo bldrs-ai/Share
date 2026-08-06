@@ -38,11 +38,37 @@ const GH_BROWSER_STATE_KEY = 'bldrs.openDialog.github'
  * @param {string|RegExp} optionName the option's accessible name
  * @return {Promise<void>}
  */
+/**
+ * Drain the component's async fetch cascade to rest inside act. Selecting an
+ * org/repo (or restoring one on mount) starts a chain of `await`ed fetches
+ * (org→repos, repo→branches+files) that each set state after resolving. A
+ * macrotask tick lets the whole microtask chain settle, and doing it inside
+ * act means those trailing settles are acted-on instead of logging one
+ * "update not wrapped in act(...)" warning per setState.
+ *
+ * @return {Promise<void>}
+ */
+async function flushCascade() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
+
+/**
+ * Open a Selector's dropdown and click the option with the given label, then
+ * settle the fetch cascade the selection starts.
+ *
+ * @param {string} testId the Selector root data-testid
+ * @param {string|RegExp} optionName the option's accessible name
+ * @return {Promise<void>}
+ */
 async function selectOption(testId, optionName) {
   const combo = within(screen.getByTestId(testId)).getByRole('combobox')
   fireEvent.mouseDown(combo)
   const option = await screen.findByRole('option', {name: optionName})
   fireEvent.click(option)
+  await flushCascade()
 }
 
 
@@ -64,10 +90,11 @@ async function renderBrowser(props = {}) {
     {wrapper: RouteThemeCtx},
   )
   await waitFor(() => expect(getOrganizations).toHaveBeenCalled())
-  // Flush the resolved org promise → setOrgNamesArr re-render.
-  await act(async () => {
-    await Promise.resolve()
-  })
+  // Settle the mount cascade inside act: the org-list resolve, plus (when
+  // localStorage carries a saved selection) the full restore chain
+  // org→repo→branches+files. A single microtask tick only reached the org
+  // resolve, so the deeper restore setStates fired outside act and warned.
+  await flushCascade()
   return utils
 }
 
@@ -286,6 +313,9 @@ describe('GitHubFileBrowser', () => {
       // The restore chain reselects the org, then its saved repo.
       await waitFor(() => expect(getRepositories).toHaveBeenCalledWith('bldrs-ai', 'test-token'))
       await waitFor(() => expect(getFilesAndFolders).toHaveBeenCalledWith('repoA', 'bldrs-ai', '/', 'test-token'))
+      // Settle the branch/file cascade the restore fetch kicks off (runs from
+      // the mount effect, not selectOption) so it doesn't warn on teardown.
+      await flushCascade()
     })
 
     it('does not restore anything when localStorage is empty', async () => {
