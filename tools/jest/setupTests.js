@@ -74,6 +74,8 @@ if (typeof HTMLCanvasElement !== 'undefined') {
 // other console.warn passes through untouched. Plain reassignment (not
 // jest.spyOn) so it survives module resets and outlives any per-test mock
 // cleanup; the warning fires at three's import time, before a spec's own spies.
+// Muting the console signal is safe because a *genuine* duplicate three is
+// caught instead by src/viewer/three/singleThreeInstance.test.js.
 const realConsoleWarn = console.warn
 console.warn = function threeDupFilteredWarn(...args) {
   if (typeof args[0] === 'string' && args[0].includes('Multiple instances of Three.js')) {
