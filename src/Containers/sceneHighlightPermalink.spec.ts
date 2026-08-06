@@ -1,6 +1,6 @@
 import {expect, test} from '@playwright/test'
-import {setupVirtualPathIntercept, waitForModelReady} from './models'
-import {homepageSetup, setIsReturningUser} from './utils'
+import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
+import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
 
 /**

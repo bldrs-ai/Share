@@ -1,6 +1,6 @@
 import {Page, expect, test} from '@playwright/test'
-import {waitForModelReady} from './models'
-import {homepageSetup, setIsReturningUser} from './utils'
+import {waitForModelReady} from '../../tests/e2e/models'
+import {homepageSetup, setIsReturningUser} from '../../tests/e2e/utils'
 
 
 /**

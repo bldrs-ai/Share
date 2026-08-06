@@ -200,7 +200,7 @@ order; BVH permutes only the index buffer, not the numbering).
   suffix at a path boundary (`fileSuffixBoundaryRegex`) — the bare type-name
   regex also matched directory segments like `/step/` and silently dropped
   the element path — and the NavTree row highlight applies to assembly rows,
-  not only leaves. E2E: `src/tests/e2e/navTreePermalink.spec.ts`.
+  not only leaves. E2E: `src/Components/NavTree/navTreePermalink.spec.ts`.
 
 ### Remaining (follow-up)
 
