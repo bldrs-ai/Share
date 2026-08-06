@@ -21,7 +21,7 @@ import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import {actAsyncFlush} from '../utils/tests'
+import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 
 
@@ -291,6 +291,13 @@ describe('CadView', () => {
     // `initViewer()` instance route through the same Jest mock.
     const setInstanceSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setInstanceSelection')
       .mockImplementation(() => {})
+    // The mocked model load resolves on its own timers and drives CadView's
+    // mount setStates (setSelectedElement, ViewerContainer) *during* the
+    // waitFor below — outside any act scope RTL can enclose, so no amount of
+    // flushing catches them. This is the one test that trips it; swallow just
+    // that act warning. The behavior under test (setInstanceSelection is not
+    // called) is asserted directly and unaffected.
+    const restoreActWarnings = suppressActWarnings()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
@@ -304,6 +311,7 @@ describe('CadView', () => {
     await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
     await actAsyncFlush()
     expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    restoreActWarnings()
   })
 
 
