@@ -30,7 +30,22 @@ function consoleSink(level, args) {
 }
 
 
-let sink = consoleSink
+// The active sink lives on globalThis, not a module variable, so it survives
+// `jest.resetModules()`: a harness that resets the registry and re-imports this
+// file (e.g. GlbWriterService.test.js) still shares the one sink the test setup
+// installed — module state resets, globals don't. A module-local `sink` would
+// spring back to the console on re-import, letting that path's `[glb]` lines
+// both escape the capture buffer AND print. Unset in production ⇒ console.
+const SINK_KEY = '__bldrsGlbLogSink'
+
+
+/**
+ * @return {function(string, Array<*>): void} the active sink — the installed
+ *   capturing sink under test, else the console default.
+ */
+function activeSink() {
+  return (typeof globalThis !== 'undefined' && globalThis[SINK_KEY]) || consoleSink
+}
 
 
 /**
@@ -42,7 +57,9 @@ let sink = consoleSink
  * @param {?function(string, Array<*>): void} fn (level, args) => void
  */
 export function setGlbLogSink(fn) {
-  sink = fn ?? consoleSink
+  if (typeof globalThis !== 'undefined') {
+    globalThis[SINK_KEY] = fn ?? undefined
+  }
 }
 
 
@@ -54,7 +71,7 @@ export function setGlbLogSink(fn) {
  * @param {...*} args
  */
 export function glbInfo(...args) {
-  sink('info', args)
+  activeSink()('info', args)
 }
 
 
@@ -67,7 +84,7 @@ export function glbInfo(...args) {
  * @param {...*} args
  */
 export function glbWarn(...args) {
-  sink('warn', args)
+  activeSink()('warn', args)
 }
 
 
@@ -80,6 +97,6 @@ export function glbWarn(...args) {
  */
 export function glbVerbose(...args) {
   if (isFeatureEnabled('glbVerbose')) {
-    sink('info', args)
+    activeSink()('info', args)
   }
 }

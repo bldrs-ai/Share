@@ -11,7 +11,7 @@
 // Wired up globally in `setupTests.js` (install once, clear before each test).
 // Import the getters directly in a spec to assert:
 //
-//   import {getGlbLogs} from '../../../tools/jest/glbLogCapture'
+//   import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 //   expect(getGlbLogs().some((l) => l.text.includes('out-of-range'))).toBe(true)
 import {setGlbLogSink} from '../../src/loader/glbLog'
 
