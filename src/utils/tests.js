@@ -5,17 +5,16 @@ import {act} from '@testing-library/react'
  * General fix for act warnings.
  * See https://kentcdodds.com/blog/fix-the-not-wrapped-in-act-warning
  *
- * A macrotask tick (setTimeout 0) drains the whole microtask chain, not just
- * one hop — so a multi-`await` mount cascade (CadView: viewer init → model
- * load → selection effects) fully settles inside act. A single
- * `await Promise.resolve()` only advanced one link, leaving the tail
- * setStates (setSelectedElement, ViewerContainer) to fire after the test and
- * log "update not wrapped in act(...)".
+ * Kept microtask-based (a single `await Promise.resolve()` inside act) rather
+ * than a `setTimeout(0)` macrotask so it stays timer-agnostic: under
+ * `jest.useFakeTimers()` a real setTimeout never fires unless the clock is
+ * advanced, which would hang every caller. Cascades that a single microtask
+ * hop can't drain (a mocked async mount resolving on its own timers, mid-
+ * `waitFor`) aren't reachable by flushing at all — use `suppressActWarnings`
+ * for those, not a deeper drain here.
  */
 export async function actAsyncFlush() {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  })
+  await act(async () => await Promise.resolve())
 }
 
 

@@ -298,20 +298,25 @@ describe('CadView', () => {
     // that act warning. The behavior under test (setInstanceSelection is not
     // called) is asserted directly and unaffected.
     const restoreActWarnings = suppressActWarnings()
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
-    await actAsyncFlush()
-    await waitFor(() => screen.getByTestId(aboutControlTestId))
-    // Set ONLY selectedInstanceIds — leave selectedElements at its
-    // empty-array default. The effect runs on the dep change; the
-    // guard should swallow it.
-    setInstanceSelectionSpy.mockClear()
-    const STALE_INSTANCE_ID = 42
-    await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
-    await actAsyncFlush()
-    expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
-    restoreActWarnings()
+    // try/finally so a failed assertion can't leave console.error mocked for
+    // the rest of the file — that would swallow every later test's errors.
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => screen.getByTestId(aboutControlTestId))
+      // Set ONLY selectedInstanceIds — leave selectedElements at its
+      // empty-array default. The effect runs on the dep change; the
+      // guard should swallow it.
+      setInstanceSelectionSpy.mockClear()
+      const STALE_INSTANCE_ID = 42
+      await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
+      await actAsyncFlush()
+      expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    } finally {
+      restoreActWarnings()
+    }
   })
 
 
