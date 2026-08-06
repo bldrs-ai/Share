@@ -14,6 +14,7 @@ import {
   parseGlb,
   serializeGlb,
 } from './injectGlbExtensions'
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 
 
 /**
@@ -358,6 +359,9 @@ describe('loader/bldrsFaceIds', () => {
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
       expect(gltf.scene.userData.bldrsFaceIds).toBeUndefined()
+      // The skip announces itself through the captured [glb] channel — assert
+      // it fired rather than letting the diagnostic go unverified (and silent).
+      expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99'))).toBe(true)
     })
   })
 

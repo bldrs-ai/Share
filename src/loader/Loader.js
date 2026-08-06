@@ -45,7 +45,7 @@ import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
 import {
   externalCacheKey,
@@ -756,8 +756,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
             'skipping picking on this mesh'
-          console.warn(
-            `[glb] reader: face_ids ${which} failed on mesh ${meshIndex} ` +
+          glbWarn(
+            `reader: face_ids ${which} failed on mesh ${meshIndex} ` +
               `(payload first expressID ${faceIdsEntry.expressIds[0]}, ` +
               `recorded ${faceIdsEntry.firstExpressId}, ` +
               `geometry ${attrExpr && geomIndex ? attrExpr.getX(geomIndex.getX(0)) : 'n/a'}); ` +
@@ -766,8 +766,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
             'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
-          console.warn(
-            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+          glbWarn(
+            `reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
               `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
         }
       }
@@ -807,8 +807,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
     }
     if (skippedCompressedNoFaceIds > 0) {
-      console.warn(
-        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+      glbWarn(
+        `reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
           `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
           'per-vertex IDs would be corrupted')
     }

@@ -18,15 +18,56 @@ import {isFeatureEnabled} from '../FeatureFlags'
 
 
 /**
+ * Default sink: write to the console with a stable `[glb]` prefix. `level` is
+ * a console method name ('info' | 'warn' | 'error').
+ *
+ * @param {string} level
+ * @param {Array<*>} args
+ */
+function consoleSink(level, args) {
+  // eslint-disable-next-line no-console
+  console[level]('[glb]', ...args)
+}
+
+
+let sink = consoleSink
+
+
+/**
+ * Swap the `[glb]` log sink. Tests install a capturing sink so these
+ * diagnostics are asserted against a buffer instead of printed — a clean load
+ * (and a clean test run) leaves a quiet console (conway #301 §6). Passing
+ * null/undefined restores the console sink.
+ *
+ * @param {?function(string, Array<*>): void} fn (level, args) => void
+ */
+export function setGlbLogSink(fn) {
+  sink = fn ?? consoleSink
+}
+
+
+/**
  * Milestone log: visible whenever called (the caller is expected to gate on
- * `isFeatureEnabled('glb')` already). Uses console.info so it's discoverable
- * without changing the debug level.
+ * `isFeatureEnabled('glb')` already). Routed through the sink (console.info by
+ * default) so it's discoverable without changing the debug level.
  *
  * @param {...*} args
  */
 export function glbInfo(...args) {
-  // eslint-disable-next-line no-console
-  console.info('[glb]', ...args)
+  sink('info', args)
+}
+
+
+/**
+ * Anomaly/error diagnostic for the GLB pipeline (cache-write skips, reader
+ * face_ids failures, out-of-range extension refs). Same `[glb]` prefix and
+ * sink as `glbInfo`, at warn level — one place for the pipeline's error-path
+ * console.warns so tests can capture and assert them.
+ *
+ * @param {...*} args
+ */
+export function glbWarn(...args) {
+  sink('warn', args)
 }
 
 
@@ -39,7 +80,6 @@ export function glbInfo(...args) {
  */
 export function glbVerbose(...args) {
   if (isFeatureEnabled('glbVerbose')) {
-    // eslint-disable-next-line no-console
-    console.info('[glb]', ...args)
+    sink('info', args)
   }
 }
