@@ -1413,7 +1413,7 @@ imports.
   `USE_WEBIFC_SHIM=false`, serves it isolated
   (`tools/esbuild/serveStaticIsolated.mjs` — COOP `same-origin` + COEP
   `require-corp`; kept off the default/prod servers because COEP breaks the
-  Drive Picker), and runs `src/tests/e2e/webIfcEngine.webifc.spec.ts` — a
+  Drive Picker), and runs `src/viewer/webIfcEngine.webifc.spec.ts` — a
   smoke that loads `index.ifc`, asserts `crossOriginIsolated`, and forwards
   the browser console so isolated-runtime errors are legible without a local
   browser. The job is **advisory** (a standalone, non-required check).

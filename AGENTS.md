@@ -34,6 +34,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Render loop, `setRenderUpdate` seam, `?feature=perf` panel | [DESIGN.md](DESIGN.md) §"Render loop & perf monitor" |
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
+| Where to put an E2E `*.spec.ts` (co-locate near the subject; `src/tests/e2e` is shared helpers only) | [src/tests/e2e/README.md](src/tests/e2e/README.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
 | Sample-model thumbnails (Open dialog Samples tab), regenerating them, aiming them via `#c:` permalink cameras | [tools/thumbnails/README.md](tools/thumbnails/README.md) |
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
