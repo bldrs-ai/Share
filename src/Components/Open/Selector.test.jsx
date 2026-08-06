@@ -257,10 +257,22 @@ describe('Selector — defensive value handling', () => {
   })
 
   it('renders an out-of-range numeric selection as empty, never "undefined"', () => {
+    // Feeding MUI Select a value past the end of the list is exactly what's
+    // under test — but MUI logs its own "out-of-range value" console.error for
+    // it. Swallow just that expected message (passing everything else through)
+    // so the assertion below runs against clean logs.
+    const originalWarn = console.warn
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('out-of-range value')) {
+        return
+      }
+      originalWarn(...args)
+    })
     renderSelector({list: ['a', 'b'], selected: 99})
     // A stale index past the end of the list must not surface the literal
     // string "undefined" in the closed field.
     expect(screen.getByRole('combobox').textContent).not.toMatch(/undefined/)
+    warnSpy.mockRestore()
   })
 
   it('offers Enter name... even when the list is empty (validated field)', async () => {
