@@ -223,17 +223,23 @@ export async function returningUserVisitsHomepage(page: Page) {
 
 /**
  * Same as returningUserVisitsHomepage, but wait for model too
+ *
+ * @param search Optional query string (e.g. '?feature=quotas') appended to the
+ *   model URL so the SPA boots with feature flags active.
  */
-export async function returningUserVisitsHomepageWaitForModel(page: Page) {
+export async function returningUserVisitsHomepageWaitForModel(page: Page, search = '') {
   await setIsReturningUser(page.context())
-  await visitHomepageWaitForModel(page)
+  await visitHomepageWaitForModel(page, search)
 }
 
 
 /**
  * Assumes other setup, then visit homepage and wait for model
+ *
+ * @param search Optional query string (e.g. '?feature=quotas') appended to the
+ *   model URL so the SPA boots with feature flags active.
  */
-export async function visitHomepageWaitForModel(page: Page) {
+export async function visitHomepageWaitForModel(page: Page, search = '') {
   await Promise.all([
     // await page.waitForURL('/index.ifc', {timeout: 10_000}), // ensure the bounce happened
     page.waitForResponse(async (response: Response) => {
@@ -244,7 +250,7 @@ export async function visitHomepageWaitForModel(page: Page) {
       }
       return false
     }),
-    page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'}),
+    page.goto(`/share/v/p/index.ifc${search}`, {waitUntil: 'domcontentloaded'}),
   ])
   // MSW registers and activates its service worker during the first
   // navigation. Wait for it to be the page's active controller before

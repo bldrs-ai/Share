@@ -59,6 +59,7 @@ function supportedFileNames(files) {
  * @property {object}   [activeConnection] The Connection driving the
  *   override token, used to tag recents with a connectionId so they
  *   land in the right card on the Sources tab.
+ * @property {Function} [checkQuota] Optional async gate; receives sharePath, returns boolean (true = proceed)
  * @return {ReactElement}
  */
 export default function GitHubFileBrowser({
@@ -67,6 +68,7 @@ export default function GitHubFileBrowser({
   onCancel,
   accessTokenOverride,
   activeConnection,
+  checkQuota,
 }) {
   // Prefer the override (connection-derived token) over the legacy
   // Auth0-federated `useStore.accessToken`. Once the legacy path retires
@@ -432,25 +434,32 @@ export default function GitHubFileBrowser({
   // fine; Selector awaits the result either way.)
   const validateFile = (name) => name.trim().length > 0
 
-  const navigateToFile = () => {
-    if (fileName && fileName.trim().length > 0) {
-      const branch = branchName || 'main'
-      const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
-      navigateToModel({pathname: sharePath}, navigate)
-      // Tag with connectionId when the connection-based path drove this
-      // browse. Without it, GitHubTab can't filter recents to the card
-      // they belong to (parity with how Drive recents are scoped).
-      addRecentFileEntry({
-        id: sharePath,
-        source: 'github',
-        name: fileName,
-        sharePath,
-        lastModifiedUtc: null,
-        ...(activeConnection ? {connectionId: activeConnection.id} : {}),
-      })
-      setPendingModelNameUpdate(sharePath)
-      setIsDialogDisplayed(false)
+  const navigateToFile = async () => {
+    if (!fileName || fileName.trim().length === 0) {
+      return
     }
+    const branch = branchName || 'main'
+    const sharePath = navigateBaseOnModelPath(orgName, repoName, branch, `${currentPath}/${fileName}`)
+    if (checkQuota) {
+      const allowed = await checkQuota(sharePath)
+      if (!allowed) {
+        return
+      }
+    }
+    navigateToModel({pathname: sharePath}, navigate)
+    // Tag with connectionId when the connection-based path drove this
+    // browse. Without it, GitHubTab can't filter recents to the card
+    // they belong to (parity with how Drive recents are scoped).
+    addRecentFileEntry({
+      id: sharePath,
+      source: 'github',
+      name: fileName,
+      sharePath,
+      lastModifiedUtc: null,
+      ...(activeConnection ? {connectionId: activeConnection.id} : {}),
+    })
+    setPendingModelNameUpdate(sharePath)
+    setIsDialogDisplayed(false)
   }
 
   return (

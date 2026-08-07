@@ -18,8 +18,11 @@ import debug from './debug'
  * @param {Function} setAlert Function to set alert messages
  * @param {Function} [onSuccess] Optional callback when file is successfully processed
  * @param {Function} [onError] Optional callback when an error occurs
+ * @param {{hasCapacity: boolean, record: Function, onExceeded: Function}} [quotaOptions]
+ *   Optional quota integration. When provided, blocks the drop if hasCapacity is false
+ *   and records the load key via record() on success.
  */
-export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError) {
+export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable, setAlert, onSuccess, onError, quotaOptions) {
   event.preventDefault()
   const files = event.dataTransfer.files
 
@@ -41,6 +44,12 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     }
     return
   }
+
+  if (quotaOptions && !quotaOptions.hasCapacity) {
+    quotaOptions.onExceeded()
+    return
+  }
+
   const uploadedFile = files[0]
 
   debug().log('handleFileDrop: uploadedFile', uploadedFile)
@@ -60,11 +69,18 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
    *   under (`<blob-uuid>.<ext>`) — the `/v/new/` segment the Loader
    *   resolves, distinct from the user's `uploadedFile.name`.
    */
-  function onWritten(fileName) {
+  async function onWritten(fileName) {
+    const key = `${appPrefix}/v/new/${fileName}`
+    if (quotaOptions) {
+      const result = await quotaOptions.record(key)
+      if (result && result.allowed === false) {
+        quotaOptions.onExceeded()
+        return
+      }
+    }
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
-    const sharePath = `${appPrefix}/v/new/${fileName}`
-    navigateToModel(sharePath, navigate)
+    navigateToModel(key, navigate)
     addRecentFileEntry({
       id: fileName,
       source: 'local',
@@ -73,7 +89,7 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
       // `Date.now() - utcMs` arithmetic — an ISO string here rendered
       // as "NaNm ago" in the Last-modified column (#1682).
       lastModifiedUtc: uploadedFile.lastModified || null,
-      sharePath,
+      sharePath: key,
     })
     setPendingModelNameUpdate(fileName)
     if (onSuccess) {
