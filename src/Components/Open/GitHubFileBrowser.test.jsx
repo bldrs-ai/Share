@@ -230,6 +230,14 @@ describe('GitHubFileBrowser', () => {
         files: [
           {name: 'window.ifc'},
           {name: 'part.STP'},
+          // The USD family is only listed if every one of its
+          // extensions reaches the filter — 'usd' is a prefix of the
+          // other three, so a regex that stops at the prefix would
+          // still pass a 'usd'-only check (#1728).
+          {name: 'engine.usdz'},
+          {name: 'stage.usda'},
+          {name: 'crate.usdc'},
+          {name: 'layer.usd'},
           {name: 'readme.md'},
           {name: 'notes.txt'},
         ],
@@ -243,6 +251,9 @@ describe('GitHubFileBrowser', () => {
       fireEvent.mouseDown(within(screen.getByTestId('openFile')).getByRole('combobox'))
       expect(await screen.findByRole('option', {name: 'window.ifc'})).toBeInTheDocument()
       expect(screen.getByRole('option', {name: 'part.STP'})).toBeInTheDocument()
+      for (const usdName of ['engine.usdz', 'stage.usda', 'crate.usdc', 'layer.usd']) {
+        expect(screen.getByRole('option', {name: usdName})).toBeInTheDocument()
+      }
       expect(screen.queryByRole('option', {name: 'readme.md'})).not.toBeInTheDocument()
       expect(screen.queryByRole('option', {name: 'notes.txt'})).not.toBeInTheDocument()
     })

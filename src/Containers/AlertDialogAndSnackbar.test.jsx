@@ -140,4 +140,18 @@ describe('AlertAndSnackbar grace period', () => {
     // model.name wins over the reporter's filename fallback.
     expect(screen.getByTestId('LoadStatusLine').textContent).toBe('Loaded Arty_Z7_PCB')
   })
+
+  it('appends a post-load note (framing exclusion) to the grace line', () => {
+    render(<ShareMock><AlertAndSnackbar/></ShareMock>)
+    act(() => {
+      useStore.getState().setModel({name: 'basel'})
+      useStore.getState().setLoadResult({
+        status: 'success',
+        summaryLine: 'Loaded basel.ifc',
+        note: 'stray geometry far from the model was left out of the zoom fit',
+      })
+    })
+    expect(screen.getByTestId('LoadStatusLine').textContent).toBe(
+      'Loaded basel — stray geometry far from the model was left out of the zoom fit')
+  })
 })
