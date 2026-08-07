@@ -65,7 +65,12 @@ export function isLfsPointerBase64(base64) {
   if (typeof base64 !== 'string' || base64 === '') {
     return false
   }
-  const compact = base64.replace(/\s+/g, '')
+  // Slice before stripping whitespace: `content` can be ~1.4MB of
+  // newline-wrapped base64 for an ordinary inline model, and stripping
+  // first would scan and copy all of it on every GitHub load. Twice
+  // BASE64_PREFIX_CHARS of raw input always survives the strip with
+  // more than BASE64_PREFIX_CHARS left (GitHub wraps at 60).
+  const compact = base64.slice(0, BASE64_PREFIX_CHARS * 2).replace(/\s+/g, '')
   const head = compact.length > BASE64_PREFIX_CHARS ? compact.slice(0, BASE64_PREFIX_CHARS) : compact
   try {
     return atob(head).startsWith(LFS_POINTER_PREFIX)

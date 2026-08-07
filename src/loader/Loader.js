@@ -12,6 +12,7 @@ import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
 import {reportModelInfo} from './loadProgress'
 import {
+  deleteFileFromOPFS,
   doesFileExistInOPFS,
   downloadModel,
   downloadToOPFS,
@@ -199,6 +200,11 @@ export async function load(
       // (we hash the bytes after they're in OPFS).
       let cacheKeyArgs = null
       let kindLabel = null
+      // Identifies the OPFS entry this load reads, so a poisoned one
+      // (see the Git LFS pointer check after the read) can be evicted.
+      // Only set for GitHub sources — the only kind whose bytes can be
+      // an LFS pointer.
+      let opfsEntryKey = null
 
       if (isUploadedFile) {
         kindLabel = 'upload'
@@ -232,6 +238,9 @@ export async function load(
             [derefPath, shaHash, isCacheHit, isBase64] =
               await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
           }
+          // Captured after the re-dereference above, which can replace
+          // shaHash — the key must match the one the OPFS lookup uses.
+          opfsEntryKey = {filePath, shaHash, owner, repo, branch}
 
           // GitHub gives us a stable upstream sha *before* we download — so
           // the GLB cache lookup can happen pre-download (fastest hit path).
@@ -344,7 +353,38 @@ export async function load(
 
       onProgress('Buffering model bytes...')
       modelData = await file.arrayBuffer()
-      if (isFormatText) {
+      if (opfsEntryKey !== null && looksLikeLfsPointer(modelData)) {
+        // A cache entry written before the Git LFS redirect landed
+        // holds the ~130-byte pointer instead of the model, and its key
+        // (pointer-blob sha + owner/repo/branch/path) is exactly the
+        // key this load computes — so it would be served forever, and
+        // the pointer guard further down would keep telling the user to
+        // use the URL they already used. Evict it and fall through to
+        // the direct fetch below, which resolves through
+        // media.githubusercontent.com. Eviction is best-effort: a
+        // failure only costs a re-download next time.
+        //
+        // Scoped to GitHub sources (the only kind that sets
+        // opfsEntryKey) because they're the only ones a re-fetch can
+        // repair. A pointer from anywhere else — an upload, a local
+        // file — falls through to the guard below, which explains the
+        // problem instead of silently re-downloading something that
+        // would fail the same way.
+        debug().warn(
+          'Loader#load: OPFS entry holds a Git LFS pointer, not the model; ' +
+          'evicting and re-fetching')
+        try {
+          await deleteFileFromOPFS(
+            opfsEntryKey.filePath, opfsEntryKey.shaHash,
+            opfsEntryKey.owner, opfsEntryKey.repo, opfsEntryKey.branch)
+        } catch (evictError) {
+          debug().warn('Loader#load: could not evict stale LFS pointer entry:', evictError)
+        }
+        // Falls through to the direct-fetch block below.
+        modelData = undefined
+        glbExportContext = null
+        cameFromGlbCache = false
+      } else if (isFormatText) {
         onProgress('Decoding model data...')
         const decoder = new TextDecoder('utf-8')
         modelData = decoder.decode(modelData)
