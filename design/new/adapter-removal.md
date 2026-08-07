@@ -1,13 +1,44 @@
 # Removing the `conway-web-ifc-adapter` shim
 
-**Status:** proposal / scope
+**Status:** **landed (2026-06)** — Option A shipped both sides; adapter retired
 **Owner:** —
 **Branch:** `claude/conway-web-ifc-adapter-removal-s1olih`
 **Spans:** `bldrs-ai/Share` (consumer), `bldrs-ai/conway` (engine),
-`bldrs-ai/conway-web-ifc-adapter` (the shim — to be retired)
+`bldrs-ai/conway-web-ifc-adapter` (the shim — **retired**)
 **Parent effort:** [`viewer-replacement.md`](viewer-replacement.md) Phase 5+
 **Sibling:** [`conway/design/new/step-support.md`](https://github.com/bldrs-ai/conway/blob/main/design/new/step-support.md)
 (its gap #1 — "Public API surface" — is the Conway-side enabler for this)
+
+---
+
+## Status — landed (2026-06)
+
+The recommended **Option A** shipped on both sides; everything below is now
+design-of-record describing how it was done.
+
+- **Conway side:** the load-bearing `web-ifc` surface is vendored into
+  `conway/src/compat/web-ifc/` and published as the
+  `@bldrs-ai/conway/web-ifc` subpath export (conway #331); the IFC
+  name↔typecode tables are generated from a pinned `web-ifc@0.0.35`
+  devDependency and guarded by a consumer-opaque parity test (conway
+  #337); an IFC+STEP `IfcAPI` smoke test gates it. AP203→AP214 routing was
+  added to the compat factory (fixes Share#1557). See
+  [`conway/design/new/web-ifc-compat-surface.md`](https://github.com/bldrs-ai/conway/blob/main/design/new/web-ifc-compat-surface.md).
+- **Share side (this repo):** `package.json` depends on `@bldrs-ai/conway`
+  directly — the `@bldrs-ai/conway-web-ifc-adapter` dependency is gone —
+  and the `webIfcShimAlias` esbuild plugin (`tools/esbuild/plugins.js`)
+  resolves `web-ifc` imports straight to
+  `node_modules/@bldrs-ai/conway/compiled/src/compat/web-ifc/index.js`.
+  The real-`web-ifc` engine-swap comparison still works because the
+  surface shape is unchanged; `web-ifc@0.0.35` is kept as the comparison
+  engine, pinned to its single-thread build (see the same plugin).
+- **Release chain:** collapsed to **Conway → Share** (the three-hop manual
+  adapter republish is gone).
+
+**Open follow-up (Conway side, non-blocking):** the properties-layer
+reshape onto Conway-native entities (compat-surface doc decision (b)) is
+still deferred — the vendored `ifc2x4_helper.ts` duplicate-entity layer
+stays until then.
 
 ---
 

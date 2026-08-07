@@ -32,7 +32,7 @@ jest.mock('three', () => jest.requireActual('three'))
 import '../../__mocks__/shareViewerTestHarness'
 import {BufferAttribute, BufferGeometry, Group, Mesh, Scene} from 'three'
 import {ShareViewer} from './ShareViewer'
-import {instanceMapFromGeometry} from './ifc/IfcInstanceMap'
+import {instanceMapFromGeometry, instanceMapFromOrderedPlacedRanges} from './ifc/IfcInstanceMap'
 import Selector from './three/Selector'
 import ThreeContext from './three/ThreeContext'
 
@@ -422,5 +422,246 @@ describe('viewer/ShareViewer Conway-direct selection helpers', () => {
       // Only one removeFromHighlighting call.
       expect(viewer.highlighter.removeFromHighlighting).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+
+/**
+ * Build a Mesh whose `instanceMap` carries STEP occurrence paths — one range
+ * per (parent, occurrencePath). Uses the ordered-ranges populator so the map
+ * gets `occurrencePathToInstanceIds` (the reverse index the resolver reads).
+ *
+ * @param {Array<{parentExpressId: number, triangleCount: number,
+ *   occurrencePath: number[]}>} ranges
+ * @return {Mesh}
+ */
+function makeOccurrenceMesh(ranges) {
+  const totalTris = ranges.reduce((n, r) => n + r.triangleCount, 0)
+  const geom = new BufferGeometry()
+  geom.setAttribute(
+    'position', new BufferAttribute(new Float32Array(totalTris * 9), 3))
+  geom.setIndex(new BufferAttribute(new Uint32Array(totalTris * 3), 1))
+  const mesh = new Mesh(geom)
+  mesh.instanceMap = instanceMapFromOrderedPlacedRanges(ranges, {geometry: geom})
+  return mesh
+}
+
+
+/**
+ * @param {object} model top-level Object3D to expose as ifcModels[0]
+ * @return {object} ShareViewer-prototype-bound stand-in with _modelById wired
+ */
+function makeResolverViewer(model) {
+  const viewer = Object.create(ShareViewer.prototype)
+  viewer.IFC = {context: {items: {ifcModels: [model]}}}
+  return viewer
+}
+
+
+describe('viewer/ShareViewer getSelectedElementsProps', () => {
+  const IFCWALL_TYPE_CODE = 1095909175
+
+  /**
+   * @param {object} propsById expressID → props object returned by getProperties
+   * @return {object} ShareViewer-prototype-bound stand-in
+   */
+  function makePropsViewer(propsById) {
+    const viewer = Object.create(ShareViewer.prototype)
+    viewer.IFC = {
+      getProperties: jest.fn((modelID, id) => Promise.resolve(propsById[id] ?? null)),
+      loader: {
+        ifcManager: {
+          // Conway contract: type-code → name lookup (ShareIfcManager
+          // ignores modelID and forwards to Conway's global map).
+          getIfcType: jest.fn((_modelID, typeCode) =>
+            (typeCode === IFCWALL_TYPE_CODE ? 'IFCWALL' : undefined)),
+        },
+      },
+    }
+    return viewer
+  }
+
+  it('resolves the type name from the fetched props\' type code, not the expressID (#1545)', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: IFCWALL_TYPE_CODE}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(viewer, [42])
+
+    const manager = viewer.IFC.loader.ifcManager
+    expect(manager.getIfcType).toHaveBeenCalledWith(0, IFCWALL_TYPE_CODE)
+    expect(manager.getIfcType).not.toHaveBeenCalledWith(0, 42)
+    expect(results).toEqual([
+      {modelID: 0, expressID: 42, props: {expressID: 42, type: 'IFCWALL'}},
+    ])
+  })
+
+  it('skips elements whose getProperties returns null instead of throwing (#1545)', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: IFCWALL_TYPE_CODE}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(
+      viewer, [7, 42])
+
+    expect(results).toHaveLength(1)
+    expect(results[0].expressID).toBe(42)
+    // The null-props element must not reach the type lookup.
+    expect(viewer.IFC.loader.ifcManager.getIfcType).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves an already-stringified type untouched', async () => {
+    const viewer = makePropsViewer({42: {expressID: 42, type: 'IFCWALL'}})
+
+    const results = await ShareViewer.prototype.getSelectedElementsProps.call(viewer, [42])
+
+    expect(viewer.IFC.loader.ifcManager.getIfcType).not.toHaveBeenCalled()
+    expect(results[0].props.type).toBe('IFCWALL')
+  })
+})
+
+
+describe('viewer/ShareViewer getInstanceIdsForOccurrencePath', () => {
+  it('resolves a leaf occurrence path to exactly its own instance(s)', () => {
+    // One reused part-type (parent 100) placed at two occurrences; the paths
+    // differ only in their root NAUO. A leaf lookup must return just its one
+    // instance, not the sibling reuse.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [11, 20]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+
+    const first = ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [10, 20])
+    const second = ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [11, 20])
+    expect(first).toEqual([0])
+    expect(second).toEqual([1])
+  })
+
+  it('with includeDescendants:false takes the exact leaf lookup (no descendants)', () => {
+    // A leaf click must resolve to only its own instance even though a deeper
+    // path exists that has it as a prefix — the exact-key branch must not scan.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [10, 20]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false})).toEqual([0])
+    // Same path with descendants included also pulls the child at [10,20].
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: true}).sort()).toEqual([0, 1])
+  })
+
+  it('with includeDescendants:false falls back to the prefix scan on an exact miss', () => {
+    // The Arty_Z7 / Alibre shape: a leaf part's brep hangs off its placement
+    // representation through a plain shape_representation_relationship, so
+    // Conway stamps the geometry with the SRR's own id below the leaf NAUO —
+    // every geometry path is strictly deeper than the tree leaf's
+    // ([10, 20, 38151] vs [10, 20]) and the exact key doesn't exist. The leaf
+    // click must still find its instances; hide (always prefix-inclusive)
+    // already did, which was the "hide works but highlight doesn't" asymmetry.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20, 38151]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [10, 21, 38152]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10, 20], {includeDescendants: false})).toEqual([0])
+    // A sibling leaf's extended path must not bleed in.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10, 21], {includeDescendants: false})).toEqual([1])
+  })
+
+  it('narrows to one solid with geometryExpressId (multibody part)', () => {
+    // The SolidWorks multibody shape (the NEMA motor): every named solid
+    // shares the part's occurrence path — extended by the SRR's own id on the
+    // geometry side — and PlacedGeometry.geometryExpressID is the solid's own
+    // express id, the NavTree ephemeral solid node's key.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 9382},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [11], geometryExpressId: 9751},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    // Solid node under the part leaf at [10]: the exact key misses (geometry
+    // keys are SRR-extended), the prefix scan + filter find the one body.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false, geometryExpressId: 9382})).toEqual([1])
+    // No filter: the whole part, both bodies.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false}).sort()).toEqual([0, 1])
+    // Filter also applies on the exact-key fast path.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [11], {includeDescendants: false, geometryExpressId: 9751})).toEqual([2])
+    // A geometry id the path doesn't hold resolves to nothing.
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(
+      viewer, 0, [10], {includeDescendants: false, geometryExpressId: 424242})).toEqual([])
+  })
+
+  it('enumerates distinct geometry ids under a path (getGeometryIdsForOccurrencePath)', () => {
+    // The discovery half of anonymous-geometry addressing (conway#387): a
+    // multibody part's pieces share its (SRR-extended) path; the "N more…"
+    // expansion lists their geometry ids. Duplicated ids across instances
+    // dedup; a sibling part's pieces stay out.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 4462},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 66], geometryExpressId: 250},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [11], geometryExpressId: 9751},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(viewer, 0, [10]))
+      .toEqual([250, 4462])
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(viewer, 0, [11]))
+      .toEqual([9751])
+    // No geometry-id table (IFC / old cache) → empty, callers degrade.
+    const bare = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10]},
+    ])
+    expect(ShareViewer.prototype.getGeometryIdsForOccurrencePath.call(
+      makeResolverViewer(bare), 0, [10])).toEqual([])
+  })
+
+  it('is prefix-inclusive: an assembly path lights up every leaf beneath it', () => {
+    // Two leaves under assembly-occurrence [10]; a lookup on [10] returns both,
+    // a lookup on the exact leaf returns just one.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [10, 21]},
+      {parentExpressId: 102, triangleCount: 1, occurrencePath: [99]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [10]).sort())
+      .toEqual([0, 1])
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [10, 20]))
+      .toEqual([0])
+  })
+
+  it('does not treat a numeric-prefix collision as a descendant ([1] must not match [12])', () => {
+    // Guards the `startsWith` join: keying on the raw string would let [1] match
+    // "12/..."; the '/' separator in the key prevents that.
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [1, 5]},
+      {parentExpressId: 101, triangleCount: 1, occurrencePath: [12, 5]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [1]))
+      .toEqual([0])
+  })
+
+  it('returns [] for an empty path, missing model, or a map without occurrence data', () => {
+    const mesh = makeOccurrenceMesh([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20]},
+    ])
+    const viewer = makeResolverViewer(mesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(viewer, 0, [])).toEqual([])
+
+    const noModel = makeResolverViewer(null)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(noModel, 0, [10, 20]))
+      .toEqual([])
+
+    // IFC-style mesh: instanceMap from per-vertex attrs has no occurrence tables.
+    const ifcMesh = makeTaggedMesh(1, 100)
+    const ifcViewer = makeResolverViewer(ifcMesh)
+    expect(ShareViewer.prototype.getInstanceIdsForOccurrencePath.call(ifcViewer, 0, [10, 20]))
+      .toEqual([])
   })
 })

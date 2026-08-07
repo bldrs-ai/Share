@@ -14,6 +14,13 @@ export const flags = [
   // land in identity-decoupling PR2.
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
+  // Workspace shell (conversational-CAD epic assist-300, #1657): the
+  // ProjectsDrawer (projects → models, localStorage-persisted) leftmost in
+  // RootLandscape + the logo popup with marketing links. Flag-off layout
+  // must stay byte-identical to today's — the merge into production chrome
+  // is invisible until flipped.
+  // See design/new/conversational-cad.md §2.
+  {name: 'workspace', isActive: false},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
@@ -71,6 +78,51 @@ export const flags = [
   // `ifcItemsMapParity` shares the same capture.
   // Design: design/new/viewer-replacement.md §3b.
   {name: 'conwayDirectIfc', isActive: true},
+  // OFF-switch for the streamed columnar IFC open (conway epic #390).
+  // By default the cache-miss IFC parse calls Conway's
+  // `OpenModelStreamed` instead of `OpenModelAsync`: the model's record
+  // index is columnar from birth (no per-record object phase — the
+  // dominant JS-heap cost of parsing large models). Everything
+  // downstream (mesh capture, properties, spatial tree, OPFS source
+  // spill) is unchanged, and Conway falls back to the classic open
+  // internally on any streamed-parse failure, so streaming can never
+  // fail a load the classic path would survive.
+  // Inverted semantics on purpose: `?feature=` can only turn flags ON,
+  // so the runtime escape hatch for a default-on behavior must be an
+  // off-flag — `?feature=disableStreamOpen` reverts one session (and
+  // A/Bs the same build); flipping this to true is the prod-wide kill
+  // switch.
+  {name: 'disableStreamOpen', isActive: false},
+  // Demand/tiled rendering (design/new/demand-tiled-rendering.md,
+  // #1613): cache-miss IFC/STEP parses open with DEFER_GEOMETRY and
+  // pump Conway's ExtractGeometryBatch — parse-time preview + the
+  // durable model assembling incrementally on screen instead of one
+  // 30s+ whole-model extraction. Default ON (shipped with the
+  // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
+  // the classic-path escape hatch and this flag the demand kill switch.
+  {name: 'demandGeometry', isActive: true},
+  // BatchedMesh render path: render the Conway-direct geometry as a
+  // THREE.BatchedMesh (one geometry per shared shape + per-instance
+  // transforms) instead of the merged BufferGeometry — the ~60% vertex-
+  // memory win measured in §3b.iv, at ~1 draw call. Picking is native
+  // (`batchId`). Off by default as a deploy-preview *validation gate*
+  // (render/pick can't be exercised headlessly); once confirmed in a
+  // preview this flips to always-on within the Conway-direct path. 3D
+  // selection-outline / isolate / GLB-cache for the batched path are
+  // follow-ups. Flip on via `?feature=batchedMesh`.
+  // Design: design/new/viewer-replacement.md §3b.iv.
+  {name: 'batchedMesh', isActive: false},
+  // Synthetic per-part coloring for STEP/CAD models that carry no
+  // presentation data. When a batched model comes back entirely
+  // default-grey (no COLOUR_RGB / STYLED_ITEM, e.g. the Jetenginestep
+  // AP203 export), each part is repainted from a curated palette (colors
+  // assigned by dense index over the sorted distinct parts, so ≤ palette
+  // -size parts never collide) — Onshape-style, so a multi-part assembly is
+  // legible instead of a grey blob. Strictly no-op the moment any real
+  // color is present, so IFC and colored STEP are untouched. Default-on; it
+  // only changes models that had zero color to begin with.
+  // See src/viewer/ifc/productPalette.js.
+  {name: 'autoColorParts', isActive: true},
 ]
 
 

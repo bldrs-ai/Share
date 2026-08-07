@@ -24,6 +24,63 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
+ * True when `pathname` addresses a temporary (uploaded) model. These live
+ * under the `/v/new/<uuid>` route and are stored only in OPFS — there is
+ * no remote source to reload them from, so clearing the cache leaves the
+ * URL pointing at a model that no longer exists.
+ *
+ * @param {string} pathname e.g. window.location.pathname
+ * @return {boolean}
+ */
+export function isTempModelPath(pathname) {
+  return typeof pathname === 'string' && pathname.includes('/v/new/')
+}
+
+
+/**
+ * Full path to the home model (`index.ifc`) with the default camera, as a
+ * plain string suitable for a hard `window.location.assign`. Mirrors the
+ * destination `navToDefault` computes for SPA navigation, including
+ * carrying the current query string forward — feature flags live there
+ * (`?feature=…`, read from `window.location.search` at runtime) and would
+ * otherwise be dropped by the cache-clear redirect.
+ *
+ * @param {?string} [appPrefix] e.g. '/share'; derived from the current
+ *   install prefix when omitted (matches BaseRoutes' computation).
+ * @return {string}
+ */
+export function homeModelPath(appPrefix) {
+  const prefix = appPrefix ||
+    `${window.location.pathname.startsWith('/Share') ? '/Share' : ''}/share`
+  const search = window.location.search || ''
+  const cameraHash = `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+  return `${prefix}/v/p/index.ifc${search}${cameraHash}`
+}
+
+
+/**
+ * Refresh the page after a Clear-Local-Cache reset. A normal model reloads
+ * from its remote source, so a plain page reload is enough. But a temporary
+ * (uploaded) model exists only in the OPFS cache we just cleared — reloading
+ * its `/v/new/<uuid>` URL would parse as a local model that is no longer
+ * present, and the loader would raise a "file not found" error dialog (with
+ * a Reset button). Detect that case and navigate to the home model instead,
+ * so the user gets a fresh session with no error — exactly what hitting
+ * Reset would have produced.
+ *
+ * @param {?string} [appPrefix] e.g. '/share'
+ */
+export function reloadAfterCacheClear(appPrefix) {
+  if (isTempModelPath(window.location.pathname)) {
+    disablePageReloadApprovalCheck()
+    window.location.assign(homeModelPath(appPrefix))
+    return
+  }
+  window.location.reload()
+}
+
+
+/**
  * Helper for calling navigate that will append search query to path,
  * if present, before appending an optional hash.
  *
@@ -52,8 +109,35 @@ export function navWith(navigate, path, options = {
 
 
 /**
+ * Merge the current query string into `path` when it carries none of its
+ * own, inserting it before any hash. Opening a model is a full page load
+ * (see `navigateToModel`), and most call sites build their destination
+ * from path segments alone (`${appPrefix}/v/new/${filename}`), so without
+ * this the reload drops `?feature=…` and the user falls out of whatever
+ * flags they were running — same reason `homeModelPath` carries the query
+ * forward across the cache-clear redirect.
+ *
+ * @param {string} path Destination, may contain its own search and/or hash
+ * @return {string}
+ */
+function withCurrentSearch(path) {
+  const currentSearch = (typeof window !== 'undefined' && window.location && window.location.search) || ''
+  if (currentSearch === '' || path.includes('?')) {
+    return path
+  }
+  const hashAt = path.indexOf('#')
+  if (hashAt === -1) {
+    return `${path}${currentSearch}`
+  }
+  return `${path.slice(0, hashAt)}${currentSearch}${path.slice(hashAt)}`
+}
+
+
+/**
  * Navigate to a model path with a full page reload to free memory.
  * During unit tests, falls back to SPA navigate to avoid jsdom reloads.
+ * The current query string is carried forward when the target doesn't
+ * specify its own (see `withCurrentSearch`).
  *
  * @param {string|object} target Destination path or location-like object
  * @param {Function} [navigate] Optional react-router navigate for test fallback
@@ -74,6 +158,8 @@ export function navigateToModel(target, navigate) {
   } else {
     throw new Error('navigateToModel: invalid target')
   }
+
+  path = withCurrentSearch(path)
 
   // In tests, prefer SPA navigate to keep assertions stable
   if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {

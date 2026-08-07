@@ -39,3 +39,9 @@ deno.lock
 # Claude Code local settings
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Thumbnail generator's local model cache (tools/thumbnails/generate.mjs).
+# Holds full-size sample models pulled from test-models so re-shoots cost
+# no LFS bandwidth; the generated thumbnails in src/assets/thumbnails ARE
+# committed, these source models are not.
+tools/thumbnails/cache/

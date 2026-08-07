@@ -4,6 +4,35 @@ import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {load, readModel} from './Loader'
 
 
+// Spark's real module boots a wasm sorter + workers that don't exist in
+// jsdom; the splat load test verifies the Loader plumbing (extension →
+// shim → fixup → convertToShareModel), not spark's decoder. Same mock
+// shape as splats.test.js.
+jest.mock('@sparkjsdev/spark', () => {
+  const three = require('three')
+  /** Stand-in for spark's SplatMesh. */
+  class SplatMesh extends three.Object3D {
+    /** @param {object} options */
+    constructor(options) {
+      super()
+      this.options = options
+      this.initialized = Promise.resolve(this)
+    }
+
+    /** @return {object} fixed local-space splat-centers box */
+    getBoundingBox() {
+      return new three.Box3(
+        new three.Vector3(-1, -1, -1),
+        new three.Vector3(1, 1, 1),
+      )
+    }
+  }
+  /** Stand-in for spark's SparkRenderer scene object. */
+  class SparkRenderer extends three.Object3D {}
+  return {SplatMesh, SparkRenderer}
+})
+
+
 let mathRandomSpy
 let mockViewer
 describe('Loader', () => {
@@ -122,6 +151,33 @@ describe('Loader', () => {
     }
   })
 
+  it('surfaces standard glTF scene/node names as Name/LongName on a GLB load (#1595)', async () => {
+    // End-to-end through the real GLTFLoader: cube.glb carries
+    // `scenes[0].name = 'Scene'` and `nodes[0].name = 'Cube'`.
+    // GLTFLoader puts those on `Object3D.name`; convertToShareModel
+    // must mirror them into the IFC-shaped Name/LongName the NavTree
+    // (reifyName) and Properties panel read — previously every node
+    // showed the 'Object' placeholder (issue #1595, e.g. NASA's
+    // ISS_stationary.glb rendered structure but no names). The root
+    // label composes the source filename in parens since authored
+    // scene names are usually generic exporter defaults.
+    mockViewer.IFC.type = 'glb'
+    const testPath = 'glb/cube.glb'
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, jest.fn(), true, jest.fn(), '')
+      expect(model.name).toBe('Scene (cube.glb)')
+      expect(model.Name.value).toBe('Scene (cube.glb)')
+      expect(model.LongName.value).toBe('Scene (cube.glb)')
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.Name.value).toBe('Cube')
+      expect(cube.LongName.value).toBe('Cube')
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('loads an OBJ model', async () => {
     mockViewer.IFC.type = 'obj'
     const testPath = 'obj/Bunny.obj'
@@ -165,6 +221,90 @@ describe('Loader', () => {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
       expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a SPLAT model', async () => {
+    mockViewer.IFC.type = 'splat'
+    const testPath = 'splat/cube.splat'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      // The fixup wraps the SplatMesh in a Group and stashes a bounds
+      // proxy on it so Box3.setFromObject-based framing works.
+      expect(model.geometry).toBeDefined()
+      expect(model.children.some((child) => child.name === 'Gaussian splats')).toBe(true)
+      expect(model.type).toBe('splat')
+      expect(model.format).toBe('splat')
+      expect(model.capabilities.expressIdPicking).toBe(false)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a USDA model', async () => {
+    mockViewer.IFC.type = 'usda'
+    const testPath = 'usd/cube.usda'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      // USD prim hierarchy surfaces as NavTree names: the fixture's
+      // Xform "Cube" contains Mesh "Geom".
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.Name.value).toBe('Cube')
+      const geom = cube.children.find((child) => child.name === 'Geom')
+      expect(geom).toBeDefined()
+      expect(geom.Name.value).toBe('Geom')
+      // Per-node expressID serials from convertToShareModel drive
+      // raycast part identification for placemarks.
+      expect(Number.isSafeInteger(geom.expressID)).toBe(true)
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a USDZ model', async () => {
+    mockViewer.IFC.type = 'usdz'
+    const testPath = 'usd/cube.usdz'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.children.some((child) => child.name === 'Geom')).toBe(true)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('rejects a Git LFS pointer with an actionable error, not a parse failure', async () => {
+    // bldrs-ai/test-models LFS-tracks every model extension it carries,
+    // so a URL that skips the Contents API dereference (a pasted
+    // raw.githubusercontent.com link) delivers ~130 bytes of pointer
+    // text. Without the guard, USDLoader would fail with an error that
+    // never mentions LFS.
+    mockViewer.IFC.type = 'usdz'
+    const pointer =
+      'version https://git-lfs.github.com/spec/v1\n' +
+      'oid sha256:364dde066e1c7a8e4d24060a3dc66e4bf98d9263d1a4b2c9f0e1a2b3c4d5e6f7\n' +
+      'size 24911208\n'
+    const restoreArrayBuffer = setupMockBlobWithContent(pointer)
+    try {
+      await expect(load(testPathToUrl('usd/cube.usdz'), mockViewer, jest.fn(), true, jest.fn(), ''))
+        .rejects.toThrow(/Git LFS/)
     } finally {
       restoreArrayBuffer()
     }
@@ -236,6 +376,28 @@ describe('Loader', () => {
 
       expect(result.geometry).toBeDefined()
       expect(result.geometry).toBe(meshChild.geometry)
+    })
+
+    it('does not hoist a BatchedMesh child geometry onto the model root', async () => {
+      // A BatchedMesh's `.geometry` is its internal packed buffer (all shapes
+      // in un-instanced local space), so hoisting it onto a Group root makes
+      // Box3.setFromObject read those un-placed bounds instead of recursing to
+      // the instance-placed children — fit-to-frame then zooms miles out
+      // (Schependomlaan regression). The batched child must be skipped.
+      const batched = new Mesh(new BufferGeometry(), new Material())
+      batched.geometry.setAttribute('position', new BufferAttribute(new Float32Array([0, 0, 0]), 3))
+      batched.isBatchedMesh = true
+
+      const mockLoader = {
+        parse: jest.fn().mockReturnValue({
+          children: [batched],
+          isObject3D: true,
+        }),
+      }
+
+      const result = await readModel(mockLoader, 'test-data', './', false, false, null, null)
+
+      expect(result.geometry).toBeUndefined()
     })
 
     it('logs warning when model has no geometry and children have no geometry', async () => {
@@ -344,27 +506,22 @@ describe('Loader', () => {
 
         // Verify progress messages are called in correct order
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
         // progress beat from the old wit-three parse path) is gone —
         // Conway-direct parse settings ride on OpenModel directly.
         // The new "Building model..." beat captures the post-parse
         // assembly step (buildConwayIfcModel + decorate).
-        expect(progressCalls).toContain('Parsing model geometry...')
-        expect(progressCalls).toContain('Building model...')
-        expect(progressCalls).toContain('Setting up coordinate system...')
-        expect(progressCalls).toContain('Fitting model to frame...')
-        expect(progressCalls).toContain('Gathering model statistics...')
-        expect(progressCalls).toContain('Model loaded successfully!')
+        expect(progressCalls).toContain('Opening model...')
+        expect(progressCalls).toContain('Assembling render mesh...')
 
         // Ensure onProgress was called multiple times.
         // Count: Determining file type, Preparing file download,
         // Reading model data, Parsing model geometry, Building model,
         // Setting up coordinate system, Fitting model to frame,
         // Gathering model statistics, Model loaded successfully.
-        const EXPECTED_PROGRESS_BEATS = 9
+        const EXPECTED_PROGRESS_BEATS = 4
         expect(onProgress).toHaveBeenCalledTimes(EXPECTED_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
@@ -383,23 +540,18 @@ describe('Loader', () => {
         await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Slice 5b: "Configuring loader..." (the applyWebIfcConfig
         // progress beat from the old wit-three parse path) is gone —
         // Conway-direct parse settings ride on OpenModel directly.
         // The new "Building model..." beat captures the post-parse
         // assembly step (buildConwayIfcModel + decorate).
-        expect(progressCalls).toContain('Parsing model geometry...')
-        expect(progressCalls).toContain('Building model...')
-        expect(progressCalls).toContain('Setting up coordinate system...')
-        expect(progressCalls).toContain('Fitting model to frame...')
-        expect(progressCalls).toContain('Gathering model statistics...')
-        expect(progressCalls).toContain('Model loaded successfully!')
+        expect(progressCalls).toContain('Opening model...')
+        expect(progressCalls).toContain('Assembling render mesh...')
 
         // Verify that progress was called multiple times for IFC-type loading
-        const MIN_PROGRESS_BEATS = 9
+        const MIN_PROGRESS_BEATS = 4
         expect(onProgress.mock.calls.length).toBeGreaterThanOrEqual(MIN_PROGRESS_BEATS)
       } finally {
         restoreArrayBuffer()
@@ -416,15 +568,14 @@ describe('Loader', () => {
         await load(testPathToUrl('obj/Bunny.obj'), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         expect(progressCalls).toContain('Decoding model data...')
         expect(progressCalls).toContain('Processing model data...')
         expect(progressCalls).toContain('Applying model fixups...')
         expect(progressCalls).toContain('Converting model format...')
 
-        expect(onProgress).toHaveBeenCalledTimes(7)
+        expect(onProgress).toHaveBeenCalledTimes(6)
       } finally {
         restoreArrayBuffer()
       }
@@ -440,16 +591,15 @@ describe('Loader', () => {
         await load(testPathToUrl('stl/cube.stl'), mockViewer, onProgress, true, setOpfsFile, '')
 
         const progressCalls = onProgress.mock.calls.map((call) => call[0])
-        expect(progressCalls).toContain('Determining file type...')
         expect(progressCalls).toContain('Preparing file download...')
-        expect(progressCalls).toContain('Reading model data...')
+        expect(progressCalls).toContain('Buffering model bytes...')
         // Should NOT contain 'Decoding model data...' for binary files
         expect(progressCalls).not.toContain('Decoding model data...')
         expect(progressCalls).toContain('Processing model data...')
         expect(progressCalls).toContain('Applying model fixups...')
         expect(progressCalls).toContain('Converting model format...')
 
-        expect(onProgress).toHaveBeenCalledTimes(6)
+        expect(onProgress).toHaveBeenCalledTimes(5)
       } finally {
         restoreArrayBuffer()
       }
@@ -477,7 +627,7 @@ describe('Loader', () => {
 
           // Mock the internal loader call
           if (progressCallback) {
-            progressCallback('Parsing model geometry...')
+            progressCallback('Opening model...')
           }
 
           // Simulate Conway calling back with progress
@@ -487,10 +637,10 @@ describe('Loader', () => {
 
           // Mock the rest of the IFC loading process
           if (progressCallback) {
-            progressCallback('Setting up coordinate system...')
+            progressCallback('Assembling render mesh...')
             progressCallback('Fitting model to frame...')
             progressCallback('Gathering model statistics...')
-            progressCallback('Model loaded successfully!')
+            progressCallback('Assembling render mesh...')
           }
 
           return mockModel
@@ -504,12 +654,12 @@ describe('Loader', () => {
 
       // Verify that all expected progress messages were called
       expect(onProgress).toHaveBeenCalledWith('Configuring loader...')
-      expect(onProgress).toHaveBeenCalledWith('Parsing model geometry...')
+      expect(onProgress).toHaveBeenCalledWith('Opening model...')
       expect(onProgress).toHaveBeenCalledWith('Test progress from Conway')
-      expect(onProgress).toHaveBeenCalledWith('Setting up coordinate system...')
+      expect(onProgress).toHaveBeenCalledWith('Assembling render mesh...')
       expect(onProgress).toHaveBeenCalledWith('Fitting model to frame...')
       expect(onProgress).toHaveBeenCalledWith('Gathering model statistics...')
-      expect(onProgress).toHaveBeenCalledWith('Model loaded successfully!')
+      expect(onProgress).toHaveBeenCalledWith('Assembling render mesh...')
 
       // Verify total number of progress calls
       expect(onProgress).toHaveBeenCalledTimes(7)
@@ -623,7 +773,7 @@ function testPathToUrl(relativePath) {
  */
 function testPathToContent(relativePath) {
   // Determine if file is binary based on extension
-  const binaryExtensions = ['fbx', 'glb', 'gltf']
+  const binaryExtensions = ['fbx', 'glb', 'gltf', 'ksplat', 'sog', 'splat', 'spz', 'usd', 'usdc', 'usdz']
   const extension = relativePath.split('.').pop().toLowerCase()
   const isBinary = binaryExtensions.includes(extension)
 

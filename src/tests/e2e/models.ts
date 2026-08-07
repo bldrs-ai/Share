@@ -1,6 +1,7 @@
 import {Page, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {join} from 'path'
+import {dismissLoadGrace} from './utils'
 
 
 /**
@@ -186,4 +187,7 @@ export async function waitForModelReady(page: Page) {
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
   await page.waitForTimeout(animWaitTimeMs)
+  // Drop the transient post-load grace snackbar so it doesn't land in
+  // screenshots (conway #301) — see dismissLoadGrace.
+  await dismissLoadGrace(page)
 }

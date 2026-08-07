@@ -8,9 +8,14 @@ import GlassesIcon from '../assets/icons/Glasses.svg'
 /**
  * @param {IfcIsolator} The IFC isoaltor
  * @param {number} IFC element id
+ * @param {Array<number>} [occurrencePath] STEP occurrence path of the node, if any
+ * @param {number} [geometryExpressId] For an ephemeral solid node (a multibody
+ *   STEP part's named body), the solid's own express id — narrows the hide to
+ *   that one body's instances instead of the whole part occurrence. Null for
+ *   products and IFC.
  * @return {ReactElement}
  */
-export default function HideToggleButton({elementId}) {
+export default function HideToggleButton({elementId, occurrencePath = null, geometryExpressId = null}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
@@ -18,6 +23,24 @@ export default function HideToggleButton({elementId}) {
   const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
+    // STEP: hide this occurrence's own geometry instances. Hiding by expressID
+    // would hit the shared product_definition_shape and vanish every reuse of
+    // the part (the reported "eye does nothing / H hides both"); resolving the
+    // occurrence path to instances hides only this node's placement. The
+    // isolator syncs the store, so the eye toggles without updateHiddenStatus.
+    if (Array.isArray(occurrencePath) && occurrencePath.length > 0 &&
+        typeof viewer.getInstanceIdsForOccurrencePath === 'function') {
+      if (!isHidden) {
+        // The geometry-id filter (ephemeral solid nodes only) narrows the
+        // hide from the whole part occurrence to the one named body.
+        viewer.isolator.hideOccurrence(
+          elementId,
+          viewer.getInstanceIdsForOccurrencePath(0, occurrencePath, {geometryExpressId}))
+      } else {
+        viewer.isolator.unHideOccurrence(elementId)
+      }
+      return
+    }
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
     if (!isHidden) {
       viewer.isolator.hideElementsById(toBeHidden)

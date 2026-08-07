@@ -84,6 +84,32 @@ describe('viewer/ifc/buildConwayIfcModel', () => {
     expect(stats.parentCount).toBe(1)
   })
 
+  it('threads each PlacedGeometry.occurrencePath into the instance map (STEP)', () => {
+    // One reused part-type (parent 100) at two occurrences. The assembled map
+    // must let a caller resolve occurrence-path → instance and back, so a
+    // reused STEP part stays per-occurrence selectable end-to-end.
+    const api = makeApi({
+      999: {
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+      },
+    })
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 2,
+        get: (i) => i === 0 ?
+          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, occurrencePath: [10, 20]} :
+          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, occurrencePath: [11, 20]},
+      },
+    }]
+    const {instanceMap} = buildConwayIfcModel(flatMeshes, api, 0)
+    expect(Array.from(instanceMap.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([0])
+    expect(Array.from(instanceMap.getInstanceIdsByOccurrencePath([11, 20]))).toEqual([1])
+    expect(instanceMap.getOccurrencePathByInstance(0)).toEqual([10, 20])
+    expect(instanceMap.getOccurrencePathByInstance(1)).toEqual([11, 20])
+  })
+
   it('preserves per-instance separation through to subset construction', () => {
     // Three instances of one shared shape — the IfcMappedItem
     // motivating case. Per-instance subset returns one triangle's

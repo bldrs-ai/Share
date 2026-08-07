@@ -7,6 +7,7 @@
 
 import {BufferAttribute, BufferGeometry, Mesh, Scene} from 'three'
 import {__sanitizeCachedTitleForTest, convertToShareModel} from './Loader'
+import {encodeElementProperties, makeElementPropertiesPayload} from './bldrsElementProperties'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets} from '../viewer/three/elementSubsets'
 
@@ -271,27 +272,27 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
 
   it('cache-hit BLDRS_element_properties hydrates getItemProperties and getPropertySets', () => {
     // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
-    // `{compressed, decode}` lazy payload. The hydration block in
-    // convertToShareModel attaches closures that read the maps for
-    // entity / pset lookups via the payload's `decode()` (which caches
-    // internally — see makeLazyPayload). Each closure call hits
-    // `decode()` but the gzip / JSON.parse work happens once.
-    const decoded = {
-      itemProperties: {
-        100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
-        500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
-      },
-      propertySets: {100: [500]},
+    // `{compressed, getRecord, getPsetIds}` lazy per-entity payload.
+    // The hydration block in convertToShareModel attaches closures
+    // that delegate lookups to the payload's accessors (which decode
+    // the header index + record blocks lazily — see
+    // makeElementPropertiesPayload).
+    const records = {
+      100: {expressID: 100, Name: {type: 1, value: 'Wall A'}},
+      500: {expressID: 500, Name: {type: 1, value: 'Pset_WallCommon'}, HasProperties: []},
     }
-    // Realistic mock: decode() returns the same object every time
-    // (proves the closures use the cached payload, not re-parse).
+    const psetIndex = {100: [500]}
     const mesh = new Mesh(new BufferGeometry())
-    let decodeReturns = 0
+    let accessorCalls = 0
     mesh.userData.bldrsElementProperties = {
       compressed: new Uint8Array([0]),
-      decode() {
-        decodeReturns++
-        return decoded
+      getRecord(id) {
+        accessorCalls++
+        return records[id]
+      },
+      getPsetIds(id) {
+        accessorCalls++
+        return psetIndex[id] ?? []
       },
     }
     convertToShareModel(mesh, makeViewerStub())
@@ -299,12 +300,8 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     expect(typeof mesh.getItemProperties).toBe('function')
     expect(typeof mesh.getPropertySets).toBe('function')
     // No decode happens at hydration time — closures defer the work.
-    expect(decodeReturns).toBe(0)
+    expect(accessorCalls).toBe(0)
 
-    // Each closure invocation calls decode() but the real
-    // makeLazyPayload caches internally so the actual decompress +
-    // parse happens once. Our mock returns the same object reference
-    // each time; that's what we assert.
     const wall = mesh.getItemProperties(100)
     expect(wall.Name.value).toBe('Wall A')
     const pset = mesh.getItemProperties(500)
@@ -314,22 +311,16 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // matching the Properties.jsx consumer contract.
     const psets = mesh.getPropertySets(100)
     expect(psets).toHaveLength(1)
-    expect(psets[0]).toEqual(decoded.itemProperties[500])
-
-    // Caching invariant: every decode() call returned the same object
-    // ref (i.e. the closures consume the payload's cached form rather
-    // than asking for a fresh parse). That's what makes the lazy
-    // wrapper a one-shot decompress instead of one-per-lookup.
-    expect(decodeReturns).toBeGreaterThan(0)
+    expect(psets[0]).toEqual(records[500])
+    expect(accessorCalls).toBeGreaterThan(0)
   })
 
   it('cache-hit Properties: getPropertySets returns [] for a product with no psets', () => {
-    const decoded = {itemProperties: {100: {expressID: 100}}, propertySets: {}}
+    // Real payload over real container bytes — pins the
+    // encode → lazy-read integration on the consumer surface.
     const mesh = new Mesh(new BufferGeometry())
-    mesh.userData.bldrsElementProperties = {
-      compressed: new Uint8Array([0]),
-      decode: () => decoded,
-    }
+    mesh.userData.bldrsElementProperties = makeElementPropertiesPayload(
+      encodeElementProperties({100: {expressID: 100}}, {}))
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getPropertySets(100)).toEqual([])
     // Also for an expressID that isn't in the index at all.
@@ -343,10 +334,8 @@ describe('Loader/convertToShareModel — Phase 2b.2 capability + subset wiring',
     // undefined lets the consumer's null-guard kick in. Critical: no
     // throw on lookup miss.
     const mesh = new Mesh(new BufferGeometry())
-    mesh.userData.bldrsElementProperties = {
-      compressed: new Uint8Array([0]),
-      decode: () => ({itemProperties: {1: {x: 1}}, propertySets: {}}),
-    }
+    mesh.userData.bldrsElementProperties = makeElementPropertiesPayload(
+      encodeElementProperties({1: {x: 1}}, {}))
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.getItemProperties(1)).toEqual({x: 1})
     expect(mesh.getItemProperties(9999)).toBeUndefined()
@@ -428,27 +417,124 @@ describe('Loader/convertToShareModel — cache-hit page title hydration', () => 
   })
 
   it('leaves Name and LongName consistent with model.name when a pre-set name takes precedence', () => {
-    // Reviewer-flagged inconsistency: previously, if model.name was
-    // pre-set AND userData.bldrsTitle was set, model.name kept its
-    // pre-existing value but model.{Name,LongName} got filled from
-    // the stale cached title — splitting the source of truth.
-    // The hydration block now treats a pre-set model.name as a hard
-    // signal that upstream decided, so it skips all three writes and
-    // lets the existing `${mimeType} model` fallback fill Name/
-    // LongName consistently with the placeholder.
+    // Reviewer-flagged inconsistency: if model.name is pre-set AND
+    // userData.bldrsTitle is set, model.name keeps its pre-existing
+    // value and the stale cached title is ignored entirely. Since the
+    // standard-naming change (#1595), Name/LongName mirror the winning
+    // model.name — one source of truth for all three fields — instead
+    // of degrading to the `${mimeType} model` placeholder.
     const mesh = new Mesh(new BufferGeometry())
     mesh.name = 'From IFC parse'
     mesh.userData.bldrsTitle = 'Stale Cache Title'
     mesh.mimeType = 'glb'
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.name).toBe('From IFC parse')
-    // Name/LongName fall through to the `${mimeType} model`
-    // placeholder rather than picking up the stale cache title.
-    // (If you want them to mirror model.name, plumb that through at
-    // the IFC parse site — convertToShareModel only reasons about
-    // model.userData on the cache-hit path.)
-    expect(mesh.Name.value).toBe('glb model')
-    expect(mesh.LongName.value).toBe('glb model')
+    expect(mesh.Name.value).toBe('From IFC parse')
+    expect(mesh.LongName.value).toBe('From IFC parse')
+  })
+})
+
+
+describe('Loader/convertToShareModel — standard scenegraph node naming (#1595)', () => {
+  // three.js loaders carry the source file's node names on
+  // `Object3D.name` (GLTFLoader copies glTF `nodes[i].name` — e.g.
+  // NASA's ISS_stationary.glb names every node; OBJLoader uses o/g
+  // group names). The decoration step must surface those through the
+  // IFC-shaped `Name`/`LongName` that reifyName (NavTree) and the
+  // Properties panel read, instead of stamping the 'Object'
+  // placeholder over them.
+
+  it('fills Name/LongName from Object3D.name on child nodes', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = 'S0_Truss'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('S0_Truss')
+    expect(child.LongName.value).toBe('S0_Truss')
+  })
+
+  it('keeps the legacy Object placeholder for unnamed child nodes', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry()) // Object3D.name defaults to ''
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('Object')
+    expect(child.LongName.value).toBe('Object')
+  })
+
+  it('does not clobber a pre-existing IFC-shaped Name on a child', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = 'raw scenegraph name'
+    child.Name = {value: 'IFC-provided name'}
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('IFC-provided name')
+  })
+
+  it('sanitizes child node names (untrusted-file boundary)', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = '<b>Node ‮</b>'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('bNode/b')
+  })
+
+  it('a child name that sanitizes to nothing falls back to the Object placeholder', () => {
+    const root = new Mesh(new BufferGeometry())
+    const child = new Mesh(new BufferGeometry())
+    child.name = ' ‮<>'
+    root.add(child)
+    convertToShareModel(root, makeViewerStub())
+    expect(child.Name.value).toBe('Object')
+  })
+
+  it('names nested descendants from their own Object3D.name', () => {
+    const root = new Mesh(new BufferGeometry())
+    const mid = new Mesh(new BufferGeometry())
+    mid.name = 'ISS_stationary'
+    const leaf = new Mesh(new BufferGeometry())
+    leaf.name = '23_港_2020_Model'
+    root.add(mid)
+    mid.add(leaf)
+    convertToShareModel(root, makeViewerStub())
+    expect(mid.Name.value).toBe('ISS_stationary')
+    expect(leaf.Name.value).toBe('23_港_2020_Model')
+  })
+
+  it('uses the glTF scene name for the root Name/LongName (plain GLB)', () => {
+    // GLTFLoader sets the returned scene Group's `name` from the glTF
+    // `scenes[n].name`. For a plain (non-Bldrs) GLB that IS the model
+    // root, so the NavTree root label / page title use the authored
+    // scene name instead of the "glb model" placeholder.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'ISS_stationary'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('ISS_stationary')
+    expect(mesh.Name.value).toBe('ISS_stationary')
+    expect(mesh.LongName.value).toBe('ISS_stationary')
+  })
+
+  it('sanitizes a file-derived root name before it reaches Name / page title', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene‮<script>'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Scenescript')
+    expect(mesh.Name.value).toBe('Scenescript')
+  })
+
+  it('a root name that sanitizes to nothing re-enables cached-title promotion', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = ' ‮'
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
   })
 })
 
@@ -533,5 +619,90 @@ describe('Loader/sanitizeCachedTitle — untrusted-input scrubbing', () => {
     mesh.mimeType = 'glb'
     convertToShareModel(mesh, makeViewerStub())
     expect(mesh.name).toBe('glb model')
+  })
+})
+
+
+describe('Loader/convertToShareModel — root label filename composition (#1595)', () => {
+  // Authored scene names are often generic exporter defaults
+  // (Blender's "Scene"), so the root label composes the source
+  // filename in parens — "Scene (ISS_stationary.glb)" — matching the
+  // three.js editor's use of the import filename. The filename comes
+  // from Loader#load: recent-files entry for uploads, trailing path
+  // part for URLs.
+
+  it('composes "<sceneName> (<fileName>)" when both exist', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'ISS_stationary.glb'})
+    expect(mesh.name).toBe('Scene (ISS_stationary.glb)')
+    expect(mesh.Name.value).toBe('Scene (ISS_stationary.glb)')
+    expect(mesh.LongName.value).toBe('Scene (ISS_stationary.glb)')
+  })
+
+  it('uses the filename alone when the file has no scene name', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'ISS_stationary.glb'})
+    expect(mesh.name).toBe('ISS_stationary.glb')
+    expect(mesh.Name.value).toBe('ISS_stationary.glb')
+  })
+
+  it('does not duplicate when the scene name equals the filename', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'cube.glb'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'cube.glb'})
+    expect(mesh.name).toBe('cube.glb')
+  })
+
+  it('keeps behavior unchanged when no fileName is provided', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub())
+    expect(mesh.name).toBe('Scene')
+  })
+
+  it('does not append the filename to a cache-stamped IFC project title', () => {
+    // Cache-hit GLB of an IFC: the bldrsTitle is the real project name
+    // ("Momentum"); appending the source filename would diverge from
+    // the live-parse page title.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    expect(mesh.name).toBe('Momentum')
+    expect(mesh.Name.value).toBe('Momentum')
+  })
+
+  it('does not append when the scene name IS the stamped cache title (0.10.0 writer)', () => {
+    // New-writer artifacts stamp the title into BOTH scenes[0].name and
+    // extras.bldrsTitle; GLTFLoader hands the scene name back on
+    // model.name. Equality with the cached title marks it as an IFC
+    // project name, not an authored scenegraph name.
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Momentum'
+    mesh.userData.bldrsTitle = 'Momentum'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: 'index.ifc'})
+    expect(mesh.name).toBe('Momentum')
+  })
+
+  it('sanitizes the filename before composing', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: '<evil>‮name.glb'})
+    expect(mesh.name).toBe('Scene (evilname.glb)')
+  })
+
+  it('a filename that sanitizes to nothing leaves the scene name alone', () => {
+    const mesh = new Mesh(new BufferGeometry())
+    mesh.name = 'Scene'
+    mesh.mimeType = 'glb'
+    convertToShareModel(mesh, makeViewerStub(), {fileName: ' ‮<>'})
+    expect(mesh.name).toBe('Scene')
   })
 })

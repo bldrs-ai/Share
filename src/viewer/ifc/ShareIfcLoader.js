@@ -17,12 +17,72 @@
 // those were fields on the fork's IFCManager because parse was
 // attached to it. Now we own the loader so we hold direct refs.
 
+import {Mesh} from 'three'
+import {assembleBatchedModel, buildBatchedConwayModel} from './buildBatchedConwayModel'
+import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {buildConwayIfcModel} from './buildConwayIfcModel'
 import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIfcLoader'
+import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
+import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
+import {payloadToPreviewMesh} from './parsePreviewMesh'
 import {isOutOfMemoryError} from '../../utils/oom'
+import {hasParams} from '../../utils/location'
+import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {runIfcItemsMapParityCheck} from './ifcItemsMapParity'
+import ProgressiveLoadSession from '../ProgressiveLoadSession'
 import ShareIfcManager from './ShareIfcManager'
+import debug, {DEBUG, WARN, isLogEnabled} from '../../utils/debug'
+
+
+/**
+ * Group the captured FlatMesh stream by shared geometry and log the
+ * instancing analysis (draw-call + vertex-memory delta vs. the merged
+ * path).
+ *
+ * Normally the whole grouping is gated on `isLogEnabled(DEBUG)`, not just
+ * the print: on a large model it walks every placement (tens of thousands)
+ * and re-fetches each unique shape's size across the Conway boundary, so
+ * building it on every default-level load — only to drop the result —
+ * would be pure waste. There is no feature flag (the grouper is a
+ * permanent diagnostic and the foundation the BatchedMesh render path,
+ * §3b.iv, builds on); verbosity is the gate. `force` overrides the gate
+ * and logs at info level — used when `?feature=batchedMesh` is on so the
+ * operator running the eval sees the numbers without raising the log
+ * level. Never throws into the load path: a probe failure must not
+ * discard a successful parse.
+ *
+ * @param {object} ifcAPI Conway IfcAPI bound to the model
+ * @param {number} modelID
+ * @param {Array} captured FlatMeshes captured during the parse
+ * @param {boolean} [force] log at info level regardless of verbosity
+ */
+function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
+  if (!force && !isLogEnabled(DEBUG)) {
+    return
+  }
+  try {
+    const {stats} = flatMeshToInstancedModel(captured, ifcAPI, modelID)
+    const reduction = stats.vertexReductionRatio.toFixed(2)
+    const line =
+      `[instancedMeshes] modelID=${modelID} — ` +
+      `instances=${stats.instanceCount} ` +
+      `uniqueShapes=${stats.uniqueGeometryCount} ` +
+      `(shared=${stats.sharedGeometryCount} singleton=${stats.singletonGeometryCount}) ` +
+      `→ instancedDrawCalls=${stats.uniqueGeometryCount} (merged path = 1) | ` +
+      `verts merged=${stats.mergedVertexCount} instanced=${stats.instancedVertexCount} ` +
+      `(reductionRatio=${reduction}) bytesSaved=${stats.estimatedBytesSaved} | ` +
+      `mostInstanced: geometry#${stats.topInstancedGeometryID} ×${stats.topInstancedCount}`
+    if (force) {
+      // eslint-disable-next-line no-console
+      console.info(line)
+    } else {
+      debug(DEBUG).log(line)
+    }
+  } catch (err) {
+    console.warn('[instancedMeshes] probe failed (non-fatal):', err)
+  }
+}
 
 
 /**
@@ -94,27 +154,140 @@ export default class ShareIfcLoader {
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
-    try {
-      if (onProgress) {
-        onProgress('Parsing model geometry...')
-      }
-      const ifcAPI = this.ifcManager.ifcAPI
-      const {modelID, captured} = await parseIfcWithConway(buffer, ifcAPI)
+    // The progressive-load session owns the format-neutral load
+    // instrumentation — demand-preview lifecycle, strict-fit camera
+    // follow, and progress/summary reporting. IFC and STEP both route
+    // through this parse, so both trigger the same session; format
+    // knowledge stays below (payload/batch → mesh conversion).
+    const scene = typeof ifc.context?.getScene === 'function' ?
+      ifc.context.getScene() : null
+    // A `#c:` permalink pins the camera to an exact pose — the user asked
+    // for THAT view, not an auto-frame. Suppress the load-time camera
+    // follow so streaming geometry can't drag the camera off the pinned
+    // pose (the follow's last portrait fit was overriding the permalink on
+    // uncached mobile loads, where a desktop cache-hit — which runs no
+    // progressive session — showed the permalink correctly). The preview
+    // meshes still render; only the camera stays put.
+    const frameCamera = !hasParams(HASH_PREFIX_CAMERA)
+    const session = new ProgressiveLoadSession({
+      scene: scene !== null && isFeatureEnabled('demandGeometry') ? scene : null,
+      getControls: () => ifc.context?.ifcCamera?.cameraControls,
+      getCamera: () => ifc.context?.ifcCamera?.perspectiveCamera,
+      frameCamera,
+      onProgress,
+    })
 
-      if (onProgress) {
-        onProgress('Building model...')
+    let builder = null
+
+    try {
+      session.report('Opening model...')
+      const ifcAPI = this.ifcManager.ifcAPI
+      // onProgress is threaded into conway's ON_PROGRESS extension so the
+      // opaque gap between 'Parsing model geometry...' and 'Building
+      // model...' carries real per-phase counts (headerParse / dataParse /
+      // geometry — conway #301). Engines without the extension just keep
+      // the coarse strings.
+      //
+      // Demand/tiled rendering (#1613): the parse-time preview payloads
+      // (slice A2) and the durable pump batches (slice A) both stream
+      // into the session's preview group — format-specific here is only
+      // the conversion to meshes; lifecycle, fitting, and reporting are
+      // the session's. Every preview step is best-effort: a preview
+      // failure must never break the load.
+      const usePreview = session.previewGroup !== null
+      const previewGeometryCache = new Map()
+      const previewMaterialCache = new Map()
+
+      const onPreviewMesh = !usePreview ? undefined : (payload) => {
+        try {
+          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
+          if (mesh !== null) {
+            session.addPreviewMesh(mesh)
+          }
+        } catch (e) {
+          debug(WARN).warn('parse preview mesh skipped:', e)
+        }
       }
-      const {mesh: ifcModel, stats: buildStats} = buildConwayIfcModel(
-        captured, ifcAPI, modelID)
-      const scene = typeof ifc.context?.getScene === 'function' ?
-        ifc.context.getScene() : null
-      decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+
+      // Slice B1: pump deltas assemble the DURABLE BatchedMesh model
+      // incrementally — the on-screen group IS the final model, so
+      // there is no monolithic end-of-load build and no swap. Falls
+      // back to the render-only preview mesh (and the end-of-load
+      // builds below) on any builder failure.
+      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
+        try {
+          if (builder === null) {
+            builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
+              onBounds: (box) => session.notifyBounds(box),
+            })
+            scene.add(builder.root)
+          }
+          builder.appendBatch(batch)
+        } catch (e) {
+          debug(WARN).warn('incremental batch append failed; preview fallback:', e)
+          try {
+            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
+            session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
+          } catch (previewError) {
+            debug(WARN).warn('demand preview batch skipped:', previewError)
+          }
+        }
+      }
+
+      const {modelID, captured} =
+        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
+
+      session.beginAssembly()
+
+      let ifcModel
+      let buildStats
+
+      // Slice B1: the incrementally assembled batches only need
+      // decoration — the group already on screen becomes the durable
+      // model. Fallback on any error: remove the partial group and run
+      // the end-of-load builds below from `captured` as before.
+      if (builder !== null && builder.hasContent()) {
+        try {
+          const incremental = builder.finalize()
+          ifcModel = assembleBatchedModel(
+            incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
+          buildStats = incremental.stats
+        } catch (e) {
+          debug(WARN).warn('incremental assembly failed; end-of-load fallback:', e)
+          try {
+            scene.remove(builder.root)
+          } catch {
+            // best-effort
+          }
+          ifcModel = undefined
+        }
+      }
+
+      // BatchedMesh render path (`?feature=batchedMesh`, §3b.iv): render the
+      // deduped geometry as a THREE.BatchedMesh. Falls back to the merged
+      // path on any construction error so the flag can never break a load.
+      if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
+        try {
+          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
+          ifcModel = batched.model
+          buildStats = batched.stats
+        } catch (e) {
+          debug(WARN).warn('batchedMesh build failed; falling back to merged path:', e)
+        }
+      }
+      if (ifcModel === undefined) {
+        const merged = buildConwayIfcModel(captured, ifcAPI, modelID)
+        ifcModel = merged.mesh
+        buildStats = merged.stats
+        decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
+      }
+
+      // Swap the preview out before the real model installs — the
+      // session stops the camera follow and disposes preview meshes.
+      session.finish()
 
       ifc.addIfcModel(ifcModel)
 
-      if (onProgress) {
-        onProgress('Setting up coordinate system...')
-      }
       // eslint-disable-next-line new-cap
       const matrixArr = await ifcAPI.GetCoordinationMatrix(modelID)
       // Apply the coordination matrix to the model directly. Wit-three's
@@ -131,14 +304,16 @@ export default class ShareIfcLoader {
         ifcModel.matrixAutoUpdate = false
       }
 
-      if (onProgress) {
-        onProgress('Fitting model to frame...')
-      }
-      ifc.context.fitToFrame()
+      // Framing the freshly loaded model is the cross-format caller's job
+      // (CadView, right after it adds the model to the scene): it applies a
+      // `#c:` permalink pose when the URL carries one, and only auto-frames
+      // otherwise. A loader-local `fitToFrame()` here fought that — it ran
+      // unconditionally, so on the IFC/STEP path a permalink camera got
+      // overwritten by the auto-fit (the mobile "camera way off" bug),
+      // while other formats framed correctly through CadView alone. Keep
+      // scene/camera management uniform across formats: no format-specific
+      // fit lives in the loader.
 
-      if (onProgress) {
-        onProgress('Gathering model statistics...')
-      }
       // `getStatistics` / `getConwayVersion` are Conway-adapter extensions
       // (Logger-backed); stock web-ifc (the USE_WEBIFC_SHIM=false engine)
       // doesn't expose them. The model mesh is already built + added above,
@@ -162,9 +337,29 @@ export default class ShareIfcLoader {
         }
       }
 
-      if (onProgress) {
-        onProgress('Model loaded successfully!')
+      // Model summary onto the report's Total line (replaces the old
+      // per-stage stats/coordinate-system lines): mesh shape from the
+      // build, units from the feature-detected scaling factor
+      // (1 = m, 0.001 = mm).
+      try {
+        const parts = []
+        if (buildStats) {
+          parts.push(`vertices=${buildStats.vertexCount ?? buildStats.totalVerts ?? '?'}`)
+          parts.push(`triangles=${buildStats.triangleCount ?? buildStats.totalTriangles ?? '?'}`)
+        }
+        if (typeof ifcAPI.GetLinearScalingFactor === 'function') {
+          // eslint-disable-next-line new-cap
+          const metresPerUnit = ifcAPI.GetLinearScalingFactor(modelID)
+          const MM = 0.001
+          const unitLabel = metresPerUnit === 1 ? 'm' :
+            metresPerUnit === MM ? 'mm' : `${metresPerUnit} m`
+          parts.push(`units=${unitLabel}`)
+        }
+        session.setSummary(parts)
+      } catch (e) {
+        debug(WARN).warn('load summary skipped:', e)
       }
+
 
       // Parallel-run the new IfcItemsMap populators against the live
       // model and log the diff. Diagnostic only — no behavior change.
@@ -174,6 +369,12 @@ export default class ShareIfcLoader {
       if (isFeatureEnabled('ifcItemsMapParity')) {
         runIfcItemsMapParityCheck(ifcAPI, ifcModel, captured)
       }
+      // Instanced-rendering analysis: groups the captured stream by shared
+      // `geometryExpressID` and reports the GPU-instancing draw-call +
+      // vertex-memory delta. Logged under verbose normally; forced to info
+      // level when `?feature=batchedMesh` is on so the eval shows the
+      // numbers alongside what just rendered as a BatchedMesh.
+      logInstancedModelStats(ifcAPI, modelID, captured, isFeatureEnabled('batchedMesh'))
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal
@@ -188,10 +389,22 @@ export default class ShareIfcLoader {
         `instances=${buildStats.instanceCount} parents=${buildStats.parentCount} ` +
         `materials=${buildStats.materialCount} ` +
         `skippedFlatMeshes=${buildStats.skippedFlatMeshes} ` +
-        `skippedPlaced=${buildStats.skippedPlacedGeometries}`)
+        `skippedPlaced=${buildStats.skippedPlacedGeometries} ` +
+        `skippedCoincident=${buildStats.skippedCoincidentPlacements ?? 0}`)
 
       return ifcModel
     } catch (err) {
+      session.abort()
+      // A partially assembled incremental group must not survive a
+      // failed load — remove it (its wasm-side twin is released by the
+      // engine's own error paths).
+      try {
+        if (builder !== null && builder.root.parent) {
+          builder.root.parent.remove(builder.root)
+        }
+      } catch {
+        // best-effort
+      }
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.

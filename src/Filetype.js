@@ -10,19 +10,36 @@ export const supportedTypes = [
   'glb',
   'gltf',
   'ifc',
+  // Gaussian splat formats (loaded via Spark — see src/loader/splats.js).
+  // Listed with the rest so routes, drag-drop and permalinks all pick
+  // them up.
+  'ksplat',
   'obj',
   'pdb',
+  'ply',
+  'sog',
+  'splat',
+  'spz',
   'step',
   'stl',
   'stp',
+  'usd',
+  'usda',
+  'usdc',
+  'usdz',
   'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
 
-/** Make a non-capturing group of a choice of filetypes. */
-export const typeRegexStr = `(?:${supportedTypes.join('|')})`
+/**
+ * Make a non-capturing group of a choice of filetypes. Alternation is
+ * first-match, so sort longest-first: with 'usd' ahead of 'usda', a bare
+ * `exec('usda')` would match just the 'usd' prefix and misreport the
+ * extension.
+ */
+export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - a.length).join('|')})`
 
 
 /** */
@@ -31,6 +48,19 @@ export const filetypeRegex = new RegExp(typeRegexStr, 'i')
 
 /** Prepend it with a '.' to make a file suffix*/
 const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
+
+
+/**
+ * The model file's ".<type>" suffix at a path-segment boundary (followed by
+ * '/' or end-of-string). Use this — not the bare `filetypeRegex` — to split a
+ * URL pathname into (model file, element path): the bare regex also matches
+ * type names appearing as plain directory segments (e.g. the "step" in
+ * ".../test-models/main/step/nist/as1.stp/1/2"), which splits the pathname
+ * into three parts and silently defeats the element-path parse. The lookahead
+ * keeps the match zero-width on the boundary so `String.split` drops only the
+ * suffix itself.
+ */
+export const fileSuffixBoundaryRegex = new RegExp(`\\.${typeRegexStr}(?=/|$)`, 'i')
 
 
 /**
@@ -83,8 +113,28 @@ export function getValidExtension(pathOrExt) {
 // File header magic is clear by this offset
 const HEADER_LIMIT = 1024
 
-// GLB binary format magic number ("glTF" in little-endian)
-const GLB_MAGIC_NUMBER = 0x46546C67
+// GLB binary format magic ("glTF" in ASCII)
+const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
+
+// USDC (crate) files start with the ASCII bytes "PXR-USDC"
+const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
+
+// Zip local-file-header signature "PK\x03\x04". A zip signature alone
+// is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
+// zips too, and they must keep failing sniffing cleanly ("unknown
+// type" alert) instead of dying downstream in USDLoader. See
+// looksLikeUsdzArchive for the disambiguation.
+const ZIP_MAGIC = [...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4]
+
+// Zip local file header layout: filename length is a LE uint16 at
+// offset 26; the filename itself starts at offset 30.
+const ZIP_NAME_LEN_OFFSET = 26
+const ZIP_NAME_OFFSET = 30
+
+// gzip magic (0x1f 0x8b) read as a little-endian uint16. Among the
+// supported formats only .spz (gzipped gaussian-splat data) is a gzip
+// stream, so the magic is a sufficient discriminator here.
+const GZIP_MAGIC_NUMBER = 0x8B1F
 
 
 /**
@@ -128,19 +178,103 @@ export async function guessTypeFromFile(file) {
  * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
-  // Check for GLB binary format first (binary files won't decode properly as UTF-8)
-  const view = new DataView(headerBuffer)
-  if (headerBuffer.byteLength >= 4) {
-    // GLB files start with magic number ("glTF" in ASCII)
-    const magic = view.getUint32(0, true) // little-endian
-    if (magic === GLB_MAGIC_NUMBER) {
-      return 'glb'
+  // Check binary formats first (binary files won't decode properly as UTF-8)
+  if (matchesMagic(headerBuffer, GLB_MAGIC)) {
+    return 'glb'
+  }
+  if (matchesMagic(headerBuffer, USDC_MAGIC)) {
+    return 'usdc'
+  }
+  if (headerBuffer.byteLength >= 2 &&
+      new DataView(headerBuffer).getUint16(0, true) === GZIP_MAGIC_NUMBER) {
+    return 'spz'
+  }
+  if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
+    // The zip signature is shared by USDZ packages, SOG splat bundles,
+    // and plain office/zip uploads — peek the first entry's name to
+    // tell them apart; anything else stays unrecognized so it fails
+    // sniffing cleanly instead of dying downstream in a loader.
+    if (looksLikeUsdzArchive(headerBuffer)) {
+      return 'usdz'
     }
+    if (looksLikeSogArchive(headerBuffer)) {
+      return 'sog'
+    }
+    return null
   }
 
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
+}
+
+
+/**
+ * True when the buffer begins with the given magic byte sequence.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @param {Array<number>} magicBytes
+ * @return {boolean}
+ */
+function matchesMagic(headerBuffer, magicBytes) {
+  if (headerBuffer.byteLength < magicBytes.length) {
+    return false
+  }
+  const bytes = new Uint8Array(headerBuffer, 0, magicBytes.length)
+  return magicBytes.every((b, i) => bytes[i] === b)
+}
+
+
+/**
+ * Distinguish a USDZ package from any other zip container (docx, xlsx,
+ * plain .zip) by peeking at the first entry's filename in the local
+ * file header. The USDZ spec requires the package's first entry to be
+ * the root USD layer, and three's USDLoader errors out otherwise — so
+ * gating on it here both rejects non-USD zips cleanly at sniff time
+ * and never rejects a USDZ the loader could actually open.
+ *
+ * @param {ArrayBuffer} headerBuffer at least the first zip local file
+ *   header (the sniff window is 1KB; the header + name fit comfortably)
+ * @return {boolean}
+ */
+function looksLikeUsdzArchive(headerBuffer) {
+  return /\.usd[ac]?$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+/**
+ * Distinguish a PlayCanvas SOG splat bundle from other zip containers by
+ * the same first-entry peek: SOG bundles carry a `meta.json` manifest
+ * (splat-transform writes it as the leading entry) alongside the webp
+ * planes. First-entry order isn't formally guaranteed, so a bundle that
+ * leads with a webp fails sniffing — extension-carrying `.sog` paths
+ * never reach this and still load.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {boolean}
+ */
+function looksLikeSogArchive(headerBuffer) {
+  return /(^|\/)meta\.json$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+/**
+ * The first zip entry's filename from a buffer holding at least the first
+ * local file header (the 1KB sniff window fits header + name comfortably).
+ * Empty string when the buffer is too short.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {string}
+ */
+function firstZipEntryName(headerBuffer) {
+  if (headerBuffer.byteLength < ZIP_NAME_OFFSET) {
+    return ''
+  }
+  const view = new DataView(headerBuffer)
+  const nameLen = view.getUint16(ZIP_NAME_LEN_OFFSET, true)
+  const nameEnd = Math.min(ZIP_NAME_OFFSET + nameLen, headerBuffer.byteLength)
+  const nameBytes = new Uint8Array(headerBuffer, ZIP_NAME_OFFSET, nameEnd - ZIP_NAME_OFFSET)
+  return new TextDecoder('utf-8').decode(nameBytes)
 }
 
 
@@ -154,6 +288,13 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('ply')) {
+    // PLY magic. Both mesh/point-cloud PLY and gaussian-splat PLY start
+    // this way; both route to the splat loader (spark renders plain
+    // point clouds as degenerate splats).
+    return 'ply'
+  } else if (header.startsWith('#usda')) {
+    return 'usda'
   } else if (header.includes('FBX')) {
     return 'fbx'
   } else if (header.startsWith('glTF')) {
@@ -161,7 +302,14 @@ export function analyzeHeaderStr(header) {
   } else if (header.match(/(^\s*#.*$)?(^\s*$)*^\s*v(\s+-?\d+(\.\d+)?){3}\s*$/m)) {
     return 'obj'
   } else if (header.includes('ISO-10303-21')) {
-    return 'ifc'
+    // IFC and STEP share the ISO-10303-21 (STEP physical file) envelope and,
+    // in this app, the same Conway loader. They differ only in their
+    // FILE_SCHEMA: IFC declares an IFC schema (IFC2X3 / IFC4 / IFC4X3 / ...),
+    // generic STEP declares an application protocol (AUTOMOTIVE_DESIGN,
+    // CONFIG_CONTROL_DESIGN, AP203/AP214/AP242, ...). Disambiguate so the
+    // upload/temp URL extension reflects the real format instead of always
+    // labeling part-21 files ".ifc".
+    return classifyStepFamily(header)
   } else if (header.match(/\s*(HEADER|COMPND|ORIGX1)/)) { // matches IFC & STEP, so put after
     return 'pdb'
   } else if (header.startsWith('solid') || header.includes('VCG')) {
@@ -173,6 +321,31 @@ export function analyzeHeaderStr(header) {
   } else {
     return null
   }
+}
+
+
+/**
+ * Classify an ISO-10303-21 (STEP physical file) header as IFC or generic
+ * STEP. We anchor on the FILE_SCHEMA entry's value rather than searching the
+ * whole header for "IFC", so an "IFC" substring elsewhere (e.g. a project
+ * name in FILE_NAME) doesn't cause a false IFC classification.
+ *
+ * IFC schema names always begin with "IFC" (IFC2X3, IFC4, IFC4X3, ...); any
+ * other schema is treated as generic STEP. If FILE_SCHEMA isn't present in
+ * the sniffed header window (e.g. an unusually long FILE_DESCRIPTION pushed
+ * it past the 1024-byte limit), default to 'ifc' — that preserves the prior
+ * behavior for the dominant format, and both types load through the same
+ * loader regardless.
+ *
+ * @param {string} header
+ * @return {string} 'ifc' or 'step'
+ */
+export function classifyStepFamily(header) {
+  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
+  if (schemaMatch === null) {
+    return 'ifc'
+  }
+  return /^IFC/i.test(schemaMatch[1]) ? 'ifc' : 'step'
 }
 
 

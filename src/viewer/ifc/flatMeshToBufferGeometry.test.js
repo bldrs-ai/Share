@@ -127,10 +127,72 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     const {geometry, ranges, placedGeometryCount} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(geometry).toBeInstanceOf(BufferGeometry)
     expect(placedGeometryCount).toBe(1)
-    expect(ranges).toEqual([{parentExpressId: 100, triangleCount: 1}])
+    expect(ranges).toEqual([{parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}])
     expect(geometry.getAttribute('position').count).toBe(3)
     expect(geometry.getIndex().array.length).toBe(3)
     expect(Array.from(geometry.getIndex().array)).toEqual([0, 1, 2])
+  })
+
+  it('recenters a georeferenced model, folding the offset into baked vertices', () => {
+    // Raw ~1e7 m (LV95) placement from the browser demand open: the baked
+    // world vertices must come back near the origin (raw − offset), or the
+    // float32 merged buffer would quantize to ~1 m and jitter on rotate.
+    const api = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 1,
+        get: () => ({geometryExpressID: 999, flatTransformation: translation(2000000, 5, -8000000)}),
+      },
+    }]
+    const {geometry, coordinationOffset} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(coordinationOffset).toEqual([2000000, 5, -8000000])
+    // unit-triangle vertex 0 is the local origin → bakes to exactly (0,0,0).
+    const pos = geometry.getAttribute('position')
+    expect(pos.getX(0)).toBeCloseTo(0)
+    expect(pos.getY(0)).toBeCloseTo(0)
+    expect(pos.getZ(0)).toBeCloseTo(0)
+  })
+
+  it('leaves a near-origin merged model untouched (no offset)', () => {
+    const api = wireGeomFetch(makeApi({
+      999: {vertexData: unitTriangleVerts(), indexData: new Uint32Array([0, 1, 2])},
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {size: () => 1, get: () => ({geometryExpressID: 999, flatTransformation: translation(7, 2, -3)})},
+    }]
+    const {geometry, coordinationOffset} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(coordinationOffset).toBeNull()
+    expect(geometry.getAttribute('position').getX(0)).toBeCloseTo(7)
+  })
+
+  it('carries each PlacedGeometry.occurrencePath onto its range (STEP)', () => {
+    // Two occurrences of one reused part-type: same parentExpressId, distinct
+    // occurrence paths. The ranges must preserve each path so the downstream
+    // IfcInstanceMap can tell the occurrences apart.
+    const api = wireGeomFetch(makeApi({
+      999: {
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+      },
+    }))
+    const flatMeshes = [{
+      expressID: 100,
+      geometries: {
+        size: () => 2,
+        get: (i) => i === 0 ?
+          {geometryExpressID: 999, flatTransformation: IDENTITY_MAT, occurrencePath: [10, 20]} :
+          {geometryExpressID: 999, flatTransformation: translation(5, 0, 0), occurrencePath: [10, 30]},
+      },
+    }]
+    const {ranges} = flatMeshToBufferGeometry(flatMeshes, api, 0)
+    expect(ranges).toEqual([
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 20], geometryExpressId: 999},
+      {parentExpressId: 100, triangleCount: 1, occurrencePath: [10, 30], geometryExpressId: 999},
+    ])
   })
 
   it('applies the per-instance flatTransformation to vertex positions', () => {
@@ -237,8 +299,8 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
     }]
     const {ranges} = flatMeshToBufferGeometry(flatMeshes, api, 0)
     expect(ranges).toEqual([
-      {parentExpressId: 100, triangleCount: 1},
-      {parentExpressId: 100, triangleCount: 2},
+      {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999},
+      {parentExpressId: 100, triangleCount: 2, geometryExpressId: 888},
     ])
   })
 
@@ -443,9 +505,9 @@ describe('viewer/ifc/flatMeshToBufferGeometry', () => {
       const {ranges, geometry} = flatMeshToBufferGeometry(flatMeshes, api, 0)
       // Ranges follow bin (emission) order, not walk order.
       expect(ranges).toEqual([
-        {parentExpressId: 100, triangleCount: 1}, // first red
-        {parentExpressId: 100, triangleCount: 1}, // second red
-        {parentExpressId: 200, triangleCount: 1}, // blue
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}, // first red
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 999}, // second red
+        {parentExpressId: 200, triangleCount: 1, geometryExpressId: 999}, // blue
       ])
       // The per-vertex instanceID attribute follows the same order.
       // Vertices 0..2 → instance 0 (parent 100), 3..5 → instance 1

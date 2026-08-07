@@ -8,6 +8,9 @@ esbuild.build({
   format: 'esm',
   platform: 'browser',
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
+  // Allow BigInt literals from the @bldrs-ai/conway Emscripten 6.0.2 glue,
+  // which esbuild cannot down-level for the 2018 target (see common.js).
+  supported: {bigint: true},
   bundle: true,
   minify: false,
   keepNames: true, // TODO: have had breakage without this

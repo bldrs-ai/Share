@@ -1,12 +1,12 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   DoubleSide,
   Matrix3,
   Matrix4,
-  MeshLambertMaterial,
 } from 'three'
+import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
+import {coordinationOffsetFor} from './flatMeshToBatchedModel'
 
 
 /**
@@ -59,12 +59,15 @@ import {
  *   expressID per-vertex, instanceID per-vertex; uint32 index). Carries
  *   `groups[]` binding each color-bin's contiguous triangle range to
  *   a `materials[]` index.
- * @property {Array<{parentExpressId: number, triangleCount: number}>} ranges
+ * @property {Array<{parentExpressId: number, triangleCount: number,
+ *   occurrencePath: (Array<number>|undefined)}>} ranges
  *   per-PlacedGeometry ranges in EMISSION order (color-binned), ready
  *   for `instanceMapFromOrderedPlacedRanges`. NOT the FlatMesh-walk
  *   order — color binning permutes the emission so each color's
- *   triangles stay contiguous in the merged buffer.
- * @property {Array<MeshLambertMaterial>} materials one per distinct
+ *   triangles stay contiguous in the merged buffer. `occurrencePath`
+ *   is the STEP NAUO express-id path off `PlacedGeometry.occurrencePath`
+ *   (undefined for IFC).
+ * @property {Array<import('three').Material>} materials one per distinct
  *   PlacedGeometry color (RGBA). Caller assigns this to
  *   `mesh.material` (array form) — three.js's renderer pairs each
  *   `geometry.groups[i].materialIndex` with `materials[i]`.
@@ -163,6 +166,16 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     }
   }
   const placedGeometryCount = entries.length
+  // Origin-recenter a georeferenced model (see coordinationOffsetFor): this
+  // merged path bakes each vertex into world space on the CPU, so a raw
+  // ~1e7 m placement would store ~1 m-quantized float32 positions and jitter
+  // on rotate. Decide one offset from the first (valid) placement and fold it
+  // into every baked translation below. Null (near-origin) → no-op.
+  const coordOffset = placedGeometryCount > 0 ?
+    coordinationOffsetFor(entries[0].placed.flatTransformation) : null
+  const offX = coordOffset ? coordOffset[0] : 0
+  const offY = coordOffset ? coordOffset[1] : 0
+  const offZ = coordOffset ? coordOffset[2] : 0
   // Bin entries by colour. Insertion order on the Map determines
   // material indices — first-seen colour becomes material 0, etc.
   // We emit triangles in this bin order so each colour's triangle
@@ -212,12 +225,14 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
   let materialIndex = 0
   for (const bin of bins.values()) {
     const groupStart = iCursor
-    // Material for this bin. Match `web-ifc-three`'s shape:
-    //   MeshLambertMaterial({color, side: DoubleSide})
-    //   + transparent / opacity when alpha < 1.
-    // IFCLoader.js:256-262.
-    const col = new Color(bin.color.x, bin.color.y, bin.color.z)
-    const material = new MeshLambertMaterial({color: col, side: DoubleSide})
+    // Material + albedo for this bin, via the §6e-flag-gated factory
+    // (src/viewer/lookMaterial.js): with `?feature=look` on, a look-managed
+    // MeshStandardMaterial + sRGB albedo so IFC surfaces respond to the env
+    // map; off, the legacy MeshLambertMaterial + untagged colour (main's
+    // behaviour). Per-color binning + transparent/opacity on alpha < 1 are
+    // unchanged.
+    const col = makeSurfaceColor(bin.color.x, bin.color.y, bin.color.z)
+    const material = makeSurfaceMaterial({color: col, side: DoubleSide})
     if (bin.color.w !== 1) {
       material.transparent = true
       material.opacity = bin.color.w
@@ -245,9 +260,10 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       const m13 = mat4.elements[8]
       const m23 = mat4.elements[9]
       const m33 = mat4.elements[10]
-      const m14 = mat4.elements[12]
-      const m24 = mat4.elements[13]
-      const m34 = mat4.elements[14]
+      // Fold the origin-recenter offset into the baked translation.
+      const m14 = mat4.elements[12] - offX
+      const m24 = mat4.elements[13] - offY
+      const m34 = mat4.elements[14] - offZ
       const n11 = normalMat.elements[0]
       const n21 = normalMat.elements[1]
       const n31 = normalMat.elements[2]
@@ -283,7 +299,18 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
       }
       vCursor += vertCount
       iCursor += indexCount
-      ranges.push({parentExpressId, triangleCount})
+      // Carry the STEP occurrence path (NAUO express ids) off the
+      // PlacedGeometry so `instanceMapFromOrderedPlacedRanges` can key a
+      // reused part's occurrences apart. `undefined` for IFC, so the
+      // downstream map leaves its occurrence tables null. The geometry
+      // express id (the solid's own id for STEP) rides along so selection
+      // can narrow a multibody part's shared path to one named solid.
+      ranges.push({
+        parentExpressId,
+        triangleCount,
+        occurrencePath: placed.occurrencePath,
+        geometryExpressId: placed.geometryExpressID,
+      })
       p++
     }
     // Close the group spanning this colour bin's contiguous index range.
@@ -309,5 +336,9 @@ export function flatMeshToBufferGeometry(flatMeshes, api, modelID) {
     placedGeometryCount,
     skippedFlatMeshes,
     skippedPlacedGeometries,
+    // `[x,y,z]` origin offset already folded into the baked vertices for a
+    // georeferenced model (null for near-origin), so a rendered point maps
+    // back to true world coordinates.
+    coordinationOffset: coordOffset,
   }
 }

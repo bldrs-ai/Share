@@ -4,21 +4,87 @@
 // silenced — which made the writer/reader effectively undetectable. These
 // helpers route milestone events through console.info with a stable
 // `[glb]` prefix so users can grep the console without flipping the debug
-// level globally. Verbose detail (cache-key descriptor, modelID, etc.) is
-// gated on the `glbVerbose` feature flag.
+// level globally.
+//
+// Console policy (conway #301 §6 — a clean load should leave a quiet
+// console): `glbInfo` is for per-load milestones a user/triager needs at a
+// glance — cache HIT/MISS, parse summary, anomalies (0 meshes, lookup
+// failures), writer completion. Everything else (cache keys, BVH/instance-
+// map/NavTree hydration detail, picking sources) goes through `glbVerbose`
+// and is gated on the `glbVerbose` feature flag. When adding a call site,
+// default to `glbVerbose` unless the line earns its place in every load's
+// console.
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
 /**
+ * Default sink: write to the console with a stable `[glb]` prefix. `level` is
+ * a console method name ('info' | 'warn' | 'error').
+ *
+ * @param {string} level
+ * @param {Array<*>} args
+ */
+function consoleSink(level, args) {
+  // eslint-disable-next-line no-console
+  console[level]('[glb]', ...args)
+}
+
+
+// The active sink lives on globalThis, not a module variable, so it survives
+// `jest.resetModules()`: a harness that resets the registry and re-imports this
+// file (e.g. GlbWriterService.test.js) still shares the one sink the test setup
+// installed — module state resets, globals don't. A module-local `sink` would
+// spring back to the console on re-import, letting that path's `[glb]` lines
+// both escape the capture buffer AND print. Unset in production ⇒ console.
+const SINK_KEY = '__bldrsGlbLogSink'
+
+
+/**
+ * @return {function(string, Array<*>): void} the active sink — the installed
+ *   capturing sink under test, else the console default.
+ */
+function activeSink() {
+  return (typeof globalThis !== 'undefined' && globalThis[SINK_KEY]) || consoleSink
+}
+
+
+/**
+ * Swap the `[glb]` log sink. Tests install a capturing sink so these
+ * diagnostics are asserted against a buffer instead of printed — a clean load
+ * (and a clean test run) leaves a quiet console (conway #301 §6). Passing
+ * null/undefined restores the console sink.
+ *
+ * @param {?function(string, Array<*>): void} fn (level, args) => void
+ */
+export function setGlbLogSink(fn) {
+  if (typeof globalThis !== 'undefined') {
+    globalThis[SINK_KEY] = fn ?? undefined
+  }
+}
+
+
+/**
  * Milestone log: visible whenever called (the caller is expected to gate on
- * `isFeatureEnabled('glb')` already). Uses console.info so it's discoverable
- * without changing the debug level.
+ * `isFeatureEnabled('glb')` already). Routed through the sink (console.info by
+ * default) so it's discoverable without changing the debug level.
  *
  * @param {...*} args
  */
 export function glbInfo(...args) {
-  // eslint-disable-next-line no-console
-  console.info('[glb]', ...args)
+  activeSink()('info', args)
+}
+
+
+/**
+ * Anomaly/error diagnostic for the GLB pipeline (cache-write skips, reader
+ * face_ids failures, out-of-range extension refs). Same `[glb]` prefix and
+ * sink as `glbInfo`, at warn level — one place for the pipeline's error-path
+ * console.warns so tests can capture and assert them.
+ *
+ * @param {...*} args
+ */
+export function glbWarn(...args) {
+  activeSink()('warn', args)
 }
 
 
@@ -31,7 +97,6 @@ export function glbInfo(...args) {
  */
 export function glbVerbose(...args) {
   if (isFeatureEnabled('glbVerbose')) {
-    // eslint-disable-next-line no-console
-    console.info('[glb]', ...args)
+    activeSink()('info', args)
   }
 }

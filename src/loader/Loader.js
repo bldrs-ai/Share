@@ -6,10 +6,13 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
+import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
+import {reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
+  deleteFileFromOPFS,
   doesFileExistInOPFS,
   downloadModel,
   downloadToOPFS,
@@ -18,15 +21,21 @@ import {
   writeBase64Model,
 } from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
 import {navigateBaseOnModelPath, parseGitHubPath} from '../utils/location'
-import {updateRecentFileLastModified} from '../connections/persistence'
+import {loadAllRecentFiles, updateRecentFileLastModified} from '../connections/persistence'
 import {testUuid} from '../utils/strings'
 import {decorateShareModel, inferModelCapabilities} from '../viewer/ShareModel'
 import {attachElementSubsets, attachInstanceMapSubsets, summariseElementIdAttribute} from '../viewer/three/elementSubsets'
-import {instanceMapFromGeometry, instanceMapFromTriangleIds} from '../viewer/ifc/IfcInstanceMap'
+import {
+  attachGeometryExpressIds,
+  attachOccurrencePaths,
+  instanceMapFromGeometry,
+  instanceMapFromTriangleIds,
+} from '../viewer/ifc/IfcInstanceMap'
 import {dereferenceAndProxyDownloadContents} from './urls'
 import BLDLoader from './BLDLoader'
 import {BldrsElementPropertiesReader} from './bldrsElementProperties'
@@ -38,7 +47,8 @@ import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
+import {spillModelSource} from './opfsSourceByteStore'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -47,6 +57,7 @@ import {
 } from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
+import splatsToThree, {newSplatLoader} from './splats'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
@@ -110,6 +121,14 @@ export async function load(
   // Test for uploaded first
   // Maybe use path.startsWith('/share/v/new')
   const isUploadedFile = testUuid(path)
+  // Human-readable source filename for root-label composition (#1595,
+  // "Scene (ISS_stationary.glb)"). For uploads the route carries only
+  // the storage UUID, so resolve the original filename from the
+  // recent-files entry the drop handler recorded — and capture it
+  // BEFORE the blob-path rewrite below discards the UUID. For URL
+  // loads (GitHub, external, locally hosted) the trailing path
+  // segment is the filename.
+  const sourceFileName = isUploadedFile ? uploadedDisplayFileName(path) : fileNameFromPath(path)
   if (isUploadedFile) {
     path = constructUploadedBlobPath(path)
     debug().log('Loader#load: file uploaded, blob path:', path)
@@ -144,7 +163,6 @@ export async function load(
   }
 
   // Find loader can do a head download for content typecheck, but full download is delayed
-  onProgress(`Determining file type...`)
   // GLB skip path below may swap these to the GLB loader tuple.
   let [loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = await findLoader(path, viewer)
   debug().log(
@@ -165,7 +183,7 @@ export async function load(
   let cameFromGlbCache = false
   const wantGlb = isFeatureEnabled('glb') && isIfc
   if (wantGlb) {
-    glbInfo('feature enabled')
+    glbVerbose('feature enabled')
   }
 
   if (isOpfsAvailable) {
@@ -183,6 +201,11 @@ export async function load(
       // (we hash the bytes after they're in OPFS).
       let cacheKeyArgs = null
       let kindLabel = null
+      // Identifies the OPFS entry this load reads, so a poisoned one
+      // (see the Git LFS pointer check after the read) can be evicted.
+      // Only set for GitHub sources — the only kind whose bytes can be
+      // an LFS pointer.
+      let opfsEntryKey = null
 
       if (isUploadedFile) {
         kindLabel = 'upload'
@@ -216,12 +239,15 @@ export async function load(
             [derefPath, shaHash, isCacheHit, isBase64] =
               await dereferenceAndProxyDownloadContents(path, accessToken, isOpfsAvailable, false)
           }
+          // Captured after the re-dereference above, which can replace
+          // shaHash — the key must match the one the OPFS lookup uses.
+          opfsEntryKey = {filePath, shaHash, owner, repo, branch}
 
           // GitHub gives us a stable upstream sha *before* we download — so
           // the GLB cache lookup can happen pre-download (fastest hit path).
           if (wantGlb && shaHash) {
             cacheKeyArgs = gitHubCacheKey({owner, repo, branch, filePath, shaHash})
-            glbInfo(
+            glbVerbose(
               `reader: cache lookup github key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${cacheKeyArgs.sourceHash}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
@@ -275,6 +301,22 @@ export async function load(
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
 
+      // Byte-source line for the load report: were the bytes served
+      // from OPFS or fetched? Reported only for the kinds where
+      // hit-ness is actually known here: uploads live in OPFS by
+      // construction, and for GitHub the isCacheHit + doesFileExistInOPFS
+      // combination above guarantees downloadModel resolved from OPFS
+      // without a fetch when isCacheHit survived. downloadToOPFS
+      // (local/external kinds) decides hit/miss inside the worker and
+      // doesn't surface it — no line rather than a guess.
+      if (isUploadedFile) {
+        reportSourceInfo('Source: OPFS cache (uploaded file)')
+      } else if (kindLabel === 'github') {
+        reportSourceInfo(isCacheHit ?
+          'Source: OPFS cache HIT (GitHub content unchanged)' :
+          'Source: network download (GitHub), cached to OPFS')
+      }
+
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd
       // read for parse below; reading it twice is cheap (OPFS).
@@ -293,7 +335,7 @@ export async function load(
           const contentSha = await sha1Hex(sourceBytes)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
-            glbInfo(
+            glbVerbose(
               `reader: cache lookup ${kindLabel} key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
             `${cacheKeyArgs.sourcePath} sha=${contentSha}`)
             glbVerbose('reader: cacheKeyArgs =', cacheKeyArgs)
@@ -317,12 +359,49 @@ export async function load(
       }
 
       if (wantGlb && isIfc && cacheKeyArgs) {
-        glbExportContext = {kindLabel, cacheKeyArgs}
+        // `sourceFile` is the OPFS-backed File whose exact bytes are
+        // parsed below (`modelData = await file.arrayBuffer()`; IFC/STEP
+        // load with isFormatText=false, so no decode in between). The
+        // post-writer source spill backs Conway's window reads with it —
+        // identity by construction, and a disk-backed handle, so
+        // capturing it here pins nothing.
+        glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: file}
       }
 
-      onProgress('Reading model data...')
+      onProgress('Buffering model bytes...')
       modelData = await file.arrayBuffer()
-      if (isFormatText) {
+      if (opfsEntryKey !== null && looksLikeLfsPointer(modelData)) {
+        // A cache entry written before the Git LFS redirect landed
+        // holds the ~130-byte pointer instead of the model, and its key
+        // (pointer-blob sha + owner/repo/branch/path) is exactly the
+        // key this load computes — so it would be served forever, and
+        // the pointer guard further down would keep telling the user to
+        // use the URL they already used. Evict it and fall through to
+        // the direct fetch below, which resolves through
+        // media.githubusercontent.com. Eviction is best-effort: a
+        // failure only costs a re-download next time.
+        //
+        // Scoped to GitHub sources (the only kind that sets
+        // opfsEntryKey) because they're the only ones a re-fetch can
+        // repair. A pointer from anywhere else — an upload, a local
+        // file — falls through to the guard below, which explains the
+        // problem instead of silently re-downloading something that
+        // would fail the same way.
+        debug().warn(
+          'Loader#load: OPFS entry holds a Git LFS pointer, not the model; ' +
+          'evicting and re-fetching')
+        try {
+          await deleteFileFromOPFS(
+            opfsEntryKey.filePath, opfsEntryKey.shaHash,
+            opfsEntryKey.owner, opfsEntryKey.repo, opfsEntryKey.branch)
+        } catch (evictError) {
+          debug().warn('Loader#load: could not evict stale LFS pointer entry:', evictError)
+        }
+        // Falls through to the direct-fetch block below.
+        modelData = undefined
+        glbExportContext = null
+        cameFromGlbCache = false
+      } else if (isFormatText) {
         onProgress('Decoding model data...')
         const decoder = new TextDecoder('utf-8')
         modelData = decoder.decode(modelData)
@@ -377,9 +456,41 @@ export async function load(
     }
   }
 
+  // Git LFS pointer guard. GitHub-hosted models go through the Contents
+  // API, which rewrites LFS pointers to media.githubusercontent.com
+  // before download (net/github/lfs.js). A URL that skips that
+  // dereference — a raw.githubusercontent.com link pasted into the
+  // search bar, or any other host serving a checked-in pointer — hands
+  // us ~130 bytes of text naming the object instead of the model, and
+  // the format loader then fails somewhere deep in its parser with an
+  // error that never mentions LFS. Say what actually went wrong.
+  if (looksLikeLfsPointer(modelData)) {
+    throw new Error(
+      'This file is stored with Git LFS, so the URL returned a pointer file instead of the model. ' +
+      'Open it via its github.com/<org>/<repo>/blob/<ref>/<path> URL, which resolves LFS content.')
+  }
+
   // Provide basePath for multi-file models.  Keep the last '/' for
   // correct resolution of subpaths with '../'.
   const basePath = path.substring(0, path.lastIndexOf('/') + 1)
+
+  // Model line for formats with no parsable STEP header (GLB/FBX/OBJ/…):
+  // name, format tag and size — the normalized form's format-independent
+  // core (design/new/load-log-format.md). STEP/IFC replaces this with a
+  // richer header-parsed line from the engine (ON_MODEL_INFO) as soon as
+  // its header parses.
+  let formatTag
+  try {
+    formatTag = Filetype.getValidExtension(path)?.toUpperCase()
+  } catch {
+    // Extension-less upload paths — the loader was already resolved by
+    // content sniffing in findLoader; the model line just omits the tag.
+  }
+  reportModelInfo({
+    fileName: path.substring(path.lastIndexOf('/') + 1) || path,
+    schema: formatTag,
+    byteLength: modelData?.byteLength ?? modelData?.length,
+  })
 
   let model
   try {
@@ -419,7 +530,7 @@ export async function load(
         glbInfo('reader: WARN — GLB has meshes but 0 vertices; degenerate geometry')
       }
     }
-    convertToShareModel(model, viewer)
+    convertToShareModel(model, viewer, {fileName: sourceFileName})
     viewer.IFC.addIfcModel(model)
     viewer.IFC.loader.ifcManager.state.models.push(model)
   }
@@ -457,7 +568,13 @@ export async function load(
   // in the next block (cache-hit restoration); the createSubset
   // closure resolves them lazily at invoke time, so the attach-here-
   // populate-below order is fine.
-  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets) {
+  // BatchedMesh path excluded: its geometry carries no per-vertex `expressID`
+  // (IDs live in the per-batch `instanceParents` table), so the per-vertex
+  // `attachElementSubsets` would build empty subsets. `buildBatchedConwayModel`
+  // already attached the batch-aware `createSubset` (`attachBatchedSubsets`) —
+  // don't clobber it.
+  if (model.capabilities.expressIdPicking && !model.capabilities.ifcSubsets &&
+      !model.capabilities.batchedPicking) {
     const scene = typeof viewer.context?.getScene === 'function' ? viewer.context.getScene() : null
     if (model.capabilities.instancePicking) {
       attachInstanceMapSubsets(model, scene)
@@ -472,11 +589,109 @@ export async function load(
     // one element express ID), in which case selecting any of those
     // positions correctly highlights every other position too.
     const stats = summariseElementIdAttribute(model)
-    glbInfo(
+    glbVerbose(
       `reader: per-vertex element-IDs — ${stats.uniqueIds} unique across ` +
       `${stats.vertices} vertices in ${stats.meshes} meshes`)
   }
 
+  // Cache-hit picking restoration: per-mesh IfcInstanceMaps from
+  // BLDRS_face_ids / per-vertex ids, then the (order-preserving) BVH
+  // build. Extracted for direct unit testing of the triangle-order
+  // alignment invariant; see restoreCacheHitPicking below.
+  restoreCacheHitPicking(model, cameFromGlbCache)
+
+  // Fire-and-forget: serialize the rendered model to GLB and stash in
+  // OPFS so the next load of the same source can skip the IFC parse.
+  // Triggered for every source kind (github, local, upload, external)
+  // when the `glb` feature flag is on. Failures are logged but never
+  // thrown — the source is already on screen; this is cache warm-up only.
+  // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
+  // `ifcManager` is captured from the live IFC parser state so the
+  // writer can pull `getSpatialStructure(...)` into a BLDRS_spatial_tree
+  // glTF extension — without that, cache-hit GLBs have no NavTree
+  // (the cache-hit path has no IFC parser). Non-IFC sources have no
+  // manager and the writer captures nothing; cache miss/hit both work.
+  //
+  // **Scheduling.** The writer is deferred to a macrotask (and then
+  // `requestIdleCallback` when available) so it doesn't run inline with
+  // the post-parse return path. Without the defer, the GLTFExporter +
+  // property-capture phases would block the main thread immediately
+  // before the user can rotate/zoom/hover on the freshly-rendered
+  // model — and on big IFCs that block extends past the first hover
+  // tick. With the defer, the next paint + the user's first frame of
+  // interaction land before the writer kicks off; the writer then runs
+  // when the browser is idle (or, on older browsers without
+  // requestIdleCallback, on the next macrotask).
+  //
+  // **In-flight flag.** `isCacheWriteInFlight` is observable from React
+  // (see Properties.jsx) so the UI can render a "Caching for next
+  // load…" affordance. The flag captures the entire writer lifetime
+  // (set before scheduling, cleared after the writer settles either
+  // way) — clears only when the actual write finishes, not when the
+  // call returns. Failures clear the flag too; the writer's `.finally`
+  // is the source of truth.
+  if (glbExportContext) {
+    glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
+    useStore.getState().setIsCacheWriteInFlight(true)
+    const runWriter = () => {
+      exportAndCacheGlb({
+        model,
+        kindLabel: glbExportContext.kindLabel,
+        cacheKeyArgs: glbExportContext.cacheKeyArgs,
+        ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
+      }).finally(() => {
+        useStore.getState().setIsCacheWriteInFlight(false)
+        // The writer's property/tree captures were the LAST load-time
+        // sweeps that read the parsed source synchronously — from here
+        // on, everything (Properties panel, psets, on-demand subtree
+        // props) goes through Conway's async APIs, which page ranges
+        // in on demand. So this is the one safe point to release
+        // Conway's resident copy of the raw source (100s of MB on
+        // large models) and back later reads with the OPFS File the
+        // model was parsed from. Cache-hit GLB loads never get here
+        // (no writer is scheduled) — nothing to spill. Fail-soft: any
+        // guard failure keeps the resident buffer (pre-spill behavior).
+        spillModelSource(viewer?.IFC?.loader?.ifcManager?.ifcAPI, 0, glbExportContext.sourceFile)
+        // Same safe point, wasm-side twin of the source spill: the
+        // scene is built and the GLB written, so nothing reads conway's
+        // native geometry again — free it (per-model) so repeated loads
+        // in one tab reuse the wasm pages instead of stacking whole
+        // model scenes until the tab crashes. Feature-detected;
+        // burn-in gated with the demand path.
+        try {
+          const releaseAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+          if (isFeatureEnabled('demandGeometry') &&
+              typeof releaseAPI?.ReleaseModelGeometry === 'function') {
+            // eslint-disable-next-line new-cap
+            const released = releaseAPI.ReleaseModelGeometry(0)
+            glbVerbose('writer: native geometry released =', released)
+          }
+        } catch (e) {
+          glbVerbose('writer: native geometry release failed (kept):', e)
+        }
+      })
+    }
+    scheduleIdleWork(runWriter)
+  }
+
+  return model
+}
+
+
+/**
+ * Restore picking state for a cache-hit GLB model: rebuild per-mesh
+ * `IfcInstanceMap`s from `BLDRS_face_ids` (or per-vertex ids), reattach
+ * the persisted STEP occurrence/geometry tables, then build the BVHs.
+ * Extracted from `load()` so the triangle-order alignment between the
+ * face_ids-built maps and the raycast/subset consumers is unit-testable:
+ * the BVH build MUST NOT permute `geometry.index` (see the indirect note
+ * inside), or every triangle-keyed lookup after it silently scrambles.
+ *
+ * @param {object} model the converted Share model (Mesh or Group)
+ * @param {boolean} cameFromGlbCache true when the model was hydrated from
+ *   the OPFS GLB cache (gates the BVH build; live parses build their own)
+ */
+export function restoreCacheHitPicking(model, cameFromGlbCache) {
   // Restore per-mesh `IfcInstanceMap` on cache-hit Conway-direct
   // models. The GLB write captured per-vertex `instanceID` alongside
   // `expressID`; `inferModelCapabilities` flipped `instancePicking`
@@ -523,8 +738,17 @@ export async function load(
   // the same depth-first order GLTFLoader produces, so positional
   // matching holds for both single-mesh and merged-container GLBs).
   if (model.capabilities.instancePicking ||
-      model.userData?.bldrsFaceIds) {
+        model.userData?.bldrsFaceIds) {
     const faceIdsPerPrimitive = model.userData?.bldrsFaceIds?.perPrimitive ?? null
+    // Global STEP occurrence-path table (index = synthetic instance id),
+    // persisted by the writer so a cache-hit STEP model can rebuild the
+    // per-occurrence tables the cache-miss instance map carried. Null for
+    // IFC / pre-occurrence artifacts. Read before the userData is freed below.
+    const occurrencePaths = model.userData?.bldrsFaceIds?.occurrencePaths ?? null
+    // Global per-instance geometry (solid) express-id table, persisted the
+    // same way — restores per-solid selection of multibody STEP parts on
+    // cache-hit. Null for IFC / pre-0.10.0 artifacts.
+    const geometryExpressIds = model.userData?.bldrsFaceIds?.geometryExpressIds ?? null
     // Per-vertex IDs are only trustworthy on uncompressed artifacts.
     // DRACO quantises integer attributes and Meshopt welds shared
     // vertices — both silently corrupt _EXPRESSID / _INSTANCEID. We
@@ -553,32 +777,53 @@ export async function load(
       if (faceIdsEntry && faceIdsEntry.expressIds) {
         // Sanity 1: per-triangle array length must match the geometry's
         // triangle count.
-        // Sanity 2: alignment canary — `firstExpressId` recorded at
-        // capture time must match `expressIds[0]` after decode.
-        // Catches a primitive-order mismatch between writer and
-        // reader (e.g. GLTFLoader traversal diverging from
-        // `json.meshes[].primitives[]`) that the length check alone
-        // wouldn't flag if two meshes happen to share triangle counts.
+        // Sanity 2: decode canary — `firstExpressId` recorded at capture
+        // time must match `expressIds[0]` after Base64 decode. This is
+        // self-referential (it compares the payload against itself), so it
+        // only guards decode integrity, NOT writer↔reader primitive-order
+        // pairing.
+        // Sanity 3: order cross-check — when the per-vertex ids are
+        // trustworthy (uncompressed artifact), triangle 0's per-vertex
+        // expressID must equal the table's first entry. Unlike the decode
+        // canary this reads the MESH's own data, so it genuinely catches a
+        // primitive-order divergence between `capturePerTriangleIds`'
+        // `json.meshes[].primitives[]` walk and GLTFLoader's traversal
+        // order. (Compressed artifacts can't be cross-checked — DRACO/
+        // Meshopt corrupt the per-vertex ids — so they rely on 1+2 alone.)
         const idxCount = obj.geometry?.index?.count ?? 0
         const expectedTriCount = (idxCount / 3) | 0
         const canaryOk = faceIdsEntry.firstExpressId === null ||
-          faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
-        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk) {
+            faceIdsEntry.firstExpressId === faceIdsEntry.expressIds[0]
+        const attrExpr = perVertexTrusted ? obj.geometry?.attributes?.expressID : null
+        const geomIndex = obj.geometry?.index
+        const crossOk = !attrExpr || !geomIndex || geomIndex.count === 0 ||
+            faceIdsEntry.expressIds[0] === attrExpr.getX(geomIndex.getX(0))
+        if (faceIdsEntry.expressIds.length === expectedTriCount && canaryOk && crossOk) {
           map = instanceMapFromTriangleIds(
             faceIdsEntry.expressIds, faceIdsEntry.instanceIds, {geometry: obj.geometry})
           viaFaceIds++
-        } else if (!canaryOk) {
-          console.warn(
-            `[glb] reader: face_ids alignment canary failed on mesh ${meshIndex} ` +
-            `(expected first expressID ${faceIdsEntry.firstExpressId}, ` +
-            `got ${faceIdsEntry.expressIds[0]}); skipping picking on this mesh`)
+        } else if (!canaryOk || !crossOk) {
+          // A failure here leaves `map` null, so the per-vertex fallback
+          // below still recovers picking when the attrs are trusted (the
+          // cross-check only runs in that case); a compressed artifact
+          // genuinely loses picking on this mesh.
+          const which = canaryOk ? 'order cross-check vs per-vertex ids' : 'decode canary'
+          const recovery = perVertexTrusted ?
+            'falling back to per-vertex attributes' :
+            'skipping picking on this mesh'
+          glbWarn(
+            `reader: face_ids ${which} failed on mesh ${meshIndex} ` +
+              `(payload first expressID ${faceIdsEntry.expressIds[0]}, ` +
+              `recorded ${faceIdsEntry.firstExpressId}, ` +
+              `geometry ${attrExpr && geomIndex ? attrExpr.getX(geomIndex.getX(0)) : 'n/a'}); ` +
+              `${recovery}`)
         } else {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
             'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
-          console.warn(
-            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
-            `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
+          glbWarn(
+            `reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+              `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
         }
       }
       if (!map && obj.geometry?.attributes?.instanceID?.count > 1) {
@@ -591,6 +836,16 @@ export async function load(
         }
       }
       if (map) {
+        // Restore STEP per-occurrence tables from the persisted global
+        // table (no-op for IFC / when absent), so scene↔NavTree selection
+        // keys on the occurrence path — not the part-type id shared across
+        // every reuse — on cache-hit exactly as it does on cache-miss.
+        if (occurrencePaths) {
+          attachOccurrencePaths(map, occurrencePaths)
+        }
+        if (geometryExpressIds) {
+          attachGeometryExpressIds(map, geometryExpressIds)
+        }
         obj.instanceMap = map
         attached++
         totalInstances += map.instanceCount
@@ -601,16 +856,16 @@ export async function load(
       meshIndex++
     })
     if (attached > 0) {
-      glbInfo(
+      glbVerbose(
         `reader: restored IfcInstanceMap × ${attached} mesh(es) — ` +
-        `${totalInstances} instances under ${allParents.size} IFC products ` +
-        `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
+          `${totalInstances} instances under ${allParents.size} IFC products ` +
+          `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
     }
     if (skippedCompressedNoFaceIds > 0) {
-      console.warn(
-        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
-        `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
-        'per-vertex IDs would be corrupted')
+      glbWarn(
+        `reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+          `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
+          'per-vertex IDs would be corrupted')
     }
     // Free the per-triangle ID arrays now that IfcInstanceMap owns its
     // own copies. For a 2.84M-triangle Snowdon model this reclaims
@@ -657,7 +912,21 @@ export async function load(
         return
       }
       try {
-        obj.geometry.computeBoundsTree()
+        // `indirect` is required for correctness here, not a perf knob. The
+        // default build sorts `geometry.index` in place (spatial leaf order),
+        // but the per-triangle `IfcInstanceMap`s were just built from
+        // `BLDRS_face_ids` in the GLB's ORIGINAL triangle order (the attach
+        // block above). A permuting build breaks every triangle-keyed
+        // consumer afterwards: a pick's `faceIndex` resolves to the wrong
+        // instance/element (an i-beam reads as a bolt), and the selection
+        // subsets draw the table's triangle ranges against the permuted
+        // buffer — highlighting spatially-nearby OTHER parts instead of the
+        // picked one. Indirect mode keeps the index untouched (the BVH holds
+        // its own indirection buffer) and reports `faceIndex` in original
+        // order, so tables, raycasts and subsets all stay aligned. The
+        // cache-MISS path never had this problem: `decorateConwayDirectIfcModel`
+        // rebuilds its map FROM the geometry after its (permuting) build.
+        obj.geometry.computeBoundsTree({indirect: true})
         bvhBuilt++
         const idx = obj.geometry.index
         bvhTris += idx ? (idx.count / 3) : 0
@@ -666,59 +935,69 @@ export async function load(
       }
     })
     if (bvhBuilt > 0) {
-      glbInfo(
+      glbVerbose(
         `reader: built BVH × ${bvhBuilt} mesh(es) — ` +
-        `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
+          `${bvhTris.toLocaleString()} triangles in ${Date.now() - bvhStartMs}ms`)
     }
   }
+}
 
-  // Fire-and-forget: serialize the rendered model to GLB and stash in
-  // OPFS so the next load of the same source can skip the IFC parse.
-  // Triggered for every source kind (github, local, upload, external)
-  // when the `glb` feature flag is on. Failures are logged but never
-  // thrown — the source is already on screen; this is cache warm-up only.
-  // Design: design/new/glb-model-sharing.md §"Pipelines/A. Originator".
-  // `ifcManager` is captured from the live IFC parser state so the
-  // writer can pull `getSpatialStructure(...)` into a BLDRS_spatial_tree
-  // glTF extension — without that, cache-hit GLBs have no NavTree
-  // (the cache-hit path has no IFC parser). Non-IFC sources have no
-  // manager and the writer captures nothing; cache miss/hit both work.
-  //
-  // **Scheduling.** The writer is deferred to a macrotask (and then
-  // `requestIdleCallback` when available) so it doesn't run inline with
-  // the post-parse return path. Without the defer, the GLTFExporter +
-  // property-capture phases would block the main thread immediately
-  // before the user can rotate/zoom/hover on the freshly-rendered
-  // model — and on big IFCs that block extends past the first hover
-  // tick. With the defer, the next paint + the user's first frame of
-  // interaction land before the writer kicks off; the writer then runs
-  // when the browser is idle (or, on older browsers without
-  // requestIdleCallback, on the next macrotask).
-  //
-  // **In-flight flag.** `isCacheWriteInFlight` is observable from React
-  // (see Properties.jsx) so the UI can render a "Caching for next
-  // load…" affordance. The flag captures the entire writer lifetime
-  // (set before scheduling, cleared after the writer settles either
-  // way) — clears only when the actual write finishes, not when the
-  // call returns. Failures clear the flag too; the writer's `.finally`
-  // is the source of truth.
-  if (glbExportContext) {
-    glbVerbose('writer: scheduling export, kind =', glbExportContext.kindLabel)
-    useStore.getState().setIsCacheWriteInFlight(true)
-    const runWriter = () => {
-      exportAndCacheGlb({
-        model,
-        kindLabel: glbExportContext.kindLabel,
-        cacheKeyArgs: glbExportContext.cacheKeyArgs,
-        ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
-      }).finally(() => {
-        useStore.getState().setIsCacheWriteInFlight(false)
-      })
-    }
-    scheduleIdleWork(runWriter)
+
+/**
+ * Trailing path segment of a URL or filepath, query/hash stripped and
+ * URI-decoded — the "filename" a user would recognize from the address
+ * bar. Returns null when there is no usable segment (trailing slash,
+ * empty input, malformed %-escape).
+ *
+ * @param {string} path URL or filepath
+ * @return {string|null}
+ */
+function fileNameFromPath(path) {
+  if (typeof path !== 'string' || path === '') {
+    return null
   }
+  const noQuery = path.split(/[?#]/)[0]
+  const segment = noQuery.substring(noQuery.lastIndexOf('/') + 1)
+  if (segment === '') {
+    return null
+  }
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    // Malformed percent-escape — the raw segment still names the file
+    // better than nothing.
+    return segment
+  }
+}
 
-  return model
+
+/**
+ * Original filename for an uploaded (drag-drop / file-picker) model.
+ * The upload flow stores the file in OPFS under a UUID and records the
+ * user's original filename in the recent-files entry keyed by that
+ * UUID (`utils/dragAndDrop.js#onWritten` → `addRecentFileEntry`).
+ * Falls back to the UUID-based storage name when the entry is missing
+ * (cleared localStorage, direct navigation to a stale /v/new/ URL).
+ *
+ * @param {string} uploadPath the pre-blob-rewrite path whose trailing
+ *   segment is the upload's storage id (`<uuid>.<type>`)
+ * @return {string|null}
+ */
+function uploadedDisplayFileName(uploadPath) {
+  const storageId = fileNameFromPath(uploadPath)
+  if (storageId === null) {
+    return null
+  }
+  try {
+    const entry = loadAllRecentFiles().find((f) => f.id === storageId)
+    if (entry && typeof entry.name === 'string' && entry.name !== '') {
+      return entry.name
+    }
+  } catch {
+    // localStorage unavailable (some embeds / private modes) — the
+    // storage id is still a serviceable display name.
+  }
+  return storageId
 }
 
 
@@ -821,18 +1100,21 @@ const BLDRS_TITLE_STRIP_PATTERN = /[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u206
 
 
 /**
- * Return a cache-hit title safe for promotion to `model.name`. Strips
- * control / bidi / markup characters, caps length, treats empty and
- * non-string inputs as "no usable title" by returning null.
+ * Return a file-derived name (cache-hit title, glTF scene/node name…)
+ * safe for promotion to `model.name` / `Name.value`. Strips control /
+ * bidi / markup characters, trims whitespace (a whitespace-only name
+ * carries no signal and would otherwise block downstream fallbacks),
+ * caps length, treats empty and non-string inputs as "no usable name"
+ * by returning null.
  *
- * @param {*} raw value from `model.userData.bldrsTitle`
+ * @param {*} raw value from `model.userData.bldrsTitle`, `Object3D.name`, …
  * @return {string|null}
  */
 function sanitizeCachedTitle(raw) {
   if (typeof raw !== 'string' || raw === '') {
     return null
   }
-  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '')
+  const stripped = raw.replace(BLDRS_TITLE_STRIP_PATTERN, '').trim()
   if (stripped === '') {
     return null
   }
@@ -853,9 +1135,13 @@ export {sanitizeCachedTitle as __sanitizeCachedTitleForTest}
  *
  * @param {Mesh} model
  * @param {object} viewer
+ * @param {object} [opts]
+ * @param {string|null} [opts.fileName] source filename for root-label
+ *   composition (#1595) — e.g. "ISS_stationary.glb". See the root
+ *   naming block below.
  * @return {Mesh}
  */
-export function convertToShareModel(model, viewer) {
+export function convertToShareModel(model, viewer, {fileName = null} = {}) {
   let objIdSerial = 0
   // Whether we found per-vertex IFC expressIDs preserved through the
   // GLB cache round-trip. GLTFExporter renames our `expressID` attribute
@@ -888,8 +1174,21 @@ export function convertToShareModel(model, viewer) {
   function recursiveDecorate(obj3d, depth = 0) {
     // Next, setup IFC props
     obj3d.type = obj3d.type || 'IFCOBJECT'
-    obj3d.Name = obj3d.Name || (depth === 0 ? undefined : {value: 'Object'})
-    obj3d.LongName = obj3d.LongName || (depth === 0 ? undefined : {value: 'Object'})
+    // Standard scenegraph node naming (#1595): three.js loaders carry
+    // the source file's node names on `Object3D.name` — GLTFLoader
+    // copies glTF `nodes[i].name` (e.g. NASA's ISS_stationary.glb
+    // names every node), OBJLoader uses `o`/`g` group names. Surface
+    // them through the IFC-shaped `Name`/`LongName` that `reifyName`
+    // (NavTree labels) and the Properties panel read, keeping the
+    // legacy 'Object' placeholder only for unnamed nodes. Sanitized
+    // like the cached title — node names cross the same untrusted-file
+    // boundary. Root (depth 0) naming is handled below, after the
+    // cache-title hydration that must take precedence.
+    if (depth > 0) {
+      const nodeName = sanitizeCachedTitle(obj3d.name) ?? 'Object'
+      obj3d.Name = obj3d.Name || {value: nodeName}
+      obj3d.LongName = obj3d.LongName || {value: nodeName}
+    }
     const id = objIdSerial++
     let hasPerVertex = false
     if (obj3d.geometry) {
@@ -975,12 +1274,48 @@ export function convertToShareModel(model, viewer) {
   // `model.name` would split the source of truth between the page
   // title (`name`) and other consumers reading `LongName.value`. A
   // pre-set `model.name` means upstream already decided; trust it.
+  // convertToShareModel only runs on the non-IFC branch of Loader#load,
+  // so a pre-set `model.name` here always came from the loaded file
+  // (GLTFLoader copies the glTF `scenes[n].name` onto the returned
+  // scene; OBJLoader similarly). Scrub it with the same sanitizer as
+  // the cached title before it reaches the page <title> / NavTree —
+  // a name that sanitizes to nothing is treated as absent, which
+  // also re-enables the cached-title promotion below.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.name = sanitizeCachedTitle(model.name) ?? ''
+  }
   const cachedTitle = sanitizeCachedTitle(model.userData?.[BLDRS_TITLE_EXTRAS_KEY])
   const liveNameAlreadySet = (typeof model.name === 'string' && model.name !== '')
+  let titleIsCacheStamped = false
   if (cachedTitle && !liveNameAlreadySet) {
     model.Name = model.Name || {value: cachedTitle}
     model.LongName = model.LongName || {value: cachedTitle}
     model.name = cachedTitle
+    titleIsCacheStamped = true
+  }
+  // Standard glTF root naming (#1595): authored scene names are often
+  // generic exporter defaults (Blender's "Scene"), so compose the root
+  // label as "<sceneName> (<fileName>)" — or the filename alone when
+  // the file has no scene name — matching the three.js editor's use of
+  // the import filename. Skipped for IFC-derived cache artifacts,
+  // where the title IS the real project name: either the bldrsTitle
+  // promotion above just ran, or (new-writer artifacts) the scene name
+  // GLTFLoader handed us equals the stamped bldrsTitle — appending the
+  // source filename there would diverge from the live-parse title.
+  const sourceFileName = sanitizeCachedTitle(fileName)
+  const titleIsIfcProjectName =
+    titleIsCacheStamped || (cachedTitle !== null && model.name === cachedTitle)
+  if (sourceFileName && !titleIsIfcProjectName) {
+    model.name = (model.name && model.name !== sourceFileName) ?
+      `${model.name} (${sourceFileName})` :
+      sourceFileName
+  }
+  // Mirror the composed root name into Name/LongName so the NavTree
+  // root and Properties panel show it instead of the generic
+  // "<mime> model" placeholder. Everything above is sanitized.
+  if (typeof model.name === 'string' && model.name !== '') {
+    model.Name = model.Name || {value: model.name}
+    model.LongName = model.LongName || {value: model.name}
   }
   model.Name = model.Name || {value: `${model.mimeType} model`}
   model.LongName = model.LongName || {value: `${model.mimeType} model`}
@@ -1019,23 +1354,26 @@ export function convertToShareModel(model, viewer) {
   const spatialTree = model.userData?.bldrsSpatialTree
   if (spatialTree) {
     model.getSpatialStructure = (_modelID, _withProperties) => spatialTree
-    glbInfo(
+    glbVerbose(
       'reader: hydrated NavTree from BLDRS_spatial_tree (' +
       `root expressID=${spatialTree.expressID}, type=${spatialTree.type})`)
   }
 
   // Cache-hit hydration for BLDRS_element_properties. The reader
-  // plugin parked a lazy-decode payload on
-  // `model.userData.bldrsElementProperties` (compressed bytes + a
-  // `decode()` closure). Promote it to `model.getItemProperties(id)`
-  // and `model.getPropertySets(id)` so the Properties panel
-  // (`Components/Properties/Properties.jsx`,
+  // plugin parked a lazy per-entity payload on
+  // `model.userData.bldrsElementProperties` (block-indexed container
+  // bytes + `getRecord`/`getPsetIds` accessors). Promote it to
+  // `model.getItemProperties(id)` and `model.getPropertySets(id)` so
+  // the Properties panel (`Components/Properties/Properties.jsx`,
   // `Components/Properties/itemProperties.jsx`) renders on cache-hit
   // without touching the (shared, parser-stateless) `ifcManager`.
   //
-  // First call to either method triggers the lazy `decode()` (one-shot
-  // pako.ungzip + JSON.parse, then cached). A load that never opens
-  // the Properties panel pays nothing.
+  // First call to either method decodes the payload's header index;
+  // each record block inflates only when one of its entities is
+  // requested (LRU-cached). A load that never opens the Properties
+  // panel pays nothing, and no call ever materialises the whole
+  // closure — which is what keeps >512MiB-JSON models (over V8's max
+  // string length) working at all. See `bldrsElementProperties.js`.
   //
   // Signature note: the closures take one arg (expressID), matching
   // `web-ifc-three.IFCModel.getItemProperties(id)` / `getPropertySets(id)`
@@ -1048,25 +1386,57 @@ export function convertToShareModel(model, viewer) {
   // from the propertySets index, matching the existing consumer
   // expectation in Properties.jsx#createPsetsList.
   const elementProperties = model.userData?.bldrsElementProperties
-  if (elementProperties && typeof elementProperties.decode === 'function') {
-    model.getItemProperties = (expressID) => {
-      const data = elementProperties.decode()
-      return data.itemProperties[expressID]
-    }
+  if (elementProperties && typeof elementProperties.getRecord === 'function') {
+    model.getItemProperties = (expressID) => elementProperties.getRecord(expressID)
     model.getPropertySets = (expressID) => {
-      const data = elementProperties.decode()
-      const psetIds = data.propertySets[expressID]
-      if (!Array.isArray(psetIds) || psetIds.length === 0) {
-        return []
-      }
-      return psetIds
-        .map((pid) => data.itemProperties[pid])
+      return elementProperties.getPsetIds(expressID)
+        .map((pid) => elementProperties.getRecord(pid))
         .filter((p) => p !== null && p !== undefined)
     }
-    glbInfo(
+    glbVerbose(
       'reader: hydrated Properties panel from BLDRS_element_properties ' +
       `(${elementProperties.compressed.byteLength}B compressed; ` +
       'decode on first access)')
+  }
+
+  // Cache-hit fallback for anonymous geometry pieces (conway#387). The
+  // element-properties table above only holds entities reachable from
+  // spatial-tree nodes; the ids a below-product pick or permalink names
+  // (faces / solids from `BLDRS_face_ids.geometryExpressIds`) aren't in
+  // it. The face_ids extension carries their identity ({type, name}) in a
+  // small side table — layer it under whatever `getItemProperties` surface
+  // exists so transient-row labels ("Face #6321") and the Properties
+  // panel's Type row resolve without a live parser. The synthesized shape
+  // mirrors Conway's arbitrary-id fallback ({expressID, type, Name}).
+  const geometryItemIdentities = model.userData?.bldrsFaceIds?.geometryItemIdentities
+  if (geometryItemIdentities && typeof geometryItemIdentities === 'object') {
+    const priorGetItemProperties = model.getItemProperties
+    model.getItemProperties = async (expressID) => {
+      let found
+      try {
+        found = typeof priorGetItemProperties === 'function' ?
+          await priorGetItemProperties.call(model, expressID) :
+          undefined
+      } catch {
+        found = undefined
+      }
+      if (found !== undefined && found !== null) {
+        return found
+      }
+      const identity = geometryItemIdentities[expressID]
+      if (!identity) {
+        return found
+      }
+      const IFC_LABEL_TYPE = 1
+      return {
+        expressID,
+        type: identity.type,
+        Name: {type: IFC_LABEL_TYPE, value: identity.name ?? ''},
+      }
+    }
+    glbInfo(
+      'reader: hydrated anonymous-geometry identities from BLDRS_face_ids ' +
+      `(${Object.keys(geometryItemIdentities).length} distinct geometry ids)`)
   }
   // Only override the manager's stock `getExpressId` for genuinely
   // unstructured models (OBJ / STL / direct .glb upload — no per-vertex
@@ -1081,10 +1451,10 @@ export function convertToShareModel(model, viewer) {
       return geom.id
     }
   } else {
-    glbInfo('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
+    glbVerbose('reader: picking source = per-vertex _EXPRESSID (preserved through GLB cache)')
   }
   if (foundPreservedInstanceId) {
-    glbInfo('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
+    glbVerbose('reader: per-instance source = per-vertex _INSTANCEID (preserved through GLB cache)')
   }
 
   model.getIfcType = (eltType) => eltType
@@ -1160,7 +1530,15 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
     // E.g. samba-dancing.fbx has Bones for child[0] and 2 meshes after
     for (let i = 0, n = model.children.length; i < n; i++) {
       const obj = model.children[i]
-      if (obj.geometry) {
+      // A `THREE.BatchedMesh`'s `.geometry` is its internal PACKED buffer —
+      // every shape in un-instanced local space (which, for models whose
+      // shapes carry building-scale local coords like Schependomlaan, spans
+      // the whole site, ~830m). Hoisting it onto the Group root makes
+      // `Box3.setFromObject` read that instead of recursing into the
+      // instance-placed children, so fit-to-frame zooms miles out. The
+      // batched Group has no single representative geometry — leave
+      // `model.geometry` undefined and let bounds recurse to the children.
+      if (obj.geometry && !obj.isBatchedMesh) {
         model.geometry = obj.geometry
         break
       }
@@ -1244,10 +1622,40 @@ async function findLoader(pathname, viewer) {
       isFormatText = true
       break
     }
+    case 'ksplat':
+    case 'ply':
+    case 'sog':
+    case 'splat':
+    case 'spz': {
+      // Gaussian splat formats via Spark (see src/loader/splats.js and
+      // issue #1726). The shim's async parse decodes bytes to a
+      // SplatMesh; the fixup wraps it into the Share model Group and
+      // installs the scene-level SparkRenderer that draws it.
+      loader = newSplatLoader(extension)
+      isLoaderAsync = true
+      isFormatText = false
+      fixupCb = splatsToThree
+      break
+    }
     case 'stl': {
       loader = new STLLoader
       fixupCb = stlToThree
       isFormatText = false
+      break
+    }
+    case 'usd':
+    case 'usda':
+    case 'usdc':
+    case 'usdz': {
+      // One arm for the whole family: USDLoader.parse sniffs the actual
+      // variant from the bytes (crate magic → USDC, zip magic → USDZ,
+      // otherwise USDA text), so the URL extension only needs to route
+      // here. Keep isFormatText false even for .usda — parse() takes the
+      // ArrayBuffer and does its own decode. The composer applies stage
+      // `upAxis` and `metersPerUnit` itself, and returns a Group whose
+      // prim names ride on Object3D.name, which convertToShareModel
+      // mirrors into Name/LongName for the NavTree.
+      loader = new USDLoader()
       break
     }
     case 'xyz': {
@@ -1337,12 +1745,26 @@ function newGltfLoader() {
 /**
  * Computes progress and calls given onProgress handler
  *
+ * Emits a structured 'download' event (same shape as conway's
+ * ProgressEvents, see loader/loadProgress.js) when axios knows the total,
+ * so the backdrop is determinate during download too; falls back to the
+ * legacy MB string otherwise.
+ *
  * @param {Event} progressEvent
  * @param {Function} onProgress
  */
 function onDownloadProgressHandler(progressEvent, onProgress) {
   if (Number.isFinite(progressEvent.loaded)) {
     const loadedBytes = progressEvent.loaded
+    if (Number.isFinite(progressEvent.total) && progressEvent.total > 0) {
+      onProgress({
+        phase: 'download',
+        completed: loadedBytes,
+        total: progressEvent.total,
+        unit: 'bytes',
+      })
+      return
+    }
     // eslint-disable-next-line no-magic-numbers
     const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
     debug().log(`Loader#loadModel$onProgress, ${loadedBytes} bytes`)

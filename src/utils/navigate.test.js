@@ -1,4 +1,4 @@
-import {navigateToModel} from './navigate'
+import {navigateToModel, isTempModelPath, homeModelPath, reloadAfterCacheClear} from './navigate'
 
 
 describe('navigateToModel', () => {
@@ -42,5 +42,132 @@ describe('navigateToModel', () => {
 
   it('throws for invalid target', () => {
     expect(() => navigateToModel(null)).toThrow(/invalid target/)
+  })
+
+  describe('carries the current query string forward (feature flags)', () => {
+    const prevEnv = process.env.NODE_ENV
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'development'
+      locationGetter.mockReturnValue({
+        search: '?feature=workspace',
+        assign: (url) => assignCalls.push(url),
+      })
+    })
+
+    afterEach(() => {
+      process.env.NODE_ENV = prevEnv
+    })
+
+    it('appends the current search to a bare path', () => {
+      navigateToModel('/share/v/new/haus.ifc')
+      expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=workspace'])
+    })
+
+    it('inserts the search before an existing hash', () => {
+      navigateToModel('/share/v/p/index.ifc#c:1,2,3')
+      expect(assignCalls).toEqual(['/share/v/p/index.ifc?feature=workspace#c:1,2,3'])
+    })
+
+    it('leaves a target that carries its own search alone', () => {
+      navigateToModel({pathname: '/share/v/new/haus.ifc', search: '?feature=bot'})
+      expect(assignCalls).toEqual(['/share/v/new/haus.ifc?feature=bot'])
+    })
+  })
+})
+
+
+describe('isTempModelPath', () => {
+  it('is true for uploaded /v/new/ models', () => {
+    expect(isTempModelPath('/share/v/new/AA77535-D1B6-49A9-915B.ifc')).toBe(true)
+    expect(isTempModelPath('/Share/share/v/new/uuid.ifc')).toBe(true)
+  })
+
+  it('is false for hosted, github and other routes', () => {
+    expect(isTempModelPath('/share/v/p/index.ifc')).toBe(false)
+    expect(isTempModelPath('/share/v/gh/org/repo/main/model.ifc')).toBe(false)
+    expect(isTempModelPath('')).toBe(false)
+    expect(isTempModelPath(undefined)).toBe(false)
+  })
+})
+
+
+describe('homeModelPath', () => {
+  let locationGetter
+
+  afterEach(() => {
+    if (locationGetter) {
+      locationGetter.mockRestore()
+      locationGetter = null
+    }
+  })
+
+  it('uses the given appPrefix', () => {
+    expect(homeModelPath('/share')).toBe(
+      '/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+  })
+
+  it('derives the install prefix when appPrefix is omitted', () => {
+    locationGetter = jest.spyOn(window, 'location', 'get')
+      .mockReturnValue({pathname: '/Share/share/v/new/uuid.ifc'})
+    expect(homeModelPath()).toBe(
+      '/Share/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+  })
+
+  it('carries the current query string forward (feature flags)', () => {
+    locationGetter = jest.spyOn(window, 'location', 'get')
+      .mockReturnValue({pathname: '/share/v/new/uuid.ifc', search: '?feature=bot'})
+    expect(homeModelPath('/share')).toBe(
+      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+  })
+})
+
+
+describe('reloadAfterCacheClear', () => {
+  let assignCalls
+  let reloadCalls
+  let locationGetter
+
+  const mockLocation = (pathname, search = '') => {
+    assignCalls = []
+    reloadCalls = 0
+    locationGetter = jest.spyOn(window, 'location', 'get').mockReturnValue({
+      pathname,
+      search,
+      assign: (url) => assignCalls.push(url),
+      reload: () => {
+        reloadCalls += 1
+      },
+    })
+  }
+
+  afterEach(() => {
+    if (locationGetter) {
+      locationGetter.mockRestore()
+      locationGetter = null
+    }
+  })
+
+  it('navigates to the home model for a temporary model', () => {
+    mockLocation('/share/v/new/uuid.ifc')
+    reloadAfterCacheClear('/share')
+    expect(assignCalls).toEqual([
+      '/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
+    expect(reloadCalls).toBe(0)
+  })
+
+  it('preserves the query string when navigating home', () => {
+    mockLocation('/share/v/new/uuid.ifc', '?feature=bot')
+    reloadAfterCacheClear('/share')
+    expect(assignCalls).toEqual([
+      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
+    expect(reloadCalls).toBe(0)
+  })
+
+  it('reloads in place for a normal model', () => {
+    mockLocation('/share/v/p/index.ifc')
+    reloadAfterCacheClear('/share')
+    expect(assignCalls).toEqual([])
+    expect(reloadCalls).toBe(1)
   })
 })

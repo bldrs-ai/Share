@@ -81,6 +81,34 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
         const {org, repo, path} = params
         const ref = new URL(request.url).searchParams.get('ref')
 
+        if (decodeURIComponent(path).endsWith('lfs-model.usdz')) {
+          // Git LFS: the Contents API serves the pointer inline (it is
+          // ~130 bytes, far under the 1MB threshold) and download_url
+          // points at raw.githubusercontent.com, which serves the same
+          // pointer. Only media.githubusercontent.com has the object.
+          const pointer =
+            'version https://git-lfs.github.com/spec/v1\n' +
+            'oid sha256:364dde066e1c7a8e4d24060a3dc66e4bf98d9263d1a4b2c9f0e1a2b3c4d5e6f7\n' +
+            'size 24911208\n'
+          const pointerSize = 133
+          return new Response(
+            JSON.stringify({
+              name: 'lfs-model.usdz',
+              path: decodeURIComponent(path),
+              sha: 'lfs00000000000000000000000000000000000000',
+              size: pointerSize,
+              download_url: `https://raw.githubusercontent.com/${org}/${repo}/${ref}/${decodeURIComponent(path)}`,
+              type: 'file',
+              content: btoa(pointer),
+              encoding: 'base64',
+            }),
+            {
+              status: HTTP_OK,
+              headers: {'Content-Type': 'application/json'},
+            },
+          )
+        }
+
         if ((org === 'cypresstester') ||
            (org === 'Swiss-Property-AG' &&
             repo === 'Momentum-Public' &&
@@ -335,10 +363,10 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
     }),
 
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
+      // GitHub's `GET /orgs/{org}/repos` returns a bare array (as does the
+      // `/user/repos` handler above) — not a `{data: [...]}` envelope.
       return new Response(
-        JSON.stringify({
-          data: [MOCK_REPOSITORY],
-        }),
+        JSON.stringify([MOCK_REPOSITORY]),
         {
           status: HTTP_OK,
           headers: {'Content-Type': 'application/json'},

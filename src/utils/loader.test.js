@@ -26,7 +26,9 @@ describe('loadLocalFile', () => {
     inputElement.dispatchEvent(event)
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(file)
-    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number))
+    // Third arg is the user's filename — callers keep it as the recents
+    // display name while navigating by the storage id (#1682).
+    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number), 'test.ifc')
   })
 
   it('revokes the object URL when the worker is disabled (sync fallback path)', () => {
@@ -80,7 +82,7 @@ describe('loadLocalFileFallback', () => {
 
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('testId')
-    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number))
+    expect(onLoad).toHaveBeenCalledWith('testId', expect.any(Number), 'test.ifc')
   })
 })
 

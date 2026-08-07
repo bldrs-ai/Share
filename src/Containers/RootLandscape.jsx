@@ -8,8 +8,12 @@ import BottomBar from './BottomBar'
 import ControlsGroup from './ControlsGroup'
 import NavTreeAndVersionsDrawer from './NavTreeAndVersionsDrawer'
 import OperationsGroup from './OperationsGroup'
+import ProjectsDrawer from './ProjectsDrawer'
+import TopBar from './TopBar'
+import {TOP_BAR_HEIGHT} from './layoutConstants'
 import RightSideDrawers from './RightSideDrawers'
 import TabbedPanels from './TabbedPanels'
+import useExistInFeature from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 
 
@@ -24,6 +28,9 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
   const isMobile = useIsMobile()
   const theme = useTheme()
   const vh = useStore((state) => state.vh)
+  // Workspace shell (epic assist-300, #1657): ProjectsDrawer sits left of
+  // the NavTree/Versions drawer. Desktop-only for now, like that drawer.
+  const isWorkspaceEnabled = useExistInFeature('workspace')
 
   return (
     <Stack
@@ -33,6 +40,14 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
       sx={{width: '100%', height: isMobile ? `${vh}px` : '100vh', overflow: 'hidden'}}
       data-testid='RootLandscape-RootStack'
     >
+      {isWorkspaceEnabled &&
+       <Box
+         sx={{flex: '0 0 auto', flexShrink: 0}}
+         data-testid='ProjectsDrawer-Container'
+       >
+         <ProjectsDrawer/>
+       </Box>
+      }
       {!isMobile &&
        <Box
          sx={{
@@ -53,20 +68,22 @@ export default function RootLandscape({pathPrefix, branch, selectWithShiftClickE
         sx={{flex: '1 1 auto', minWidth: 0, height: '100%'}}
         data-testid='CenterPane'
       >
-        <Box sx={{opacity: 0.5}}>
-          <Paper
-            elevation={0}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              height: 58,
-              width: '100%',
-              backgroundColor: theme.palette.secondary.backgroundColor,
-              borderRadius: 0,
-            }}
-            data-testid='RootLandscape-ToolbarPaper'
-          />
-        </Box>
+        {isWorkspaceEnabled ?
+          <TopBar/> :
+          <Box sx={{opacity: 0.5}}>
+            <Paper
+              elevation={0}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                height: TOP_BAR_HEIGHT,
+                width: '100%',
+                backgroundColor: theme.palette.secondary.backgroundColor,
+                borderRadius: 0,
+              }}
+              data-testid='RootLandscape-ToolbarPaper'
+            />
+          </Box>}
         <Stack
           direction='row'
           justifyContent='space-between'

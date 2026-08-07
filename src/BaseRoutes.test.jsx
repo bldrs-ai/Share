@@ -1,5 +1,5 @@
 import React from 'react'
-import {render, waitFor} from '@testing-library/react'
+import {render, screen, waitFor} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import {
   mockedUseAuth0,
@@ -166,5 +166,61 @@ describe('BaseRoutes - auth resolution', () => {
     })
     const state = await renderAndResolve()
     expect(state.accessToken).toBe('')
+  })
+
+  // The boot path reads the SDK's token cache (cacheMode 'on') so model load
+  // isn't serialized behind a network exchange; a background cacheMode 'off'
+  // pass restores claims freshness (pendingReauth from the Stripe webhook,
+  // invalid_grant revocation, identity link/unlink) off the critical path.
+  it('authenticated: runs one cached-token pass and one background fresh-claims pass', async () => {
+    const token = 'github-jwt'
+    tokenClaims[token] = {
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    }
+    const getToken = jest.fn().mockResolvedValue(token)
+    mockedUseAuth0.mockReturnValue({
+      ...mockedUserLoggedIn,
+      getAccessTokenSilently: getToken,
+    })
+    await renderAndResolve()
+    await waitFor(() => {
+      const cacheModes = getToken.mock.calls.map(([opts]) => opts.cacheMode)
+      expect(cacheModes).toContain('on')
+      expect(cacheModes).toContain('off')
+    })
+    // Once per page load, not per effect re-run
+    expect(getToken.mock.calls.filter(([opts]) => opts.cacheMode === 'off').length).toBe(1)
+  })
+
+  it('background pass surfaces pendingReauth that the cached token missed', async () => {
+    const staleToken = 'stale-jwt'
+    const freshToken = 'fresh-jwt'
+    tokenClaims[staleToken] = {
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: null},
+      'https://bldrs.ai/identities': [{connection: 'github', provider: 'github', user_id: '1'}],
+    }
+    tokenClaims[freshToken] = {
+      'https://bldrs.ai/app_metadata': {subscriptionStatus: 'shareProPendingReauth'},
+    }
+    const getToken = jest.fn((opts) =>
+      Promise.resolve(opts.cacheMode === 'off' ? freshToken : staleToken))
+    mockedUseAuth0.mockReturnValue({
+      ...mockedUserLoggedIn,
+      getAccessTokenSilently: getToken,
+    })
+    render(
+      <MemoryRouter initialEntries={['/about']}>
+        <HelmetThemeCtx>
+          <BaseRoutes/>
+        </HelmetThemeCtx>
+      </MemoryRouter>,
+    )
+    // Cached pass establishes the session…
+    await waitFor(() => expect(useStore.getState().isAuthResolved).toBe(true))
+    expect(useStore.getState().accessToken).toBe(staleToken)
+    // …and the fresh pass opens the reauth modal the stale claims hid.
+    await waitFor(() => {
+      expect(screen.getByText('Reauthentication Required')).toBeInTheDocument()
+    })
   })
 })

@@ -1,0 +1,379 @@
+jest.mock('@sentry/react', () => ({
+  addBreadcrumb: jest.fn(),
+  captureMessage: jest.fn(),
+  setContext: jest.fn(),
+  setTag: jest.fn(),
+}))
+
+import {captureMessage, setContext, setTag} from '@sentry/react'
+import useStore from '../store/useStore'
+import {
+  STALL_TIMEOUT_MS,
+  attachLoadFailureContext,
+  beginLoadProgress,
+  endLoadProgress,
+  isModelInfoProgress,
+  isStructuredProgress,
+  reportEngineVersion,
+  reportFramingExclusion,
+  reportLoadProgress,
+  reportModelInfo,
+  reportSourceInfo,
+} from './loadProgress'
+
+
+/** @return {string[]} the report lines currently in the store */
+function reportLines() {
+  return useStore.getState().loadReportLines
+}
+
+
+describe('loadProgress', () => {
+  let consoleInfoSpy
+
+  beforeEach(() => {
+    jest.useFakeTimers()
+    jest.clearAllMocks()
+    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    useStore.getState().setLoadReportLines([])
+    useStore.getState().setCurrentLoadLine(null)
+    useStore.getState().setLoadResult(null)
+  })
+
+  afterEach(() => {
+    endLoadProgress()
+    consoleInfoSpy.mockRestore()
+    jest.useRealTimers()
+  })
+
+  describe('signal detection', () => {
+    it('classifies structured events, model-info envelopes, and strings', () => {
+      expect(isStructuredProgress({phase: 'geometry', completed: 1})).toBe(true)
+      expect(isStructuredProgress('Loading model...')).toBe(false)
+      expect(isStructuredProgress({loaded: 1024})).toBe(false)
+      expect(isModelInfoProgress({modelInfo: {fileName: 'a.ifc'}})).toBe(true)
+      expect(isModelInfoProgress({phase: 'geometry', completed: 1})).toBe(false)
+    })
+  })
+
+  describe('report accumulation', () => {
+    it('begins with the Share preamble line and mirrors it to the console', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      expect(reportLines()[0]).toMatch(/^Share v/)
+      expect(consoleInfoSpy).toHaveBeenCalledWith(reportLines()[0])
+    })
+
+    it('appends engine and model lines', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportEngineVersion('Conway v1.379.1190')
+      reportLoadProgress({modelInfo: {fileName: 'index.ifc', schema: 'IFC4'}})
+      expect(reportLines()).toContain('Conway v1.379.1190')
+      expect(reportLines()).toContain('Model: index.ifc — IFC4')
+    })
+
+    it('reportModelInfo works for non-engine formats', () => {
+      beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
+      reportModelInfo({fileName: 'ISS_stationary.glb', schema: 'GLB', byteLength: 39_950_000})
+      expect(reportLines()).toContain('Model: ISS_stationary.glb — GLB, 38.1 MB')
+    })
+
+    it('reportSourceInfo appends a byte-source line', () => {
+      beginLoadProgress({fileInfo: 'model.ply'})
+      reportSourceInfo('Source: OPFS cache (uploaded file)')
+      expect(reportLines()).toContain('Source: OPFS cache (uploaded file)')
+    })
+
+    it('reportSourceInfo is a no-op without an active load', () => {
+      expect(() => reportSourceInfo('Source: OPFS cache (uploaded file)')).not.toThrow()
+    })
+
+    it('publishes a live bar and freezes a completed stage without a bar', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'dataParse', completed: 50, total: 100, elapsedMs: 100})
+      // Live stage keeps its bar.
+      expect(useStore.getState().currentLoadLine).toMatch(/^Parsing \[0%/)
+
+      // dataParse reaches 100%, then geometry begins → Parsing freezes as a
+      // completed line: colon format, no bar.
+      reportLoadProgress({phase: 'dataParse', completed: 100, total: 100, elapsedMs: 150})
+      reportLoadProgress({phase: 'geometry', completed: 0, total: 10, elapsedMs: 200})
+      const frozenParsing = reportLines().find((line) => line.startsWith('Parsing'))
+      expect(frozenParsing).toMatch(/^Parsing: /)
+      expect(frozenParsing).not.toMatch(/\[/)
+      expect(useStore.getState().currentLoadLine).toMatch(/^Geometry/)
+    })
+
+    it('rebases engine elapsedMs so legacy→engine stage boundaries never go negative', () => {
+      // Regression: engine events carry elapsedMs from the ENGINE clock
+      // (conway's tracker starts at OpenModel), while legacy strings are
+      // stamped from load start. Closing a legacy stage with a raw engine
+      // timestamp produced "Parsing model geometry: -1.6s" whenever the
+      // pre-parse stages (download, read) took longer than the engine's
+      // first-event offset.
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      // 5s of Share-side wall clock passes before the engine starts
+      // (download + read stages under fake timers).
+      const shareSideStagesMs = 5000
+      reportLoadProgress('Preparing file download...')
+      jest.advanceTimersByTime(shareSideStagesMs)
+      reportLoadProgress('Parsing model geometry...')
+      // Engine's first event: 10ms on ITS clock — far behind Share's.
+      reportLoadProgress({phase: 'dataParse', completed: 0, total: 100, elapsedMs: 10})
+      reportLoadProgress({phase: 'geometry', completed: 0, total: 100, elapsedMs: 250})
+      const frozen = reportLines()
+      // Every closed stage line carries a non-negative duration (the legacy
+      // "Parsing model geometry" line closes at 0.000s, not -4.99s).
+      const durations = frozen
+        .map((line) => / (-?[\d.]+)s/.exec(line))
+        .filter((match) => match !== null)
+        .map((match) => Number(match[1]))
+      expect(durations.length).toBeGreaterThan(0)
+      for (const duration of durations) {
+        expect(duration).toBeGreaterThanOrEqual(0)
+      }
+      expect(frozen.some((line) => /^Parsing model geometry: 0\.000s/.test(line))).toBe(true)
+      // Engine-to-engine deltas are preserved exactly: the Parsing stage
+      // (frozen mid-flight, so it keeps its bar) closes at the geometry
+      // event, 250-10 = 240ms on the engine clock.
+      expect(frozen.some((line) => /^Parsing \[.*0\.240s/.test(line))).toBe(true)
+    })
+
+    it('normalizes legacy strings into stages with stamped deltas', () => {
+      beginLoadProgress({fileInfo: 'model.fbx'})
+      reportLoadProgress('Downloading model data...')
+      expect(useStore.getState().currentLoadLine).toMatch(/^Downloading model data \[\.\.\.\]/)
+      reportLoadProgress('Processing model data...')
+      // Indeterminate stage completed → colon format, no bar.
+      expect(reportLines().some((line) => /^Downloading model data: /.test(line))).toBe(true)
+    })
+
+    it('endLoadProgress freezes the running stage + Total and clears the live line', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 5, total: 10, elapsedMs: 100})
+      endLoadProgress()
+      const lines = reportLines()
+      expect(lines.some((line) => line.startsWith('Geometry'))).toBe(true)
+      expect(lines.some((line) => /^Total: /.test(line))).toBe(true)
+      expect(useStore.getState().currentLoadLine).toBe(null)
+    })
+
+    it('summarizes captured console warnings/errors after the Total line', () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 1, total: 10, elapsedMs: 50})
+      // Engine-style errors during the load — captured via the console tee.
+      console.error('CDT Exception (hemisphere: 0)')
+      console.error('CDT Exception (hemisphere: 0)')
+      endLoadProgress()
+
+      const lines = reportLines()
+      const totalIndex = lines.findIndex((line) => /^Total: /.test(line))
+      const diagIndex = lines.findIndex((line) => /^Warnings & errors \(/.test(line))
+      expect(totalIndex).toBeGreaterThanOrEqual(0)
+      expect(diagIndex).toBeGreaterThan(totalIndex)
+      // One line only: counts + the message. A single distinct message drops
+      // the "N distinct" note.
+      expect(lines[diagIndex]).toBe('Warnings & errors (2): CDT Exception (hemisphere: 0) (×2)')
+      consoleErrorSpy.mockRestore()
+    })
+
+    it('collapses many distinct warnings into that one line', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+      // Per-entity engine diagnostics: textually distinct, so dedup can't
+      // collapse them — a STEP model emits hundreds.
+      const distinctCount = 200
+      for (let i = 0; i < distinctCount; i++) {
+        console.warn(`Error processing representation #${i}`)
+      }
+      // ...plus one repeated message, which wins the "most common" sample.
+      console.warn('No basis found for brep!')
+      console.warn('No basis found for brep!')
+      endLoadProgress()
+
+      const lines = reportLines()
+      const diagLines = lines.filter((line) => /^Warnings & errors/.test(line))
+      expect(diagLines).toHaveLength(1)
+      expect(diagLines[0]).toBe('Warnings & errors (202, 201 distinct): No basis found for brep! (×2)')
+      // Nothing else from the diagnostics leaks into the report.
+      expect(lines.some((line) => /Error processing representation/.test(line))).toBe(false)
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('truncates a long sample message', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const overlongChars = 200
+      const readableLineChars = 120
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      console.warn(`long ${'x'.repeat(overlongChars)}`)
+      endLoadProgress()
+
+      const diagLine = reportLines().find((line) => /^Warnings & errors/.test(line))
+      expect(diagLine).toMatch(/^Warnings & errors \(1\): long x+…$/)
+      expect(diagLine.length).toBeLessThan(readableLineChars)
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('a new load clears the previous report', () => {
+      beginLoadProgress({fileInfo: 'a.ifc'})
+      reportEngineVersion('Conway v1')
+      endLoadProgress()
+      beginLoadProgress({fileInfo: 'b.ifc'})
+      expect(reportLines()).not.toContain('Conway v1')
+    })
+  })
+
+  describe('grace result', () => {
+    it('publishes a terse "Loaded <name>" success result (no timing/heap)', () => {
+      beginLoadProgress({fileInfo: 'path/to/index.ifc'})
+      reportLoadProgress({phase: 'geometry', completed: 10, total: 10, elapsedMs: 100})
+      endLoadProgress()
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('success')
+      // Just the name (basename of fileInfo when no header was parsed) — no
+      // Total, no seconds, no MB.
+      expect(result.summaryLine).toBe('Loaded index.ifc')
+    })
+
+    it('uses the filename, ignoring an unreliable STEP header fileName', () => {
+      // The STEP header's fileName is often junk (a comment); the grace line
+      // falls back to the source filename (the snackbar prefers model.name).
+      beginLoadProgress({fileInfo: 'path/to/Arty_Z7_PCB.stp'})
+      reportLoadProgress({modelInfo: {fileName: `/* name */ 'export2`, schema: 'AP214'}})
+      endLoadProgress()
+      expect(useStore.getState().loadResult.summaryLine).toBe('Loaded Arty_Z7_PCB.stp')
+    })
+
+    it('publishes an error result with the failure summary', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      endLoadProgress(new Error('bad STEP header'))
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('error')
+      expect(result.summaryLine).toBe('Load failed: bad STEP header')
+    })
+
+    it('summarizes an out-of-memory failure specially', () => {
+      const oom = new Error('Cannot enlarge memory arrays')
+      oom.isOutOfMemory = true
+      beginLoadProgress({fileInfo: 'big.ifc'})
+      endLoadProgress(oom)
+      expect(useStore.getState().loadResult.summaryLine).toBe('Load failed: out of memory')
+    })
+
+    it('a new load clears the previous grace result', () => {
+      beginLoadProgress({fileInfo: 'a.ifc'})
+      endLoadProgress()
+      expect(useStore.getState().loadResult).not.toBe(null)
+      beginLoadProgress({fileInfo: 'b.ifc'})
+      expect(useStore.getState().loadResult).toBe(null)
+    })
+  })
+
+  describe('framing exclusion (robust auto-framing, test-models-private#26)', () => {
+    it('appends a Health line, warns the console, and notes the grace result', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'basel.ifc'})
+      endLoadProgress()
+
+      reportFramingExclusion({excludedElements: 3, excludedVertices: 0, maxDistance: 1877.4})
+
+      const healthLine = reportLines().find((line) => line.startsWith('Health:'))
+      expect(healthLine).toBe(
+        'Health: stray geometry excluded from view framing (3 elements, up to 1877 model units out)')
+      expect(warnSpy).toHaveBeenCalledWith(healthLine)
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('success')
+      // The terse "Loaded <name>" stays; the note rides alongside for the
+      // snackbar to append.
+      expect(result.summaryLine).toBe('Loaded basel.ifc')
+      expect(result.note).toMatch(/stray geometry/)
+      warnSpy.mockRestore()
+    })
+
+    it('reports vertex-granularity exclusions too', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'basel.ifc'})
+      endLoadProgress()
+
+      reportFramingExclusion({excludedElements: 0, excludedVertices: 52, maxDistance: 1450})
+
+      expect(reportLines().find((line) => line.startsWith('Health:'))).toBe(
+        'Health: stray geometry excluded from view framing (52 vertices, up to 1450 model units out)')
+      warnSpy.mockRestore()
+    })
+
+    it('is silent when nothing was excluded, or with no load reported', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'clean.ifc'})
+      endLoadProgress()
+      const linesBefore = reportLines().length
+
+      reportFramingExclusion({excludedElements: 0, excludedVertices: 0, maxDistance: 0})
+      reportFramingExclusion(null)
+
+      expect(reportLines().length).toBe(linesBefore)
+      expect(warnSpy).not.toHaveBeenCalled()
+      expect(useStore.getState().loadResult.note).toBeUndefined()
+      warnSpy.mockRestore()
+    })
+
+    it('does not touch an error grace result', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'broken.ifc'})
+      endLoadProgress(new Error('bad header'))
+
+      reportFramingExclusion({excludedElements: 1, excludedVertices: 0, maxDistance: 500})
+
+      expect(useStore.getState().loadResult.note).toBeUndefined()
+      // The Health line still lands in the report for the "i" dialog.
+      expect(reportLines().some((line) => line.startsWith('Health:'))).toBe(true)
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('sentry integration', () => {
+    it('fires the stall watchdog once and tags the phase', () => {
+      const onStall = jest.fn()
+      beginLoadProgress({fileInfo: 'index.ifc', onStall})
+      reportLoadProgress({phase: 'geometry', completed: 3, total: 10, elapsedMs: 50})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS + 1)
+      expect(onStall).toHaveBeenCalledWith(expect.objectContaining({phase: 'geometry'}))
+      expect(captureMessage).toHaveBeenCalledWith('Model load stalled', 'warning')
+      expect(setTag).toHaveBeenCalledWith('load.phase', 'geometry')
+    })
+
+    it('failure context includes the accumulated report text', () => {
+      beginLoadProgress({fileInfo: 'index.ifc'})
+      reportLoadProgress({phase: 'dataParse', completed: 1, total: 4, elapsedMs: 10})
+      endLoadProgress()
+      attachLoadFailureContext()
+      expect(setTag).toHaveBeenCalledWith('load.phase', 'dataParse')
+      expect(setContext).toHaveBeenCalledWith('load', expect.objectContaining({
+        phase: 'dataParse',
+        fileInfo: 'index.ifc',
+        report: expect.stringContaining('Share v'),
+      }))
+    })
+
+    it('ignores straggler progress after endLoadProgress', () => {
+      const onStall = jest.fn()
+      beginLoadProgress({fileInfo: 'index.ifc', onStall})
+      reportLoadProgress({phase: 'dataParse', completed: 2, total: 4, elapsedMs: 10})
+      endLoadProgress()
+      const linesAtEnd = reportLines()
+
+      reportLoadProgress({phase: 'geometry', completed: 9, total: 10, elapsedMs: 20})
+      jest.advanceTimersByTime(STALL_TIMEOUT_MS * 2)
+      expect(onStall).not.toHaveBeenCalled()
+      expect(reportLines()).toEqual(linesAtEnd)
+    })
+
+    it('is a safe no-op with no active load', () => {
+      endLoadProgress()
+      expect(() => reportLoadProgress({phase: 'geometry', completed: 1})).not.toThrow()
+      expect(() => reportEngineVersion('Conway v1')).not.toThrow()
+      expect(() => attachLoadFailureContext()).not.toThrow()
+    })
+  })
+})

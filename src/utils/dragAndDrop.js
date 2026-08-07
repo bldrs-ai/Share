@@ -55,16 +55,25 @@ export async function handleFileDrop(event, navigate, appPrefix, isOpfsAvailable
     return
   }
 
-  /** @param {string} fileName The filename the upload was given */
+  /**
+   * @param {string} fileName The OPFS storage id the upload was written
+   *   under (`<blob-uuid>.<ext>`) — the `/v/new/` segment the Loader
+   *   resolves, distinct from the user's `uploadedFile.name`.
+   */
   function onWritten(fileName) {
     disablePageReloadApprovalCheck()
     debug().log('handleFileDrop: navigate to:', fileName)
-    navigateToModel(`${appPrefix}/v/new/${fileName}`, navigate)
+    const sharePath = `${appPrefix}/v/new/${fileName}`
+    navigateToModel(sharePath, navigate)
     addRecentFileEntry({
       id: fileName,
       source: 'local',
       name: uploadedFile.name,
-      lastModifiedUtc: uploadedFile.lastModified ? new Date(uploadedFile.lastModified).toISOString() : null,
+      // Epoch ms, matching RecentFileEntry and RecentFilesList's
+      // `Date.now() - utcMs` arithmetic — an ISO string here rendered
+      // as "NaNm ago" in the Last-modified column (#1682).
+      lastModifiedUtc: uploadedFile.lastModified || null,
+      sharePath,
     })
     setPendingModelNameUpdate(fileName)
     if (onSuccess) {

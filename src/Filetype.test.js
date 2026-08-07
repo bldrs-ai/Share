@@ -2,6 +2,7 @@ import {
   FilenameParseError,
   analyzeHeader,
   analyzeHeaderStr,
+  fileSuffixBoundaryRegex,
   getValidExtension,
   isExtensionSupported,
   pathSuffixSupported,
@@ -51,6 +52,24 @@ describe('Filetype', () => {
     }
   })
 
+  it('fileSuffixBoundaryRegex splits pathname into (model file, element path)', () => {
+    // The motivating case: a filetype name ("step") as a plain directory
+    // segment must NOT split — only the file's own dotted suffix at a
+    // path boundary does. Pre-fix, permalinks under such directories
+    // produced a 3-way split and element-path selection never ran.
+    const pathname = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214.stp/5/6217/3804'
+    expect(pathname.split(fileSuffixBoundaryRegex)).toStrictEqual(
+      ['/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-oc-214', '/5/6217/3804'])
+    // No element path → empty trailing part; suffix at end-of-string matches.
+    expect('/share/v/p/index.ifc'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/index', ''])
+    // Mid-filename ".ifc" (no boundary) must not split.
+    expect('/share/v/p/index.ifcx/1'.split(fileSuffixBoundaryRegex)).toStrictEqual(['/share/v/p/index.ifcx/1'])
+    for (const ext of supportedTypes) {
+      expect(`/x/${ext}/y/model.${ext}/1/2`.split(fileSuffixBoundaryRegex)).toStrictEqual(
+        [`/x/${ext}/y/model`, '/1/2'])
+    }
+  })
+
   it('splitAroundExtension', () => {
     for (const ext of supportedTypes) {
       const {parts, extension} = splitAroundExtension(`asdf.${ext}/blah`)
@@ -89,8 +108,54 @@ describe('Filetype', () => {
       expect(analyzeHeaderStr(`ORIGX1      1.000000  0.000000  0.000000        0.00000`)).toBe('pdb')
     })
 
+    it('matches ifc header', () => {
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_DESCRIPTION((''),'2;1');\n` +
+            `FILE_NAME('model.ifc','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('IFC4'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('ifc')
+    })
+
+    it('matches step header as step, not ifc', () => {
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_DESCRIPTION((''),'2;1');\n` +
+            `FILE_NAME('part.step','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('step')
+    })
+
+    it('does not misclassify step as ifc when the name contains "IFC"', () => {
+      // "IFC" appears in the FILE_NAME but the schema is a STEP AP, so the
+      // FILE_SCHEMA-anchored check must still resolve to step.
+      const header = `ISO-10303-21;\n` +
+            `HEADER;\n` +
+            `FILE_NAME('myIFCexport.stp','',(''),(''),'','','');\n` +
+            `FILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));\n` +
+            `ENDSEC;\n`
+      expect(analyzeHeaderStr(header)).toBe('step')
+    })
+
+    it('defaults part-21 to ifc when FILE_SCHEMA is absent from the window', () => {
+      // FILE_SCHEMA truncated out of the sniffed header — fall back to the
+      // dominant format rather than mislabeling as step.
+      const header = `ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((''),'2;1');\n`
+      expect(analyzeHeaderStr(header)).toBe('ifc')
+    })
+
     it('matches stl header', () => {
       expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
+    })
+
+    it('matches ply header', () => {
+      const header = `ply\n` +
+            `format binary_little_endian 1.0\n` +
+            `element vertex 100\n` +
+            `property float x\n`
+      expect(analyzeHeaderStr(header)).toBe('ply')
     })
 
     it('matches xyz header', () => {
@@ -98,6 +163,11 @@ describe('Filetype', () => {
             `#  \n` +
             `  0.3517846     -0.7869986      -2.873479`
       expect(analyzeHeaderStr(header)).toBe('xyz')
+    })
+
+    it('matches usda header', () => {
+      const header = `#usda 1.0\n(\n    upAxis = "Y"\n)`
+      expect(analyzeHeaderStr(header)).toBe('usda')
     })
   })
 
@@ -166,6 +236,64 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe(null)
     })
 
+    it('detects SPZ (gzip magic) binary format', () => {
+      const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
+      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
+      new DataView(buffer).setUint16(0, GZIP_MAGIC_NUMBER, true)
+      expect(analyzeHeader(buffer)).toBe('spz')
+    })
+
+    it('detects USDC crate binary format', () => {
+      const buffer = new TextEncoder().encode('PXR-USDC and then the rest of the crate file').buffer
+      expect(analyzeHeader(buffer)).toBe('usdc')
+    })
+
+    /**
+     * Build the start of a zip: a local file header whose first entry
+     * has the given name. Enough for the sniffing path, which only
+     * reads the signature, the name length, and the name.
+     *
+     * @param {string} firstEntryName
+     * @return {ArrayBuffer}
+     */
+    function makeZipHeader(firstEntryName) {
+      const zipNameOffset = 30
+      const zipNameLenOffset = 26
+      const nameBytes = new TextEncoder().encode(firstEntryName)
+      const buffer = new ArrayBuffer(zipNameOffset + nameBytes.length)
+      const bytes = new Uint8Array(buffer)
+      bytes.set([...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4])
+      new DataView(buffer).setUint16(zipNameLenOffset, nameBytes.length, true)
+      bytes.set(nameBytes, zipNameOffset)
+      return buffer
+    }
+
+    it('detects a zip whose first entry is a USD layer as USDZ', () => {
+      expect(analyzeHeader(makeZipHeader('model.usdc'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('cube.usda'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('scene.USD'))).toBe('usdz')
+    })
+
+    it('detects a zip whose first entry is a SOG manifest as SOG', () => {
+      expect(analyzeHeader(makeZipHeader('meta.json'))).toBe('sog')
+      expect(analyzeHeader(makeZipHeader('bundle/meta.json'))).toBe('sog')
+    })
+
+    it('rejects non-USD non-SOG zip containers (docx, plain zip) as unknown', () => {
+      // Pre-USD behavior for these was a clean null -> "unknown type"
+      // alert on upload; classifying them usdz would fail deep in
+      // USDLoader instead.
+      expect(analyzeHeader(makeZipHeader('[Content_Types].xml'))).toBe(null)
+      expect(analyzeHeader(makeZipHeader('readme.txt'))).toBe(null)
+      // Not the manifest — only a first-entry meta.json marks a SOG.
+      expect(analyzeHeader(makeZipHeader('notmeta.json'))).toBe(null)
+    })
+
+    it('does not swallow text that merely starts with PK', () => {
+      const buffer = new TextEncoder().encode('PKX is not a zip at all, just text').buffer
+      expect(analyzeHeader(buffer)).toBe(null)
+    })
+
     it('detects GLTF text format with proper header', () => {
       // Note: Text starting with "glTF" will be detected as GLB because "glTF" encodes
       // to the same bytes as the GLB magic number. This is correct behavior since
@@ -208,6 +336,15 @@ describe('Filetype', () => {
       expect(getValidExtension('test.GLTF')).toBe('gltf')
       expect(getValidExtension('GLB')).toBe('glb')
       expect(getValidExtension('gltf')).toBe('gltf')
+    })
+
+    it('validates the USD family, matching the longest extension', () => {
+      // 'usd' is a prefix of the other three — the alternation must not
+      // stop at the prefix (typeRegexStr sorts longest-first).
+      expect(getValidExtension('model.usd')).toBe('usd')
+      expect(getValidExtension('model.usda')).toBe('usda')
+      expect(getValidExtension('model.usdc')).toBe('usdc')
+      expect(getValidExtension('model.USDZ')).toBe('usdz')
     })
   })
 })

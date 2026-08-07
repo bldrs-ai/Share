@@ -113,6 +113,25 @@ describe('loader/GlbWriterService', () => {
     terminateGlbWriterWorker()
   })
 
+  it('passes sceneExtras and sceneName through to the worker message (null when omitted)', async () => {
+    const {injectAndPackInWorker, terminateGlbWriterWorker} = await import('./GlbWriterService')
+    injectAndPackInWorker({
+      bytes: new Uint8Array([1]),
+      mode: null,
+      extensions: [],
+      sceneExtras: {bldrsTitle: 'Momentum'},
+      sceneName: 'Momentum',
+    })
+    injectAndPackInWorker({bytes: new Uint8Array([2]), mode: null, extensions: []})
+    const withMeta = lastWorkerInstance.posted[0].data
+    expect(withMeta.sceneExtras).toEqual({bldrsTitle: 'Momentum'})
+    expect(withMeta.sceneName).toBe('Momentum')
+    const withoutMeta = lastWorkerInstance.posted[1].data
+    expect(withoutMeta.sceneExtras).toBeNull()
+    expect(withoutMeta.sceneName).toBeNull()
+    terminateGlbWriterWorker()
+  })
+
   it('rejects with the worker-reported error when ok is false', async () => {
     const {injectAndPackInWorker, terminateGlbWriterWorker} = await import('./GlbWriterService')
     const promise = injectAndPackInWorker({

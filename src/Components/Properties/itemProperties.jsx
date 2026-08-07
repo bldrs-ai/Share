@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import {Typography} from '@mui/material'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import debug from '../../utils/debug'
+import {prettyType} from '../../utils/ifc'
 import {stoi} from '../../utils/strings'
 
 
@@ -20,10 +21,11 @@ import {stoi} from '../../utils/strings'
 export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
   const ROWS = []
   let rowKey = 0
-  if (ifcProps.constructor &&
-      ifcProps.constructor.name &&
-      ifcProps.constructor.name !== 'IfcPropertySet') {
-    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`}/>)
+  const typeName = entityTypeName(model, ifcProps)
+  if (!isPset && typeName !== null && typeName !== 'IfcPropertySet') {
+    // Prettified for reading ('Element (generic proxy)'), not the raw
+    // schema constant ('IFCBUILDINGELEMENTPROXY').
+    ROWS.push(<Row d1={'Type'} d2={prettyType(typeName)} key={`type-${serial}`}/>)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
@@ -43,6 +45,77 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
       <tbody>{ROWS}</tbody>
     </table>
   )
+}
+
+
+/**
+ * Display name for the entity's schema type, or null when no usable name
+ * can be derived (the row is omitted rather than showing a junk value).
+ *
+ * Resolution order:
+ *   1. `ifcProps.type` as a string — Conway's compat surface returns the
+ *      entity type name directly ('ADVANCED_FACE', 'IFCWALL', …). This is
+ *      the STEP path and the modern Conway-direct IFC path.
+ *   2. Numeric `ifcProps.type` (an IFC type code from `getLine`-shaped
+ *      surfaces) mapped through `model.ifcManager.getIfcType(0, code)`.
+ *   3. `constructor.name` when it looks like a real IFC class (web-ifc
+ *      dev builds return class instances like `IfcWall`). Minified prod
+ *      builds mangle those names ('t') and plain objects give 'Object' —
+ *      neither is a type, so both are rejected rather than displayed,
+ *      which is the long-standing "IFC Type: Object" bug this replaces.
+ *
+ * @param {object} model IFC model (for the numeric type-code lookup)
+ * @param {object} ifcProps the entity
+ * @return {string|null}
+ */
+export function entityTypeName(model, ifcProps) {
+  const rawType = ifcProps?.type
+  if (typeof rawType === 'string' && rawType.length > 0) {
+    return rawType
+  }
+  if (typeof rawType === 'number') {
+    // Two manager shapes exist: ShareIfcManager's `getIfcType(modelID,
+    // typeCode)` and the Conway-direct shim, which lacks it but exposes
+    // the compat surface's `properties.getIfcType(typeCode)` directly.
+    const lookups = [
+      () => model?.ifcManager?.getIfcType?.(0, rawType),
+      () => model?.ifcManager?.ifcAPI?.properties?.getIfcType?.(rawType),
+    ]
+    for (const lookup of lookups) {
+      try {
+        const name = lookup()
+        if (typeof name === 'string' && name.length > 0) {
+          return name
+        }
+      } catch {
+        // Try the next shape, then the constructor heuristic.
+      }
+    }
+  }
+  const ctorName = ifcProps?.constructor?.name
+  if (typeof ctorName === 'string' && ctorName.startsWith('Ifc')) {
+    return ctorName
+  }
+  return null
+}
+
+
+/**
+ * The object `deref` needs to resolve a type-5 entity reference. Its
+ * second parameter is a **web-ifc API**, not our model: it calls
+ * `webIfc.properties.getItemProperties(...)`. Passing the model meant
+ * that call threw on `undefined.getItemProperties` the moment a
+ * property carried a reference — which aborted the whole table and left
+ * the previously selected element's properties on screen. Spatial
+ * containers (IfcSite, IfcBuilding) hit it; leaves mostly don't, which
+ * is why this hid for so long.
+ *
+ * @param {object} model IFC model
+ * @return {object} web-ifc-shaped API, falling back to the model so
+ *   backends that already expose `properties` keep working.
+ */
+function webIfcFor(model) {
+  return model?.ifcManager?.ifcAPI ?? model
 }
 
 
@@ -104,15 +177,19 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       if (propValue.type === 0) {
         return null
       }
+      // `deref` takes (ref, webIfc, indent) — the 4th "render nested
+      // entity" callback this used to pass was never invoked, so a
+      // resolved reference came back as a raw entity object and React
+      // threw "Objects are not valid as a React child", aborting the
+      // table. Nest it into its own table here instead. Arrays are left
+      // alone: React renders them, and deref has already resolved each
+      // member.
+      const derefed = await deref(propValue, webIfcFor(model), serial)
+      const isEntity = derefed !== null && typeof derefed === 'object' && !Array.isArray(derefed)
       return (
         <Row
           d1={label}
-          d2={
-            await deref(
-              propValue, model, serial,
-              // TODO(pablo): there's no 4th param in deref
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
-          }
+          d2={isEntity ? await createPropertyTable(model, derefed, false, serial) : derefed}
           key={serial}
         />
       )

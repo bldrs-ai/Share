@@ -51,6 +51,21 @@ beforeEach(() => {
 })
 
 
+/**
+ * Settle the status useEffect that fires on mount when a connection exists
+ * (async validateAll → setStatuses). Call it right after rendering a connected
+ * tab so that trailing update lands inside act instead of logging an "update
+ * not wrapped in act(...)" warning once the checkStatus promise resolves.
+ *
+ * @return {Promise<void>}
+ */
+async function flushStatusEffect() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
+
 describe('GitHubTab — empty state', () => {
   it('renders the empty state with Connect GitHub when no github connections exist', () => {
     render(
@@ -93,7 +108,7 @@ describe('GitHubTab — connected state', () => {
     })
   })
 
-  it('renders the per-connection card and a Browse button', () => {
+  it('renders the per-connection card and a Browse button', async () => {
     render(
       <GitHubTab onPickerReady={jest.fn()} onOpenById={jest.fn()}/>,
       {wrapper: StoreRouteThemeCtx},
@@ -101,6 +116,7 @@ describe('GitHubTab — connected state', () => {
 
     expect(screen.getByTestId('github-tab')).toBeInTheDocument()
     expect(screen.getByTestId('button-browse-github-gh-1')).toBeInTheDocument()
+    await flushStatusEffect()
   })
 
   it('calls onPickerReady with (token, connection) when Browse is clicked', async () => {
@@ -154,7 +170,7 @@ describe('GitHubTab — connected state', () => {
 
 
 describe('GitHubTab — recents', () => {
-  it('only surfaces github recents tagged with this connection.id', () => {
+  it('only surfaces github recents tagged with this connection.id', async () => {
     loadAllRecentFiles.mockReturnValue([
       // Belongs to this connection — should appear.
       {id: '/share/path/a', source: 'github', name: 'a.ifc', sharePath: '/share/path/a', connectionId: 'gh-1'},
@@ -178,9 +194,10 @@ describe('GitHubTab — recents', () => {
     expect(screen.queryByText('b.ifc')).not.toBeInTheDocument()
     expect(screen.queryByText('c.ifc')).not.toBeInTheDocument()
     expect(screen.queryByText('d.ifc')).not.toBeInTheDocument()
+    await flushStatusEffect()
   })
 
-  it('calls onOpenById with the recent\'s id and name when a recent is clicked', () => {
+  it('calls onOpenById with the recent\'s id and name when a recent is clicked', async () => {
     loadAllRecentFiles.mockReturnValue([
       {id: '/share/path/a', source: 'github', name: 'a.ifc', sharePath: '/share/path/a', connectionId: 'gh-1'},
     ])
@@ -197,5 +214,6 @@ describe('GitHubTab — recents', () => {
     fireEvent.click(screen.getByText('a.ifc'))
 
     expect(onOpenById).toHaveBeenCalledWith(mockConnection, '/share/path/a', 'a.ifc')
+    await flushStatusEffect()
   })
 })

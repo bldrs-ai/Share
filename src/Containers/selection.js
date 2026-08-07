@@ -1,4 +1,5 @@
 import debug from '../utils/debug'
+import useStore from '../store/useStore'
 import {getDescendantExpressIds} from '../utils/TreeUtils'
 
 
@@ -34,20 +35,34 @@ export function elementSelection(viewer, elementsById, selectItemsInScene, isShi
   const descendantIds = getDescendantExpressIds(selectedElt)
   let updateNav = false
   const selectedInViewer = new Set(viewer.getSelectedIds())
+  // Anchors are the ids the user actually clicked. The viewer set also
+  // carries their descendants, because a container's geometry lives in
+  // its children and must highlight in the scene — but treating that
+  // whole set as "the selection" made every child row look selected in
+  // NavTree, and left Properties and the breadcrumb showing whichever
+  // descendant happened to land last in the set.
+  const anchors = new Set(
+    (useStore.getState().selectedAnchorIds || []).map(Number).filter(Number.isFinite))
   if (isShiftKeyDown) {
     if (selectedInViewer.has(expressId)) {
       const descendantIdsToRemove = getDescendantExpressIds(selectedElt)
       descendantIdsToRemove.forEach((descendantId) => selectedInViewer.delete(descendantId))
       selectedInViewer.delete(expressId)
+      anchors.delete(expressId)
     } else {
       selectedInViewer.add(expressId)
       descendantIds.forEach((id) => selectedInViewer.add(id))
+      // Re-added last so shift-click keeps showing the newest pick.
+      anchors.delete(expressId)
+      anchors.add(expressId)
     }
   } else {
     selectedInViewer.clear()
     selectedInViewer.add(expressId)
     descendantIds.forEach((descendantId) => selectedInViewer.add(descendantId))
+    anchors.clear()
+    anchors.add(expressId)
     updateNav = true
   }
-  selectItemsInScene(Array.from(selectedInViewer), updateNav)
+  selectItemsInScene(Array.from(selectedInViewer), updateNav, [], null, null, Array.from(anchors))
 }

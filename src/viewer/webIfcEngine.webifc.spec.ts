@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test'
-import {homepageSetup, setIsReturningUser, waitForModel} from './utils'
+import {homepageSetup, setIsReturningUser, waitForModel} from '../tests/e2e/utils'
 
 
 /**
