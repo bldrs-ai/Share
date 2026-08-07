@@ -10,8 +10,16 @@ export const supportedTypes = [
   'glb',
   'gltf',
   'ifc',
+  // Gaussian splat formats (loaded via Spark — see src/loader/splats.js).
+  // Listed with the rest so routes, drag-drop and permalinks all pick
+  // them up.
+  'ksplat',
   'obj',
   'pdb',
+  'ply',
+  'sog',
+  'splat',
+  'spz',
   'step',
   'stl',
   'stp',
@@ -123,6 +131,11 @@ const ZIP_MAGIC = [...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4]
 const ZIP_NAME_LEN_OFFSET = 26
 const ZIP_NAME_OFFSET = 30
 
+// gzip magic (0x1f 0x8b) read as a little-endian uint16. Among the
+// supported formats only .spz (gzipped gaussian-splat data) is a gzip
+// stream, so the magic is a sufficient discriminator here.
+const GZIP_MAGIC_NUMBER = 0x8B1F
+
 
 /**
  * @param {string} path
@@ -172,8 +185,22 @@ export function analyzeHeader(headerBuffer) {
   if (matchesMagic(headerBuffer, USDC_MAGIC)) {
     return 'usdc'
   }
+  if (headerBuffer.byteLength >= 2 &&
+      new DataView(headerBuffer).getUint16(0, true) === GZIP_MAGIC_NUMBER) {
+    return 'spz'
+  }
   if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
-    return looksLikeUsdzArchive(headerBuffer) ? 'usdz' : null
+    // The zip signature is shared by USDZ packages, SOG splat bundles,
+    // and plain office/zip uploads — peek the first entry's name to
+    // tell them apart; anything else stays unrecognized so it fails
+    // sniffing cleanly instead of dying downstream in a loader.
+    if (looksLikeUsdzArchive(headerBuffer)) {
+      return 'usdz'
+    }
+    if (looksLikeSogArchive(headerBuffer)) {
+      return 'sog'
+    }
+    return null
   }
 
   const decoder = new TextDecoder('utf-8')
@@ -211,15 +238,43 @@ function matchesMagic(headerBuffer, magicBytes) {
  * @return {boolean}
  */
 function looksLikeUsdzArchive(headerBuffer) {
+  return /\.usd[ac]?$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+/**
+ * Distinguish a PlayCanvas SOG splat bundle from other zip containers by
+ * the same first-entry peek: SOG bundles carry a `meta.json` manifest
+ * (splat-transform writes it as the leading entry) alongside the webp
+ * planes. First-entry order isn't formally guaranteed, so a bundle that
+ * leads with a webp fails sniffing — extension-carrying `.sog` paths
+ * never reach this and still load.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {boolean}
+ */
+function looksLikeSogArchive(headerBuffer) {
+  return /(^|\/)meta\.json$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+/**
+ * The first zip entry's filename from a buffer holding at least the first
+ * local file header (the 1KB sniff window fits header + name comfortably).
+ * Empty string when the buffer is too short.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {string}
+ */
+function firstZipEntryName(headerBuffer) {
   if (headerBuffer.byteLength < ZIP_NAME_OFFSET) {
-    return false
+    return ''
   }
   const view = new DataView(headerBuffer)
   const nameLen = view.getUint16(ZIP_NAME_LEN_OFFSET, true)
   const nameEnd = Math.min(ZIP_NAME_OFFSET + nameLen, headerBuffer.byteLength)
   const nameBytes = new Uint8Array(headerBuffer, ZIP_NAME_OFFSET, nameEnd - ZIP_NAME_OFFSET)
-  const name = new TextDecoder('utf-8').decode(nameBytes)
-  return /\.usd[ac]?$/i.test(name)
+  return new TextDecoder('utf-8').decode(nameBytes)
 }
 
 
@@ -233,6 +288,11 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('ply')) {
+    // PLY magic. Both mesh/point-cloud PLY and gaussian-splat PLY start
+    // this way; both route to the splat loader (spark renders plain
+    // point clouds as degenerate splats).
+    return 'ply'
   } else if (header.startsWith('#usda')) {
     return 'usda'
   } else if (header.includes('FBX')) {

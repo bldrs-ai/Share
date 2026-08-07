@@ -150,6 +150,14 @@ describe('Filetype', () => {
       expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
     })
 
+    it('matches ply header', () => {
+      const header = `ply\n` +
+            `format binary_little_endian 1.0\n` +
+            `element vertex 100\n` +
+            `property float x\n`
+      expect(analyzeHeaderStr(header)).toBe('ply')
+    })
+
     it('matches xyz header', () => {
       const header = `# header1 \n` +
             `#  \n` +
@@ -228,6 +236,13 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe(null)
     })
 
+    it('detects SPZ (gzip magic) binary format', () => {
+      const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
+      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
+      new DataView(buffer).setUint16(0, GZIP_MAGIC_NUMBER, true)
+      expect(analyzeHeader(buffer)).toBe('spz')
+    })
+
     it('detects USDC crate binary format', () => {
       const buffer = new TextEncoder().encode('PXR-USDC and then the rest of the crate file').buffer
       expect(analyzeHeader(buffer)).toBe('usdc')
@@ -259,12 +274,19 @@ describe('Filetype', () => {
       expect(analyzeHeader(makeZipHeader('scene.USD'))).toBe('usdz')
     })
 
-    it('rejects non-USD zip containers (docx, plain zip) as unknown', () => {
+    it('detects a zip whose first entry is a SOG manifest as SOG', () => {
+      expect(analyzeHeader(makeZipHeader('meta.json'))).toBe('sog')
+      expect(analyzeHeader(makeZipHeader('bundle/meta.json'))).toBe('sog')
+    })
+
+    it('rejects non-USD non-SOG zip containers (docx, plain zip) as unknown', () => {
       // Pre-USD behavior for these was a clean null -> "unknown type"
       // alert on upload; classifying them usdz would fail deep in
       // USDLoader instead.
       expect(analyzeHeader(makeZipHeader('[Content_Types].xml'))).toBe(null)
       expect(analyzeHeader(makeZipHeader('readme.txt'))).toBe(null)
+      // Not the manifest — only a first-entry meta.json marks a SOG.
+      expect(analyzeHeader(makeZipHeader('notmeta.json'))).toBe(null)
     })
 
     it('does not swallow text that merely starts with PK', () => {

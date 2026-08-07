@@ -54,7 +54,7 @@ import {
   schemaVersionFor,
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
@@ -288,8 +288,8 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       // `preserveTriangleOrder` stays false, so compressGlb falls
       // back to the per-vertex-IDs-detected skip (uncompressed
       // write) rather than running DRACO with corrupted IDs.
-      console.warn(
-        '[glb] writer: parseGlb for face_ids capture threw; ' +
+      glbWarn(
+        'writer: parseGlb for face_ids capture threw; ' +
         'skipping face_ids (DRACO will skip too):', e)
     }
     // STEP per-occurrence identity. The per-triangle arrays above only

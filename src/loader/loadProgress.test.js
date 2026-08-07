@@ -17,6 +17,7 @@ import {
   reportEngineVersion,
   reportLoadProgress,
   reportModelInfo,
+  reportSourceInfo,
 } from './loadProgress'
 
 
@@ -73,6 +74,16 @@ describe('loadProgress', () => {
       beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
       reportModelInfo({fileName: 'ISS_stationary.glb', schema: 'GLB', byteLength: 39_950_000})
       expect(reportLines()).toContain('Model: ISS_stationary.glb — GLB, 38.1 MB')
+    })
+
+    it('reportSourceInfo appends a byte-source line', () => {
+      beginLoadProgress({fileInfo: 'model.ply'})
+      reportSourceInfo('Source: OPFS cache (uploaded file)')
+      expect(reportLines()).toContain('Source: OPFS cache (uploaded file)')
+    })
+
+    it('reportSourceInfo is a no-op without an active load', () => {
+      expect(() => reportSourceInfo('Source: OPFS cache (uploaded file)')).not.toThrow()
     })
 
     it('publishes a live bar and freezes a completed stage without a bar', () => {

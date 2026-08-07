@@ -10,7 +10,7 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportModelInfo} from './loadProgress'
+import {reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   deleteFileFromOPFS,
   doesFileExistInOPFS,
@@ -47,7 +47,7 @@ import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
 import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
 import {
   externalCacheKey,
@@ -57,6 +57,7 @@ import {
 } from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
+import splatsToThree, {newSplatLoader} from './splats'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
@@ -299,6 +300,22 @@ export async function load(
       }
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
+
+      // Byte-source line for the load report: were the bytes served
+      // from OPFS or fetched? Reported only for the kinds where
+      // hit-ness is actually known here: uploads live in OPFS by
+      // construction, and for GitHub the isCacheHit + doesFileExistInOPFS
+      // combination above guarantees downloadModel resolved from OPFS
+      // without a fetch when isCacheHit survived. downloadToOPFS
+      // (local/external kinds) decides hit/miss inside the worker and
+      // doesn't surface it — no line rather than a guess.
+      if (isUploadedFile) {
+        reportSourceInfo('Source: OPFS cache (uploaded file)')
+      } else if (kindLabel === 'github') {
+        reportSourceInfo(isCacheHit ?
+          'Source: OPFS cache HIT (GitHub content unchanged)' :
+          'Source: network download (GitHub), cached to OPFS')
+      }
 
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd
@@ -794,8 +811,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
             'skipping picking on this mesh'
-          console.warn(
-            `[glb] reader: face_ids ${which} failed on mesh ${meshIndex} ` +
+          glbWarn(
+            `reader: face_ids ${which} failed on mesh ${meshIndex} ` +
               `(payload first expressID ${faceIdsEntry.expressIds[0]}, ` +
               `recorded ${faceIdsEntry.firstExpressId}, ` +
               `geometry ${attrExpr && geomIndex ? attrExpr.getX(geomIndex.getX(0)) : 'n/a'}); ` +
@@ -804,8 +821,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           const recovery = perVertexTrusted ?
             'falling back to per-vertex attributes' :
             'skipping picking on this mesh (compressed, per-vertex IDs are corrupted)'
-          console.warn(
-            `[glb] reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
+          glbWarn(
+            `reader: face_ids triangle count mismatch on mesh ${meshIndex} ` +
               `(face_ids ${faceIdsEntry.expressIds.length}, geometry ${expectedTriCount}); ${recovery}`)
         }
       }
@@ -845,8 +862,8 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
           `(${viaFaceIds} via BLDRS_face_ids, ${attached - viaFaceIds} via per-vertex)`)
     }
     if (skippedCompressedNoFaceIds > 0) {
-      console.warn(
-        `[glb] reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
+      glbWarn(
+        `reader: skipped picking on ${skippedCompressedNoFaceIds} mesh(es) — ` +
           `compressed (${compressionMode}) artifact with no BLDRS_face_ids coverage; ` +
           'per-vertex IDs would be corrupted')
     }
@@ -1603,6 +1620,21 @@ async function findLoader(pathname, viewer) {
       loader = new PDBLoader
       fixupCb = pdbToThree
       isFormatText = true
+      break
+    }
+    case 'ksplat':
+    case 'ply':
+    case 'sog':
+    case 'splat':
+    case 'spz': {
+      // Gaussian splat formats via Spark (see src/loader/splats.js and
+      // issue #1726). The shim's async parse decodes bytes to a
+      // SplatMesh; the fixup wraps it into the Share model Group and
+      // installs the scene-level SparkRenderer that draws it.
+      loader = newSplatLoader(extension)
+      isLoaderAsync = true
+      isFormatText = false
+      fixupCb = splatsToThree
       break
     }
     case 'stl': {
