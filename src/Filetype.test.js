@@ -164,6 +164,11 @@ describe('Filetype', () => {
             `  0.3517846     -0.7869986      -2.873479`
       expect(analyzeHeaderStr(header)).toBe('xyz')
     })
+
+    it('matches usda header', () => {
+      const header = `#usda 1.0\n(\n    upAxis = "Y"\n)`
+      expect(analyzeHeaderStr(header)).toBe('usda')
+    })
   })
 
   describe('analyzeHeader (binary)', () => {
@@ -238,11 +243,55 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe('spz')
     })
 
-    it('detects SOG (zip magic) binary format', () => {
-      const ZIP_MAGIC_NUMBER = 0x04034B50 // "PK\x03\x04", little-endian
-      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
-      new DataView(buffer).setUint32(0, ZIP_MAGIC_NUMBER, true)
-      expect(analyzeHeader(buffer)).toBe('sog')
+    it('detects USDC crate binary format', () => {
+      const buffer = new TextEncoder().encode('PXR-USDC and then the rest of the crate file').buffer
+      expect(analyzeHeader(buffer)).toBe('usdc')
+    })
+
+    /**
+     * Build the start of a zip: a local file header whose first entry
+     * has the given name. Enough for the sniffing path, which only
+     * reads the signature, the name length, and the name.
+     *
+     * @param {string} firstEntryName
+     * @return {ArrayBuffer}
+     */
+    function makeZipHeader(firstEntryName) {
+      const zipNameOffset = 30
+      const zipNameLenOffset = 26
+      const nameBytes = new TextEncoder().encode(firstEntryName)
+      const buffer = new ArrayBuffer(zipNameOffset + nameBytes.length)
+      const bytes = new Uint8Array(buffer)
+      bytes.set([...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4])
+      new DataView(buffer).setUint16(zipNameLenOffset, nameBytes.length, true)
+      bytes.set(nameBytes, zipNameOffset)
+      return buffer
+    }
+
+    it('detects a zip whose first entry is a USD layer as USDZ', () => {
+      expect(analyzeHeader(makeZipHeader('model.usdc'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('cube.usda'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('scene.USD'))).toBe('usdz')
+    })
+
+    it('detects a zip whose first entry is a SOG manifest as SOG', () => {
+      expect(analyzeHeader(makeZipHeader('meta.json'))).toBe('sog')
+      expect(analyzeHeader(makeZipHeader('bundle/meta.json'))).toBe('sog')
+    })
+
+    it('rejects non-USD non-SOG zip containers (docx, plain zip) as unknown', () => {
+      // Pre-USD behavior for these was a clean null -> "unknown type"
+      // alert on upload; classifying them usdz would fail deep in
+      // USDLoader instead.
+      expect(analyzeHeader(makeZipHeader('[Content_Types].xml'))).toBe(null)
+      expect(analyzeHeader(makeZipHeader('readme.txt'))).toBe(null)
+      // Not the manifest — only a first-entry meta.json marks a SOG.
+      expect(analyzeHeader(makeZipHeader('notmeta.json'))).toBe(null)
+    })
+
+    it('does not swallow text that merely starts with PK', () => {
+      const buffer = new TextEncoder().encode('PKX is not a zip at all, just text').buffer
+      expect(analyzeHeader(buffer)).toBe(null)
     })
 
     it('detects GLTF text format with proper header', () => {
@@ -287,6 +336,15 @@ describe('Filetype', () => {
       expect(getValidExtension('test.GLTF')).toBe('gltf')
       expect(getValidExtension('GLB')).toBe('glb')
       expect(getValidExtension('gltf')).toBe('gltf')
+    })
+
+    it('validates the USD family, matching the longest extension', () => {
+      // 'usd' is a prefix of the other three — the alternation must not
+      // stop at the prefix (typeRegexStr sorts longest-first).
+      expect(getValidExtension('model.usd')).toBe('usd')
+      expect(getValidExtension('model.usda')).toBe('usda')
+      expect(getValidExtension('model.usdc')).toBe('usdc')
+      expect(getValidExtension('model.USDZ')).toBe('usdz')
     })
   })
 })

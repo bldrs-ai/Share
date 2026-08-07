@@ -247,6 +247,49 @@ describe('Loader', () => {
     }
   })
 
+  it('loads a USDA model', async () => {
+    mockViewer.IFC.type = 'usda'
+    const testPath = 'usd/cube.usda'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      // USD prim hierarchy surfaces as NavTree names: the fixture's
+      // Xform "Cube" contains Mesh "Geom".
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.Name.value).toBe('Cube')
+      const geom = cube.children.find((child) => child.name === 'Geom')
+      expect(geom).toBeDefined()
+      expect(geom.Name.value).toBe('Geom')
+      // Per-node expressID serials from convertToShareModel drive
+      // raycast part identification for placemarks.
+      expect(Number.isSafeInteger(geom.expressID)).toBe(true)
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a USDZ model', async () => {
+    mockViewer.IFC.type = 'usdz'
+    const testPath = 'usd/cube.usdz'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.children.some((child) => child.name === 'Geom')).toBe(true)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('loads a STEP model', async () => {
     mockViewer.IFC.type = 'step'
     const testPath = 'step/a-gear.step'
@@ -710,7 +753,7 @@ function testPathToUrl(relativePath) {
  */
 function testPathToContent(relativePath) {
   // Determine if file is binary based on extension
-  const binaryExtensions = ['fbx', 'glb', 'gltf', 'ksplat', 'sog', 'splat', 'spz']
+  const binaryExtensions = ['fbx', 'glb', 'gltf', 'ksplat', 'sog', 'splat', 'spz', 'usd', 'usdc', 'usdz']
   const extension = relativePath.split('.').pop().toLowerCase()
   const isBinary = binaryExtensions.includes(extension)
 
