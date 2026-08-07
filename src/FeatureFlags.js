@@ -14,6 +14,15 @@ export const flags = [
   // land in identity-decoupling PR2.
   // See design/new/identity-decoupling-decisions.md.
   {name: 'githubAsSource', isActive: false},
+  // Usage quotas. The quota lib (src/quota), the record-load Netlify
+  // function, the useQuota hook and QuotaLimitDialog all ship
+  // unconditionally; this flag gates ENFORCEMENT. When off, useQuota
+  // reports unlimited capacity and record() is a no-op, so no load is
+  // ever counted or blocked and the QuotaBadge stays hidden. Off by
+  // default while quotas are validated against real Auth0 + public/private
+  // repos; enable per-session with `?feature=quotas`. Flip isActive to true
+  // to roll the limits out to everyone.
+  {name: 'quotas', isActive: false},
   // GLB runtime artifact pipeline (design/new/glb-model-sharing.md).
   // `glb` enables both the writer (post-IFC-parse cache warm-up) and the
   // reader (skip-IFC-when-GLB-cached fast path in Loader.js).
