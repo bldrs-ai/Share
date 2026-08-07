@@ -4,6 +4,35 @@ import ShareIfcLoader from '../viewer/ifc/ShareIfcLoader'
 import {load, readModel} from './Loader'
 
 
+// Spark's real module boots a wasm sorter + workers that don't exist in
+// jsdom; the splat load test verifies the Loader plumbing (extension →
+// shim → fixup → convertToShareModel), not spark's decoder. Same mock
+// shape as splats.test.js.
+jest.mock('@sparkjsdev/spark', () => {
+  const three = require('three')
+  /** Stand-in for spark's SplatMesh. */
+  class SplatMesh extends three.Object3D {
+    /** @param {object} options */
+    constructor(options) {
+      super()
+      this.options = options
+      this.initialized = Promise.resolve(this)
+    }
+
+    /** @return {object} fixed local-space splat-centers box */
+    getBoundingBox() {
+      return new three.Box3(
+        new three.Vector3(-1, -1, -1),
+        new three.Vector3(1, 1, 1),
+      )
+    }
+  }
+  /** Stand-in for spark's SparkRenderer scene object. */
+  class SparkRenderer extends three.Object3D {}
+  return {SplatMesh, SparkRenderer}
+})
+
+
 let mathRandomSpy
 let mockViewer
 describe('Loader', () => {
@@ -192,6 +221,70 @@ describe('Loader', () => {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
       expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a SPLAT model', async () => {
+    mockViewer.IFC.type = 'splat'
+    const testPath = 'splat/cube.splat'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      // The fixup wraps the SplatMesh in a Group and stashes a bounds
+      // proxy on it so Box3.setFromObject-based framing works.
+      expect(model.geometry).toBeDefined()
+      expect(model.children.some((child) => child.name === 'Gaussian splats')).toBe(true)
+      expect(model.type).toBe('splat')
+      expect(model.format).toBe('splat')
+      expect(model.capabilities.expressIdPicking).toBe(false)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a USDA model', async () => {
+    mockViewer.IFC.type = 'usda'
+    const testPath = 'usd/cube.usda'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      // USD prim hierarchy surfaces as NavTree names: the fixture's
+      // Xform "Cube" contains Mesh "Geom".
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.Name.value).toBe('Cube')
+      const geom = cube.children.find((child) => child.name === 'Geom')
+      expect(geom).toBeDefined()
+      expect(geom.Name.value).toBe('Geom')
+      // Per-node expressID serials from convertToShareModel drive
+      // raycast part identification for placemarks.
+      expect(Number.isSafeInteger(geom.expressID)).toBe(true)
+      expect(model).toMatchSnapshot()
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
+  it('loads a USDZ model', async () => {
+    mockViewer.IFC.type = 'usdz'
+    const testPath = 'usd/cube.usdz'
+    const onProgress = jest.fn()
+    const setOpfsFile = jest.fn()
+    const restoreArrayBuffer = testPathToContent(testPath)
+    try {
+      const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
+      expect(model).toBeDefined()
+      const cube = model.children.find((child) => child.name === 'Cube')
+      expect(cube).toBeDefined()
+      expect(cube.children.some((child) => child.name === 'Geom')).toBe(true)
     } finally {
       restoreArrayBuffer()
     }
@@ -660,7 +753,7 @@ function testPathToUrl(relativePath) {
  */
 function testPathToContent(relativePath) {
   // Determine if file is binary based on extension
-  const binaryExtensions = ['fbx', 'glb', 'gltf']
+  const binaryExtensions = ['fbx', 'glb', 'gltf', 'ksplat', 'sog', 'splat', 'spz', 'usd', 'usdc', 'usdz']
   const extension = relativePath.split('.').pop().toLowerCase()
   const isBinary = binaryExtensions.includes(extension)
 

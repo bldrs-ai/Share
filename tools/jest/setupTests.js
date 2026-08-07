@@ -7,12 +7,18 @@ import '@testing-library/jest-dom'
 import 'regenerator-runtime/runtime'
 import {disableDebug} from '../../src/utils/debug'
 import {getAndExportEnvVars} from './vars.jest'
+import {installGlbLogCapture, clearGlbLogs} from './glbLogCapture'
 
 
 const {initServer} = require('../../src/__mocks__/server')
 
 
 disableDebug()
+
+// Divert the GLB pipeline's `[glb]` diagnostics into a buffer so a test run
+// leaves a quiet console; specs assert on them via getGlbLogs(). Cleared
+// before each test in the beforeEach below.
+installGlbLogCapture()
 
 const server = initServer(getAndExportEnvVars())
 
@@ -22,6 +28,9 @@ beforeAll(() => {
     onUnhandledRequest: 'error', // Warns about unhandled requests
   })
 })
+
+// Start each test with an empty `[glb]` capture buffer.
+beforeEach(() => clearGlbLogs())
 
 // Reset any request handlers that we may add during the tests,
 // so they don't affect other tests.

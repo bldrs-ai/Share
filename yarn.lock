@@ -5401,6 +5401,13 @@
     color "^5.0.2"
     text-hex "1.0.x"
 
+"@sparkjsdev/spark@^2.1.0":
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/@sparkjsdev/spark/-/spark-2.1.0.tgz#30aa64ea296628c0a0b53aa3067b210bbae6a244"
+  integrity sha512-BRw+MuMzx0B3K8fDLQygt2OHEhYUV+41RX7btq9pZ3rCVrq42o57jW34VAIvC7JO/84DJh/1AutACV9ym6BfVg==
+  dependencies:
+    fflate "^0.8.2"
+
 "@stripe/react-stripe-js@3.1.1":
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/@stripe/react-stripe-js/-/react-stripe-js-3.1.1.tgz#78a2575683637f87c965a81cc1e0f626138f20f1"
@@ -10152,6 +10159,11 @@ fetch-blob@^3.1.2, fetch-blob@^3.1.4:
   dependencies:
     node-domexception "^1.0.0"
     web-streams-polyfill "^3.0.3"
+
+fflate@^0.8.2:
+  version "0.8.3"
+  resolved "https://registry.yarnpkg.com/fflate/-/fflate-0.8.3.tgz#bc27d8eb30343d4d512abb03480202ce65d825fc"
+  integrity sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==
 
 fflate@~0.8.2:
   version "0.8.2"
