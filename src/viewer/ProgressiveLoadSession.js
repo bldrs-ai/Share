@@ -1,6 +1,7 @@
 import {Box3, Group, MathUtils, Sphere, Vector3} from 'three'
 import {setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
+import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
 
 
 /** Session lifecycle states (see class doc). */
@@ -28,6 +29,11 @@ const FAR_PLANE_SLACK = 1.5
 const MAX_DISTANCE_HEADROOM = 10
 /** Box corner count for the sphere-containment test. */
 const BOX_CORNERS = 8
+/**
+ * Refits whose framing sphere barely differs from the one already fitted
+ * are skipped — see maybeRefit_. Fraction of the fitted radius.
+ */
+const REFIT_EPSILON_FRACTION = 0.01
 
 
 /**
@@ -40,8 +46,11 @@ const BOX_CORNERS = 8
  *
  *  - the demand-preview group's scene lifecycle (install on first mesh,
  *    dispose + remove at finish/abort),
- *  - the camera follow: a STRICT fit of everything shown so far. A
- *    running union box tracks the preview's true extents, and a refit
+ *  - the camera follow: a STRICT fit of everything shown so far, minus
+ *    extreme strays. Per-element world boxes accumulate as geometry
+ *    streams in, and the fit frames their robust bounds
+ *    (`three/robustBounds.js` — the same criterion the end-of-load fit
+ *    uses, so the follow and the final frame never disagree). A refit
  *    fires when (and only when) new geometry lands OUTSIDE the volume
  *    the camera currently frames — so existing geometry is never pushed
  *    offscreen between timer beats. The first fit is instant; follow-up
@@ -85,7 +94,12 @@ export default class ProgressiveLoadSession {
     this.followedControls = null
     this.followDelayMs = CAMERA_FOLLOW_MIN_MS
     this.lastFitMs = 0
-    this.unionBox = new Box3()
+    // Per-element world boxes — what the follow frames (see
+    // fitUnionToFrame_). Two stores because they have different
+    // lifetimes: the preview group's boxes are rebuilt when its
+    // coordination transform is stamped, the streamed ones only append.
+    this.previewBoxes = new ElementBoxes()
+    this.streamedBoxes = new ElementBoxes()
     this.fittedSphere = null
     this.overflowPending = false
     this.onControlStart = () => this.stopFollow_()
@@ -168,7 +182,9 @@ export default class ProgressiveLoadSession {
       return
     }
     try {
-      this.unionBox.union(box)
+      // Copies the six bounds out: the incremental builder hands over a
+      // scratch box it reuses for the next instance.
+      this.streamedBoxes.push(box)
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
       }
@@ -241,8 +257,8 @@ export default class ProgressiveLoadSession {
 
 
   /**
-   * Grow the union box by one mesh's world bounds and flag an overflow
-   * when it escapes the currently framed sphere.
+   * Record one preview mesh's world bounds and flag an overflow when it
+   * escapes the currently framed sphere.
    *
    * @param {object} mesh
    */
@@ -251,7 +267,7 @@ export default class ProgressiveLoadSession {
     if (box === null) {
       return
     }
-    this.unionBox.union(box)
+    this.previewBoxes.push(box)
     if (this.fittedSphere !== null && !this.sphereContainsBox_(this.fittedSphere, box)) {
       this.overflowPending = true
     }
@@ -259,17 +275,19 @@ export default class ProgressiveLoadSession {
 
 
   /**
-   * Recompute the union box from scratch (group transform changed).
+   * Recompute the preview group's boxes from scratch (its transform
+   * changed). Only these move with it; the streamed instance boxes
+   * arrived in scene space already.
    */
   rebuildUnion_() {
-    this.unionBox.makeEmpty()
+    this.previewBoxes.clear()
     if (this.previewGroup === null) {
       return
     }
     for (const child of this.previewGroup.children) {
       const box = this.meshWorldBox_(child)
       if (box !== null) {
-        this.unionBox.union(box)
+        this.previewBoxes.push(box)
       }
     }
   }
@@ -302,6 +320,24 @@ export default class ProgressiveLoadSession {
       box.applyMatrix4(this.previewGroup.matrix)
     }
     return box
+  }
+
+
+  /**
+   * Is `sphere` within a hair of the one already fitted? Guards the
+   * no-op refits an excluded stray would otherwise cause.
+   *
+   * @param {Sphere} sphere
+   * @return {boolean} false when nothing has been fitted yet
+   */
+  sphereMatchesFitted_(sphere) {
+    const fitted = this.fittedSphere
+    if (fitted === null) {
+      return false
+    }
+    const epsilon = fitted.radius * REFIT_EPSILON_FRACTION
+    return Math.abs(sphere.radius - fitted.radius) <= epsilon &&
+      sphere.center.distanceTo(fitted.center) <= epsilon
   }
 
 
@@ -396,25 +432,50 @@ export default class ProgressiveLoadSession {
 
 
   /**
-   * Strictly frame the union of everything shown so far: fit the
-   * camera to the union box's bounding sphere (with margin), pushing
-   * the far plane out monotonically so successive refits never pop the
+   * Strictly frame everything shown so far, minus extreme strays: fit
+   * the camera to the robust bounding sphere (with margin), pushing the
+   * far plane out monotonically so successive refits never pop the
    * projection.
+   *
+   * The follow uses the same robust criterion as the end-of-load fit
+   * (`three/robustBounds.js`) rather than the raw union. Framing the raw
+   * union meant one stray instance landing mid-stream (the
+   * test-models-private#26 catenaries) zoomed the camera out to a
+   * kilometre-scale box for the rest of the load, so the model
+   * materialized as a speck and only snapped back at the end. Sharing
+   * the criterion also means the follow and the final frame agree —
+   * there is no correction to watch when the load settles.
    *
    * @param {boolean} withTransition tween the move (false = instant)
    */
   fitUnionToFrame_(withTransition) {
     const controls = this.getControls()
     const camera = this.getCamera()
-    if (!controls || !camera || this.unionBox.isEmpty()) {
+    if (!controls || !camera) {
+      return
+    }
+    const bounds = robustBoundsFromElements([this.previewBoxes, this.streamedBoxes])
+    if (bounds === null || bounds.box.isEmpty()) {
       return
     }
     const sphere = new Sphere()
-    this.unionBox.getBoundingSphere(sphere)
+    bounds.box.getBoundingSphere(sphere)
     if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
       return
     }
     sphere.radius *= FRAMING_MARGIN
+    // Nothing to do when the pose already frames this sphere — refits
+    // fire on any overflow, and geometry excluded as a stray leaves the
+    // framing unchanged, which would otherwise tween the camera to where
+    // it already is once per stray. Stamp lastFitMs anyway: evaluating
+    // this cost a full robust-bounds pass, so it has to sit behind the
+    // same cadence gate as a real fit or every arriving stray pays for
+    // one.
+    if (this.sphereMatchesFitted_(sphere)) {
+      this.overflowPending = false
+      this.lastFitMs = Date.now()
+      return
+    }
     const vFov = MathUtils.degToRad(camera.fov)
     const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
     const limitingFov = camera.aspect > 1 ? vFov : hFov

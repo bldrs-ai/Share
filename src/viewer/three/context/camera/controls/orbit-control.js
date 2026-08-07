@@ -2,9 +2,10 @@
 // `web-ifc-viewer/dist/components/context/camera/controls/orbit-control.js`
 // in slice 5d.3.
 
-import {Box3, MathUtils, Sphere, Vector3} from 'three'
+import {MathUtils, Sphere, Vector3} from 'three'
 import {IfcComponent, NavigationModes} from '../../base-types'
 import {LiteEvent} from '../../LiteEvent'
+import {robustBoundsFor} from '../../../robustBounds'
 
 
 // Leave ~1/3 of the canvas as whitespace (≈1/6 per side): inflate the
@@ -81,8 +82,13 @@ export class OrbitControl extends IfcComponent {
     if (!framed) {
       return null
     }
-    const box = new Box3().setFromObject(framed)
-    if (box.isEmpty()) {
+    // Outlier-robust bounds: a handful of stray fragments flung far from
+    // the model (test-models-private#26) must not drag the frame out to a
+    // kilometre-scale box. Identical to Box3().setFromObject on clean
+    // models — see robustBounds.js for the (deliberately extreme-only)
+    // exclusion criterion.
+    const box = robustBoundsFor(framed)?.box
+    if (!box || box.isEmpty()) {
       return null
     }
 
