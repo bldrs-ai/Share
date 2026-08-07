@@ -20,6 +20,7 @@ import {
   writeBase64Model,
 } from '../OPFS/utils'
 import {HTTP_NOT_FOUND} from '../net/http'
+import {looksLikeLfsPointer} from '../net/github/lfs'
 import {assertDefined} from '../utils/assert'
 import {enablePageReloadApprovalCheck} from '../utils/event'
 import debug from '../utils/debug'
@@ -396,6 +397,20 @@ export async function load(
       modelData = await axiosDownload(fetchUrl, isFormatText, onProgress)
       debug().log('Loader#load: modelData from axios download:', modelData)
     }
+  }
+
+  // Git LFS pointer guard. GitHub-hosted models go through the Contents
+  // API, which rewrites LFS pointers to media.githubusercontent.com
+  // before download (net/github/lfs.js). A URL that skips that
+  // dereference — a raw.githubusercontent.com link pasted into the
+  // search bar, or any other host serving a checked-in pointer — hands
+  // us ~130 bytes of text naming the object instead of the model, and
+  // the format loader then fails somewhere deep in its parser with an
+  // error that never mentions LFS. Say what actually went wrong.
+  if (looksLikeLfsPointer(modelData)) {
+    throw new Error(
+      'This file is stored with Git LFS, so the URL returned a pointer file instead of the model. ' +
+      'Open it via its github.com/<org>/<repo>/blob/<ref>/<path> URL, which resolves LFS content.')
   }
 
   // Provide basePath for multi-file models.  Keep the last '/' for

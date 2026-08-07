@@ -240,6 +240,26 @@ describe('Loader', () => {
     }
   })
 
+  it('rejects a Git LFS pointer with an actionable error, not a parse failure', async () => {
+    // bldrs-ai/test-models LFS-tracks every model extension it carries,
+    // so a URL that skips the Contents API dereference (a pasted
+    // raw.githubusercontent.com link) delivers ~130 bytes of pointer
+    // text. Without the guard, USDLoader would fail with an error that
+    // never mentions LFS.
+    mockViewer.IFC.type = 'usdz'
+    const pointer =
+      'version https://git-lfs.github.com/spec/v1\n' +
+      'oid sha256:364dde066e1c7a8e4d24060a3dc66e4bf98d9263d1a4b2c9f0e1a2b3c4d5e6f7\n' +
+      'size 24911208\n'
+    const restoreArrayBuffer = setupMockBlobWithContent(pointer)
+    try {
+      await expect(load(testPathToUrl('usd/cube.usdz'), mockViewer, jest.fn(), true, jest.fn(), ''))
+        .rejects.toThrow(/Git LFS/)
+    } finally {
+      restoreArrayBuffer()
+    }
+  })
+
   it('loads a STEP model', async () => {
     mockViewer.IFC.type = 'step'
     const testPath = 'step/a-gear.step'

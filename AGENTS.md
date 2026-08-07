@@ -35,6 +35,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Code style, lint rules | [STYLE.md](STYLE.md) |
 | Build, dev server, CI, Playwright setup | [PLAYBOOK.md](PLAYBOOK.md) |
 | Where to put an E2E `*.spec.ts` (co-locate near the subject; `src/tests/e2e` is shared helpers only) | [src/tests/e2e/README.md](src/tests/e2e/README.md) |
+| Adding a new model format (`supportedTypes` + header sniffing → `findLoader` arm → `ShareModel` capabilities → fixtures/tests), what NavTree naming and raycast picking give you for free, Git LFS on GitHub-hosted models | [design/new/adding-model-formats.md](design/new/adding-model-formats.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
 | Sample-model thumbnails (Open dialog Samples tab), regenerating them, aiming them via `#c:` permalink cameras | [tools/thumbnails/README.md](tools/thumbnails/README.md) |
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
