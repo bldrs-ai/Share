@@ -5,7 +5,6 @@
 // files that import it before the component under test — see
 // `__mocks__/shareViewerTestHarness.js` for the load-order rationale.
 import {
-  Box3,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -30,6 +29,7 @@ import IfcIsolator from './three/IfcIsolator'
 import CustomPostProcessor from './three/CustomPostProcessor'
 import Selector from './three/Selector'
 import ShareIfcLoader from './ifc/ShareIfcLoader'
+import {robustBoundsFor} from './three/robustBounds'
 import ShareIfc from './ifc/ShareIfc'
 import {IfcContext} from './three/context'
 import ThreeContext from './three/ThreeContext'
@@ -428,8 +428,11 @@ export class ShareViewer {
     if (!this._groundPlane || !model) {
       return
     }
-    const box = new Box3().setFromObject(model)
-    if (box.isEmpty()) {
+    // Robust bounds, same as framing: a stray fragment a kilometre out
+    // (test-models-private#26) would otherwise blow up the ground plane
+    // and shadow frustum along with the camera box.
+    const box = robustBoundsFor(model)?.box
+    if (!box || box.isEmpty()) {
       return
     }
     const size = new Vector3()

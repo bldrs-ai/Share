@@ -609,6 +609,58 @@ export function endLoadProgress(error = null) {
 
 
 /**
+ * Grace-snackbar note when framing excluded strays — kept short: the
+ * numbers live in the Health line one expand (or the "i" report) away.
+ */
+const FRAMING_NOTE = 'stray geometry far from the model was left out of the zoom fit'
+
+
+/**
+ * Report that auto-framing excluded stray outlier geometry
+ * (`robustBounds.js`; conway design/new/model-diagnostics.md §4.3): a
+ * Health line on the load report (§4.1 shape), a console.warn for the
+ * standard log, and a note the grace snackbar appends to its "Loaded
+ * <name>" line.
+ *
+ * Framing runs after the load settles, so call this after
+ * `endLoadProgress` — the report gains a post-Total line and the
+ * already-published success `loadResult` is amended in place. No-op for
+ * a clean model (nothing excluded) or when no load was being reported.
+ *
+ * @param {object} [bounds] robustBounds result ({excludedElements,
+ *   excludedVertices, maxDistance, ...}); null/undefined tolerated
+ */
+export function reportFramingExclusion(bounds) {
+  const excludedElements = bounds?.excludedElements ?? 0
+  const excludedVertices = bounds?.excludedVertices ?? 0
+  if (!activeReporter || (excludedElements === 0 && excludedVertices === 0)) {
+    return
+  }
+  const parts = []
+  if (excludedElements > 0) {
+    parts.push(`${excludedElements} ${excludedElements === 1 ? 'element' : 'elements'}`)
+  }
+  if (excludedVertices > 0) {
+    parts.push(`${excludedVertices} ${excludedVertices === 1 ? 'vertex' : 'vertices'}`)
+  }
+  const distance = Math.round(bounds.maxDistance)
+  const line = `Health: stray geometry excluded from view framing ` +
+    `(${parts.join(' + ')}, up to ${distance} model units out)`
+  // The console tee is already restored post-load, so this reaches the
+  // real console once, as a warning; the report line carries the same
+  // text without re-echoing it.
+  console.warn(line)
+  activeReporter.addReportLine(line, false)
+
+  const store = useStore.getState()
+  const loadResult = store.loadResult
+  if (loadResult?.status === 'success' && !loadResult.note) {
+    store.setLoadResult({...loadResult, note: FRAMING_NOTE})
+  }
+}
+
+
+/**
  * Test-only: the active reporter.
  *
  * @return {LoadProgressReporter|null}
