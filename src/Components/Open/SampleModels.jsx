@@ -1,6 +1,7 @@
 import React, {ReactElement, useState} from 'react'
 import {Grid, Chip, Typography} from '@mui/material'
 import {AccessibilityOutlined as AccessibilityIcon} from '@mui/icons-material'
+import useQuota from '../../hooks/useQuota'
 import Bplaza from '../../assets/icons/Bplaza.svg'
 import Gear from '../../assets/icons/Gear.svg'
 import Momentum from '../../assets/icons/Momentum.svg'
@@ -19,6 +20,7 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
   // Lazy import to avoid circulars in tests
   const {navigateToModel} = require('../../utils/navigate')
   const [, setSelected] = useState('')
+  const {record} = useQuota()
   const iconsStyle = {height: '1.6em'}
   const modelPath = {
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
@@ -42,8 +44,11 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
     Gear: <Gear style={iconsStyle}/>,
   }
 
-  const handleSelect = (modelName, closeDialog) => {
+  const handleSelect = async (modelName, closeDialog) => {
     setSelected(modelName)
+    // Sample models are public; the server resolves them as such and the
+    // call is a free no-op. Anonymous users skip the round-trip via record().
+    await record(modelPath[modelName].split('#')[0])
     navigateToModel({pathname: modelPath[modelName]}, navigate)
     closeDialog()
   }
