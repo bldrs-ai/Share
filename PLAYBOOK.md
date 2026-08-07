@@ -73,6 +73,24 @@ post-DnD navigation unreliable in tests — prefer testing the persistence→UI 
 **Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
 from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.
 
+**Screenshot goldens**: A new `expectScreen(page, 'Name.png')` test has no baseline, so it fails until
+you generate one:
+```bash
+yarn test-flows src/path/To.spec.ts --update-snapshots -g "test name"
+```
+The PNG lands in `src/path/To.spec.ts-snapshots/` (see `snapshotPathTemplate` in
+`tools/playwright.config.js`) and is committed with the test. Two things to know:
+
+- **Look at the generated golden before committing it.** `--update-snapshots` writes whatever
+  rendered, so a broken render becomes the baseline and CI then enforces the bug.
+- **Fixtures must live in `src/tests/fixtures/github/...`,** not `docs/__test_fixtures__/`. The
+  `test-flows` web server runs `yarn test-flows-build`, which starts with `yarn clean` and then
+  copies the fixture tree in — so anything hand-placed under `docs/` is deleted before the run.
+
+Re-running `--update-snapshots` over an existing golden rewrites it, which is how you intentionally
+accept a visual change; without the flag, a diff fails the test and the actual/expected/diff PNGs
+land in `tools/playwright-report`.
+
 
 # Specific Guides
 
