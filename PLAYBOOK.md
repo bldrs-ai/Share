@@ -217,3 +217,97 @@ remote.
 
 After a push, verify with `git log origin/<branch>` or `git status` rather
 than trusting the push command's output alone.
+
+
+## Keep the test console clean
+
+**A test run should print nothing unexpected.** Noise isn't cosmetic: once a
+run logs a hundred lines of warnings, the one *new* warning that flags a real
+regression drowns in them and nobody sees it. So a green run is also a *quiet*
+run — treat a stray warning as a defect to resolve, not scenery. There are
+four moves, in priority order; reach for a lower one only when the one above
+it genuinely can't apply.
+
+**1. Fix the warning at the source.** Most React `act()` warnings mean a state
+update wasn't awaited. Await it — don't mute it. `actAsyncFlush()`
+(`src/utils/tests.js`) settles the pending microtask after a render:
+
+```js
+import {actAsyncFlush} from '../utils/tests'
+render(<Thing/>)
+await actAsyncFlush() // flush the mount effect's setState before asserting
+```
+
+Keep that helper **timer-agnostic** — a single awaited `Promise.resolve()`,
+never a `setTimeout(0)`. Under `jest.useFakeTimers()` a real timer never fires
+unless the clock is advanced, so a `setTimeout`-based flush would hang every
+caller that uses fake timers. Same rule for any flush helper you add.
+
+**2. Divert expected diagnostics into a buffer and assert on them.** When code
+is *supposed* to log — the `[glb]` loader emits error-path diagnostics by
+design — don't let it reach the console and don't silently swallow it either.
+Route it through a swappable sink and assert the expected line is present, so
+the diagnostic becomes a *tested signal* instead of spam:
+
+- `src/loader/glbLog.js` — the emit side. `glbInfo/glbWarn/glbVerbose` call an
+  active sink (default: console) that tests can swap via `setGlbLogSink`. The
+  sink lives on `globalThis` so it survives `jest.resetModules()`.
+- `tools/jest/glbLogCapture.js` — the test side. `installGlbLogCapture()`
+  (wired once in `setupTests.js`, cleared per test) buffers everything; a spec
+  reads it with `getGlbLogs()`:
+
+```js
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
+// ...trigger the malformed-GLB path...
+expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99')))
+  .toBe(true)
+```
+
+Apply this pattern to any subsystem with intentional, assertable logging:
+give it a swappable sink rather than calling `console.*` directly.
+
+**3. Suppress only what you genuinely can't reach — narrowly, and restore it.**
+Some updates fire outside any `act` scope RTL can enclose: a mocked model load
+that resolves on its own timers and drives a `setState` *during* a `waitFor`.
+There's nothing to await. `suppressActWarnings()` (`src/utils/tests.js`)
+swallows **only** the `"not wrapped in act"` line and passes every other
+`console.error` through. Scope it to the one test and wrap in `try/finally` so
+a failed assertion can't leave `console.error` mocked for the rest of the file
+(which would hide every later test's real errors):
+
+```js
+const restore = suppressActWarnings()
+try {
+  // ...the one test whose cascade can't be awaited...
+} finally {
+  restore()
+}
+```
+
+This is the escape hatch, not the norm — prefer move 1 whenever the update is
+reachable.
+
+**4. If you mute a real signal globally, back it with a static test.** A global
+`console.warn` filter is a blunt instrument: it can hide a genuine problem
+alongside the false positive. `setupTests.js` mutes three's *"Multiple
+instances of Three.js"* warning because under jest it's a false positive (the
+harness resets the module registry and re-imports three against an already-set
+`window.__THREE__`). But that same warning would also fire for a *real* on-disk
+duplicate — a nested `node_modules/three` pulled in by some dependency's
+version range — which the filter would now swallow. So the mute is paired with
+`src/viewer/three/singleThreeInstance.test.js`, a static scan that fails if
+`three` appears in `node_modules` more than once. **Rule:** any global console
+filter that could mask a real defect needs a compensating detector for the case
+that actually ships.
+
+**Bonus — kill jsdom "not implemented" spam at the setup seam.** jsdom logs a
+`console.error` every time app code calls an unimplemented canvas method
+(`getContext`, `toDataURL` — PerfMonitor's overlay, screenshot capture). The
+code already treats their falsy return as "headless — skip", so
+`setupTests.js` stubs them to exactly those falsy values. Same runtime the code
+already saw under jsdom, minus the per-call error. A test needing a real
+context still overrides these on its own canvas object.
+
+The shared wiring lives in **`tools/jest/setupTests.js`** (glb capture install
++ per-test clear, the three filter, the canvas stubs); per-test helpers live in
+**`src/utils/tests.js`**.
