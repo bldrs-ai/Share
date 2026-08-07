@@ -9,6 +9,7 @@ import {
   parseGlb,
   serializeGlb,
 } from './injectGlbExtensions'
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 
 
 describe('loader/bldrsSpatialTree', () => {
@@ -281,6 +282,8 @@ describe('loader/bldrsSpatialTree', () => {
       await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
       expect(gltf.scene.userData.bldrsSpatialTree).toBeUndefined()
       expect(reader.spatialTree).toBeNull()
+      // The skip announces itself through the captured [glb] channel.
+      expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99'))).toBe(true)
     })
 
     it('skips a non-integer bufferView index without throwing', async () => {
