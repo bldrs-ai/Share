@@ -16,6 +16,49 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
   is a no-op, so nothing is counted, blocked, or badged.
 - **Landed as a 4-PR stack** (supersedes #1494). See the Implementation map.
 
+## Status & remaining work
+
+*Handoff snapshot, 2026-08-07. Work is paused here; each numbered item below
+is sized to be picked up as its own work thread. They are ordered — (1) and
+(2) unblock the rest.*
+
+**Where things stand:** the four stacked PRs (#1550 → #1551 → #1552 → #1553,
+branches `quota/1-core-lib` … `quota/4-wire-load-sites`; see the
+Implementation map) are pushed, one commit per branch, each husky-gated green
+(eslint `--max-warnings 0`, tsc, full Jest) on `main@845298d7` (2026-06-29).
+\#1550's CI is fully green on that base — `build`, `playwright-run`, and
+`playwright-webifc-run`. Enforcement ships dark behind the `quotas` flag.
+
+1. **Re-integrate the stack onto current main.** main has moved ~317 commits
+   since the stack's base (workspace store, batched/instanced viewer, USD +
+   splat formats, Node 24, Open-dialog evolution). 10 of the stack's 25 files
+   were also touched on main — by layer:
+   - #1550: `AGENTS.md` (router table only; GitHub reports the PR merely
+     "behind", not conflicting)
+   - #1551: none — the server layer is clean
+   - #1552: `src/FeatureFlags.js`, `src/net/http.js`
+   - #1553: `OpenModelDialog.jsx` + `.test.jsx`, `GitHubFileBrowser.jsx`,
+     `SampleModels.jsx`, `SampleModelFileSelector.jsx`,
+     `src/utils/dragAndDrop.js`, `src/tests/e2e/utils.ts`
+   Re-stack bottom-up (each branch is a single commit, so this is four
+   rebases). When resolving the Open-dialog files, preserve the
+   click-handler ordering contract (§UI surfaces below; Open/README §Gating
+   wiring) — hasCapacity gate, then getAccessToken *inside* the click
+   handler before any other await, then record(). Husky-gate and
+   force-push each branch.
+2. **Review & land the stack bottom-up.** Merge #1550 first; GitHub
+   auto-retargets each remaining PR to `main` as its base merges. Caveat:
+   `Quota.spec.ts` gets its *first CI run* only when #1553 retargets to
+   `main` (workflows don't run for PRs based on another branch) — watch it.
+3. **Close #1494 as superseded** (a pointer comment is already on that PR).
+4. **Deploy-preview smoke test** (checklist in #1553): with `?feature=quotas`
+   and a real Auth0 free user — public GH repo loads without counting;
+   private repo counts; 5th private load → 403 + `QuotaLimitDialog`, no
+   navigation; `sharePro` unlimited; `/share/quotas` renders.
+5. **Bake, then roll out.** Test per-session via `?feature=quotas`; when
+   satisfied, flip the flag's `isActive` to `true` in `src/FeatureFlags.js`.
+6. **Follow-ups** — each small and independent: see §Out of scope below.
+
 ## Tiers & limits
 
 | Tier | Limit | Window | Determined by |
@@ -146,12 +189,12 @@ Summary only; the wiring lives in
 
 ## Implementation map
 
-| Layer | Files | PR |
+| Layer | Files | PR (branch) |
 |---|---|---|
-| Core lib (tiers, window, classifiers, OPFS) | `src/quota/quota.js` (+ test) | 1 |
-| Server gate | `netlify/functions/record-load.js`, `src/__mocks__/api-handlers.js` | 2 |
-| Client hook + UI + flag | `src/hooks/useQuota.js`, `QuotaBadge.jsx`, `QuotaLimitDialog.jsx`, `src/FeatureFlags.js` | 3 |
-| Load-site wiring + docs page | Open dialog + containers, `src/pages/share/Quotas.jsx`, `Quota.spec.ts` | 4 |
+| Core lib (tiers, window, classifiers, OPFS) + this doc | `src/quota/quota.js` (+ test) | [#1550](https://github.com/bldrs-ai/Share/pull/1550) (`quota/1-core-lib`) |
+| Server gate | `netlify/functions/record-load.js`, `src/__mocks__/api-handlers.js` | [#1551](https://github.com/bldrs-ai/Share/pull/1551) (`quota/2-server-enforcement`) |
+| Client hook + UI + flag | `src/hooks/useQuota.js`, `QuotaBadge.jsx`, `QuotaLimitDialog.jsx`, `src/FeatureFlags.js` | [#1552](https://github.com/bldrs-ai/Share/pull/1552) (`quota/3-client-hook-ui`) |
+| Load-site wiring + docs page | Open dialog + containers, `src/pages/share/Quotas.jsx`, `Quota.spec.ts` | [#1553](https://github.com/bldrs-ai/Share/pull/1553) (`quota/4-wire-load-sites`) |
 
 ## Out of scope / follow-ups
 
