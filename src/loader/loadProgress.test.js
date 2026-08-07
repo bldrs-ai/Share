@@ -15,6 +15,7 @@ import {
   isModelInfoProgress,
   isStructuredProgress,
   reportEngineVersion,
+  reportFramingExclusion,
   reportLoadProgress,
   reportModelInfo,
 } from './loadProgress'
@@ -255,6 +256,68 @@ describe('loadProgress', () => {
       expect(useStore.getState().loadResult).not.toBe(null)
       beginLoadProgress({fileInfo: 'b.ifc'})
       expect(useStore.getState().loadResult).toBe(null)
+    })
+  })
+
+  describe('framing exclusion (robust auto-framing, test-models-private#26)', () => {
+    it('appends a Health line, warns the console, and notes the grace result', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'basel.ifc'})
+      endLoadProgress()
+
+      reportFramingExclusion({excludedElements: 3, excludedVertices: 0, maxDistance: 1877.4})
+
+      const healthLine = reportLines().find((line) => line.startsWith('Health:'))
+      expect(healthLine).toBe(
+        'Health: stray geometry excluded from view framing (3 elements, up to 1877 model units out)')
+      expect(warnSpy).toHaveBeenCalledWith(healthLine)
+      const result = useStore.getState().loadResult
+      expect(result.status).toBe('success')
+      // The terse "Loaded <name>" stays; the note rides alongside for the
+      // snackbar to append.
+      expect(result.summaryLine).toBe('Loaded basel.ifc')
+      expect(result.note).toMatch(/stray geometry/)
+      warnSpy.mockRestore()
+    })
+
+    it('reports vertex-granularity exclusions too', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'basel.ifc'})
+      endLoadProgress()
+
+      reportFramingExclusion({excludedElements: 0, excludedVertices: 52, maxDistance: 1450})
+
+      expect(reportLines().find((line) => line.startsWith('Health:'))).toBe(
+        'Health: stray geometry excluded from view framing (52 vertices, up to 1450 model units out)')
+      warnSpy.mockRestore()
+    })
+
+    it('is silent when nothing was excluded, or with no load reported', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'clean.ifc'})
+      endLoadProgress()
+      const linesBefore = reportLines().length
+
+      reportFramingExclusion({excludedElements: 0, excludedVertices: 0, maxDistance: 0})
+      reportFramingExclusion(null)
+
+      expect(reportLines().length).toBe(linesBefore)
+      expect(warnSpy).not.toHaveBeenCalled()
+      expect(useStore.getState().loadResult.note).toBeUndefined()
+      warnSpy.mockRestore()
+    })
+
+    it('does not touch an error grace result', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      beginLoadProgress({fileInfo: 'broken.ifc'})
+      endLoadProgress(new Error('bad header'))
+
+      reportFramingExclusion({excludedElements: 1, excludedVertices: 0, maxDistance: 500})
+
+      expect(useStore.getState().loadResult.note).toBeUndefined()
+      // The Health line still lands in the report for the "i" dialog.
+      expect(reportLines().some((line) => line.startsWith('Health:'))).toBe(true)
+      warnSpy.mockRestore()
     })
   })
 

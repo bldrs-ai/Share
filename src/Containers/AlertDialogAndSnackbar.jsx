@@ -283,8 +283,11 @@ export default function AlertAndSnackbar() {
   // doesn't reflow, metrics following). Grace success: "Loaded <name>",
   // preferring the page-title model name over the reporter's filename. Grace
   // error: the failure summary.
-  const graceLine = (loadResult?.status === 'success' && model?.name) ?
+  const graceBase = (loadResult?.status === 'success' && model?.name) ?
     `Loaded ${model.name}` : (loadResult?.summaryLine ?? '')
+  // A post-load note (e.g. reportFramingExclusion's "stray geometry …")
+  // rides the grace line so the user sees it without expanding the report.
+  const graceLine = loadResult?.note ? `${graceBase} — ${loadResult.note}` : graceBase
   const shownLine = isLoadActive ? padLiveLine(currentLoadLine) : graceLine
   const lineElement = (
     <Typography

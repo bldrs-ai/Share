@@ -16,8 +16,10 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   endLoadProgress,
+  reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
+import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
@@ -534,6 +536,15 @@ export default function CadView({
     // bounds (valid now it's added + framed). Optional-chained: the Jest
     // viewer mock doesn't define it.
     viewer.groundModel?.(loadedModel)
+
+    // Framing just ran on outlier-robust bounds (robustBounds.js, cached
+    // — this read is free). If strays were excluded, say so: Health line
+    // + console warning + grace-snackbar note. After endLoadProgress by
+    // design — it amends the published loadResult. The traverse guard
+    // skips the Jest MockModel, which isn't an Object3D.
+    if (typeof loadedModel.traverse === 'function') {
+      reportFramingExclusion(robustBoundsFor(loadedModel))
+    }
 
     // §6e: apply the active render look's materials to the new model, so a
     // model opened while a non-default look is active still matches.
