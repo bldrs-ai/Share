@@ -42,6 +42,7 @@ const HTTP_BAD_REQUEST = 400
 const HTTP_UNAUTHORIZED = 401
 const HTTP_FORBIDDEN = 403
 const HTTP_METHOD_NOT_ALLOWED = 405
+const HTTP_INTERNAL_SERVER_ERROR = 500
 const HTTP_BAD_GATEWAY = 502
 
 // Tier constants (kept in lock-step with src/quota/quota.js)
@@ -63,7 +64,7 @@ const MGMT_TOKEN_REFRESH_SAFETY_SEC = 60
 
 // GH privacy cache TTL
 const GH_PRIVACY_CACHE_TTL_MIN = 15
-const GH_PRIVACY_CACHE_TTL_MS = GH_PRIVACY_CACHE_TTL_MIN * MINUTES_PER_HOUR * MILLIS_PER_SECOND
+const GH_PRIVACY_CACHE_TTL_MS = GH_PRIVACY_CACHE_TTL_MIN * SECONDS_PER_MIN * MILLIS_PER_SECOND
 
 // Module-scope caches — survive across warm Lambda invocations.
 let cachedMgmtToken = null
@@ -188,9 +189,10 @@ async function isPrivateGhRepo(owner, repo) {
     let isPrivate
     if (resp.status === HTTP_OK) {
       isPrivate = false
-    } else if (resp.status === HTTP_FORBIDDEN || resp.status >= HTTP_BAD_GATEWAY) {
-      // Rate-limited or upstream hiccup — don't penalize the user; treat
-      // as not-quotable. Do NOT cache this so we retry next time.
+    } else if (resp.status === HTTP_FORBIDDEN || resp.status >= HTTP_INTERNAL_SERVER_ERROR) {
+      // Rate-limited (403) or any 5xx upstream hiccup — don't penalize the
+      // user; treat as not-quotable (design/new/quotas.md §GitHub privacy
+      // detection: "403 / 5xx → No"). Do NOT cache this so we retry next time.
       Sentry.captureException(new Error(`GH repo lookup status=${resp.status} for ${cacheKey}`))
       return false
     } else {

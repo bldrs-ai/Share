@@ -132,12 +132,17 @@ flag off). `QuotaLimitDialog` links to `/share/quotas`.
 
 ### Gating wiring
 
-`useQuota()` exposes `{used, limit, tier, hasCapacity, record}`. Every load site
-— Drive picker + recents, local file + recents, GitHub recents + browser, sample
-chips, drag-and-drop — gates in this order:
+`useQuota()` exposes `{used, limit, tier, hasCapacity, check, record}`. Every
+load site — Drive picker + recents, local file + recents, GitHub recents +
+browser, sample chips, drag-and-drop (viewport and onboarding overlay) — gates
+in this order:
 
-1. **`hasCapacity`** — cheap client check; if already over, open
+1. **Cheap client check** — `check(key)` when the share path is known up front
+   (recents), `hasCapacity` when it isn't yet (new local file). If denied, open
    `QuotaLimitDialog` and stop (no consent popup, no server round-trip).
+   `check` only denies a *known-new, known-private* load: already-counted keys
+   stay openable at limit (mirroring the server's idempotency), and `/v/gh/`
+   paths pass through because only the server can tell public from private.
 2. **`provider.getAccessToken`** (Drive / GitHub only) — token preflight
    *inside* the click handler, before any other `await`, so a GIS consent popup
    keeps its user-gesture activation. Navigating or awaiting `record()` first

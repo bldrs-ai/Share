@@ -22,11 +22,12 @@ export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}
   const [selected, setSelected] = useState('')
   const {record} = useQuota()
 
-  const handleSelect = async (e, closeDialog) => {
+  const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const path = SAMPLE_MODELS[e.target.value].path
-    // Public sample — record() resolves it as free; see SampleModels.handleSelect.
-    await record(path.split('#')[0])
+    // Public sample — record() resolves it as free and we don't gate on it;
+    // fire-and-forget so the click isn't delayed. See SampleModels.handleSelect.
+    record(path.split('#')[0])
     disablePageReloadApprovalCheck()
     navigateToModel({pathname: path}, navigate)
     closeDialog()

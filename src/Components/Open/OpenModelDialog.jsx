@@ -54,7 +54,7 @@ export default function OpenModelDialog({
   const setAlert = useStore((state) => state.setAlert)
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
-  const {tier, record, hasCapacity} = useQuota()
+  const {tier, record, check, hasCapacity} = useQuota()
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
@@ -103,8 +103,11 @@ export default function OpenModelDialog({
   const handleOpenById = async (connection, fileId, fileName) => {
     // Cheap client-side gate first — if we already know we're at limit,
     // surface the dialog without bothering with token acquisition or a
-    // round-trip to record-load.
-    if (!hasCapacity) {
+    // round-trip to record-load. check(key), not hasCapacity: an
+    // already-counted key stays openable at limit (server idempotency;
+    // /share/quotas promises re-opens from recents are free).
+    const key = `${appPrefix}/v/g/${fileId}`
+    if (!check(key).allowed) {
       setShowQuotaDialog(true)
       return
     }
@@ -131,7 +134,6 @@ export default function OpenModelDialog({
         return
       }
     }
-    const key = `${appPrefix}/v/g/${fileId}`
     const {allowed} = await record(key)
     if (!allowed) {
       setShowQuotaDialog(true)
@@ -163,7 +165,9 @@ export default function OpenModelDialog({
    * @param {string} fileName Recent's display name.
    */
   const handleGithubOpenById = async (connection, fileId, fileName) => {
-    if (!hasCapacity) {
+    // check(fileId), not hasCapacity — see handleOpenById; fileId is the
+    // recent's share path, so an already-counted repo file reopens at limit.
+    if (!check(fileId).allowed) {
       setShowQuotaDialog(true)
       return
     }

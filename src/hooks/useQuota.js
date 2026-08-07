@@ -3,6 +3,7 @@ import {captureException} from '@sentry/react'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import useStore from '../store/useStore'
 import {isFeatureEnabled} from '../FeatureFlags'
+import {HTTP_FORBIDDEN} from '../net/http'
 import {
   TIERS,
   LIMITS,
@@ -18,7 +19,6 @@ import {
 
 
 const RECORD_LOAD_ENDPOINT = '/.netlify/functions/record-load'
-const HTTP_FORBIDDEN = 403
 
 
 // Stable no-ops returned when the `quotas` feature flag is off, so the hook's
@@ -64,6 +64,14 @@ export default function useQuota() {
   const [quota, setQuota] = useState(null)
 
   useEffect(() => {
+    // With the flag off the hook returns the passthrough shape below, so
+    // loading OPFS state would be wasted work — and its post-mount setQuota
+    // is exactly the kind of unsettled async update that litters every
+    // consumer's tests with act() warnings (PLAYBOOK §"Keep the test
+    // console clean").
+    if (!quotasEnabled) {
+      return undefined
+    }
     let cancelled = false
     loadQuota().then((raw) => {
       if (cancelled) {
@@ -85,7 +93,7 @@ export default function useQuota() {
       cancelled = true
       unsub()
     }
-  }, [tier])
+  }, [tier, quotasEnabled])
 
   const used = quota?.loads.length ?? 0
   const limit = LIMITS[tier] !== undefined ? LIMITS[tier] : LIMITS[TIERS.FREE]
@@ -97,12 +105,16 @@ export default function useQuota() {
     if (tier === TIERS.PAID) {
       return {allowed: true, used, limit, alreadyCounted: false}
     }
-    if (key === null || !isQuotablePath(key)) {
+    if (key === null || key === undefined || !isQuotablePath(key)) {
       return {allowed: true, used, limit, alreadyCounted: false}
     }
     const alreadyCounted = quota.loads.some((l) => l.key === key)
+    // Only deny what the client KNOWS is a new private load: /v/gh/ paths
+    // may be public (the server resolves that), so they pass the cheap gate
+    // and record() makes the authoritative call. Already-counted keys stay
+    // openable at limit (server idempotency).
     return {
-      allowed: alreadyCounted || used < limit,
+      allowed: alreadyCounted || !isLocallyQuotable(key) || used < limit,
       used,
       limit,
       alreadyCounted,
@@ -114,23 +126,10 @@ export default function useQuota() {
       return {allowed: true, used, limit, tier, alreadyCounted: false}
     }
 
-    // Anonymous: OPFS only.
+    // Anonymous: OPFS only — same local flow as the server-unreachable
+    // fallback, just with the anonymous tier.
     if (tier === TIERS.ANONYMOUS) {
-      if (!isLocallyQuotable(key)) {
-        return {allowed: true, used, limit, tier, alreadyCounted: false}
-      }
-      const updated = await recordLoad(key)
-      if (updated) {
-        setQuota((prev) => ({...(prev || updated), loads: updated.loads}))
-      }
-      const newUsed = updated?.loads.length ?? used
-      return {
-        allowed: newUsed <= limit,
-        used: newUsed,
-        limit,
-        tier,
-        alreadyCounted: false,
-      }
+      return recordLocally(key, tier, limit, setQuota)
     }
 
     // Authenticated: server is authoritative.
@@ -144,7 +143,7 @@ export default function useQuota() {
       })
     } catch (err) {
       captureException(err)
-      return fallbackRecord(key, tier, limit, used, setQuota)
+      return recordLocally(key, tier, limit, setQuota)
     }
 
     let response
@@ -159,7 +158,7 @@ export default function useQuota() {
       })
     } catch (err) {
       captureException(err)
-      return fallbackRecord(key, tier, limit, used, setQuota)
+      return recordLocally(key, tier, limit, setQuota)
     }
 
     let data
@@ -167,6 +166,15 @@ export default function useQuota() {
       data = await response.json()
     } catch {
       data = {}
+    }
+
+    // Mirror the server's authoritative loads into OPFS whenever it sends
+    // them (both allow and deny responses) so the badge and the next mount
+    // agree with the server even if it's briefly unreachable later.
+    if (Array.isArray(data.loads)) {
+      const updated = {tier: data.tier ?? tier, loads: data.loads}
+      saveQuota(updated)
+      setQuota(updated)
     }
 
     if (response.status === HTTP_FORBIDDEN) {
@@ -182,28 +190,26 @@ export default function useQuota() {
 
     if (!response.ok) {
       captureException(new Error(`record-load returned ${response.status}`))
-      return fallbackRecord(key, tier, limit, used, setQuota)
+      return recordLocally(key, tier, limit, setQuota)
     }
 
-    // Mirror server response into OPFS so the next mount has fresh state
-    // even if the server is briefly unreachable later.
-    if (Array.isArray(data.loads)) {
-      const updated = {tier: data.tier ?? tier, loads: data.loads}
-      saveQuota(updated)
-      setQuota(updated)
+    // A new load was persisted server-side (loads present and not a dedup
+    // hit): force-refresh the JWT so app_metadata readers (BaseRoutes etc.)
+    // see the bumped count on next read. Skipped for not-quotable / paid /
+    // alreadyCounted responses, where app_metadata didn't change and the
+    // cacheMode:'off' refresh would be a wasted Auth0 round-trip. Failure
+    // here is non-fatal — the hook's own state is already authoritative
+    // for the badge / dialog.
+    if (Array.isArray(data.loads) && data.alreadyCounted !== true) {
+      getAccessTokenSilently({
+        authorizationParams: {
+          audience: 'https://api.github.com/',
+          scope: 'openid profile email offline_access',
+        },
+        cacheMode: 'off',
+        useRefreshTokens: true,
+      }).catch((err) => captureException(err))
     }
-
-    // Force-refresh the JWT so app_metadata readers (BaseRoutes etc.)
-    // see the bumped count on next read. Failure here is non-fatal —
-    // the hook's own state is already authoritative for the badge / dialog.
-    getAccessTokenSilently({
-      authorizationParams: {
-        audience: 'https://api.github.com/',
-        scope: 'openid profile email offline_access',
-      },
-      cacheMode: 'off',
-      useRefreshTokens: true,
-    }).catch((err) => captureException(err))
 
     return {
       allowed: data.allowed !== false,
@@ -243,27 +249,35 @@ export default function useQuota() {
 
 
 /**
- * Server unreachable — fall back to OPFS-only counting. Mirrors the
- * anonymous code path but keeps the user's authenticated tier.
+ * OPFS-only record: the anonymous path, and the fallback when the server
+ * is unreachable for an authenticated user (whose tier is kept). Applies
+ * the same order of operations as the server — dedup, then capacity gate,
+ * then persist — so a denied load is never written (writing it would
+ * over-report `used` and make the key read as alreadyCounted later).
  *
  * @param {string} key Share path being loaded
  * @param {string} tier User's quota tier
  * @param {number} limit Per-tier load limit
- * @param {number} used Current observed usage
  * @param {Function} setQuota State setter for the hook's quota cache
  * @return {Promise<{allowed:boolean,used:number,limit:number,tier:string,alreadyCounted:boolean}>}
  */
-async function fallbackRecord(key, tier, limit, used, setQuota) {
-  if (!isLocallyQuotable(key)) {
-    return {allowed: true, used, limit, tier, alreadyCounted: false}
+async function recordLocally(key, tier, limit, setQuota) {
+  const current = await loadQuota()
+  const pruned = pruneLoads(current.loads, tier)
+  const alreadyCounted = pruned.some((l) => l.key === key)
+  if (!isLocallyQuotable(key) || alreadyCounted) {
+    return {allowed: true, used: pruned.length, limit, tier, alreadyCounted}
+  }
+  if (pruned.length >= limit) {
+    return {allowed: false, used: pruned.length, limit, tier, alreadyCounted: false}
   }
   const updated = await recordLoad(key)
   if (updated) {
     setQuota((prev) => ({...(prev || updated), loads: updated.loads, tier}))
   }
-  const newUsed = updated?.loads.length ?? used
+  const newUsed = updated?.loads.length ?? pruned.length
   return {
-    allowed: newUsed <= limit,
+    allowed: true,
     used: newUsed,
     limit,
     tier,

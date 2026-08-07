@@ -104,7 +104,7 @@ limit must never wrongly burn a user's quota. Lookups are cached module-scope
 
 ## Client (`useQuota`)
 
-`src/hooks/useQuota.js` exposes `{used, limit, tier, hasCapacity, record}`.
+`src/hooks/useQuota.js` exposes `{used, limit, tier, hasCapacity, check, record}`.
 
 - **Signed in:** `record(key)` awaits `record-load`, mirrors the authoritative
   response into OPFS, and force-refreshes the JWT so other `app_metadata`
@@ -189,9 +189,13 @@ The per-layer PRs carry the review history; layers 2–4 reached `main` via the
 - `WidgetApi` / `LoadModelEventHandler` programmatic loads bypass the React hook
   and are not metered (flagged).
 - Migrate quota storage off Auth0 `app_metadata` to a KV store when
-  Management-API limits bite.
+  Management-API limits bite. This also fixes the known read-modify-write
+  race: `record-load` has no compare-and-set, so two concurrent loads for
+  one user can last-write-win a `loads` entry away (loss direction is a
+  free extra load, never a wrongful block).
 - Authenticated GitHub API to dodge the 60/hr unauth privacy-lookup limit.
 - Free-tier "at-limit dialog" / "public sample doesn't count" e2e (flaky around
-  navigation timing; unit-covered in `src/quota/quota.test.js`).
-- Dedupe the local `HTTP_FORBIDDEN = 403` in `useQuota` against the shared
-  `src/net/http.js` constant.
+  navigation timing; unit-covered in `src/quota/quota.test.js`). Relatedly, the
+  Pro-tier `Quota.spec.ts` currently early-returns (passes vacuously) because
+  its seeded Drive recent renders only under a connection card no test
+  connection creates — fixing it needs the same connection-seeding pattern.

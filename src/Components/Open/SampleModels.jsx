@@ -15,11 +15,13 @@ export default function SampleModels({navigate, setIsDialogDisplayed}) {
   const [, setSelected] = useState('')
   const {record} = useQuota()
 
-  const handleSelect = async (model, closeDialog) => {
+  const handleSelect = (model, closeDialog) => {
     setSelected(model.name)
     // Sample models are public; the server resolves them as such and the
-    // call is a free no-op. Anonymous users skip the round-trip via record().
-    await record(model.path.split('#')[0])
+    // call is a free no-op whose result we don't gate on — fire-and-forget
+    // so the click navigates immediately instead of waiting out a token
+    // fetch + record-load round-trip. record() never rejects.
+    record(model.path.split('#')[0])
     navigateToModel({pathname: model.path}, navigate)
     closeDialog()
   }

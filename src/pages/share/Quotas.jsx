@@ -54,7 +54,6 @@ export default function Quotas() {
         <Typography component='ul'>
           <li>Public GitHub repositories (including all sample models)</li>
           <li>Browsing the model viewer itself, navigation, search, etc.</li>
-          <li>Loads while offline (they will sync when you reconnect)</li>
         </Typography>
 
         <Typography sx={{marginTop: '2em'}}>

@@ -1,5 +1,6 @@
 import React, {ReactElement} from 'react'
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Link, Stack, Typography} from '@mui/material'
+import {useTheme} from '@mui/material/styles'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
 
@@ -16,11 +17,15 @@ import {LIMITS, ROLLING_WINDOW_DAYS, TIERS} from '../../quota/quota'
  */
 export default function QuotaLimitDialog({tier, isOpen, onClose}) {
   const {loginWithRedirect, user} = useAuth0()
+  const theme = useTheme()
 
   const handleSubscribe = () => {
     onClose()
+    // Same URL shape as ProfileControl's onSubscriptionClick, so the
+    // subscribe page keeps the viewer's theme and prefills the email.
+    const themeParam = theme.palette.mode === 'light' ? 'light' : 'dark'
     const email = user?.email ? `&userEmail=${encodeURIComponent(user.email)}` : ''
-    window.location.href = `/subscribe/?${email}`
+    window.location.href = `/subscribe/?theme=${themeParam}${email}`
   }
 
   const handleSignUp = () => {

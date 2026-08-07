@@ -1,4 +1,4 @@
-import {renderHook, waitFor} from '@testing-library/react'
+import {act, renderHook} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedOut} from '../__mocks__/authentication'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useQuota from './useQuota'
@@ -42,7 +42,11 @@ describe('useQuota — quotas feature flag', () => {
 
     const {result} = renderHook(() => useQuota())
 
+    // Settle the mount cascade (loadQuota → setQuota) inside act so the
+    // async state update doesn't land outside act() and warn.
+    await act(async () => {})
+
     // Anonymous (logged-out) tier has a finite cap, so the gate is live.
-    await waitFor(() => expect(Number.isFinite(result.current.limit)).toBe(true))
+    expect(Number.isFinite(result.current.limit)).toBe(true)
   })
 })
