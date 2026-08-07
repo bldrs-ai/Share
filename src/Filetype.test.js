@@ -233,12 +233,43 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe('usdc')
     })
 
-    it('detects zip archives as USDZ', () => {
-      const zipMagic = Array.from('PK', (c) => c.charCodeAt(0))
-      const zipHeaderSize = 30
-      const buffer = new ArrayBuffer(zipHeaderSize)
-      new Uint8Array(buffer).set(zipMagic)
-      expect(analyzeHeader(buffer)).toBe('usdz')
+    /**
+     * Build the start of a zip: a local file header whose first entry
+     * has the given name. Enough for the sniffing path, which only
+     * reads the signature, the name length, and the name.
+     *
+     * @param {string} firstEntryName
+     * @return {ArrayBuffer}
+     */
+    function makeZipHeader(firstEntryName) {
+      const zipNameOffset = 30
+      const zipNameLenOffset = 26
+      const nameBytes = new TextEncoder().encode(firstEntryName)
+      const buffer = new ArrayBuffer(zipNameOffset + nameBytes.length)
+      const bytes = new Uint8Array(buffer)
+      bytes.set([...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4])
+      new DataView(buffer).setUint16(zipNameLenOffset, nameBytes.length, true)
+      bytes.set(nameBytes, zipNameOffset)
+      return buffer
+    }
+
+    it('detects a zip whose first entry is a USD layer as USDZ', () => {
+      expect(analyzeHeader(makeZipHeader('model.usdc'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('cube.usda'))).toBe('usdz')
+      expect(analyzeHeader(makeZipHeader('scene.USD'))).toBe('usdz')
+    })
+
+    it('rejects non-USD zip containers (docx, plain zip) as unknown', () => {
+      // Pre-USD behavior for these was a clean null -> "unknown type"
+      // alert on upload; classifying them usdz would fail deep in
+      // USDLoader instead.
+      expect(analyzeHeader(makeZipHeader('[Content_Types].xml'))).toBe(null)
+      expect(analyzeHeader(makeZipHeader('readme.txt'))).toBe(null)
+    })
+
+    it('does not swallow text that merely starts with PK', () => {
+      const buffer = new TextEncoder().encode('PKX is not a zip at all, just text').buffer
+      expect(analyzeHeader(buffer)).toBe(null)
     })
 
     it('detects GLTF text format with proper header', () => {
