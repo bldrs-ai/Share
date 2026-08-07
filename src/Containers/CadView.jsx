@@ -537,11 +537,12 @@ export default function CadView({
     // viewer mock doesn't define it.
     viewer.groundModel?.(loadedModel)
 
-    // Framing just ran on outlier-robust bounds (robustBounds.js, cached
-    // — this read is free). If strays were excluded, say so: Health line
-    // + console warning + grace-snackbar note. After endLoadProgress by
-    // design — it amends the published loadResult. The traverse guard
-    // skips the Jest MockModel, which isn't an Object3D.
+    // Framing just ran on outlier-robust bounds (robustBounds.js), and
+    // this repeats that cached measurement. If strays were excluded, say
+    // so: Health line + console warning + grace-snackbar note. After
+    // endLoadProgress by design — it amends the published loadResult.
+    // The traverse guard skips the Jest MockModel, which isn't an
+    // Object3D.
     if (typeof loadedModel.traverse === 'function') {
       reportFramingExclusion(robustBoundsFor(loadedModel))
     }

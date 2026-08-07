@@ -236,6 +236,25 @@ describe('ProgressiveLoadSession', () => {
       expect(session.overflowPending).toBe(false)
     })
 
+    it('keeps skipped refits behind the cadence gate', () => {
+      // Deciding to skip still costs a full robust-bounds pass, so it
+      // has to stamp lastFitMs like a real fit — otherwise the throttle
+      // is defeated and every arriving stray pays for one.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+      const afterSkip = session.lastFitMs
+
+      expect(afterSkip).toBeGreaterThan(0)
+      // A second stray now finds the gate closed, so it costs nothing.
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.maybeRefit_()
+      expect(session.lastFitMs).toBe(afterSkip)
+    })
+
     it('still follows real geometry that extends the model', () => {
       const scratch = new Box3()
       streamRun(session, STREAM_COUNT, scratch)

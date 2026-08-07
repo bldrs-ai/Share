@@ -467,9 +467,13 @@ export default class ProgressiveLoadSession {
     // Nothing to do when the pose already frames this sphere — refits
     // fire on any overflow, and geometry excluded as a stray leaves the
     // framing unchanged, which would otherwise tween the camera to where
-    // it already is once per stray.
+    // it already is once per stray. Stamp lastFitMs anyway: evaluating
+    // this cost a full robust-bounds pass, so it has to sit behind the
+    // same cadence gate as a real fit or every arriving stray pays for
+    // one.
     if (this.sphereMatchesFitted_(sphere)) {
       this.overflowPending = false
+      this.lastFitMs = Date.now()
       return
     }
     const vFov = MathUtils.degToRad(camera.fov)

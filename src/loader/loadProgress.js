@@ -638,10 +638,10 @@ export function reportFramingExclusion(bounds) {
   }
   const parts = []
   if (excludedElements > 0) {
-    parts.push(`${excludedElements} element${excludedElements === 1 ? '' : 's'}`)
+    parts.push(`${excludedElements} ${excludedElements === 1 ? 'element' : 'elements'}`)
   }
   if (excludedVertices > 0) {
-    parts.push(`${excludedVertices} vertices`)
+    parts.push(`${excludedVertices} ${excludedVertices === 1 ? 'vertex' : 'vertices'}`)
   }
   const distance = Math.round(bounds.maxDistance)
   const line = `Health: stray geometry excluded from view framing ` +

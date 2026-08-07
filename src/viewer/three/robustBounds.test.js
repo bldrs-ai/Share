@@ -269,16 +269,18 @@ describe('viewer/three/robustBounds', () => {
       expect(result.box.max.z).toBeLessThanOrEqual(1)
     })
 
-    it('acts on a stray before 2% of the model could reach one element', () => {
-      // MIN_EXCLUDED_ELEMENTS: at 40 instances a purely fractional
-      // budget rounds to 0, which during a stream is exactly when the
-      // camera would pop out and have to be pulled back later.
+    it('leaves a small model alone, so the follow and the final fit agree', () => {
+      // Under ~50 elements the 2% budget rounds below one, and there is
+      // deliberately no absolute floor: a floor would both let a small
+      // model lose 9% of itself and — since this core is shared — let
+      // the streaming follow exclude what the final fit would keep,
+      // which is a visible pop when the load settles.
       const smallCount = 40
       const result = robustBoundsFromElements(
         [streamedBoxes(smallCount, [[0, 0, STRAY_DISTANCE]])])
 
-      expect(result.excludedElements).toBe(1)
-      expect(result.box.max.z).toBeLessThanOrEqual(1)
+      expect(result.excludedElements).toBe(0)
+      expect(result.box.max.z).toBeCloseTo(STRAY_DISTANCE + UNIT_HALF_EXTENT)
     })
 
     it('returns null with nothing recorded', () => {

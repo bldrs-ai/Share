@@ -66,17 +66,17 @@ const PAD_FACTOR = 1
 /**
  * More excluded geometry than this means the model isn't "core + strays"
  * — refuse to filter rather than carve up real geometry.
+ *
+ * Purely fractional, with no absolute floor, for two reasons. A floor
+ * would let a small model lose a large share of itself (4 of 44 elements
+ * is 9%), and — because both entry points share this core — it would
+ * have to hold for the streaming follow and the final fit alike, or the
+ * camera would frame one thing while geometry streamed and something
+ * else once it settled. Below ~50 elements the fraction rounds to zero
+ * and nothing is excluded, which is the conservative answer when the
+ * statistics are that thin.
  */
 const MAX_EXCLUDED_FRACTION = 0.02
-/**
- * Absolute element allowance, applied when the fraction is stricter.
- * Without it the streaming follow can't act until the model is large
- * enough for 2% to reach 1 (50 instances) — the window in which an early
- * stray pops the camera out and a later refit has to pull it back. A
- * handful of elements is what "model + strays" looks like (issue #26's
- * model has 5 of 37,502); the fence test remains the real gate.
- */
-const MIN_EXCLUDED_ELEMENTS = 4
 /**
  * Per-axis envelope sample budget. The quantile only needs an estimate,
  * and the streaming follow re-derives it per refit — a strided sample
@@ -182,28 +182,62 @@ export function robustBoundsFromElements(stores) {
 
 
 /**
- * Cached wrapper around computeRobustBounds. The cache is validated by
- * element + vertex counts, so a progressively growing model recomputes.
+ * Cached wrapper around computeRobustBounds, for the several end-of-load
+ * callers that measure the same model (limit sizing, fitModelToFrame,
+ * the ground rig, the load report).
+ *
+ * Validated by a fingerprint that counts geometry without measuring it —
+ * a hit must be far cheaper than a recompute, and re-deriving every
+ * instance's world AABB just to check the count would not be. It tracks
+ * a growing model (progressive loads), not one whose transforms moved,
+ * which doesn't happen between those callers.
  *
  * @param {object} object three.js Object3D
  * @return {object|null} see robustBoundsCore
  */
 export function robustBoundsFor(object) {
+  const fingerprint = boundsFingerprint(object)
   const cached = cache.get(object)
-  if (cached) {
-    const {vertexEntries, elementBoxes} = collectParts(object)
-    if (countVertices(vertexEntries) === cached.totalVertices &&
-        elementBoxes.count === cached.totalElements) {
-      return cached
-    }
+  if (cached && cached.fingerprint === fingerprint) {
+    return cached.result
   }
   const result = computeRobustBounds(object)
   if (result) {
-    cache.set(object, result)
+    cache.set(object, {fingerprint, result})
   } else {
     cache.delete(object)
   }
   return result
+}
+
+
+/**
+ * A cheap "has the geometry changed?" key: counts only, no per-instance
+ * matrix or bounds math.
+ *
+ * @param {object} object three.js Object3D
+ * @return {string}
+ */
+function boundsFingerprint(object) {
+  let elements = 0
+  let vertices = 0
+  let nodes = 0
+  object.traverse((node) => {
+    nodes++
+    if (node.isBatchedMesh) {
+      elements += node.instanceCount
+      return
+    }
+    if (node.isInstancedMesh) {
+      elements++
+      return
+    }
+    const position = node.geometry?.attributes?.position
+    if (position) {
+      vertices += position.count
+    }
+  })
+  return `${nodes}:${elements}:${vertices}`
 }
 
 
@@ -270,6 +304,13 @@ function robustBoundsCore(stores, vertexEntries) {
   }
   const {fenceLows, fenceHighs} = fences
 
+  // Nothing reaches a fence, so pass 2 could only re-derive `exactBox`.
+  // Worth the check: this is the common case (every clean model), and
+  // the pass it skips is a second full walk of every vertex.
+  if (boxWithinFences(exactBox, fenceLows, fenceHighs)) {
+    return unfilteredResult(exactBox, totalElements, totalVertices)
+  }
+
   // Pass 2: the robust box grows only from in-fence geometry, so it hugs
   // the surviving model instead of stopping at the fence line. An element
   // is excluded whole as soon as any part of it crosses a fence — a shape
@@ -296,9 +337,7 @@ function robustBoundsCore(stores, vertexEntries) {
     }
   })
 
-  const elementBudget = Math.max(
-    MIN_EXCLUDED_ELEMENTS, totalElements * MAX_EXCLUDED_FRACTION)
-  const overElementBudget = excludedElements > elementBudget
+  const overElementBudget = excludedElements > totalElements * MAX_EXCLUDED_FRACTION
   const overVertexBudget = excludedVertices > totalVertices * MAX_EXCLUDED_FRACTION
   if ((excludedElements === 0 && excludedVertices === 0) ||
       overElementBudget || overVertexBudget || robustBox.isEmpty()) {
@@ -367,9 +406,23 @@ function collectParts(object) {
   object.updateWorldMatrix(true, true)
   const vertexEntries = []
   const elementBoxes = new ElementBoxes()
+  const objectBox = new Box3()
   object.traverse((node) => {
     if (node.isBatchedMesh) {
       collectBatchedElementBoxes(node, elementBoxes)
+      return
+    }
+    if (node.isInstancedMesh) {
+      // Its position attribute is one shape's, shared by every instance,
+      // so reading it here would collapse the model to that footprint.
+      // `Box3.expandByObject` takes the object-level box for the same
+      // reason; one box for the whole mesh is coarse but never wrong.
+      if (node.boundingBox === null) {
+        node.computeBoundingBox()
+      }
+      if (node.boundingBox && !node.boundingBox.isEmpty()) {
+        elementBoxes.push(objectBox.copy(node.boundingBox).applyMatrix4(node.matrixWorld))
+      }
       return
     }
     const position = node.geometry?.attributes?.position
@@ -483,6 +536,26 @@ function elementCrossesFences(data, offset, fenceLows, fenceHighs) {
     }
   }
   return false
+}
+
+
+/**
+ * Does `box` sit entirely inside the fences?
+ *
+ * @param {Box3} box
+ * @param {Array<number>} fenceLows
+ * @param {Array<number>} fenceHighs
+ * @return {boolean}
+ */
+function boxWithinFences(box, fenceLows, fenceHighs) {
+  const lows = [box.min.x, box.min.y, box.min.z]
+  const highs = [box.max.x, box.max.y, box.max.z]
+  for (const axis of AXES) {
+    if (lows[axis] < fenceLows[axis] || highs[axis] > fenceHighs[axis]) {
+      return false
+    }
+  }
+  return true
 }
 
 
