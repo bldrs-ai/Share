@@ -334,6 +334,24 @@ export default function githubApiHandlers(defines: Defines, authed: boolean): Ht
       )
     }),
 
+    // Serves the OAuthScopes probe: the X-OAuth-Scopes header mirrors what
+    // GitHub reports on every authenticated response.
+    http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/user`, ({request}) => {
+      if (!request.headers.get('authorization')) {
+        return new Response(null, {status: HTTP_AUTHORIZATION_REQUIRED})
+      }
+      return new Response(
+        JSON.stringify({login: 'cypresstester'}),
+        {
+          status: HTTP_OK,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-OAuth-Scopes': 'public_repo, read:org, read:user, user:email',
+          },
+        },
+      )
+    }),
+
     http.get(`${authed ? GH_BASE_AUTHED : GH_BASE_UNAUTHED}/orgs/bldrs-ai/repos`, () => {
       // GitHub's `GET /orgs/{org}/repos` returns a bare array (as does the
       // `/user/repos` handler above) — not a `{data: [...]}` envelope.

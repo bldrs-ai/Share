@@ -6,6 +6,7 @@ import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import {getFilesAndFolders} from '../../net/github/Files'
 import {getBranches} from '../../net/github/Branches'
+import {getOAuthScopes} from '../../net/github/OAuthScopes'
 import {navigateToModel} from '../../utils/navigate'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
 import useStore from '../../store/useStore'
@@ -20,6 +21,7 @@ jest.mock('../../net/github/Organizations')
 jest.mock('../../net/github/Repositories')
 jest.mock('../../net/github/Files')
 jest.mock('../../net/github/Branches')
+jest.mock('../../net/github/OAuthScopes')
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
 jest.mock('../../connections/persistence', () => ({
   addRecentFileEntry: jest.fn(),
@@ -117,6 +119,10 @@ describe('GitHubFileBrowser', () => {
       directories: [{name: 'sub'}],
     })
     getBranches.mockResolvedValue([{name: 'main'}, {name: 'dev'}])
+    // Default: the scope probe is unavailable (e.g. proxy doesn't forward
+    // GET /user), exercising the inference-based fallback paths. Tests that
+    // need token truth override this per-case.
+    getOAuthScopes.mockRejectedValue(new Error('scope probe unavailable'))
     openSpy = jest.spyOn(window, 'open').mockImplementation(() => ({}))
     act(() => {
       useStore.setState({accessToken: 'test-token', appMetadata: {subscriptionStatus: 'free'}})
@@ -220,6 +226,57 @@ describe('GitHubFileBrowser', () => {
       expect(checkbox).toBeChecked()
       expect(checkbox).toBeDisabled()
       expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
+    })
+
+    it('records the account-level grant when private repos are observed', async () => {
+      getRepositories.mockResolvedValue([{name: 'secret', private: true}])
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai')
+      // PopupAuth reads this record to re-request `repo` on every later
+      // login, so GitHub's last-request-wins scoping can't drop the grant.
+      await waitFor(() => expect(localStorage.getItem('bldrs.github.grantedScope')).toBe('repo'))
+    })
+
+    it('shows checked + locked when the token truly carries repo scope, even in an all-public org', async () => {
+      getOAuthScopes.mockResolvedValue(['repo', 'read:org'])
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai') // all-public fixtures
+      const checkbox = await screen.findByRole('checkbox')
+      await waitFor(() => expect(checkbox).toBeChecked())
+      expect(checkbox).toBeDisabled()
+      expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
+      // Token truth also (re)writes the record for PopupAuth to re-request.
+      expect(localStorage.getItem('bldrs.github.grantedScope')).toBe('repo')
+    })
+
+    it('clears a stale record and re-enables the opt-in when the token lacks repo scope', async () => {
+      // A record can lie: the widening request may not have reached GitHub,
+      // or another environment narrowed the grant. Token truth must win, or
+      // the checkbox freezes checked with no way to retry.
+      localStorage.setItem('bldrs.github.grantedScope', 'repo')
+      getOAuthScopes.mockResolvedValue(['public_repo', 'read:org'])
+      act(() => {
+        useStore.setState({appMetadata: {subscriptionStatus: 'sharePro'}})
+      })
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai')
+      await waitFor(() => expect(localStorage.getItem('bldrs.github.grantedScope')).toBeNull())
+      const checkbox = await screen.findByRole('checkbox')
+      expect(checkbox).not.toBeChecked()
+      expect(checkbox).not.toBeDisabled()
+    })
+
+    it('does not record a grant when a connection override token drives the browser', async () => {
+      getRepositories.mockResolvedValue([{name: 'secret', private: true}])
+      await renderBrowser({accessTokenOverride: 'override-token'})
+      await selectOption('openOrganization', '@bldrs-ai')
+      const checkbox = await screen.findByRole('checkbox')
+      // The override token's own `repo` scope still shows as enabled…
+      await waitFor(() => expect(checkbox).toBeChecked())
+      // …but it says nothing about the legacy Auth0-federated grant, and the
+      // scope probe (legacy-path-only) must not run against it either.
+      expect(localStorage.getItem('bldrs.github.grantedScope')).toBeNull()
+      expect(getOAuthScopes).not.toHaveBeenCalled()
     })
   })
 
