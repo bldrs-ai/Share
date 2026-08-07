@@ -8,8 +8,14 @@ import {
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  Vector3,
 } from 'three'
-import {computeRobustBounds, robustBoundsFor} from './robustBounds'
+import {
+  ElementBoxes,
+  computeRobustBounds,
+  robustBoundsFor,
+  robustBoundsFromElements,
+} from './robustBounds'
 
 
 /** Building-scale stand-in span, in scene units. */
@@ -24,6 +30,8 @@ const CUBE_COUNT = 100
 const ANTENNA_SPAN_FRACTION = 0.8
 /** Extra clusters appended to trip the cache's count check. */
 const TEN_MORE_CLUSTERS = 10
+/** Half the edge of the unit boxes the streaming tests record. */
+const UNIT_HALF_EXTENT = 0.5
 
 
 /**
@@ -212,6 +220,85 @@ describe('viewer/three/robustBounds', () => {
 
     expect(result.excludedVertices).toBe(0)
     expect(result.box.max.x).toBeLessThanOrEqual(MODEL_SIZE + 1)
+  })
+
+  describe('robustBoundsFromElements (streaming follow)', () => {
+    /**
+     * @param {number} count unit boxes along x, spread over MODEL_SIZE
+     * @param {Array<Array<number>>} [strayCenters]
+     * @return {ElementBoxes}
+     */
+    function streamedBoxes(count, strayCenters = []) {
+      const store = new ElementBoxes()
+      const box = new Box3()
+      const size = new Vector3(1, 1, 1)
+      for (let i = 0; i < count; i++) {
+        store.push(box.setFromCenterAndSize(
+          new Vector3((i / count) * MODEL_SIZE, 0, 0), size))
+      }
+      for (const [x, y, z] of strayCenters) {
+        store.push(box.setFromCenterAndSize(new Vector3(x, y, z), size))
+      }
+      return store
+    }
+
+    it('agrees with the Object3D path on the same geometry', () => {
+      // The follow and the end-of-load fit must not disagree, or the
+      // camera visibly corrects itself when the load settles.
+      const root = new Object3D()
+      root.add(batchedCubes(CUBE_COUNT, [[0, STRAY_DISTANCE, STRAY_DISTANCE]]))
+      const fromObject = computeRobustBounds(root)
+      const fromElements = robustBoundsFromElements(
+        [streamedBoxes(CUBE_COUNT, [[0, STRAY_DISTANCE, STRAY_DISTANCE]])])
+
+      expect(fromElements.excludedElements).toBe(fromObject.excludedElements)
+      expect(fromElements.box.max.y).toBeCloseTo(fromObject.box.max.y)
+    })
+
+    it('classifies across several stores as one model', () => {
+      // The session keeps preview-group and streamed-instance boxes
+      // apart (different lifetimes) but they are one model to frame.
+      const half = CUBE_COUNT / 2
+      const result = robustBoundsFromElements([
+        streamedBoxes(half),
+        streamedBoxes(half, [[0, 0, STRAY_DISTANCE]]),
+      ])
+
+      expect(result.totalElements).toBe(CUBE_COUNT + 1)
+      expect(result.excludedElements).toBe(1)
+      expect(result.box.max.z).toBeLessThanOrEqual(1)
+    })
+
+    it('acts on a stray before 2% of the model could reach one element', () => {
+      // MIN_EXCLUDED_ELEMENTS: at 40 instances a purely fractional
+      // budget rounds to 0, which during a stream is exactly when the
+      // camera would pop out and have to be pulled back later.
+      const smallCount = 40
+      const result = robustBoundsFromElements(
+        [streamedBoxes(smallCount, [[0, 0, STRAY_DISTANCE]])])
+
+      expect(result.excludedElements).toBe(1)
+      expect(result.box.max.z).toBeLessThanOrEqual(1)
+    })
+
+    it('returns null with nothing recorded', () => {
+      expect(robustBoundsFromElements([new ElementBoxes()])).toBeNull()
+    })
+
+    it('grows past its initial capacity without losing boxes', () => {
+      const store = new ElementBoxes(2)
+      const grown = 200
+      const box = new Box3()
+      for (let i = 0; i < grown; i++) {
+        box.setFromCenterAndSize(new Vector3(i, 0, 0), new Vector3(1, 1, 1))
+        store.push(box)
+      }
+      const result = robustBoundsFromElements([store])
+
+      // Last box's center, plus its half-extent.
+      expect(result.totalElements).toBe(grown)
+      expect(result.box.max.x).toBeCloseTo((grown - 1) + UNIT_HALF_EXTENT)
+    })
   })
 
   describe('robustBoundsFor cache', () => {

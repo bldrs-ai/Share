@@ -1,8 +1,28 @@
-import {BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene} from 'three'
+import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Vector3} from 'three'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
 
 
 /* eslint-disable no-magic-numbers */
+
+
+/**
+ * Stream `count` unit boxes along x through notifyBounds, reusing one
+ * scratch box exactly as IncrementalBatchedBuilder does, then force one
+ * refit so the fitted sphere covers all of them.
+ *
+ * @param {ProgressiveLoadSession} target
+ * @param {number} count
+ * @param {Box3} scratch
+ */
+function streamRun(target, count, scratch) {
+  const size = new Vector3(1, 1, 1)
+  for (let i = 0; i < count; i++) {
+    target.notifyBounds(scratch.setFromCenterAndSize(new Vector3(i, 0, 0), size))
+  }
+  target.lastFitMs = 0
+  target.overflowPending = true
+  target.maybeRefit_()
+}
 
 
 /** @return {object} A camera-controls stand-in recording fit calls. */
@@ -176,6 +196,78 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(0)
     pinned.finish()
   })
+
+  describe('robust framing during the stream', () => {
+    // Enough instances for the robust criterion to have statistics —
+    // below that it frames the exact union, as the tests above assert.
+    const STREAM_COUNT = 60
+    /** A test-models-private#26 catenary sliver: a km into the sky. */
+    const STRAY_AT = new Vector3(0, 0, 5000)
+
+    it('keeps framing the model when a stray lands mid-stream', () => {
+      // The whole point of #26's fix on this path: before it, one stray
+      // instance zoomed the camera out to a km-scale box for the rest of
+      // the load, so the model materialized as a speck.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+      expect(framed.radius).toBeLessThan(STREAM_COUNT)
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeCloseTo(framed.radius)
+      expect(after.center.z).toBeCloseTo(framed.center.z)
+    })
+
+    it('skips the no-op refit an excluded stray would otherwise cause', () => {
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const fitCount = controls.fits.length
+
+      session.notifyBounds(scratch.setFromCenterAndSize(STRAY_AT, new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      // The framing didn't change, so the camera was never told to move.
+      expect(controls.fits).toHaveLength(fitCount)
+      expect(session.overflowPending).toBe(false)
+    })
+
+    it('still follows real geometry that extends the model', () => {
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+
+      // A wing continuing the building — inside the fences, so framed.
+      session.notifyBounds(
+        scratch.setFromCenterAndSize(new Vector3(STREAM_COUNT + 20, 0, 0), new Vector3(1, 1, 1)))
+      session.lastFitMs = 0
+      session.maybeRefit_()
+
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeGreaterThan(framed.radius)
+    })
+
+    it('copies bounds out of the caller\'s scratch box', () => {
+      // IncrementalBatchedBuilder passes one scratch Box3 it overwrites
+      // per instance — retaining the reference would corrupt every
+      // recorded bound on the next append.
+      const scratch = new Box3()
+      streamRun(session, STREAM_COUNT, scratch)
+      const framed = controls.fits[controls.fits.length - 1]
+
+      scratch.set(new Vector3(-9999, -9999, -9999), new Vector3(9999, 9999, 9999))
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(controls.fits[controls.fits.length - 1].radius).toBeCloseTo(framed.radius)
+    })
+  })
+
 
   it('stampCoordination re-frames the union under the group transform', () => {
     session.addPreviewMesh(cubeAt(0))
