@@ -1,5 +1,6 @@
 import React, {ReactElement, useState} from 'react'
 import {MenuItem, TextField} from '@mui/material'
+import useQuota from '../../hooks/useQuota'
 import {disablePageReloadApprovalCheck} from '../../utils/event'
 import {navigateToModel} from '../../utils/navigate'
 import {SAMPLE_MODELS} from './sampleModelRoster'
@@ -19,11 +20,15 @@ import {SAMPLE_MODELS} from './sampleModelRoster'
  */
 export default function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
   const [selected, setSelected] = useState('')
+  const {record} = useQuota()
 
-  const handleSelect = (e, closeDialog) => {
+  const handleSelect = async (e, closeDialog) => {
     setSelected(e.target.value)
+    const path = SAMPLE_MODELS[e.target.value].path
+    // Public sample — record() resolves it as free; see SampleModels.handleSelect.
+    await record(path.split('#')[0])
     disablePageReloadApprovalCheck()
-    navigateToModel({pathname: SAMPLE_MODELS[e.target.value].path}, navigate)
+    navigateToModel({pathname: path}, navigate)
     closeDialog()
   }
 
