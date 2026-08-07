@@ -18,46 +18,31 @@ This is the design of record for the feature. The Open-dialog UI wiring is in
 
 ## Status & remaining work
 
-*Handoff snapshot, 2026-08-07. Work is paused here; each numbered item below
-is sized to be picked up as its own work thread. They are ordered — (1) and
-(2) unblock the rest.*
+*Updated 2026-08-07 with the #1740 re-land.*
 
-**Where things stand:** the four stacked PRs (#1550 → #1551 → #1552 → #1553,
-branches `quota/1-core-lib` … `quota/4-wire-load-sites`; see the
-Implementation map) are pushed, one commit per branch, each husky-gated green
-(eslint `--max-warnings 0`, tsc, full Jest) on `main@845298d7` (2026-06-29).
-\#1550's CI is fully green on that base — `build`, `playwright-run`, and
-`playwright-webifc-run`. Enforcement ships dark behind the `quotas` flag.
+**Where things stand:** the core lib + this doc landed on `main` via #1550.
+The other three stacked PRs (#1551 → #1553) were merged into their stacked
+*branch* bases rather than `main` — GitHub only retargets a stacked PR to
+`main` when the merged base branch is deleted — so their content initially
+landed nowhere reachable. **#1740** (`quota/5-reland`) re-lands all three
+layers (server gate, client hook + UI + flag, load-site wiring) onto current
+`main` in one reviewed merge, with the Open-dialog conflicts resolved in
+favor of main's shapes (sampleModelRoster cards, the #1682 storage-id
+semantics, the loosened GitHub file gate) and the click-handler ordering
+contract preserved (§UI surfaces below; Open/README §Gating wiring).
+Enforcement ships dark behind the `quotas` flag.
 
-1. **Re-integrate the stack onto current main.** main has moved ~317 commits
-   since the stack's base (workspace store, batched/instanced viewer, USD +
-   splat formats, Node 24, Open-dialog evolution). 10 of the stack's 25 files
-   were also touched on main — by layer:
-   - #1550: `AGENTS.md` (router table only; GitHub reports the PR merely
-     "behind", not conflicting)
-   - #1551: none — the server layer is clean
-   - #1552: `src/FeatureFlags.js`, `src/net/http.js`
-   - #1553: `OpenModelDialog.jsx` + `.test.jsx`, `GitHubFileBrowser.jsx`,
-     `SampleModels.jsx`, `SampleModelFileSelector.jsx`,
-     `src/utils/dragAndDrop.js`, `src/tests/e2e/utils.ts`
-   Re-stack bottom-up (each branch is a single commit, so this is four
-   rebases). When resolving the Open-dialog files, preserve the
-   click-handler ordering contract (§UI surfaces below; Open/README §Gating
-   wiring) — hasCapacity gate, then getAccessToken *inside* the click
-   handler before any other await, then record(). Husky-gate and
-   force-push each branch.
-2. **Review & land the stack bottom-up.** Merge #1550 first; GitHub
-   auto-retargets each remaining PR to `main` as its base merges. Caveat:
-   `Quota.spec.ts` gets its *first CI run* only when #1553 retargets to
-   `main` (workflows don't run for PRs based on another branch) — watch it.
-3. **Close #1494 as superseded** (a pointer comment is already on that PR).
-4. **Deploy-preview smoke test** (checklist in #1553): with `?feature=quotas`
+1. **Land #1740** — watch its CI (this is `Quota.spec.ts`'s first-ever CI
+   run), then merge. Afterwards delete the spent `quota/*` branches; leaving
+   merged stacked branches undeleted is exactly what caused the stranding.
+2. **Close #1494 as superseded** (a pointer comment is already on that PR).
+3. **Deploy-preview smoke test** (checklist in #1740): with `?feature=quotas`
    and a real Auth0 free user — public GH repo loads without counting;
    private repo counts; 5th private load → 403 + `QuotaLimitDialog`, no
    navigation; `sharePro` unlimited; `/share/quotas` renders.
-5. **Bake, then roll out.** Test per-session via `?feature=quotas`; when
+4. **Bake, then roll out.** Test per-session via `?feature=quotas`; when
    satisfied, flip the flag's `isActive` to `true` in `src/FeatureFlags.js`.
-6. **Follow-ups** — each small and independent: see §Out of scope below.
+5. **Follow-ups** — each small and independent: see §Out of scope below.
 
 ## Tiers & limits
 
@@ -195,6 +180,9 @@ Summary only; the wiring lives in
 | Server gate | `netlify/functions/record-load.js`, `src/__mocks__/api-handlers.js` | [#1551](https://github.com/bldrs-ai/Share/pull/1551) (`quota/2-server-enforcement`) |
 | Client hook + UI + flag | `src/hooks/useQuota.js`, `QuotaBadge.jsx`, `QuotaLimitDialog.jsx`, `src/FeatureFlags.js` | [#1552](https://github.com/bldrs-ai/Share/pull/1552) (`quota/3-client-hook-ui`) |
 | Load-site wiring + docs page | Open dialog + containers, `src/pages/share/Quotas.jsx`, `Quota.spec.ts` | [#1553](https://github.com/bldrs-ai/Share/pull/1553) (`quota/4-wire-load-sites`) |
+
+The per-layer PRs carry the review history; layers 2–4 reached `main` via the
+[#1740](https://github.com/bldrs-ai/Share/pull/1740) re-land (see §Status).
 
 ## Out of scope / follow-ups
 
