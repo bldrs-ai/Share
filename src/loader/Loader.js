@@ -10,7 +10,7 @@ import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportModelInfo} from './loadProgress'
+import {reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   doesFileExistInOPFS,
   downloadModel,
@@ -55,6 +55,7 @@ import {
 } from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
+import splatsToThree, {newSplatLoader} from './splats'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
@@ -289,6 +290,22 @@ export async function load(
       }
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
+
+      // Byte-source line for the load report: were the bytes served
+      // from OPFS or fetched? Reported only for the kinds where
+      // hit-ness is actually known here: uploads live in OPFS by
+      // construction, and for GitHub the isCacheHit + doesFileExistInOPFS
+      // combination above guarantees downloadModel resolved from OPFS
+      // without a fetch when isCacheHit survived. downloadToOPFS
+      // (local/external kinds) decides hit/miss inside the worker and
+      // doesn't surface it — no line rather than a guess.
+      if (isUploadedFile) {
+        reportSourceInfo('Source: OPFS cache (uploaded file)')
+      } else if (kindLabel === 'github') {
+        reportSourceInfo(isCacheHit ?
+          'Source: OPFS cache HIT (GitHub content unchanged)' :
+          'Source: network download (GitHub), cached to OPFS')
+      }
 
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd
@@ -1548,6 +1565,21 @@ async function findLoader(pathname, viewer) {
       loader = new PDBLoader
       fixupCb = pdbToThree
       isFormatText = true
+      break
+    }
+    case 'ksplat':
+    case 'ply':
+    case 'sog':
+    case 'splat':
+    case 'spz': {
+      // Gaussian splat formats via Spark (see src/loader/splats.js and
+      // issue #1726). The shim's async parse decodes bytes to a
+      // SplatMesh; the fixup wraps it into the Share model Group and
+      // installs the scene-level SparkRenderer that draws it.
+      loader = newSplatLoader(extension)
+      isLoaderAsync = true
+      isFormatText = false
+      fixupCb = splatsToThree
       break
     }
     case 'stl': {

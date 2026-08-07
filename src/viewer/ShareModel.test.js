@@ -28,7 +28,7 @@ describe('viewer/ShareModel', () => {
       })
     })
 
-    it.each(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld'])(
+    it.each(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld', 'ply', 'spz', 'splat', 'ksplat', 'sog'])(
       'treats %s as unstructured mesh (no IFC capabilities)',
       (format) => {
         const caps = capabilitiesForFormat(format)

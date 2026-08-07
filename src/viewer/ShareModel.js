@@ -22,7 +22,8 @@
 /**
  * Source file format. Mirrors the extensions findLoader() understands.
  *
- * @typedef {'ifc'|'step'|'stp'|'glb'|'gltf'|'obj'|'stl'|'pdb'|'xyz'|'fbx'|'bld'|'usd'|'usda'|'usdc'|'usdz'} ShareModelFormat
+ * @typedef {'ifc'|'step'|'stp'|'glb'|'gltf'|'obj'|'stl'|'pdb'|'xyz'|'fbx'|'bld'|
+ *   'usd'|'usda'|'usdc'|'usdz'|'ply'|'spz'|'splat'|'ksplat'|'sog'} ShareModelFormat
  */
 
 
@@ -70,7 +71,14 @@
 
 
 const IFC_LIKE = new Set(['ifc', 'step', 'stp'])
-const UNSTRUCTURED_MESH = new Set(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld', 'usd', 'usda', 'usdc', 'usdz'])
+// Gaussian splat formats (ply/spz/splat/ksplat/sog) are intentionally
+// mesh-only: flat arrays of gaussians with no element structure, so no
+// picking/subset/property capability applies (see src/loader/splats.js).
+const UNSTRUCTURED_MESH = new Set([
+  'glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld',
+  'usd', 'usda', 'usdc', 'usdz',
+  'ply', 'spz', 'splat', 'ksplat', 'sog',
+])
 
 
 /**
