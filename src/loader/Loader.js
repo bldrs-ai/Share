@@ -9,7 +9,7 @@ import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
-import {reportModelInfo} from './loadProgress'
+import {reportModelInfo, reportSourceInfo} from './loadProgress'
 import {
   doesFileExistInOPFS,
   downloadModel,
@@ -289,6 +289,22 @@ export async function load(
       }
       debug().log('Loader#load: File from OPFS:', file)
       setOpfsFile(file)
+
+      // Byte-source line for the load report: were the bytes served
+      // from OPFS or fetched? Reported only for the kinds where
+      // hit-ness is actually known here: uploads live in OPFS by
+      // construction, and for GitHub the isCacheHit + doesFileExistInOPFS
+      // combination above guarantees downloadModel resolved from OPFS
+      // without a fetch when isCacheHit survived. downloadToOPFS
+      // (local/external kinds) decides hit/miss inside the worker and
+      // doesn't surface it — no line rather than a guess.
+      if (isUploadedFile) {
+        reportSourceInfo('Source: OPFS cache (uploaded file)')
+      } else if (kindLabel === 'github') {
+        reportSourceInfo(isCacheHit ?
+          'Source: OPFS cache HIT (GitHub content unchanged)' :
+          'Source: network download (GitHub), cached to OPFS')
+      }
 
       // For non-GitHub sources we don't have an upstream sha, so we hash the
       // bytes ourselves to build the cache key. This is the same File we'd

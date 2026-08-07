@@ -530,6 +530,22 @@ export function reportModelInfo(info) {
 
 
 /**
+ * Report where the model bytes came from — OPFS cache vs network — as its
+ * own report line (PR #1727 feedback: reloads served from OPFS should say
+ * "cache HIT" for every format, not just the GLB-artifact path's console
+ * log). Emitted by Loader#load once the bytes are in hand, for the source
+ * kinds where hit-ness is actually known. Safe no-op with no active load.
+ *
+ * @param {string} line e.g. 'Source: OPFS cache HIT (GitHub content unchanged)'
+ */
+export function reportSourceInfo(line) {
+  if (activeReporter && !activeReporter.ended && line) {
+    activeReporter.addReportLine(line)
+  }
+}
+
+
+/**
  * Attach the active load's final progress state to Sentry (tags + context)
  * ahead of a captureException call. Call from the load-failure catch.
  */
