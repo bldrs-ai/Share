@@ -15,14 +15,23 @@ export const supportedTypes = [
   'step',
   'stl',
   'stp',
+  'usd',
+  'usda',
+  'usdc',
+  'usdz',
   'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
 
-/** Make a non-capturing group of a choice of filetypes. */
-export const typeRegexStr = `(?:${supportedTypes.join('|')})`
+/**
+ * Make a non-capturing group of a choice of filetypes. Alternation is
+ * first-match, so sort longest-first: with 'usd' ahead of 'usda', a bare
+ * `exec('usda')` would match just the 'usd' prefix and misreport the
+ * extension.
+ */
+export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - a.length).join('|')})`
 
 
 /** */
@@ -99,6 +108,14 @@ const HEADER_LIMIT = 1024
 // GLB binary format magic number ("glTF" in little-endian)
 const GLB_MAGIC_NUMBER = 0x46546C67
 
+// USDC (crate) files start with the ASCII bytes "PXR-USDC"
+const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
+
+// Zip archive signature "PK" — the same two-byte sniff three's
+// USDLoader uses. USDZ is the only zip-packaged model format we
+// support, so a zip signature classifies as usdz.
+const ZIP_MAGIC = Array.from('PK', (c) => c.charCodeAt(0))
+
 
 /**
  * @param {string} path
@@ -141,7 +158,7 @@ export async function guessTypeFromFile(file) {
  * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
-  // Check for GLB binary format first (binary files won't decode properly as UTF-8)
+  // Check binary formats first (binary files won't decode properly as UTF-8)
   const view = new DataView(headerBuffer)
   if (headerBuffer.byteLength >= 4) {
     // GLB files start with magic number ("glTF" in ASCII)
@@ -150,10 +167,32 @@ export function analyzeHeader(headerBuffer) {
       return 'glb'
     }
   }
+  if (matchesMagic(headerBuffer, USDC_MAGIC)) {
+    return 'usdc'
+  }
+  if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
+    return 'usdz'
+  }
 
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
+}
+
+
+/**
+ * True when the buffer begins with the given magic byte sequence.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @param {Array<number>} magicBytes
+ * @return {boolean}
+ */
+function matchesMagic(headerBuffer, magicBytes) {
+  if (headerBuffer.byteLength < magicBytes.length) {
+    return false
+  }
+  const bytes = new Uint8Array(headerBuffer, 0, magicBytes.length)
+  return magicBytes.every((b, i) => bytes[i] === b)
 }
 
 
@@ -167,6 +206,8 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('#usda')) {
+    return 'usda'
   } else if (header.includes('FBX')) {
     return 'fbx'
   } else if (header.startsWith('glTF')) {

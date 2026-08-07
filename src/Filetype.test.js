@@ -156,6 +156,11 @@ describe('Filetype', () => {
             `  0.3517846     -0.7869986      -2.873479`
       expect(analyzeHeaderStr(header)).toBe('xyz')
     })
+
+    it('matches usda header', () => {
+      const header = `#usda 1.0\n(\n    upAxis = "Y"\n)`
+      expect(analyzeHeaderStr(header)).toBe('usda')
+    })
   })
 
   describe('analyzeHeader (binary)', () => {
@@ -223,6 +228,19 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe(null)
     })
 
+    it('detects USDC crate binary format', () => {
+      const buffer = new TextEncoder().encode('PXR-USDC and then the rest of the crate file').buffer
+      expect(analyzeHeader(buffer)).toBe('usdc')
+    })
+
+    it('detects zip archives as USDZ', () => {
+      const zipMagic = Array.from('PK', (c) => c.charCodeAt(0))
+      const zipHeaderSize = 30
+      const buffer = new ArrayBuffer(zipHeaderSize)
+      new Uint8Array(buffer).set(zipMagic)
+      expect(analyzeHeader(buffer)).toBe('usdz')
+    })
+
     it('detects GLTF text format with proper header', () => {
       // Note: Text starting with "glTF" will be detected as GLB because "glTF" encodes
       // to the same bytes as the GLB magic number. This is correct behavior since
@@ -265,6 +283,15 @@ describe('Filetype', () => {
       expect(getValidExtension('test.GLTF')).toBe('gltf')
       expect(getValidExtension('GLB')).toBe('glb')
       expect(getValidExtension('gltf')).toBe('gltf')
+    })
+
+    it('validates the USD family, matching the longest extension', () => {
+      // 'usd' is a prefix of the other three — the alternation must not
+      // stop at the prefix (typeRegexStr sorts longest-first).
+      expect(getValidExtension('model.usd')).toBe('usd')
+      expect(getValidExtension('model.usda')).toBe('usda')
+      expect(getValidExtension('model.usdc')).toBe('usdc')
+      expect(getValidExtension('model.USDZ')).toBe('usdz')
     })
   })
 })

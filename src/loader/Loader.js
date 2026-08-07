@@ -6,6 +6,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js'
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader.js'
 import {PDBLoader} from 'three/examples/jsm/loaders/PDBLoader.js'
 import {STLLoader} from 'three/examples/jsm/loaders/STLLoader.js'
+import {USDLoader} from 'three/examples/jsm/loaders/USDLoader.js'
 import {XYZLoader} from 'three/examples/jsm/loaders/XYZLoader.js'
 import {MeshoptDecoder} from 'meshoptimizer/decoder'
 import * as Filetype from '../Filetype'
@@ -1553,6 +1554,21 @@ async function findLoader(pathname, viewer) {
       loader = new STLLoader
       fixupCb = stlToThree
       isFormatText = false
+      break
+    }
+    case 'usd':
+    case 'usda':
+    case 'usdc':
+    case 'usdz': {
+      // One arm for the whole family: USDLoader.parse sniffs the actual
+      // variant from the bytes (crate magic → USDC, zip magic → USDZ,
+      // otherwise USDA text), so the URL extension only needs to route
+      // here. Keep isFormatText false even for .usda — parse() takes the
+      // ArrayBuffer and does its own decode. The composer applies stage
+      // `upAxis` and `metersPerUnit` itself, and returns a Group whose
+      // prim names ride on Object3D.name, which convertToShareModel
+      // mirrors into Name/LongName for the NavTree.
+      loader = new USDLoader()
       break
     }
     case 'xyz': {
