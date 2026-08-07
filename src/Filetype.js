@@ -15,14 +15,23 @@ export const supportedTypes = [
   'step',
   'stl',
   'stp',
+  'usd',
+  'usda',
+  'usdc',
+  'usdz',
   'xyz',
 ]
 
 export const supportedTypesUsageStr = `${supportedTypes.join(',')}`
 
 
-/** Make a non-capturing group of a choice of filetypes. */
-export const typeRegexStr = `(?:${supportedTypes.join('|')})`
+/**
+ * Make a non-capturing group of a choice of filetypes. Alternation is
+ * first-match, so sort longest-first: with 'usd' ahead of 'usda', a bare
+ * `exec('usda')` would match just the 'usd' prefix and misreport the
+ * extension.
+ */
+export const typeRegexStr = `(?:${[...supportedTypes].sort((a, b) => b.length - a.length).join('|')})`
 
 
 /** */
@@ -96,8 +105,23 @@ export function getValidExtension(pathOrExt) {
 // File header magic is clear by this offset
 const HEADER_LIMIT = 1024
 
-// GLB binary format magic number ("glTF" in little-endian)
-const GLB_MAGIC_NUMBER = 0x46546C67
+// GLB binary format magic ("glTF" in ASCII)
+const GLB_MAGIC = Array.from('glTF', (c) => c.charCodeAt(0))
+
+// USDC (crate) files start with the ASCII bytes "PXR-USDC"
+const USDC_MAGIC = Array.from('PXR-USDC', (c) => c.charCodeAt(0))
+
+// Zip local-file-header signature "PK\x03\x04". A zip signature alone
+// is NOT enough to classify as usdz — docx/xlsx/plain .zip uploads are
+// zips too, and they must keep failing sniffing cleanly ("unknown
+// type" alert) instead of dying downstream in USDLoader. See
+// looksLikeUsdzArchive for the disambiguation.
+const ZIP_MAGIC = [...Array.from('PK', (c) => c.charCodeAt(0)), 3, 4]
+
+// Zip local file header layout: filename length is a LE uint16 at
+// offset 26; the filename itself starts at offset 30.
+const ZIP_NAME_LEN_OFFSET = 26
+const ZIP_NAME_OFFSET = 30
 
 
 /**
@@ -141,19 +165,61 @@ export async function guessTypeFromFile(file) {
  * @return {string|null} type
  */
 export function analyzeHeader(headerBuffer) {
-  // Check for GLB binary format first (binary files won't decode properly as UTF-8)
-  const view = new DataView(headerBuffer)
-  if (headerBuffer.byteLength >= 4) {
-    // GLB files start with magic number ("glTF" in ASCII)
-    const magic = view.getUint32(0, true) // little-endian
-    if (magic === GLB_MAGIC_NUMBER) {
-      return 'glb'
-    }
+  // Check binary formats first (binary files won't decode properly as UTF-8)
+  if (matchesMagic(headerBuffer, GLB_MAGIC)) {
+    return 'glb'
+  }
+  if (matchesMagic(headerBuffer, USDC_MAGIC)) {
+    return 'usdc'
+  }
+  if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
+    return looksLikeUsdzArchive(headerBuffer) ? 'usdz' : null
   }
 
   const decoder = new TextDecoder('utf-8')
   const headerStr = decoder.decode(headerBuffer)
   return analyzeHeaderStr(headerStr)
+}
+
+
+/**
+ * True when the buffer begins with the given magic byte sequence.
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @param {Array<number>} magicBytes
+ * @return {boolean}
+ */
+function matchesMagic(headerBuffer, magicBytes) {
+  if (headerBuffer.byteLength < magicBytes.length) {
+    return false
+  }
+  const bytes = new Uint8Array(headerBuffer, 0, magicBytes.length)
+  return magicBytes.every((b, i) => bytes[i] === b)
+}
+
+
+/**
+ * Distinguish a USDZ package from any other zip container (docx, xlsx,
+ * plain .zip) by peeking at the first entry's filename in the local
+ * file header. The USDZ spec requires the package's first entry to be
+ * the root USD layer, and three's USDLoader errors out otherwise — so
+ * gating on it here both rejects non-USD zips cleanly at sniff time
+ * and never rejects a USDZ the loader could actually open.
+ *
+ * @param {ArrayBuffer} headerBuffer at least the first zip local file
+ *   header (the sniff window is 1KB; the header + name fit comfortably)
+ * @return {boolean}
+ */
+function looksLikeUsdzArchive(headerBuffer) {
+  if (headerBuffer.byteLength < ZIP_NAME_OFFSET) {
+    return false
+  }
+  const view = new DataView(headerBuffer)
+  const nameLen = view.getUint16(ZIP_NAME_LEN_OFFSET, true)
+  const nameEnd = Math.min(ZIP_NAME_OFFSET + nameLen, headerBuffer.byteLength)
+  const nameBytes = new Uint8Array(headerBuffer, ZIP_NAME_OFFSET, nameEnd - ZIP_NAME_OFFSET)
+  const name = new TextDecoder('utf-8').decode(nameBytes)
+  return /\.usd[ac]?$/i.test(name)
 }
 
 
@@ -167,6 +233,8 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('#usda')) {
+    return 'usda'
   } else if (header.includes('FBX')) {
     return 'fbx'
   } else if (header.startsWith('glTF')) {

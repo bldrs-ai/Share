@@ -22,7 +22,7 @@
 /**
  * Source file format. Mirrors the extensions findLoader() understands.
  *
- * @typedef {'ifc'|'step'|'stp'|'glb'|'gltf'|'obj'|'stl'|'pdb'|'xyz'|'fbx'|'bld'} ShareModelFormat
+ * @typedef {'ifc'|'step'|'stp'|'glb'|'gltf'|'obj'|'stl'|'pdb'|'xyz'|'fbx'|'bld'|'usd'|'usda'|'usdc'|'usdz'} ShareModelFormat
  */
 
 
@@ -70,7 +70,7 @@
 
 
 const IFC_LIKE = new Set(['ifc', 'step', 'stp'])
-const UNSTRUCTURED_MESH = new Set(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld'])
+const UNSTRUCTURED_MESH = new Set(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld', 'usd', 'usda', 'usdc', 'usdz'])
 
 
 /**
