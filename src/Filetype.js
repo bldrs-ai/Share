@@ -10,8 +10,16 @@ export const supportedTypes = [
   'glb',
   'gltf',
   'ifc',
+  // Gaussian splat formats (loaded via Spark — see src/loader/splats.js).
+  // Listed with the rest so routes, drag-drop and permalinks all pick
+  // them up.
+  'ksplat',
   'obj',
   'pdb',
+  'ply',
+  'sog',
+  'splat',
+  'spz',
   'step',
   'stl',
   'stp',
@@ -99,6 +107,15 @@ const HEADER_LIMIT = 1024
 // GLB binary format magic number ("glTF" in little-endian)
 const GLB_MAGIC_NUMBER = 0x46546C67
 
+// gzip magic (0x1f 0x8b) read as a little-endian uint16. Among the
+// supported formats only .spz (gzipped gaussian-splat data) is a gzip
+// stream, so the magic is a sufficient discriminator here.
+const GZIP_MAGIC_NUMBER = 0x8B1F
+
+// ZIP local-file-header magic "PK\x03\x04" in little-endian. Among the
+// supported formats only .sog (PlayCanvas SOG splat bundle) is a zip.
+const ZIP_MAGIC_NUMBER = 0x04034B50
+
 
 /**
  * @param {string} path
@@ -149,6 +166,12 @@ export function analyzeHeader(headerBuffer) {
     if (magic === GLB_MAGIC_NUMBER) {
       return 'glb'
     }
+    if (magic === ZIP_MAGIC_NUMBER) {
+      return 'sog'
+    }
+  }
+  if (headerBuffer.byteLength >= 2 && view.getUint16(0, true) === GZIP_MAGIC_NUMBER) {
+    return 'spz'
   }
 
   const decoder = new TextDecoder('utf-8')
@@ -167,6 +190,11 @@ export function analyzeHeaderStr(header) {
   debug().log('Filetype#analyzeHeader, header:', header)
   if (header.includes('"metadata"')) {
     return 'bld'
+  } else if (header.startsWith('ply')) {
+    // PLY magic. Both mesh/point-cloud PLY and gaussian-splat PLY start
+    // this way; both route to the splat loader (spark renders plain
+    // point clouds as degenerate splats).
+    return 'ply'
   } else if (header.includes('FBX')) {
     return 'fbx'
   } else if (header.startsWith('glTF')) {

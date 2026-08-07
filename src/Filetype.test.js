@@ -150,6 +150,14 @@ describe('Filetype', () => {
       expect(analyzeHeaderStr(`solid smth`)).toBe('stl')
     })
 
+    it('matches ply header', () => {
+      const header = `ply\n` +
+            `format binary_little_endian 1.0\n` +
+            `element vertex 100\n` +
+            `property float x\n`
+      expect(analyzeHeaderStr(header)).toBe('ply')
+    })
+
     it('matches xyz header', () => {
       const header = `# header1 \n` +
             `#  \n` +
@@ -221,6 +229,20 @@ describe('Filetype', () => {
 
       // This should fall back to text analysis and return null since it doesn't match any pattern
       expect(analyzeHeader(buffer)).toBe(null)
+    })
+
+    it('detects SPZ (gzip magic) binary format', () => {
+      const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
+      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
+      new DataView(buffer).setUint16(0, GZIP_MAGIC_NUMBER, true)
+      expect(analyzeHeader(buffer)).toBe('spz')
+    })
+
+    it('detects SOG (zip magic) binary format', () => {
+      const ZIP_MAGIC_NUMBER = 0x04034B50 // "PK\x03\x04", little-endian
+      const buffer = new ArrayBuffer(GLB_MIN_SIZE)
+      new DataView(buffer).setUint32(0, ZIP_MAGIC_NUMBER, true)
+      expect(analyzeHeader(buffer)).toBe('sog')
     })
 
     it('detects GLTF text format with proper header', () => {

@@ -54,6 +54,7 @@ import {
 } from './sourceCacheKey'
 import objToThree from './obj'
 import pdbToThree from './pdb'
+import splatsToThree, {newSplatLoader} from './splats'
 import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
@@ -1547,6 +1548,21 @@ async function findLoader(pathname, viewer) {
       loader = new PDBLoader
       fixupCb = pdbToThree
       isFormatText = true
+      break
+    }
+    case 'ksplat':
+    case 'ply':
+    case 'sog':
+    case 'splat':
+    case 'spz': {
+      // Gaussian splat formats via Spark (see src/loader/splats.js and
+      // issue #1726). The shim's async parse decodes bytes to a
+      // SplatMesh; the fixup wraps it into the Share model Group and
+      // installs the scene-level SparkRenderer that draws it.
+      loader = newSplatLoader(extension)
+      isLoaderAsync = true
+      isFormatText = false
+      fixupCb = splatsToThree
       break
     }
     case 'stl': {
