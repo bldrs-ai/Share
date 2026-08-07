@@ -3,6 +3,7 @@ import {
   getDownloadUrl,
   getFiles,
   getFilesAndFolders,
+  getPathContents,
 } from './Files'
 import {MOCK_FILES} from './Files.fixture'
 
@@ -92,6 +93,26 @@ describe('net/github/Files', () => {
       const {files, directories} = await getFilesAndFolders('Share', 'pablo-mayrgundter', '/', '')
       expect(files.length).toEqual(1)
       expect(directories.length).toEqual(1)
+    })
+  })
+
+
+  describe('getPathContents with Git LFS', () => {
+    it('redirects an LFS pointer to media.githubusercontent.com instead of returning it inline', async () => {
+      // Without this, the loader receives ~130 bytes of pointer text
+      // and the format parser fails with an unrelated error. Every
+      // model extension in bldrs-ai/test-models is LFS-tracked, so
+      // this is the path any GitHub URL into that repo takes.
+      const {content, isBase64} = await getPathContents(
+        {orgName: 'bldrs-ai', name: 'test-models'},
+        'usd/lfs-model.usdz',
+        false,
+        'main',
+        '',
+      )
+      expect(content).toEqual(
+        'https://media.githubusercontent.com/media/bldrs-ai/test-models/main/usd/lfs-model.usdz')
+      expect(isBase64).toBe(false)
     })
   })
 })

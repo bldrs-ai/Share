@@ -2,6 +2,7 @@ import {assertDefined} from '../../utils/assert'
 import {HTTP_CREATED, HTTP_NOT_MODIFIED, HTTP_NOT_FOUND} from '../http'
 import {checkCache, updateCache} from './Cache'
 import {getGitHub, getGitHubResource} from './Http'
+import {isLfsPointerBase64, lfsMediaUrl} from './lfs'
 import {octokit} from './OctokitExport'
 
 
@@ -343,10 +344,24 @@ export async function getPathContents(repository, path, useCache, ref = '', acce
     content: response.data.download_url, // default to the download URL
   }
 
-  if (
+  const hasInlineContent =
     response.data.download_url.includes('raw.githubusercontent.com') &&
-    response.data.content // ensures content is not null/undefined/empty
-  ) {
+    Boolean(response.data.content) // ensures content is not null/undefined/empty
+
+  if (hasInlineContent && isLfsPointerBase64(response.data.content)) {
+    // Git LFS: both the inline content and the raw.githubusercontent.com
+    // download_url beside it serve the ~130-byte *pointer*, not the
+    // model. Redirect to media.githubusercontent.com, which resolves the
+    // real object, and let the caller download it like any other file.
+    // A pointer is always small enough to come back inline, so every
+    // LFS-tracked file — whatever the object's true size — lands here.
+    // See ./lfs.js.
+    const mediaUrl = lfsMediaUrl(response.data.download_url)
+    if (mediaUrl !== null) {
+      result.content = mediaUrl
+    }
+    // isBase64 stays false: content is a URL to download, not bytes.
+  } else if (hasInlineContent) {
     // If the file content is available in base64,
     // return it along with a flag indicating that it's base64 encoded.
     result.content = response.data.content

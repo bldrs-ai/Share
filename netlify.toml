@@ -22,6 +22,21 @@
   publish = "docs"
   ignore = "bash tools/netlify/ignore-build.sh"
 
+# Pin the build runtime. Without this, Netlify picks its build image's
+# default (18 on the current Noble image), which `package.json`'s
+# `engines.node: ">=20"` rejects — yarn then fails the install and the
+# whole deploy. That's exactly how the prod deploy of #1733 broke, while
+# deploy previews stayed green: previews and production are two separate
+# Netlify projects, and only one of them carried a NODE_VERSION in its UI
+# environment. Keeping the version here instead means every context —
+# production, previews, branch deploys — reads the same number from the
+# repo, and it can't drift back apart.
+#
+# Keep in sync with `.nvmrc` (local dev) and the `node-version` in
+# .github/workflows/{main,test-flows}.yml, so CI tests what Netlify ships.
+[build.environment]
+  NODE_VERSION = "24"
+
 # Local development. `npx netlify dev` launches `yarn serve-prod` (the
 # esbuild static-file server on :8080) and serves netlify/functions/* on
 # the same origin at :8888 so /.netlify/functions/* reaches them. Without
