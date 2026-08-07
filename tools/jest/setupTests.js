@@ -63,3 +63,28 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   // texture `url`) expect null, and callers treat a falsy data URL as "none".
   HTMLCanvasElement.prototype.toDataURL = jest.fn(() => null)
 }
+
+// three stamps window.__THREE__ on first import to detect genuinely duplicate
+// copies, and warns "Multiple instances of Three.js being imported." when it's
+// already set. Under jest that is a false positive: the viewer test harness
+// resets the module registry and re-imports three (jest.mock / requireActual)
+// within a file, and a worker reuses its jsdom window across files, so three
+// re-initialises against an already-set flag even though there is a single
+// real copy (no nested node_modules/three). Swallow only that one line — every
+// other console.warn passes through untouched. Plain reassignment (not
+// jest.spyOn) so it survives module resets and stays installed as the base
+// console.warn for the whole worker (a spec's own jest.spyOn(console,'warn')
+// wraps this, so it still only ever sees the filtered stream). Two honest
+// limits: a spec that BOTH spies console.warn AND itself re-imports three
+// mid-test could observe the warning before it reaches this filter (no such
+// spec exists today); and the filter matches on message text, so it would
+// also mute a genuine RUNTIME duplicate. The install-on-disk duplicate case —
+// the one that actually ships — is caught instead by the static
+// src/viewer/three/singleThreeInstance.test.js.
+const realConsoleWarn = console.warn
+console.warn = function threeDupFilteredWarn(...args) {
+  if (typeof args[0] === 'string' && args[0].includes('Multiple instances of Three.js')) {
+    return
+  }
+  return realConsoleWarn.apply(this, args)
+}
