@@ -17,7 +17,7 @@ on:
 
 jobs:
   playwright-run:
-    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
+    runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
     # Image must match @playwright/test in package.json (Playwright caches
     # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
     # is chosen so screenshot baselines regenerated in the dev/sandbox env
