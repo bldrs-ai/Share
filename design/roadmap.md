@@ -696,9 +696,10 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
   `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
-  `analytics#isRealModelOpen` so the homepage's auto-loaded demo model doesn't
-  fire it — it replaced `select_content`, whose counts were conflated with
-  homepage visits); marking it a key event + the Ads import stay GA4 config.
+  `analytics#isRealModelOpen` so neither the homepage's auto-loaded demo model
+  nor opens on `*.netlify.app` deploy-preview/dev hosts fire it — it replaced
+  `select_content`, whose counts were conflated with homepage visits); marking
+  it a key event + the Ads import stay GA4 config.
 - Hygiene: skip GA init when `navigator.webdriver === true` or when
   `location.hostname !== 'bldrs.ai'` — one guard cleans CI/e2e, localhost, and
   preview-deploy pollution out of prod analytics. (Also: confirm whether scheduled

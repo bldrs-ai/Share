@@ -69,5 +69,30 @@ describe('Analytics', () => {
       expect(Analytics.isRealModelOpen({kind: 'provider', provider: 'google', fileId: 'abc123'})).toBe(true)
       expect(Analytics.isRealModelOpen({kind: 'url'})).toBe(true)
     })
+
+    // All *.netlify.app hosts (deploy previews, branch deploys, the dev
+    // site) serve the prod GA tag — opens there are team/CI traffic,
+    // not conversions.
+    test('false on Netlify deploy hosts, even for real sources', () => {
+      const githubOpen = {
+        kind: 'provider',
+        provider: 'github',
+        gitpath: 'https://github.com/bldrs-ai/test-models/blob/main/ifc/misc/box.ifc',
+      }
+      expect(Analytics.isRealModelOpen(githubOpen, 'deploy-preview-1741--bldrs-share-prod.netlify.app')).toBe(false)
+      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app')).toBe(false)
+    })
+
+    test('true on production and localhost hosts for real sources', () => {
+      const githubOpen = {
+        kind: 'provider',
+        provider: 'github',
+        gitpath: 'https://github.com/bldrs-ai/test-models/blob/main/ifc/misc/box.ifc',
+      }
+      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs.ai')).toBe(true)
+      // localhost must stay true: realModelOpen.spec.ts asserts the
+      // event fires in the E2E harness, which serves on localhost.
+      expect(Analytics.isRealModelOpen(githubOpen, 'localhost')).toBe(true)
+    })
   })
 })

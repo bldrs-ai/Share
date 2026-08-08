@@ -51,10 +51,22 @@ export function gtagEvent(eventName, parameters) {
  * and isUploadedFile comes back false — upload filepaths are
  * UUID-derived, never 'index.ifc'.
  *
+ * Also false on Netlify deploy hosts (*.netlify.app): deploy previews,
+ * branch deploys and the bldrs-share-dev site all serve the production
+ * index.html with the prod GA tag baked in, so team review sessions on
+ * a PR preview would otherwise register as conversions. Production is
+ * bldrs.ai; localhost stays included because the Playwright E2E suite
+ * (realModelOpen.spec.ts) asserts against dataLayer on localhost and
+ * the googletagmanager script is blocked there anyway.
+ *
  * @param {object} routeResult from routes.ts#handleRoute
+ * @param {string} hostname current page host; parameterized for tests
  * @return {boolean}
  */
-export function isRealModelOpen(routeResult) {
+export function isRealModelOpen(routeResult, hostname = window.location.hostname) {
+  if (hostname.endsWith('.netlify.app')) {
+    return false
+  }
   const isBundledDemo = routeResult?.kind === 'file' &&
     !routeResult.isUploadedFile &&
     routeResult.filepath === 'index.ifc'
