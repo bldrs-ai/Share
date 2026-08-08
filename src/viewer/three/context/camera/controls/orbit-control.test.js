@@ -12,7 +12,8 @@ const DEFAULT_MAX_DISTANCE = 300
 const MODEL_SIZE = 1000
 /**
  * Edge length of a millimetre-scale STEP part, in scene units: the 50 mm
- * `data/create-a-tube.step` from #1742, at the true size conway#458 gives it.
+ * `data/create-a-tube.step` from #1742, at the true size conway#458 (PR
+ * conway#460) gives it.
  */
 const SMALL_MODEL_SIZE = 0.05
 /**

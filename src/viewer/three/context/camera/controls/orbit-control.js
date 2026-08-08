@@ -31,8 +31,9 @@ const NEAR_RADIUS_FRACTION = 0.001
  * of denormal range for a degenerate bounding sphere.
  *
  * This replaces a flat 0.1-scene-unit floor (#1742), which sat *inside* any
- * part smaller than a couple of metres. Latent until conway#458 stopped
- * scaling millimetre STEP files by the reciprocal of their unit factor: a
+ * part smaller than a couple of metres. Latent until conway#458 (PR
+ * conway#460, shipped in 1.460.1363) stopped scaling millimetre STEP files
+ * by the reciprocal of their unit factor: a
  * 50 mm part that used to arrive as 50 km now arrives at its true size, with
  * minDistance ≈ 0.0024, so the old floor clipped it as you zoomed and ate it
  * entirely past 0.1. IFC never tripped it — building-scale geometry sits well

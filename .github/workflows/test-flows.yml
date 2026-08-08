@@ -44,8 +44,15 @@ jobs:
       - name: Playwright Info
         run: npx playwright --version
 
+      # Worker count is tied to `runs-on` above, and overrides the local
+      # default in tools/playwright.config.js. Keep it at or below the
+      # runner's vCPU count minus one: each worker drives its own Chromium
+      # alongside the shared static server, and oversubscribing shows up as
+      # timing flake in click/visibility waits rather than as honest
+      # failures. 6 workers on this 4-vCPU runner did exactly that — update
+      # this number whenever the runner size changes.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=6
+        run: yarn test-flows --reporter=github,list,html --workers=3
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
