@@ -695,8 +695,10 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
 **Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
-  the derived `real_model_open` key event (built on `select_content` +
-  `stats_preprocessorVersion`) is GA4 config, not code.
+  `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
+  `analytics#isRealModelOpen` so the homepage's auto-loaded demo model doesn't
+  fire it — it replaced `select_content`, whose counts were conflated with
+  homepage visits); marking it a key event + the Ads import stay GA4 config.
 - Hygiene: skip GA init when `navigator.webdriver === true` or when
   `location.hostname !== 'bldrs.ai'` — one guard cleans CI/e2e, localhost, and
   preview-deploy pollution out of prod analytics. (Also: confirm whether scheduled
@@ -1051,7 +1053,7 @@ landing page — before the MVP launch needs any of it.
   hostname check on GA init) — cleans CI/e2e/preview pollution out of prod data.
 - `grow-120` events: `share_link_created`, `share_link_opened`,
   `model_interacted` wired into the share flow + viewer; `real_model_open`
-  derived key event configured GA4-side.
+  fires from Share on non-demo model opens (✅), key-event marking GA4-side.
 - `grow-100`: `/viewer/ifc` + `/viewer/step` landing pages on the marketing SSG
   build (then `/viewer/stl`, `/viewer/obj`, …). Unblocks the acquisition-campaign
   landing targets.
