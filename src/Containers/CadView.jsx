@@ -7,7 +7,7 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {OPEN_CID_PARAM, getGaClientId, gtagEvent, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -570,6 +570,13 @@ export default function CadView({
       // TODO(pablo): currently only IFC/STEP are populated with stats.
       if (loadedModel.loadStats) {
         addProperties(eventParams, loadedModel.loadStats, 'stats_')
+      }
+      // Per-user open depth: GA4 has no user-id dimension, so the
+      // client id rides along as an event-scoped custom dimension.
+      // Absent whenever GA didn't initialize — see analytics#gaClientId.
+      const openCid = getGaClientId()
+      if (openCid) {
+        eventParams[OPEN_CID_PARAM] = openCid
       }
       gtagEvent('real_model_open', eventParams)
     }
