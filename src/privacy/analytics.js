@@ -32,3 +32,45 @@ export function gtagEvent(eventName, parameters) {
     window.gtag('event', eventName, parameters)
   }
 }
+
+
+/**
+ * True for model loads worth counting as the `real_model_open` GA event:
+ * any remote source (GitHub, Google Drive, generic URL) or an uploaded
+ * file. False for the bundled demo model the homepage auto-loads
+ * (navToDefault → /share/v/p/index.ifc) — counting it would fire on
+ * every homepage visit. real_model_open is a GA4 key event imported
+ * into Google Ads as the search campaigns' conversion, so
+ * pageview-shaped noise here would poison bidding (bizdev
+ * ads-campaign-build §1, growth-strategy §3).
+ *
+ * Demo detection matches routes.ts#processFile output for hosted
+ * project files: {kind: 'file', isUploadedFile: false, filepath}. The
+ * filepath check covers uploads on GitHub Pages installs, where
+ * processFile's '/share/v/new' prefix test misses ('/Share/share/v/new')
+ * and isUploadedFile comes back false — upload filepaths are
+ * UUID-derived, never 'index.ifc'.
+ *
+ * Also false on Netlify deploy hosts (*.netlify.app), so team review
+ * sessions on a PR preview don't register as conversions. This is
+ * deliberate defense-in-depth behind index/ga.js#shouldInitGa, whose
+ * prod-hostname allowlist already keeps gtag/js from loading off-prod
+ * at all. The two predicates differ on purpose and can't be merged:
+ * localhost must stay *included* here because the Playwright E2E suite
+ * (realModelOpen.spec.ts) asserts this event lands in the dataLayer
+ * buffer on localhost, while shouldInitGa excludes localhost from
+ * loading GA entirely.
+ *
+ * @param {object} routeResult from routes.ts#handleRoute
+ * @param {string} hostname current page host; parameterized for tests
+ * @return {boolean}
+ */
+export function isRealModelOpen(routeResult, hostname = window.location.hostname) {
+  if (hostname.endsWith('.netlify.app')) {
+    return false
+  }
+  const isBundledDemo = routeResult?.kind === 'file' &&
+    !routeResult.isUploadedFile &&
+    routeResult.filepath === 'index.ifc'
+  return !isBundledDemo
+}

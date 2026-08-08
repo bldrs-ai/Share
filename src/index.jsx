@@ -11,6 +11,7 @@ import Auth0BridgeRegistrar from './connections/Auth0BridgeRegistrar'
 import {flags} from './FeatureFlags'
 import './compat'
 import setupEsbuildWatch from './index/esbuild'
+import setupGa from './index/ga'
 import setupMSW from './index/msw'
 import setupSentry from './index/sentry'
 import './index.css'
@@ -21,6 +22,8 @@ import '@fontsource/roboto/latin-700.css'
 
 
 setupSentry()
+// After setupSentry: ga.js reports init failures via captureException.
+setupGa()
 setupMSW()
 setupEsbuildWatch()
 
