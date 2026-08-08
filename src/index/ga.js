@@ -1,4 +1,5 @@
 import {captureException} from '@sentry/react'
+import {setGaClientId} from '../privacy/analytics'
 
 
 // Must match the ID in public/index.html's inline gtag('config') stub —
@@ -67,6 +68,12 @@ export default function setupGa(env = undefined) {
       )
     }
     document.head.appendChild(script)
+    // Ask GA for this browser's client id so model-open events can
+    // carry it as ga_cid (see privacy/analytics#setGaClientId for why).
+    // The call buffers in dataLayer like any other gtag call and the
+    // callback fires once gtag/js has loaded and resolved the id — so
+    // it never fires on a blocked client, and events just omit ga_cid.
+    window.gtag('get', GA_MEASUREMENT_ID, 'client_id', setGaClientId)
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}})
   }

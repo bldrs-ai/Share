@@ -16,6 +16,28 @@ describe('Analytics', () => {
   })
 
 
+  // ga_cid carries GA4's client id on model-open events so per-user
+  // open depth is queryable; see the module doc for why the param is
+  // simply absent when GA never initialized.
+  describe('GA client id', () => {
+    test('null until set', () => {
+      expect(Analytics.getGaClientId()).toBeNull()
+    })
+
+    test('records a non-empty string id', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      expect(Analytics.getGaClientId()).toBe('1234567890.0987654321')
+    })
+
+    test('ignores the empty/undefined ids gtag yields before the property loads', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setGaClientId(undefined)
+      Analytics.setGaClientId('')
+      expect(Analytics.getGaClientId()).toBe('1234567890.0987654321')
+    })
+  })
+
+
   // Route-result shapes mirror routes.ts#handleRoute output. The one
   // excluded shape is the homepage's bundled demo — everything else is
   // a real open.

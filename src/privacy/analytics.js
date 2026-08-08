@@ -34,6 +34,50 @@ export function gtagEvent(eventName, parameters) {
 }
 
 
+/*
+ * GA4's client id, captured at init by index/ga.js.
+ *
+ * The GA4 Data API exposes no user-id dimension, so per-user open
+ * depth ("how many people opened exactly one model vs six or more")
+ * can't be derived — only the eventCount ÷ totalUsers average. Sending
+ * the client id as a `ga_cid` event param, with a matching
+ * event-scoped custom dimension registered GA4-side (Admin → Custom
+ * definitions → event parameter `ga_cid`), makes the distribution
+ * queryable: customEvent:ga_cid × eventCount, bucketed client-side.
+ *
+ * Null until gtag's async callback lands, and permanently null
+ * wherever GA never initializes — off-prod, under automation, or on
+ * blocked clients — so events simply omit the param there rather than
+ * carrying a placeholder that would form its own bogus bucket. No
+ * backfill: the dimension only accrues data from ship time forward.
+ *
+ * At much larger scale GA4 rolls high-cardinality dimension values
+ * into "(other)"; that's the signal to graduate this query to the
+ * BigQuery export.
+ */
+let gaClientId = null
+
+
+/**
+ * Record the GA4 client id. Ignores anything but a non-empty string —
+ * gtag's `get` callback yields undefined when the property isn't
+ * loaded yet, and a falsy id is worse than none.
+ *
+ * @param {string} cid
+ */
+export function setGaClientId(cid) {
+  if (typeof cid === 'string' && cid.length > 0) {
+    gaClientId = cid
+  }
+}
+
+
+/** @return {string|null} GA4 client id, or null if unavailable */
+export function getGaClientId() {
+  return gaClientId
+}
+
+
 /**
  * True for model loads worth counting as the `real_model_open` GA event:
  * any remote source (GitHub, Google Drive, generic URL) or an uploaded

@@ -1,4 +1,5 @@
 import {captureException} from '@sentry/react'
+import {getGaClientId} from '../privacy/analytics'
 import setupGa, {GA_MEASUREMENT_ID, shouldInitGa} from './ga'
 
 
@@ -61,6 +62,24 @@ describe('setupGa', () => {
       expect.objectContaining({message: expect.stringContaining('ga_init: gtag/js failed to load')}),
       {tags: {subsystem: 'ga_init'}},
     )
+  })
+
+  // GA4 has no user-id dimension, so the client id ships as an event
+  // param; the callback only resolves once gtag/js actually loads.
+  test('requests the GA client id and records it for model-open events', () => {
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    const getCall = window.dataLayer.find((entry) => entry?.[0] === 'get')
+    expect(getCall).toBeDefined()
+    expect(getCall[1]).toBe(GA_MEASUREMENT_ID)
+    expect(getCall[2]).toBe('client_id')
+    expect(getGaClientId()).toBeNull()
+    getCall[3]('1234567890.0987654321')
+    expect(getGaClientId()).toBe('1234567890.0987654321')
+  })
+
+  test('does not request a client id off-prod', () => {
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()
   })
 
   test('reports a missing inline bootstrap to Sentry without throwing', () => {
