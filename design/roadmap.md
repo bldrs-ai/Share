@@ -710,16 +710,21 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   gets noisy.
 - Per-user open depth (decided 2026-08-08): the GA4 Data API has no user-id
   dimension, so "X users opened Y models" can't be derived — only the
-  eventCount ÷ totalUsers average. Share now sends GA4's client id as a
-  `ga_cid` param on `real_model_open` (✅ `index/ga.js` requests it via
-  `gtag('get', …, 'client_id', …)`, `analytics#getGaClientId` holds it,
-  CadView attaches it when present). **Remaining GA4-side config:** Admin →
-  Custom definitions → new event-scoped dimension `ga_cid` from event
-  parameter `ga_cid`; then query `customEvent:ga_cid × eventCount` and bucket
-  client-side (1 / 2 / 3–5 / 6+ opens, fixtures excluded). No backfill — the
-  dimension accrues from ship time, so land it early in a campaign window for
-  a clean baseline. At larger scale GA4 rolls high-cardinality values into
-  "(other)"; that's the cue to move the query to the BigQuery export.
+  eventCount ÷ totalUsers average. Share now sends GA4's client id as an
+  `open_cid` param on `real_model_open` (✅ `index/ga.js` requests it via
+  `gtag('get', …, 'client_id', …)`, `analytics#getGaClientId` holds it and
+  falls back to the `_ga` cookie for events that fire before that async
+  callback lands, CadView attaches it when present). **Not `ga_cid`** as
+  originally specced: GA4 reserves the `ga_`/`google_`/`firebase_`/`gtag.`
+  prefixes and silently disables matching params, so that name would have
+  ingested as nothing and left the dimension permanently empty.
+  **Remaining GA4-side config:** Admin → Custom definitions → new
+  event-scoped dimension `open_cid` from event parameter `open_cid`; then
+  query `customEvent:open_cid × eventCount` and bucket client-side
+  (1 / 2 / 3–5 / 6+ opens, fixtures excluded). No backfill — the dimension
+  accrues from ship time, so land it early in a campaign window for a clean
+  baseline. At larger scale GA4 rolls high-cardinality values into "(other)";
+  that's the cue to move the query to the BigQuery export.
 - Channel-grouping + dashboard slices are bizdev-side config; the Share-side
   deliverable is the events existing and firing.
 - v0.4 addition: capture **model size/complexity** (bucketed — bytes, element

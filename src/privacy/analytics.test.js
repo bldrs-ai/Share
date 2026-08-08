@@ -1,3 +1,4 @@
+import Cookies from 'js-cookie'
 import * as Analytics from './analytics'
 
 
@@ -16,11 +17,16 @@ describe('Analytics', () => {
   })
 
 
-  // ga_cid carries GA4's client id on model-open events so per-user
+  // open_cid carries GA4's client id on model-open events so per-user
   // open depth is queryable; see the module doc for why the param is
   // simply absent when GA never initialized.
   describe('GA client id', () => {
-    test('null until set', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+    })
+
+    test('null when neither the gtag callback nor the cookie has an id', () => {
       expect(Analytics.getGaClientId()).toBeNull()
     })
 
@@ -34,6 +40,31 @@ describe('Analytics', () => {
       Analytics.setGaClientId(undefined)
       Analytics.setGaClientId('')
       expect(Analytics.getGaClientId()).toBe('1234567890.0987654321')
+    })
+
+    // Events fired before gtag's async callback resolves still reach
+    // GA4; without this fallback they'd lose the param exactly on a
+    // visitor's first open.
+    test('falls back to the _ga cookie, whose id keeps its embedded dot', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      expect(Analytics.getGaClientId()).toBe('1234567890.0987654321')
+    })
+
+    test('prefers the gtag callback id over the cookie', () => {
+      Cookies.set('_ga', 'GA1.1.1111111111.2222222222')
+      Analytics.setGaClientId('3333333333.4444444444')
+      expect(Analytics.getGaClientId()).toBe('3333333333.4444444444')
+    })
+
+    test('null for a malformed cookie rather than a junk id', () => {
+      Cookies.set('_ga', 'GA1.1')
+      expect(Analytics.getGaClientId()).toBeNull()
+    })
+
+    // GA4 reserves the ga_ prefix and silently drops matching params.
+    test('param name avoids GA4 reserved prefixes', () => {
+      expect(Analytics.OPEN_CID_PARAM).toBe('open_cid')
+      expect(Analytics.OPEN_CID_PARAM).not.toMatch(/^(_|ga_|google_|firebase_|gtag\.)/)
     })
   })
 

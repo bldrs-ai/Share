@@ -40,15 +40,14 @@ export function gtagEvent(eventName, parameters) {
  * The GA4 Data API exposes no user-id dimension, so per-user open
  * depth ("how many people opened exactly one model vs six or more")
  * can't be derived — only the eventCount ÷ totalUsers average. Sending
- * the client id as a `ga_cid` event param, with a matching
- * event-scoped custom dimension registered GA4-side (Admin → Custom
- * definitions → event parameter `ga_cid`), makes the distribution
- * queryable: customEvent:ga_cid × eventCount, bucketed client-side.
+ * the client id as the OPEN_CID_PARAM event param, with a matching
+ * event-scoped custom dimension registered GA4-side, makes the
+ * distribution queryable: customEvent:open_cid × eventCount, bucketed
+ * client-side.
  *
- * Null until gtag's async callback lands, and permanently null
- * wherever GA never initializes — off-prod, under automation, or on
- * blocked clients — so events simply omit the param there rather than
- * carrying a placeholder that would form its own bogus bucket. No
+ * Null wherever GA never initializes — off-prod, under automation, or
+ * on blocked clients — so events simply omit the param there rather
+ * than carrying a placeholder that would form its own bogus bucket. No
  * backfill: the dimension only accrues data from ship time forward.
  *
  * At much larger scale GA4 rolls high-cardinality dimension values
@@ -56,6 +55,22 @@ export function gtagEvent(eventName, parameters) {
  * BigQuery export.
  */
 let gaClientId = null
+
+
+/*
+ * NOT `ga_cid`: GA4 reserves the `ga_`, `google_`, `firebase_` and
+ * `gtag.` prefixes (plus a leading underscore) for event and parameter
+ * names, and silently disables anything that matches — the param would
+ * be dropped at ingestion with no error, leaving the custom dimension
+ * permanently empty.
+ */
+export const OPEN_CID_PARAM = 'open_cid'
+
+
+// Cookie GA writes the client id into, as `GA<version>.<domain depth>.<id>`
+// where the id itself contains a dot (GA1.1.1234567890.0987654321).
+const GA_COOKIE_NAME = '_ga'
+const GA_COOKIE_ID_OFFSET = 2
 
 
 /**
@@ -72,9 +87,42 @@ export function setGaClientId(cid) {
 }
 
 
-/** @return {string|null} GA4 client id, or null if unavailable */
+/**
+ * The client id from gtag's async `get` callback, falling back to the
+ * `_ga` cookie gtag/js writes synchronously on config.
+ *
+ * The fallback matters more than it looks: the callback only resolves
+ * after gtag/js loads, and any event fired before then still reaches
+ * GA4 (gtagEvent buffers into dataLayer, which gtag/js drains on load)
+ * — just without the param. That window sits at session start, so the
+ * losses would concentrate on each visitor's *first* open, which is
+ * exactly the "1 open" cohort this instrumentation exists to size.
+ *
+ * @return {string|null} GA4 client id, or null if unavailable
+ */
 export function getGaClientId() {
-  return gaClientId
+  return gaClientId ?? gaClientIdFromCookie()
+}
+
+
+/** @return {string|null} client id parsed from the `_ga` cookie */
+function gaClientIdFromCookie() {
+  const raw = Cookies.get(GA_COOKIE_NAME)
+  if (!raw) {
+    return null
+  }
+  const parts = raw.split('.')
+  if (parts.length <= GA_COOKIE_ID_OFFSET) {
+    return null
+  }
+  const cid = parts.slice(GA_COOKIE_ID_OFFSET).join('.')
+  return cid.length > 0 ? cid : null
+}
+
+
+/** Test-only reset for the captured client id. */
+export function _resetGaClientIdForTests() {
+  gaClientId = null
 }
 
 

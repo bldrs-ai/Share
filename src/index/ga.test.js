@@ -1,5 +1,6 @@
+import Cookies from 'js-cookie'
 import {captureException} from '@sentry/react'
-import {getGaClientId} from '../privacy/analytics'
+import {_resetGaClientIdForTests, getGaClientId} from '../privacy/analytics'
 import setupGa, {GA_MEASUREMENT_ID, shouldInitGa} from './ga'
 
 
@@ -14,6 +15,10 @@ function findGtagScript() {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  _resetGaClientIdForTests()
+  // getGaClientId falls back to this cookie; clear it so the assertions
+  // below see only what setupGa's callback provides.
+  Cookies.remove('_ga')
   document.head.querySelectorAll('script').forEach((s) => s.remove())
   // Mirror the inline bootstrap index.html declares before the bundle.
   window.dataLayer = []
