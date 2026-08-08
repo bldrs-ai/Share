@@ -23,7 +23,9 @@ jobs:
     # is chosen so screenshot baselines regenerated in the dev/sandbox env
     # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
-    timeout-minutes: 20
+    # Headroom for the reduced worker count below: the suite took 12.8m at 3
+    # workers on this runner, so 20 left no margin at 2.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -45,14 +47,20 @@ jobs:
         run: npx playwright --version
 
       # Worker count is tied to `runs-on` above, and overrides the local
-      # default in tools/playwright.config.js. Keep it at or below the
-      # runner's vCPU count minus one: each worker drives its own Chromium
-      # alongside the shared static server, and oversubscribing shows up as
-      # timing flake in click/visibility waits rather than as honest
-      # failures. 6 workers on this 4-vCPU runner did exactly that — update
-      # this number whenever the runner size changes.
+      # default in tools/playwright.config.js. Update it whenever the runner
+      # changes size.
+      #
+      # RAM is the binding constraint here, not vCPU: this runner has 8GB
+      # against the previous runner's 32GB, and every worker holds a whole
+      # Chromium rendering a WebGL scene with the conway wasm heap resident.
+      # Starvation shows up as click/visibility timeouts and as
+      # `#viewer-container` never mounting at all — not as honest assertion
+      # failures — so it reads like flake. Measured on this runner:
+      # 6 workers => 53 failed / 81 passed (the state main landed in at
+      # 6df8de7), 3 workers => 4 failed / 134 passed. 2 is the next step
+      # down, and matches Playwright's own default heuristic of vCPU/2.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=3
+        run: yarn test-flows --reporter=github,list,html --workers=2
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
