@@ -32,7 +32,7 @@ There is no "verification-only" build of the script. The snippet for verificatio
   - Because the safeguard lives outside the repo, the repo's only reliable defense is **not loading the script on routes that must stay ad-free**. Treat the dashboard toggle as a second layer, not the first.
 - **Viewer routes never carry `<ins>` slots.** Specifically `/`, `/share/*`, and any model-editing UI. Slots are limited to text-heavy routes (`/about`, `/privacy`, `/tos`, `/blog/*`).
 - **Tests stay hermetic.** No live ad traffic during Jest or Playwright runs. See "Test hermeticity" below.
-- **Consent matches GTM today.** The script loads unconditionally on every page, same as `googletagmanager.com/gtag/js`. The existing `isAnalyticsAllowed` cookie (`src/privacy/analytics.js:6`) gates *gtag event calls*, not script loading — mirror that for ads. A future iteration can gate the script itself if EU consent rules force it; `isAnalyticsAllowed` is the foothold.
+- **Consent matches GTM today.** The AdSense script loads unconditionally on every page. (`googletagmanager.com/gtag/js` used to as well, but is now injected only on prod hosts by `src/index/ga.js` — analytics hygiene, not consent.) The existing `isAnalyticsAllowed` cookie (`src/privacy/analytics.js:6`) gates *gtag event calls*, not script loading — mirror that for ads. A future iteration can gate the script itself if EU consent rules force it; `isAnalyticsAllowed` is the foothold.
 
 
 ## Incident: unintended Auto ads (2026-05 → 2026-07)
