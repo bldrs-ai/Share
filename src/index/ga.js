@@ -1,6 +1,9 @@
 import {captureException} from '@sentry/react'
 
 
+// Must match the ID in public/index.html's inline gtag('config') stub —
+// the stub routes buffered events to the property, this constant only
+// fetches the loader. A property migration has to update both.
 export const GA_MEASUREMENT_ID = 'G-GRLNVMZRGW'
 
 // Apex is canonical; www is included in case a client renders before

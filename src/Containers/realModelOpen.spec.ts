@@ -1,4 +1,5 @@
 import {Page, expect, test} from '@playwright/test'
+import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -41,7 +42,7 @@ async function realModelOpenEvents(page: Page): Promise<{name: string, contentId
  * conversion bidding — hence the guarded, separately-named event
  * (CadView#loadModel + analytics#isRealModelOpen).
  */
-test.describe('real_model_open GA event', () => {
+describeMobileAndDesktop('real_model_open GA event', () => {
   test.beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())

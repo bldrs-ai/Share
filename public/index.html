@@ -48,7 +48,8 @@
     <!-- gtag stub only: buffers events into dataLayer everywhere (gtagEvent
          calls + E2E assertions rely on it). The external gtag/js loader is
          injected by src/index/ga.js, and only on prod hosts outside
-         automation — keeps preview/dev/CI traffic out of prod analytics. -->
+         automation — keeps preview/dev/CI traffic out of prod analytics.
+         The config ID below must match ga.js#GA_MEASUREMENT_ID. -->
     <script type="application/javascript">
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}

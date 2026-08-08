@@ -51,13 +51,15 @@ export function gtagEvent(eventName, parameters) {
  * and isUploadedFile comes back false — upload filepaths are
  * UUID-derived, never 'index.ifc'.
  *
- * Also false on Netlify deploy hosts (*.netlify.app): deploy previews,
- * branch deploys and the bldrs-share-dev site all serve the production
- * index.html with the prod GA tag baked in, so team review sessions on
- * a PR preview would otherwise register as conversions. Production is
- * bldrs.ai; localhost stays included because the Playwright E2E suite
- * (realModelOpen.spec.ts) asserts against dataLayer on localhost and
- * the googletagmanager script is blocked there anyway.
+ * Also false on Netlify deploy hosts (*.netlify.app), so team review
+ * sessions on a PR preview don't register as conversions. This is
+ * deliberate defense-in-depth behind index/ga.js#shouldInitGa, whose
+ * prod-hostname allowlist already keeps gtag/js from loading off-prod
+ * at all. The two predicates differ on purpose and can't be merged:
+ * localhost must stay *included* here because the Playwright E2E suite
+ * (realModelOpen.spec.ts) asserts this event lands in the dataLayer
+ * buffer on localhost, while shouldInitGa excludes localhost from
+ * loading GA entirely.
  *
  * @param {object} routeResult from routes.ts#handleRoute
  * @param {string} hostname current page host; parameterized for tests
