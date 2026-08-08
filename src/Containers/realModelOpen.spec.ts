@@ -23,15 +23,19 @@ const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * before they cross the evaluate boundary.
  *
  * @param page Playwright page object
- * @return Array of {name, contentId} for each real_model_open event
+ * @return Array of {name, contentId, hasOpenCid} for each real_model_open event
  */
-async function realModelOpenEvents(page: Page): Promise<{name: string, contentId: string}[]> {
+async function realModelOpenEvents(page: Page): Promise<{name: string, contentId: string, hasOpenCid: boolean}[]> {
   return await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataLayer: any[] = (window as any).dataLayer || []
     return dataLayer
       .filter((entry) => entry?.[0] === 'event' && entry?.[1] === 'real_model_open')
-      .map((entry) => ({name: String(entry[1]), contentId: String(entry[2]?.content_id ?? '')}))
+      .map((entry) => ({
+        name: String(entry[1]),
+        contentId: String(entry[2]?.content_id ?? ''),
+        hasOpenCid: entry[2]?.open_cid !== undefined,
+      }))
   })
 }
 
@@ -66,5 +70,11 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     const events = await realModelOpenEvents(page)
     expect(events).toHaveLength(1)
     expect(events[0].contentId).toContain('box.ifc')
+    // open_cid comes from gtag's client_id callback or the _ga cookie,
+    // neither of which exists here: index/ga.js skips the loader
+    // off-prod and under automation, so nothing ever writes them. The
+    // param must be absent rather than empty, so it can't form its own
+    // bucket in GA4.
+    expect(events[0].hasOpenCid).toBe(false)
   })
 })
