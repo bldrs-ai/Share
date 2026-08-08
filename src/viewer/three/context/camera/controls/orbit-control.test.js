@@ -10,6 +10,17 @@ const DEFAULT_MIN_DISTANCE = 1
 const DEFAULT_MAX_DISTANCE = 300
 /** Edge length of the stand-in model, in scene units. */
 const MODEL_SIZE = 1000
+/**
+ * Edge length of a millimetre-scale STEP part, in scene units: the 50 mm
+ * `data/create-a-tube.step` from #1742, at the true size conway#458 gives it.
+ */
+const SMALL_MODEL_SIZE = 0.05
+/**
+ * Digits of agreement for the scale-invariance quotients. Bounded by float32,
+ * not by the math: the bounds come off BoxGeometry's Float32Array positions,
+ * so the two cubes aren't exactly 20000x apart to begin with.
+ */
+const PRECISION = 6
 
 
 /**
@@ -73,6 +84,46 @@ describe('viewer/three/context/camera/controls/orbit-control', () => {
       // model clips against the far plane at full zoom-out.
       expect(camera.far).toBeGreaterThan(controls.maxDistance + sphere.radius)
       expect(camera.near).toBeLessThan(controls.minDistance)
+    })
+
+    // Regression for #1742: the near plane used to be floored at an absolute
+    // 0.1 scene units, which sits inside any part smaller than a couple of
+    // metres — zooming in clipped it, and past 0.1 it vanished.
+    it('keeps the near plane inside a millimetre-scale part', () => {
+      const {control, camera, controls} = makeControl(sceneWithCube(SMALL_MODEL_SIZE))
+
+      const sphere = control.fitCameraLimitsToModel()
+
+      expect(sphere).not.toBeNull()
+      // The closest the user can dolly still has to sit outside the near
+      // plane, or the last bit of zoom eats the model.
+      expect(camera.near).toBeGreaterThan(0)
+      expect(camera.near).toBeLessThan(controls.minDistance)
+      // And the near plane has to be small against the part itself, not
+      // merely small against the old constant.
+      expect(camera.near).toBeLessThan(SMALL_MODEL_SIZE)
+    })
+
+    // The other half of #1742: the frustum has to be scale-invariant, not just
+    // "small enough" at one size. Guards the near/far ratio that drives depth
+    // precision at both extremes the issue calls out.
+    it('scales the whole frustum with the model rather than pinning a constant', () => {
+      const big = makeControl(sceneWithCube(MODEL_SIZE))
+      const small = makeControl(sceneWithCube(SMALL_MODEL_SIZE))
+
+      big.control.fitCameraLimitsToModel()
+      small.control.fitCameraLimitsToModel()
+
+      // Same rig, same shape, 20000x apart in size — so each shape ratio
+      // should agree. Compared as a quotient against 1 so the tolerance is
+      // relative: these quantities are themselves 20000x apart in magnitude,
+      // and toBeCloseTo's tolerance is absolute.
+      const agree = (smallValue, bigValue) =>
+        expect(smallValue / bigValue).toBeCloseTo(1, PRECISION)
+      agree(small.camera.far / small.camera.near, big.camera.far / big.camera.near)
+      agree(small.camera.near / small.controls.minDistance,
+        big.camera.near / big.controls.minDistance)
+      agree(small.camera.near / SMALL_MODEL_SIZE, big.camera.near / MODEL_SIZE)
     })
 
     it('does not move the camera', () => {

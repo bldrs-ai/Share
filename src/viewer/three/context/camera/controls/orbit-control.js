@@ -18,8 +18,27 @@ const MIN_DISTANCE_FACTOR = 0.01
 const MAX_DISTANCE_HEADROOM = 10
 /** Far plane must clear the whole zoom-out range plus the model. */
 const FAR_PLANE_SLACK = 1.5
-/** Floor for the near plane, in scene units. */
-const MIN_NEAR = 0.1
+/**
+ * Floor for the near plane, as a fraction of the framing radius. Inert at
+ * the current MIN_DISTANCE_FACTOR — the derived near below works out to at
+ * least 0.005·radius — but it keeps the floor model-relative if the dolly
+ * range is ever retuned tighter, so depth precision degrades with the model
+ * rather than with the scene's unit of measure.
+ */
+const NEAR_RADIUS_FRACTION = 0.001
+/**
+ * Absolute backstop under that, only to keep the near plane off zero and out
+ * of denormal range for a degenerate bounding sphere.
+ *
+ * This replaces a flat 0.1-scene-unit floor (#1742), which sat *inside* any
+ * part smaller than a couple of metres. Latent until conway#458 stopped
+ * scaling millimetre STEP files by the reciprocal of their unit factor: a
+ * 50 mm part that used to arrive as 50 km now arrives at its true size, with
+ * minDistance ≈ 0.0024, so the old floor clipped it as you zoomed and ate it
+ * entirely past 0.1. IFC never tripped it — building-scale geometry sits well
+ * above the floor.
+ */
+const ABSOLUTE_MIN_NEAR = 1e-6
 const HALF = 0.5
 
 
@@ -136,7 +155,14 @@ export class OrbitControl extends IfcComponent {
     // far must clear the pulled-back camera (maxDistance + model radius), near
     // must stay inside the closest dolly. Without this, zooming out on a large
     // model would clip it against the old far = 2000 plane.
-    camera.near = Math.max(controls.minDistance * HALF, MIN_NEAR)
+    //
+    // Every term here is derived from the model, so the frustum scales with it
+    // the way minDistance/maxDistance/far already do — see ABSOLUTE_MIN_NEAR
+    // for why the floor stopped being an absolute constant (#1742).
+    camera.near = Math.max(
+      controls.minDistance * HALF,
+      sphere.radius * NEAR_RADIUS_FRACTION,
+      ABSOLUTE_MIN_NEAR)
     camera.far = (controls.maxDistance + sphere.radius) * FAR_PLANE_SLACK
     camera.updateProjectionMatrix()
 
