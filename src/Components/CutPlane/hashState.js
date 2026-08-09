@@ -5,7 +5,7 @@ import {
   getHashParams as utilsGetHashParams,
   removeHashParams as utilsRemoveHashParams,
 } from '../../utils/location'
-import {floatStrTrim, isNumeric} from '../../utils/strings'
+import {isNumeric} from '../../utils/strings'
 import {getPlanesOffset} from './CutPlaneMenu'
 
 
@@ -68,7 +68,11 @@ export function getPlanesFromHash(planeHash) {
     } else {
       planes.push({
         direction: key,
-        offset: floatStrTrim(value),
+        // parseFloat, not floatStrTrim: 3-decimal rounding on read
+        // collapses a millimetre part's offsets to 0. Kept in step with
+        // the near-identical CutPlaneMenu#getPlanes, which is the copy
+        // the app actually calls -- these two want deduplicating.
+        offset: parseFloat(value),
       })
     }
     if (removableParamKeys.length) {
