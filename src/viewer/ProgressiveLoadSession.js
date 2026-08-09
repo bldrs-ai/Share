@@ -1,6 +1,7 @@
-import {Box3, Group, MathUtils, Sphere, Vector3} from 'three'
+import {Box3, Group, Sphere, Vector3} from 'three'
 import {setLoadSummary} from '../loader/loadProgress'
 import debug, {WARN} from '../utils/debug'
+import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from './three/cameraLimits'
 import {ElementBoxes, robustBoundsFromElements} from './three/robustBounds'
 
 
@@ -14,19 +15,12 @@ export const SessionState = Object.freeze({
 })
 
 
-/** Bounding-sphere margin applied when framing the preview. */
-const FRAMING_MARGIN = 1.5
 /** Minimum gap between two follow refits (also the starting cadence). */
 const CAMERA_FOLLOW_MIN_MS = 250
 /** The cadence cap the exponential growth converges to. */
 const CAMERA_FOLLOW_MAX_MS = 1000
 /** Per-refit cadence growth factor. */
 const CAMERA_FOLLOW_GROWTH = 1.5
-const HALF = 0.5
-/** Far plane must clear the whole zoom-out range plus the model. */
-const FAR_PLANE_SLACK = 1.5
-/** Zoom-out headroom over the fit distance (mirrors fitModelToFrame). */
-const MAX_DISTANCE_HEADROOM = 10
 /** Box corner count for the sphere-containment test. */
 const BOX_CORNERS = 8
 /**
@@ -476,28 +470,25 @@ export default class ProgressiveLoadSession {
       this.lastFitMs = Date.now()
       return
     }
-    const vFov = MathUtils.degToRad(camera.fov)
-    const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
-    const limitingFov = camera.aspect > 1 ? vFov : hFov
-    const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
     // camera-controls clamps every dolly to [minDistance, maxDistance],
-    // and the activation default is maxDistance = 300 scene units — on
-    // any model whose fit distance exceeds that, fitToSphere silently
-    // parks the camera at the clamp and the model overflows the window.
-    // Scale the zoom-out range with the growing union exactly like the
-    // final fitModelToFrame does (10x headroom), only ever outward —
-    // the union is monotonic, so the range never needs to shrink
-    // mid-follow and the final fit re-derives it anyway.
-    const wantMaxDistance = fitDistance * MAX_DISTANCE_HEADROOM
-    if (typeof controls.maxDistance === 'number' &&
-        controls.maxDistance < wantMaxDistance) {
-      controls.maxDistance = wantMaxDistance
-    }
-    const wantFar = (wantMaxDistance + sphere.radius) * FAR_PLANE_SLACK
-    if (camera.far < wantFar) {
-      camera.far = wantFar
-      camera.updateProjectionMatrix()
-    }
+    // and the OrbitControl activation defaults are minDistance 1 /
+    // maxDistance 300 with near 1. Both ends bite, in opposite
+    // directions and at opposite scales:
+    //
+    //  - large model: fit distance exceeds maxDistance 300, so
+    //    fitToSphere parks at the clamp and the model overflows;
+    //  - sub-metre model: fit distance is under minDistance 1, so
+    //    fitToSphere parks *too far out* and the model is a speck, while
+    //    near = 1 sits beyond it entirely and clips it in half.
+    //
+    // The follow used to grow only maxDistance and far, so the second
+    // case went unhandled until the end-of-load fit corrected it — read
+    // as the model "resizing during load". Derive the whole set from the
+    // same place the final fit does; growOnly keeps the outward range
+    // monotonic (the union only grows, and a shrinking range would pop
+    // the projection between refits) while letting minDistance and near
+    // come down off the defaults.
+    applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
     controls.fitToSphere(sphere, withTransition)
     this.fittedSphere = sphere
     this.overflowPending = false

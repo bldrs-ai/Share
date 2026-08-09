@@ -1,5 +1,6 @@
 import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Vector3} from 'three'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
+import {fitDistanceForRadius} from './three/cameraLimits'
 
 
 /* eslint-disable no-magic-numbers */
@@ -53,6 +54,10 @@ function makeCamera() {
   return {
     fov: 45,
     aspect: 1.5,
+    // The IfcCamera constructor defaults. `near: 1` matters as much as
+    // the controls' minDistance: on a sub-metre model it sits beyond the
+    // whole thing, so the follow must bring it down (see cameraLimits).
+    near: 1,
     far: 100,
     updateProjectionMatrix() {/* no-op */},
   }
@@ -196,6 +201,75 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(0)
     pinned.finish()
   })
+
+  describe('camera limits during the stream', () => {
+    /**
+     * Assert the follow left the camera able to actually reach the pose
+     * it asked for, and with the model inside the frustum.
+     *
+     * @param {object} fitted the sphere handed to fitToSphere
+     */
+    const expectReachableFit = (fitted) => {
+      const wantDistance = fitDistanceForRadius(camera, fitted.radius)
+      // fitToSphere dollies are clamped to [minDistance, maxDistance]. If
+      // the distance it wants falls outside, the camera silently parks at
+      // the clamp instead and the model is mis-sized.
+      expect(wantDistance).toBeGreaterThan(controls.minDistance)
+      expect(wantDistance).toBeLessThan(controls.maxDistance)
+      // Near must sit inside the model, not beyond it, or it clips.
+      expect(camera.near).toBeLessThan(wantDistance - fitted.radius)
+    }
+
+    it('brings minDistance and near DOWN for a sub-metre model', () => {
+      // Arty_Z7.stp is a true-scale millimetre PCB, ~0.1 scene units
+      // across. The follow used to grow only maxDistance and far, leaving
+      // minDistance and near at the activation default of 1 -- ten times
+      // the whole board. fitToSphere then clamped to minDistance so the
+      // board rendered tiny, and near=1 sat beyond it so it rendered
+      // half-clipped, until the end-of-load fit corrected both. That
+      // correction is what read as "resizing during load".
+      session.notifyBounds(
+        new Box3().setFromCenterAndSize(new Vector3(0, 0, 0), new Vector3(0.1, 0.1, 0.02)))
+
+      const fitted = controls.fits[0]
+      expect(fitted).toBeDefined()
+      expect(controls.minDistance).toBeLessThan(1)
+      expect(camera.near).toBeLessThan(1)
+      expectReachableFit(fitted)
+    })
+
+    it('grows maxDistance and far UP for a model past the defaults', () => {
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+
+      const fitted = controls.fits[controls.fits.length - 1]
+      expect(controls.maxDistance).toBeGreaterThan(300)
+      expect(camera.far).toBeGreaterThan(100)
+      expectReachableFit(fitted)
+    })
+
+    it('never shrinks the outward range between refits', () => {
+      // growOnly: the union is monotonic, and letting maxDistance/far
+      // fall back mid-load would pop the projection between refits.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const wideMax = controls.maxDistance
+      const wideFar = camera.far
+
+      // A refit whose robust bounds are no larger must not pull them in.
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.fittedSphere = null
+      session.maybeRefit_()
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(controls.maxDistance).toBeGreaterThanOrEqual(wideMax)
+      expect(camera.far).toBeGreaterThanOrEqual(wideFar)
+    })
+  })
+
 
   describe('robust framing during the stream', () => {
     // Enough instances for the robust criterion to have statistics —

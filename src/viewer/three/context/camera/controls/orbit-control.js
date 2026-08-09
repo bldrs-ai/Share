@@ -2,45 +2,11 @@
 // `web-ifc-viewer/dist/components/context/camera/controls/orbit-control.js`
 // in slice 5d.3.
 
-import {MathUtils, Sphere, Vector3} from 'three'
+import {Sphere, Vector3} from 'three'
 import {IfcComponent, NavigationModes} from '../../base-types'
 import {LiteEvent} from '../../LiteEvent'
 import {robustBoundsFor} from '../../../robustBounds'
-
-
-// Leave ~1/3 of the canvas as whitespace (≈1/6 per side): inflate the
-// framed sphere so the model fills ~2/3 of the viewport rather than
-// sitting edge-to-edge.
-const FRAMING_MARGIN = 1.5
-/** Zoom-in limit as a fraction of the fit distance. */
-const MIN_DISTANCE_FACTOR = 0.01
-/** Zoom-out headroom over the fit distance. */
-const MAX_DISTANCE_HEADROOM = 10
-/** Far plane must clear the whole zoom-out range plus the model. */
-const FAR_PLANE_SLACK = 1.5
-/**
- * Floor for the near plane, as a fraction of the framing radius. Inert at
- * the current MIN_DISTANCE_FACTOR — the derived near below works out to at
- * least 0.005·radius — but it keeps the floor model-relative if the dolly
- * range is ever retuned tighter, so depth precision degrades with the model
- * rather than with the scene's unit of measure.
- */
-const NEAR_RADIUS_FRACTION = 0.001
-/**
- * Absolute backstop under that, only to keep the near plane off zero and out
- * of denormal range for a degenerate bounding sphere.
- *
- * This replaces a flat 0.1-scene-unit floor (#1742), which sat *inside* any
- * part smaller than a couple of metres. Latent until conway#458 (PR
- * conway#460, shipped in 1.460.1363) stopped scaling millimetre STEP files
- * by the reciprocal of their unit factor: a
- * 50 mm part that used to arrive as 50 km now arrives at its true size, with
- * minDistance ≈ 0.0024, so the old floor clipped it as you zoomed and ate it
- * entirely past 0.1. IFC never tripped it — building-scale geometry sits well
- * above the floor.
- */
-const ABSOLUTE_MIN_NEAR = 1e-6
-const HALF = 0.5
+import {FRAMING_MARGIN, applyCameraLimits, cameraLimitsForSphere} from '../../../cameraLimits'
 
 
 export class OrbitControl extends IfcComponent {
@@ -123,22 +89,8 @@ export class OrbitControl extends IfcComponent {
     }
     sphere.radius *= FRAMING_MARGIN
 
-    // Distance camera-controls will dolly to for `sphere`, mirroring its
-    // getDistanceToFitSphere (radius / sin(½·limitingFOV); the limiting FOV is
-    // the narrower of the two axes). Computed here so the zoom limits below
-    // scale with the model instead of the old hardcoded cap.
     const camera = this.ifcCamera.perspectiveCamera
-    const vFov = MathUtils.degToRad(camera.fov)
-    const hFov = Math.atan(Math.tan(vFov * HALF) * camera.aspect) * 2
-    const limitingFov = camera.aspect > 1 ? vFov : hFov
-    const fitDistance = sphere.radius / Math.sin(limitingFov * HALF)
-
     const controls = this.ifcCamera.cameraControls
-    // Allow zooming out to 10x the fit distance (model shrinks to ~1/10 of the
-    // canvas) and well in. Replaces the hardcoded maxDistance = 300 that
-    // clamped fitToSphere on large models — pinning the camera too close and
-    // capping zoom-out before the whole model was visible.
-    controls.minDistance = fitDistance * MIN_DISTANCE_FACTOR
     // Never pull the range in under where the camera already sits —
     // `setPosition` doesn't clamp, but the first dolly afterwards does,
     // so a shrinking range would snap the camera inwards on the user's
@@ -150,22 +102,10 @@ export class OrbitControl extends IfcComponent {
     // by the 10x headroom instead — the same bound the link's own
     // maxDistance had when the link was created.
     const currentDistance = Number.isFinite(controls.distance) ? controls.distance : 0
-    controls.maxDistance = Math.max(fitDistance * MAX_DISTANCE_HEADROOM, currentDistance)
-
-    // Keep the model between the near/far planes across the whole zoom range:
-    // far must clear the pulled-back camera (maxDistance + model radius), near
-    // must stay inside the closest dolly. Without this, zooming out on a large
-    // model would clip it against the old far = 2000 plane.
-    //
-    // Every term here is derived from the model, so the frustum scales with it
-    // the way minDistance/maxDistance/far already do — see ABSOLUTE_MIN_NEAR
-    // for why the floor stopped being an absolute constant (#1742).
-    camera.near = Math.max(
-      controls.minDistance * HALF,
-      sphere.radius * NEAR_RADIUS_FRACTION,
-      ABSOLUTE_MIN_NEAR)
-    camera.far = (controls.maxDistance + sphere.radius) * FAR_PLANE_SLACK
-    camera.updateProjectionMatrix()
+    // Shared with the streaming camera follow — see cameraLimits.js for
+    // why both fits must derive the whole set from one place.
+    applyCameraLimits(
+      camera, controls, cameraLimitsForSphere(camera, sphere, currentDistance))
 
     return sphere
   }
