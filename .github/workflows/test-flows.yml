@@ -23,8 +23,11 @@ jobs:
     # is chosen so screenshot baselines regenerated in the dev/sandbox env
     # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
-    # Headroom for the reduced worker count below: the suite took 12.8m at 3
-    # workers on this runner, so 20 left no margin at 2.
+    # Headroom, not a fitted bound: a clean run at the worker count below
+    # measured 11.7m on this runner. The margin is for the degraded case --
+    # a starved run burns far longer than a healthy one because each failure
+    # drags a 30s timeout plus a retry behind it (the 3-worker run with 4
+    # failures took 12.8m, and main's 53-failure run took 14.4m).
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
@@ -57,8 +60,8 @@ jobs:
       # `#viewer-container` never mounting at all — not as honest assertion
       # failures — so it reads like flake. Measured on this runner:
       # 6 workers => 53 failed / 81 passed (the state main landed in at
-      # 6df8de7), 3 workers => 4 failed / 134 passed. 2 is the next step
-      # down, and matches Playwright's own default heuristic of vCPU/2.
+      # 6df8de7), 3 workers => 4 failed / 134 passed, 2 workers => green in
+      # 11.7m. 2 also matches Playwright's own default heuristic of vCPU/2.
       - name: Run Playwright tests
         run: yarn test-flows --reporter=github,list,html --workers=2
 
