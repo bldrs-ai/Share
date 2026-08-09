@@ -105,6 +105,47 @@ export function getGaClientId() {
 }
 
 
+/*
+ * Tag prefixing the client id in the OPEN_CID_PARAM value, so the value
+ * can never be read as a number.
+ *
+ * A raw client id is numeric-looking by construction
+ * ("1871520000.1754700000"), and gtag classifies each event param as
+ * text or numeric when it builds the collect beacon — numeric-looking
+ * values go out as `epn.` (number) instead of `ep.` (text). Landing in
+ * the numeric slot has two consequences, both observed in the GA4 UI as
+ * a value rendered "1.87152e+09":
+ *
+ *   1. float64 holds ~15-17 significant digits against the id's 20, so
+ *      "1871520000.1754700000" truncates to 1871520000.17547 and
+ *      distinct clients silently collide — fatal for a per-user count.
+ *   2. An event-scoped custom *dimension* (text) doesn't populate from
+ *      a numeric param at all.
+ *
+ * The same coercion bites downstream of GA4 too: any CSV/Sheets export
+ * of a bare id re-parses it to a float on open.
+ *
+ * A non-digit prefix removes the ambiguity everywhere at once. It makes
+ * the value opaque rather than joinable against a raw client id, which
+ * this metric doesn't need — it only ever counts events per distinct
+ * value.
+ */
+const OPEN_CID_PREFIX = 'cid.'
+
+
+/**
+ * The OPEN_CID_PARAM value for the current client: the client id
+ * tagged so GA4 stores it as text. Null when no id is available, in
+ * which case callers must omit the param rather than send a blank.
+ *
+ * @return {string|null}
+ */
+export function getOpenCid() {
+  const cid = getGaClientId()
+  return cid === null ? null : `${OPEN_CID_PREFIX}${cid}`
+}
+
+
 /** @return {string|null} client id parsed from the `_ga` cookie */
 function gaClientIdFromCookie() {
   const raw = Cookies.get(GA_COOKIE_NAME)
