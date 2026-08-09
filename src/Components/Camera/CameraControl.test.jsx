@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import React from 'react'
 import {__getShareViewerMockSingleton} from '../../../__mocks__/shareViewerTestHarness'
 import {act, render, renderHook, screen} from '@testing-library/react'
@@ -23,6 +24,21 @@ describe('CameraControl', () => {
 
   it('parseHashParams, 6 params', () => {
     expect(parseHashParams(`${HASH_PREFIX_CAMERA}:1,2,3,4,5,6`)).toStrictEqual([1, 2, 3, 4, 5, 6])
+  })
+
+  it('parseHashParams keeps sub-millimetre precision', () => {
+    // Read used to re-round to 3 decimals via floatStrTrim, which undid
+    // the write-side precision and parsed a small part's camera back to
+    // the origin however carefully it had been serialized.
+    expect(parseHashParams(`${HASH_PREFIX_CAMERA}:0.00042,0.00013,0.00021`))
+      .toStrictEqual([0.00042, 0.00013, 0.00021])
+  })
+
+  it('parseHashParams accepts exponential notation', () => {
+    // String(1e-7) is '1e-7' -- reachable on a sub-millimetre part, and
+    // rejected outright by the pre-fix grammar.
+    expect(parseHashParams(`${HASH_PREFIX_CAMERA}:1e-7,-2.5e-8,3E+2`))
+      .toStrictEqual([1e-7, -2.5e-8, 300])
   })
 
   it('CameraControl', async () => {
