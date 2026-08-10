@@ -28,6 +28,12 @@ const BOX_CORNERS = 8
  * are skipped — see maybeRefit_. Fraction of the fitted radius.
  */
 const REFIT_EPSILON_FRACTION = 0.01
+/**
+ * How much larger than necessary the framed volume must be before the
+ * timer reclaims it. See isOverframed_ — this exists to recover from a
+ * stray that inflated the frame, not to track ordinary growth.
+ */
+const OVERFRAME_FACTOR = 4
 
 
 /**
@@ -425,13 +431,50 @@ export default class ProgressiveLoadSession {
   }
 
 
+  /**
+   * Has the framed volume become far larger than the geometry needs?
+   *
+   * Refits fire on OVERFLOW only, which is one-directional: the frame can
+   * grow but never come back. One stray that inflates the framing sphere
+   * is therefore permanent for the rest of the load — every later mesh
+   * lands inside the inflated sphere, so nothing ever overflows and no
+   * refit is requested. Observed on Snowdon: a fit jumped to radius
+   * 318751 at 503 preview meshes, and the following 650 meshes produced
+   * no fit at all while the model sat on screen as a sub-pixel speck.
+   *
+   * The factor is deliberately coarse. Normal growth is already handled
+   * by overflow, so this only has to catch the pathological case, and a
+   * tight threshold would re-fit on ordinary variation — which is the
+   * camera thrash the strict-fit design exists to avoid.
+   *
+   * @return {boolean}
+   */
+  isOverframed_() {
+    if (this.fittedSphere === null) {
+      return false
+    }
+    const bounds = robustBoundsFromElements([this.previewBoxes, this.streamedBoxes])
+    if (bounds === null || bounds.box.isEmpty()) {
+      return false
+    }
+    const sphere = new Sphere()
+    bounds.box.getBoundingSphere(sphere)
+    if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
+      return false
+    }
+    // fittedSphere already carries FRAMING_MARGIN; apply it to the raw
+    // radius so the comparison is like-for-like.
+    return this.fittedSphere.radius > sphere.radius * FRAMING_MARGIN * OVERFRAME_FACTOR
+  }
+
+
   /** Timer backstop for overflows that landed inside the refit gap. */
   followTick_() {
     this.followTimer = null
     if (this.followStopped) {
       return
     }
-    if (this.overflowPending) {
+    if (this.overflowPending || this.isOverframed_()) {
       try {
         this.fitUnionToFrame_(true)
       } catch (e) {
@@ -507,14 +550,19 @@ export default class ProgressiveLoadSession {
     // come down off the defaults.
     applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
     // One line per actual camera move (throttled 250ms -> 1s, so a
-    // handful per load). A centre that jumps between fits is the preview
-    // group being relocated under the camera; a radius that explodes is
-    // a stray dragging the frame out.
+    // handful per load). A radius that explodes means the stray filter
+    // let something through, so report its decision inline: excluded=0
+    // with a huge radius means robustBounds returned the EXACT box, i.e.
+    // it refused to filter (over MAX_EXCLUDED_FRACTION, or the fences
+    // never computed) rather than that there was nothing to exclude.
     // eslint-disable-next-line no-console
     console.info(
       `[progressive] fit: centre=(${sphere.center.x.toFixed(2)}, ` +
       `${sphere.center.y.toFixed(2)}, ${sphere.center.z.toFixed(2)}) ` +
-      `radius=${sphere.radius.toFixed(3)} previewMeshes=${this.previewMeshCount}`)
+      `radius=${sphere.radius.toFixed(3)} previewMeshes=${this.previewMeshCount} ` +
+      `excluded=${bounds.excludedElements ?? 0}/${bounds.totalElements ?? 0}elem ` +
+      `${bounds.excludedVertices ?? 0}/${bounds.totalVertices ?? 0}vert ` +
+      `strayDist=${bounds.maxDistance === undefined ? 'n/a' : bounds.maxDistance.toFixed(0)}`)
     controls.fitToSphere(sphere, withTransition)
     this.fittedSphere = sphere
     this.overflowPending = false
