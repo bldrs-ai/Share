@@ -197,12 +197,12 @@ export default class ShareIfcLoader {
       const usePreview = session.previewGroup !== null
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
-      // One origin-recenter frame for BOTH streaming paths. The preview
-      // meshes and the incremental durable batches are on screen at the
-      // same time, so each deciding its own frame puts them in different
-      // places — on a georeferenced model (Revit site coordinates) the
-      // builder recentred and the previews did not, stranding the
-      // previews ~200km out and dragging the camera follow with them.
+      // One origin-recenter frame for BOTH streaming paths, decided by
+      // the durable builder alone; previews read it and render
+      // unrecentred until the first durable batch lands. The preview
+      // channel is the unreliable half (conway#465 emitted payloads
+      // whose placement never resolved), so it must never decide where
+      // the durable model renders.
       const coordination = {offset: undefined}
 
       // Identify the geometry that drags the camera follow off the model.

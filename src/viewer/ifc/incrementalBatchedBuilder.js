@@ -81,10 +81,11 @@ export class IncrementalBatchedBuilder {
     // placement decides it; then `[x,y,z]` (subtracted from every
     // instance) or null (no-op).
     //
-    // Shared with the parse-time preview path when the caller passes one:
-    // both render simultaneously while a model streams, so a frame the
-    // two don't agree on puts the preview where the real model never
-    // goes. That is what made Snowdon invisible during load.
+    // Shared with the parse-time preview path when the caller passes
+    // one, and THIS BUILDER IS THE ONLY WRITER: the preview channel can
+    // emit payloads whose placement never resolved (conway#465), so the
+    // frame must be decided by the durable stream's first placement —
+    // the authoritative one — and previews only read it.
     this.coordination = opts.coordination ?? {offset: undefined}
     // Lazily created per transparency: see ensureBatch_.
     this.opaque = null

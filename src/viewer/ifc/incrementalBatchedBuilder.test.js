@@ -201,11 +201,13 @@ describe('IncrementalBatchedBuilder', () => {
     expect(builder.root.userData.coordinationOffset).toBeUndefined()
   })
 
-  it('shares one recentre frame with the preview path', () => {
+  it('shares one recentre frame with the preview path, builder deciding', () => {
     // The two stream onto the screen together, so a frame they disagree
-    // on strands the preview where the durable model never goes. On
-    // Snowdon (Revit site coordinates) that put previews ~200km out and
-    // dragged the camera follow with them for the whole load.
+    // on strands the preview where the durable model never goes — and
+    // only the durable builder may DECIDE the frame: the preview channel
+    // can emit payloads whose placement never resolved (conway#465), so
+    // a preview-latched frame could shift the whole durable model by a
+    // bogus payload's error.
     const placedAt = (tx, ty, tz) => ({
       expressID: 1,
       geometries: [{geometryExpressID: 999, flatTransformation:
@@ -234,6 +236,29 @@ describe('IncrementalBatchedBuilder', () => {
 
     expect(mesh.matrix.elements[12]).toBeCloseTo(0)
     expect(mesh.matrix.elements[14]).toBeCloseTo(0)
+  })
+
+  it('a preview before the builder decides renders raw and never latches', () => {
+    // Before the first durable batch there is no trustworthy frame.
+    // The preview must not decide one — a mis-placed payload would
+    // shift every later durable instance, and a near-origin payload on
+    // a large-coordinate model would latch null and disable recentring.
+    const coordination = {offset: undefined}
+    const mesh = payloadToPreviewMesh(
+      {
+        geometryExpressID: 999,
+        color: {x: 1, y: 1, z: 1, w: 1},
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+        flatTransformation: [
+          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1,
+        ],
+      },
+      new Map(), new Map(), coordination)
+
+    expect(coordination.offset).toBeUndefined()
+    expect(mesh.matrix.elements[12]).toBeCloseTo(2000000)
+    expect(mesh.matrix.elements[14]).toBeCloseTo(-8000000)
   })
 
   it('reports bounds per appended instance and skips bad geometry', () => {

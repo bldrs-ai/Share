@@ -117,6 +117,12 @@ export default class ProgressiveLoadSession {
     // the whole preview group, and teardown are all silent.
     this.previewMeshCount = 0
     this.previewOutliers = 0
+    // Bounds-change revision, and the revision the overframe check last
+    // ran against: isOverframed_ costs a full robust-bounds pass, so the
+    // timer only re-evaluates it after new bounds arrived — not on
+    // every quiet 250ms-1s tick of a long parse.
+    this.boundsRevision_ = 0
+    this.overframeCheckedRevision_ = 0
     // Running union of ACCEPTED preview boxes, for the outlier test.
     // Cheap to maintain (one box expand per mesh) unlike re-deriving
     // robust bounds, which is why the test lives here and not in the fit.
@@ -167,6 +173,9 @@ export default class ProgressiveLoadSession {
       return
     }
     try {
+      // Computed once here and threaded through growUnion_ — the box
+      // derivation (computeBoundingBox + matrix applies) is per-mesh
+      // hot-path work a large model repeats thousands of times.
       const box = this.meshWorldBox_(mesh)
       if (this.isPreviewOutlier_(box)) {
         this.previewOutliers++
@@ -190,7 +199,7 @@ export default class ProgressiveLoadSession {
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
       }
-      this.growUnion_(mesh)
+      this.growUnion_(box)
       if (this.fittedSphere === null) {
         this.startFollow_()
       } else {
@@ -219,6 +228,7 @@ export default class ProgressiveLoadSession {
       // Copies the six bounds out: the incremental builder hands over a
       // scratch box it reuses for the next instance.
       this.streamedBoxes.push(box)
+      this.boundsRevision_++
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
       }
@@ -342,14 +352,16 @@ export default class ProgressiveLoadSession {
    * Record one preview mesh's world bounds and flag an overflow when it
    * escapes the currently framed sphere.
    *
-   * @param {object} mesh
+   * @param {Box3|null} box the mesh's world bounds, computed by the
+   *   caller (addPreviewMesh already derives it for the outlier test —
+   *   deriving it twice doubled the hot path's bounds work)
    */
-  growUnion_(mesh) {
-    const box = this.meshWorldBox_(mesh)
+  growUnion_(box) {
     if (box === null) {
       return
     }
     this.previewUnion.union(box)
+    this.boundsRevision_++
     this.previewBoxes.push(box)
     if (this.fittedSphere !== null && !this.sphereContainsBox_(this.fittedSphere, box)) {
       this.overflowPending = true
@@ -368,6 +380,7 @@ export default class ProgressiveLoadSession {
     // in, so this has to be rebuilt with them or a coordination stamp
     // would leave it comparing across frames.
     this.previewUnion.makeEmpty()
+    this.boundsRevision_++
     if (this.previewGroup === null) {
       return
     }
@@ -545,7 +558,11 @@ export default class ProgressiveLoadSession {
     if (this.followStopped) {
       return
     }
-    if (this.overflowPending || this.isOverframed_()) {
+    const staleFrameSuspect = this.boundsRevision_ !== this.overframeCheckedRevision_
+    if (staleFrameSuspect) {
+      this.overframeCheckedRevision_ = this.boundsRevision_
+    }
+    if (this.overflowPending || (staleFrameSuspect && this.isOverframed_())) {
       try {
         this.fitUnionToFrame_(true)
       } catch (e) {
