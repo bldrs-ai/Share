@@ -96,6 +96,11 @@ export default class ProgressiveLoadSession {
     this.streamedBoxes = new ElementBoxes()
     this.fittedSphere = null
     this.overflowPending = false
+    // Diagnostic counters for the always-on [progressive] lifecycle log.
+    // "Geometry shows briefly then vanishes mid-load" is invisible in the
+    // current log: preview install, the coordination stamp that can move
+    // the whole preview group, and teardown are all silent.
+    this.previewMeshCount = 0
     this.onControlStart = () => this.stopFollow_()
   }
 
@@ -143,9 +148,12 @@ export default class ProgressiveLoadSession {
     }
     try {
       this.previewGroup.add(mesh)
+      this.previewMeshCount++
       if (!this.previewInstalled) {
         this.previewInstalled = true
         this.scene.add(this.previewGroup)
+        // eslint-disable-next-line no-console
+        console.info('[progressive] preview installed (first mesh)')
       }
       if (this.state === SessionState.IDLE) {
         this.state = SessionState.PREVIEWING
@@ -212,6 +220,15 @@ export default class ProgressiveLoadSession {
     try {
       group.matrix.fromArray(matrixArr)
       group.matrixAutoUpdate = false
+      // Prime suspect when the preview shows and then vanishes: a
+      // non-identity stamp moves the ENTIRE preview group in one go. The
+      // union is rebuilt and a refit requested right after, but
+      // maybeRefit_ is behind a cadence gate, so the camera can lag the
+      // jump by up to CAMERA_FOLLOW_MAX_MS with the preview offscreen.
+      // eslint-disable-next-line no-console
+      console.info(
+        `[progressive] coordination stamp: translation=(${matrixArr[12]}, ` +
+        `${matrixArr[13]}, ${matrixArr[14]}) meshes=${this.previewMeshCount}`)
       this.rebuildUnion_()
       this.overflowPending = true
       this.maybeRefit_()
@@ -489,6 +506,15 @@ export default class ProgressiveLoadSession {
     // the projection between refits) while letting minDistance and near
     // come down off the defaults.
     applyCameraLimits(camera, controls, cameraLimitsForSphere(camera, sphere), true)
+    // One line per actual camera move (throttled 250ms -> 1s, so a
+    // handful per load). A centre that jumps between fits is the preview
+    // group being relocated under the camera; a radius that explodes is
+    // a stray dragging the frame out.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[progressive] fit: centre=(${sphere.center.x.toFixed(2)}, ` +
+      `${sphere.center.y.toFixed(2)}, ${sphere.center.z.toFixed(2)}) ` +
+      `radius=${sphere.radius.toFixed(3)} previewMeshes=${this.previewMeshCount}`)
     controls.fitToSphere(sphere, withTransition)
     this.fittedSphere = sphere
     this.overflowPending = false
@@ -519,6 +545,11 @@ export default class ProgressiveLoadSession {
     if (this.previewGroup === null || !this.previewInstalled) {
       return
     }
+    // The other way geometry vanishes: the preview is disposed here and
+    // the durable model has to be on screen by now, or there is a gap.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[progressive] preview teardown: meshes=${this.previewMeshCount} state=${this.state}`)
     try {
       this.scene.remove(this.previewGroup)
       for (const child of this.previewGroup.children) {
