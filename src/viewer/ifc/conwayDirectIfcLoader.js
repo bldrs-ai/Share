@@ -177,10 +177,12 @@ export async function parseIfcWithConway(
       // Yield so the renderer paints between batches.
       await yieldToEventLoop()
     }
-    // console.info, not debug(): debug() defaults to INFO and no-ops
-    // unless the level is raised, so the first cut of this line never
-    // printed. Matches the always-on `[conwayDirect] parsed` boundary
-    // log in ShareIfcLoader.
+    // Permanent boundary log, like `[conwayDirect] parsed` in
+    // ShareIfcLoader: whether the pump produced batches is the
+    // difference between a load that streams onto the screen and one
+    // that shows nothing until the end-of-load build, and the two are
+    // indistinguishable without this line (Share#1744). console.info,
+    // not debug() — debug() no-ops unless the level is raised.
     // eslint-disable-next-line no-console
     console.info(
       `[conwayDirect] demand pump: batches=${pumpedBatches} ` +

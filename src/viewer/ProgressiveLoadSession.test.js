@@ -82,14 +82,14 @@ describe('ProgressiveLoadSession', () => {
   let controls
   let camera
   let session
-  let infoSpy
+  let warnSpy
 
   beforeEach(() => {
-    // The session's [progressive] lifecycle lines are always-on by
-    // design (they have to reach a user's console without a flag), so
-    // divert them here rather than let every test narrate the load.
-    // PLAYBOOK.md §"Keep the test console clean".
-    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    // The outlier guard's console.warn is always-on by design (it must
+    // reach a user's console without a flag), so divert it here rather
+    // than let the outlier tests narrate. PLAYBOOK.md §"Keep the test
+    // console clean".
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     scene = new Scene()
     controls = makeControls()
     camera = makeCamera()
@@ -103,7 +103,7 @@ describe('ProgressiveLoadSession', () => {
 
   afterEach(() => {
     session.finish()
-    infoSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 
   it('walks idle → previewing → assembling → finished', () => {
@@ -296,6 +296,8 @@ describe('ProgressiveLoadSession', () => {
 
       expect(session.previewOutliers).toBe(1)
       expect(session.previewMeshCount).toBe(accepted)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dropping mis-placed preview geometry'))
       // The camera still frames the 40 cubes (~4 units), not the 417589
       // the rejected placement would have dragged it to.
       const after = controls.fits[controls.fits.length - 1]

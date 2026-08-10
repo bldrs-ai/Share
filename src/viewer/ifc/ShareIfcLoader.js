@@ -205,38 +205,8 @@ export default class ShareIfcLoader {
       // the durable model renders.
       const coordination = {offset: undefined}
 
-      // Identify the geometry that drags the camera follow off the model.
-      // Snowdon frames a 318km sphere at ~500 preview meshes while the
-      // building itself is ~60 units across, and the stray filter reports
-      // excluded=0 — meaning too much of the preview stream is out there
-      // for "model + strays" to apply. What those placements ARE decides
-      // the fix, and nothing currently says.
-      let farPreviews = 0
-      let farthestPreview = 0
-      let farPreviewsLogged = 0
-      let farDurable = 0
-      let farthestDurable = 0
-      const FAR_PREVIEW_THRESHOLD = 1e4
-      const FAR_PREVIEW_LOG_LIMIT = 5
-      const HALF_EXTENT = 0.5
-
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
-          const t = payload.flatTransformation
-          const distance = Math.hypot(t[12], t[13], t[14])
-          if (distance > FAR_PREVIEW_THRESHOLD) {
-            farPreviews++
-            farthestPreview = Math.max(farthestPreview, distance)
-            if (farPreviewsLogged < FAR_PREVIEW_LOG_LIMIT) {
-              farPreviewsLogged++
-              // eslint-disable-next-line no-console
-              console.info(
-                `[progressive] far preview #${farPreviews}: ` +
-                `expressID=${payload.expressID} geom=${payload.geometryExpressID} ` +
-                `t=(${t[12].toFixed(1)}, ${t[13].toFixed(1)}, ${t[14].toFixed(1)}) ` +
-                `dist=${distance.toFixed(0)}`)
-            }
-          }
           const mesh = payloadToPreviewMesh(
             payload, previewGeometryCache, previewMaterialCache, coordination)
           if (mesh !== null) {
@@ -256,24 +226,7 @@ export default class ShareIfcLoader {
         try {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
-              // Measure the durable stream through the bounds the builder
-              // already derives. The previous cut of this walked
-              // `flatMesh.geometries` directly, which is a conway vector
-              // rather than a JS iterable — it threw inside the try, so
-              // every batch was misreported as an append failure and fell
-              // back to preview meshes. Never walk conway containers here;
-              // the builder owns that access.
-              onBounds: (box) => {
-                const distance = Math.hypot(
-                  (box.min.x + box.max.x) * HALF_EXTENT,
-                  (box.min.y + box.max.y) * HALF_EXTENT,
-                  (box.min.z + box.max.z) * HALF_EXTENT)
-                if (distance > FAR_PREVIEW_THRESHOLD) {
-                  farDurable++
-                  farthestDurable = Math.max(farthestDurable, distance)
-                }
-                session.notifyBounds(box)
-              },
+              onBounds: (box) => session.notifyBounds(box),
               coordination,
             })
             scene.add(builder.root)
@@ -292,17 +245,6 @@ export default class ShareIfcLoader {
 
       const {modelID, captured} =
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
-
-      // The decisive comparison: same threshold applied to both streams.
-      // preview>0 with durable=0 means the preview channel emits
-      // placements the durable model never gets; both >0 means the
-      // geometry genuinely spans that range and the follow's framing is
-      // what needs to change.
-      // eslint-disable-next-line no-console
-      console.info(
-        `[progressive] far placements (>${FAR_PREVIEW_THRESHOLD}): ` +
-        `preview=${farPreviews} maxDist=${farthestPreview.toFixed(0)} | ` +
-        `durable=${farDurable} maxDist=${farthestDurable.toFixed(0)}`)
 
       session.beginAssembly()
 
