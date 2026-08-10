@@ -23,9 +23,11 @@ const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * before they cross the evaluate boundary.
  *
  * @param page Playwright page object
- * @return Array of {name, contentId, hasOpenCid} for each real_model_open event
+ * @return Array of {name, contentId, hasOpenCid, openCid} per real_model_open event
  */
-async function realModelOpenEvents(page: Page): Promise<{name: string, contentId: string, hasOpenCid: boolean}[]> {
+async function realModelOpenEvents(
+  page: Page,
+): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown}[]> {
   return await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataLayer: any[] = (window as any).dataLayer || []
@@ -35,9 +37,15 @@ async function realModelOpenEvents(page: Page): Promise<{name: string, contentId
         name: String(entry[1]),
         contentId: String(entry[2]?.content_id ?? ''),
         hasOpenCid: entry[2]?.open_cid !== undefined,
+        openCid: entry[2]?.open_cid,
       }))
   })
 }
+
+
+// A real GA client id: two dot-joined numbers, so the whole value
+// parses as a float unless something makes it non-numeric.
+const FAKE_CLIENT_ID = '1871520000.1754700000'
 
 
 /**
@@ -76,5 +84,29 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     // param must be absent rather than empty, so it can't form its own
     // bucket in GA4.
     expect(events[0].hasOpenCid).toBe(false)
+  })
+
+  /*
+   * Pins the wire format through the real call site, not just
+   * getOpenCid in isolation: a bare client id is numeric-looking, and
+   * gtag beacons numeric-looking params as `epn.` (number), which
+   * truncates the id in float64 and leaves the text custom dimension
+   * empty. Seeding the `_ga` cookie exercises analytics#getGaClientId's
+   * fallback, the one client-id path that works with GA unloaded.
+   */
+  test('sends a non-numeric open_cid when a client id is available', async ({page}) => {
+    await page.context().addCookies([
+      {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
+    ])
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const events = await realModelOpenEvents(page)
+    expect(events).toHaveLength(1)
+    expect(events[0].openCid).toBe(`cid.${FAKE_CLIENT_ID}`)
+    // The point of the prefix: unparseable as a number, so gtag keeps
+    // it in the text slot with all its digits intact.
+    expect(Number(events[0].openCid)).toBeNaN()
+    expect(String(events[0].openCid)).toContain(FAKE_CLIENT_ID)
   })
 })
