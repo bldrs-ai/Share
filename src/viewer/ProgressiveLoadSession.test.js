@@ -278,6 +278,46 @@ describe('ProgressiveLoadSession', () => {
   })
 
 
+  describe('mis-placed preview geometry', () => {
+    it('drops a preview the durable model would never place there', () => {
+      // conway's preview channel double-subtracts the site offset for
+      // some products: on Snowdon (site at 417622, 78714, 238) that put
+      // 88 previews ~425km out while the durable stream placed none
+      // there, and the follow chased them to a 318km framing sphere.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(-417589.5))
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(session.previewOutliers).toBe(1)
+      expect(session.previewMeshCount).toBe(accepted)
+      // The camera still frames the 40 cubes (~4 units), not the 417589
+      // the rejected placement would have dragged it to.
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeLessThan(100)
+    })
+
+    it('keeps ordinary geometry that merely extends the model', () => {
+      // A wing, crane or antenna is nowhere near 100x the model radius
+      // out, so the guard must not touch it.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(20))
+
+      expect(session.previewOutliers).toBe(0)
+      expect(session.previewMeshCount).toBe(accepted + 1)
+    })
+  })
+
+
   describe('recovering an over-inflated frame', () => {
     it('reclaims the frame when a stray blew it up', () => {
       // Snowdon: a fit jumped to radius 318751 at 503 preview meshes and

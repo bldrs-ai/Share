@@ -34,6 +34,15 @@ const REFIT_EPSILON_FRACTION = 0.01
  * stray that inflated the frame, not to track ordinary growth.
  */
 const OVERFRAME_FACTOR = 4
+/**
+ * Preview placements this many times the accumulated preview radius away
+ * from its centre are dropped. See isPreviewOutlier_ — this defends the
+ * camera follow against a preview channel that mis-places geometry, and
+ * the multiple is enormous so that only a broken placement trips it.
+ */
+const PREVIEW_OUTLIER_FACTOR = 100
+/** Accepted previews required before the test has anything to measure. */
+const PREVIEW_OUTLIER_WARMUP = 32
 
 
 /**
@@ -107,6 +116,11 @@ export default class ProgressiveLoadSession {
     // current log: preview install, the coordination stamp that can move
     // the whole preview group, and teardown are all silent.
     this.previewMeshCount = 0
+    this.previewOutliers = 0
+    // Running union of ACCEPTED preview boxes, for the outlier test.
+    // Cheap to maintain (one box expand per mesh) unlike re-deriving
+    // robust bounds, which is why the test lives here and not in the fit.
+    this.previewUnion = new Box3()
     this.onControlStart = () => this.stopFollow_()
   }
 
@@ -153,6 +167,18 @@ export default class ProgressiveLoadSession {
       return
     }
     try {
+      const box = this.meshWorldBox_(mesh)
+      if (this.isPreviewOutlier_(box)) {
+        this.previewOutliers++
+        if (this.previewOutliers === 1) {
+          const centre = box.getCenter(new Vector3())
+          console.warn(
+            '[progressive] dropping mis-placed preview geometry at ' +
+            `(${centre.x.toFixed(1)}, ${centre.y.toFixed(1)}, ${centre.z.toFixed(1)}) — ` +
+            'the durable model does not place geometry there')
+        }
+        return
+      }
       this.previewGroup.add(mesh)
       this.previewMeshCount++
       if (!this.previewInstalled) {
@@ -274,6 +300,45 @@ export default class ProgressiveLoadSession {
 
 
   /**
+   * Is this preview placed somewhere the model plainly is not?
+   *
+   * conway's parse-time preview channel can emit a placement with the
+   * origin-coordination transform applied to geometry that is already
+   * local, so the site offset is subtracted twice instead of cancelling.
+   * On Snowdon (site at 417622, 78714, 238) that put 88 previews ~425km
+   * out while the durable stream placed none of them there. The camera
+   * follow frames the union, so it chased them and rendered the building
+   * as a speck for the whole load.
+   *
+   * The stray filter in robustBounds cannot help: it is tuned for
+   * "model + a few strays" and gives up past MAX_EXCLUDED_FRACTION (2%),
+   * which 88 displaced elements exceed — that is why it reported
+   * excluded=0 while framing a 318km sphere.
+   *
+   * Deliberately crude. Real geometry is never 100x the model's own
+   * radius from its centre, so this cannot fire on a legitimate outlying
+   * wing, crane or antenna; it only catches a placement that is wrong.
+   * Durable bounds are never tested — that stream is authoritative.
+   *
+   * @param {Box3|null} box the candidate's world bounds
+   * @return {boolean}
+   */
+  isPreviewOutlier_(box) {
+    if (box === null || this.previewMeshCount < PREVIEW_OUTLIER_WARMUP ||
+        this.previewUnion.isEmpty()) {
+      return false
+    }
+    const sphere = new Sphere()
+    this.previewUnion.getBoundingSphere(sphere)
+    if (!(sphere.radius > 0) || !Number.isFinite(sphere.radius)) {
+      return false
+    }
+    return box.getCenter(new Vector3()).distanceTo(sphere.center) >
+      sphere.radius * PREVIEW_OUTLIER_FACTOR
+  }
+
+
+  /**
    * Record one preview mesh's world bounds and flag an overflow when it
    * escapes the currently framed sphere.
    *
@@ -284,6 +349,7 @@ export default class ProgressiveLoadSession {
     if (box === null) {
       return
     }
+    this.previewUnion.union(box)
     this.previewBoxes.push(box)
     if (this.fittedSphere !== null && !this.sphereContainsBox_(this.fittedSphere, box)) {
       this.overflowPending = true
@@ -298,6 +364,10 @@ export default class ProgressiveLoadSession {
    */
   rebuildUnion_() {
     this.previewBoxes.clear()
+    // The outlier test measures against the same transform the boxes are
+    // in, so this has to be rebuilt with them or a coordination stamp
+    // would leave it comparing across frames.
+    this.previewUnion.makeEmpty()
     if (this.previewGroup === null) {
       return
     }
@@ -305,6 +375,7 @@ export default class ProgressiveLoadSession {
       const box = this.meshWorldBox_(child)
       if (box !== null) {
         this.previewBoxes.push(box)
+        this.previewUnion.union(box)
       }
     }
   }
