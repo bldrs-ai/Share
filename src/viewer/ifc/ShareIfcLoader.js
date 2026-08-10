@@ -205,8 +205,37 @@ export default class ShareIfcLoader {
       // previews ~200km out and dragging the camera follow with them.
       const coordination = {offset: undefined}
 
+      // Identify the geometry that drags the camera follow off the model.
+      // Snowdon frames a 318km sphere at ~500 preview meshes while the
+      // building itself is ~60 units across, and the stray filter reports
+      // excluded=0 — meaning too much of the preview stream is out there
+      // for "model + strays" to apply. What those placements ARE decides
+      // the fix, and nothing currently says.
+      let farPreviews = 0
+      let farthestPreview = 0
+      let farPreviewsLogged = 0
+      let farDurable = 0
+      let farthestDurable = 0
+      const FAR_PREVIEW_THRESHOLD = 1e4
+      const FAR_PREVIEW_LOG_LIMIT = 5
+
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
+          const t = payload.flatTransformation
+          const distance = Math.hypot(t[12], t[13], t[14])
+          if (distance > FAR_PREVIEW_THRESHOLD) {
+            farPreviews++
+            farthestPreview = Math.max(farthestPreview, distance)
+            if (farPreviewsLogged < FAR_PREVIEW_LOG_LIMIT) {
+              farPreviewsLogged++
+              // eslint-disable-next-line no-console
+              console.info(
+                `[progressive] far preview #${farPreviews}: ` +
+                `expressID=${payload.expressID} geom=${payload.geometryExpressID} ` +
+                `t=(${t[12].toFixed(1)}, ${t[13].toFixed(1)}, ${t[14].toFixed(1)}) ` +
+                `dist=${distance.toFixed(0)}`)
+            }
+          }
           const mesh = payloadToPreviewMesh(
             payload, previewGeometryCache, previewMaterialCache, coordination)
           if (mesh !== null) {
@@ -232,6 +261,22 @@ export default class ShareIfcLoader {
             scene.add(builder.root)
           }
           builder.appendBatch(batch)
+          // Same measurement on the DURABLE stream. If the far placements
+          // appear here too, the preview channel is faithful and the
+          // geometry really is spread over hundreds of km (a survey point
+          // or site element), which is a framing problem. If they appear
+          // ONLY in previews, the preview channel is emitting placements
+          // the durable model does not have, which is a conway-side bug.
+          for (const flatMesh of batch) {
+            for (const placed of flatMesh.geometries ?? []) {
+              const t = placed.flatTransformation
+              const distance = Math.hypot(t[12], t[13], t[14])
+              if (distance > FAR_PREVIEW_THRESHOLD) {
+                farDurable++
+                farthestDurable = Math.max(farthestDurable, distance)
+              }
+            }
+          }
         } catch (e) {
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
@@ -245,6 +290,17 @@ export default class ShareIfcLoader {
 
       const {modelID, captured} =
         await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
+
+      // The decisive comparison: same threshold applied to both streams.
+      // preview>0 with durable=0 means the preview channel emits
+      // placements the durable model never gets; both >0 means the
+      // geometry genuinely spans that range and the follow's framing is
+      // what needs to change.
+      // eslint-disable-next-line no-console
+      console.info(
+        `[progressive] far placements (>${FAR_PREVIEW_THRESHOLD}): ` +
+        `preview=${farPreviews} maxDist=${farthestPreview.toFixed(0)} | ` +
+        `durable=${farDurable} maxDist=${farthestDurable.toFixed(0)}`)
 
       session.beginAssembly()
 
