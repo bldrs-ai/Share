@@ -144,6 +144,15 @@ export class IncrementalBatchedBuilder {
           state.instanceOccurrencePaths.slice() : null
       state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
+      // The mesh has stopped growing, so a bounding volume is finally
+      // meaningful. Compute it and hand culling back — see ensureBatch_
+      // for why it had to be off while streaming. assembleBatchedModel
+      // recomputes these too; doing it here keeps the invariant with the
+      // builder that turned culling off, rather than relying on a
+      // consumer that the fallback paths may not reach.
+      state.mesh.computeBoundingBox?.()
+      state.mesh.computeBoundingSphere?.()
+      state.mesh.frustumCulled = true
       batches.push({
         mesh: state.mesh,
         material: state.material,
@@ -332,6 +341,26 @@ export class IncrementalBatchedBuilder {
     // per-frame camera sort flips the coplanar winner as the camera
     // moves); the transparent batch must still sort for blending.
     mesh.sortObjects = transparent
+    // Culling is OFF for the whole streaming phase, and this is load-
+    // bearing rather than an optimization opt-out.
+    //
+    // `BatchedMesh` declares `boundingSphere`, so three's
+    // `Frustum.intersectsObject` computes it once on first render and
+    // then CACHES it — nothing invalidates it when instances append.
+    // Computed on the first frame, when a handful of instances occupy a
+    // mesh reserved for thousands, it freezes at near-zero radius, and
+    // every batch after that is culled against it. The model stays
+    // invisible for the entire stream and only pops in at the end, when
+    // assembleBatchedModel (buildBatchedConwayModel.js) finally calls
+    // computeBoundingBox/Sphere. The camera follow looks correct
+    // throughout because it derives its own bounds (onBounds below), so
+    // the camera tracks a model that is never drawn.
+    //
+    // Recomputing per batch is the other option and it is O(instances)
+    // each time — quadratic over a load. Skipping the test costs one
+    // extra draw call for a mesh that is on screen anyway.
+    // finalize() restores culling once the bounds are real.
+    mesh.frustumCulled = false
     const state = {
       mesh,
       material,

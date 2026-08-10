@@ -99,6 +99,31 @@ describe('IncrementalBatchedBuilder', () => {
     }
   })
 
+  it('keeps culling off while streaming, and restores it at finalize', () => {
+    // three caches BatchedMesh.boundingSphere the first time it culls and
+    // never invalidates it when instances append. Computed on frame one,
+    // when a few instances sit in a mesh reserved for thousands, it
+    // freezes near zero radius and culls every later batch -- the model
+    // stays invisible for the whole stream and only appears at the end,
+    // when assembleBatchedModel finally computes real bounds. The camera
+    // follow derives its own bounds, so it tracks a model never drawn.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+
+    const streaming = [builder.opaque, builder.transparent].filter(Boolean)
+    expect(streaming.length).toBeGreaterThan(0)
+    for (const state of streaming) {
+      expect(state.mesh.frustumCulled).toBe(false)
+    }
+
+    const {batches} = builder.finalize()
+    for (const batch of batches) {
+      expect(batch.mesh.frustumCulled).toBe(true)
+      // Bounds are only meaningful once the mesh has stopped growing.
+      expect(batch.mesh.boundingSphere).not.toBeNull()
+    }
+  })
+
   it('grows capacity in place across small initial limits', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {
       initialInstances: 1, initialVertices: 3, initialIndices: 3,
