@@ -2,6 +2,7 @@
 import {BatchedMesh, Matrix4} from 'three'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
+import {payloadToPreviewMesh} from './parsePreviewMesh'
 
 
 const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
@@ -196,8 +197,43 @@ describe('IncrementalBatchedBuilder', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
     builder.finalize()
-    expect(builder.coordOffset).toBeNull()
+    expect(builder.coordination.offset).toBeNull()
     expect(builder.root.userData.coordinationOffset).toBeUndefined()
+  })
+
+  it('shares one recentre frame with the preview path', () => {
+    // The two stream onto the screen together, so a frame they disagree
+    // on strands the preview where the durable model never goes. On
+    // Snowdon (Revit site coordinates) that put previews ~200km out and
+    // dragged the camera follow with them for the whole load.
+    const placedAt = (tx, ty, tz) => ({
+      expressID: 1,
+      geometries: [{geometryExpressID: 999, flatTransformation:
+        [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
+    })
+    const coordination = {offset: undefined}
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {coordination})
+    builder.appendBatch([placedAt(2000000, 5, -8000000)])
+    builder.finalize()
+
+    expect(coordination.offset).toEqual([2000000, 5, -8000000])
+
+    // A preview payload placed at the same site coordinates now lands in
+    // the same frame -- near the origin, not a megametre away.
+    const mesh = payloadToPreviewMesh(
+      {
+        geometryExpressID: 999,
+        color: {x: 1, y: 1, z: 1, w: 1},
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+        flatTransformation: [
+          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1,
+        ],
+      },
+      new Map(), new Map(), coordination)
+
+    expect(mesh.matrix.elements[12]).toBeCloseTo(0)
+    expect(mesh.matrix.elements[14]).toBeCloseTo(0)
   })
 
   it('reports bounds per appended instance and skips bad geometry', () => {

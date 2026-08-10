@@ -76,10 +76,16 @@ export class IncrementalBatchedBuilder {
     // coincidenceKeys already appended, across all batches — drops exact
     // duplicate placements that would z-fight (see coincidenceKey).
     this.seenPlacements = new Set()
-    // Origin-recenter offset for georeferenced models (see
-    // coordinationOffsetFor). `undefined` until the first placement decides
-    // it; then `[x,y,z]` (subtracted from every instance) or null (no-op).
-    this.coordOffset = undefined
+    // Origin-recenter frame for georeferenced models (see
+    // coordinationOffsetFor). `offset` is `undefined` until the first
+    // placement decides it; then `[x,y,z]` (subtracted from every
+    // instance) or null (no-op).
+    //
+    // Shared with the parse-time preview path when the caller passes one:
+    // both render simultaneously while a model streams, so a frame the
+    // two don't agree on puts the preview where the real model never
+    // goes. That is what made Snowdon invisible during load.
+    this.coordination = opts.coordination ?? {offset: undefined}
     // Lazily created per transparency: see ensureBatch_.
     this.opaque = null
     this.transparent = null
@@ -231,16 +237,14 @@ export class IncrementalBatchedBuilder {
     // the origin (float32-precise) instead of at ~1e7 m. See
     // coordinationOffsetFor. Stamped on the root for consumers that need to
     // map a rendered point back to true world coordinates.
-    if (this.coordOffset === undefined) {
-      this.coordOffset = coordinationOffsetFor(placed.flatTransformation)
-      if (this.coordOffset !== null) {
-        this.root.userData.coordinationOffset = this.coordOffset
-      }
+    if (this.coordination.offset === undefined) {
+      this.coordination.offset = coordinationOffsetFor(placed.flatTransformation)
     }
-    if (this.coordOffset !== null) {
-      matrix.elements[12] -= this.coordOffset[0]
-      matrix.elements[13] -= this.coordOffset[1]
-      matrix.elements[14] -= this.coordOffset[2]
+    if (this.coordination.offset !== null) {
+      this.root.userData.coordinationOffset = this.coordination.offset
+      matrix.elements[12] -= this.coordination.offset[0]
+      matrix.elements[13] -= this.coordination.offset[1]
+      matrix.elements[14] -= this.coordination.offset[2]
     }
     state.mesh.setMatrixAt(batchId, matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))

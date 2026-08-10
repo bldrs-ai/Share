@@ -197,10 +197,18 @@ export default class ShareIfcLoader {
       const usePreview = session.previewGroup !== null
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
+      // One origin-recenter frame for BOTH streaming paths. The preview
+      // meshes and the incremental durable batches are on screen at the
+      // same time, so each deciding its own frame puts them in different
+      // places — on a georeferenced model (Revit site coordinates) the
+      // builder recentred and the previews did not, stranding the
+      // previews ~200km out and dragging the camera follow with them.
+      const coordination = {offset: undefined}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
-          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
+          const mesh = payloadToPreviewMesh(
+            payload, previewGeometryCache, previewMaterialCache, coordination)
           if (mesh !== null) {
             session.addPreviewMesh(mesh)
           }
@@ -219,6 +227,7 @@ export default class ShareIfcLoader {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
               onBounds: (box) => session.notifyBounds(box),
+              coordination,
             })
             scene.add(builder.root)
           }
