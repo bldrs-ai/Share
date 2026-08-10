@@ -218,6 +218,7 @@ export default class ShareIfcLoader {
       let farthestDurable = 0
       const FAR_PREVIEW_THRESHOLD = 1e4
       const FAR_PREVIEW_LOG_LIMIT = 5
+      const HALF_EXTENT = 0.5
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
@@ -255,28 +256,29 @@ export default class ShareIfcLoader {
         try {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
-              onBounds: (box) => session.notifyBounds(box),
+              // Measure the durable stream through the bounds the builder
+              // already derives. The previous cut of this walked
+              // `flatMesh.geometries` directly, which is a conway vector
+              // rather than a JS iterable — it threw inside the try, so
+              // every batch was misreported as an append failure and fell
+              // back to preview meshes. Never walk conway containers here;
+              // the builder owns that access.
+              onBounds: (box) => {
+                const distance = Math.hypot(
+                  (box.min.x + box.max.x) * HALF_EXTENT,
+                  (box.min.y + box.max.y) * HALF_EXTENT,
+                  (box.min.z + box.max.z) * HALF_EXTENT)
+                if (distance > FAR_PREVIEW_THRESHOLD) {
+                  farDurable++
+                  farthestDurable = Math.max(farthestDurable, distance)
+                }
+                session.notifyBounds(box)
+              },
               coordination,
             })
             scene.add(builder.root)
           }
           builder.appendBatch(batch)
-          // Same measurement on the DURABLE stream. If the far placements
-          // appear here too, the preview channel is faithful and the
-          // geometry really is spread over hundreds of km (a survey point
-          // or site element), which is a framing problem. If they appear
-          // ONLY in previews, the preview channel is emitting placements
-          // the durable model does not have, which is a conway-side bug.
-          for (const flatMesh of batch) {
-            for (const placed of flatMesh.geometries ?? []) {
-              const t = placed.flatTransformation
-              const distance = Math.hypot(t[12], t[13], t[14])
-              if (distance > FAR_PREVIEW_THRESHOLD) {
-                farDurable++
-                farthestDurable = Math.max(farthestDurable, distance)
-              }
-            }
-          }
         } catch (e) {
           debug(WARN).warn('incremental batch append failed; preview fallback:', e)
           try {
