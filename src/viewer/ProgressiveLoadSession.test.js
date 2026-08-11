@@ -1,5 +1,6 @@
-import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Vector3} from 'three'
+import {Box3, BoxGeometry, Matrix4, Mesh, MeshBasicMaterial, Scene, Sphere, Vector3} from 'three'
 import ProgressiveLoadSession, {SessionState} from './ProgressiveLoadSession'
+import {fitDistanceForRadius} from './three/cameraLimits'
 
 
 /* eslint-disable no-magic-numbers */
@@ -53,6 +54,10 @@ function makeCamera() {
   return {
     fov: 45,
     aspect: 1.5,
+    // The IfcCamera constructor defaults. `near: 1` matters as much as
+    // the controls' minDistance: on a sub-metre model it sits beyond the
+    // whole thing, so the follow must bring it down (see cameraLimits).
+    near: 1,
     far: 100,
     updateProjectionMatrix() {/* no-op */},
   }
@@ -77,8 +82,14 @@ describe('ProgressiveLoadSession', () => {
   let controls
   let camera
   let session
+  let warnSpy
 
   beforeEach(() => {
+    // The outlier guard's console.warn is always-on by design (it must
+    // reach a user's console without a flag), so divert it here rather
+    // than let the outlier tests narrate. PLAYBOOK.md §"Keep the test
+    // console clean".
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     scene = new Scene()
     controls = makeControls()
     camera = makeCamera()
@@ -92,6 +103,7 @@ describe('ProgressiveLoadSession', () => {
 
   afterEach(() => {
     session.finish()
+    warnSpy.mockRestore()
   })
 
   it('walks idle → previewing → assembling → finished', () => {
@@ -196,6 +208,162 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(0)
     pinned.finish()
   })
+
+  describe('camera limits during the stream', () => {
+    /**
+     * Assert the follow left the camera able to actually reach the pose
+     * it asked for, and with the model inside the frustum.
+     *
+     * @param {object} fitted the sphere handed to fitToSphere
+     */
+    const expectReachableFit = (fitted) => {
+      const wantDistance = fitDistanceForRadius(camera, fitted.radius)
+      // fitToSphere dollies are clamped to [minDistance, maxDistance]. If
+      // the distance it wants falls outside, the camera silently parks at
+      // the clamp instead and the model is mis-sized.
+      expect(wantDistance).toBeGreaterThan(controls.minDistance)
+      expect(wantDistance).toBeLessThan(controls.maxDistance)
+      // Near must sit inside the model, not beyond it, or it clips.
+      expect(camera.near).toBeLessThan(wantDistance - fitted.radius)
+    }
+
+    it('brings minDistance and near DOWN for a sub-metre model', () => {
+      // Arty_Z7.stp is a true-scale millimetre PCB, ~0.1 scene units
+      // across. The follow used to grow only maxDistance and far, leaving
+      // minDistance and near at the activation default of 1 -- ten times
+      // the whole board. fitToSphere then clamped to minDistance so the
+      // board rendered tiny, and near=1 sat beyond it so it rendered
+      // half-clipped, until the end-of-load fit corrected both. That
+      // correction is what read as "resizing during load".
+      session.notifyBounds(
+        new Box3().setFromCenterAndSize(new Vector3(0, 0, 0), new Vector3(0.1, 0.1, 0.02)))
+
+      const fitted = controls.fits[0]
+      expect(fitted).toBeDefined()
+      expect(controls.minDistance).toBeLessThan(1)
+      expect(camera.near).toBeLessThan(1)
+      expectReachableFit(fitted)
+    })
+
+    it('grows maxDistance and far UP for a model past the defaults', () => {
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+
+      const fitted = controls.fits[controls.fits.length - 1]
+      expect(controls.maxDistance).toBeGreaterThan(300)
+      expect(camera.far).toBeGreaterThan(100)
+      expectReachableFit(fitted)
+    })
+
+    it('never shrinks the outward range between refits', () => {
+      // growOnly: the union is monotonic, and letting maxDistance/far
+      // fall back mid-load would pop the projection between refits.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const wideMax = controls.maxDistance
+      const wideFar = camera.far
+
+      // A refit whose robust bounds are no larger must not pull them in.
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.fittedSphere = null
+      session.maybeRefit_()
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(controls.maxDistance).toBeGreaterThanOrEqual(wideMax)
+      expect(camera.far).toBeGreaterThanOrEqual(wideFar)
+    })
+  })
+
+
+  describe('mis-placed preview geometry', () => {
+    it('drops a preview the durable model would never place there', () => {
+      // conway's preview channel double-subtracts the site offset for
+      // some products: on Snowdon (site at 417622, 78714, 238) that put
+      // 88 previews ~425km out while the durable stream placed none
+      // there, and the follow chased them to a 318km framing sphere.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(-417589.5))
+      session.lastFitMs = 0
+      session.overflowPending = true
+      session.maybeRefit_()
+
+      expect(session.previewOutliers).toBe(1)
+      expect(session.previewMeshCount).toBe(accepted)
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('dropping mis-placed preview geometry'))
+      // The camera still frames the 40 cubes (~4 units), not the 417589
+      // the rejected placement would have dragged it to.
+      const after = controls.fits[controls.fits.length - 1]
+      expect(after.radius).toBeLessThan(100)
+    })
+
+    it('keeps ordinary geometry that merely extends the model', () => {
+      // A wing, crane or antenna is nowhere near 100x the model radius
+      // out, so the guard must not touch it.
+      for (let i = 0; i < 40; i++) {
+        session.addPreviewMesh(cubeAt(i * 0.1))
+      }
+      const accepted = session.previewMeshCount
+
+      session.addPreviewMesh(cubeAt(20))
+
+      expect(session.previewOutliers).toBe(0)
+      expect(session.previewMeshCount).toBe(accepted + 1)
+    })
+  })
+
+
+  describe('recovering an over-inflated frame', () => {
+    it('reclaims the frame when a stray blew it up', () => {
+      // Snowdon: a fit jumped to radius 318751 at 503 preview meshes and
+      // the following 650 meshes produced NO fit at all, because refits
+      // fire on overflow and nothing can overflow a sphere that large.
+      // The model sat on screen as a sub-pixel speck for the rest of the
+      // load and only looked right once the end-of-load fit ran.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const good = controls.fits[controls.fits.length - 1]
+
+      session.fittedSphere = new Sphere(good.center.clone(), good.radius * 5000)
+      session.overflowPending = false
+      session.lastFitMs = 0
+      const before = controls.fits.length
+
+      session.followTick_()
+      session.stopFollow_()
+
+      expect(controls.fits.length).toBeGreaterThan(before)
+      const recovered = controls.fits[controls.fits.length - 1]
+      expect(recovered.radius).toBeLessThan(good.radius * 2)
+    })
+
+    it('does not refit when the frame is merely a little loose', () => {
+      // The guard against trading one bug for camera thrash: ordinary
+      // growth is already handled by overflow, so a frame that is only
+      // somewhat larger than needed must be left alone.
+      const scratch = new Box3()
+      streamRun(session, 60, scratch)
+      const good = controls.fits[controls.fits.length - 1]
+
+      session.fittedSphere = new Sphere(good.center.clone(), good.radius * 1.5)
+      session.overflowPending = false
+      session.lastFitMs = 0
+      const before = controls.fits.length
+
+      session.followTick_()
+      session.stopFollow_()
+
+      expect(controls.fits).toHaveLength(before)
+    })
+  })
+
 
   describe('robust framing during the stream', () => {
     // Enough instances for the robust criterion to have statistics —

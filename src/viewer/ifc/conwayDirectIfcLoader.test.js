@@ -26,6 +26,22 @@ jest.mock('../../FeatureFlags', () => ({
 
 /* eslint-disable no-magic-numbers */
 describe('viewer/ifc/conwayDirectIfcLoader', () => {
+  // The demand-pump boundary logs are always-on (they must reach a
+  // user's console without a flag), so divert them rather than let the
+  // suite narrate every parse. PLAYBOOK.md §"Keep the test console clean".
+  let infoSpy
+  let warnSpy
+
+  beforeEach(() => {
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    infoSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
   describe('parseIfcWithConway', () => {
     it('returns the modelID + captured FlatMeshes from a single Conway OpenModel + StreamAllMeshes pass', async () => {
       const fakeFlatMesh1 = {expressID: 42, geometries: {size: () => 0}}

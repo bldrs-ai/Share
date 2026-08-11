@@ -2,6 +2,7 @@
 import {BatchedMesh, Matrix4} from 'three'
 import {IncrementalBatchedBuilder} from './incrementalBatchedBuilder'
 import {flatMeshToBatchedModel} from './flatMeshToBatchedModel'
+import {payloadToPreviewMesh} from './parsePreviewMesh'
 
 
 const IDENTITY_MAT = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
@@ -99,6 +100,31 @@ describe('IncrementalBatchedBuilder', () => {
     }
   })
 
+  it('keeps culling off while streaming, and restores it at finalize', () => {
+    // three caches BatchedMesh.boundingSphere the first time it culls and
+    // never invalidates it when instances append. Computed on frame one,
+    // when a few instances sit in a mesh reserved for thousands, it
+    // freezes near zero radius and culls every later batch -- the model
+    // stays invisible for the whole stream and only appears at the end,
+    // when assembleBatchedModel finally computes real bounds. The camera
+    // follow derives its own bounds, so it tracks a model never drawn.
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
+    builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
+
+    const streaming = [builder.opaque, builder.transparent].filter(Boolean)
+    expect(streaming.length).toBeGreaterThan(0)
+    for (const state of streaming) {
+      expect(state.mesh.frustumCulled).toBe(false)
+    }
+
+    const {batches} = builder.finalize()
+    for (const batch of batches) {
+      expect(batch.mesh.frustumCulled).toBe(true)
+      // Bounds are only meaningful once the mesh has stopped growing.
+      expect(batch.mesh.boundingSphere).not.toBeNull()
+    }
+  })
+
   it('grows capacity in place across small initial limits', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {
       initialInstances: 1, initialVertices: 3, initialIndices: 3,
@@ -171,8 +197,68 @@ describe('IncrementalBatchedBuilder', () => {
     const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0)
     builder.appendBatch([flatMesh(1, [{geomExpressID: 999, color: OPAQUE}])])
     builder.finalize()
-    expect(builder.coordOffset).toBeNull()
+    expect(builder.coordination.offset).toBeNull()
     expect(builder.root.userData.coordinationOffset).toBeUndefined()
+  })
+
+  it('shares one recentre frame with the preview path, builder deciding', () => {
+    // The two stream onto the screen together, so a frame they disagree
+    // on strands the preview where the durable model never goes — and
+    // only the durable builder may DECIDE the frame: the preview channel
+    // can emit payloads whose placement never resolved (conway#465), so
+    // a preview-latched frame could shift the whole durable model by a
+    // bogus payload's error.
+    const placedAt = (tx, ty, tz) => ({
+      expressID: 1,
+      geometries: [{geometryExpressID: 999, flatTransformation:
+        [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, tx, ty, tz, 1], color: OPAQUE}],
+    })
+    const coordination = {offset: undefined}
+    const builder = new IncrementalBatchedBuilder(makeApi(shapes), 0, {coordination})
+    builder.appendBatch([placedAt(2000000, 5, -8000000)])
+    builder.finalize()
+
+    expect(coordination.offset).toEqual([2000000, 5, -8000000])
+
+    // A preview payload placed at the same site coordinates now lands in
+    // the same frame -- near the origin, not a megametre away.
+    const mesh = payloadToPreviewMesh(
+      {
+        geometryExpressID: 999,
+        color: {x: 1, y: 1, z: 1, w: 1},
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+        flatTransformation: [
+          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1,
+        ],
+      },
+      new Map(), new Map(), coordination)
+
+    expect(mesh.matrix.elements[12]).toBeCloseTo(0)
+    expect(mesh.matrix.elements[14]).toBeCloseTo(0)
+  })
+
+  it('a preview before the builder decides renders raw and never latches', () => {
+    // Before the first durable batch there is no trustworthy frame.
+    // The preview must not decide one — a mis-placed payload would
+    // shift every later durable instance, and a near-origin payload on
+    // a large-coordinate model would latch null and disable recentring.
+    const coordination = {offset: undefined}
+    const mesh = payloadToPreviewMesh(
+      {
+        geometryExpressID: 999,
+        color: {x: 1, y: 1, z: 1, w: 1},
+        vertexData: unitTriangleVerts(),
+        indexData: new Uint32Array([0, 1, 2]),
+        flatTransformation: [
+          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2000000, 5, -8000000, 1,
+        ],
+      },
+      new Map(), new Map(), coordination)
+
+    expect(coordination.offset).toBeUndefined()
+    expect(mesh.matrix.elements[12]).toBeCloseTo(2000000)
+    expect(mesh.matrix.elements[14]).toBeCloseTo(-8000000)
   })
 
   it('reports bounds per appended instance and skips bad geometry', () => {
