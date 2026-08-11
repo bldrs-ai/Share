@@ -20,6 +20,12 @@ on:
     # cancel-in-progress kills the flows that are mid-flight and the run it
     # schedules in their place skips (the PR is a draft again).
     types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
+    # NOTE: same caveat as main.yml and conway's build.yml — this is a
+    # workflow-level skip, so a docs-only PR produces NO check run at all,
+    # whereas the job-level draft gate below produces a `skipped` conclusion
+    # that satisfies a required status check. If either job here is ever made
+    # required in branch protection, convert this to a per-job `if` gate or
+    # docs-only PRs will sit unmergeable forever.
     paths-ignore:
       - '**/*.md'
       - 'design/**'

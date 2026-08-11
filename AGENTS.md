@@ -52,14 +52,20 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   clause is defensive rather than load-bearing (Actions coerces
   mismatched `==` operands to numbers, so `null == false` is already
   true on push) — keep it so CI on main doesn't hinge on that.
-  **Consequence to be aware of:** because `build` is gated here, a draft
-  gets no CI signal at all. The husky pre-commit hook covers most of
-  that phase — but only most: it runs eslint + typecheck + jest, while
-  CI's `build` job *also* runs `yarn build-prod`. So an esbuild-only
-  breakage (a missing asset loader, a plugin misconfig) survives every
-  draft commit and first surfaces at step 3, after `/review` has already
-  signed off — exactly the step-4 re-review this lifecycle is trying to
-  avoid. Run `yarn build-prod` once before flipping to ready — then undo
+  **Consequence to be aware of:** because every job is gated here, a
+  draft gets no CI signal at all, and the husky pre-commit hook covers
+  only part of the gap. Three things it does not run, each of which will
+  otherwise first fail at step 3 — after `/review` has signed off, which
+  is exactly the step-4 re-review this lifecycle is trying to avoid:
+  (a) `yarn build-prod`, so an esbuild-only breakage (missing asset
+  loader, plugin misconfig) survives every draft commit; (b) coverage —
+  the hook's `yarn test` runs `test-src`, while CI runs `test-ci` →
+  `test-coverage` with thresholds enforced (`tools/jest/jest.config.js`);
+  (c) **Playwright**, the big one — E2E specs never execute before step
+  3, so `/review` is reading specs that have never run, against this
+  file's own mandatory desktop+mobile E2E rule. Before flipping to ready,
+  run `yarn build-prod`, `yarn test-ci`, and
+  `yarn test-flows-build-and-serve` + `yarn test-flows [spec]` — then undo
   what it did to `package.json`, because `tools/updateVersion.mjs` stamps
   a local version into that tracked file on every build and the stamp
   must never reach a commit (#1747). `git checkout -- package.json` if
