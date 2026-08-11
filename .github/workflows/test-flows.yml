@@ -45,13 +45,15 @@ on:
 # drop the middle commit's run before it starts.
 #
 # Keying non-PR events on github.sha would avoid that, and it is the wrong
-# trade here. It lets those three merges run six large-runner jobs at once
-# against the 4-job cap — relocating onto main exactly the starvation the draft
-# gate removes from drafts — and it collides across event types the ref keeps
-# apart, so a workflow_dispatch re-run on a main commit would queue behind that
-# commit's push run. What is lost by serializing is one main commit's flow run,
-# which ships nothing; conway keys on the ref for the same reason with more at
-# stake (see conway#468).
+# trade here: it lets those three merges run six large-runner jobs at once
+# against the 4-job cap, relocating onto main exactly the starvation the draft
+# gate removes from drafts. What serializing costs is one main commit's flow
+# run, and nothing ships from those runs. conway keys on the ref for a
+# stronger reason — an npm publish rides on the ordering there (conway#468).
+#
+# (This repo has no tag triggers, so push and workflow_dispatch on main share
+# `refs/heads/main` and land in one group either way. Don't carry conway's
+# extra event-type argument over here; it turns on its `rc-*` tag trigger.)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

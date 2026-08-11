@@ -56,10 +56,14 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   breakage (a missing asset loader, a plugin misconfig) survives every
   draft commit and first surfaces at step 3, after `/review` has already
   signed off — exactly the step-4 re-review this lifecycle is trying to
-  avoid. Run `yarn build-prod` once before flipping to ready — then
-  `git checkout -- package.json`, because `tools/updateVersion.mjs`
-  stamps a local version into it on every build and that stamp must
-  never reach a commit. And if you're in a sandbox where the hook isn't
+  avoid. Run `yarn build-prod` once before flipping to ready — then undo
+  what it did to `package.json`, because `tools/updateVersion.mjs` stamps
+  a local version into that tracked file on every build and the stamp
+  must never reach a commit (#1747). `git checkout -- package.json` if
+  the version is the only change in it; if you also edited it — added a
+  dependency, changed a script — restore just the `version` field by
+  hand, since the checkout would silently drop the rest while
+  `yarn.lock` kept it. And if you're in a sandbox where the hook isn't
   installed, `yarn install` first; nothing is being checked otherwise.
   conway uses the same lifecycle, gating `run-ifc-regression` and
   `visual-diff` while leaving its `build` job ungated.

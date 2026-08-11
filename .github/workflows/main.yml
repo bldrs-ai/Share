@@ -51,10 +51,9 @@ on:
 # `cancel-in-progress: false` does not mean "never cancel" — GitHub cancels a
 # run still PENDING in a group when a newer one joins — so three merges inside
 # one build window drop the middle commit's build. That is the accepted cost:
-# keying on github.sha instead would run them in parallel against the 4-job cap
-# and would collide across event types (a workflow_dispatch re-run on a main
-# commit joining that commit's push run). Same choice as test-flows.yml, and as
-# conway, which has an npm release riding on the ordering (conway#468).
+# keying on github.sha instead would run them in parallel against the 4-job
+# cap. Same choice as test-flows.yml, and as conway, which has an npm release
+# riding on the ordering (conway#468).
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
