@@ -3,6 +3,7 @@ import {Box, Button, Divider, Slide, Stack, Typography} from '@mui/material'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {checkOPFSAvailability} from '../../OPFS/utils'
 import useStore from '../../store/useStore'
+import useQuota from '../../hooks/useQuota'
 import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
 import {NeedsReconnectError} from '../../connections/errors'
 import {
@@ -25,6 +26,7 @@ import GoogleDriveTab from '../Connections/GoogleDriveTab'
 import GitHubTab from '../Connections/GitHubTab'
 import GoogleDrivePickerDialog from '../Connections/GoogleDrivePickerDialog'
 import RecentFilesBrowseSection from '../Connections/RecentFilesBrowseSection'
+import QuotaLimitDialog from './QuotaLimitDialog'
 import {LABEL_LOCAL, LABEL_GITHUB, LABEL_GOOGLE, LABEL_SAMPLES} from './component'
 import {FolderOpen as FolderOpenIcon, GitHub as GitHubIcon} from '@mui/icons-material'
 
@@ -49,14 +51,17 @@ export default function OpenModelDialog({
   const appPrefix = useStore((state) => state.appPrefix)
   const setCurrentTab = useStore((state) => state.setCurrentTab)
   const currentTab = useStore((state) => state.currentTab)
+  const setAlert = useStore((state) => state.setAlert)
   const isOpfsAvailable = checkOPFSAvailability()
   const isMobile = useIsMobile()
+  const {tier, record, check, hasCapacity} = useQuota()
 
   const [pickerToken, setPickerToken] = useState(null)
   const [pickerConnection, setPickerConnection] = useState(null)
   const [localRecents, setLocalRecents] = useState([])
   const [githubRecents, setGithubRecents] = useState([])
   const [showGithubBrowser, setShowGithubBrowser] = useState(false)
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false)
   // When the user clicks Browse on a connection in GitHubTab, we feed the
   // connection-derived token through to GitHubFileBrowser instead of the
   // legacy Auth0-federated useStore.accessToken. Both stay null on the
@@ -80,8 +85,6 @@ export default function OpenModelDialog({
     setPickerConnection(connection)
   }
 
-  const setAlert = useStore((state) => state.setAlert)
-
   /**
    * GitHubTab's Browse-on-connection handler: stash the connection token
    * and reveal the GitHubFileBrowser inline (slide-over). The browser
@@ -98,11 +101,22 @@ export default function OpenModelDialog({
   }
 
   const handleOpenById = async (connection, fileId, fileName) => {
+    // Cheap client-side gate first — if we already know we're at limit,
+    // surface the dialog without bothering with token acquisition or a
+    // round-trip to record-load. check(key), not hasCapacity: an
+    // already-counted key stays openable at limit (server idempotency;
+    // /share/quotas promises re-opens from recents are free).
+    const key = `${appPrefix}/v/g/${fileId}`
+    if (!check(key).allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     // Pre-flight token acquisition INSIDE this user-gesture click handler so
     // that if GIS needs to pop a consent window, the popup inherits the click
     // activation and the browser allows it. If we navigate first, the gesture
     // is gone by the time CadView's load chain calls getAccessToken — and a
-    // stale token there hits popup_failed_to_open and bricks the load.
+    // stale token there hits popup_failed_to_open and bricks the load. This
+    // must remain BEFORE the record() await for the same reason.
     const provider = getProvider(connection.providerId)
     if (provider) {
       try {
@@ -120,6 +134,11 @@ export default function OpenModelDialog({
         return
       }
     }
+    const {allowed} = await record(key)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     disablePageReloadApprovalCheck()
     addRecentFileEntry({
       id: fileId,
@@ -129,9 +148,9 @@ export default function OpenModelDialog({
       lastModifiedUtc: null,
       connectionId: connection.id,
       fileId,
-      sharePath: `${appPrefix}/v/g/${fileId}`,
+      sharePath: key,
     })
-    navigateToModel(`${appPrefix}/v/g/${fileId}`, navigate)
+    navigateToModel(key, navigate)
     setIsDialogDisplayed(false)
   }
 
@@ -146,6 +165,12 @@ export default function OpenModelDialog({
    * @param {string} fileName Recent's display name.
    */
   const handleGithubOpenById = async (connection, fileId, fileName) => {
+    // check(fileId), not hasCapacity — see handleOpenById; fileId is the
+    // recent's share path, so an already-counted repo file reopens at limit.
+    if (!check(fileId).allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     const provider = getProvider(connection.providerId)
     if (provider) {
       try {
@@ -163,6 +188,11 @@ export default function OpenModelDialog({
         return
       }
     }
+    const {allowed} = await record(fileId)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     disablePageReloadApprovalCheck()
     addRecentFileEntry({
       id: fileId,
@@ -176,11 +206,19 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
-  const handlePickerSelect = (docs) => {
+  const handlePickerSelect = async (docs) => {
     if (!pickerConnection || !docs || docs.length === 0) {
       return
     }
     const doc = docs[0]
+    const key = `${appPrefix}/v/g/${doc.id}`
+    const {allowed} = await record(key)
+    if (!allowed) {
+      setPickerToken(null)
+      setPickerConnection(null)
+      setShowQuotaDialog(true)
+      return
+    }
     const connection = pickerConnection
     setPickerToken(null)
     setPickerConnection(null)
@@ -193,9 +231,9 @@ export default function OpenModelDialog({
       lastModifiedUtc: doc.lastModifiedUtc || null,
       connectionId: connection.id,
       fileId: doc.id,
-      sharePath: `${appPrefix}/v/g/${doc.id}`,
+      sharePath: key,
     })
-    navigateToModel(`${appPrefix}/v/g/${doc.id}`, navigate)
+    navigateToModel(key, navigate)
     setIsDialogDisplayed(false)
   }
 
@@ -206,15 +244,24 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
+    if (!hasCapacity) {
+      setShowQuotaDialog(true)
+      return
+    }
     /**
      * @param {string} storageId OPFS storage id, `<blob-uuid>.<ext>` — the
      *   `/v/new/` path segment the Loader resolves against OPFS.
      * @param {number} lastModifiedUtc Epoch ms from the picked File.
      * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
      */
-    const onLoad = (storageId, lastModifiedUtc, originalName) => {
-      disablePageReloadApprovalCheck()
+    const onLoad = async (storageId, lastModifiedUtc, originalName) => {
       const sharePath = `${appPrefix}/v/new/${storageId}`
+      const {allowed} = await record(sharePath)
+      if (!allowed) {
+        setShowQuotaDialog(true)
+        return
+      }
+      disablePageReloadApprovalCheck()
       navigateToModel(sharePath, navigate)
       addRecentFileEntry({
         id: storageId,
@@ -251,15 +298,35 @@ export default function OpenModelDialog({
    *
    * @param {object} entry A `local` RecentFileEntry.
    */
-  const handleOpenLocalRecent = (entry) => {
+  const handleOpenLocalRecent = async (entry) => {
+    const key = entry.sharePath || `${appPrefix}/v/new/${entry.id}`
+    const {allowed} = await record(key)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     disablePageReloadApprovalCheck()
-    navigateToModel(entry.sharePath || `${appPrefix}/v/new/${entry.id}`, navigate)
+    navigateToModel(key, navigate)
     setIsDialogDisplayed(false)
   }
 
-  const handleOpenGithubRecent = (entry) => {
+  const handleOpenGithubRecent = async (entry) => {
+    const {allowed} = await record(entry.sharePath)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return
+    }
     navigateToModel(entry.sharePath, navigate)
     setIsDialogDisplayed(false)
+  }
+
+  const handleGithubBrowserOpen = async (sharePath) => {
+    const {allowed} = await record(sharePath)
+    if (!allowed) {
+      setShowQuotaDialog(true)
+      return false
+    }
+    return true
   }
 
   const BLDRS_IDENTITIES_CLAIM = 'https://bldrs.ai/identities'
@@ -343,6 +410,7 @@ export default function OpenModelDialog({
                     }}
                     accessTokenOverride={githubBrowserToken}
                     activeConnection={githubBrowserConnection}
+                    checkQuota={handleGithubBrowserOpen}
                   />
                 </Stack>
               </Slide>
@@ -365,6 +433,7 @@ export default function OpenModelDialog({
                     navigate={navigate}
                     setIsDialogDisplayed={setIsDialogDisplayed}
                     onCancel={() => setShowGithubBrowser(false)}
+                    checkQuota={handleGithubBrowserOpen}
                   />
                 </Stack>
               </Slide>
@@ -424,6 +493,12 @@ export default function OpenModelDialog({
         mode='file'
         onSelect={handlePickerSelect}
         onCancel={handlePickerCancel}
+      />
+
+      <QuotaLimitDialog
+        tier={tier}
+        isOpen={showQuotaDialog}
+        onClose={() => setShowQuotaDialog(false)}
       />
     </>
   )

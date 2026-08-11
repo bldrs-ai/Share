@@ -239,6 +239,8 @@ describe('OpenModelDialog — Google Drive tab', () => {
     })
     render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
     fireEvent.click(screen.getByTestId('button-open-by-id'))
+    // getAccessToken preflights inside the click, then record() awaits the
+    // MSW-backed record-load handler before navigateToModel fires.
     await waitFor(() => {
       expect(navigateToModel).toHaveBeenCalledWith(
         expect.stringMatching(/\/v\/g\/file-id-abc$/),
@@ -340,18 +342,25 @@ describe('OpenModelDialog — Local tab', () => {
     render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
   }
 
-  it('navigates by storage id, not display name, for a legacy entry with no sharePath', () => {
+  // The recents/openFile handlers await the quota record() gate (a no-op
+  // resolve while the `quotas` flag is off) before navigating, so the
+  // post-click assertions must waitFor the microtask hop.
+  it('navigates by storage id, not display name, for a legacy entry with no sharePath', async () => {
     renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
-    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    })
   })
 
-  it('navigates to the stored sharePath when the entry carries one', () => {
+  it('navigates to the stored sharePath when the entry carries one', async () => {
     renderLocalTab([
       {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/share/v/new/${STORAGE_ID}`},
     ])
     fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
-    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    await waitFor(() => {
+      expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    })
   })
 
   it('shows the original filename in the recents row', () => {
@@ -360,28 +369,32 @@ describe('OpenModelDialog — Local tab', () => {
     expect(screen.queryByText(STORAGE_ID)).not.toBeInTheDocument()
   })
 
-  it('records the picked filename as display name and the storage id as nav target', () => {
+  it('records the picked filename as display name and the storage id as nav target', async () => {
     const lastModified = Date.now()
     loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
-    expect(addRecentFileEntry).toHaveBeenCalledWith({
-      id: STORAGE_ID,
-      source: 'local',
-      name: 'box.ifc',
-      lastModifiedUtc: lastModified,
-      sharePath: `/share/v/new/${STORAGE_ID}`,
+    await waitFor(() => {
+      expect(addRecentFileEntry).toHaveBeenCalledWith({
+        id: STORAGE_ID,
+        source: 'local',
+        name: 'box.ifc',
+        lastModifiedUtc: lastModified,
+        sharePath: `/share/v/new/${STORAGE_ID}`,
+      })
     })
     expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
     expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
   })
 
-  it('falls back to the storage id as display name when the picker gives no filename', () => {
+  it('falls back to the storage id as display name when the picker gives no filename', async () => {
     loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
     renderLocalTab([])
     fireEvent.click(screen.getByTestId('button_open_file'))
-    expect(addRecentFileEntry).toHaveBeenCalledWith(
-      expect.objectContaining({id: STORAGE_ID, name: STORAGE_ID}),
-    )
+    await waitFor(() => {
+      expect(addRecentFileEntry).toHaveBeenCalledWith(
+        expect.objectContaining({id: STORAGE_ID, name: STORAGE_ID}),
+      )
+    })
   })
 })
