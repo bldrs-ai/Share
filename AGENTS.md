@@ -39,7 +39,10 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **What the gate covers:** `build` (main.yml) and both `test-flows`
   jobs are skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
-  always has a preview URL to click through. Before editing those
+  normally has a preview URL to click through. (Not for a docs-only PR:
+  `tools/netlify/ignore-build.sh` skips the deploy when every changed
+  file matches `.md` / `design/` / `notes/`. Marketing posts are `.mdx`,
+  so they still build.) Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
   PR waiting forever); `ready_for_review` and `converted_to_draft` must

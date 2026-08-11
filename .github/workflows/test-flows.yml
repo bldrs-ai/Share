@@ -27,36 +27,26 @@ on:
   workflow_dispatch:
 
 # The draft gate defers this workflow's cost; this bounds it. These are the two
-# longest jobs in the repo (~12m and ~25m ceilings), so without cancellation
-# three quick pushes to one ready PR leave six of them running to completion
-# against a 4-job cap -- which is the exact starvation the draft gate exists to
-# prevent, just relocated from drafts to rework pushes.
+# longest jobs in the repo (35m and 25m ceilings, ~12m for a healthy
+# playwright-run), so without cancellation three quick pushes to one ready PR
+# leave six of them running against a 4-job cap -- the exact starvation the
+# draft gate exists to prevent, just relocated from drafts to rework pushes.
 #
-# Grouped per ref for PRs, so PRs never cancel each other (refs/pull/<n>/merge
-# is unique per PR). cancel-in-progress is scoped to pull_request: a push to
-# main should run to completion, since its result is the record of what main is
-# in rather than feedback on a diff still being edited.
+# Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
+# unique per PR). Cancel-always, matching main.yml: superseded runs die rather
+# than queue, on main as much as on a PR, because nothing ships from a flows
+# run and only the newest commit's result is worth a runner.
 #
-# That guarantee is not absolute, and the ref key is a deliberate choice about
-# which way to fail. All main pushes share one ref, so they land in one group
-# and run one at a time — and `cancel-in-progress: false` does not mean "never
-# cancel": GitHub cancels a run still PENDING in a group when a newer one
-# joins. Three merges inside one flows window (12-25m, so not rare) therefore
-# drop the middle commit's run before it starts.
-#
-# Keying non-PR events on github.sha would avoid that, and it is the wrong
-# trade here: it lets those three merges run six large-runner jobs at once
-# against the 4-job cap, relocating onto main exactly the starvation the draft
-# gate removes from drafts. What serializing costs is one main commit's flow
-# run, and nothing ships from those runs. conway keys on the ref for a
-# stronger reason — an npm publish rides on the ordering there (conway#468).
-#
-# (This repo has no tag triggers, so push and workflow_dispatch on main share
-# `refs/heads/main` and land in one group either way. Don't carry conway's
-# extra event-type argument over here; it turns on its `rc-*` tag trigger.)
+# Do NOT narrow this to `${{ github.event_name == 'pull_request' }}`. Leaving
+# main uncancelled makes its runs queue in this group, and `cancel-in-progress:
+# false` does not mean "never cancel" -- GitHub drops a run still PENDING in a
+# group when a newer one joins -- so three merges inside one flows window would
+# lose the middle commit's run anyway, while the others serialized. conway does
+# scope its cancellation that way, but only because an npm publish rides on the
+# ordering there (conway#468); that reason does not exist here.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   playwright-run:

@@ -47,16 +47,22 @@ on:
 # branch (the original static `build-group` cancelled across every branch in
 # the repo, so any push anywhere aborted running PR builds).
 #
-# Ref-keyed for non-PR events too, which serializes main's builds. Note that
-# `cancel-in-progress: false` does not mean "never cancel" — GitHub cancels a
-# run still PENDING in a group when a newer one joins — so three merges inside
-# one build window drop the middle commit's build. That is the accepted cost:
-# keying on github.sha instead would run them in parallel against the 4-job
-# cap. Same choice as test-flows.yml, and as conway, which has an npm release
-# riding on the ordering (conway#468).
+# Ref-keyed and cancel-always, which is what this was before the hoist —
+# superseded builds die rather than queue, on main as much as on a PR. Nothing
+# ships from a build here (Netlify deploys separately, and there is no publish
+# step), so only the newest commit's result is worth a runner.
+#
+# Do NOT narrow this to `${{ github.event_name == 'pull_request' }}`. Leaving
+# main uncancelled makes its runs queue in this group, and `cancel-in-progress:
+# false` does not mean "never cancel" — GitHub drops a run still PENDING in a
+# group when a newer one joins — so three quick merges would leave commit 3
+# waiting behind commit 1's already-superseded build and lose commit 2's
+# entirely. conway does scope its cancellation that way, but only because an
+# npm publish rides on the ordering there (conway#468); that reason does not
+# exist here.
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   build:
