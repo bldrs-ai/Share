@@ -9,6 +9,11 @@ on:
       - 'notes/**'
   pull_request:
     branches: [ main ]
+    # ready_for_review is what makes the draft gate below usable: without it,
+    # flipping a draft to ready fires no event and the PR would sit with no
+    # flow run until the next push. opened/synchronize/reopened are the
+    # Actions default set, restated because naming `types` at all replaces it.
+    types: [ opened, synchronize, reopened, ready_for_review ]
     paths-ignore:
       - '**/*.md'
       - 'design/**'
@@ -17,6 +22,19 @@ on:
 
 jobs:
   playwright-run:
+    # Draft PRs don't run flows. This is the most expensive thing CI does per
+    # PR (~12m on a large runner, two jobs' worth), and with several PRs in
+    # flight the draft pushes alone can saturate the 4-job concurrency cap and
+    # starve the PRs that are actually ready. Netlify deploy previews are NOT
+    # affected — they come from Netlify's own GitHub integration, not from
+    # Actions — so a draft still gets a preview URL to click through by hand.
+    # See AGENTS.md "PR lifecycle".
+    #
+    # A job-level `if` (rather than a workflow-level trigger filter) is what
+    # keeps this compatible with required status checks: a skipped-by-if job
+    # reports a conclusion, a workflow that never triggers reports nothing and
+    # leaves the PR waiting forever.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
     # Image must match @playwright/test in package.json (Playwright caches
     # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
@@ -102,6 +120,8 @@ jobs:
   # console so any isolated-runtime failure is legible without a local
   # browser (see design/new/viewer-replacement.md §5f).
   playwright-webifc-run:
+    # Draft-gated for the same reason as playwright-run above.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
     container: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 25

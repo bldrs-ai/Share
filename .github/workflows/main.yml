@@ -9,6 +9,11 @@ on:
       - 'notes/**'
   pull_request:
     branches: [ main ]
+    # ready_for_review is what makes the draft gate below usable: without it,
+    # flipping a draft to ready fires no event and the PR would sit with no
+    # build until the next push. opened/synchronize/reopened are the Actions
+    # default set, restated because naming `types` at all replaces it.
+    types: [ opened, synchronize, reopened, ready_for_review ]
     paths-ignore:
       - '**/*.md'
       - 'design/**'
@@ -17,6 +22,18 @@ on:
 
 jobs:
   build:
+    # Draft PRs don't build. Several PRs are typically in flight at once and
+    # each draft push would otherwise burn a full build+lint+test slot on the
+    # shared runners while the change is still being reviewed and reworked.
+    # Netlify deploy previews are NOT affected — they come from Netlify's own
+    # GitHub integration, not from Actions — so a draft still gets a preview
+    # URL to look at. See AGENTS.md "PR lifecycle".
+    #
+    # A job-level `if` (rather than a workflow-level trigger filter) is what
+    # keeps this compatible with required status checks: a skipped-by-if job
+    # reports a conclusion, a workflow that never triggers reports nothing and
+    # leaves the PR waiting forever.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 10
     # Per-ref group so a push to one branch only cancels in-progress builds
     # for that same branch. The previous static `build-group` cancelled

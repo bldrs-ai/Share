@@ -23,6 +23,29 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 - **Run tests; don't ask first.** Use `--config tools/jest/jest.config.js` when invoking Jest directly.
 - **The husky `.husky/pre-commit` hook runs `yarn precommit` (eslint + typecheck + jest) automatically on every commit.** Trust it — don't run `yarn precommit` yourself before `git commit` / `git push`. The hook is the gate; running it explicitly too is just doing the same multi-minute pass twice. It enforces the same checks CI's `build` job runs (`eslint src netlify tools --max-warnings 0 && yarn typecheck && yarn test`). If the hook isn't installed (fresh sandbox, `yarn install --ignore-scripts`, etc.), run `yarn install` to wire it in; don't paper over a missing hook by running the gate manually. Running a piece of the gate in isolation while iterating (e.g. one Jest file, `yarn eslint <path>`) is fine — that's a development inner loop, not the commit gate.
 - **UI work: "if it's not doc'd, it doesn't exist; if it's not tested, it doesn't work."** Two standing requirements for any PR implementing UI epic/story/task work: (1) **doc** — the work is tracked as an epic-labeled issue with native sub-issues per story/task, all titles sharing the epic's name so the family is greppable; (2) **test** — an issue isn't done until each task/sub-issue has a happy-path E2E test on desktop *and* mobile, via `describeMobileAndDesktop` (`src/tests/e2e/formFactor.ts`). Cross-link the PR ↔ issues, and close the story/task sub-issues when the implementing PR is submitted. Full rule + worked example: [design/new/conversational-cad.md](design/new/conversational-cad.md) §7.1.
+- **PRs: open in draft, land in five steps.** Several PRs are usually
+  in flight and CI runners are capped at 4 concurrent jobs, so a PR that
+  runs the full suite on every rework push starves the PRs that are
+  ready. (1) Open it with `draft: true` — not opened-then-marked.
+  (2) Keep it in draft until `/review` has run and every finding is
+  fixed or answered in the thread. (3) Flip to ready
+  (`update_pull_request`, `draft: false`); that fires
+  `ready_for_review`, which is what starts the gated jobs. (4) Drive CI
+  green, and `/review` again if the fixes changed the diff beyond a
+  trivial revert — otherwise the reviewed diff isn't the merged diff.
+  (5) Update the PR description to match what the change became, merge,
+  then close or narrow its issues (partly-addressed → a comment saying
+  what's left, not a close).
+  **What the gate covers:** `build` (main.yml) and both `test-flows`
+  jobs are skipped on drafts. **Netlify deploy previews still run** —
+  they come from Netlify's GitHub integration, not Actions — so a draft
+  always has a preview URL to click through. Before editing those
+  workflows: the gate is a job-level `if:` (a skipped-by-if job
+  satisfies a required check; a workflow that never triggers leaves the
+  PR waiting forever), and `ready_for_review` must stay in the
+  `pull_request` `types:` list or step 3 silently does nothing.
+  conway uses the same lifecycle, gating `run-ifc-regression` and
+  `visual-diff` while leaving its `build` job ungated.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
 
 
