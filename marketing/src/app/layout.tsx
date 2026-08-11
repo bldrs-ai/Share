@@ -1,5 +1,12 @@
 import type {Metadata, Viewport} from 'next'
 import {AppRouterCacheProvider} from '@mui/material-nextjs/v15-appRouter'
+// Self-hosted Roboto (weights 300/400/500/700), bundled by @fontsource/roboto
+// so the build never fetches from Google Fonts — see the note in src/lib/theme.ts.
+// These weights must stay in sync with the ROBOTO_FONT_FAMILY consumers there.
+import '@fontsource/roboto/300.css'
+import '@fontsource/roboto/400.css'
+import '@fontsource/roboto/500.css'
+import '@fontsource/roboto/700.css'
 import ThemeRegistry from '@/components/ThemeRegistry'
 import {INIT_SCRIPT} from '@/lib/colorMode'
 import {
