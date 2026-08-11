@@ -63,7 +63,7 @@ import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useStore from '../store/useStore'
 import {sha1Hex} from '../utils/contentHash'
-import {isOutOfMemoryError} from '../utils/oom'
+import {markIfOutOfMemory} from '../utils/oom'
 
 
 // Defer to the browser's idle period when supported, otherwise to the
@@ -500,23 +500,14 @@ export async function load(
     byteLength: modelData?.byteLength ?? modelData?.length,
   })
 
+  // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
+  // for IFC loads, or a generic error otherwise), so `model` is always
+  // truthy past this point — no post-call null check is needed here.
   let model
   try {
     model = await readModel(loader, modelData, basePath, isLoaderAsync, isIfc, viewer, fixupCb, onProgress)
   } catch (e) {
-    if (isOutOfMemoryError(e)) {
-      e.isOutOfMemory = true
-    }
-    throw e
-  }
-
-  if (model === null || model === undefined) {
-    // If loader captured a last error, surface that
-    const lastErr = (viewer && viewer.IFC && viewer.IFC.ifcLastError) || new Error('Failed to parse IFC model')
-    if (isOutOfMemoryError(lastErr)) {
-      lastErr.isOutOfMemory = true
-    }
-    throw lastErr
+    throw markIfOutOfMemory(e)
   }
 
   model.isUploadedFile = isUploadedFile
@@ -1522,7 +1513,22 @@ export async function readModel(loader, modelData, basePath, isLoaderAsync, isIf
   }
 
   if (!model) {
-    throw new Error('Loader could not read model')
+    // For IFC/async (Conway) loads, ShareIfcLoader.parse stashes the real
+    // engine failure on `viewer.IFC.ifcLastError` before returning a falsy
+    // model (it only re-throws OOM-classified errors; everything else is
+    // caught and returned as null). Surfacing that captured error here —
+    // instead of a blanket 'Loader could not read model' — does two things:
+    //   (1) lets `isOutOfMemoryError` route constrained-device memory
+    //       failures into the OOM "device too constrained" UX, and
+    //   (2) gives Sentry the true Conway error for grouping instead of
+    //       collapsing every failure into one opaque bucket (SHARE-RS,
+    //       11k+ events, ~100% old Android — the generic message hid the
+    //       actual cause from triage).
+    // Non-IFC loaders never set `ifcLastError`, so they keep the generic
+    // message. Mirrors the (now unreachable-for-IFC) fallback in `load()`.
+    const lastErr = (isIfc && viewer && viewer.IFC && viewer.IFC.ifcLastError) ||
+      new Error('Loader could not read model')
+    throw markIfOutOfMemory(lastErr)
   }
 
   if (fixupCb) {
