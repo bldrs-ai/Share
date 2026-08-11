@@ -69,6 +69,46 @@ describe('Analytics', () => {
   })
 
 
+  /*
+   * The param VALUE must be un-parseable as a number. A bare client id
+   * is numeric-looking, and gtag sends numeric-looking params as `epn.`
+   * (number): float64 truncates the id's 20 digits to ~16, colliding
+   * distinct clients, and a text custom dimension won't populate from a
+   * numeric param at all.
+   */
+  describe('getOpenCid', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+    })
+
+    test('null when no client id is available, so the param is omitted', () => {
+      expect(Analytics.getOpenCid()).toBeNull()
+    })
+
+    test('tags the id so it cannot be parsed as a number', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      const value = Analytics.getOpenCid()
+      expect(value).toBe('cid.1871520000.1754700000')
+      expect(Number.isNaN(Number(value))).toBe(true)
+    })
+
+    test('preserves the full id, which float64 would truncate', () => {
+      const cid = '1871520000.1754700000'
+      Analytics.setGaClientId(cid)
+      expect(Analytics.getOpenCid()).toContain(cid)
+      // The bug this guards: Number() drops 5 digits, so two clients
+      // differing only in the tail would collapse to one value.
+      expect(String(Number(cid))).not.toBe(cid)
+    })
+
+    test('tags the cookie-derived id too', () => {
+      Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
+      expect(Analytics.getOpenCid()).toBe('cid.1871520000.1754700000')
+    })
+  })
+
+
   // Route-result shapes mirror routes.ts#handleRoute output. The one
   // excluded shape is the homepage's bundled demo — everything else is
   // a real open.

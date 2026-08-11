@@ -718,9 +718,15 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   originally specced: GA4 reserves the `ga_`/`google_`/`firebase_`/`gtag.`
   prefixes and silently disables matching params, so that name would have
   ingested as nothing and left the dimension permanently empty.
+  The value is sent prefix-tagged (`cid.<client id>`) because gtag types
+  numeric-looking params as numbers (`epn.` in the beacon): a raw id landed
+  in GA4's numeric slot, rendering as `1.87152e+09` — float64 truncates the
+  id's 20 digits, colliding distinct clients, and a text dimension won't
+  populate from a numeric param.
   **Remaining GA4-side config:** Admin → Custom definitions → new
-  event-scoped dimension `open_cid` from event parameter `open_cid`; then
-  query `customEvent:open_cid × eventCount` and bucket client-side
+  event-scoped dimension `open_cid` from event parameter `open_cid` (a
+  *dimension*, not a metric); then query `customEvent:open_cid × eventCount`
+  and bucket client-side
   (1 / 2 / 3–5 / 6+ opens, fixtures excluded). No backfill — the dimension
   accrues from ship time, so land it early in a campaign window for a clean
   baseline. At larger scale GA4 rolls high-cardinality values into "(other)";
