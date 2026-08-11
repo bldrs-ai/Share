@@ -42,8 +42,19 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   always has a preview URL to click through. Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
-  PR waiting forever), and `ready_for_review` must stay in the
-  `pull_request` `types:` list or step 3 silently does nothing.
+  PR waiting forever); `ready_for_review` and `converted_to_draft` must
+  stay in the `pull_request` `types:` list (the first starts the gated
+  jobs at step 3, the second lets pulling a PR back to draft *cancel* a
+  run already in flight); and the `github.event_name != 'pull_request'`
+  clause is defensive rather than load-bearing (Actions coerces
+  mismatched `==` operands to numbers, so `null == false` is already
+  true on push) — keep it so CI on main doesn't hinge on that.
+  **Consequence to be aware of:** because `build` is gated here, a draft
+  gets no lint/typecheck/unit-test signal from CI at all — the husky
+  pre-commit hook is what covers that phase, which is why the rule above
+  about never skipping it matters more than it looks. If you push a
+  draft from a sandbox where the hook isn't installed, run `yarn install`
+  before you rely on anything being checked.
   conway uses the same lifecycle, gating `run-ifc-regression` and
   `visual-diff` while leaving its `build` job ungated.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.

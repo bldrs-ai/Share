@@ -13,12 +13,32 @@ on:
     # flipping a draft to ready fires no event and the PR would sit with no
     # flow run until the next push. opened/synchronize/reopened are the
     # Actions default set, restated because naming `types` at all replaces it.
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    #
+    # converted_to_draft is the other half of that gate, and it works by
+    # cancellation rather than by starting anything: pushing a PR back to
+    # draft fires an event in the concurrency group below, so
+    # cancel-in-progress kills the flows that are mid-flight and the run it
+    # schedules in their place skips (the PR is a draft again).
+    types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
     paths-ignore:
       - '**/*.md'
       - 'design/**'
       - 'notes/**'
   workflow_dispatch:
+
+# The draft gate defers this workflow's cost; this bounds it. These are the two
+# longest jobs in the repo (~12m and ~25m ceilings), so without cancellation
+# three quick pushes to one ready PR leave six of them running to completion
+# against a 4-job cap -- which is the exact starvation the draft gate exists to
+# prevent, just relocated from drafts to rework pushes.
+#
+# Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
+# unique per PR). cancel-in-progress is scoped to pull_request: a push to main
+# should run to completion, since its result is the record of what main is in
+# rather than feedback on a diff still being edited.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   playwright-run:
@@ -34,6 +54,13 @@ jobs:
     # keeps this compatible with required status checks: a skipped-by-if job
     # reports a conclusion, a workflow that never triggers reports nothing and
     # leaves the PR waiting forever.
+    #
+    # The event_name clause is defensive, not load-bearing. On push and
+    # workflow_dispatch `github.event.pull_request` is null, and Actions
+    # coerces both sides of `==` to a number when the types differ, so a bare
+    # `draft == false` would evaluate `0 == 0` and run anyway. Relying on that
+    # coercion would make CI on main hinge on a documented-but-obscure corner
+    # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
     # Image must match @playwright/test in package.json (Playwright caches

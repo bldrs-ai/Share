@@ -13,7 +13,13 @@ on:
     # flipping a draft to ready fires no event and the PR would sit with no
     # build until the next push. opened/synchronize/reopened are the Actions
     # default set, restated because naming `types` at all replaces it.
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    #
+    # converted_to_draft is the other half of that gate, and it works by
+    # cancellation rather than by starting anything: pushing a PR back to
+    # draft fires an event in the job's concurrency group, so
+    # cancel-in-progress kills the build that is mid-flight and the run it
+    # schedules in its place skips (the PR is a draft again).
+    types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
     paths-ignore:
       - '**/*.md'
       - 'design/**'
@@ -33,6 +39,13 @@ jobs:
     # keeps this compatible with required status checks: a skipped-by-if job
     # reports a conclusion, a workflow that never triggers reports nothing and
     # leaves the PR waiting forever.
+    #
+    # The event_name clause is defensive, not load-bearing. On push and
+    # workflow_dispatch `github.event.pull_request` is null, and Actions
+    # coerces both sides of `==` to a number when the types differ, so a bare
+    # `draft == false` would evaluate `0 == 0` and run anyway. Relying on that
+    # coercion would make CI on main hinge on a documented-but-obscure corner
+    # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 10
     # Per-ref group so a push to one branch only cancels in-progress builds
