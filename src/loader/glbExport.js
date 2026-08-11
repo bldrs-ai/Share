@@ -34,12 +34,19 @@ import {
 import {
   BLDRS_FACE_IDS_EXTENSION_NAME,
   buildFaceIdsExtensionData,
+  captureGeometryItemIdentities,
   capturePerTriangleIds,
 } from './bldrsFaceIds'
 import {
   BLDRS_SPATIAL_TREE_EXTENSION_NAME,
   captureBldrsSpatialTree,
 } from './bldrsSpatialTree'
+import {eachBatch} from '../viewer/ifc/batchedModel'
+import {
+  batchedModelOccurrenceTables,
+  batchedModelToMergedMesh,
+  disposeMergedMesh,
+} from '../viewer/ifc/batchedToMergedMesh'
 import {glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
@@ -47,7 +54,7 @@ import {
   schemaVersionFor,
 } from './glbCompress'
 import {packGlbChunks} from './glbContainer'
-import {glbInfo, glbVerbose} from './glbLog'
+import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
 import {injectGlbExtensions, parseGlb} from './injectGlbExtensions'
 
@@ -144,6 +151,24 @@ function silenceGltfExporterMaterialWarnings() {
 
 
 /**
+ * True when the model root is, or contains, a `THREE.BatchedMesh`. Such
+ * models come from the Conway-direct instancing path (`?feature=batchedMesh`)
+ * and are baked back to a merged mesh before serialising (see
+ * `exportAndCacheGlb`), since `GLTFExporter` can't serialise a packed batch.
+ *
+ * @param {object} model Three.js root (Mesh / Group / Scene / BatchedMesh)
+ * @return {boolean}
+ */
+function modelHasBatchedMesh(model) {
+  let found = false
+  eachBatch(model, () => {
+    found = true
+  })
+  return found
+}
+
+
+/**
  * Export the loaded model and write the resulting GLB (wrapped in the
  * Bldrs container) to OPFS at the cache key the reader will look for.
  * Fire-and-forget at the call site — any failure is logged but never
@@ -170,13 +195,36 @@ function silenceGltfExporterMaterialWarnings() {
 export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
   const startMs = Date.now()
   try {
+    // BatchedMesh render path (`?feature=batchedMesh`): `GLTFExporter` can't
+    // serialise a `THREE.BatchedMesh`'s packed buffer, and a batch carries
+    // no per-vertex `_EXPRESSID` for the `BLDRS_face_ids` picking capture.
+    // Bake it into the same merged-mesh shape the Conway-direct merged path
+    // produces (per-vertex expressID/instanceID + colour-binned materials);
+    // the resulting GLB is byte-compatible with a merged cache artifact and
+    // reads back through the existing cache-hit path unchanged
+    // (design/new/viewer-replacement.md §3b.iv). The bake is transient —
+    // disposed right after serialisation below.
+    const isBatched = modelHasBatchedMesh(model)
+    const exportModel = isBatched ? batchedModelToMergedMesh(model) : model
+    if (isBatched && !exportModel) {
+      glbInfo('writer: skipped (batched model produced no exportable geometry)')
+      return false
+    }
     const filePath = cacheKeyArgs.sourcePath
     const requestedMode = activeGlbCompressionMode()
     glbInfo(
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    const rawBytes = await exportThreeModelAsGlb(model)
+    if (isBatched) {
+      glbVerbose('writer: baked BatchedMesh model to a merged mesh for export')
+    }
+    const rawBytes = await exportThreeModelAsGlb(exportModel)
+    // The baked mesh is a transient, off-scene copy; free its buffers now
+    // that the bytes are captured (the source batched model is untouched).
+    if (exportModel !== model) {
+      disposeMergedMesh(exportModel)
+    }
     if (!rawBytes || rawBytes.byteLength === 0) {
       glbInfo('writer: skipped (GLTFExporter produced no bytes)')
       return false
@@ -240,16 +288,75 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       // `preserveTriangleOrder` stays false, so compressGlb falls
       // back to the per-vertex-IDs-detected skip (uncompressed
       // write) rather than running DRACO with corrupted IDs.
-      console.warn(
-        '[glb] writer: parseGlb for face_ids capture threw; ' +
+      glbWarn(
+        'writer: parseGlb for face_ids capture threw; ' +
         'skipping face_ids (DRACO will skip too):', e)
+    }
+    // STEP per-occurrence identity. The per-triangle arrays above only
+    // carry the scalar instance id; the occurrence path (a variable-length
+    // NAUO chain) lives on the live instance map. Persist the global
+    // `instanceId → path` table alongside face_ids so a cache-hit STEP
+    // model can restore per-occurrence NavTree↔scene selection instead of
+    // collapsing to the shared part-type id. Absent for IFC.
+    if (faceIds) {
+      let occurrencePaths = model?.instanceMap?.instanceIdToOccurrencePath ?? null
+      // Per-instance geometry (solid) express ids — the other half of the
+      // (occurrencePath, solid expressID) identity per-solid selection of
+      // multibody STEP parts joins on. Same rationale as the paths above:
+      // per-triangle arrays carry only the scalar instance id. Absent for IFC.
+      let geometryExpressIds = model?.instanceMap?.instanceIdToGeometryExpressId ?? null
+      // Batched render path (demandGeometry default / ?feature=batchedMesh):
+      // the model is a THREE.BatchedMesh with NO `instanceMap` — its
+      // per-occurrence tables live on the batch meshes, keyed by batchId.
+      // `batchedModelToMergedMesh` (above) baked each vertex's `instanceID`
+      // from the global occurrence id, so re-key the occurrence tables to that
+      // same id space; otherwise a batched-first load caches with no occurrence
+      // data and the scene per-occurrence highlight can't restore on cache-hit
+      // (the NavTree still can — the spatial tree persists paths separately).
+      if (!Array.isArray(occurrencePaths) && isBatched) {
+        const batchedTables = batchedModelOccurrenceTables(model)
+        occurrencePaths = batchedTables.occurrencePaths
+        geometryExpressIds = batchedTables.geometryExpressIds
+      }
+      if (Array.isArray(occurrencePaths)) {
+        faceIds.occurrencePaths = occurrencePaths
+      }
+      // Geometry (solid) ids — and their identity table — are persisted only
+      // when the model also carries occurrence paths (STEP): every reader-side
+      // join on a geometry id is occurrence-path-gated (per-solid narrowing in
+      // getInstanceIdsForOccurrencePath, "Face #" transient rows), so for IFC
+      // the table has no consumer, and the identity sweep below provably
+      // resolves nothing (Conway IFC entities have numeric types, which the
+      // capture skips) while costing one async property lookup per DISTINCT
+      // geometry id — minutes of write-time on big IFCs for an empty result.
+      if (Array.isArray(occurrencePaths) && Array.isArray(geometryExpressIds)) {
+        faceIds.geometryExpressIds = geometryExpressIds
+        // Identity table for those geometry pieces (conway#387): distinct
+        // id → {type, name}, resolved through the live parser we have RIGHT
+        // NOW so a cache-hit load can label transient NavTree rows and the
+        // Properties panel without one. Small: one entry per distinct
+        // geometry id (hundreds on NEMA-class parts), not per instance.
+        const identitiesStartMs = Date.now()
+        faceIds.geometryItemIdentities = await captureGeometryItemIdentities(
+          ifcManager, modelId, geometryExpressIds)
+        glbVerbose(
+          `writer: geometry identity sweep took ${Date.now() - identitiesStartMs}ms ` +
+          `(${Object.keys(faceIds.geometryItemIdentities ?? {}).length} identities)`)
+      }
     }
     await yieldToBrowser()
     const capturePromise = (async () => {
+      // Per-phase timing (glbVerbose): the writer's post-export phases are
+      // otherwise silent for minutes on big models, which makes write stalls
+      // unattributable from the console (#1639 follow-up observation).
+      const treeStartMs = Date.now()
       const spatialTree = await captureBldrsSpatialTree(ifcManager, modelId)
+      glbVerbose(`writer: spatial-tree capture took ${Date.now() - treeStartMs}ms`)
       await yieldToBrowser()
+      const propsStartMs = Date.now()
       const elementProperties = await captureBldrsElementProperties(
         ifcManager, modelId, spatialTree)
+      glbVerbose(`writer: element-properties capture took ${Date.now() - propsStartMs}ms`)
       return {spatialTree, elementProperties}
     })()
     // Compress FIRST, then inject. `@gltf-transform/core`'s `WebIO`
@@ -274,35 +381,51 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // matching schema slot. Otherwise a -draco / -meshopt suffix on
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
+    const compressStartMs = Date.now()
     const {bytes: compressedBytes, mode} = await compressGlb(
       rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
+    glbVerbose(`writer: compress phase took ${Date.now() - compressStartMs}ms (mode=${mode || 'none'})`)
     await yieldToBrowser()
     const {spatialTree, elementProperties} = await capturePromise
     await yieldToBrowser()
     const faceIdsData = faceIds ? buildFaceIdsExtensionData(faceIds) : null
     // Dispatch the JSON.stringify + pako.gzip + extension injection +
     // container packing to the GlbWriter worker. On Schependomlaan-
-    // class IFCs the element-properties payload is multi-MB; running
-    // its `JSON.stringify` + `pako.gzip` on the main thread costs
-    // ~300-500ms of frozen hover-pick. Moving them to the worker
+    // class IFCs the spatial-tree / face-ids payloads are multi-MB;
+    // running their `JSON.stringify` + `pako.gzip` on the main thread
+    // costs ~300-500ms of frozen hover-pick. Moving them to the worker
     // eliminates that block — the main thread only pays the
     // structured-clone cost across postMessage (~50ms on a
     // Schependomlaan payload, scales sublinearly with size).
+    // (The element-properties payload always arrives as already-
+    // compressed container bytes from the capture — see below — so
+    // for it the worker only splices bytes; the stringify+gzip
+    // offload applies to the other extensions.)
     //
     // The fallback path runs everything inline (no worker) — used
     // when the worker fails to construct (Safari edge cases,
     // module-worker support detection failure). Same result either
     // way; the only observable difference is main-thread freeze
     // duration.
+    // The element-properties capture (both streaming and slow paths)
+    // hands back the block-indexed container bytes — pass them
+    // through as `precompressed` so neither this thread nor the
+    // worker re-materialises the payload. Nullish when no capture ran
+    // (non-IFC source); the inject filter drops the entry.
     const extensionsForInject = [
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
-      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: elementProperties, compress: true},
+      {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties?.compressedBytes},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
     ]
     // Scene-level metadata that rides along in the same inject pass
-    // — no extra parse/serialize. Today: just the project title under
-    // `BLDRS_TITLE_EXTRAS_KEY`. Set to null when no title is
-    // available so `injectGlbExtensions` no-ops the scene mutation.
+    // — no extra parse/serialize. The project title is stamped twice:
+    // under `BLDRS_TITLE_EXTRAS_KEY` in `scenes[0].extras` (the
+    // Bldrs-only carrier the reader hydrates the page title from) AND
+    // into the standard glTF `scenes[0].name` field (#1595) so
+    // generic viewers — the three.js editor's navtree, Babylon
+    // sandbox — show the model name instead of GLTFExporter's
+    // 'AuxScene' placeholder. Null when no title is available so
+    // `injectGlbExtensions` no-ops both scene mutations.
     const sceneExtrasForInject = titleForExtras ?
       {[BLDRS_TITLE_EXTRAS_KEY]: titleForExtras} :
       null
@@ -314,12 +437,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         mode,
         extensions: extensionsForInject,
         sceneExtras: sceneExtrasForInject,
+        sceneName: titleForExtras,
       })
       packed = workerResult.bytes
       extStats = workerResult.extStats
     } catch (workerErr) {
       glbInfo('writer: worker dispatch failed, running inline on main thread:', workerErr)
-      const inline = injectGlbExtensions(compressedBytes, extensionsForInject, sceneExtrasForInject)
+      const inline = injectGlbExtensions(
+        compressedBytes, extensionsForInject, sceneExtrasForInject, titleForExtras)
       extStats = inline.stats
       packed = packGlbChunks([inline.bytes], mode)
     }
@@ -330,6 +455,9 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     if (extStats.addedSceneExtras > 0) {
       glbVerbose(
         `writer: stamped ${extStats.addedSceneExtras} scene.extras key(s) (title="${titleForExtras}")`)
+    }
+    if (extStats.addedSceneName > 0) {
+      glbVerbose(`writer: stamped standard scenes[0].name = "${titleForExtras}"`)
     }
     const schemaVer = schemaVersionFor(mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})

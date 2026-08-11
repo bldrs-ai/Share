@@ -197,9 +197,31 @@ describe('dragAndDrop utility', () => {
         id: mockFileName,
         source: 'local',
         name: 'mymodel.ifc',
-        lastModifiedUtc: new Date(lastModified).toISOString(),
+        // Epoch ms, not an ISO string — RecentFilesList does
+        // `Date.now() - utcMs` and would render "NaNm ago" (#1682).
+        lastModifiedUtc: lastModified,
+        sharePath: `/prefix/v/new/${mockFileName}`,
       })
       expect(setPendingModelNameUpdate).toHaveBeenCalledWith(mockFileName)
+    })
+
+    // The recents row must navigate by the OPFS storage id the worker
+    // wrote under, never by the user's filename — see #1682.
+    it('records the storage id as the entry id and the user filename as display name', async () => {
+      const mockFile = {name: 'mymodel.ifc', type: 'application/octet-stream', size: 1024}
+      mockEvent.dataTransfer.files = [mockFile]
+      guessTypeFromFile.mockResolvedValue('ifc')
+      saveDnDFileToOpfs.mockImplementation((file, type, onWritten) => {
+        onWritten('ADD77535-D1B6-49A9-915B-41343B08BF83.ifc')
+      })
+
+      await handleFileDrop(mockEvent, mockNavigate, '/prefix', true, mockSetAlert)
+
+      expect(addRecentFileEntry).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'ADD77535-D1B6-49A9-915B-41343B08BF83.ifc',
+        name: 'mymodel.ifc',
+        sharePath: '/prefix/v/new/ADD77535-D1B6-49A9-915B-41343B08BF83.ifc',
+      }))
     })
 
     it('records recent entry with null lastModifiedUtc when lastModified is absent', async () => {

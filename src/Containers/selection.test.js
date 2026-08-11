@@ -27,7 +27,18 @@ describe('elementSelection', () => {
     const viewer = makeViewer()
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, false, 3)
-    expect(selectItemsInScene).toHaveBeenCalledWith([3], true)
+    expect(selectItemsInScene).toHaveBeenCalledWith([3], true, [], null, null, [3])
+  })
+
+  // The scene needs the descendants (a container's geometry lives in
+  // its children) but the anchor stays the clicked element, so NavTree,
+  // Properties and the breadcrumb don't follow a child instead.
+  it('anchors on the clicked element while selecting its descendants', () => {
+    const viewer = makeViewer()
+    const selectItemsInScene = jest.fn()
+    elementSelection(viewer, elementsById, selectItemsInScene, false, 2)
+    const [, , , , , anchors] = selectItemsInScene.mock.calls[0]
+    expect(anchors).toEqual([2])
   })
 
   it('selects an element together with its descendants (non-shift)', () => {
@@ -49,14 +60,14 @@ describe('elementSelection', () => {
     const viewer = makeViewer([2]) // 2 already selected in the scene
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, true, '2')
-    expect(selectItemsInScene).toHaveBeenCalledWith([], false)
+    expect(selectItemsInScene).toHaveBeenCalledWith([], false, [], null, null, [])
   })
 
   it('shift-clicking an unselected element adds it without updating navigation — string id', () => {
     const viewer = makeViewer([])
     const selectItemsInScene = jest.fn()
     elementSelection(viewer, elementsById, selectItemsInScene, true, '3')
-    expect(selectItemsInScene).toHaveBeenCalledWith([3], false)
+    expect(selectItemsInScene).toHaveBeenCalledWith([3], false, [], null, null, [3])
   })
 
   it('does nothing when the element cannot be picked in the scene', () => {

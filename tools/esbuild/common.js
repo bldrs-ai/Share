@@ -21,6 +21,13 @@ export default {
   platform: 'browser',
   // Roughly 2018-era browsers
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
+  // The @bldrs-ai/conway wasm glue (Emscripten 6.0.2) emits BigInt literals
+  // (e.g. `0n`) for its 64-bit interop. esbuild cannot down-level BigInt
+  // syntax — there is no polyfill — so with the 2018 target it errors out.
+  // Allow BigInt through: the conway 3D engine already requires a modern,
+  // cross-origin-isolated browser (SharedArrayBuffer + threads) well beyond
+  // any pre-BigInt browser, so this narrows nothing that could run it anyway.
+  supported: {bigint: true},
   bundle: true,
   loader: {
     '.css': 'css',

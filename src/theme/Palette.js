@@ -44,6 +44,20 @@ export const day = {
     backgroundColor: `${colors.grey.light}A0`,
     backdropFilter: 'blur(1px)',
     link: colors.blue.darkest,
+    // Workspace shell chrome (ProjectsDrawer). Opaque on purpose — it
+    // frames the app rather than floating over the scene like the
+    // NavTree/Notes drawers. Tinted toward the tron cyan of
+    // primary.sceneHighlight; it has to read as clearly distinct from the
+    // white scene background right next to it, so this is a real tint and
+    // not a near-white wash.
+    workspaceBackground: '#D3E9EE',
+    // Collapsed rail: half-opacity, but pre-doubled against the scene
+    // background so it still *reads* as the workspace tint. Half of the
+    // near-white workspaceBackground over a white scene lands ~4% off
+    // white — invisible. Solving 0.5*C + 0.5*white = workspaceBackground
+    // gives this, so the rail matches the drawer over the default scene
+    // and stays translucent over anything darker.
+    workspaceRailBackground: '#A7D3DD',
   },
 
   success: {
@@ -106,6 +120,13 @@ export const night = {
     backgroundColor: `${colors.grey.dark}80`,
     backdropFilter: 'blur(1px)',
     link: colors.blue.lightest,
+    // Workspace shell chrome — see day.secondary.workspaceBackground.
+    // Tron teal, light enough to read as a lit panel against the black
+    // scene background.
+    workspaceBackground: '#0F2E38',
+    // See day.secondary.workspaceRailBackground — same derivation
+    // against the black night scene.
+    workspaceRailBackground: '#1E5C70',
   },
 
   success: {

@@ -46,6 +46,9 @@
 // dispatch on `typeof model.X === 'function'` without branching on
 // the load backend.
 
+import {isFeatureEnabled} from '../../FeatureFlags'
+import {reportEngineVersion} from '../../loader/loadProgress'
+import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
 
@@ -77,9 +80,25 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  * @param {object} [settings] OpenModel settings — defaults to
  *   `{COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}` to match
  *   the wit-three baseline.
+ * @param {Function} [onProgress] receives conway's structured
+ *   ProgressEvents ({phase, completed, total?, unit, elapsedMs}) during
+ *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
+ *   silently ignored by engines that predate it (real web-ifc, old pins).
+ * @param {Function} [onMeshBatch] demand/tiled slice A: receives
+ *   `(flatMeshes, modelID)` for each extracted batch as it lands (only
+ *   on the `demandGeometry` deferred path) so callers can render
+ *   progressively;
+ *   `captured` still accumulates everything for one-shot consumers.
+ * @param {Function} [onPreviewMesh] demand/tiled slice A2: receives
+ *   conway PreviewMeshPayloads WHILE THE PARSE RUNS (self-contained
+ *   copied geometry, preview quality — openings/materials can be
+ *   missing; replaced wholesale by the durable batches). Only on the
+ *   `demandGeometry` deferred path with engines that support
+ *   ON_PREVIEW_MESH; silently ignored otherwise.
  * @return {Promise<{modelID: number, captured: Array}>}
  */
-export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
+export async function parseIfcWithConway(
+  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -91,10 +110,135 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
     // eslint-disable-next-line new-cap
     await ifcAPI.Init()
   }
+  applyEngineLogLevel(ifcAPI)
+  // Engine identity line for the load report (log line 2) — e.g.
+  // "Conway v1.379.1190". Feature-detected; real web-ifc lacks it.
+  if (typeof ifcAPI.getConwayVersion === 'function') {
+    reportEngineVersion(ifcAPI.getConwayVersion())
+  }
   const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
-  const openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
-  // eslint-disable-next-line new-cap
-  const modelID = ifcAPI.OpenModel(data, openSettings)
+  let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
+  if (onProgress) {
+    // ON_MODEL_INFO (conway extension) arrives once, right after the header
+    // parses — forwarded through the same onProgress pipe as a
+    // {modelInfo} envelope so callers need only one callback channel.
+    openSettings = {
+      ...openSettings,
+      ON_PROGRESS: onProgress,
+      ON_MODEL_INFO: (info) => onProgress({modelInfo: info}),
+    }
+  }
+  // Demand/tiled rendering slice A (`demandGeometry` flag, #1613):
+  // deferred open + batch pump. The open returns in parse time; meshes
+  // then stream in file-order batches through `onMeshBatch` (and
+  // accumulate into `captured` for the classic one-shot consumers),
+  // yielding to the event loop between batches so the scene can render
+  // progressively. Feature-detected; engines without the pump fall
+  // through to the classic selection below.
+  if (isFeatureEnabled('demandGeometry') &&
+      !isFeatureEnabled('disableStreamOpen') &&
+      typeof ifcAPI.OpenModelStreamed === 'function' &&
+      typeof ifcAPI.ExtractGeometryBatch === 'function') {
+    const deferSettings = {...openSettings, DEFER_GEOMETRY: true}
+    if (onPreviewMesh) {
+      // Slice A2 (parse-time preview channel): conway emits preview
+      // payloads between the parse's cooperative yields. Passing the
+      // callback to an engine without the channel is harmless (unknown
+      // settings are ignored), so no feature detection is needed here.
+      deferSettings.ON_PREVIEW_MESH = onPreviewMesh
+    }
+    // eslint-disable-next-line new-cap
+    const modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
+    if (typeof modelID !== 'number' || modelID < 0) {
+      throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
+    }
+    const captured = []
+    // Batch-pump accounting for the load log. Whether the pump actually
+    // produced anything is the difference between a model that streams
+    // onto the screen and one that shows nothing until the end-of-load
+    // build, and until now the log said nothing either way — a blank
+    // 9-second parse and a healthy streaming parse looked identical.
+    let pumpedBatches = 0
+    for (;;) {
+      const batch = []
+      // eslint-disable-next-line new-cap
+      const {extracted, remaining} = ifcAPI.ExtractGeometryBatch(
+        modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+      if (batch.length > 0) {
+        captured.push(...batch)
+        pumpedBatches++
+        if (onMeshBatch) {
+          onMeshBatch(batch, modelID)
+        }
+      }
+      if (remaining === 0 && extracted === 0) {
+        break
+      }
+      // Yield so the renderer paints between batches.
+      await yieldToEventLoop()
+    }
+    // Permanent boundary log, like `[conwayDirect] parsed` in
+    // ShareIfcLoader: whether the pump produced batches is the
+    // difference between a load that streams onto the screen and one
+    // that shows nothing until the end-of-load build, and the two are
+    // indistinguishable without this line (Share#1744). console.info,
+    // not debug() — debug() no-ops unless the level is raised.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] demand pump: batches=${pumpedBatches} ` +
+      `meshes=${captured.length} onMeshBatch=${onMeshBatch ? 'yes' : 'no'} ` +
+      `onPreviewMesh=${onPreviewMesh ? 'yes' : 'no'}`)
+    if (captured.length === 0) {
+      // Nothing pumped: conway fell back to a classic fully-extracted
+      // open internally, so StreamAllMeshes below captures the whole
+      // model in one go and NOTHING renders until the end-of-load build.
+      // That is the blank-screen-then-pop behavior, and it is silent
+      // without this line.
+      console.warn(
+        '[conwayDirect] demand pump produced no batches; ' +
+        'falling back to one-shot StreamAllMeshes — no progressive render')
+      // The deferred columnar open is IFC-only: for STEP input (and any
+      // streamed-parse failure) conway falls back internally to a
+      // classic, fully-extracted open where the batch pump is a no-op —
+      // the model is fine, it just has nothing to pump. Serve the
+      // one-shot capture instead of returning an empty scene.
+      // No onMeshBatch here: extraction is already complete, so a
+      // preview would just double the geometry conversion right before
+      // the final build renders the same thing.
+      // eslint-disable-next-line new-cap
+      ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
+        captured.push(flatMesh)
+      })
+    }
+    return {modelID, captured}
+  }
+
+  // Open-path selection, most preferred first:
+  //   1. OpenModelStreamed (conway #390, default): streamed columnar
+  //      parse — no per-record object phase, the dominant JS-heap cost
+  //      on large models. Conway falls back to the classic open
+  //      internally on any streamed-parse failure, so this path never
+  //      fails a load the classic one would survive. Opt out with the
+  //      `disableStreamOpen` flag (inverted because `?feature=` can
+  //      only turn flags on — `?feature=disableStreamOpen` reverts a
+  //      session; flipping the flag's isActive is the prod kill
+  //      switch).
+  //   2. OpenModelAsync (conway #301 §2): yields to the event loop
+  //      between progress ticks, so the backdrop/snackbar actually
+  //      repaint and the browser stops flagging the tab as stalled.
+  //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
+  // All feature-detected, so any engine pin keeps loading.
+  let modelID
+  if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+    // eslint-disable-next-line new-cap
+    modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
+  } else if (typeof ifcAPI.OpenModelAsync === 'function') {
+    // eslint-disable-next-line new-cap
+    modelID = await ifcAPI.OpenModelAsync(data, openSettings)
+  } else {
+    // eslint-disable-next-line new-cap
+    modelID = ifcAPI.OpenModel(data, openSettings)
+  }
   if (typeof modelID !== 'number' || modelID < 0) {
     throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
   }
@@ -104,6 +248,68 @@ export async function parseIfcWithConway(buffer, ifcAPI, settings = undefined) {
     captured.push(flatMesh)
   })
   return {modelID, captured}
+}
+
+
+// Products extracted per demand batch: large enough that per-batch
+// capture/render overhead amortizes, small enough that first pixels
+// arrive within a couple of seconds of parse completing.
+const DEMAND_EXTRACT_BATCH_SIZE = 64
+
+
+/**
+ * Yield to the event loop without background-tab timer throttling:
+ * backgrounded tabs clamp setTimeout to >=1s, collapsing the pump to a
+ * ~5% duty cycle. scheduler.yield() (and a MessageChannel fallback)
+ * post ordinary tasks, which are not clamped, so loads keep their CPU
+ * when the tab is backgrounded.
+ *
+ * @return {Promise<void>} resolves on the next event-loop task
+ */
+function yieldToEventLoop() {
+  if (typeof globalThis.scheduler?.yield === 'function') {
+    return globalThis.scheduler.yield()
+  }
+  if (typeof globalThis.MessageChannel === 'function') {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => {
+        channel.port1.close()
+        resolve()
+      }
+      channel.port2.postMessage(null)
+    })
+  }
+  // Non-browser environments (tests); throttling doesn't apply there.
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+
+// web-ifc numeric log levels (conway's SetLogLevel shim uses the same
+// numbering so an engine swap keeps working).
+const ENGINE_LOG_LEVEL_DEBUG = 1
+const ENGINE_LOG_LEVEL_WARN = 3
+
+
+/**
+ * Quiet the engine's console for a clean load (#301 §6): warnings/errors
+ * only by default, everything (deduped log table included) under the
+ * `glbVerbose` diagnostics flag. Feature-detected — old engine pins and
+ * real web-ifc's wasm-side SetLogLevel both tolerate or lack this call.
+ *
+ * @param {object} ifcAPI
+ */
+function applyEngineLogLevel(ifcAPI) {
+  if (typeof ifcAPI.SetLogLevel !== 'function') {
+    return
+  }
+  try {
+    // eslint-disable-next-line new-cap
+    ifcAPI.SetLogLevel(
+      isFeatureEnabled('glbVerbose') ? ENGINE_LOG_LEVEL_DEBUG : ENGINE_LOG_LEVEL_WARN)
+  } catch (e) {
+    debug(WARN).warn('conwayDirectIfcLoader#applyEngineLogLevel:', e)
+  }
 }
 
 
@@ -196,7 +402,49 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
       ifcModel.geometry.getIndex() &&
       ifcModel.geometry.getAttribute?.('expressID') &&
       ifcModel.geometry.getAttribute?.('instanceID')) {
+    // The pre-reorder map from `buildConwayIfcModel` carries the STEP
+    // per-occurrence tables (`instanceIdToOccurrencePath` /
+    // `occurrencePathToInstanceIds`), but the BVH permute forces a
+    // rebuild from geometry attributes — and `instanceMapFromGeometry`
+    // reads only `expressID` + `instanceID` per vertex, so it can't
+    // recover the occurrence path (a variable-length array, not a
+    // per-vertex scalar). Carry those tables forward by hand. The
+    // synthetic instance ids line up 1:1: `flatMeshToBufferGeometry`
+    // stamps per-vertex `instanceID` in the same emission order
+    // `instanceMapFromOrderedPlacedRanges` numbered the build map, and
+    // the reorder permutes only the index buffer, not that numbering.
+    // Without this, scene→NavTree picks and per-occurrence tree
+    // narrowing fall back to the colliding part-type expressID (every
+    // reuse of a nut highlights together).
+    const buildMap = ifcModel.instanceMap
     ifcModel.instanceMap = instanceMapFromGeometry(ifcModel.geometry)
+    if (buildMap?.instanceIdToOccurrencePath || buildMap?.instanceIdToGeometryExpressId) {
+      // Guard the 1:1 assumption instead of trusting it silently. If the two
+      // populators ever number instances differently (e.g. one drops a
+      // degenerate PlacedGeometry the other keeps), copying the tables over
+      // would bind occurrence paths to the wrong instances — a silent
+      // wrong-nut-highlights bug. On mismatch, skip the transfer and degrade
+      // to type-level selection rather than mis-highlight.
+      if (buildMap.instanceCount === ifcModel.instanceMap.instanceCount) {
+        if (buildMap.instanceIdToOccurrencePath) {
+          ifcModel.instanceMap.instanceIdToOccurrencePath = buildMap.instanceIdToOccurrencePath
+          ifcModel.instanceMap.occurrencePathToInstanceIds = buildMap.occurrencePathToInstanceIds
+        }
+        // Same 1:1 carry for the per-instance geometry (solid) express ids —
+        // per-vertex attributes can't encode them either, and they're the
+        // second half of the (occurrencePath, solid expressID) identity that
+        // per-solid selection joins on.
+        if (buildMap.instanceIdToGeometryExpressId) {
+          ifcModel.instanceMap.instanceIdToGeometryExpressId =
+            buildMap.instanceIdToGeometryExpressId
+        }
+      } else {
+        console.warn(
+          '[conwayDirect] occurrence-path transfer skipped: instance-count mismatch ' +
+          `(build ${buildMap.instanceCount}, geometry ${ifcModel.instanceMap.instanceCount}); ` +
+          'STEP selection degrades to type-level for this model')
+      }
+    }
   }
 
   ifcModel.capabilities = ifcModel.capabilities ?? {}
@@ -237,7 +485,7 @@ export function decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, opts = {
  * @param {number} modelID
  * @return {object} the shim
  */
-function makeConwayDirectIfcManager(ifcAPI, modelID) {
+export function makeConwayDirectIfcManager(ifcAPI, modelID) {
   return {
     ifcAPI,
     getSpatialStructure: (_modelIDArg, withProperties = false) =>
@@ -260,23 +508,36 @@ function makeConwayDirectIfcManager(ifcAPI, modelID) {
  * @param {object} ifcAPI
  * @param {number} modelID
  */
-function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
+export function attachConwayDirectModelMethods(ifcModel, ifcAPI, modelID) {
   // Two-arg + single-arg calling conventions exist across consumers:
   //   - `(modelID, withProps)` — CadView.jsx, ShareViewer.getByFloor,
   //     IfcIsolator (mirrors `ifcManager.getSpatialStructure` shape)
   //   - `(withProps)` — cache-hit closure pattern
-  // We accept both: if the first arg is a boolean (and only one arg
-  // was passed), it's the `withProperties` flag; otherwise the leading
-  // modelID is ignored and `withProperties` is the second arg. The
-  // model's bound modelID is always used — closures are per-model.
+  // We accept both: if the first arg is a boolean or Conway's `'names'`
+  // mode (and only one arg was passed), it's the `withProperties` flag;
+  // otherwise the leading modelID is ignored and `withProperties` is
+  // the second arg. `'names'` must pass through un-coerced — Conway's
+  // shim reads it as the light per-node Name/LongName/GlobalId mode; a
+  // bare boolean coercion here would silently upgrade it back to the
+  // full-record `true` visit this mode exists to avoid. The model's
+  // bound modelID is always used — closures are per-model.
   ifcModel.getSpatialStructure = function getSpatialStructure(...args) {
+    const isMode = (v) => typeof v === 'boolean' || v === 'names'
     let withProps = false
-    if (args.length === 1 && typeof args[0] === 'boolean') {
+    if (args.length === 1 && isMode(args[0])) {
       withProps = args[0]
     } else if (args.length >= 2) {
-      withProps = !!args[1]
+      withProps = isMode(args[1]) ? args[1] : Boolean(args[1])
     }
-    return ifcAPI.properties.getSpatialStructure(modelID, withProps)
+    // `includeSolids` (Conway ≥1.376.1184) surfaces STEP multibody sub-solids
+    // as ephemeral `type: 'solid'` NavTree nodes (named SolidWorks bodies like
+    // the NEMA 23 motor's `Boss-Extrude7`; anonymous solid dumps stay
+    // suppressed engine-side). The IFC surface ignores the option. This is the
+    // NavTree/search feed; the IfcIsolator path (`makeConwayDirectIfcManager`
+    // above) intentionally stays product-only — hide/isolate keys on product
+    // subsets and has no meaning for a sub-solid yet. See Conway
+    // `design/new/step-nonproduct-semantics.md`.
+    return ifcAPI.properties.getSpatialStructure(modelID, withProps, {includeSolids: true})
   }
   ifcModel.getItemProperties = (expressID, recursive = false) => {
     return ifcAPI.properties.getItemProperties(modelID, expressID, recursive)

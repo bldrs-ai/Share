@@ -66,10 +66,15 @@ describe('ViewerContainer', () => {
     window.DragEvent = null
   })
 
-  test('renders the container', () => {
+  test('renders the container', async () => {
     render(<ViewerContainer/>)
     const dropzone = screen.getByTestId('cadview-dropzone')
     expect(dropzone).toBeInTheDocument()
+    // CadView mounts async work (viewer setup) that sets state after this sync
+    // assertion; settle it inside act so the trailing update doesn't warn.
+    await act(async () => {
+      await Promise.resolve()
+    })
   })
 
   test('calls preventDefault and sets drag state on drag over', () => {

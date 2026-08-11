@@ -4,9 +4,9 @@
 // parse write.
 //
 // What this worker handles (post-GLTFExporter, post-compression):
-//   - JSON.stringify on the per-extension payload (heavy on
-//     `BLDRS_element_properties` — multi-MB nested objects on big
-//     IFCs)
+//   - JSON.stringify on the per-extension payload (multi-MB nested
+//     objects on big IFCs; `BLDRS_element_properties` arrives as
+//     precompressed container bytes and skips this)
 //   - pako.gzip on the resulting bytes (CPU-bound)
 //   - injectGlbExtensions byte-splice (sync but fast once stringify
 //     + gzip are done)
@@ -39,13 +39,15 @@
 //     mode: 'draco' | 'meshopt' | null,
 //     extensions: [
 //       {name: 'BLDRS_spatial_tree',      data: object|null, compress: true},
-//       {name: 'BLDRS_element_properties', data: object|null, compress: true},
+//       {name: 'BLDRS_element_properties', precompressed: Uint8Array|undefined},
 //       {name: 'BLDRS_face_ids',          data: object|null, compress: true},
 //     ],
 //     sceneExtras: {                  // optional small string-keyed
 //       bldrsTitle: 'Project Name',   // metadata merged into
 //       ...                           // scenes[0].extras for auto-
 //     } | null,                       // promotion to scene.userData
+//     sceneName: 'Project Name'       // optional standard glTF
+//       | null,                       // scenes[0].name stamp (#1595)
 //   }
 //
 // Reply (success — packed final container bytes, transferable):
@@ -64,10 +66,10 @@ self.addEventListener('message', (event) => {
   if (!data || data.command !== 'inject-and-pack') {
     return
   }
-  const {id, bytes, mode, extensions, sceneExtras} = data
+  const {id, bytes, mode, extensions, sceneExtras, sceneName} = data
   try {
     const {bytes: withExtensions, stats: extStats} =
-      injectGlbExtensions(bytes, extensions, sceneExtras)
+      injectGlbExtensions(bytes, extensions, sceneExtras, sceneName)
     const packed = packGlbChunks([withExtensions], mode)
     // Transfer the final bytes back zero-copy. The Uint8Array's
     // underlying ArrayBuffer is in the transferables list, so the

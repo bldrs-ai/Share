@@ -31,10 +31,12 @@ const mockConnection = {
  * setState), so we drain generously.
  */
 async function flushValidateEffect() {
+  // A macrotask tick drains the whole microtask chain (Promise.all → each
+  // connection's checkStatus → setState) in one go — more robust than a fixed
+  // number of Promise.resolve hops — and doing it inside act keeps the
+  // trailing setStatuses from logging an un-acted-on update warning.
   await act(async () => {
-    for (let i = 0; i < 6; i++) {
-      await Promise.resolve()
-    }
+    await Promise.resolve()
   })
 }
 
@@ -151,6 +153,9 @@ describe('GoogleDriveTab', () => {
       await waitFor(() => {
         expect(checkStatus).toHaveBeenCalledWith(expect.objectContaining({id: mockConnection.id}))
       })
+      // This test asserts only that checkStatus fired; settle the setStatuses
+      // it resolves into so that trailing update lands inside act.
+      await flushValidateEffect()
     })
 
     it('renders \'Reconnect\' label and stale hint when checkStatus returns \'expired\'', async () => {
@@ -193,6 +198,9 @@ describe('GoogleDriveTab', () => {
         expect(btn).toHaveTextContent('Browse')
       })
       expect(screen.queryByTestId(`stale-hint-${mockConnection.id}`)).not.toBeInTheDocument()
+      // 'Browse' is the default label, so the waitFor above passes before the
+      // 'connected' setStatuses resolves; settle it so it lands inside act.
+      await flushValidateEffect()
     })
 
     it('flips stale → healthy after a successful Reconnect click clears it', async () => {

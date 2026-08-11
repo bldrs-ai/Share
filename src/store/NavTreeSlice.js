@@ -35,6 +35,13 @@ export default function createNavTreeSlice(set, get) {
 
     selectedElements: [],
     setSelectedElements: (elts) => set(() => ({selectedElements: elts})),
+    // The ids the user actually picked, without the descendants that
+    // `elementSelection` adds so a parent's geometry highlights in the
+    // scene. Surfaces that answer "what is selected?" — NavTree row
+    // highlight, Properties, the TopBar crumb — read this; the scene
+    // reads `selectedElements`.
+    selectedAnchorIds: [],
+    setSelectedAnchorIds: (ids) => set(() => ({selectedAnchorIds: ids})),
 
     // Synthetic IfcInstanceMap instance IDs (one per Conway
     // PlacedGeometry). Populated alongside `selectedElements` on the
@@ -48,5 +55,63 @@ export default function createNavTreeSlice(set, get) {
     // selects the whole IFC element.
     selectedInstanceIds: [],
     setSelectedInstanceIds: (ids) => set(() => ({selectedInstanceIds: ids})),
+
+    // STEP occurrence path (NAUO express ids) of the selected occurrence, or
+    // null. A reused part's occurrences share one `selectedElements` expressID,
+    // so this is what lets the NavTree highlight the one clicked/picked node
+    // instead of every reuse. Null for IFC and single-occurrence parts.
+    selectedOccurrencePath: null,
+    setSelectedOccurrencePath: (path) => set(() => ({selectedOccurrencePath: path})),
+
+    // Express id of the selected ephemeral solid (a multibody STEP part's
+    // named body — the NavTree's `type:'solid'` nodes), or null when the
+    // selection is a whole product/occurrence. Solid nodes share their
+    // parent's occurrence path, so the path alone can't say whether the
+    // selection is the part or one body inside it — this is the second half
+    // of the (occurrencePath, solid expressID) identity. Consumers: NavTree
+    // row highlight/scroll, per-solid hide (H), permalink round-trip.
+    selectedSolidExpressId: null,
+    setSelectedSolidExpressId: (id) => set(() => ({selectedSolidExpressId: id})),
+
+    // Transient NavTree rows for anonymous below-product geometry
+    // (conway#387): parent occurrence-path key → [{expressID, label}].
+    // Session-only by design — rows materialize from a scene pick, a
+    // permalink, or a "N more…" expansion and are reconstructed on the fly;
+    // they are never persisted to the GLB cache, so a reload only recreates
+    // the one a permalink names. Keyed additively with per-id dedup because
+    // the same piece can arrive from several sources (pick then permalink).
+    transientTreeNodes: {},
+    addTransientTreeNodes: (pathKey, nodes) => set((state) => {
+      const existing = state.transientTreeNodes[pathKey] ?? []
+      const incomingById = new Map(nodes.map((node) => [node.expressID, node]))
+      let upgraded = false
+      // A row that first arrived without a resolvable identity carries the
+      // degraded "Item #<id>" label; a later arrival with a real label (the
+      // properties surface came up, or a pick followed a permalink) upgrades
+      // it in place — the id, not the label, is the row's identity.
+      const merged = existing.map((node) => {
+        const incoming = incomingById.get(node.expressID)
+        if (incoming && incoming.label !== node.label &&
+            node.label === `Item #${node.expressID}`) {
+          upgraded = true
+          return {...node, label: incoming.label}
+        }
+        return node
+      })
+      const known = new Set(existing.map((node) => node.expressID))
+      const fresh = nodes.filter((node) => !known.has(node.expressID))
+      if (fresh.length === 0 && !upgraded) {
+        return {}
+      }
+      return {
+        transientTreeNodes: {
+          ...state.transientTreeNodes,
+          [pathKey]: [...merged, ...fresh],
+        },
+      }
+    }),
+    // New model load: ids are only unique within one file, so stale rows
+    // from the previous model must not leak into the next tree.
+    clearTransientTreeNodes: () => set(() => ({transientTreeNodes: {}})),
   }
 }

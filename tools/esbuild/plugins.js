@@ -20,7 +20,11 @@ export default function makePlugins(root, buildDir) {
     setup(build) {
       build.onResolve({filter: /^web-ifc$/}, (args) => {
         return {
-          path: path.resolve(root, 'node_modules/@bldrs-ai/conway-web-ifc-adapter/compiled/src/ifc_api.js'),
+          // Conway now ships the web-ifc compat surface itself, via the
+          // `@bldrs-ai/conway/web-ifc` subpath export (the standalone
+          // `@bldrs-ai/conway-web-ifc-adapter` package is retired). Resolve
+          // to its compiled entry directly so Share depends on Conway alone.
+          path: path.resolve(root, 'node_modules/@bldrs-ai/conway/compiled/src/compat/web-ifc/index.js'),
         }
       })
     },

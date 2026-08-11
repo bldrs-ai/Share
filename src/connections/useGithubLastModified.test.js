@@ -18,6 +18,7 @@ describe('useGithubLastModified', () => {
     await act(() => {
       result.current.setRepository('testowner', 'testrepo')
       result.current.setAccessToken('')
+      result.current.setIsAuthResolved(true)
     })
   })
 
@@ -50,5 +51,23 @@ describe('useGithubLastModified', () => {
     await new Promise((resolve) => setTimeout(resolve, ASYNC_SETTLE_MS))
     const [entry] = loadRecentFilesBySource('github')
     expect(entry.lastModifiedUtc).toBeNull()
+  })
+
+  // Guard added with the model-loading-perf work: pre-resolution the hook
+  // used to fire anonymously and then again authed once the token landed.
+  it('waits for auth resolution, then back-fills', async () => {
+    await act(() => useStore.setState({isAuthResolved: false}))
+    addRecentFileEntry({id: SHARE_PATH, source: 'github', name: 'model.ifc', lastModifiedUtc: null})
+
+    renderHook(() => useGithubLastModified(MOCK_MODEL_PATH, 'main'))
+
+    await new Promise((resolve) => setTimeout(resolve, ASYNC_SETTLE_MS))
+    expect(loadRecentFilesBySource('github')[0].lastModifiedUtc).toBeNull()
+
+    await act(() => useStore.setState({isAuthResolved: true}))
+    await waitFor(() => {
+      const [entry] = loadRecentFilesBySource('github')
+      expect(entry.lastModifiedUtc).toBe(new Date(COMMIT_DATE).getTime())
+    })
   })
 })

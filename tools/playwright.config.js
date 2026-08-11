@@ -76,6 +76,10 @@ export default defineConfig({
       SHARE_CONFIG: 'playwright',
       PORT: port,
     },
+    // 3 min — webServer.command does the SPA build + marketing build
+    // (Next.js install + static export) before npx http-server boots, and
+    // a cold cache in CI pushes us past Playwright's 60s default.
+    timeout: 180_000,
     // Don't try to use existing server on GHA.  Locally will lazy start with command
     // above if none is running.
     reuseExistingServer: true, // !isCI,

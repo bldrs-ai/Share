@@ -1,5 +1,7 @@
+/* eslint-disable no-magic-numbers */
 import {
   computeElementPathIds,
+  expandedIdsForSelection,
   setupLookupAndParentLinks,
 } from './TreeUtils'
 import {v4 as uuidv4} from 'uuid'
@@ -61,7 +63,52 @@ test('Test computeElementPathIds', () => {
 })
 
 
-// eslint-disable-next-line no-magic-numbers
+describe('expandedIdsForSelection', () => {
+  it('reveals a STEP occurrence by opening root + occurrence path, merged additively', () => {
+    // The occurrence path is the ancestor node-id chain; root is prepended.
+    // Existing expansion (a sibling branch the user opened) must be preserved.
+    const next = expandedIdsForSelection({
+      prevExpanded: ['0', '999'],
+      occurrencePath: [10, 20, 30],
+      rootExpressId: 0,
+      pathIds: null,
+    })
+    expect(next).toEqual(['0', '999', '10', '20', '30'])
+  })
+
+  it('does not collapse other open branches (no dropped ids, deduped)', () => {
+    const next = expandedIdsForSelection({
+      prevExpanded: ['0', '10'],
+      occurrencePath: [10, 20],
+      rootExpressId: 0,
+      pathIds: null,
+    })
+    // '0' and '10' already present → not duplicated; '20' added.
+    expect(next).toEqual(['0', '10', '20'])
+  })
+
+  it('falls back to parent-path ids for a non-occurrence (IFC) selection', () => {
+    const next = expandedIdsForSelection({
+      prevExpanded: ['500'],
+      occurrencePath: null,
+      rootExpressId: 0,
+      pathIds: [0, 1, 2],
+    })
+    expect(next).toEqual(['500', '0', '1', '2'])
+  })
+
+  it('drops null/undefined ids (e.g. missing root) without crashing', () => {
+    const next = expandedIdsForSelection({
+      prevExpanded: [],
+      occurrencePath: [10, 20],
+      rootExpressId: undefined,
+      pathIds: null,
+    })
+    expect(next).toEqual(['10', '20'])
+  })
+})
+
+
 let nextExpressID = Math.floor(Math.random() * 100)
 
 export const createFakeProject = ({expressId, name, longName}) => {

@@ -6,7 +6,7 @@ import MockRoutes from './BaseRoutesMock.test'
 // IfcContext / ShareIfc). ShareViewer no longer self-imports the fork to
 // trigger the Jest harness, so load it explicitly before `./Share` so
 // the harness's dep mocks register first.
-import 'web-ifc-viewer'
+import '../__mocks__/shareViewerTestHarness'
 import Share from './Share'
 
 

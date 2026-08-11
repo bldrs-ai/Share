@@ -86,13 +86,20 @@ function getWorker() {
  *   the underlying ArrayBuffer
  * @param {string|null} args.mode container mode tag — draco/meshopt/null
  * @param {Array<object>} args.extensions extension payloads to inject;
- *   each entry is `{name, data, compress?}` matching `injectGlbExtensions`
+ *   each entry is `{name, data, compress?, precompressed?}` matching
+ *   `injectGlbExtensions`. A `precompressed` Uint8Array rides through
+ *   the structured clone intact (deliberately NOT in the transfer
+ *   list — the caller's inline fallback after a worker failure must
+ *   still see an attached buffer)
  * @param {object} [args.sceneExtras] optional small string-keyed
  *   metadata merged into `scenes[0].extras` in the same inject pass
  *   (see `injectGlbExtensions`)
+ * @param {string} [args.sceneName] optional standard glTF
+ *   `scenes[0].name` stamp applied in the same pass (#1595; see
+ *   `injectGlbExtensions`)
  * @return {Promise<{bytes: Uint8Array, extStats: object}>}
  */
-export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras}) {
+export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras, sceneName}) {
   return new Promise((resolve, reject) => {
     const worker = getWorker()
     const id = nextRequestId
@@ -107,6 +114,7 @@ export function injectAndPackInWorker({bytes, mode, extensions, sceneExtras}) {
           mode,
           extensions,
           sceneExtras: sceneExtras ?? null,
+          sceneName: sceneName ?? null,
         },
         [bytes.buffer],
       )

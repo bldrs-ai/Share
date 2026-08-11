@@ -15,6 +15,88 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ * 0.15.0 — retires STEP artifacts baked at the wrong world scale. conway
+ *         1.460.1363 (bldrs-ai/conway#458, PR conway#460) stopped applying a
+ *         STEP file's length-unit factor as its RECIPROCAL, so a millimetre
+ *         model that used to arrive 1e6x too large now arrives at true size.
+ *         Geometry is baked into the GLB in world coordinates and nothing in
+ *         the cache key identifies the engine, so without this bump a user
+ *         holding a pre-1.460 artifact would keep loading the oversized
+ *         geometry indefinitely — never picking up the fix, and disagreeing
+ *         with cache-miss users on every shared camera / cut-plane link.
+ *         Older 0.14.0 artifacts read as miss; next miss rewrites at true
+ *         scale. IFC artifacts are unaffected (the IFC path folds
+ *         `linearScalingFactor` into its coordination matrix and never had
+ *         the defect), but the key is format-blind so they rewrite too.
+ *         Precedent for pairing an engine bump with a schema bump: d1a74ea.
+ * 0.14.0 — fixed the batched writer dropping STEP per-occurrence data. The
+ *         default render path is now the demandGeometry BatchedMesh, which
+ *         has no `instanceMap`; the writer had read `occurrencePaths` /
+ *         `geometryExpressIds` straight off `model.instanceMap`, so a
+ *         batched-first load cached with both tables silently absent. On
+ *         cache-hit the spatial tree still restored occurrence paths (NavTree
+ *         highlighted) but the mesh table was gone, so scene per-occurrence
+ *         selection collapsed to the part-type id (permalink reload lost the
+ *         3D highlight). The writer now re-keys the batch side tables via
+ *         `batchedModelOccurrenceTables`; this bump retires the occurrence-less
+ *         0.13.0 artifacts those batched writes produced so the next miss
+ *         rewrites them complete. IFC artifacts are unaffected (no occurrence
+ *         data). See design/new/step-occurrence-selection.md.
+ * 0.13.0 — replaced `BLDRS_element_properties`' monolithic gzipped-JSON
+ *         payload with a block-indexed binary container ("BPRI" magic:
+ *         gzipped header carrying an id→block index + the pset table,
+ *         followed by independently gzipped ~1MB record blocks). The
+ *         old format required inflating the whole payload into ONE JS
+ *         string — V8 caps strings at ~512MiB, so PSB-class models
+ *         died in pako's string join (`RangeError: Invalid string
+ *         length`) and even smaller models materialised the full
+ *         object graph for a panel that reads one element at a time.
+ *         The reader now decodes the header index on first access and
+ *         one block per record miss (LRU-cached). NO legacy read
+ *         path: older 0.12.0 artifacts read as miss and rewrite; an
+ *         old-format payload arriving as a shared GLB file raises a
+ *         "clear local cache" alert instead of decoding.
+ * 0.12.0 — extended `BLDRS_face_ids` with a geometry-piece identity table
+ *         (`geometryItemIdentities`: distinct geometry express id →
+ *         {type, name}, resolved through the live parser at write time).
+ *         Cache-hit loads can now label anonymous below-product pieces
+ *         ("Face #6321" transient NavTree rows, Properties-panel Type)
+ *         without re-parsing the STEP — the ids themselves already
+ *         travelled in `geometryExpressIds` (0.11.0), but their identity
+ *         didn't. Older 0.11.0 artifacts read as miss; next miss rewrites
+ *         with the table attached. IFC artifacts are unaffected (no
+ *         geometry-express-id table). See conway#387.
+ * 0.11.0 — extended `BLDRS_face_ids` with a global per-instance geometry
+ *         (solid) express-id table (`geometryExpressIds`, index = synthetic
+ *         instance id), and the spatial tree with Conway's ephemeral solid
+ *         nodes (`includeSolids`). Together they restore per-solid selection
+ *         of multibody STEP parts (NavTree `type:'solid'` rows ↔ the one
+ *         body's instances) on cache-hit. Older 0.10.0 artifacts read as
+ *         miss; next miss rewrites with the table and solid nodes attached.
+ *         IFC artifacts are unaffected. See conway
+ *         design/new/step-nonproduct-semantics.md.
+ * 0.10.0 — adopted standard glTF scene naming (#1595): the writer now
+ *         stamps the model title into the standard `scenes[0].name`
+ *         field (what generic viewers like the three.js editor
+ *         display) in addition to the Bldrs-only `extras.bldrsTitle`,
+ *         replacing GLTFExporter's 'AuxScene' placeholder. Reader-side,
+ *         `convertToShareModel` now surfaces standard `Object3D.name`
+ *         node names (glTF `nodes[i].name` via GLTFLoader) in the
+ *         NavTree / Properties panel instead of the 'Object'
+ *         placeholder. Element-level hierarchy still travels in
+ *         `BLDRS_spatial_tree` — the exported scene graph is a merged
+ *         mesh (one node per material bin, not per IFC element), so
+ *         per-element standard nodes would defeat the draw-call
+ *         batching; the standard fields carry what the flat graph can
+ *         express. Older 0.9.0 artifacts read as miss; next miss
+ *         rewrites with the scene name attached.
+ * 0.9.0 — extended `BLDRS_face_ids` with a global STEP occurrence-path
+ *         table (`occurrencePaths`, index = synthetic instance id) so a
+ *         cache-hit STEP model restores per-occurrence NavTree↔scene
+ *         selection instead of collapsing to the part-type id shared by
+ *         every reuse. Older 0.8.0 artifacts read as miss; next miss
+ *         rewrites with the table attached. IFC artifacts are unaffected
+ *         (no occurrence data). See design/new/step-occurrence-selection.md.
  * 0.8.0 — added `BLDRS_face_ids` glTF extension carrying per-triangle
  *         `expressID` / `instanceID` arrays as a Base64-encoded JSON
  *         payload, separate from the per-vertex attribute stream.
@@ -55,7 +137,7 @@
  * 0.2.0 — generalised cache key from GitHub-only (owner/repo/branch) to a
  *         per-source-kind 3-level namespace (ns1/ns2/ns3).
  */
-export const BLDRS_GLB_SCHEMA_VERSION = '0.8.0'
+export const BLDRS_GLB_SCHEMA_VERSION = '0.15.0'
 
 
 /**

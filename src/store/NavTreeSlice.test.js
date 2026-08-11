@@ -112,6 +112,46 @@ describe('store/NavTreeSlice', () => {
     })
     /* eslint-enable no-magic-numbers */
 
+    describe('transientTreeNodes (conway#387)', () => {
+      const PATH_KEY = '14107'
+      const FACE_ID = 4462
+
+      it('adds, dedups by id, and clears', () => {
+        const store = makeStore()
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Face #4462'}])
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Face #4462'}])
+        expect(store.getState().transientTreeNodes[PATH_KEY]).toEqual(
+          [{expressID: FACE_ID, label: 'Face #4462'}])
+        store.getState().clearTransientTreeNodes()
+        expect(store.getState().transientTreeNodes).toEqual({})
+      })
+
+      it('upgrades a degraded "Item #id" label in place', () => {
+        // A permalink resolved before the properties surface was ready
+        // gets the degraded label; a later pick of the same piece (or a
+        // late label fetch) must replace it, not be dropped by the dedup.
+        const store = makeStore()
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Item #4462'}])
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Face #4462'}])
+        expect(store.getState().transientTreeNodes[PATH_KEY]).toEqual(
+          [{expressID: FACE_ID, label: 'Face #4462'}])
+      })
+
+      it('never downgrades a real label back to "Item #id"', () => {
+        const store = makeStore()
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Face #4462'}])
+        store.getState().addTransientTreeNodes(
+          PATH_KEY, [{expressID: FACE_ID, label: 'Item #4462'}])
+        expect(store.getState().transientTreeNodes[PATH_KEY]).toEqual(
+          [{expressID: FACE_ID, label: 'Face #4462'}])
+      })
+    })
+
     it('selectedInstanceIds is independent of selectedElements', () => {
       // Parent IFC expressID + the synthetic per-instance ID can vary
       // independently — the Conway-direct click sets both, Shift-click

@@ -26,7 +26,7 @@ function makeFakeLegacyContext() {
   const clippingPlanes = [new Plane()]
   const mouse = {position: new Vector2(MOUSE_X, MOUSE_Y)}
   const cameraControls = {addEventListener: () => {}}
-  const navMode = {fitModelToFrame: jest.fn()}
+  const navMode = {fitModelToFrame: jest.fn(), fitCameraLimitsToModel: jest.fn()}
   const items = {ifcModels: [{id: 'a'}], pickableIfcModels: [{id: 'b'}]}
   return {
     getScene: () => scene,
@@ -81,6 +81,22 @@ describe('viewer/three/ThreeContext', () => {
     const ctx = new ThreeContext(legacy)
     ctx.fitModelToFrame()
     expect(legacy.ifcCamera.currentNavMode.fitModelToFrame).toHaveBeenCalled()
+  })
+
+  it('passes the framing target through fitModelToFrame', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    const model = {id: 'model'}
+    ctx.fitModelToFrame(model)
+    expect(legacy.ifcCamera.currentNavMode.fitModelToFrame).toHaveBeenCalledWith(model)
+  })
+
+  it('delegates fitCameraLimitsToModel to the current nav mode', () => {
+    const legacy = makeFakeLegacyContext()
+    const ctx = new ThreeContext(legacy)
+    const model = {id: 'model'}
+    ctx.fitCameraLimitsToModel(model)
+    expect(legacy.ifcCamera.currentNavMode.fitCameraLimitsToModel).toHaveBeenCalledWith(model)
   })
 
   it('exposes loaded/pickable model arrays (mutable)', () => {

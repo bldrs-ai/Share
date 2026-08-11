@@ -1,4 +1,4 @@
-import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
 import {disposeViewer, initViewer} from './viewer'
 
 
@@ -24,7 +24,7 @@ function makeMaterialWithAllMaps() {
 
 /**
  * Override the singleton mock with disposable scene / renderer /
- * clipper stubs.  The default mock from __mocks__/web-ifc-viewer.js
+ * clipper stubs.  The default mock from __mocks__/shareViewerTestHarness.js
  * doesn't model dispose; we patch the singleton in place so that the
  * version of `currentViewer` captured by initViewer() carries our
  * spies.  Returns the spies for assertion.
@@ -239,7 +239,7 @@ describe('Containers/viewer', () => {
   describe('singleton fixture sanity', () => {
     it('initViewer returns a ShareViewer that shares the singleton fork IfcManager', () => {
       // ShareViewer instantiates `IfcContext` (vendored) + `IfcManager`
-      // directly; the mock factory in `__mocks__/web-ifc-viewer.js`
+      // directly; the mock factory in `__mocks__/shareViewerTestHarness.js`
       // routes `makeForkIfc` through the singleton `impl`, so mutations
       // to the singleton's IFC surface are observable on `viewer.IFC`.
       // We can't use `.toBe(singleton.IFC)` because babel-plugin-jest-

@@ -1,5 +1,5 @@
 // ShareIfcManager — Bldrs' IFC manager surface, backed directly by
-// Conway's `IfcAPI` (the `@bldrs-ai/conway-web-ifc-adapter` engine).
+// Conway's `IfcAPI` (the `@bldrs-ai/conway/web-ifc` compat surface).
 //
 // Slice 5d.1 of design/new/viewer-replacement.md Phase 5. Replaces
 // `viewer.IFC.loader.ifcManager` (web-ifc-three's `IFCManager`,

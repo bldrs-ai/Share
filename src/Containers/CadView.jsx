@@ -4,28 +4,52 @@ import {MeshLambertMaterial} from 'three'
 import {Box} from '@mui/material'
 import {useTheme} from '@mui/material/styles'
 import {captureException} from '@sentry/react'
-import {filetypeRegex} from '../Filetype'
+import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtagEvent} from '../privacy/analytics'
+import {OPEN_CID_PARAM, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
 import {load} from '../loader/Loader'
+import {
+  attachLoadFailureContext,
+  beginLoadProgress,
+  endLoadProgress,
+  reportFramingExclusion,
+  reportLoadProgress,
+} from '../loader/loadProgress'
+import {robustBoundsFor} from '../viewer/three/robustBounds'
 import {NeedsReconnectError} from '../connections/errors'
 import {getBrowser} from '../connections/registry'
 import useStore from '../store/useStore'
-import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {expandedIdsForSelection, getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {areDefinedAndNotNull, assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {disablePageReloadApprovalCheck} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {navWith} from '../utils/navigate'
 import {addProperties} from '../utils/objects'
+import {labelForGeometryId} from '../utils/geometryLabels'
+import {
+  findNodeByOccurrencePath,
+  occurrencePathKey,
+  occurrencePathKeySetForTree,
+  occurrencePathsEqual,
+  trimToTreeOccurrencePath,
+} from '../utils/occurrencePaths'
 import {isOutOfMemoryError} from '../utils/oom'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import Picker from '../viewer/three/Picker'
+import {DEFAULT_LOOK} from '../viewer/looks'
 import RootLandscape from './RootLandscape'
 import ViewerContainer from './ViewerContainer'
+import {
+  AUTH_SETTLE_GRACE_MS,
+  AUTH_SETTLE_RETRY_MS,
+  isAuthShapedLoadError,
+  waitForAuthSettled,
+} from './authLoadGate'
 import {elementSelection} from './selection'
 import {partsToPath} from './urls'
 import {initViewer} from './viewer'
@@ -57,7 +81,10 @@ export default function CadView({
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
   const selectedInstanceIds = useStore((state) => state.selectedInstanceIds)
+  const selectedOccurrencePath = useStore((state) => state.selectedOccurrencePath)
   const setSelectedInstanceIds = useStore((state) => state.setSelectedInstanceIds)
+  const setSelectedOccurrencePath = useStore((state) => state.setSelectedOccurrencePath)
+  const setSelectedSolidExpressId = useStore((state) => state.setSelectedSolidExpressId)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
@@ -70,6 +97,8 @@ export default function CadView({
   const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setSelectedAnchorIds = useStore((state) => state.setSelectedAnchorIds)
+  const selectedAnchorIds = useStore((state) => state.selectedAnchorIds)
   const setViewer = useStore((state) => state.setViewer)
   const viewer = useStore((state) => state.viewer)
 
@@ -88,11 +117,12 @@ export default function CadView({
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
   // [isAuthLoading, …]-dep effect fires (with an `!isViewerLoaded` guard) so
-  // a model whose initial `onViewer` returned early on auth-not-ready
-  // retries once auth settles. If auth settles WHILE the first onViewer is
-  // mid-`loadModel`, `isViewerLoaded` is still false (it's only set at the
-  // end), so both fire end-to-end → double load. This in-flight ref
-  // dedupes overlapping calls; whichever effect tick wins, the other skips.
+  // a model whose initial `onViewer` returned early on OPFS-status-unknown
+  // retries once availability lands, and again on auth-state changes. If
+  // auth settles WHILE the first onViewer is mid-`loadModel`,
+  // `isViewerLoaded` is still false (it's only set at the end), so both
+  // fire end-to-end → double load. This in-flight ref dedupes overlapping
+  // calls; whichever effect tick wins, the other skips.
   const onViewerInFlightRef = useRef(false)
 
   // IFCSlice
@@ -155,6 +185,10 @@ export default function CadView({
         captureException(error)
       }
       const initializedViewer = initViewer(pathPrefix, sceneBackground || '#abcdef')
+      // Apply the persisted §6e render look (profile-menu toggle). Runs on
+      // every (re)init — including theme changes, which re-create the viewer —
+      // so the chosen look survives re-creation.
+      initializedViewer.applyLook?.(getRenderMode() ?? DEFAULT_LOOK)
       setViewer(initializedViewer)
     }
     // Don't call first time since component states get set from permalinks
@@ -182,13 +216,10 @@ export default function CadView({
       return
     }
 
-    // Wait only while auth is still being resolved. Once resolved, proceed
-    // regardless of whether a GitHub token landed — Google-only users
-    // legitimately have accessToken='' and hasGithubIdentity=false.
-    if (isAuthLoading || (isAuthenticated && !isAuthResolved)) {
-      debug().warn('Auth not yet resolved, waiting.')
-      return
-    }
+    // NB: no auth precondition here. onViewerInternal itself waits a bounded
+    // grace for auth to settle (GitHub loads only) and retries authed when an
+    // anonymous attempt fails auth-shaped — so a slow Auth0 exchange can no
+    // longer hold the load (and its progress UI) hostage.
 
     // Past the early returns — we're actually going to load. The in-flight
     // guard sits HERE (not at the effect-callback level) so two effect ticks
@@ -232,10 +263,37 @@ export default function CadView({
     }
 
     debug().log('CadView#onViewer: modelPath:', modelPath)
+
+    // Progress overlay up BEFORE any auth/token waiting. Previously the
+    // overlay only appeared once loadModel ran, and loadModel sat behind
+    // full auth resolution — a slow Auth0 exchange meant ~10s of frozen
+    // screen with no feedback. loadModel refines the message once it runs.
+    setIsModelLoading(true)
+    setSnackMessage('Loading model...')
+
+    // Only GitHub-hosted models use the Auth0-brokered token; local files,
+    // other external URLs, and Drive (its own connection tokens) shouldn't
+    // wait on it at all. Mirror Loader#load's own detection
+    // (`pathUrl.host === 'github.com'`) rather than testing `gitpath`:
+    // /share/v/gh routes carry a github.com downloadUrl AND a gitpath, but a
+    // generic /share/v/u route can point at github.com too and has no
+    // gitpath — it still goes through the token-authed Contents API in the
+    // loader, so it needs the same grace + authed retry. Non-URL targets
+    // (local paths, upload UUIDs) throw in the URL constructor → not GitHub.
+    let needsGithubAuth = false
+    try {
+      needsGithubAuth = new URL(modelPath.downloadUrl || modelPath.filepath).host.toLowerCase() === 'github.com'
+    } catch {
+      // Relative/local path — not GitHub-hosted.
+    }
+    const isAuthSettledBeforeLoad = needsGithubAuth ?
+      await waitForAuthSettled(AUTH_SETTLE_GRACE_MS) :
+      true
+
     let tmpModelRef
     let isOOM = false
     try {
-      tmpModelRef = await loadModel(modelPath)
+      tmpModelRef = await loadModelWithAuthRetry(modelPath, isAuthSettledBeforeLoad)
     } catch (e) {
       if (isOutOfMemoryError(e)) {
         isOOM = true
@@ -268,18 +326,29 @@ export default function CadView({
       // devices, already surfaced to the user with actionable advice (the
       // 'oom' alert above). Capturing it generated the SHARE-RS noise
       // (11k+ events / 2.7k users, ~100% old Android) — a device limit, not
-      // a code defect. Real (non-OOM) loader failures are still captured.
+      // a code defect. Real (non-OOM) loader failures are still captured,
+      // and get load.* tags + context from the last progress event first
+      // (via attachLoadFailureContext), so they group by phase in Sentry
+      // instead of landing in one detail-free "model loading failed"
+      // bucket (conway #301 §7).
       if (!isOOM) {
+        attachLoadFailureContext()
         captureException(e)
       }
       return
+    } finally {
+      // Whatever the outcome, this load attempt is over. The overlay/snack
+      // may still be up (set before the grace wait above, or re-set by the
+      // authed-retry path after loadModel's own finally cleared it) — a
+      // load that ends in an alert must not leave the LoadingBackdrop
+      // blocking the error dialog.
+      setIsModelLoading(false)
+      setSnackMessage(null)
     }
     if (!tmpModelRef && !isOOM) {
       setAlert('Failed to parse model')
       return
     }
-    setIsModelLoading(false)
-    setSnackMessage(null)
 
     debug().log('CadView#onViewer: pathToLoad(${pathToLoad}), tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
@@ -322,6 +391,40 @@ export default function CadView({
 
 
   /**
+   * loadModel wrapper for the auth-slow path: when the attempt went out
+   * before auth settled (grace window in onViewerInternal expired, so
+   * probably no token) and failed auth-shaped — GitHub masks private repos
+   * as 404 to anonymous callers and rate-limits anonymous IPs with 403 —
+   * wait for the token to land and retry once with it. Everything else
+   * rethrows to onViewerInternal's catch unchanged.
+   *
+   * @param {object} routeResult
+   * @param {boolean} isAuthSettledBeforeLoad
+   * @return {object} loaded model
+   */
+  async function loadModelWithAuthRetry(routeResult, isAuthSettledBeforeLoad) {
+    try {
+      return await loadModel(routeResult)
+    } catch (error) {
+      if (isAuthSettledBeforeLoad || !isAuthShapedLoadError(error)) {
+        throw error
+      }
+      // loadModel's finally just cleared the overlay; keep it up while we
+      // wait for the token — to the user this is still the same load.
+      setIsModelLoading(true)
+      await waitForAuthSettled(AUTH_SETTLE_RETRY_MS)
+      if (!useStore.getState().accessToken) {
+        // Auth settled without a GitHub token (logged out, Google-only) —
+        // the anonymous failure was the real answer.
+        throw error
+      }
+      debug().log('CadView#loadModelWithAuthRetry: anonymous load failed auth-shaped; retrying with token')
+      return await loadModel(routeResult)
+    }
+  }
+
+
+  /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
    * @param {object} routeResult
@@ -339,23 +442,25 @@ export default function CadView({
     // Call this before loader, as IFCLoader needs it.
     viewer.setCustomViewSettings(customViewSettings)
 
-    const onProgress = (progressMsg) => {
-      let msg
-      if (progressMsg && typeof progressMsg === 'object') {
-        const loadedBytes = progressMsg.loaded ?? progressMsg.receivedLength
-        if (Number.isFinite(loadedBytes)) {
-          // eslint-disable-next-line no-magic-numbers
-          const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-          msg = `${loadedMegs} MB`
-        } else {
-          msg = JSON.stringify(progressMsg)
-        }
-      } else {
-        msg = progressMsg
-      }
-      setSnackMessage(`${loadingMessageBase}: ${msg}`)
-    }
+    // Per-load progress reporter (conway #301): accumulates the normalized
+    // load-log report (status-bar expando + post-load dialog + console
+    // mirror), Sentry breadcrumbs, and the stall watchdog. Disposed in the
+    // finally below. Live progress renders in the snackbar (AlertDialogAndSnackbar),
+    // so the snackbar keeps only the base "Loading <file>" message.
+    beginLoadProgress({
+      fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
+      onStall: (lastEvent) => {
+        const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
+        setSnackMessage(`${loadingMessageBase}: still working${where}…`)
+      },
+    })
+
+    const onProgress = (progressMsg) => reportLoadProgress(progressMsg)
     let loadedModel
+    // Captured in the catch so the finally can tell endLoadProgress whether
+    // the load succeeded (success grace line) or failed (error grace line),
+    // even though the error is re-raised to onViewerInternal's handler.
+    let loadError = null
     try {
       if (isGoogleResult) {
         const connection = connections.find((c) => c.providerId === 'google-drive')
@@ -370,10 +475,16 @@ export default function CadView({
           loadedModel = await load(routeResult.downloadUrl, viewer, onProgress, false, setOpfsFile, '')
         }
       } else {
+        // Read the token at call time, not from the render closure — the
+        // auth grace/retry flow in onViewerInternal can land a token
+        // mid-flight, and the closure would still hold the pre-resolution
+        // (usually empty) value.
+        const tokenNow = useStore.getState().accessToken
         loadedModel = await load(filepath, viewer, onProgress,
-          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, accessToken)
+          (gitpath && gitpath === 'external') ? false : isOpfsAvailable, setOpfsFile, tokenNow)
       }
     } catch (error) {
+      loadError = error
       if (isOutOfMemoryError(error)) {
         error.isOutOfMemory = true
       }
@@ -389,6 +500,12 @@ export default function CadView({
       // generalises that pattern to every loader error.
       throw error
     } finally {
+      // Freeze the report (Total line) + stall watchdog off. The
+      // reporter's last-event state stays queryable after end —
+      // onViewerInternal's catch stamps it onto Sentry via
+      // attachLoadFailureContext before capturing. The captured error (or
+      // null on success) drives the end-of-load grace snackbar.
+      endLoadProgress(loadError)
       setIsModelLoading(false)
     }
 
@@ -408,10 +525,40 @@ export default function CadView({
 
     viewer.context.getScene().add(loadedModel)
 
+    // Size the dolly range + near/far clip planes to the model *before*
+    // any camera pose is applied, so the first frame is already drawn
+    // with the right frustum. fitModelToFrame does this too, but a
+    // permalink with a `#c:` camera hash skips the fit — and then the
+    // model renders against the default far = 2000 plane and the first
+    // user input clamps the restored distance to maxDistance = 300
+    // (#1652).
+    viewer.context.fitCameraLimitsToModel(loadedModel)
+
     const isCamHashSet = onHash(location, viewer.context.getCameraControls())
     if (!isCamHashSet) {
-      viewer.context.fitModelToFrame()
+      // Framing target passed explicitly: the no-arg fallback frames the
+      // last scene child, which is the model only by luck of ordering.
+      viewer.context.fitModelToFrame(loadedModel)
     }
+
+    // §6e: fit the contact-shadow ground + shadow frustum to the model's
+    // bounds (valid now it's added + framed). Optional-chained: the Jest
+    // viewer mock doesn't define it.
+    viewer.groundModel?.(loadedModel)
+
+    // Framing just ran on outlier-robust bounds (robustBounds.js), and
+    // this repeats that cached measurement. If strays were excluded, say
+    // so: Health line + console warning + grace-snackbar note. After
+    // endLoadProgress by design — it amends the published loadResult.
+    // The traverse guard skips the Jest MockModel, which isn't an
+    // Object3D.
+    if (typeof loadedModel.traverse === 'function') {
+      reportFramingExclusion(robustBoundsFor(loadedModel))
+    }
+
+    // §6e: apply the active render look's materials to the new model, so a
+    // model opened while a non-default look is active still matches.
+    viewer.applyLookToModel?.(loadedModel)
 
     // TODO(pablo): centralize capability check somewhere
     if (loadedModel.ifcManager) {
@@ -420,15 +567,29 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    const selectContentObj = {
-      content_type: loadedModel.type || 'undefined',
-      content_id: filepath,
+    // Replaces the retired `select_content` event, whose counts were
+    // conflated with homepage visits because the demo model fired it
+    // too. The isRealModelOpen guard keeps that from recurring — see
+    // its doc for why the demo must stay out of this event.
+    if (isRealModelOpen(routeResult)) {
+      const eventParams = {
+        content_type: loadedModel.type || 'undefined',
+        content_id: filepath,
+      }
+      // TODO(pablo): currently only IFC/STEP are populated with stats.
+      if (loadedModel.loadStats) {
+        addProperties(eventParams, loadedModel.loadStats, 'stats_')
+      }
+      // Per-user open depth: GA4 has no user-id dimension, so the
+      // client id rides along as an event-scoped custom dimension,
+      // prefix-tagged by getOpenCid so GA4 can't type it as a number.
+      // Absent whenever GA didn't initialize — see analytics#gaClientId.
+      const openCid = getOpenCid()
+      if (openCid) {
+        eventParams[OPEN_CID_PARAM] = openCid
+      }
+      gtagEvent('real_model_open', eventParams)
     }
-    // TODO(pablo): currently only IFC/STEP are populated with stats.
-    if (loadedModel.loadStats) {
-      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
-    }
-    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }
@@ -462,18 +623,29 @@ export default function CadView({
       //      tree). `hasOwnProperty` discriminates this from wit-three's
       //      `IFCModel.prototype.getSpatialStructure` which takes no args
       //      and would silently drop `withProperties=true`.
-      //   2. Wit-three's `m.ifcManager.getSpatialStructure(0, true)` —
+      //   2. Wit-three's `m.ifcManager.getSpatialStructure(0, ...)` —
       //      legacy fallback. Post-Slice-5b this won't work for IFC
       //      parses (wit-three's `state.models[modelID]` is empty
       //      because we skipped its parse), but the branch stays as a
       //      defensive fallback for non-IFC models that decorated with
       //      `ifcManager` shims via `convertToShareModel`.
+      //
+      // `'names'` (Conway extension) fetches the tree with only the
+      // Name/LongName/GlobalId handles each load-time consumer here
+      // actually reads (setupLookupAndParentLinks: expressID;
+      // SearchIndex + reifyName: Name/LongName/GlobalId/type;
+      // groupElementsByTypes: Name/LongName/type) instead of the old
+      // `true`, which flattened and retained every spatial node's FULL
+      // attribute record — O(products) memory pinned for the session
+      // that the Properties panel re-fetches on demand anyway. The
+      // cache-hit GLB closure ignores the flag (tree pre-serialised);
+      // wit-three's legacy shim treats any truthy value as `true`.
       const hasOwnSpatialStructure =
         Object.prototype.hasOwnProperty.call(m, 'getSpatialStructure')
       if (hasOwnSpatialStructure) {
-        rootElt = await m.getSpatialStructure(0, true)
+        rootElt = await m.getSpatialStructure(0, 'names')
       } else {
-        rootElt = await m.ifcManager.getSpatialStructure(0, true)
+        rootElt = await m.ifcManager.getSpatialStructure(0, 'names')
       }
     } catch (e) {
       setAlert('Could not read full model structure.  Only model geometry will be available.')
@@ -487,12 +659,41 @@ export default function CadView({
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     initSearch(m, rootElt)
+    // Root display name, in preference order: real properties from the
+    // parser (IFC project Name/LongName), then whatever the tree root
+    // already carries (convertToShareModel's composed
+    // "<sceneName> (<fileName>)" for plain GLB/OBJ — see #1595), then
+    // the generic 'Model' placeholder. The previous unconditional
+    // overwrite stamped 'Model' over every non-IFC root because
+    // getProperties has nothing for unstructured models.
     const tmpProps = await viewer.getProperties(0, rootElt.expressID)
-    const rootProps = tmpProps || {Name: {value: 'Model'}, LongName: {value: 'Model'}}
-    rootElt.Name = rootProps.Name
-    rootElt.LongName = rootProps.LongName
+    if (tmpProps && (tmpProps.Name || tmpProps.LongName)) {
+      rootElt.Name = tmpProps.Name ?? rootElt.Name
+      rootElt.LongName = tmpProps.LongName ?? rootElt.LongName
+    } else if (!rootElt.Name && !rootElt.LongName) {
+      rootElt.Name = {value: 'Model'}
+      rootElt.LongName = {value: 'Model'}
+    }
+    // Ids are only unique within one file — transient anonymous-geometry
+    // rows from the previous model must not leak into this tree.
+    useStore.getState().clearTransientTreeNodes()
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
+    // Load-time property reads are done: drop Conway's materialised
+    // entity/descriptor caches (the 'names' walk + type sweep touched
+    // O(products) entities). Entities rematerialise transparently on the
+    // next property access (Properties panel, GLB cache writer), so this
+    // only bounds memory. Conway extension — optional-chained so older
+    // conway versions no-op. The IsModelOpen gate keeps cache-hit GLB
+    // loads silent: they share the live conway ifcAPI via
+    // `viewer.IFC.loader.ifcManager` without ever opening model 0, and
+    // an ungated release would log a spurious model-undefined error.
+    const conwayApi = m.ifcManager?.ifcAPI
+    // eslint-disable-next-line new-cap
+    if (conwayApi?.ReleaseEntityCache && conwayApi.IsModelOpen?.(0)) {
+      // eslint-disable-next-line new-cap
+      conwayApi.ReleaseEntityCache(0)
+    }
   }
 
 
@@ -514,8 +715,25 @@ export default function CadView({
       }
       const picked = pickedAll[0]
       const mesh = picked.object
-      // TODO(pablo): obsolete? needed this in h3 at some point
-      viewer.setHighlighted([mesh])
+      // TODO(pablo): obsolete? needed this in h3 at some point.
+      // Two pick targets must NOT reach the OutlineEffect:
+      // - A BatchedMesh: three auto-enables `USE_BATCHING` for it, but
+      //   postprocessing's outline ShaderMaterial (DepthComparisonMaterial)
+      //   predates BatchedMesh and omits the batching shader chunks, so its
+      //   program fails to compile (`batchingMatrix` undeclared) and blanks
+      //   the frame. The batched path highlights by recoloring instances
+      //   (batchedHighlight) instead, so clear the outline rather than feed
+      //   it the batch.
+      // - A geometry-less non-Mesh (Spark SplatMesh, #1726): the
+      //   OutlineEffect's per-frame update toggles its selection's
+      //   `.visible` off around an extra depth-pass scene render; the
+      //   scene-level SparkRenderer re-gathers splats during that pass and
+      //   sees the mesh hidden, so its async sort alternates between the
+      //   full and the empty splat set — the whole model flickers at the
+      //   sort cadence. An outline of a gaussian cloud carries no signal
+      //   anyway; store/NavTree selection below still applies.
+      const outlineable = !mesh.isBatchedMesh && mesh.isMesh === true
+      viewer.setHighlighted(outlineable ? [mesh] : null)
       // Per-instance picking path (Conway-direct):
       //   no-shift = just this PlacedGeometry
       //   shift     = the whole IFC element (every instance)
@@ -527,6 +745,37 @@ export default function CadView({
       // viewer-replacement work, so it wins the modifier slot. Models
       // without an instanceMap (today's wit-three path, GLB cache hit)
       // keep the legacy Shift behavior unchanged.
+      // BatchedMesh render path (`?feature=batchedMesh` / demandGeometry):
+      // the raycast sets `batchId` (the per-instance id); resolve it to the
+      // parent IFC product, its global occurrence id (the batched "instance
+      // id" `setInstanceSelection` narrows the recolor with), and its STEP
+      // occurrence path / solid geometry id through the per-batch tables
+      // `assembleBatchedModel` attached — the same per-instance pick the
+      // merged path resolves through `mesh.instanceMap`.
+      if (mesh.isBatchedMesh && mesh.instanceParents) {
+        const batchId = picked.batchId
+        if (batchId === undefined || batchId < 0) {
+          return
+        }
+        const parentExpressId = mesh.instanceParents[batchId]
+        if (parentExpressId === undefined || !viewer.isolator.canBePickedInScene(parentExpressId)) {
+          return
+        }
+        const instanceId = mesh.instanceOccurrenceIds?.[batchId]
+        if (instanceId === undefined) {
+          // Undecorated batch (no occurrence table): parent-level only.
+          selectItemsInScene([parentExpressId], true, [])
+          return
+        }
+        selectFromInstancePick({
+          parentExpressId,
+          instanceId,
+          rawOccurrencePath: mesh.instanceOccurrencePaths?.[batchId] ?? null,
+          pickedGeometryId: mesh.instanceGeometryIds?.[batchId] ?? null,
+          isShiftKeyDown: event.shiftKey,
+        })
+        return
+      }
       if (mesh.instanceMap) {
         const faceIdx = picked.faceIndex
         const instanceId = mesh.instanceMap.getInstanceIdByTriangle(faceIdx)
@@ -540,18 +789,13 @@ export default function CadView({
         if (!viewer.isolator.canBePickedInScene(parentExpressId)) {
           return
         }
-        // Route through selectItemsInScene (the single selection
-        // funnel) so a scene pick gets the same treatment as every
-        // other source: store update + element-path permalink in the
-        // URL. Previously this set the store directly and skipped the
-        // funnel, so scene selections never produced a shareable
-        // permalink. The parent expressID is always the "selection" so
-        // the properties panel / nav tree / search respond normally;
-        // `instanceIds` only narrows what the OutlineEffect draws.
-        // Shift = the whole IFC element (every instance) → no
-        // per-instance restriction; no-shift = just this PlacedGeometry.
-        const instanceIds = event.shiftKey ? [] : [instanceId]
-        selectItemsInScene([parentExpressId], true, instanceIds)
+        selectFromInstancePick({
+          parentExpressId,
+          instanceId,
+          rawOccurrencePath: mesh.instanceMap.getOccurrencePathByInstance?.(instanceId) ?? null,
+          pickedGeometryId: mesh.instanceMap.getGeometryExpressIdByInstance?.(instanceId) ?? null,
+          isShiftKeyDown: event.shiftKey,
+        })
         return
       }
       // Non-instance branch: elementSelection funnels through
@@ -574,6 +818,82 @@ export default function CadView({
     } catch (e) {
       console.error(e)
     }
+  }
+
+
+  /**
+   * Shared tail of the per-instance scene-pick funnel — used by both the
+   * merged (`mesh.instanceMap`) and batched (per-batch tables) double-click
+   * branches so the two can't drift on the selection contract.
+   *
+   * Routes through selectItemsInScene (the single selection funnel) so a
+   * scene pick gets the same treatment as every other source: store update
+   * + element-path permalink in the URL. The parent expressID is always the
+   * "selection" so the properties panel / nav tree / search respond
+   * normally; `instanceIds` only narrows what the scene highlight draws.
+   * Shift = the whole IFC element (every instance) → no per-instance
+   * restriction; no-shift = just this PlacedGeometry.
+   *
+   * STEP: the picked instance's occurrence path makes the NavTree highlight
+   * the one occurrence, not every reuse of the part type (null on shift and
+   * for IFC / single-occurrence parts). The geometry path can be deeper
+   * than any tree node's — Conway appends a segment per child
+   * shape_representation level, and an SRR-attached brep (Alibre exports)
+   * adds a non-NAUO id below the leaf — so trim to the deepest tree-known
+   * prefix or the NavTree's exact-key matches (row highlight, scroll) find
+   * nothing. The store is read imperatively: the click handler is installed
+   * once from `onModel`, before that render's `rootElement` is set.
+   *
+   * Ephemeral solid resolution: when the tree surfaces the picked body as a
+   * `type:'solid'` child of the node at this path (Conway's multibody solid
+   * layer), select THAT node — its express id is the picked instance's
+   * `PlacedGeometry.geometryExpressID` — so the NavTree highlights the one
+   * body, not the whole part. Falls back to the part-level selection when
+   * the tree has no matching solid (single-solid parts, suppressed
+   * anonymous dumps, old caches).
+   *
+   * @param {object} pick
+   * @param {number} pick.parentExpressId the geometry-owner product id
+   * @param {number} pick.instanceId synthetic per-instance id (IfcInstanceMap
+   *   id on the merged path; global occurrence id on the batched path)
+   * @param {Array<number>|null} pick.rawOccurrencePath untrimmed STEP path
+   * @param {number|null} pick.pickedGeometryId the instance's own geometry
+   *   (solid) express id
+   * @param {boolean} pick.isShiftKeyDown
+   */
+  function selectFromInstancePick({
+    parentExpressId, instanceId, rawOccurrencePath, pickedGeometryId, isShiftKeyDown,
+  }) {
+    const instanceIds = isShiftKeyDown ? [] : [instanceId]
+    const rawPath = isShiftKeyDown ? null : rawOccurrencePath
+    const rootEltForPick = useStore.getState().rootElement
+    const occurrencePath = rawPath ?
+      trimToTreeOccurrencePath(rawPath, occurrencePathKeySetForTree(rootEltForPick)) :
+      null
+    let targetId = parentExpressId
+    let solidExpressId = null
+    if (occurrencePath) {
+      const pathNode = pickedGeometryId !== null ?
+        findNodeByOccurrencePath(rootEltForPick, occurrencePath) : null
+      const solidNode = pathNode?.children?.find?.(
+        (child) => child.ephemeral === true && child.expressID === pickedGeometryId)
+      if (solidNode) {
+        targetId = solidNode.expressID
+        solidExpressId = solidNode.expressID
+      } else if (pickedGeometryId !== null && pathNode &&
+          occurrenceInstanceIds(occurrencePath, false).length > 1) {
+        // Anonymous piece of a multi-piece part (conway#387): no tree
+        // node exists, but (path, geometry id) is a complete identity —
+        // select it as a solid and materialize a transient NavTree row
+        // so highlight/scroll/eye/permalink all work. The >1-instance
+        // guard keeps single-solid parts (as1's nut, the NEMA screws)
+        // on the part-level selection, where the part node IS the piece.
+        targetId = pickedGeometryId
+        solidExpressId = pickedGeometryId
+        materializeTransientNode(occurrencePath, pickedGeometryId)
+      }
+    }
+    selectItemsInScene([targetId], true, instanceIds, occurrencePath, solidExpressId)
   }
 
 
@@ -680,8 +1000,24 @@ export default function CadView({
    *   source (NavTree, search, permalink) doesn't inherit the instance
    *   subset left behind by an earlier scene pick. Only the Conway
    *   scene-pick path passes a non-empty value.
+   * @param {Array<number>} occurrencePath STEP occurrence path (NAUO express
+   *   ids) of the selected occurrence, or null. Disambiguates which NavTree
+   *   node highlights when a reused part's occurrences share one expressID;
+   *   null (the default) clears it for IFC and non-occurrence sources.
+   * @param {number} solidExpressId Express id of the selected ephemeral solid
+   *   (a multibody STEP part's named body), or null when the selection is a
+   *   whole product/occurrence. Solid nodes share their parent's occurrence
+   *   path, so this is what tells "the part" from "one body inside it" —
+   *   NavTree row highlight, per-solid hide and the permalink all read it.
+   * @param {Array} anchorIds The ids the user actually picked, when the
+   *   caller expanded them into descendants for the scene highlight
+   *   (`elementSelection` does). Null (the default) means every result is
+   *   its own anchor. NavTree row highlight, Properties and the TopBar
+   *   crumb follow the anchors; only the scene uses the expanded set.
    */
-  function selectItemsInScene(resultIDs, updateNavigation = true, instanceIds = []) {
+  function selectItemsInScene(
+    resultIDs, updateNavigation = true, instanceIds = [], occurrencePath = null,
+    solidExpressId = null, anchorIds = null) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
@@ -690,11 +1026,51 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
+      // Callers that expand a pick into descendants (elementSelection)
+      // pass the clicked ids explicitly; for everyone else every result
+      // is its own anchor.
+      setSelectedAnchorIds(anchorIds === null ? resIds : anchorIds.map((id) => `${id}`))
       setSelectedInstanceIds(instanceIds)
+      // STEP per-occurrence key: a reused part's occurrences share one
+      // expressID, so this disambiguates which NavTree node to highlight.
+      // Every non-occurrence caller passes null, clearing any stale path.
+      setSelectedOccurrencePath(occurrencePath)
+      setSelectedSolidExpressId(solidExpressId)
       // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
+        // STEP: build the element path from the occurrence path, prepending
+        // the root id (occurrence paths omit the root). The elementsById
+        // lookup can't do it: a reused sub-assembly's duplicated subtrees
+        // share expressIDs, so the table holds only the last-visited
+        // duplicate and the permalink could encode a different occurrence
+        // than the one selected. For a scene pick it misses entirely —
+        // `firstId` is then the geometry-owner product_definition_shape id,
+        // which is not a tree node. Store read is imperative because this
+        // funnel is also called from the once-installed dblclick handler,
+        // whose closure predates the render that set `rootElement`.
+        //
+        // Only tree-known paths are written: `trimToTreeOccurrencePath`
+        // passes a RAW geometry path through unchanged when the tree carries
+        // no occurrence keys (engine skew between geometry stamping and
+        // getSpatialStructure, malformed capture), and minting that into the
+        // URL would both share a dead link and — via the location effect
+        // re-entering selectElementBasedOnFilepath one tick later — clobber
+        // the pick's per-instance highlight. Non-tree paths fall back to the
+        // legacy lookup, which fails into this try/catch for a scene pick's
+        // PDS id, so no navigation happens (the pre-occurrence behavior).
+        const rootElt = useStore.getState().rootElement
+        const isTreeOccurrencePath = Boolean(
+          occurrencePath && occurrencePath.length > 0 && rootElt &&
+          occurrencePathKeySetForTree(rootElt)?.has(occurrencePathKey(occurrencePath)))
+        // A selected solid appends its own express id below the occurrence
+        // path — solids aren't path-addressable on their own (they share the
+        // parent part's path), so the URL identity is [root, ...path, solid].
+        // `selectElementBasedOnFilepath` resolves it back symmetrically.
+        const pathIds = isTreeOccurrencePath ?
+          [rootElt.expressID, ...occurrencePath,
+            ...(solidExpressId !== null ? [solidExpressId] : [])] :
+          getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const enabledFeatures = searchParams.get('feature')
         const elementPath = pathIds.join('/')
@@ -725,13 +1101,88 @@ export default function CadView({
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
   function selectElementBasedOnFilepath(filepath) {
+    // Normalize to the element path BELOW the model file. The two callers
+    // pass different shapes: the location watcher passes the already-split
+    // element path ('/120010/.../2867' — no file suffix, split is a no-op),
+    // while the post-load call passes the full source path (gitpath / srcUrl /
+    // installPrefix+filepath) whose last '/'-segment is the model FILENAME.
+    // Without this split, a filename with a digit prefix — an OPFS upload's
+    // hex UUID (~62% start with a digit) or a numeric-named file like
+    // 171210AISC_Sculpture_param.ifc — parseInt()s to a finite "element id"
+    // and CLOBBERS the selection the permalink restore just made (#1639
+    // follow-up: NavTree kept its highlight, the scene lost its own).
+    const suffixSplit = filepath.split(fileSuffixBoundaryRegex)
+    if (suffixSplit.length === 2) {
+      filepath = suffixSplit[1]
+    }
     if (filepath.startsWith('/')) {
       filepath = filepath.substring(1)
     }
     const parts = filepath.split(/\//)
     if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
-      const targetId = parseInt(parts[parts.length - 1])
+      // Whole-segment numeric only: app-written element paths are pure ids,
+      // and parseInt's prefix parsing would accept junk like '12abc'.
+      const lastPart = parts[parts.length - 1]
+      const targetId = /^\d+$/.test(lastPart) ? parseInt(lastPart, 10) : NaN
+      if (!isFinite(targetId)) {
+        return
+      }
+      const state = useStore.getState()
+      // STEP: the element path's ids below the root ARE the selection's
+      // occurrence path (selectItemsInScene writes the URL from
+      // `selectedOccurrencePath`), so resolve it back rather than selecting
+      // the bare trailing id — that id is a NAUO shared by every duplicate of
+      // a reused sub-assembly (under-determined in the tree) and never equals
+      // the product_definition_shape id that owns the geometry (unreachable
+      // in the scene). See design/new/step-occurrence-selection.md.
+      // `findNodeByOccurrencePath` is the single tree-membership gate (a
+      // non-null node ⟺ the tree knows the path) and its node supplies
+      // `hasChildren` for the scene resolution below. Null for IFC (nodes
+      // carry no occurrence paths) and for element paths the tree doesn't
+      // know — those keep the plain scalar-id selection.
+      //
+      // The first segment must be the root id: every app-written element
+      // path starts at the root (both the occurrence branch and
+      // getParentPathIdsForElement), so a hand-trimmed URL whose tail
+      // happens to also be a valid occurrence key must not silently
+      // re-anchor to that different occurrence — it degrades to the
+      // scalar-id selection instead.
+      const eltPathIds = parts.slice(1).map((part) => parseInt(part))
+      const startsAtRoot =
+        state.rootElement && parseInt(parts[0]) === state.rootElement.expressID
+      let node = startsAtRoot ?
+        findNodeByOccurrencePath(state.rootElement, eltPathIds) : null
+      let occurrencePath = node ? eltPathIds : null
+      // Ephemeral solid permalink: the writer appends the solid's express id
+      // below its parent part's occurrence path ([root, ...path, solid]), so
+      // when the full segment list isn't a tree path, try the prefix as the
+      // path and the trailing id as one of that node's `type:'solid'`
+      // children. Mirrors the write in selectItemsInScene.
+      let solidExpressId = null
+      if (!node && startsAtRoot && eltPathIds.length >= 2) {
+        const parentPathIds = eltPathIds.slice(0, -1)
+        const parentNode = findNodeByOccurrencePath(state.rootElement, parentPathIds)
+        const solidNode = parentNode?.children?.find?.(
+          (child) => child.ephemeral === true && child.expressID === targetId)
+        if (solidNode) {
+          node = parentNode
+          occurrencePath = parentPathIds
+          solidExpressId = targetId
+        } else if (parentNode &&
+            occurrenceInstanceIds(parentPathIds, false, targetId).length > 0) {
+          // Anonymous-geometry permalink (conway#387): the trailing id names
+          // no tree node, but the instance map holds geometry with that id
+          // under the parent path — the piece exists, it just has no in-file
+          // identity beyond its express id. Select it as a solid and
+          // materialize its transient row so the tree shows what the URL
+          // addressed.
+          node = parentNode
+          occurrencePath = parentPathIds
+          solidExpressId = targetId
+          materializeTransientNode(parentPathIds, targetId)
+        }
+      }
       // Skip re-selecting when this element is already the active
       // selection. We consult the store (selectItemsInScene updates it
       // synchronously) and not only viewer.getSelectedIds(), because this
@@ -741,14 +1192,85 @@ export default function CadView({
       // getSelectedIds() is still stale. Without the store check the
       // re-selection would funnel through selectItemsInScene again and
       // reset selectedInstanceIds, widening a Conway per-instance scene
-      // pick to the whole element.
-      const alreadySelected =
-        useStore.getState().selectedElements.includes(`${targetId}`) ||
+      // pick to the whole element. When BOTH sides carry an occurrence
+      // path, identity is the path, not the trailing id — duplicates share
+      // the id, and a scene pick's selectedElements holds the PDS id, not
+      // this NAUO, though its selection is the same occurrence. When the
+      // store side has none (a shift multi-select or types-tree group
+      // reset it to null while the pathname kept the occurrence), fall
+      // back to id membership — otherwise any hash-only location change
+      // (camera rest, panel close) would re-fire this and stomp the
+      // accumulated multi-select back to the URL's single occurrence.
+      const idSelected =
+        state.selectedElements.includes(`${targetId}`) ||
         viewer.getSelectedIds().includes(targetId)
-      if (isFinite(targetId) && !alreadySelected) {
-        selectItemsInScene([targetId], false)
+      // Occurrence identity is the path — plus the solid id when the URL
+      // addresses one body of a multibody part: solid and parent share the
+      // path, so path equality alone would treat "the part" and "one body
+      // inside it" as the same selection and skip the re-select.
+      const alreadySelected = (occurrencePath && state.selectedOccurrencePath) ?
+        (occurrencePathsEqual(occurrencePath, state.selectedOccurrencePath) &&
+          state.selectedSolidExpressId === solidExpressId) :
+        idSelected
+      if (alreadySelected) {
+        return
       }
+      // Mirror the NavTree occurrence-click funnel: resolve the path to the
+      // exact instance ids so the scene highlights just this occurrence
+      // (`includeDescendants` per the node's children — an assembly needs
+      // the descendant scan, a leaf takes the exact-key path; a solid narrows
+      // further by its geometry express id). Empty for the scalar-id
+      // (IFC / unknown-path) case, where occurrencePath is null.
+      const hasChildren = Boolean(node && Array.isArray(node.children) && node.children.length > 0)
+      const instanceIds = occurrencePath ?
+        occurrenceInstanceIds(
+          occurrencePath, solidExpressId !== null ? false : hasChildren, solidExpressId) : []
+      selectItemsInScene([targetId], false, instanceIds, occurrencePath, solidExpressId)
     }
+  }
+
+
+  /**
+   * Resolve a STEP occurrence path to the exact IfcInstanceMap instance ids
+   * to highlight — the single implementation shared by the NavTree click
+   * funnel and the permalink resolver, so the two entry points can't drift
+   * on the resolution contract (modelID, options, the feature-detect for
+   * viewers without the method). Empty array when the viewer can't resolve
+   * (legacy/IFC viewers) so callers fall back to parent-level selection.
+   *
+   * @param {Array<number>} occurrencePath NAUO express ids, root→leaf
+   * @param {boolean} includeDescendants an assembly needs the descendant
+   *   prefix scan; a leaf takes the O(1) exact-key path
+   * @param {number} geometryExpressId for an ephemeral solid node, the
+   *   solid's own express id — narrows the resolution to the one body of a
+   *   multibody part; null keeps every instance at/under the path
+   * @return {Array<number>} synthetic instance ids
+   */
+  function occurrenceInstanceIds(occurrencePath, includeDescendants, geometryExpressId = null) {
+    return typeof viewer.getInstanceIdsForOccurrencePath === 'function' ?
+      viewer.getInstanceIdsForOccurrencePath(
+        0, occurrencePath, {includeDescendants, geometryExpressId}) : []
+  }
+
+
+  /**
+   * Materialize a transient NavTree row for an anonymous geometry piece
+   * (conway#387): resolve its label from Conway's arbitrary-id lookup
+   * ("Face #6321" / "Solid #250", degrading to "Item #id" on older engines)
+   * and add it to the session-only transient-node store, where NavTreePanel
+   * injects it under its parent part's row. Fire-and-forget: the selection
+   * itself never waits on the label, and the store dedups repeat arrivals
+   * (pick then permalink of the same piece).
+   *
+   * @param {Array<number>} occurrencePath the parent part's NAUO path
+   * @param {number} geometryExpressId the piece's own express id
+   */
+  function materializeTransientNode(occurrencePath, geometryExpressId) {
+    const pathKey = occurrencePathKey(occurrencePath)
+    labelForGeometryId(useStore.getState().model, geometryExpressId).then((label) => {
+      useStore.getState().addTransientTreeNodes(
+        pathKey, [{expressID: geometryExpressId, label}])
+    })
   }
 
 
@@ -787,10 +1309,13 @@ export default function CadView({
     if (!isViewerLoaded) {
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
         'isAuthenticated:', isAuthenticated, 'isAuthResolved:', isAuthResolved)
-      if (!isAuthLoading && isOpfsAvailable !== null && (!isAuthenticated || isAuthResolved)) {
+      // No auth precondition — onViewerInternal waits (bounded) for auth
+      // itself and retries authed on failure. This effect's remaining jobs:
+      // kick onViewer once OPFS availability lands (the [viewer]-effect may
+      // have fired while it was still null), and re-kick on auth-state
+      // changes (deduped by onViewer's in-flight ref).
+      if (isOpfsAvailable !== null) {
         (async () => {
-          // onViewer's own in-flight guard dedupes when this races the
-          // [viewer]-effect during a mid-load auth resolution.
           await onViewer()
         })()
       }
@@ -836,7 +1361,12 @@ export default function CadView({
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
     if (rootElement) {
-      const parts = location.pathname.split(filetypeRegex)
+      // Boundary-anchored suffix split: the bare `filetypeRegex` also matches
+      // type names appearing as directory segments (".../main/step/nist/
+      // as1.stp/1/2" splits on the "step" dir → 3 parts), which failed the
+      // part-count check below and silently dropped element-path permalinks
+      // for any model under such a directory.
+      const parts = location.pathname.split(fileSuffixBoundaryRegex)
       const expectedPartCount = 2
       if (parts.length === expectedPartCount && parts[1] !== '') {
         selectElementBasedOnFilepath(parts[1])
@@ -846,7 +1376,12 @@ export default function CadView({
 
 
   useEffect(() => {
-    (async () => {
+    // Same staleness guard as the Properties panel: this effect awaits
+    // the entity fetch before writing `selectedElement`, so a slow
+    // earlier selection could otherwise resolve last and leave every
+    // consumer (Properties, the TopBar crumb) showing the previous pick.
+    let isStale = false
+    ;(async () => {
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
@@ -878,8 +1413,13 @@ export default function CadView({
       }
       // If current selection is not empty
       if (selectedElements.length > 0) {
-        // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)[0]
+        // Properties follow the last *clicked* element. Reading
+        // `selectedElements` here showed a descendant instead: picking
+        // a container adds its whole subtree so the scene highlights,
+        // and the deepest child landed last in that array.
+        const anchors = (selectedAnchorIds && selectedAnchorIds.length > 0) ?
+          selectedAnchorIds : selectedElements
+        const lastId = anchors.slice(-1)[0]
         // Prefer the model-level `getItemProperties(id)` when present
         // — for cache-hit GLB it's the closure attached by
         // `Loader.js#convertToShareModel` from the
@@ -896,12 +1436,25 @@ export default function CadView({
         if (!props && typeof viewer.getProperties === 'function') {
           props = await viewer.getProperties(0, Number(lastId))
         }
-        setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
-        if (pathIds) {
-          setExpandedElements(pathIds.map((n) => `${n}`))
+        if (isStale) {
+          return
         }
+        setSelectedElement(props)
+        // Reveal the selection in the NavTree by opening the path to it, merged
+        // into the current expansion (see `expandedIdsForSelection`). For a STEP
+        // occurrence this keys off the occurrence path rather than `lastId` —
+        // on a scene pick `lastId` is the geometry's shared
+        // product_definition_shape, which isn't a tree node, so the old
+        // parent-path lookup missed and deep/reused nodes never expanded.
+        const pathIds = (selectedOccurrencePath && selectedOccurrencePath.length > 0) ?
+          null : getParentPathIdsForElement(elementsById, parseInt(lastId))
+        const nextExpanded = expandedIdsForSelection({
+          prevExpanded: useStore.getState().expandedElements,
+          occurrencePath: selectedOccurrencePath,
+          rootExpressId: rootElement?.expressID,
+          pathIds,
+        })
+        setExpandedElements(nextExpanded)
         const types = elementTypesMap.filter(
           (t) => t.elements.filter(
             (e) => ids.includes(e.expressID)).length > 0)
@@ -913,7 +1466,10 @@ export default function CadView({
         setSelectedElement(null)
       }
     })()
-  }, [selectedElements, selectedInstanceIds])
+    return () => {
+      isStale = true
+    }
+  }, [selectedElements, selectedAnchorIds, selectedInstanceIds, selectedOccurrencePath])
   /* eslint-enable */
 
 
@@ -943,19 +1499,44 @@ export default function CadView({
         <RootLandscape
           pathPrefix={pathPrefix}
           branch={modelPath.branch}
-          selectWithShiftClickEvents={(isShiftKeyDown, expressIdOrIds) => {
-            // The element-types tree passes an array (every element of a
-            // type) to select the group at once; the spatial tree and
-            // the scene pass a single expressID. elementSelection is
-            // single-id (shift toggle + descendants); the group case
-            // replaces the selection wholesale, like a search result, so
-            // it goes straight to the funnel with no permalink.
-            if (Array.isArray(expressIdOrIds)) {
-              selectItemsInScene(expressIdOrIds, false)
-            } else {
-              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
-            }
-          }}
+          selectWithShiftClickEvents={
+            (isShiftKeyDown, expressIdOrIds, occurrencePath = null, hasChildren = false,
+              isEphemeralSolid = false) => {
+              // The element-types tree passes an array (every element of a
+              // type) to select the group at once; the spatial tree and
+              // the scene pass a single expressID. elementSelection is
+              // single-id (shift toggle + descendants); the group case
+              // replaces the selection wholesale, like a search result, so
+              // it goes straight to the funnel with no permalink.
+              if (Array.isArray(expressIdOrIds)) {
+                selectItemsInScene(expressIdOrIds, false)
+              } else if (occurrencePath && occurrencePath.length > 0 && !isShiftKeyDown) {
+                // STEP occurrence node (non-shift). The tree node's id is its NAUO
+                // express id, but the geometry is keyed by the shared
+                // product_definition_shape, so parent-level selection
+                // (elementSelection → setSelection) can't reach the mesh — the
+                // occurrence path is the only shared key. Resolve it to the exact
+                // instance ids and drive the per-instance highlight directly,
+                // mirroring the scene-pick funnel. The node's expressID stays the
+                // "selection" so properties / nav / the tree's per-occurrence
+                // highlight (selectedOccurrencePath) all key off it.
+                //
+                // Shift-click falls through to elementSelection instead, which
+                // toggles/accumulates against the current selection (multi-select);
+                // the per-occurrence scene highlight is single-selection only, so
+                // shift keeps its legacy type-level accumulate behavior.
+                // An ephemeral solid node shares its parent part's occurrence
+                // path; its own express id (= PlacedGeometry.geometryExpressID)
+                // narrows the resolution to the one clicked body.
+                const solidExpressId = isEphemeralSolid ? parseInt(expressIdOrIds, 10) : null
+                const instanceIds =
+                  occurrenceInstanceIds(occurrencePath, hasChildren, solidExpressId)
+                selectItemsInScene(
+                  [expressIdOrIds], true, instanceIds, occurrencePath, solidExpressId)
+              } else {
+                elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressIdOrIds)
+              }
+            }}
           deselectItems={deselectItems}
         />
       )}

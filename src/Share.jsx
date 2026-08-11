@@ -8,6 +8,7 @@ import {consumePendingModelNameUpdate, updateRecentFileModelTitle} from './conne
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import debug from './utils/debug'
+import {pageTitleForModel} from './utils/modelDisplayName'
 import {navToDefault} from './utils/navigate'
 import {handleRoute} from './routes/routes'
 
@@ -143,41 +144,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  * @return {ReactElement}
  */
 function PageTitle({modelPath, modelName, isUploadedFile}) {
-  let titleStr = ''
-  const modelPathFilename = modelPath.filepath?.split('/').pop()
-  switch (modelPath.kind) {
-    case 'file':
-      if (isUploadedFile) {
-        titleStr = `New: ${modelName}`
-      } else {
-        titleStr = `${modelName || modelPathFilename}`
-      }
-      break
-    case 'provider':
-      switch (modelPath.provider) {
-        case 'google':
-          titleStr = `Google: ${modelName || 'file'}`
-          break
-        case 'github':
-          if (modelName === undefined) {
-            modelName = `${modelPath.repo}/${modelPath.filepath} at ${modelPath.branch}`
-          }
-          titleStr = `GitHub: ${modelName}`
-          break
-        default:
-          titleStr = `${modelPath.provider}: ${modelName || modelPathFilename}`
-      }
-      break
-    case 'srcUrl':
-      titleStr = modelName || modelPathFilename
-      break
-    default:
-      titleStr = `Loading...`
-  }
-
   return (
     <Helmet>
-      <title>{titleStr}</title>
+      <title>{pageTitleForModel(modelPath, modelName, isUploadedFile)}</title>
     </Helmet>
   )
 }

@@ -21,11 +21,14 @@ describe('viewer/ShareModel', () => {
         // off by default; Loader's Conway-direct path flips it on after
         // attaching an IfcInstanceMap.
         instancePicking: false,
+        // off by default; `inferModelCapabilities` flips it on (and ifcSubsets
+        // off) for the BatchedMesh render path.
+        batchedPicking: false,
         useIfcClipper: true,
       })
     })
 
-    it.each(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld'])(
+    it.each(['glb', 'gltf', 'obj', 'stl', 'pdb', 'xyz', 'fbx', 'bld', 'ply', 'spz', 'splat', 'ksplat', 'sog'])(
       'treats %s as unstructured mesh (no IFC capabilities)',
       (format) => {
         const caps = capabilitiesForFormat(format)
@@ -140,6 +143,21 @@ describe('viewer/ShareModel', () => {
       expect(inferModelCapabilities({})).toEqual({})
     })
 
+    it('promotes batchedPicking (and clears ifcSubsets) for a decorated BatchedMesh', () => {
+      // A BatchedMesh carries no per-vertex expressID — IDs live in
+      // `instanceParents`. Without this, the model keeps the IFC format
+      // default (ifcSubsets:true, no batchedPicking) and setSelection routes
+      // through web-ifc-three's pickByIds → no highlight.
+      const batched = new Mesh(new BufferGeometry())
+      batched.isBatchedMesh = true
+      // eslint-disable-next-line no-magic-numbers
+      batched.instanceParents = new Uint32Array([100, 200])
+      const caps = inferModelCapabilities(batched)
+      expect(caps.batchedPicking).toBe(true)
+      expect(caps.expressIdPicking).toBe(true)
+      expect(caps.ifcSubsets).toBe(false)
+    })
+
     /**
      * Build a mesh with both `expressID` and `instanceID` per-vertex
      * attributes — the shape a cache-hit GLB carries after the
@@ -206,14 +224,16 @@ describe('viewer/ShareModel', () => {
 
     it('promotes typedProperties when userData carries a BLDRS_element_properties payload', () => {
       // Mirrors what `BldrsElementPropertiesReader#afterRoot` parks: a
-      // `{compressed, decode}` lazy-decode object on userData.
-      // `Loader.js#convertToShareModel` hangs `getItemProperties` /
-      // `getPropertySets` off it. Capability flip is independent of
-      // the consumer wiring — presence of the payload is the signal.
+      // `{compressed, getRecord, getPsetIds}` lazy per-entity payload
+      // on userData. `Loader.js#convertToShareModel` hangs
+      // `getItemProperties` / `getPropertySets` off it. Capability
+      // flip is independent of the consumer wiring — presence of the
+      // payload is the signal.
       const root = new Group()
       root.userData.bldrsElementProperties = {
         compressed: new Uint8Array([0]),
-        decode: () => ({itemProperties: {}, propertySets: {}}),
+        getRecord: () => undefined,
+        getPsetIds: () => [],
       }
       const caps = inferModelCapabilities(root)
       expect(caps.typedProperties).toBe(true)

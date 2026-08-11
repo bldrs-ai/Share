@@ -224,8 +224,9 @@ The cache-side concerns are addressed below in "Cache round-trip" —
 no custom glTF extension was needed; per-vertex `instanceID` rides
 through GLTFExporter's `_UPPERCASE` rename verbatim.
 
-**Live implementation** (behind `?feature=conwayDirectIfc`, on track
-to default-on once the open items in §3b.iii land):
+**Live implementation** (the production geometry path — `conwayDirectIfc`
+flipped **default-on 2026-05** (PR #1529) once the §3b.iii open items
+landed, so `?feature=conwayDirectIfc` is now redundant):
 
 - `src/viewer/ifc/IfcItemsMap.js` — per-IFC-product table. Three
   populators: per-vertex-attribute (fallback / cache-hit before
@@ -285,7 +286,7 @@ to default-on once the open items in §3b.iii land):
   `viewer.setSelection(0, ids)` then
   `viewer.setInstanceSelection(0, instanceIds)`.
 
-**Cache round-trip** (`?feature=conwayDirectIfc,glb`):
+**Cache round-trip** (`conwayDirectIfc` + `glb`, both default-on):
 
 Per-vertex `instanceID` rides through the IFC→GLB→IFC cache
 natively via GLTFExporter's `_UPPERCASE` rename — no custom glTF
@@ -380,8 +381,7 @@ the per-vertex `expressID` attribute across child Meshes.
   binned ones; on Snowdon (~6k products) that's noticeable but
   recoverable with InstancedMesh batching for the
   `IfcMappedItem`-heavy portion and per-product Mesh for the
-  rest. Worth a separate spike post-default-on. Captured here
-  so the idea doesn't fall off the followup list.
+  rest. See §3b.iv — now an active effort.
 
 **Done — BLDRS_spatial_tree slice.** Landed 2026-05 (PR #1527).
 Resolves §3b.iii default-on blocker 1 below: cache-hit GLBs now
@@ -613,6 +613,270 @@ manually → wire bit-level diff into the regression harness → flip
 public-launch gate. Not on the critical path for the §3b.iii blockers
 above; tracked here so it doesn't fall off.
 
+#### 3b.iv. Instanced rendering (GPU instancing) — active
+
+We now own the whole chain (Conway engine → `@bldrs-ai/conway/web-ifc`
+→ this loader), so the long-standing "InstancedMesh batching" idea
+(§3b.iii open item) becomes tractable end-to-end. The key fact, verified
+against the compat surface:
+
+**Conway already emits the instancing model; we throw it away here.**
+At the compat boundary each `PlacedGeometry` carries a `geometryExpressID`
+referencing a **shared, source-unit *local*-space** geometry plus its own
+`flatTransformation` placement matrix. `GetGeometry(geometryExpressID)`
+returns the shared buffer — and the conway #308 "port cluster" fix
+(`ifc_api_proxy_ap214.ts`, the removed per-leaf `normalize()`) exists
+precisely *because* AP214 instances / `IfcMappedItem`s share one geometry
+buffer. So the shared-geometry + N-matrices representation survives intact
+to `flatMeshToBufferGeometry`. That assembler is the *only* place it dies:
+`flatMeshToBufferGeometry.js:232` bakes each matrix into a private vertex
+slab and merges everything into one `BufferGeometry`, so the 6 physical
+as1 bolts (or Snowdon's 2284 shared-geometry multi-placed FlatMeshes,
+§3b.ii) become N full vertex copies instead of 1 shape + N matrices.
+(Conway's *own* three.js renderer, `conway/src/rendering/threejs/scene_object.ts`,
+already does the right thing — `BatchedMesh.addGeometry` once per shape +
+`addInstance` per placement. We're the outlier.)
+
+**Plan.** Render the case-1 (shared-`geometryExpressID`) portion with GPU
+instancing; keep merged geometry for case-2 / singletons — a **hybrid**,
+which `THREE.BatchedMesh` (three 0.184) models directly (many shapes +
+many instances, one draw call). Don't instance everything: a model of
+thousands of placed-once unique shapes would turn one draw call into
+thousands. Group by `geometryExpressID`; shapes with ≥2 placements
+instance, the rest merge.
+
+- **Geometry:** one `BufferGeometry` per unique `geometryExpressID`
+  (fetched once, kept in local space — *don't* apply `flatTransformation`
+  to vertices).
+- **Placement:** per-instance matrix from `flatTransformation`
+  (`setMatrixAt` / batched instance), per-instance color via
+  `instanceColor` — which retires most of the `color`-bin `groups[]` +
+  array-material machinery for the instanced case.
+- **Picking:** `InstancedMesh`/`BatchedMesh` raycasts return
+  `instanceId`/`batchId` *natively*, replacing the triangle→instance
+  lookup (`IfcInstanceMap.getInstanceIdByTriangle`). The synthetic 0-based
+  `instanceID` the assembler already mints per `PlacedGeometry`
+  (`flatMeshToBufferGeometry.js:278`) maps 1:1 onto it; selection still
+  resolves to `parentExpressId` the same way. (Validate `three-mesh-bvh`
+  accelerated raycast on instanced/batched geometry — current picking
+  depends on it.)
+
+**Why now / tie-in to STEP occurrence identity.** Instancing makes the
+scalar-`expressID` collapse *structural*: `instanceId` **is** the
+per-occurrence handle. Today all 6 as1 bolts resolve to one
+`parentExpressId` (`CadView.jsx`), exactly the case the conway
+STEP-metadata plan flags — STEP stores a compressed DAG of part *types* +
+NAUO edges, so a physical part exists only as a root→leaf *path*, not a
+single entity (conway `design/new/step-metadata-nist.md` §"Occurrence
+identity"). The `expressID → ordered occurrence path` generalization that
+plan asks of Share and the per-instance id GPU instancing needs are the
+**same** identifier. Doing them together is cheaper than either alone, and
+STEP assemblies are both the forcing function and the biggest beneficiary.
+
+**Landed (PRs #1573 + #1575, merged Conway-direct path).** The `expressID →
+ordered occurrence path` generalization is real: `PlacedGeometry.occurrencePath`
+(the root→leaf NAUO ids) now keys per-occurrence behavior both ways —
+scene pick → per-occurrence NavTree highlight (+ auto-expand to the node),
+NavTree click → occurrence-scoped scene highlight — via `setInstanceSelection`
+on `instancePicking` models. #1575 extended it past selection: per-occurrence
+**hide** (the NavTree eye / `H` hide one occurrence, not every reuse) and
+**GLB-cache persistence** (the `instanceId → occurrencePath` table rides
+`BLDRS_face_ids`, schema `0.9.0`, so a cache-hit STEP model keeps per-occurrence
+behavior). Full design + remaining follow-ups (permalink, per-occurrence
+isolate) in `design/new/step-occurrence-selection.md`. This shipped on the
+**merged** Conway-direct path only; the **batched** path carries
+`batchedPicking` (product-level) not `instancePicking`, so it still highlights
+every occurrence of the picked product — see the batched selection follow-up
+below.
+
+**Measured (PR1, 2026-06).** The grouper ran over real models.
+**vtx reduction** = the share of merged vertex memory the geometry
+*sharing* removes (`1 − instancedVerts/mergedVerts`). **mem saved** = that
+sharing win on a uniform 24 B/vertex basis (position+normal) **minus** the
+per-instance matrix+colour overhead (80 B/instance) — i.e. only what
+instancing's geometry dedup buys, *not* the separate ~8 B/vertex the
+batched path also saves by dropping per-vertex pick attributes (that is a
+picking-model co-benefit, not sharing, so it is excluded to avoid
+overstating). **naive drawCalls** = unique shapes — the *naive*
+InstancedMesh-per-shape bound, **not** the target (see below).
+
+| Model | instances | unique shapes | shared | vtx reduction | mem saved (sharing) | top shape | naive drawCalls |
+|---|---|---|---|---|---|---|---|
+| index.ifc | 7 | 7 | 0 | 0% | ~0 | ×1 | 7 |
+| Momentum (ArchiCAD) | 439 | 425 | 7 | 1% | ~0 | ×3 | 425 |
+| Schependomlaan | 6,250 | 4,697 | 667 | 34% | ~2.5 MB | ×147 | 4,697 |
+| Snowdon 2x3 (Revit) | 25,587 | 9,767 | 5,230 | **60%** | **~38 MB** | ×336 | 9,767 |
+| Snowdon 4 (Revit) | 28,363 | 12,251 | 5,310 | **57%** | **~38 MB** | ×336 | 12,251 |
+| Arty.step | 6,769 | 5,128 | 1,285 | **26%** | **~10 MB** | ×20 | 5,128 |
+
+Three settled conclusions:
+
+1. **The memory win is real and large where instancing is dense** (Revit
+   ~60% / ~38 MB; STEP `Arty.step` 26% / ~10 MB) and **degrades
+   gracefully** to ~0 (or slightly negative — the per-instance overhead
+   with no sharing) on singleton-heavy models (index, Momentum). The
+   batched path additionally drops ~8 B/vertex of per-vertex pick
+   attributes — a further win not counted in the column above.
+2. **STEP is a first-class beneficiary**, confirming the occurrence-identity
+   thesis on real data, not just `as1`.
+3. **The `drawCalls` column is a warning, not a target.** Naive
+   InstancedMesh-per-shape turns Snowdon's 1 merged draw call into ~10–12k —
+   almost certainly a net render-perf loss. Even instancing *only* the
+   shared shapes (the hybrid) is ~5k draw calls. **This is the empirical
+   reason PR2 uses `BatchedMesh`** — it multi-draws the whole batch (all
+   shapes + per-instance transforms) in **~1 draw call**, taking the memory
+   win without the draw-call blowup. Do **not** ship InstancedMesh-per-shape.
+
+**Slicing.**
+- **PR1 (#1568) — grouper + verbose analysis.**
+  `src/viewer/ifc/flatMeshToInstancedModel.js` is a pure grouper that
+  dedupes the captured FlatMeshes by `geometryExpressID` and returns the
+  per-shape placement lists (matrix/color/parent/instanceId) + the stats
+  above. There is **no feature flag** (it is a permanent diagnostic and
+  the foundation PR2 builds on); it runs **only when verbose logging is
+  enabled** (`isLogEnabled(DEBUG)`), so the per-placement grouping cost is
+  paid only when the analysis is actually wanted. Render is unchanged.
+- **PR2 (#1571) — `BatchedMesh` render path.** Build a `BatchedMesh` from
+  the grouper output (`addGeometry` once per unique shape in local space,
+  `addInstance` + `setMatrixAt`/`setColorAt` per placement; one draw call
+  regardless). Picking resolves on native `batchId` → `parentExpressId` via
+  the per-batch tables `buildBatchedConwayModel` attaches. Behind
+  `?feature=batchedMesh` with a defensive fallback to the merged path on any
+  construction error. Pairs with the `expressID → occurrence path`
+  identifier generalization (`batchId` is that per-occurrence handle).
+
+  **Transparency:** opaque and blended instances can't share one material
+  state, so placements are split by alpha into an opaque batch and a
+  transparent batch (`depthWrite:false`, per-instance RGBA via
+  `setColorAt(Vector4)`); >1 batch wraps in a `Group`. The occurrence-id
+  space is global across both batches so selection is split-agnostic.
+
+  **Interaction follow-ups — landed (this slice).**
+
+  - *Selection + hover highlight (`src/viewer/ifc/batchedHighlight.js`).*
+    **Recolor, not overlay.** The merged paths highlight by dropping a
+    translucent subset Mesh into the scene coplanar with the source; that
+    only renders because the subset shares the source's *exact* vertex
+    buffer (pixel-identical depth, so it wins the depth test). A
+    `BatchedMesh` subset must be re-baked from independent CPU math, which
+    z-fights the opaque batch and vanishes — polygon-offset tuning never
+    made it robust. So the batched path recolors the *actual* instances via
+    `setColorAt` (the idiomatic BatchedMesh approach): two layers
+    (selection = sticky, preselection = hover) painted over each instance's
+    original colour, which is retained per-batch (`instanceColors`, alpha
+    included so glass stays glass). Selection covers every occurrence of the
+    picked product — **per-occurrence narrowing still needs `instancePicking`**,
+    which the batched model doesn't carry (it has `batchedPicking`). The
+    merged Conway-direct path already narrows to a single occurrence via
+    `PlacedGeometry.occurrencePath` (PR #1573,
+    `design/new/step-occurrence-selection.md`, follow-up #3); bringing that to
+    the batched path is the remaining follow-up.
+  - *Isolate / hide (`src/viewer/ifc/batchedSubset.js`).* `IfcIsolator`
+    drives the batched model unchanged through a `createSubset` /
+    `removeSubset` surface that re-bakes the kept instances (`getMatrixAt` +
+    the retained `instanceGeometry`) into world-aligned subset Meshes
+    carrying a synthetic per-vertex `expressID` (so the isolated subset
+    stays pickable). `visualElementsIds` is unioned from `instanceParents`.
+  - *BVH picking.* `three-mesh-bvh` accelerated raycast validated on
+    `BatchedMesh`: `ShareIfc` patches
+    `BatchedMesh.prototype.{computeBoundsTree,raycast}` and each batch builds
+    its per-geometry bounds trees; `acceleratedBatchedMeshRaycast` still
+    emits `intersection.batchId`, so the pick path is unaffected.
+  - *GLB cache.* `GLTFExporter` can't serialise a `BatchedMesh`'s packed
+    buffer, and a batch carries no per-vertex `_EXPRESSID` for the
+    `BLDRS_face_ids` picking capture. So before serialising (landed PR #1574),
+    `exportAndCacheGlb` bakes the batched model into the *same* merged-mesh
+    shape the merged
+    Conway-direct path emits (`batchedModelToMergedMesh`): one indexed
+    geometry with per-vertex `expressID`/`instanceID`, colour-binned into
+    `geometry.groups[]` + `MeshLambertMaterial[]`, instance matrices baked
+    into the vertices and the coordination transform kept on the node. The
+    resulting GLB is **byte-compatible with a merged Conway-direct cache
+    artifact**, so the reader hydrates it through the existing cache-hit path
+    as an `instancePicking` model — no reader-side changes, no schema bump.
+    Consequence: a reload from cache is the merged mesh, not a live
+    `BatchedMesh` — the same cache-hit/cache-miss shape divergence §3b.iii
+    already notes for the Conway-direct path. A batched-native GLB schema
+    (EXT_mesh_gpu_instancing) that preserves the instanced representation
+    across the round-trip — shrinking the artifact *and* making the round-trip
+    shape-stable — is the natural follow-up; §3b.v details what the batched
+    infrastructure already gives it and what's left to build.
+  - *Fit-to-frame.* `Loader.js#readModel` hoists a Group root's first child
+    geometry onto `model.geometry` ("generalize to multi-mesh" TODO). A
+    `BatchedMesh`'s `.geometry` is its packed buffer — every shape in
+    *un-instanced* local space — so for models whose shapes carry
+    building-scale local coords (Schependomlaan) that box is the whole site
+    (~830m), and `Box3.setFromObject` used it instead of recursing to the
+    instance-placed children, zooming the camera miles out. Fixed by skipping
+    `isBatchedMesh` children in that hoist (a batched Group has no single
+    representative geometry).
+  - *Always-on* flip is deferred pending smoke-test of the flagged path.
+
+#### 3b.v. Forward path: `EXT_mesh_gpu_instancing` (batched-native GLB cache)
+
+The merged-mesh bake (§3b.iv *GLB cache*) is deliberately the
+zero-reader-change MVP: it gets batched models cached *at all* by
+flattening them into the shape the reader already understands. But it
+**de-instances** — N placements of a shape become N full vertex copies —
+so the cached artifact is *larger* than the source's instancing would
+allow, and the round-trip loses the instanced representation (reload is a
+merged mesh, not a live `BatchedMesh`).
+
+[`EXT_mesh_gpu_instancing`](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/EXT_mesh_gpu_instancing)
+is the natural upgrade: a node references one *shared* mesh plus
+per-instance TRS accessors, so a shape placed N times costs
+`1 geometry + N transforms` on disk instead of `N geometries`. This is a
+**structural** win (de-duplication), not a codec win — it stacks with
+DRACO/Meshopt (DRACO still compresses the single shared geometry;
+Meshopt's `EXT_meshopt_compression` can compress the instance-transform
+stream). Magnitude tracks the instancing ratio: large for repetitive
+models (façade panels, fasteners, AP214 occurrences / `IfcMappedItem`
+clusters — the ~60% vertex-sharing figure §3b.iv measured in memory),
+~zero for singleton-heavy models (nothing to dedup).
+
+**Why the batched work is the front half of this.** The extension needs a
+geometry-dedup + per-instance-transform + per-instance-id decomposition —
+which the batched path already computes and the bake then throws away. An
+instancing writer would consume the grouper's *un-baked* output (the
+structure that exists just before `batchedModelToMergedMesh` flattens it):
+
+| `EXT_mesh_gpu_instancing` needs (per node) | Batched path already has |
+|---|---|
+| One shared mesh (deduped geometry), preserving instancing across occurrences | `flatMeshToBatchedModel` / `collectGroups` dedupe by `geometryExpressID` — this is the "keep the sharing" win, incl. AP214 occurrences / `IfcMappedItem`s |
+| Per-instance transforms (TRANSLATION/ROTATION/SCALE accessors) | `getMatrixAt(batchId)` / the placement matrices |
+| Per-instance `_EXPRESSID` / `_INSTANCEID` custom instance attrs (picking) | `instanceParents` / `instanceOccurrenceIds` tables |
+| Opaque vs. transparent split into separate nodes/materials | the existing two-batch (opaque + transparent) structure |
+
+**The bigger payoff — a shape-stable round-trip.** The live batched path
+picks via `batchId → instanceParents` (per-instance); an
+`EXT_mesh_gpu_instancing` cache-hit loads into three.js `InstancedMesh`,
+whose `instanceId` maps to those same tables. So cache-miss and cache-hit
+would both be instanced, and the reader's pick populator is conceptually
+the live batched pick path — removing the *only* reason the two diverge
+today (the merged bake).
+
+**What is genuinely new work (not carried over):**
+
+1. **A custom extension writer.** `GLTFExporter` won't emit
+   `EXT_mesh_gpu_instancing`, so the node + instance accessors are
+   hand-synthesised. But it's a narrow writer over the grouper output, not
+   a general exporter.
+2. **Per-instance colour.** The one real gap: glTF instancing shares one
+   material across all instances, so `setColorAt`'s per-instance RGBA has
+   no standard home. Cleanest fix is a colour **sub-key** on the grouper's
+   bin (group by `geometryExpressID` × colour → one instanced node per
+   colour), which the grouper is already structured to add; a custom
+   `_COLOR` instance attribute + shader is the messier alternative.
+3. **Reader populator + `BLDRS_face_ids` variant.** Picking becomes
+   per-instance rather than per-triangle-vertex, so the capture (writer)
+   and read-back (reader) paths need instance-aware versions.
+
+Net: the batched infrastructure isn't merely compatible with an instanced
+GLB — it's the natural source for one. The IFC-specific hard part (dedup
+while preserving instancing, plus per-instance id bookkeeping) is done and
+tested; the remaining slice is the extension serialisation, per-instance
+colour grouping, and the instanced read-back.
+
 ### 3c. Plugins (small, replaceable, individually disposable)
 Each takes a `ThreeContext` (and an `IfcModelService` if relevant) and exposes a tiny API:
 
@@ -843,8 +1107,8 @@ forced tree-wide via `resolutions` — so the original "bump `three`" goal
 is met; what remains under **5e** is shedding the fork-era color/lighting
 compat scaffolding + wit-three leftovers (see below). **5f** is reframed:
 the `web-ifc` shim is **kept** as the Conway↔web-ifc engine flag, not a
-deletion target. **5g** renames the test mock off the `web-ifc-viewer`
-name (5d.4 parked it behind a jest `moduleNameMapper`). The slice
+deletion target. **5g** renamed the test mock off the `web-ifc-viewer`
+name (5d.4 had parked it behind a jest `moduleNameMapper`). The slice
 numbering below matches the `5d.N` tags in the committed source comments
 (`grep -rn "5d\." src/`).
 
@@ -1013,9 +1277,9 @@ comments (`grep "5d\." src/`).
   diff) AND the cut-plane-permalink load path (fork's
   `IfcClipper.active` setter dives into `postProduction.composer` /
   `outlineUniforms`); vendoring the *real* Postproduction fixed both.
-  Test-mock plumbing notes live in `__mocks__/web-ifc-viewer.js` (the
-  jest.mock-for-local-modules + `globalThis` singleton dedup is subtle
-  — read the comments there before touching it).
+  Test-mock plumbing notes live in `__mocks__/shareViewerTestHarness.js`
+  (the jest.mock-for-local-modules + `globalThis` singleton dedup is
+  subtle — read the comments there before touching it).
 
 - **5d.4 — drop the last fork imports + the dep (done 2026-06, this
   slice).** `IfcManager` was the only remaining fork construct
@@ -1045,31 +1309,34 @@ comments (`grep "5d\." src/`).
     needs it) and `webIfcShimAlias` (5f). `web-ifc` itself survives via
     `@bldrs-ai/ifclib`; `web-ifc-three` had no real `src/` import.
   - **Test harness:** ShareViewer no longer self-imports the fork to
-    trigger `__mocks__/web-ifc-viewer.js`, so the viewer-stack tests
-    that relied on that self-trigger (`ShareViewer.test.js`,
-    `CadView.test.jsx`, `MarkerControl.test.jsx`, `Share.test.jsx`) now
-    load the harness explicitly before the component-under-test. The
-    harness still resolves under its `web-ifc-viewer` name via a jest
-    `moduleNameMapper` — the rename to a non-fork name is slice 5g.
+    trigger the harness, so the viewer-stack tests that relied on that
+    self-trigger (`ShareViewer.test.js`, `CadView.test.jsx`,
+    `MarkerControl.test.jsx`, `Share.test.jsx`) now load the harness
+    explicitly before the component-under-test. (Slice 5g later renamed
+    the harness `__mocks__/web-ifc-viewer.js` →
+    `shareViewerTestHarness.js` and dropped the `moduleNameMapper` it had
+    resolved through.)
 
-**Slice 5e — shed fork-era three-compat scaffolding (todo; rescoped
-2026-06).** The version bump is already *done*: `three@0.184.0` +
+**Slice 5e — shed fork-era three-compat scaffolding (in progress;
+rescoped 2026-06).** The version bump is already *done*: `three@0.184.0` +
 `@types/three@0.184.1`, forced tree-wide via `resolutions`. So this slice
 is no longer "bump `three`" — it's removing the compat layers that existed
 to run the old fork against modern `three`, now that the fork is gone:
 
   1. **Color / lighting forward step (§6b steps 2, 3, 5 + re-tune the
-     inlined lights).** Re-enable `ColorManagement.enabled = true` and
-     `renderer.outputColorSpace = SRGBColorSpace`, set a tone mapper
-     (`ACESFilmicToneMapping`), and re-tune the `×π` light intensities now
-     inlined in the vendored `src/viewer/three/context/scene.js` (5d.3) —
-     they were tuned against the broken legacy path. Goal: reclaim control
-     of the color pipeline now that we own the scene. This is the one
-     genuinely *visual* change and **may not fully land** (the legacy look
-     may be hard to reproduce under managed color) — gate it on a
-     side-by-side render check and snapshot a fresh Cosmos baseline before
-     committing. `ColorManagement.enabled = false` lives at
-     `ShareViewer.js:67` today.
+     inlined lights) — partially landed; managed color only.** 5e enables
+     just the first sub-step: `ColorManagement.enabled = true` (the r184
+     default; the r135-compat `= false` is removed). `outputColorSpace`
+     stays at the production `LinearSRGBColorSpace`, no tone mapper is set,
+     and the scene lights keep their production `×π` values — so the only
+     visible change is a slight, accepted managed-color shift. The rest of
+     the forward step — SRGB output + a tone mapper + a light re-tune — was
+     deferred at 5e and later **shipped as the §6e look, behind
+     `?feature=look`** (default off): on flat IFC lighting a filmic mapper
+     (ACES/AgX) just dims/flattens because there's no HDR range to map, so it
+     only pays off alongside the environment map + PBR materials that the flag
+     also turns on. `NeutralToneMapping` (color-accurate, minimal hue shift)
+     was the choice there, over ACES.
   2. **Drop the `BLDRS_face_ids` per-vertex fallback's wit-three-specific
      checks** — wit-three's parse-state assumptions no longer apply.
   3. **Re-evaluate the `?feature=perf` baseline** now the fork (and its
@@ -1146,7 +1413,7 @@ imports.
   `USE_WEBIFC_SHIM=false`, serves it isolated
   (`tools/esbuild/serveStaticIsolated.mjs` — COOP `same-origin` + COEP
   `require-corp`; kept off the default/prod servers because COEP breaks the
-  Drive Picker), and runs `src/tests/e2e/webIfcEngine.webifc.spec.ts` — a
+  Drive Picker), and runs `src/viewer/webIfcEngine.webifc.spec.ts` — a
   smoke that loads `index.ifc`, asserts `crossOriginIsolated`, and forwards
   the browser console so isolated-runtime errors are legible without a local
   browser. The job is **advisory** (a standalone, non-required check).
@@ -1172,14 +1439,16 @@ imports.
   wasms bundled with runtime dispatch — a real refactor, deferred unless
   the side-by-side workflow demands it.
 
-**Slice 5g — mocks (todo; unblocked by 5d.4).** The harness now resolves
-under the `web-ifc-viewer` name only through a jest `moduleNameMapper`
-(`tools/jest/jest.config.js`) — the dep itself is gone. Remaining
-cosmetic work: rename `__mocks__/web-ifc-viewer.js` to a ShareViewer-named
-harness, update the ~10 test files that import it, and drop the
-`moduleNameMapper` entry. The `globalThis`-singleton + load-dedup
-machinery moves with it. No production coupling remains — pure test-tree
-rename.
+**Slice 5g — mocks (done 2026-06).** Renamed
+`__mocks__/web-ifc-viewer.js` → `__mocks__/shareViewerTestHarness.js` (the
+harness only resolved under the dead `web-ifc-viewer` package name via a
+jest `moduleNameMapper`). The 11 viewer-stack test files that imported it
+now load the harness by relative path; the `^web-ifc-viewer$`
+`moduleNameMapper` entry is dropped (`tools/jest/jest.config.js`), and the
+dead `web-ifc-three` / `web-ifc-viewer` entries are removed from
+`excludedNodeModules` (`tools/jest/common.js`). The `globalThis`-singleton
++ load-dedup machinery moved unchanged. Pure test-tree rename — no
+production coupling.
 
 ### Phase 6 — cleanup
 - Remove the feature flag from Phase 3.
@@ -1450,11 +1719,42 @@ the third over- or under-corrects:
   the fork is incompatible with modern three; the root override forces
   one version across all consumers.
 
-### 6e. Where this is going — the migration to PBR / tone-mapping
+### 6e. The render "look" — PBR / IBL / tone-mapping (shipped behind `?feature=look`)
 
-The compat path in §6b is a **deliberate hold**, not the destination.
-The fork's IFC pipeline and our material setup were tuned in 2022
-against three's pre-r152 conventions. To migrate forward we need:
+**Status (2026-07): delivered, gated behind `?feature=look` (default OFF).**
+Flag off renders the legacy look (`MeshLambertMaterial`, no env map, no tone
+mapper, legacy `× π` lights, `LinearSRGBColorSpace` output) = `main`
+unchanged; flag on renders the full filmic/PBR look. It's one **atomic**
+switch: to ship, flip the flag's default in `src/FeatureFlags.js` and
+regenerate the screenshot baselines to the look in the *same* PR (they're
+legacy today).
+
+**What the flag turns on:** uniform `MeshStandardMaterial` + sRGB albedo across
+the generated-surface loaders, built through one factory
+(`src/viewer/lookMaterial.js` — `makeSurfaceMaterial` / `makeSurfaceColor`;
+covers IFC `flatMeshToBufferGeometry`, Conway-batched `batchedToMergedMesh` /
+`flatMeshToBatchedModel`, and `stl.js`), tagged `userData.isLookManaged` so a
+look toggle restyles them but authored glTF/GLB PBR is left untouched; a
+zero-asset **gradient studio IBL** (PMREM-prefiltered canvas gradient);
+**Khronos PBR-Neutral tone-mapping** in the postprocessing composer
+(`CustomPostProcessor`) with `outputColorSpace` back at the r184 sRGB default;
+Neutral-look **retuned lights** (`scene.js`); named **looks**
+(`src/viewer/looks.js` — the single source of truth: **Neutral** default +
+**Flat** legacy-style high-key) applied live by `ShareViewer.applyLook`, with a
+user-facing **Neutral / Flat** toggle in the profile menu (`ProfileControl`,
+cookie-persisted like the day/night theme); and dev-only tuning via a
+`?feature=look` lil-gui panel (`LightingGui`) plus **SSAO ambient occlusion** +
+a bounds-fitted **contact shadow** (both off in the shipped looks). The
+construction-time constants (lights, IFC material params, env intensity) all
+*derive* from `LOOKS.neutral`, so retuning Neutral is one edit. *Follow-up:*
+OBJ uses `OBJLoader`'s own materials, so it's unchanged either way (matches its
+legacy baseline); converting it to Standard for full flag-on uniformity is a
+separate step.
+
+The compat path in §6b was a **deliberate hold**, not the destination.
+The fork's IFC pipeline and our material setup were tuned in 2022 against
+three's pre-r152 conventions. The forward plan below (steps 1–5) all landed
+behind the flag; migrating forward meant:
 
 1. **Tag IFC material colors as sRGB** at parse / decoration time —
    today the colors come out of Conway / `web-ifc-three` as plain RGB
@@ -1486,16 +1786,18 @@ and most impactful: a one-line `toneMapping` setter unlocks the entire
 post-r152 visual quality. We should do this **before** PBR materials
 land, so we have a stable reference point for material tuning.
 
-A reasonable target sequence:
+How it actually shipped:
 
-- Phase 5: the fork drop (5d.4) landed *without* the color steps — kept
-  deliberately mechanical. The color/lighting forward step (steps 2–3 +
-  step 5 + re-tuning the now-vendored lights) is **slice 5e**, a separate
-  PR on top of the merged fork removal. Tune one set of `ambient` +
-  `directional` values against the new pipeline; snapshot a fresh Cosmos
-  baseline. May not fully reproduce the legacy look — accepted risk.
-- Phase 6+: step 1 (material colorSpace tagging) + step 4 (PBR + env
-  map). Standalone visual-quality PR; ships against the post-5e pipeline.
+- **Slice 5e** landed step 2 only (`ColorManagement.enabled = true`), keeping
+  `outputColorSpace` + the lights at production values — a slight managed-color
+  shift, no visible re-tune.
+- Everything else (steps 1, 3, 4, 5 + the look registry, the profile toggle,
+  the tuning GUI, and the dev SSAO/contact-shadow effects) shipped as **one
+  atomic, flag-gated feature** — the §6e look above — instead of a default-on
+  visual-quality PR. Gating behind `?feature=look` (default off) keeps `main`
+  and the screenshot baselines unchanged; the flag flip + baseline regen is a
+  single focused follow-up. `NeutralToneMapping` was chosen over ACES/AgX, as
+  anticipated in the §3d.iii deferral note.
 
 The compat-path code is a single docblock in `ShareViewer.js` + the
 esbuild plugin's lights rewrite. The lights rewrite (`scaleLightIntensities`
@@ -1551,6 +1853,29 @@ interface ShareModel extends Object3D {
   }
 }
 ```
+
+**Update (landed) — the shape grew to seven flags** as the Conway-direct
+and batched paths landed. `ShareModel.js` (`capabilitiesForFormat` /
+`inferModelCapabilities`) is now authoritative; the current set:
+
+```ts
+capabilities: {
+  expressIdPicking: boolean   // click resolves a parent IFC product id
+  spatialStructure: boolean   // NavTree available (live parse or BLDRS_spatial_tree)
+  typedProperties: boolean    // Properties panel (live parse or BLDRS_element_properties)
+  ifcSubsets: boolean         // web-ifc-three per-vertex subsets; false on Conway-direct
+  instancePicking: boolean    // per-occurrence: merged Conway-direct + cache-hit GLB
+  batchedPicking: boolean     // product-level pick/recolor on the BatchedMesh path
+  useIfcClipper: boolean      // (legacy; slated for removal per §3c.iv item 3)
+}
+```
+
+`inferModelCapabilities` is additive over the format default and is the
+runtime source of truth: it detects a decorated `BatchedMesh`
+(`isBatchedMesh` + `instanceParents`) → `batchedPicking`, a per-vertex
+`instanceID`/`BLDRS_face_ids` signature → `instancePicking`. The two are
+mutually exclusive (the batched branch returns before the per-vertex
+checks). Both imply `expressIdPicking` and turn `ifcSubsets` off.
 Call-sites become `if (model.capabilities.expressIdPicking)` and `if (model.capabilities.ifcSubsets)` — no `viewer.IFC.type` left anywhere. After the unified `Clipper` lands (§3c), the cut-plane branch collapses entirely. This shape is forward-compatible with the in-flight GLB-optimized-scene PR (8.3): that PR can set `capabilities.spatialStructure = true` on its loaded model and re-light the NavTree without any other viewer-side work.
 
 ### 8.3 Fake `ifcManager` on non-IFC models — deprecate gracefully

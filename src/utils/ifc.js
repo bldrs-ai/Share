@@ -8,7 +8,14 @@ import {toTitleCase} from './strings'
  */
 export function prettyType(type) {
   const ifcPrefix = 'IFC'
-  switch (type) {
+  // Managers disagree on case ('IFCWALL' vs 'IfcWall'); normalize so
+  // both hit the same cases. Non-IFC type names pass through untouched
+  // rather than losing their first three characters below.
+  const upper = typeof type === 'string' ? type.toUpperCase() : type
+  if (typeof upper === 'string' && !upper.startsWith(ifcPrefix)) {
+    return type
+  }
+  switch (upper) {
     case 'IFCREINFORCINGBAR': return 'Reinforcing Bar'
     case 'IFCREINFORCINGMESH': return 'Reinforcing Mesh'
     case 'IFCTENDONANCHOR': return 'Tendon Anchor'
@@ -27,10 +34,10 @@ export function prettyType(type) {
     case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)'
     case 'IFCCURTAINWALL': return 'Curtain Wall'
     default: {
-      if (!type) {
+      if (!upper) {
         return ''
       }
-      let titleCased = toTitleCase(type.substring(ifcPrefix.length))
+      let titleCased = toTitleCase(upper.substring(ifcPrefix.length))
       if (titleCased.endsWith('element')) {
         titleCased = `${titleCased.replace('element', '')} Element`
       }

@@ -9,24 +9,91 @@ on:
       - 'notes/**'
   pull_request:
     branches: [ main ]
+    # ready_for_review is what makes the draft gate below usable: without it,
+    # flipping a draft to ready fires no event and the PR would sit with no
+    # flow run until the next push. opened/synchronize/reopened are the
+    # Actions default set, restated because naming `types` at all replaces it.
+    #
+    # converted_to_draft is the other half of that gate, and it works by
+    # cancellation rather than by starting anything: pushing a PR back to
+    # draft fires an event in the concurrency group below, so
+    # cancel-in-progress kills the flows that are mid-flight and the run it
+    # schedules in their place skips (the PR is a draft again).
+    types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
+    # NOTE: same caveat as main.yml and conway's build.yml — this is a
+    # workflow-level skip, so a docs-only PR produces NO check run at all,
+    # whereas the job-level draft gate below produces a `skipped` conclusion
+    # that satisfies a required status check. If either job here is ever made
+    # required in branch protection, convert this to a per-job `if` gate or
+    # docs-only PRs will sit unmergeable forever.
     paths-ignore:
       - '**/*.md'
       - 'design/**'
       - 'notes/**'
   workflow_dispatch:
 
+# The draft gate defers this workflow's cost; this bounds it. These are the two
+# longest jobs in the repo (35m and 25m ceilings, ~12m for a healthy
+# playwright-run), so without cancellation three quick pushes to one ready PR
+# leave six of them running against a 4-job cap -- the exact starvation the
+# draft gate exists to prevent, just relocated from drafts to rework pushes.
+#
+# Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
+# unique per PR). Cancel-always, matching main.yml: superseded runs die rather
+# than queue, on main as much as on a PR, because nothing ships from a flows
+# run and only the newest commit's result is worth a runner.
+#
+# Do NOT narrow this to `${{ github.event_name == 'pull_request' }}`. Leaving
+# main uncancelled makes its runs queue in this group, and `cancel-in-progress:
+# false` does not mean "never cancel" -- GitHub drops a run still PENDING in a
+# group when a newer one joins -- so three merges inside one flows window would
+# lose the middle commit's run anyway, while the others serialized. conway does
+# scope its cancellation that way, but only because an npm publish rides on the
+# ordering there (conway#468); that reason does not exist here.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   playwright-run:
-    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
-    # Make sure this matches the version in package.json to get the cache right and APIs matched
-    container: mcr.microsoft.com/playwright:v1.54.2-jammy
-    timeout-minutes: 20
+    # Draft PRs don't run flows. This is the most expensive thing CI does per
+    # PR (~12m on a large runner, two jobs' worth), and with several PRs in
+    # flight the draft pushes alone can saturate the 4-job concurrency cap and
+    # starve the PRs that are actually ready. Netlify deploy previews are NOT
+    # affected — they come from Netlify's own GitHub integration, not from
+    # Actions — so a draft still gets a preview URL to click through by hand.
+    # See AGENTS.md "PR lifecycle".
+    #
+    # A job-level `if` (rather than a workflow-level trigger filter) is what
+    # keeps this compatible with required status checks: a skipped-by-if job
+    # reports a conclusion, a workflow that never triggers reports nothing and
+    # leaves the PR waiting forever.
+    #
+    # The event_name clause is defensive, not load-bearing. On push and
+    # workflow_dispatch `github.event.pull_request` is null, and Actions
+    # coerces both sides of `==` to a number when the types differ, so a bare
+    # `draft == false` would evaluate `0 == 0` and run anyway. Relying on that
+    # coercion would make CI on main hinge on a documented-but-obscure corner
+    # of the expression language. The clause states the intent instead.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
+    # Image must match @playwright/test in package.json (Playwright caches
+    # by version + matches browser APIs). The -noble (Ubuntu 24.04) variant
+    # is chosen so screenshot baselines regenerated in the dev/sandbox env
+    # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
+    # Headroom, not a fitted bound: a clean run at the worker count below
+    # measured 11.7m on this runner. The margin is for the degraded case --
+    # a starved run burns far longer than a healthy one because each failure
+    # drags a 30s timeout plus a retry behind it (the 3-worker run with 4
+    # failures took 12.8m, and main's 53-failure run took 14.4m).
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
 
@@ -41,8 +108,21 @@ jobs:
       - name: Playwright Info
         run: npx playwright --version
 
+      # Worker count is tied to `runs-on` above, and overrides the local
+      # default in tools/playwright.config.js. Update it whenever the runner
+      # changes size.
+      #
+      # RAM is the binding constraint here, not vCPU: this runner has 8GB
+      # against the previous runner's 32GB, and every worker holds a whole
+      # Chromium rendering a WebGL scene with the conway wasm heap resident.
+      # Starvation shows up as click/visibility timeouts and as
+      # `#viewer-container` never mounting at all — not as honest assertion
+      # failures — so it reads like flake. Measured on this runner:
+      # 6 workers => 53 failed / 81 passed (the state main landed in at
+      # 6df8de7), 3 workers => 4 failed / 134 passed, 2 workers => green in
+      # 11.7m. 2 also matches Playwright's own default heuristic of vCPU/2.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=6
+        run: yarn test-flows --reporter=github,list,html --workers=2
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
@@ -81,15 +161,17 @@ jobs:
   # console so any isolated-runtime failure is legible without a local
   # browser (see design/new/viewer-replacement.md §5f).
   playwright-webifc-run:
-    runs-on: ubuntu-22.04-8vcpu-32gb-300gbssd
-    container: mcr.microsoft.com/playwright:v1.54.2-jammy
+    # Draft-gated for the same reason as playwright-run above.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04-4vcpu-8gb-150gbssd
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
 

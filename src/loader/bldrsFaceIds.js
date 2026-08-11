@@ -137,7 +137,29 @@ export class BldrsFaceIdsReader {
     })
 
     if (gltf.scene) {
-      gltf.scene.userData.bldrsFaceIds = {perPrimitive: resolved}
+      // Global STEP occurrence-path table (index = synthetic instance id),
+      // persisted alongside the per-triangle ids so a cache-hit STEP model
+      // can restore per-occurrence selection. Sanitised to arrays / null;
+      // absent (undefined) for IFC and pre-occurrence artifacts.
+      const occurrencePaths = Array.isArray(parsed.occurrencePaths) ?
+        parsed.occurrencePaths.map((p) => (Array.isArray(p) ? p : null)) :
+        null
+      // Global per-instance geometry (solid) express ids — the second half of
+      // the (occurrencePath, solid expressID) identity behind per-solid
+      // selection of multibody STEP parts. Sanitised to finite numbers / null.
+      const geometryExpressIds = Array.isArray(parsed.geometryExpressIds) ?
+        parsed.geometryExpressIds.map(
+          (id) => (typeof id === 'number' && Number.isFinite(id) ? id : null)) :
+        null
+      // Geometry-piece identity table (conway#387): distinct geometry
+      // express id → {type, name} captured at write time, so a cache-hit
+      // load (no live parser) can still label transient NavTree rows
+      // ("Face #6321") and serve the Properties panel's type row for
+      // anonymous pieces. Sanitised to string fields / dropped entries.
+      const geometryItemIdentities = sanitizeGeometryItemIdentities(
+        parsed.geometryItemIdentities)
+      gltf.scene.userData.bldrsFaceIds =
+        {perPrimitive: resolved, occurrencePaths, geometryExpressIds, geometryItemIdentities}
       const total = resolved.reduce(
         (n, e) => n + (e?.expressIds?.length ?? 0), 0)
       glbInfo(
@@ -270,7 +292,14 @@ function readAccessorAsUint32(json, bin, accIdx) {
  * payloads are Base64-encoded so they fit the existing JSON+gzip
  * inject pipeline without API changes.
  *
- * @param {object} captured `{perPrimitive: [{expressIds, instanceIds}|null, ...]}`
+ * When `captured.occurrencePaths` is present (STEP on a Conway that emits
+ * per-instance occurrence paths), it rides along as a top-level
+ * `occurrencePaths` array (index = synthetic instance id) so the reader can
+ * restore per-occurrence selection on cache-hit — the per-triangle arrays
+ * only carry the scalar instance id, not the variable-length path.
+ *
+ * @param {object} captured `{perPrimitive: [{expressIds, instanceIds}|null, ...],
+ *   occurrencePaths?: Array<Array<number>|null>}`
  * @return {object|null} extension data ready for `injectGlbExtensions`
  */
 export function buildFaceIdsExtensionData(captured) {
@@ -298,7 +327,118 @@ export function buildFaceIdsExtensionData(captured) {
     }
     return out
   })
-  return {perPrimitive}
+  const data = {perPrimitive}
+  // Occurrence paths are small (one entry per placed instance) and already
+  // JSON-native (nested int arrays), so carry them verbatim — the whole
+  // payload is gzipped downstream. Only emit when the source provides them.
+  if (Array.isArray(captured.occurrencePaths)) {
+    data.occurrencePaths = captured.occurrencePaths.map(
+      (p) => (Array.isArray(p) ? p : null))
+  }
+  // Per-instance geometry (solid) express ids ride the same way — one scalar
+  // per placed instance, the join key for per-solid selection of multibody
+  // STEP parts (NavTree ephemeral solid nodes). Only emit when present.
+  if (Array.isArray(captured.geometryExpressIds)) {
+    data.geometryExpressIds = captured.geometryExpressIds.map(
+      (id) => (typeof id === 'number' && Number.isFinite(id) ? id : null))
+  }
+  // Geometry-piece identity table — small (one entry per DISTINCT geometry
+  // id, not per instance) and JSON-native. Only emit when captured.
+  const identities = sanitizeGeometryItemIdentities(captured.geometryItemIdentities)
+  if (identities !== null) {
+    data.geometryItemIdentities = identities
+  }
+  return data
+}
+
+
+/**
+ * Sanitize a geometry-identity table to `{[id]: {type?, name?}}` with
+ * string-only fields, or null when nothing valid remains. Shared by the
+ * writer (untrusted only in the sense of shape drift) and the reader
+ * (untrusted cache bytes).
+ *
+ * @param {object|null|undefined} raw candidate table
+ * @return {object|null}
+ */
+export function sanitizeGeometryItemIdentities(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null
+  }
+  const clean = {}
+  let kept = 0
+  for (const key of Object.keys(raw)) {
+    const entry = raw[key]
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+    const out = {}
+    if (typeof entry.type === 'string' && entry.type.length > 0) {
+      out.type = entry.type
+    }
+    if (typeof entry.name === 'string' && entry.name.length > 0) {
+      out.name = entry.name
+    }
+    if (out.type !== undefined || out.name !== undefined) {
+      clean[key] = out
+      kept++
+    }
+  }
+  return kept > 0 ? clean : null
+}
+
+
+/**
+ * Resolve each distinct geometry express id to its identity ({type, name})
+ * through the live properties surface, for embedding in the cache artifact.
+ * Runs at GLB-write time — the one moment a live parser is guaranteed —
+ * so cache-hit loads can label anonymous pieces without re-parsing.
+ * Conway ≥1.389 resolves arbitrary ids (`getItemProperties` fallback);
+ * older engines return typeless shapes, which are skipped (the reader
+ * degrades to "Item #<id>" exactly as if the table were absent).
+ *
+ * @param {object} ifcManager IfcManager-like with async
+ *   `getItemProperties(modelID, expressID, recursive)`
+ * @param {number} modelID
+ * @param {Array<number|null>} geometryExpressIds per-instance table
+ *   (`instanceIdToGeometryExpressId`); duplicates and nulls are fine
+ * @return {Promise<object|null>} `{[id]: {type?, name?}}` or null
+ */
+export async function captureGeometryItemIdentities(ifcManager, modelID, geometryExpressIds) {
+  if (typeof ifcManager?.getItemProperties !== 'function' ||
+      !Array.isArray(geometryExpressIds)) {
+    return null
+  }
+  const distinct = new Set()
+  for (const id of geometryExpressIds) {
+    if (typeof id === 'number' && Number.isFinite(id)) {
+      distinct.add(id)
+    }
+  }
+  const identities = {}
+  for (const id of distinct) {
+    let props
+    try {
+      props = await ifcManager.getItemProperties(modelID, id, false)
+    } catch {
+      continue
+    }
+    if (!props || typeof props !== 'object') {
+      continue
+    }
+    const entry = {}
+    if (typeof props.type === 'string' && props.type.length > 0) {
+      entry.type = props.type
+    }
+    const name = props.Name?.value
+    if (typeof name === 'string' && name.length > 0) {
+      entry.name = name
+    }
+    if (entry.type !== undefined || entry.name !== undefined) {
+      identities[id] = entry
+    }
+  }
+  return Object.keys(identities).length > 0 ? identities : null
 }
 
 

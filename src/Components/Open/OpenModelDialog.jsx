@@ -206,16 +206,27 @@ export default function OpenModelDialog({
   }
 
   const openFile = () => {
-    const onLoad = (filename, lastModifiedUtc) => {
+    /**
+     * @param {string} storageId OPFS storage id, `<blob-uuid>.<ext>` — the
+     *   `/v/new/` path segment the Loader resolves against OPFS.
+     * @param {number} lastModifiedUtc Epoch ms from the picked File.
+     * @param {string} [originalName] The user's filename, e.g. `box.ifc`.
+     */
+    const onLoad = (storageId, lastModifiedUtc, originalName) => {
       disablePageReloadApprovalCheck()
-      navigateToModel(`${appPrefix}/v/new/${filename}`, navigate)
+      const sharePath = `${appPrefix}/v/new/${storageId}`
+      navigateToModel(sharePath, navigate)
       addRecentFileEntry({
-        id: filename,
+        id: storageId,
         source: 'local',
-        name: filename,
+        // `name` is the display name; `id` is what the Loader resolves.
+        // Keeping them distinct is what lets the recents row read
+        // "box.ifc" while navigation still targets the OPFS entry.
+        name: originalName || storageId,
         lastModifiedUtc: lastModifiedUtc || null,
+        sharePath,
       })
-      setPendingModelNameUpdate(filename)
+      setPendingModelNameUpdate(storageId)
     }
     if (isOpfsAvailable) {
       loadLocalFile(onLoad, false)
@@ -225,9 +236,24 @@ export default function OpenModelDialog({
     setIsDialogDisplayed(false)
   }
 
+  /**
+   * Re-open a local upload from Recents. The nav target must be the
+   * entry's OPFS storage id (`<blob-uuid>.<ext>`), NOT its display
+   * `name` (the user's original filename) — `Loader#load` recognises an
+   * upload by `testUuid(path)` and resolves it out of OPFS. A display
+   * name like `box.ifc` fails that test, gets classified as a locally
+   * hosted file, and fetches `/box.ifc` from the origin, where the SPA
+   * catch-all hands back index.html and the parse dies with the
+   * misleading "Loader could not read model" (#1682).
+   *
+   * `sharePath` is recorded at creation time; the `id` fallback covers
+   * entries already in localStorage from before that was stored.
+   *
+   * @param {object} entry A `local` RecentFileEntry.
+   */
   const handleOpenLocalRecent = (entry) => {
     disablePageReloadApprovalCheck()
-    navigateToModel(`${appPrefix}/v/new/${entry.name}`, navigate)
+    navigateToModel(entry.sharePath || `${appPrefix}/v/new/${entry.id}`, navigate)
     setIsDialogDisplayed(false)
   }
 

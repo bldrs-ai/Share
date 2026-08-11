@@ -85,7 +85,20 @@ export default function BotChat() {
     }
     setInput('')
 
-    const setSelectedElements = useStore.getState().setSelectedElements
+    // Wrap the store setter so a bot-driven selection also clears the
+    // per-occurrence / per-instance keys. `selectItemsInScene` (the normal
+    // selection funnel) resets those on every call; the bot bypasses it and
+    // sets `selectedElements` directly, so without this a stale
+    // `selectedOccurrencePath` from a prior STEP pick would keep the NavTree
+    // highlighting the old occurrence instead of the bot's new selection.
+    // Wrapping here also covers the eval'd `client_code`, which receives this
+    // same setter.
+    const rawSetSelectedElements = useStore.getState().setSelectedElements
+    const setSelectedElements = (ids) => {
+      useStore.getState().setSelectedInstanceIds([])
+      useStore.getState().setSelectedOccurrencePath(null)
+      rawSetSelectedElements(ids)
+    }
     const selectedElements = useStore.getState().selectedElements
 
     const userMsg = {id: uuid(), position: 'right', title: 'You:', text: content, date: new Date()}

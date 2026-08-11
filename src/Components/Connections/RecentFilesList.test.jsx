@@ -91,6 +91,24 @@ describe('RecentFilesList', () => {
     expect(screen.getByText('2d ago')).toBeInTheDocument()
   })
 
+  // Drag-and-drop stored ISO strings until #1682; those entries are
+  // still in users' localStorage and must not render "NaNm ago".
+  it('renders a legacy ISO-string timestamp as relative time', () => {
+    const legacy = [{id: 'file-4', source: 'local', name: 'Old.ifc',
+      lastModifiedUtc: new Date(Date.now() - MS_PER_MINUTE).toISOString()}]
+    render(<RecentFilesList files={legacy} onOpen={jest.fn()}/>, {wrapper: ThemeCtx})
+
+    expect(screen.getByText('1m ago')).toBeInTheDocument()
+  })
+
+  it('renders no timestamp for an unparseable value', () => {
+    const bad = [{id: 'file-5', source: 'local', name: 'Bad.ifc', lastModifiedUtc: 'not-a-date'}]
+    render(<RecentFilesList files={bad} onOpen={jest.fn()}/>, {wrapper: ThemeCtx})
+
+    expect(screen.getByText('Bad.ifc')).toBeInTheDocument()
+    expect(screen.queryByText(/ago/)).not.toBeInTheDocument()
+  })
+
   it('shows column headers', () => {
     render(<RecentFilesList files={mockFiles} onOpen={jest.fn()}/>, {wrapper: ThemeCtx})
 

@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from '../../../__mocks__/shareViewerTestHarness'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
@@ -151,7 +151,13 @@ describe('CutPlaneMenu', () => {
     check(getPlanesFromHash(`${pfx}:x=1,y=4`), [['x', 1], ['y', 4]])
     check(getPlanesFromHash(`${pfx}:x=2,z=5`), [['x', 2], ['z', 5]])
     check(getPlanesFromHash(`${pfx}:y=3,z=6`), [['y', 3], ['z', 6]])
-    check(getPlanesFromHash(`${pfx}:x=0,y=1.11111,z=2.22222`), [['x', 0], ['y', 1.111], ['z', 2.222]])
+    // Offsets are no longer re-rounded on read; the hash value is the
+    // value. 3 decimals here used to send a millimetre part's planes to
+    // the model centre.
+    check(getPlanesFromHash(`${pfx}:x=0,y=1.11111,z=2.22222`), [['x', 0], ['y', 1.11111], ['z', 2.22222]])
+    check(
+      getPlanesFromHash(`${pfx}:x=0.00042,y=-0.00013`),
+      [['x', 0.00042], ['y', -0.00013]])
     /* eslint-enable no-magic-numbers */
   })
 })

@@ -3,8 +3,13 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {NeedsReconnectError} from '../../connections/errors'
-import {loadRecentFilesBySource} from '../../connections/persistence'
+import {
+  addRecentFileEntry,
+  loadRecentFilesBySource,
+  setPendingModelNameUpdate,
+} from '../../connections/persistence'
 import {getProvider} from '../../connections/registry'
+import {loadLocalFileFallback} from '../../utils/loader'
 import {navigateToModel} from '../../utils/navigate'
 import useStore from '../../store/useStore'
 import OpenModelDialog from './OpenModelDialog'
@@ -46,6 +51,7 @@ jest.mock('../Connections/GitHubTab', () => function MockGitHubTab() {
 })
 jest.mock('../../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
 jest.mock('../../utils/navigate', () => ({navigateToModel: jest.fn()}))
+jest.mock('../../utils/loader', () => ({loadLocalFile: jest.fn(), loadLocalFileFallback: jest.fn()}))
 
 
 const mockNavigate = jest.fn()
@@ -289,5 +295,93 @@ describe('OpenModelDialog — Google Drive tab', () => {
       })
     })
     expect(navigateToModel).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('OpenModelDialog — Local tab', () => {
+  // A local upload lives in OPFS under a blob-uuid storage id; the
+  // user's filename is only ever a display label. Regression cover for
+  // #1682, where navigating by the display name sent the Loader off to
+  // fetch /box.ifc from the origin (SPA catch-all → index.html → "Loader
+  // could not read model").
+  const STORAGE_ID = 'ADD77535-D1B6-49A9-915B-41343B08BF83.ifc'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useAuth0.mockReturnValue({
+      isAuthenticated: false,
+      loginWithRedirect: jest.fn(),
+      logout: jest.fn(),
+      user: null,
+    })
+    loadRecentFilesBySource.mockReturnValue([])
+    act(() => {
+      // The store defaults currentTab to 1 (GitHub); Local is index 0.
+      useStore.getState().setCurrentTab(0)
+      useStore.getState().setAppPrefix('/share')
+    })
+  })
+
+  afterEach(() => {
+    act(() => {
+      useStore.getState().setAppPrefix(null)
+    })
+  })
+
+  /**
+   * Render the Local tab (index 0) with the given local recents.
+   *
+   * @param {Array<object>} localFiles
+   * @return {void}
+   */
+  function renderLocalTab(localFiles) {
+    loadRecentFilesBySource.mockImplementation((source) => source === 'local' ? localFiles : [])
+    render(<OpenModelDialog {...defaultProps}/>, {wrapper: HelmetStoreRouteThemeCtx})
+  }
+
+  it('navigates by storage id, not display name, for a legacy entry with no sharePath', () => {
+    renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
+    fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
+    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+  })
+
+  it('navigates to the stored sharePath when the entry carries one', () => {
+    renderLocalTab([
+      {id: STORAGE_ID, source: 'local', name: 'box.ifc', sharePath: `/share/v/new/${STORAGE_ID}`},
+    ])
+    fireEvent.click(screen.getByTestId(`link-open-recent-${STORAGE_ID}`))
+    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+  })
+
+  it('shows the original filename in the recents row', () => {
+    renderLocalTab([{id: STORAGE_ID, source: 'local', name: 'box.ifc'}])
+    expect(screen.getByText('box.ifc')).toBeInTheDocument()
+    expect(screen.queryByText(STORAGE_ID)).not.toBeInTheDocument()
+  })
+
+  it('records the picked filename as display name and the storage id as nav target', () => {
+    const lastModified = Date.now()
+    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, lastModified, 'box.ifc'))
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    expect(addRecentFileEntry).toHaveBeenCalledWith({
+      id: STORAGE_ID,
+      source: 'local',
+      name: 'box.ifc',
+      lastModifiedUtc: lastModified,
+      sharePath: `/share/v/new/${STORAGE_ID}`,
+    })
+    expect(navigateToModel).toHaveBeenCalledWith(`/share/v/new/${STORAGE_ID}`, mockNavigate)
+    expect(setPendingModelNameUpdate).toHaveBeenCalledWith(STORAGE_ID)
+  })
+
+  it('falls back to the storage id as display name when the picker gives no filename', () => {
+    loadLocalFileFallback.mockImplementation((onLoad) => onLoad(STORAGE_ID, null))
+    renderLocalTab([])
+    fireEvent.click(screen.getByTestId('button_open_file'))
+    expect(addRecentFileEntry).toHaveBeenCalledWith(
+      expect.objectContaining({id: STORAGE_ID, name: STORAGE_ID}),
+    )
   })
 })

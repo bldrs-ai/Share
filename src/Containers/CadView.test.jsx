@@ -11,16 +11,17 @@ import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 // Slice 5d.4: ShareViewer no longer self-imports the fork to trigger the
 // Jest harness, so load it explicitly here — before the first import
 // that pulls in ShareViewer (→ IfcContext / ShareIfc) — so the harness's
-// jest.mock() registrations land first. The lazy `require('web-ifc-viewer')`
-// calls in the test bodies below read its singleton.
-import 'web-ifc-viewer'
+// jest.mock() registrations land first. The lazy
+// `require('../../__mocks__/shareViewerTestHarness')` calls in the test
+// bodies below read its singleton.
+import '../../__mocks__/shareViewerTestHarness'
 import {ShareViewer} from '../viewer/ShareViewer'
 import Clipper from '../viewer/three/Clipper'
 import SearchIndex from '../search/SearchIndex'
 import useStore from '../store/useStore'
 import * as Loader from '../loader/Loader'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import {actAsyncFlush} from '../utils/tests'
+import {actAsyncFlush, suppressActWarnings} from '../utils/tests'
 import CadView from './CadView'
 
 
@@ -36,7 +37,7 @@ jest.mock('../Filetype')
 jest.mock('../search/SearchIndex')
 // Slice 5b of design/new/viewer-replacement.md: the IFC parse path
 // goes through `parseIfcWithConway` + `buildConwayIfcModel` instead
-// of wit-three's `IFCLoader.parse`. The web-ifc-viewer mock
+// of wit-three's `IFCLoader.parse`. The ShareViewer test harness
 // auto-mocks `three`, which leaves `BufferGeometry` + `Mesh` without
 // their real methods — production `buildConwayIfcModel` produces a
 // broken Mesh under that mock. We short-circuit the Conway-direct
@@ -50,7 +51,7 @@ jest.mock('../viewer/ifc/conwayDirectIfcLoader', () => ({
 }))
 jest.mock('../viewer/ifc/buildConwayIfcModel', () => ({
   buildConwayIfcModel: () => {
-    const {__getShareViewerMockSingleton} = require('web-ifc-viewer')
+    const {__getShareViewerMockSingleton} = require('../../__mocks__/shareViewerTestHarness')
     return {
       mesh: __getShareViewerMockSingleton()._loadedModel,
       materials: [],
@@ -185,11 +186,11 @@ describe('CadView', () => {
   beforeEach(() => {
     viewer = new ShareViewer()
     // Slice 5d.3: `_loadedModel` lives on the singleton fork mock that
-    // `__mocks__/web-ifc-viewer.js` exposes via `__getShareViewerMockSingleton`.
+    // `__mocks__/shareViewerTestHarness.js` exposes via `__getShareViewerMockSingleton`.
     // Pre-5d.3 this was reached via `viewer._fork`, but the `_fork`
     // composition pointer is gone now that ShareViewer instantiates
     // IfcContext + IfcManager + IfcClipper directly.
-    const {__getShareViewerMockSingleton: getSingleton} = require('web-ifc-viewer')
+    const {__getShareViewerMockSingleton: getSingleton} = require('../../__mocks__/shareViewerTestHarness')
     getSingleton()._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
@@ -290,19 +291,32 @@ describe('CadView', () => {
     // `initViewer()` instance route through the same Jest mock.
     const setInstanceSelectionSpy = jest.spyOn(ShareViewer.prototype, 'setInstanceSelection')
       .mockImplementation(() => {})
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
-    await actAsyncFlush()
-    await waitFor(() => screen.getByTestId(aboutControlTestId))
-    // Set ONLY selectedInstanceIds — leave selectedElements at its
-    // empty-array default. The effect runs on the dep change; the
-    // guard should swallow it.
-    setInstanceSelectionSpy.mockClear()
-    const STALE_INSTANCE_ID = 42
-    await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
-    await actAsyncFlush()
-    expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    // The mocked model load resolves on its own timers and drives CadView's
+    // mount setStates (setSelectedElement, ViewerContainer) *during* the
+    // waitFor below — outside any act scope RTL can enclose, so no amount of
+    // flushing catches them. This is the one test that trips it; swallow just
+    // that act warning. The behavior under test (setInstanceSelection is not
+    // called) is asserted directly and unaffected.
+    const restoreActWarnings = suppressActWarnings()
+    // try/finally so a failed assertion can't leave console.error mocked for
+    // the rest of the file — that would swallow every later test's errors.
+    try {
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+      render(<ShareMock><CadView installPrefix='' appPrefix='' pathPrefix=''/></ShareMock>)
+      await actAsyncFlush()
+      await waitFor(() => screen.getByTestId(aboutControlTestId))
+      // Set ONLY selectedInstanceIds — leave selectedElements at its
+      // empty-array default. The effect runs on the dep change; the
+      // guard should swallow it.
+      setInstanceSelectionSpy.mockClear()
+      const STALE_INSTANCE_ID = 42
+      await act(() => result.current.setSelectedInstanceIds([STALE_INSTANCE_ID]))
+      await actAsyncFlush()
+      expect(setInstanceSelectionSpy).not.toHaveBeenCalled()
+    } finally {
+      restoreActWarnings()
+    }
   })
 
 
@@ -588,7 +602,7 @@ describe('CadView', () => {
 
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
-  import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
+  import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
   it('SceneLayer accesses IFC camera, renderer and scene camera', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {

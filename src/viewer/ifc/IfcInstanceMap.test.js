@@ -8,9 +8,12 @@ import {
 import {
   IfcInstanceMap,
   NO_INSTANCE_ID,
+  attachGeometryExpressIds,
+  attachOccurrencePaths,
   instanceMapFromFlatMeshes,
   instanceMapFromGeometry,
   instanceMapFromOrderedPlacedRanges,
+  instanceMapFromTriangleIds,
 } from './IfcInstanceMap'
 
 
@@ -67,6 +70,73 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       expect(map.triangleCount).toBe(3)
       expect(map.instanceCount).toBe(2)
       expect(Array.from(map.instanceIdToParentExpressId)).toEqual([10, 40])
+    })
+
+    it('captures a distinct occurrence path per instance for STEP ranges', () => {
+      // One reused part (parentExpressId 1915) at two occurrences: the parent
+      // id collides, the occurrence path disambiguates.
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 1915, triangleCount: 2, occurrencePath: [3810, 1921, 1916]},
+        {parentExpressId: 1915, triangleCount: 2, occurrencePath: [3810, 1927, 1916]},
+      ])
+      expect(map.getParentExpressIdByInstance(0)).toBe(1915)
+      expect(map.getParentExpressIdByInstance(1)).toBe(1915)
+      expect(map.getOccurrencePathByInstance(0)).toEqual([3810, 1921, 1916])
+      expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1927, 1916])
+    })
+
+    it('reverse-maps an occurrence path to its instance(s)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1921, 1916]},
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1927, 1916]},
+        {parentExpressId: 6210, triangleCount: 1, occurrencePath: []},
+      ])
+      // Each reused-nut occurrence resolves to exactly its own instance.
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([3810, 1921, 1916]))).toEqual([0])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([3810, 1927, 1916]))).toEqual([1])
+      // Empty / unknown paths resolve to null (caller falls back to expressID).
+      expect(map.getInstanceIdsByOccurrencePath([])).toBeNull()
+      expect(map.getInstanceIdsByOccurrencePath([9, 9, 9])).toBeNull()
+    })
+
+    it('normalizes a root-level (empty) occurrence path to null', () => {
+      // A root-level STEP placement carries an empty path; callers testing
+      // truthiness must fall back to the parent expressID, so [] reads as null.
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 6210, triangleCount: 1, occurrencePath: []},
+        {parentExpressId: 1915, triangleCount: 1, occurrencePath: [3810, 1921, 1916]},
+      ])
+      expect(map.getOccurrencePathByInstance(0)).toBeNull()
+      expect(map.getOccurrencePathByInstance(1)).toEqual([3810, 1921, 1916])
+    })
+
+    it('leaves occurrence paths null for IFC ranges (no occurrencePath)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      expect(map.instanceIdToOccurrencePath).toBeNull()
+      expect(map.getOccurrencePathByInstance(0)).toBeNull()
+    })
+
+    it('captures per-instance geometry (solid) express ids for STEP ranges', () => {
+      // A multibody part (the NEMA motor shape): one parent, one shared
+      // occurrence path, several named solids — the geometry express id is
+      // what tells the bodies apart.
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [10], geometryExpressId: 250},
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [10], geometryExpressId: 9382},
+      ])
+      expect(map.getGeometryExpressIdByInstance(0)).toBe(250)
+      expect(map.getGeometryExpressIdByInstance(1)).toBe(9382)
+      expect(map.getGeometryExpressIdByInstance(2)).toBeNull()
+    })
+
+    it('leaves geometry ids null for ranges that carry none (IFC)', () => {
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1},
+      ])
+      expect(map.instanceIdToGeometryExpressId).toBeNull()
+      expect(map.getGeometryExpressIdByInstance(0)).toBeNull()
     })
 
     it('handles an empty stream', () => {
@@ -260,6 +330,24 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       const byInstance = map.createSubsetMeshByInstance([1])
       expect(Array.from(byParent.geometry.getIndex().array))
         .toEqual(Array.from(byInstance.geometry.getIndex().array))
+    })
+
+    it('omits excludeInstances — the per-occurrence hide reveal', () => {
+      // Parent 100 reused across 3 occurrences (inst 0,1,2). Hiding occurrence
+      // inst 1 must leave 0 and 2 in the reveal subset — the seam that lets one
+      // STEP occurrence hide while its siblings stay shown.
+      const geom = makeSixTriangleGeometry()
+      const map = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1}, // inst 0 → tri 0
+        {parentExpressId: 100, triangleCount: 1}, // inst 1 → tri 1
+        {parentExpressId: 100, triangleCount: 1}, // inst 2 → tri 2
+      ], {geometry: geom})
+      const subset = map.createSubsetMeshByParent([100], {excludeInstances: new Set([1])})
+      // Tris 0 and 2 only (inst 1's tri 1 dropped).
+      expect(Array.from(subset.geometry.getIndex().array)).toEqual([0, 1, 2, 6, 7, 8])
+      // An empty exclude set is identical to no exclusion.
+      const full = map.createSubsetMeshByParent([100], {excludeInstances: new Set()})
+      expect(Array.from(full.geometry.getIndex().array)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8])
     })
   })
 
@@ -531,6 +619,87 @@ describe('viewer/ifc/IfcInstanceMap', () => {
       const wholeWall = map.createSubsetMeshByParent([100])
       expect(oneInstance.geometry.getIndex().array.length).toBe(3)
       expect(wholeWall.geometry.getIndex().array.length).toBe(126)
+    })
+  })
+
+
+  describe('attachOccurrencePaths (cache-hit restore)', () => {
+    it('restores occurrence tables from a global instanceId→path table', () => {
+      // Two reused occurrences (instance 0 and 1) sharing parent 100.
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100, 100]), new Uint32Array([0, 1]))
+      expect(map.instanceIdToOccurrencePath).toBeNull()
+
+      attachOccurrencePaths(map, [[10, 20], [11, 20]])
+      expect(map.getOccurrencePathByInstance(0)).toEqual([10, 20])
+      expect(map.getOccurrencePathByInstance(1)).toEqual([11, 20])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([0])
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([11, 20]))).toEqual([1])
+    })
+
+    it('only indexes instance ids the mesh actually holds (per-primitive subset)', () => {
+      // A cache-hit primitive covering only global instance id 5 — the global
+      // table has entries for 0..5 but only 5 is present in this mesh, so the
+      // reverse index must not claim ids 0..4 this mesh can't render.
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([5]))
+      const global = [[1], [2], [3], [4], [5], [10, 20]]
+      attachOccurrencePaths(map, global)
+      expect(Array.from(map.getInstanceIdsByOccurrencePath([10, 20]))).toEqual([5])
+      expect(map.getInstanceIdsByOccurrencePath([1])).toBeNull()
+      expect(map.getOccurrencePathByInstance(5)).toEqual([10, 20])
+    })
+
+    it('is a no-op for IFC (no matching paths) and when tables already exist', () => {
+      const ifcMap = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([0]))
+      attachOccurrencePaths(ifcMap, [null])
+      expect(ifcMap.instanceIdToOccurrencePath).toBeNull()
+
+      // Already-populated map (cache-miss) is left untouched.
+      const occMap = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, occurrencePath: [7, 8]},
+      ])
+      const before = occMap.instanceIdToOccurrencePath
+      attachOccurrencePaths(occMap, [[99]])
+      expect(occMap.instanceIdToOccurrencePath).toBe(before)
+      expect(occMap.getOccurrencePathByInstance(0)).toEqual([7, 8])
+    })
+  })
+
+
+  describe('attachGeometryExpressIds (cache-hit restore)', () => {
+    it('restores per-instance geometry ids from a global table', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100, 100]), new Uint32Array([0, 1]))
+      expect(map.instanceIdToGeometryExpressId).toBeNull()
+
+      attachGeometryExpressIds(map, [250, 9382])
+      expect(map.getGeometryExpressIdByInstance(0)).toBe(250)
+      expect(map.getGeometryExpressIdByInstance(1)).toBe(9382)
+    })
+
+    it('only binds instance ids the mesh actually holds (per-primitive subset)', () => {
+      const map = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([5]))
+      attachGeometryExpressIds(map, [1, 2, 3, 4, 5, 9382])
+      expect(map.getGeometryExpressIdByInstance(5)).toBe(9382)
+      expect(map.getGeometryExpressIdByInstance(0)).toBeNull()
+    })
+
+    it('is a no-op for null/absent tables and already-populated maps', () => {
+      const ifcMap = instanceMapFromTriangleIds(
+        new Uint32Array([100]), new Uint32Array([0]))
+      attachGeometryExpressIds(ifcMap, [null])
+      expect(ifcMap.instanceIdToGeometryExpressId).toBeNull()
+
+      const solidMap = instanceMapFromOrderedPlacedRanges([
+        {parentExpressId: 100, triangleCount: 1, geometryExpressId: 250},
+      ])
+      const before = solidMap.instanceIdToGeometryExpressId
+      attachGeometryExpressIds(solidMap, [9382])
+      expect(solidMap.instanceIdToGeometryExpressId).toBe(before)
+      expect(solidMap.getGeometryExpressIdByInstance(0)).toBe(250)
     })
   })
 })

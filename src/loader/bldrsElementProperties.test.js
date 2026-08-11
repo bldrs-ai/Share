@@ -1,27 +1,49 @@
 /* eslint-disable no-magic-numbers */
-import * as pako from 'pako'
+import useStore from '../store/useStore'
 import {
   BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME,
   BldrsElementPropertiesReader,
+  ElementPropertiesContainerWriter,
   captureBldrsElementProperties,
-  makeLazyPayload,
+  decodeElementProperties,
+  encodeElementProperties,
+  makeElementPropertiesPayload,
 } from './bldrsElementProperties'
 import {
   injectGlbExtensions,
   parseGlb,
   serializeGlb,
 } from './injectGlbExtensions'
+import {getGlbLogs} from '../../tools/jest/glbLogCapture'
 
 
 describe('loader/bldrsElementProperties', () => {
-  describe('captureBldrsElementProperties — fast path via Conway adapter', () => {
-    // The fast path reaches into `ifcAPI.getPassthrough(modelID)` and
-    // iterates the upstream Conway `IfcStepModel` synchronously,
+  /**
+   * Decode a capture result (both paths return the block-indexed
+   * container as `{compressedBytes}`) back to the materialised
+   * tables so assertions can run on content. Asserts the result
+   * shape on the way through.
+   *
+   * @param {object} result `{compressedBytes: Uint8Array}`
+   * @return {object} `{itemProperties, propertySets}`
+   */
+  function decodeCaptured(result) {
+    expect(result).not.toBeNull()
+    expect(result.compressedBytes).toBeInstanceOf(Uint8Array)
+    return decodeElementProperties(result.compressedBytes)
+  }
+
+  describe('captureBldrsElementProperties — streaming path via Conway adapter', () => {
+    // The streaming path reaches into `ifcAPI.getPassthrough(modelID)`
+    // and iterates the upstream Conway `IfcStepModel` synchronously,
     // calling `proxy.getLine(expressID)` per entity to convert raw
     // STEP-tape data to the wit-three-shape object consumers expect.
-    // Pset extraction happens inline — `IfcRelDefinesByProperties`
-    // entities encountered during the walk build the
-    // product→psetIds index in one pass. No spatial tree needed.
+    // Records are gzipped into container blocks incrementally (never
+    // all resident at once), so the capture returns `{compressedBytes}`
+    // — tests decode it back to assert on content. Pset extraction
+    // happens inline — `IfcRelDefinesByProperties` entities
+    // encountered during the walk build the product→psetIds index in
+    // one pass. No spatial tree needed.
 
     /**
      * Build a fake ifcManager that mimics the adapter surface:
@@ -77,7 +99,7 @@ describe('loader/bldrsElementProperties', () => {
         },
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, /* unused */ null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, /* unused */ null))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '101', '102'])
       expect(captured.itemProperties[100]).toEqual(entities[100])
       // Pset index is empty when no IfcRelDefinesByProperties entities exist.
@@ -132,17 +154,19 @@ describe('loader/bldrsElementProperties', () => {
         999: relAB,
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       // Walls 100 and 101 share pset 500 (via the same rel). Wall 102
       // gets pset 501 from a different rel. The pset entities
       // themselves (500, 501) and the rel entities (998, 999) also
       // land in itemProperties so the reader can deref them.
+      // (Structural equality, not identity — the wire round-trip
+      // JSON-serialises class instances to plain objects.)
       expect(captured.propertySets[100]).toEqual([500])
       expect(captured.propertySets[101]).toEqual([500])
       expect(captured.propertySets[102]).toEqual([501])
       expect(captured.itemProperties[500]).toBeDefined()
-      expect(captured.itemProperties[998]).toBe(relC)
-      expect(captured.itemProperties[999]).toBe(relAB)
+      expect(captured.itemProperties[998]).toEqual({...relC})
+      expect(captured.itemProperties[999]).toEqual({...relAB})
     })
 
     it('detects IfcRelDefinesByProperties by numeric type, not constructor.name', async () => {
@@ -177,7 +201,7 @@ describe('loader/bldrsElementProperties', () => {
         getLine: (id) => entities[id],
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       // Pre-fix: this returned `{}` because `constructor.name` was
       // 'Object'. Post-fix: type check matches, pset index built.
       expect(captured.propertySets[100]).toEqual([500])
@@ -208,7 +232,7 @@ describe('loader/bldrsElementProperties', () => {
         999: rel,
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.propertySets[100]).toEqual([500])
     })
 
@@ -234,7 +258,7 @@ describe('loader/bldrsElementProperties', () => {
         getLine: (id) => entities[id],
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeDefined()
       expect(captured.itemProperties[101]).toBeUndefined()
       expect(captured.itemProperties[102]).toBeDefined()
@@ -260,7 +284,7 @@ describe('loader/bldrsElementProperties', () => {
         },
       }
       const mgr = {ifcAPI: {getPassthrough: () => proxy}}
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeUndefined()
       expect(captured.itemProperties[101]).toBeDefined()
     })
@@ -291,7 +315,7 @@ describe('loader/bldrsElementProperties', () => {
         1001: {expressID: 1001, type: 1, Name: {type: 1, value: 'IfcRepresentation'}},
       }
       const mgr = makeFastMgr(entities)
-      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
       expect(captured.itemProperties[100]).toBeDefined() // root
       expect(captured.itemProperties[500]).toBeDefined() // reached via HasProperties
       expect(captured.itemProperties[999]).toBeUndefined() // orphan, pruned
@@ -319,6 +343,56 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured).toBeNull()
     })
 
+    it('disables conway entity memoization during the sweep and restores it after', async () => {
+      // Fixed-memory discipline pin: with memoization on, conway pins
+      // one extracted entity object per descriptor for every getLine —
+      // O(all parsed entities) retained for the sweep's duration. The
+      // streaming path must run with it OFF and put the caller's value
+      // back afterwards.
+      const flagDuringGetLine = []
+      const stepModel = {
+        elementMemoization: true,
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          yield {expressID: 101}
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => {
+          flagDuringGetLine.push(stepModel.elementMemoization)
+          return {expressID: id, type: 1, GlobalId: {type: 1, value: `g${id}`}}
+        },
+        releaseEntityCache: jest.fn(),
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+      expect(flagDuringGetLine).toEqual([false, false])
+      expect(stepModel.elementMemoization).toBe(true)
+      // Sweep residue dropped at the end (conway ≥1.373 surface;
+      // optional-chained so its absence on older versions is fine —
+      // pinned here so a refactor doesn't silently lose the release).
+      expect(proxy.releaseEntityCache).toHaveBeenCalled()
+      expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '101'])
+    })
+
+    it('restores entity memoization even when the sweep throws', async () => {
+      const stepModel = {
+        elementMemoization: true,
+        * [Symbol.iterator]() {
+          yield {expressID: 100}
+          throw new Error('iterator exploded')
+        },
+      }
+      const proxy = {
+        model: [stepModel],
+        getLine: (id) => ({expressID: id, GlobalId: {type: 1, value: 'g'}}),
+      }
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+      await expect(captureBldrsElementProperties(mgr, 0, null)).rejects.toThrow('iterator exploded')
+      expect(stepModel.elementMemoization).toBe(true)
+    })
+
     it('falls back to slow path when adapter surface is absent (test stubs etc)', async () => {
       // The existing slow-path tests rely on this: their ifcManager
       // stubs don't have `.ifcAPI`, so the fast path is unreachable
@@ -331,9 +405,108 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: () => Promise.resolve([]),
       }
       const tree = {expressID: 1, type: 'IFCPROJECT', children: []}
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
-      expect(captured).not.toBeNull()
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.itemProperties[1]).toBeDefined()
+    })
+
+    describe('roots-only enumeration (conway RootExpressIDs)', () => {
+      /**
+       * Fast-mgr variant exposing `ifcAPI.RootExpressIDs` alongside the
+       * usual adapter surface. `rootIDs` is what the iterator yields;
+       * the stepModel iterator counts its own uses so tests can assert
+       * the full scan was (or wasn't) taken.
+       *
+       * @param {object} entitiesById flat map expressID → entity-shape
+       * @param {Array<number>|undefined} rootIDs ids RootExpressIDs yields
+       * @return {object} `{mgr, scanCounts}` — scanCounts.fullScans
+       *   increments each time the stepModel iterator is consumed
+       */
+      function makeRootsMgr(entitiesById, rootIDs) {
+        const ids = Object.keys(entitiesById).map(Number).sort((a, b) => a - b)
+        const scanCounts = {fullScans: 0}
+        const stepModel = {
+          * [Symbol.iterator]() {
+            scanCounts.fullScans++
+            for (const id of ids) {
+              yield {expressID: id}
+            }
+          },
+        }
+        const proxy = {
+          model: [stepModel],
+          getLine: (expressID) => entitiesById[expressID],
+        }
+        const mgr = {
+          ifcAPI: {
+            getPassthrough: (mid) => (mid === 0 ? proxy : undefined),
+            RootExpressIDs: rootIDs === undefined ?
+              () => undefined :
+              function* () {
+                yield* rootIDs
+              },
+          },
+        }
+        return {mgr, scanCounts}
+      }
+
+      const entities = {
+        100: {expressID: 100, type: 3124254112, GlobalId: {type: 1, value: 'g100'}, Name: {type: 1, value: 'Wall'}},
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset'}},
+        // Geometric noise the roots-only path never touches.
+        7000: {expressID: 7000, type: 1, Name: {type: 1, value: 'IfcCartesianPoint'}},
+        999: {
+          expressID: 999, type: 4186316022, GlobalId: {type: 1, value: 'g999'},
+          RelatedObjects: [{type: 5, value: 100}],
+          RelatingPropertyDefinition: {type: 5, value: 500},
+        },
+      }
+
+      it('uses the roots iterator and never runs the full entity scan', async () => {
+        const {mgr, scanCounts} = makeRootsMgr(entities, [100, 999])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        // Same payload the full scan produces: roots (100, 999) plus
+        // the pset (500) reached through the rel's ref; pset index
+        // built from the rel; geometric noise pruned.
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+        expect(captured.propertySets[100]).toEqual([500])
+        expect(captured.itemProperties[7000]).toBeUndefined()
+        expect(scanCounts.fullScans).toBe(0)
+      })
+
+      it('produces the same decoded payload as the full scan', async () => {
+        const {mgr: rootsMgr} = makeRootsMgr(entities, [100, 999])
+        const fullMgr = makeFastMgr(entities)
+        const viaRoots = decodeCaptured(await captureBldrsElementProperties(rootsMgr, 0, null))
+        const viaFull = decodeCaptured(await captureBldrsElementProperties(fullMgr, 0, null))
+        expect(viaRoots.itemProperties).toEqual(viaFull.itemProperties)
+        expect(viaRoots.propertySets).toEqual(viaFull.propertySets)
+      })
+
+      it('de-dupes ids the iterator yields more than once (multi-mapped entities)', async () => {
+        const {mgr} = makeRootsMgr(entities, [100, 100, 999, 999])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        // Wire JSON with duplicate keys would still JSON.parse, so pin
+        // the raw emission count via the visited-set contract instead:
+        // each id appears exactly once in the serialized text.
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+        expect(captured.propertySets[100]).toEqual([500])
+      })
+
+      it('falls back to the full scan when the iterator yields nothing', async () => {
+        const {mgr, scanCounts} = makeRootsMgr(entities, [])
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(scanCounts.fullScans).toBe(1)
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+      })
+
+      it('falls back to the full scan when RootExpressIDs returns undefined', async () => {
+        // Conway returns undefined for missing models / schemas
+        // without a root notion (AP214).
+        const {mgr, scanCounts} = makeRootsMgr(entities, undefined)
+        const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, null))
+        expect(scanCounts.fullScans).toBe(1)
+        expect(Object.keys(captured.itemProperties).sort()).toEqual(['100', '500', '999'])
+      })
     })
   })
 
@@ -386,8 +559,7 @@ describe('loader/bldrsElementProperties', () => {
         })),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
-      expect(captured).not.toBeNull()
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '2', '3'])
       expect(captured.itemProperties[1]).toEqual({
         expressID: 1, Name: {type: 1, value: 'Entity 1'},
@@ -420,7 +592,7 @@ describe('loader/bldrsElementProperties', () => {
         }),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.itemProperties[1]).toBeDefined()
       expect(captured.itemProperties[2]).toBeUndefined() // skipped
       expect(captured.itemProperties[3]).toBeDefined()
@@ -443,7 +615,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '100', '200', '300'])
     })
 
@@ -472,7 +644,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort())
         .toEqual(['1', '10', '11', '12'])
     })
@@ -489,7 +661,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties).sort()).toEqual(['1', '2', '3'])
       // Each entity fetched exactly once despite the cycle.
       expect(mgr.getItemProperties).toHaveBeenCalledTimes(3)
@@ -511,7 +683,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve(entities[id])),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(Object.keys(captured.itemProperties)).toEqual(['1'])
       // Only the seed was fetched — no chasing of {type:1} or {type:2}.
       expect(mgr.getItemProperties).toHaveBeenCalledTimes(1)
@@ -531,7 +703,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn((mid, id) => Promise.resolve({expressID: id})),
         getPropertySets: jest.fn((mid, id) => Promise.resolve(id === 100 ? psets : [])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.propertySets[100]).toEqual([500, 501])
       // psets themselves are entities → in itemProperties.
       expect(captured.itemProperties[500]).toBeDefined()
@@ -544,7 +716,7 @@ describe('loader/bldrsElementProperties', () => {
         getItemProperties: jest.fn(() => Promise.resolve({})),
         getPropertySets: jest.fn(() => Promise.resolve([])),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       expect(captured.propertySets).toEqual({})
     })
 
@@ -561,7 +733,7 @@ describe('loader/bldrsElementProperties', () => {
           return Promise.resolve([])
         }),
       }
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(await captureBldrsElementProperties(mgr, 0, tree))
       // Item properties for both still captured; pset index just lacks 2.
       expect(captured.itemProperties[1]).toBeDefined()
       expect(captured.itemProperties[2]).toBeDefined()
@@ -569,52 +741,62 @@ describe('loader/bldrsElementProperties', () => {
     })
   })
 
-  describe('makeLazyPayload — lazy decode', () => {
-    /**
-     * @param {object} obj data to wrap
-     * @return {Uint8Array} gzipped JSON bytes
-     */
-    function compressed(obj) {
-      return pako.gzip(new TextEncoder().encode(JSON.stringify(obj)))
-    }
-
+  describe('makeElementPropertiesPayload — lazy indexed decode', () => {
     it('does not decode at construction', () => {
-      // The compressed input is intentionally invalid; constructor must
+      // The container input is intentionally invalid; constructor must
       // not touch it (proof that decode is truly lazy).
       const badBytes = new Uint8Array([0x42, 0x4c, 0x44, 0x52])
-      const payload = makeLazyPayload(badBytes)
+      const payload = makeElementPropertiesPayload(badBytes)
       expect(payload.compressed).toBe(badBytes)
       // No throw, no work done.
     })
 
-    it('decodes on first call and caches the result', () => {
-      const bytes = compressed({itemProperties: {1: {x: 1}}, propertySets: {1: [10]}})
-      const payload = makeLazyPayload(bytes)
-      const a = payload.decode()
-      const b = payload.decode()
-      expect(a).toBe(b) // same object reference — cached
-      expect(a.itemProperties[1]).toEqual({x: 1})
-      expect(a.propertySets[1]).toEqual([10])
+    it('returns records and pset ids from an encoded container', () => {
+      const bytes = encodeElementProperties({1: {x: 1}, 2: {y: 2}}, {1: [10]})
+      const payload = makeElementPropertiesPayload(bytes)
+      expect(payload.getRecord(1)).toEqual({x: 1})
+      expect(payload.getRecord(2)).toEqual({y: 2})
+      expect(payload.getRecord(999)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([10])
+      expect(payload.getPsetIds(2)).toEqual([])
     })
 
-    it('returns empty-shape payload on a malformed compressed blob', () => {
-      const payload = makeLazyPayload(new Uint8Array([0xff, 0xff, 0xff, 0xff]))
-      const decoded = payload.decode()
-      expect(decoded).toEqual({itemProperties: {}, propertySets: {}})
+    it('degrades to no-records on a malformed container', () => {
+      const payload = makeElementPropertiesPayload(new Uint8Array([0xff, 0xff, 0xff, 0xff]))
+      expect(payload.getRecord(1)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([])
     })
 
-    it('returns empty-shape payload on a non-object JSON payload', () => {
-      const bytes = compressed([1, 2, 3])
-      const payload = makeLazyPayload(bytes)
-      expect(payload.decode()).toEqual({itemProperties: {}, propertySets: {}})
+    it('reads records back across many blocks (and through LRU eviction)', () => {
+      // A tiny block target forces one block per record — 50 blocks is
+      // well past the reader's LRU capacity, so the sequential reads
+      // below also exercise eviction + re-inflate of cold blocks.
+      const writer = new ElementPropertiesContainerWriter(8)
+      const records = {}
+      for (let id = 1; id <= 50; id++) {
+        records[id] = {Name: {type: 1, value: `Entity ${id}`}}
+        writer.addRecord(id, records[id])
+      }
+      const bytes = writer.finish({7: [8]})
+      const payload = makeElementPropertiesPayload(bytes)
+      for (let id = 1; id <= 50; id++) {
+        expect(payload.getRecord(id)).toEqual(records[id])
+      }
+      // Revisit an early (long-evicted) block.
+      expect(payload.getRecord(1)).toEqual(records[1])
+      expect(payload.getPsetIds(7)).toEqual([8])
+      // The materialising test helper agrees with the lazy reader.
+      const decoded = decodeElementProperties(bytes)
+      expect(decoded.itemProperties).toEqual(records)
+      expect(decoded.propertySets).toEqual({7: [8]})
     })
 
-    it('isolates missing fields — keeps the ones that ARE valid objects', () => {
-      // Only itemProperties present, no propertySets.
-      const bytes = compressed({itemProperties: {99: {a: 1}}})
-      const decoded = makeLazyPayload(bytes).decode()
-      expect(decoded.itemProperties[99]).toEqual({a: 1})
-      expect(decoded.propertySets).toEqual({})
+    it('round-trips an empty capture', () => {
+      const bytes = encodeElementProperties({}, {})
+      const payload = makeElementPropertiesPayload(bytes)
+      expect(payload.getRecord(1)).toBeUndefined()
+      expect(payload.getPsetIds(1)).toEqual([])
+      expect(decodeElementProperties(bytes)).toEqual({itemProperties: {}, propertySets: {}})
     })
   })
 
@@ -638,15 +820,14 @@ describe('loader/bldrsElementProperties', () => {
     }
 
     it('parks a lazy payload on gltf.scene.userData', async () => {
-      const data = {
-        itemProperties: {1: {Name: {type: 1, value: 'X'}}},
-        propertySets: {1: [2]},
-      }
+      const container = encodeElementProperties(
+        {1: {Name: {type: 1, value: 'X'}}},
+        {1: [2]})
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: container},
       ])
       const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
       const gltf = {scene: {userData: {}}}
@@ -654,10 +835,33 @@ describe('loader/bldrsElementProperties', () => {
       const payload = gltf.scene.userData.bldrsElementProperties
       expect(payload).toBeDefined()
       expect(payload.compressed).toBeInstanceOf(Uint8Array)
-      expect(typeof payload.decode).toBe('function')
+      expect(typeof payload.getRecord).toBe('function')
       // Decode now and assert content.
-      expect(payload.decode().itemProperties[1]).toEqual({Name: {type: 1, value: 'X'}})
-      expect(payload.decode().propertySets[1]).toEqual([2])
+      expect(payload.getRecord(1)).toEqual({Name: {type: 1, value: 'X'}})
+      expect(payload.getPsetIds(1)).toEqual([2])
+    })
+
+    it('alerts and attaches nothing for a pre-0.13.0 monolithic-gzip payload', async () => {
+      // The old wire format was one gzip of the whole
+      // `{itemProperties, propertySets}` JSON — exactly what the
+      // inject step's `{data, compress: true}` path produces, so use
+      // it to build the legacy fixture. The reader must refuse it
+      // (no legacy decode path exists), leave userData untouched, and
+      // raise the clear-cache alert.
+      useStore.getState().setAlert(null)
+      const legacy = {itemProperties: {1: {x: 1}}, propertySets: {}}
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: legacy, compress: true},
+      ])
+      const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
+      const gltf = {scene: {userData: {}}}
+      await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
+      expect(gltf.scene.userData.bldrsElementProperties).toBeUndefined()
+      expect(useStore.getState().alert).toMatch(/Clear Local Cache/)
+      useStore.getState().setAlert(null)
     })
 
     it('is a no-op when the GLB has no extension', async () => {
@@ -686,6 +890,8 @@ describe('loader/bldrsElementProperties', () => {
       const gltf = {scene: {userData: {}}}
       await expect(reader.afterRoot(gltf)).resolves.toBe(gltf)
       expect(gltf.scene.userData.bldrsElementProperties).toBeUndefined()
+      // The skip announces itself through the captured [glb] channel.
+      expect(getGlbLogs().some((l) => l.text.includes('out-of-range bufferView 99'))).toBe(true)
     })
 
     it('survives a gltf with no default scene (no attach, no throw)', async () => {
@@ -693,7 +899,7 @@ describe('loader/bldrsElementProperties', () => {
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: {itemProperties: {}}, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: encodeElementProperties({}, {})},
       ])
       const reader = new BldrsElementPropertiesReader(parserFromGlb(withExt))
       const gltf = {/* no .scene */}
@@ -702,6 +908,66 @@ describe('loader/bldrsElementProperties', () => {
   })
 
   describe('end-to-end: capture → inject → reader → decode', () => {
+    it('streams an adapter capture through precompressed inject + reader decode', async () => {
+      // The streaming writer's full production pipeline: adapter
+      // capture emits block-indexed container bytes →
+      // injectGlbExtensions embeds them verbatim as `precompressed` →
+      // the reader's lazy per-entity accessors recover the same
+      // records the capture serialised.
+      const entities = {
+        100: {
+          expressID: 100, type: 3124254112,
+          GlobalId: {type: 1, value: 'g100'},
+          HasProperties: [{type: 5, value: 500}],
+        },
+        500: {expressID: 500, type: 1660063152, Name: {type: 1, value: 'Pset_WallCommon'}},
+        999: {
+          expressID: 999, type: 4186316022, // IFCRELDEFINESBYPROPERTIES
+          GlobalId: {type: 1, value: 'g999'},
+          RelatedObjects: [{type: 5, value: 100}],
+          RelatingPropertyDefinition: {type: 5, value: 500},
+        },
+      }
+      const ids = Object.keys(entities).map(Number)
+      const stepModel = {
+        * [Symbol.iterator]() {
+          for (const id of ids) {
+            yield {expressID: id}
+          }
+        },
+      }
+      const proxy = {model: [stepModel], getLine: (id) => entities[id]}
+      const mgr = {ifcAPI: {getPassthrough: () => proxy}}
+
+      const captured = await captureBldrsElementProperties(mgr, 0, null)
+      expect(captured.compressedBytes).toBeInstanceOf(Uint8Array)
+
+      const baseGlb = serializeGlb(
+        {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
+        new Uint8Array(4))
+      const {bytes: withExt} = injectGlbExtensions(baseGlb, [
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: captured.compressedBytes},
+      ])
+
+      const {json, bin} = parseGlb(withExt)
+      const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
+      const reader = new BldrsElementPropertiesReader({
+        json,
+        getDependency: () => Promise.resolve(buffer),
+      })
+      const gltf = {scene: {userData: {}}}
+      await reader.afterRoot(gltf)
+      const payload = gltf.scene.userData.bldrsElementProperties
+
+      expect(payload.getRecord(100)).toEqual(entities[100])
+      expect(payload.getRecord(500)).toEqual(entities[500])
+      expect(payload.getPsetIds(100)).toEqual([500])
+      // Full-set check via the materialising helper on the same bytes.
+      const decoded = decodeElementProperties(payload.compressed)
+      expect(Object.keys(decoded.itemProperties).sort()).toEqual(['100', '500', '999'])
+      expect(decoded.propertySets).toEqual({100: [500]})
+    })
+
     it('preserves the captured map through write + read', async () => {
       const tree = {
         expressID: 1, type: 'IFCPROJECT', children: [
@@ -719,7 +985,8 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: (mid, id) => Promise.resolve(id === 100 ? [entities[500]] : []),
       }
 
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const capturedResult = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(capturedResult)
       expect(captured.itemProperties[100]).toBeDefined()
       expect(captured.itemProperties[999]).toBeDefined() // followed via BFS
       expect(captured.itemProperties[500]).toBeDefined() // captured via psets
@@ -729,7 +996,7 @@ describe('loader/bldrsElementProperties', () => {
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: captured, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: capturedResult.compressedBytes},
       ])
 
       // Now read back.
@@ -741,7 +1008,7 @@ describe('loader/bldrsElementProperties', () => {
       })
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
-      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+      const decoded = decodeElementProperties(gltf.scene.userData.bldrsElementProperties.compressed)
 
       expect(decoded.itemProperties).toEqual(captured.itemProperties)
       expect(decoded.propertySets).toEqual(captured.propertySets)
@@ -794,7 +1061,8 @@ describe('loader/bldrsElementProperties', () => {
         getPropertySets: () => Promise.resolve([]),
       }
 
-      const captured = await captureBldrsElementProperties(mgr, 0, tree)
+      const capturedResult = await captureBldrsElementProperties(mgr, 0, tree)
+      const captured = decodeCaptured(capturedResult)
       // BFS reaches entities via OwnerHistory's `OwningUser` /
       // `OwningApplication` refs — those field names aren't in
       // `GEOMETRIC_FIELD_NAMES`. But `ObjectPlacement` (→559) and
@@ -809,12 +1077,12 @@ describe('loader/bldrsElementProperties', () => {
       expect(captured.itemProperties[559]).toBeUndefined()
       expect(captured.itemProperties[611]).toBeUndefined()
 
-      // Round-trip through compress + inject + parse + decode.
+      // Round-trip through inject + parse + lazy read.
       const baseGlb = serializeGlb(
         {asset: {version: '2.0'}, buffers: [{byteLength: 4}]},
         new Uint8Array(4))
       const {bytes: withExt} = injectGlbExtensions(baseGlb, [
-        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, data: captured, compress: true},
+        {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: capturedResult.compressedBytes},
       ])
       const {json, bin} = parseGlb(withExt)
       const buffer = bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength)
@@ -824,22 +1092,22 @@ describe('loader/bldrsElementProperties', () => {
       })
       const gltf = {scene: {userData: {}}}
       await reader.afterRoot(gltf)
-      const decoded = gltf.scene.userData.bldrsElementProperties.decode()
+      const payload = gltf.scene.userData.bldrsElementProperties
 
       // Byte-for-byte (key-for-key) preservation of the IFC site shape,
       // including null-valued fields, numeric `type` discriminant, and
       // every typed-primitive / reference. This is the contract that
       // `@bldrs-ai/ifclib`'s `deref` builds the Properties panel on.
-      const decodedSite = decoded.itemProperties[621]
+      const decodedSite = payload.getRecord(621)
       expect(decodedSite).toEqual(ifcSiteEntity)
       expect(decodedSite.GlobalId).toEqual({type: 1, value: '02uD5Qe8H3mek2PYnMWHk1'})
       expect(decodedSite.OwnerHistory).toEqual({type: 5, value: 28})
       expect(decodedSite.Description).toBeNull()
       expect(decodedSite.PredefinedType).toEqual({type: 3, value: 'NOTDEFINED'})
 
-      // Following the OwnerHistory ref via the same decoded map must
+      // Following the OwnerHistory ref via the same payload must
       // resolve — that's the deref chain the Properties panel walks.
-      const referenced = decoded.itemProperties[decodedSite.OwnerHistory.value]
+      const referenced = payload.getRecord(decodedSite.OwnerHistory.value)
       expect(referenced).toEqual(ownerHistory)
     })
   })

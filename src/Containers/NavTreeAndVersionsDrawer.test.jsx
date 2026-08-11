@@ -1,5 +1,5 @@
 import React from 'react'
-import {__getShareViewerMockSingleton} from 'web-ifc-viewer'
+import {__getShareViewerMockSingleton} from '../../__mocks__/shareViewerTestHarness'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import {useIsMobile} from '../Components/Hooks'
 import {TITLE as TITLE_NAV_TREE} from '../Components/NavTree/NavTreePanel'

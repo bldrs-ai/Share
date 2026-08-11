@@ -14,9 +14,34 @@ import {
   parseIfcWithConway,
 } from './conwayDirectIfcLoader'
 
+// Controllable flag surface: defaults to "everything off" (matching
+// the real module for every flag these tests touch except
+// `streamOpen`, whose default-on is pinned separately against the
+// real module below). The open-path tests flip it per case.
+const mockIsFeatureEnabled = jest.fn()
+jest.mock('../../FeatureFlags', () => ({
+  isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
+}))
+
 
 /* eslint-disable no-magic-numbers */
 describe('viewer/ifc/conwayDirectIfcLoader', () => {
+  // The demand-pump boundary logs are always-on (they must reach a
+  // user's console without a flag), so divert them rather than let the
+  // suite narrate every parse. PLAYBOOK.md §"Keep the test console clean".
+  let infoSpy
+  let warnSpy
+
+  beforeEach(() => {
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    infoSpy.mockRestore()
+    warnSpy.mockRestore()
+  })
+
   describe('parseIfcWithConway', () => {
     it('returns the modelID + captured FlatMeshes from a single Conway OpenModel + StreamAllMeshes pass', async () => {
       const fakeFlatMesh1 = {expressID: 42, geometries: {size: () => 0}}
@@ -127,6 +152,205 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       await parseIfcWithConway(new ArrayBuffer(0), ifcAPI, settings)
       expect(ifcAPI.OpenModel.mock.calls[0][1]).toBe(settings)
     })
+
+    describe('demandGeometry deferred open + batch pump (slice A)', () => {
+      beforeEach(() => mockIsFeatureEnabled.mockReset())
+      afterAll(() => mockIsFeatureEnabled.mockReset())
+
+      /**
+       * @param {number} products total products the fake engine holds
+       * @return {object} IfcAPI stub with the deferred pump surface
+       */
+      function makeDemandAPI(products) {
+        let cursor = 0
+        return {
+          wasmModule: {},
+          OpenModelStreamed: jest.fn(() => Promise.resolve(5)),
+          OpenModelAsync: jest.fn(() => Promise.resolve(8)),
+          OpenModel: jest.fn(() => 9),
+          StreamAllMeshes: jest.fn(),
+          ExtractGeometryBatch: jest.fn((modelID, batchSize, cb) => {
+            const take = Math.min(batchSize, products - cursor)
+            for (let i = 0; i < take; i++) {
+              cb({expressID: 1000 + cursor + i, geometries: {size: () => 1}})
+            }
+            cursor += take
+            return {extracted: take, remaining: products - cursor}
+          }),
+        }
+      }
+
+      it('opens deferred and pumps batches to completion', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const batches = []
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
+        expect(result.modelID).toBe(5)
+        // Deferred settings rode the open.
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.DEFER_GEOMETRY).toBe(true)
+        // 150 products in batches of 64 → 3 extraction rounds; all
+        // meshes accumulate AND stream incrementally.
+        expect(result.captured).toHaveLength(150)
+        expect(batches).toEqual([64, 64, 22])
+        // The one-shot capture path is not used on this branch.
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+      })
+
+      it('falls through to the classic selection when the engine lacks the pump', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        delete ifcAPI.ExtractGeometryBatch
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        // Classic streamed open (no defer), one-shot capture.
+        expect(result.modelID).toBe(5)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings?.DEFER_GEOMETRY).toBeUndefined()
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+      })
+
+      it('stays on the classic path when the flag is off', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+      })
+
+      it('disableStreamOpen also disables the demand path', async () => {
+        mockIsFeatureEnabled.mockImplementation(
+          (name) => name === 'demandGeometry' || name === 'disableStreamOpen')
+        const ifcAPI = makeDemandAPI(10)
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        // Full classic fallback: OpenModelAsync, not the deferred open.
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.ExtractGeometryBatch).not.toHaveBeenCalled()
+      })
+
+      it('demandGeometry flag exists (temporarily default-on for branch burn-in)', () => {
+        // Default-off is the mainline contract; this branch flips it on so
+        // DnD loads (which can't carry ?feature=) exercise the demand path.
+        // Restore the isActive=false assertion before merging to main.
+        const {flags} = jest.requireActual('../../FeatureFlags')
+        const flag = flags.find((f) => f.name === 'demandGeometry')
+        expect(flag).toBeDefined()
+        expect(flag.isActive).toBe(true)
+      })
+
+      it('serves the one-shot capture when the pump no-ops (STEP / classic fallback)', async () => {
+        // The deferred columnar open is IFC-only: STEP input falls back
+        // internally to a classic fully-extracted open whose pump returns
+        // {0,0} immediately. The loader must serve StreamAllMeshes then,
+        // not an empty scene.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.ExtractGeometryBatch = jest.fn(() => ({extracted: 0, remaining: 0}))
+        ifcAPI.StreamAllMeshes = jest.fn((modelID, cb) => {
+          for (let i = 0; i < 5; i++) {
+            cb({expressID: 2000 + i, geometries: {size: () => 1}})
+          }
+        })
+        const batches = []
+        const result = await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, (batch) => batches.push(batch.length))
+        expect(result.captured).toHaveLength(5)
+        expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
+        // No preview batches for an already-complete extraction.
+        expect(batches).toEqual([])
+      })
+
+      it('threads onPreviewMesh into the deferred open as ON_PREVIEW_MESH (slice A2)', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        const onPreviewMesh = jest.fn()
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, undefined, undefined, onPreviewMesh)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.DEFER_GEOMETRY).toBe(true)
+        expect(settings.ON_PREVIEW_MESH).toBe(onPreviewMesh)
+      })
+
+      it('omits ON_PREVIEW_MESH when no preview callback is given', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(settings.ON_PREVIEW_MESH).toBeUndefined()
+      })
+    })
+
+    describe('open-path selection (disableStreamOpen flag)', () => {
+      // Share's jest config doesn't clearMocks, so a per-test
+      // implementation would otherwise leak into later tests — reset to
+      // the default (everything off) around this block.
+      beforeEach(() => mockIsFeatureEnabled.mockReset())
+      afterAll(() => mockIsFeatureEnabled.mockReset())
+
+      /** @return {object} IfcAPI stub exposing all three open entries */
+      function makeTriplePathAPI() {
+        return {
+          wasmModule: {},
+          OpenModelStreamed: jest.fn(() => Promise.resolve(7)),
+          OpenModelAsync: jest.fn(() => Promise.resolve(8)),
+          OpenModel: jest.fn(() => 9),
+          StreamAllMeshes: jest.fn(),
+        }
+      }
+
+      it('disableStreamOpen exists and defaults to off in FeatureFlags', () => {
+        // The mock above hides the real module from the loader; this
+        // pins the shipped default (streaming ON) so a prod kill-switch
+        // flip is a deliberate diff here too. The flag is inverted
+        // because `?feature=` can only turn flags on — the runtime
+        // escape hatch for a default-on behavior must be an off-flag.
+        const {flags} = jest.requireActual('../../FeatureFlags')
+        const flag = flags.find((f) => f.name === 'disableStreamOpen')
+        expect(flag).toBeDefined()
+        expect(flag.isActive).toBe(false)
+      })
+
+      it('prefers OpenModelStreamed by default (no flags set)', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeTriplePathAPI()
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(7)
+        expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+        const [data, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(data).toBeInstanceOf(Uint8Array)
+        expect(settings).toEqual({COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true})
+        expect(ifcAPI.OpenModelAsync).not.toHaveBeenCalled()
+        expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
+      })
+
+      it('falls back to OpenModelAsync when the engine predates OpenModelStreamed', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeTriplePathAPI()
+        delete ifcAPI.OpenModelStreamed
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.OpenModel).not.toHaveBeenCalled()
+      })
+
+      it('disableStreamOpen reverts to OpenModelAsync, even with OpenModelStreamed present', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'disableStreamOpen')
+        const ifcAPI = makeTriplePathAPI()
+        const result = await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
+        expect(result.modelID).toBe(8)
+        expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
+        expect(ifcAPI.OpenModelAsync).toHaveBeenCalledTimes(1)
+      })
+
+      it('throws when OpenModelStreamed reports failure (-1)', async () => {
+        mockIsFeatureEnabled.mockImplementation(() => false)
+        const ifcAPI = makeTriplePathAPI()
+        ifcAPI.OpenModelStreamed = jest.fn(() => Promise.resolve(-1))
+        await expect(parseIfcWithConway(new ArrayBuffer(4), ifcAPI)).rejects.toThrow(
+          /OpenModel returned -1/)
+        expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
+      })
+    })
   })
 
   describe('decorateConwayDirectIfcModel — property-method closures', () => {
@@ -180,7 +404,8 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       // Two-arg call (CadView.jsx / IfcIsolator.js shape). The
       // leading arg is ignored — the bound modelID is used instead.
       await ifcModel.getSpatialStructure(0, true)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(0, true, {includeSolids: true})
     })
 
     it('getSpatialStructure accepts a single boolean arg — the cache-hit closure shape', async () => {
@@ -188,7 +413,26 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
       const ifcModel = new Mesh()
       decorateConwayDirectIfcModel(ifcModel, ifcAPI, 0)
       await ifcModel.getSpatialStructure(true)
-      expect(ifcAPI.properties.getSpatialStructure).toHaveBeenCalledWith(0, true)
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(0, true, {includeSolids: true})
+    })
+
+    it('getSpatialStructure passes Conway\'s \'names\' mode through un-coerced', async () => {
+      // Regression pin: 'names' must reach Conway as the string, not be
+      // boolean-coerced — a truthy coercion would silently upgrade the
+      // light Name/LongName/GlobalId walk back to the full-record visit
+      // that 'names' mode exists to avoid (CadView.jsx load path).
+      const ifcAPI = makeIfcAPI()
+      const ifcModel = new Mesh()
+      decorateConwayDirectIfcModel(ifcModel, ifcAPI, 7)
+      // Two-arg manager shape (CadView.jsx): (modelID, 'names').
+      await ifcModel.getSpatialStructure(0, 'names')
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenCalledWith(7, 'names', {includeSolids: true})
+      // Single-arg cache-hit closure shape: ('names').
+      await ifcModel.getSpatialStructure('names')
+      expect(ifcAPI.properties.getSpatialStructure)
+        .toHaveBeenLastCalledWith(7, 'names', {includeSolids: true})
     })
 
     it('getIfcType is an identity over the spatial-tree node\'s string type', () => {

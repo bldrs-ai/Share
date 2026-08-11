@@ -118,6 +118,25 @@ Use dash-separated, converted from CamelCase:
 - **Mock implementations**: Use `() => {}` freely for Jest mocks
 - **Test descriptions**: Clear, descriptive test names
 
+### Console hygiene
+A test run should print **nothing unexpected** — noise buries the one new
+warning that flags a real regression. Treat a stray warning as a defect, in
+this priority order:
+- **Fix it at the source.** An `act()` warning usually means an un-awaited
+  state update — await it with `actAsyncFlush()` (`src/utils/tests.js`), don't
+  mute it. Keep flush helpers timer-agnostic (a single microtask, never
+  `setTimeout` — it hangs under fake timers).
+- **Divert expected output and assert on it.** Code that logs *by design*
+  (the `[glb]` diagnostics) routes through a swappable sink and is checked via
+  `getGlbLogs()` — a tested signal, not console spam.
+- **Suppress only what you can't reach** — narrowly (`suppressActWarnings()`
+  swallows just the one line), scoped to one test, restored in `try/finally`.
+- **Back any global mute with a static test** — e.g. three's muted "Multiple
+  instances" warning is compensated by `singleThreeInstance.test.js`.
+
+Full rationale and worked examples: [PLAYBOOK.md](PLAYBOOK.md) §"Keep the test
+console clean".
+
 ## JSDoc Standards
 - **Check types**: Type checking enabled
 - **No required descriptions**: Focus on type safety over verbose docs
