@@ -16,9 +16,11 @@ on:
     #
     # converted_to_draft is the other half of that gate, and it works by
     # cancellation rather than by starting anything: pushing a PR back to
-    # draft fires an event in the job's concurrency group, so
+    # draft fires an event in the run-level concurrency group below, so
     # cancel-in-progress kills the build that is mid-flight and the run it
-    # schedules in its place skips (the PR is a draft again).
+    # schedules in its place skips (the PR is a draft again). Run-level, not
+    # job-level, for the reason given there — a skipped job never enters its
+    # own group, so a job-level group could not cancel anything here.
     types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
     paths-ignore:
       - '**/*.md'

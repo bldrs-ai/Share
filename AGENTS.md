@@ -56,9 +56,11 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   breakage (a missing asset loader, a plugin misconfig) survives every
   draft commit and first surfaces at step 3, after `/review` has already
   signed off — exactly the step-4 re-review this lifecycle is trying to
-  avoid. Run `yarn build-prod` once before flipping to ready. And if
-  you're in a sandbox where the hook isn't installed, `yarn install`
-  first; nothing is being checked otherwise.
+  avoid. Run `yarn build-prod` once before flipping to ready — then
+  `git checkout -- package.json`, because `tools/updateVersion.mjs`
+  stamps a local version into it on every build and that stamp must
+  never reach a commit. And if you're in a sandbox where the hook isn't
+  installed, `yarn install` first; nothing is being checked otherwise.
   conway uses the same lifecycle, gating `run-ifc-regression` and
   `visual-diff` while leaving its `build` job ungated.
 - **PRs: auto-subscribe to CI / review activity.** Immediately after `create_pull_request` succeeds, call `subscribe_pr_activity` for that PR without asking. The default-prompt asks first — for this repo, skip that question and just subscribe. Babysitting is the expected mode here: watch CI, autofix tractable failures, respond to review comments per the system-prompt rules (small + confident → push the fix; ambiguous or architecturally significant → `AskUserQuestion` first; no-op-able → skip silently). Only `unsubscribe_pr_activity` when the user explicitly says to stop.
