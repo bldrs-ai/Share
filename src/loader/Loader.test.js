@@ -440,8 +440,8 @@ describe('Loader', () => {
 
     it('tags a constrained-device memory failure as OOM for IFC null loads', async () => {
       const mockLoader = {parse: jest.fn().mockResolvedValue(null)}
-      // An Emscripten/wasm heap-exhaustion trap — now matched by oom.js.
-      const oomErr = new Error('RuntimeError: memory access out of bounds')
+      // An explicit Emscripten heap-exhaustion abort — matched by oom.js.
+      const oomErr = new Error('Aborted(OOM)')
       const viewer = {IFC: {ifcLastError: oomErr}}
 
       await expect(readModel(mockLoader, 'test-data', './', true, true, viewer, null))

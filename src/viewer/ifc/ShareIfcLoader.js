@@ -25,7 +25,7 @@ import {decorateConwayDirectIfcModel, parseIfcWithConway} from './conwayDirectIf
 import {flatMeshToBufferGeometry} from './flatMeshToBufferGeometry'
 import {flatMeshToInstancedModel} from './flatMeshToInstancedModel'
 import {payloadToPreviewMesh} from './parsePreviewMesh'
-import {isOutOfMemoryError} from '../../utils/oom'
+import {isOutOfMemoryError, markIfOutOfMemory} from '../../utils/oom'
 import {hasParams} from '../../utils/location'
 import {HASH_PREFIX_CAMERA} from '../../Components/Camera/hashState'
 import {isFeatureEnabled} from '../../FeatureFlags'
@@ -151,6 +151,13 @@ export default class ShareIfcLoader {
    */
   async parse(buffer, onProgress, onError) {
     const ifc = this._ifc
+    // Clear any error stashed by a prior load on this shared IFC namespace.
+    // readModel (Loader.js) reads `viewer.IFC.ifcLastError` to surface the
+    // real engine failure when a parse returns falsy, so a stale value (and
+    // its sticky `.isOutOfMemory` tag) from an earlier failed load must not
+    // leak into this load's error path.
+    this.ifcLastError = null
+    ifc.ifcLastError = null
     if (ifc.context.items.ifcModels.length !== 0) {
       throw new Error('Model cannot be loaded.  A model is already present')
     }
@@ -417,9 +424,11 @@ export default class ShareIfcLoader {
       this.ifcLastError = err
       this._ifc.ifcLastError = err
       // Rethrow OOM so callers can present a tailored UX message.
+      // markIfOutOfMemory tags in place but guards primitive throwables
+      // (Emscripten abort() can throw a bare string, and assigning a
+      // property to a primitive throws a TypeError in strict mode).
       if (isOutOfMemoryError(err)) {
-        err.isOutOfMemory = true // tag for convenience
-        throw err
+        throw markIfOutOfMemory(err)
       }
       console.error(err)
       if (onError) {

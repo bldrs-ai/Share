@@ -1,4 +1,4 @@
-import {isOutOfMemoryError, OOM_PATTERNS} from './oom'
+import {isOutOfMemoryError, markIfOutOfMemory, OOM_PATTERNS} from './oom'
 
 
 describe('isOutOfMemoryError', () => {
@@ -14,15 +14,20 @@ describe('isOutOfMemoryError', () => {
     expect(isOutOfMemoryError(new RangeError('could not allocate memory'))).toBe(true)
   })
 
-  it('matches Emscripten/wasm heap-exhaustion traps (constrained-mobile Conway path)', () => {
-    // These are the constrained-device signatures behind SHARE-RS that
-    // previously slipped past the OOM UX and into Sentry as opaque errors.
-    expect(isOutOfMemoryError(new Error('RuntimeError: memory access out of bounds'))).toBe(true)
-    expect(isOutOfMemoryError(new Error('out of bounds memory access'))).toBe(true)
-    expect(isOutOfMemoryError(new Error('table index is out of bounds'))).toBe(true)
+  it('matches explicit Emscripten/heap OOM aborts', () => {
     expect(isOutOfMemoryError(new Error('Aborted(OOM)'))).toBe(true)
     expect(isOutOfMemoryError(new Error('Cannot enlarge memory arrays to size ...'))).toBe(true)
     expect(isOutOfMemoryError(new Error('memory allocation failed'))).toBe(true)
+  })
+
+  it('does NOT classify ambiguous wasm traps as OOM', () => {
+    // These are control-flow / wild-pointer traps a genuine Conway code
+    // defect throws just as readily as heap exhaustion does. Classifying
+    // them as OOM would suppress their Sentry capture and mislabel a real
+    // bug as a device limit — so they stay non-OOM and remain captured.
+    expect(isOutOfMemoryError(new Error('RuntimeError: memory access out of bounds'))).toBe(false)
+    expect(isOutOfMemoryError(new Error('out of bounds memory access'))).toBe(false)
+    expect(isOutOfMemoryError(new Error('table index is out of bounds'))).toBe(false)
   })
 
   it('does not false-positive on unrelated aborts/failures', () => {
@@ -32,10 +37,38 @@ describe('isOutOfMemoryError', () => {
   })
 
   it('is case-insensitive', () => {
-    expect(isOutOfMemoryError(new Error('MEMORY ACCESS OUT OF BOUNDS'))).toBe(true)
+    expect(isOutOfMemoryError(new Error('ABORTED(OOM)'))).toBe(true)
   })
 
   it('OOM_PATTERNS stay lowercase (consumers lowercase before matching)', () => {
     OOM_PATTERNS.forEach((p) => expect(p).toBe(p.toLowerCase()))
+  })
+})
+
+
+describe('markIfOutOfMemory', () => {
+  it('tags an object OOM error in place and returns it', () => {
+    const err = new Error('Aborted(OOM)')
+    expect(markIfOutOfMemory(err)).toBe(err)
+    expect(err.isOutOfMemory).toBe(true)
+  })
+
+  it('does not tag a non-OOM object error', () => {
+    const err = new Error('Failed to fetch')
+    markIfOutOfMemory(err)
+    expect(err.isOutOfMemory).toBeUndefined()
+  })
+
+  it('is a no-op (no TypeError) for a primitive OOM throwable', () => {
+    // Emscripten abort() can throw a bare string; assigning a property to a
+    // primitive throws a TypeError in strict mode, so primitives are left
+    // untagged (message-based isOutOfMemoryError still classifies them).
+    expect(() => markIfOutOfMemory('Aborted(OOM)')).not.toThrow()
+    expect(markIfOutOfMemory('Aborted(OOM)')).toBe('Aborted(OOM)')
+  })
+
+  it('handles null/undefined without throwing', () => {
+    expect(() => markIfOutOfMemory(null)).not.toThrow()
+    expect(() => markIfOutOfMemory(undefined)).not.toThrow()
   })
 })
