@@ -76,10 +76,17 @@ export class IncrementalBatchedBuilder {
     // coincidenceKeys already appended, across all batches — drops exact
     // duplicate placements that would z-fight (see coincidenceKey).
     this.seenPlacements = new Set()
-    // Origin-recenter offset for georeferenced models (see
-    // coordinationOffsetFor). `undefined` until the first placement decides
-    // it; then `[x,y,z]` (subtracted from every instance) or null (no-op).
-    this.coordOffset = undefined
+    // Origin-recenter frame for georeferenced models (see
+    // coordinationOffsetFor). `offset` is `undefined` until the first
+    // placement decides it; then `[x,y,z]` (subtracted from every
+    // instance) or null (no-op).
+    //
+    // Shared with the parse-time preview path when the caller passes
+    // one, and THIS BUILDER IS THE ONLY WRITER: the preview channel can
+    // emit payloads whose placement never resolved (conway#465), so the
+    // frame must be decided by the durable stream's first placement —
+    // the authoritative one — and previews only read it.
+    this.coordination = opts.coordination ?? {offset: undefined}
     // Lazily created per transparency: see ensureBatch_.
     this.opaque = null
     this.transparent = null
@@ -144,6 +151,15 @@ export class IncrementalBatchedBuilder {
           state.instanceOccurrencePaths.slice() : null
       state.mesh.instanceGeometry = state.instanceGeometry.slice()
       state.mesh.instanceColors = state.instanceColors.slice()
+      // The mesh has stopped growing, so a bounding volume is finally
+      // meaningful. Compute it and hand culling back — see ensureBatch_
+      // for why it had to be off while streaming. assembleBatchedModel
+      // recomputes these too; doing it here keeps the invariant with the
+      // builder that turned culling off, rather than relying on a
+      // consumer that the fallback paths may not reach.
+      state.mesh.computeBoundingBox?.()
+      state.mesh.computeBoundingSphere?.()
+      state.mesh.frustumCulled = true
       batches.push({
         mesh: state.mesh,
         material: state.material,
@@ -222,16 +238,14 @@ export class IncrementalBatchedBuilder {
     // the origin (float32-precise) instead of at ~1e7 m. See
     // coordinationOffsetFor. Stamped on the root for consumers that need to
     // map a rendered point back to true world coordinates.
-    if (this.coordOffset === undefined) {
-      this.coordOffset = coordinationOffsetFor(placed.flatTransformation)
-      if (this.coordOffset !== null) {
-        this.root.userData.coordinationOffset = this.coordOffset
-      }
+    if (this.coordination.offset === undefined) {
+      this.coordination.offset = coordinationOffsetFor(placed.flatTransformation)
     }
-    if (this.coordOffset !== null) {
-      matrix.elements[12] -= this.coordOffset[0]
-      matrix.elements[13] -= this.coordOffset[1]
-      matrix.elements[14] -= this.coordOffset[2]
+    if (this.coordination.offset !== null) {
+      this.root.userData.coordinationOffset = this.coordination.offset
+      matrix.elements[12] -= this.coordination.offset[0]
+      matrix.elements[13] -= this.coordination.offset[1]
+      matrix.elements[14] -= this.coordination.offset[2]
     }
     state.mesh.setMatrixAt(batchId, matrix)
     state.mesh.setColorAt(batchId, this.scratchRgba.set(color.x, color.y, color.z, color.w))
@@ -332,6 +346,26 @@ export class IncrementalBatchedBuilder {
     // per-frame camera sort flips the coplanar winner as the camera
     // moves); the transparent batch must still sort for blending.
     mesh.sortObjects = transparent
+    // Culling is OFF for the whole streaming phase, and this is load-
+    // bearing rather than an optimization opt-out.
+    //
+    // `BatchedMesh` declares `boundingSphere`, so three's
+    // `Frustum.intersectsObject` computes it once on first render and
+    // then CACHES it — nothing invalidates it when instances append.
+    // Computed on the first frame, when a handful of instances occupy a
+    // mesh reserved for thousands, it freezes at near-zero radius, and
+    // every batch after that is culled against it. The model stays
+    // invisible for the entire stream and only pops in at the end, when
+    // assembleBatchedModel (buildBatchedConwayModel.js) finally calls
+    // computeBoundingBox/Sphere. The camera follow looks correct
+    // throughout because it derives its own bounds (onBounds below), so
+    // the camera tracks a model that is never drawn.
+    //
+    // Recomputing per batch is the other option and it is O(instances)
+    // each time — quadratic over a load. Skipping the test costs one
+    // extra draw call for a mesh that is on screen anyway.
+    // finalize() restores culling once the bounds are real.
+    mesh.frustumCulled = false
     const state = {
       mesh,
       material,

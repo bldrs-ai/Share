@@ -26,10 +26,25 @@ import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
  * @param {object} payload conway PreviewMeshPayload
  * @param {Map<number, object>} geometryCache geometryExpressID → BufferGeometry
  * @param {Map<string, object>} materialCache rgba key → Material
+ * @param {object} [coordination] shared origin-recenter frame, `{offset}`,
+ *   the SAME object the durable IncrementalBatchedBuilder uses — and the
+ *   builder is the ONLY writer. The preview channel is the unreliable
+ *   half of the stream (conway can emit a payload whose placement never
+ *   resolved, conway#465), so letting the first preview latch the frame
+ *   would hand a possibly-bogus transform authority over where every
+ *   durable instance renders: a mis-placed first payload would shift the
+ *   whole real model by its error, and a near-origin first payload on a
+ *   large-coordinate model would latch null and disable recentring
+ *   outright. Previews that arrive before the builder has decided render
+ *   unrecentred — conway's own COORDINATE_TO_ORIGIN already puts
+ *   payloads near the origin, so the Share-side offset is a rare
+ *   fallback, the window closes at the first durable batch, and the
+ *   camera follow's outlier guard covers the gap.
+ *   Omitted (tests, non-georeferenced models) means no recentring.
  * @return {object|null} a matrix-stamped Mesh, or null when the payload
  *   references geometry this load has not seen (nothing to render)
  */
-export function payloadToPreviewMesh(payload, geometryCache, materialCache) {
+export function payloadToPreviewMesh(payload, geometryCache, materialCache, coordination = null) {
   let geometry = geometryCache.get(payload.geometryExpressID)
   if (geometry === undefined) {
     if (payload.vertexData === undefined || payload.indexData === undefined) {
@@ -57,5 +72,14 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache) {
   const mesh = new Mesh(geometry, material)
   mesh.matrixAutoUpdate = false
   mesh.matrix.fromArray(payload.flatTransformation)
+  // Read-only: `offset === undefined` means the durable builder has not
+  // decided the frame yet — render unrecentred rather than letting an
+  // untrusted preview payload decide it (see the coordination param doc).
+  if (coordination !== null &&
+      coordination.offset !== undefined && coordination.offset !== null) {
+    mesh.matrix.elements[12] -= coordination.offset[0]
+    mesh.matrix.elements[13] -= coordination.offset[1]
+    mesh.matrix.elements[14] -= coordination.offset[2]
+  }
   return mesh
 }

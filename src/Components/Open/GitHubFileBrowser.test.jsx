@@ -50,7 +50,7 @@ const GH_BROWSER_STATE_KEY = 'bldrs.openDialog.github'
  */
 async function flushCascade() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Promise.resolve()
   })
 }
 

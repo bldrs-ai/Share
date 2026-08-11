@@ -36,6 +36,13 @@ function loadSpark() {
     sparkModulePromise = import('@sparkjsdev/spark').then((module) => {
       spark = module
       return module
+    }).catch((importError) => {
+      // Never cache a rejected import: the ~5MB chunk failing once on a
+      // flaky network would otherwise fail every later splat open in the
+      // session with the same stale error. Clearing the slot lets the
+      // next open retry the fetch.
+      sparkModulePromise = null
+      throw importError
     })
   }
   return sparkModulePromise

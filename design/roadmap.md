@@ -695,12 +695,42 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
 **Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
 - Instrument the funnel stages the growth doc defines (§3 there):
   `share_link_created`, `share_link_opened`, `model_interacted` events in Share;
-  the derived `real_model_open` key event (built on `select_content` +
-  `stats_preprocessorVersion`) is GA4 config, not code.
-- Hygiene: skip GA init when `navigator.webdriver === true` or when
-  `location.hostname !== 'bldrs.ai'` — one guard cleans CI/e2e, localhost, and
-  preview-deploy pollution out of prod analytics. (Also: confirm whether scheduled
-  e2e runs ship the prod measurement ID.)
+  `real_model_open` is sent directly by Share (CadView#loadModel, guarded by
+  `analytics#isRealModelOpen` so neither the homepage's auto-loaded demo model
+  nor opens on `*.netlify.app` deploy-preview/dev hosts fire it — it replaced
+  `select_content`, whose counts were conflated with homepage visits); marking
+  it a key event + the Ads import stay GA4 config.
+- Hygiene: GA only initializes in prod (✅) — index.html keeps the inline
+  dataLayer/gtag stub (event buffering + E2E assertions), while
+  `src/index/ga.js#setupGa` injects the external gtag/js loader only on
+  bldrs.ai/www.bldrs.ai with `navigator.webdriver` false, cleaning CI/e2e,
+  localhost, and preview-deploy pollution out of prod analytics. Init failures
+  go to Sentry tagged `subsystem:ga_init`; ad-blocked clients will dominate
+  that stream — add a sentry.js filter (cf. `netlify_rum_blocked`) when it
+  gets noisy.
+- Per-user open depth (decided 2026-08-08): the GA4 Data API has no user-id
+  dimension, so "X users opened Y models" can't be derived — only the
+  eventCount ÷ totalUsers average. Share now sends GA4's client id as an
+  `open_cid` param on `real_model_open` (✅ `index/ga.js` requests it via
+  `gtag('get', …, 'client_id', …)`, `analytics#getGaClientId` holds it and
+  falls back to the `_ga` cookie for events that fire before that async
+  callback lands, CadView attaches it when present). **Not `ga_cid`** as
+  originally specced: GA4 reserves the `ga_`/`google_`/`firebase_`/`gtag.`
+  prefixes and silently disables matching params, so that name would have
+  ingested as nothing and left the dimension permanently empty.
+  The value is sent prefix-tagged (`cid.<client id>`) because gtag types
+  numeric-looking params as numbers (`epn.` in the beacon): a raw id landed
+  in GA4's numeric slot, rendering as `1.87152e+09` — float64 truncates the
+  id's 20 digits, colliding distinct clients, and a text dimension won't
+  populate from a numeric param.
+  **Remaining GA4-side config:** Admin → Custom definitions → new
+  event-scoped dimension `open_cid` from event parameter `open_cid` (a
+  *dimension*, not a metric); then query `customEvent:open_cid × eventCount`
+  and bucket client-side
+  (1 / 2 / 3–5 / 6+ opens, fixtures excluded). No backfill — the dimension
+  accrues from ship time, so land it early in a campaign window for a clean
+  baseline. At larger scale GA4 rolls high-cardinality values into "(other)";
+  that's the cue to move the query to the BigQuery export.
 - Channel-grouping + dashboard slices are bizdev-side config; the Share-side
   deliverable is the events existing and firing.
 - v0.4 addition: capture **model size/complexity** (bucketed — bytes, element
@@ -1048,10 +1078,11 @@ into a funnel with no earned channels wastes the launch.
 **Goal:** the funnel is measurable, share links unfurl, and search intent has a
 landing page — before the MVP launch needs any of it.
 - `grow-120` first slice: GA hygiene guard (`navigator.webdriver` +
-  hostname check on GA init) — cleans CI/e2e/preview pollution out of prod data.
+  hostname check on GA init) — cleans CI/e2e/preview pollution out of prod
+  data (✅ `src/index/ga.js`).
 - `grow-120` events: `share_link_created`, `share_link_opened`,
   `model_interacted` wired into the share flow + viewer; `real_model_open`
-  derived key event configured GA4-side.
+  fires from Share on non-demo model opens (✅), key-event marking GA4-side.
 - `grow-100`: `/viewer/ifc` + `/viewer/step` landing pages on the marketing SSG
   build (then `/viewer/stl`, `/viewer/obj`, …). Unblocks the acquisition-campaign
   landing targets.

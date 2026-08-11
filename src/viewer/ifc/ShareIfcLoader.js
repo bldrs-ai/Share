@@ -197,10 +197,18 @@ export default class ShareIfcLoader {
       const usePreview = session.previewGroup !== null
       const previewGeometryCache = new Map()
       const previewMaterialCache = new Map()
+      // One origin-recenter frame for BOTH streaming paths, decided by
+      // the durable builder alone; previews read it and render
+      // unrecentred until the first durable batch lands. The preview
+      // channel is the unreliable half (conway#465 emitted payloads
+      // whose placement never resolved), so it must never decide where
+      // the durable model renders.
+      const coordination = {offset: undefined}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
-          const mesh = payloadToPreviewMesh(payload, previewGeometryCache, previewMaterialCache)
+          const mesh = payloadToPreviewMesh(
+            payload, previewGeometryCache, previewMaterialCache, coordination)
           if (mesh !== null) {
             session.addPreviewMesh(mesh)
           }
@@ -219,6 +227,7 @@ export default class ShareIfcLoader {
           if (builder === null) {
             builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
               onBounds: (box) => session.notifyBounds(box),
+              coordination,
             })
             scene.add(builder.root)
           }

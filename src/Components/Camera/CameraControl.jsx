@@ -9,7 +9,6 @@ import {
   removeHashListener,
 } from '../../utils/location'
 import {roundCoord} from '../../utils/math'
-import {floatStrTrim} from '../../utils/strings'
 import {
   HASH_PREFIX_CAMERA,
   removeCameraUrlParams,
@@ -140,7 +139,13 @@ export function setCameraFromParams(encodedParams, cameraControls) {
 }
 
 
-const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
+// The exponent group is load-bearing, not decoration. Camera coords are
+// serialized with `String(number)`, which switches to exponential below
+// 1e-6 -- reachable on a sub-millimetre part now that coords are rounded
+// relative to scale rather than to 3 decimals. Without it such a link
+// fails to match and restores no camera at all. Superset of the old
+// grammar, so existing permalinks still parse.
+const floatPattern = '(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)'
 const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
 const paramPattern = `${HASH_PREFIX_CAMERA}:${coordPattern}(?:,${coordPattern})?`
 const paramRegex = new RegExp(paramPattern)
@@ -157,13 +162,17 @@ export function parseHashParams(encodedParams) {
   debug().log('CameraControl#onHash: match: ', match)
 
   if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
-    const x = floatStrTrim(match[1])
-    const y = floatStrTrim(match[2])
-    const z = floatStrTrim(match[3])
+    // parseFloat, not floatStrTrim: re-rounding to 3 decimals on read
+    // would undo the scale-aware rounding done on write, collapsing a
+    // millimetre part's camera back to the origin. The regex has already
+    // established each group is a well-formed number.
+    const x = parseFloat(match[1])
+    const y = parseFloat(match[2])
+    const z = parseFloat(match[3])
     if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
       return [x, y, z]
     } else {
-      return [x, y, z, floatStrTrim(match[4]), floatStrTrim(match[5]), floatStrTrim(match[6])]
+      return [x, y, z, parseFloat(match[4]), parseFloat(match[5]), parseFloat(match[6])]
     }
   } else {
     debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)

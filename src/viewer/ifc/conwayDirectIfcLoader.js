@@ -153,6 +153,12 @@ export async function parseIfcWithConway(
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }
     const captured = []
+    // Batch-pump accounting for the load log. Whether the pump actually
+    // produced anything is the difference between a model that streams
+    // onto the screen and one that shows nothing until the end-of-load
+    // build, and until now the log said nothing either way — a blank
+    // 9-second parse and a healthy streaming parse looked identical.
+    let pumpedBatches = 0
     for (;;) {
       const batch = []
       // eslint-disable-next-line new-cap
@@ -160,6 +166,7 @@ export async function parseIfcWithConway(
         modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
       if (batch.length > 0) {
         captured.push(...batch)
+        pumpedBatches++
         if (onMeshBatch) {
           onMeshBatch(batch, modelID)
         }
@@ -170,7 +177,26 @@ export async function parseIfcWithConway(
       // Yield so the renderer paints between batches.
       await yieldToEventLoop()
     }
+    // Permanent boundary log, like `[conwayDirect] parsed` in
+    // ShareIfcLoader: whether the pump produced batches is the
+    // difference between a load that streams onto the screen and one
+    // that shows nothing until the end-of-load build, and the two are
+    // indistinguishable without this line (Share#1744). console.info,
+    // not debug() — debug() no-ops unless the level is raised.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] demand pump: batches=${pumpedBatches} ` +
+      `meshes=${captured.length} onMeshBatch=${onMeshBatch ? 'yes' : 'no'} ` +
+      `onPreviewMesh=${onPreviewMesh ? 'yes' : 'no'}`)
     if (captured.length === 0) {
+      // Nothing pumped: conway fell back to a classic fully-extracted
+      // open internally, so StreamAllMeshes below captures the whole
+      // model in one go and NOTHING renders until the end-of-load build.
+      // That is the blank-screen-then-pop behavior, and it is silent
+      // without this line.
+      console.warn(
+        '[conwayDirect] demand pump produced no batches; ' +
+        'falling back to one-shot StreamAllMeshes — no progressive render')
       // The deferred columnar open is IFC-only: for STEP input (and any
       // streamed-parse failure) conway falls back internally to a
       // classic, fully-extracted open where the batch pump is a no-op —

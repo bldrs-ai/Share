@@ -133,6 +133,25 @@ export const flags = [
   // only changes models that had zero color to begin with.
   // See src/viewer/ifc/productPalette.js.
   {name: 'autoColorParts', isActive: true},
+  // Diagnostic OFF-switch for the full-screen loading overlay
+  // (Components/LoadingBackdrop.jsx). The overlay is a dimmer that sits
+  // above the canvas, so it also swallows pointer events for the whole
+  // load — which makes anything that goes wrong *during* a progressive
+  // load unobservable: you cannot orbit or zoom out to tell "the model
+  // shifted offscreen" apart from "the model isn't there".
+  // `?feature=disableLoadOverlay` leaves the canvas live so a load can be
+  // inspected while it streams.
+  //
+  // Note when using it: taking the camera fires `controlstart`, which
+  // stops ProgressiveLoadSession's camera follow permanently (by design
+  // — the user outranks the follow). So the first interaction freezes
+  // the camera for the rest of the load. That is what makes the flag
+  // useful for "where did it go", and also why the follow's own framing
+  // can't be observed in the same run.
+  //
+  // Inverted semantics on purpose: `?feature=` can only turn flags ON,
+  // so an off-switch for default-on behavior has to be an off-flag.
+  {name: 'disableLoadOverlay', isActive: false},
 ]
 
 

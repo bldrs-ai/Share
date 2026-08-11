@@ -75,34 +75,41 @@ describe('viewer/three/MeshClipper', () => {
       expect(clipper.computeArrowScale()).toBe(5)
     })
 
-    it('clamps to MIN_ARROW_SCALE (2) for tiny models', () => {
+    it('has no absolute floor: a millimetre part keeps a sub-model arrow', () => {
+      // A true-scale gear is ~3.3mm across. The old absolute
+      // MIN_ARROW_SCALE of 2 world units pinned the arrow at ~600x the
+      // model, and arrows draw depthTest:false at renderOrder 999, so it
+      // covered the part outright rather than just looking wrong.
       const viewer = makeViewerStub()
-      const tinyModel = new Mesh(new BoxGeometry(0.001, 0.001, 0.001), new MeshBasicMaterial())
+      const tinyModel = new Mesh(new BoxGeometry(0.0033, 0.0033, 0.0033), new MeshBasicMaterial())
       const clipper = new MeshClipper(viewer, tinyModel)
 
-      expect(clipper.computeArrowScale()).toBe(2)
+      expect(clipper.computeArrowScale()).toBeCloseTo(clipper.modelBoundingSphere.radius * 0.25, 10)
+      expect(clipper.computeArrowScale()).toBeLessThan(clipper.modelBoundingSphere.radius)
     })
 
-    it('clamps to MAX_ARROW_SCALE (40) for very large models', () => {
+    it('has no absolute ceiling: a large model gets a proportional arrow', () => {
       const viewer = makeViewerStub()
       const hugeModel = new Mesh(new BoxGeometry(1000, 1000, 1000), new MeshBasicMaterial())
       const clipper = new MeshClipper(viewer, hugeModel)
 
-      expect(clipper.computeArrowScale()).toBe(40)
+      expect(clipper.computeArrowScale()).toBeCloseTo(clipper.modelBoundingSphere.radius * 0.25, 10)
+      // The old MAX_ARROW_SCALE would have clamped this to 40, ~1/5 of
+      // the intended size, shrinking the gizmo on large sites.
+      expect(clipper.computeArrowScale()).toBeGreaterThan(40)
     })
 
-    it('returns radius * 0.25 when it falls within bounds', () => {
-      // Radius for a 2x2x2 box centered at origin: sqrt(3) ≈ 1.732
-      // scaled = 1.732 * 0.25 ≈ 0.433 → clamped to MIN (2)
-      // Need a bigger box: 40x40x40 → radius ≈ 34.64 → scaled ≈ 8.66
-      const viewer = makeViewerStub()
-      const model = new Mesh(new BoxGeometry(40, 40, 40), new MeshBasicMaterial())
-      const clipper = new MeshClipper(viewer, model)
+    it('holds the same arrow:model ratio across a 1e6 size difference', () => {
+      // Scale invariance is the actual requirement -- the gizmo must
+      // present identically relative to the model at every model scale.
+      const tiny = new MeshClipper(
+        makeViewerStub(), new Mesh(new BoxGeometry(0.001, 0.001, 0.001), new MeshBasicMaterial()))
+      const huge = new MeshClipper(
+        makeViewerStub(), new Mesh(new BoxGeometry(1000, 1000, 1000), new MeshBasicMaterial()))
 
-      const expected = clipper.modelBoundingSphere.radius * 0.25
-      expect(clipper.computeArrowScale()).toBeCloseTo(expected, 2)
-      expect(clipper.computeArrowScale()).toBeGreaterThanOrEqual(2)
-      expect(clipper.computeArrowScale()).toBeLessThanOrEqual(40)
+      const tinyRatio = tiny.computeArrowScale() / tiny.modelBoundingSphere.radius
+      const hugeRatio = huge.computeArrowScale() / huge.modelBoundingSphere.radius
+      expect(tinyRatio).toBeCloseTo(hugeRatio, 10)
     })
   })
 

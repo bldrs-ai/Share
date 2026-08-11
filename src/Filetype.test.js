@@ -1,3 +1,4 @@
+import {gzipSync} from 'three/examples/jsm/libs/fflate.module.js'
 import {
   FilenameParseError,
   analyzeHeader,
@@ -236,11 +237,26 @@ describe('Filetype', () => {
       expect(analyzeHeader(buffer)).toBe(null)
     })
 
-    it('detects SPZ (gzip magic) binary format', () => {
+    it('detects SPZ by its decompressed magic, not by gzip alone', () => {
+      // A real .spz is a gzip stream whose DECOMPRESSED bytes begin with
+      // SPZ's magic 'NGSP'. Gzip alone must not classify: every
+      // .tar.gz / gzipped log shares that signature, and routing those
+      // to the splat decoder turns a clean "unknown type" alert into a
+      // parse failure deep inside wasm (adding-model-formats.md).
+      const spzHead = new Uint8Array([...Array.from('NGSP', (c) => c.charCodeAt(0)), 2, 0, 0, 0])
+      expect(analyzeHeader(gzipSync(spzHead).buffer)).toBe('spz')
+    })
+
+    it('leaves a non-SPZ gzip stream unrecognized', () => {
+      const tarball = new TextEncoder().encode('not a splat, just gzipped text content')
+      expect(analyzeHeader(gzipSync(tarball).buffer)).toBe(null)
+    })
+
+    it('leaves a gzip header with no decodable payload unrecognized', () => {
       const GZIP_MAGIC_NUMBER = 0x8B1F // gzip magic 1f 8b, little-endian
       const buffer = new ArrayBuffer(GLB_MIN_SIZE)
       new DataView(buffer).setUint16(0, GZIP_MAGIC_NUMBER, true)
-      expect(analyzeHeader(buffer)).toBe('spz')
+      expect(analyzeHeader(buffer)).toBe(null)
     })
 
     it('detects USDC crate binary format', () => {

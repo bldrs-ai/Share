@@ -73,7 +73,7 @@ describe('ViewerContainer', () => {
     // CadView mounts async work (viewer setup) that sets state after this sync
     // assertion; settle it inside act so the trailing update doesn't warn.
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await Promise.resolve()
     })
   })
 

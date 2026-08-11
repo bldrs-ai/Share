@@ -7,7 +7,7 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {gtagEvent} from '../privacy/analytics'
+import {OPEN_CID_PARAM, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -558,15 +558,29 @@ export default function CadView({
       console.warn('CadView#loadedModel: model without manager:', loadedModel)
     }
 
-    const selectContentObj = {
-      content_type: loadedModel.type || 'undefined',
-      content_id: filepath,
+    // Replaces the retired `select_content` event, whose counts were
+    // conflated with homepage visits because the demo model fired it
+    // too. The isRealModelOpen guard keeps that from recurring — see
+    // its doc for why the demo must stay out of this event.
+    if (isRealModelOpen(routeResult)) {
+      const eventParams = {
+        content_type: loadedModel.type || 'undefined',
+        content_id: filepath,
+      }
+      // TODO(pablo): currently only IFC/STEP are populated with stats.
+      if (loadedModel.loadStats) {
+        addProperties(eventParams, loadedModel.loadStats, 'stats_')
+      }
+      // Per-user open depth: GA4 has no user-id dimension, so the
+      // client id rides along as an event-scoped custom dimension,
+      // prefix-tagged by getOpenCid so GA4 can't type it as a number.
+      // Absent whenever GA didn't initialize — see analytics#gaClientId.
+      const openCid = getOpenCid()
+      if (openCid) {
+        eventParams[OPEN_CID_PARAM] = openCid
+      }
+      gtagEvent('real_model_open', eventParams)
     }
-    // TODO(pablo): currently only IFC/STEP are populated with stats.
-    if (loadedModel.loadStats) {
-      addProperties(selectContentObj, loadedModel.loadStats, 'stats_')
-    }
-    gtagEvent('select_content', selectContentObj)
 
     return loadedModel
   }

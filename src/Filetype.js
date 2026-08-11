@@ -1,4 +1,7 @@
 import axios from 'axios'
+// three's vendored fflate — already shipped for its EXR/other loaders,
+// so this adds no bundle weight beyond what the app carries.
+import {Gunzip} from 'three/examples/jsm/libs/fflate.module.js'
 import {assertDefined} from './utils/assert'
 import debug from './utils/debug'
 
@@ -187,7 +190,12 @@ export function analyzeHeader(headerBuffer) {
   }
   if (headerBuffer.byteLength >= 2 &&
       new DataView(headerBuffer).getUint16(0, true) === GZIP_MAGIC_NUMBER) {
-    return 'spz'
+    // The gzip signature is shared by SPZ splats and every ordinary
+    // gzipped upload (.tar.gz, gzipped logs/JSON) — same trap as the
+    // zip branch below. Decompress the head and require SPZ's own
+    // magic; anything else stays unrecognized so it fails sniffing
+    // cleanly instead of dying inside the splat decoder.
+    return looksLikeSpzStream(headerBuffer) ? 'spz' : null
   }
   if (matchesMagic(headerBuffer, ZIP_MAGIC)) {
     // The zip signature is shared by USDZ packages, SOG splat bundles,
@@ -239,6 +247,40 @@ function matchesMagic(headerBuffer, magicBytes) {
  */
 function looksLikeUsdzArchive(headerBuffer) {
   return /\.usd[ac]?$/i.test(firstZipEntryName(headerBuffer))
+}
+
+
+// SPZ header magic 0x5053474e, little-endian on disk: 'NGSP' as the
+// first four DECOMPRESSED bytes of every .spz file (Niantic spz spec).
+const SPZ_MAGIC = Array.from('NGSP', (c) => c.charCodeAt(0))
+
+
+/**
+ * Distinguish an SPZ splat from any other gzip stream by inflating the
+ * head and checking SPZ's own magic. The header buffer is a truncated
+ * prefix of the file, so this streams through fflate's `Gunzip` (which
+ * emits the decompressed prefix of a partial member) rather than
+ * `gunzipSync` (which would throw on the missing tail).
+ *
+ * @param {ArrayBuffer} headerBuffer
+ * @return {boolean}
+ */
+function looksLikeSpzStream(headerBuffer) {
+  try {
+    /** @type {Array<Uint8Array>} */
+    const chunks = []
+    const gunzip = new Gunzip()
+    gunzip.ondata = (chunk) => {
+      chunks.push(chunk)
+    }
+    gunzip.push(new Uint8Array(headerBuffer), false)
+    const decoded = chunks[0]
+    return decoded !== undefined && decoded.length >= SPZ_MAGIC.length &&
+      SPZ_MAGIC.every((byte, index) => decoded[index] === byte)
+  } catch {
+    // Truncated-at-an-awkward-boundary or corrupt gzip: not sniffable.
+    return false
+  }
 }
 
 
