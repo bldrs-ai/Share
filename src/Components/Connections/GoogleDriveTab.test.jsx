@@ -36,7 +36,7 @@ async function flushValidateEffect() {
   // number of Promise.resolve hops — and doing it inside act keeps the
   // trailing setStatuses from logging an un-acted-on update warning.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await Promise.resolve()
   })
 }
 

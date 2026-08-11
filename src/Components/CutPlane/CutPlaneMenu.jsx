@@ -5,7 +5,8 @@ import {Menu, MenuItem, SvgIcon, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeParams} from '../../utils/location'
-import {floatStrTrim, isNumeric} from '../../utils/strings'
+import {roundCoordComponent} from '../../utils/math'
+import {isNumeric} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {HASH_PREFIX_CUT_PLANE} from './hashState'
 import {Close as CloseIcon, CropOutlined as CropOutlinedIcon} from '@mui/icons-material'
@@ -285,7 +286,10 @@ export function getPlanesOffset(viewer, ifcModel) {
           planeNormal = key
           planeAxisCenter = modelCenter[planeNormal]
           planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
-          planesOffset[planeNormal] = floatStrTrim(planeOffsetFromCenter)
+          // Scale-relative, not 3 fixed decimals: a millimetre part's
+          // offsets all sit inside the old absolute quantum, so every
+          // plane in a shared #cp: link snapped to the model centre.
+          planesOffset[planeNormal] = roundCoordComponent(planeOffsetFromCenter)
         }
       }
     })
@@ -336,7 +340,9 @@ export function getPlanes(planeHash) {
     } else {
       planes.push({
         direction: key,
-        offset: floatStrTrim(value),
+        // parseFloat, not floatStrTrim: re-rounding on read would undo
+        // the write-side precision from getPlanesOffset.
+        offset: parseFloat(value),
       })
     }
     if (removableParamKeys.length) {
@@ -367,7 +373,12 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
   let planeOffsetX = 0
   let planeOffsetY = 0
   let planeOffsetZ = 0
-  const finiteOffset = floatStrTrim(offset)
+  // Coerce to finite without rounding. This is scene placement rather
+  // than serialization, so quantizing here would re-apply the absolute
+  // step that getPlanesOffset and getPlanes just stopped applying, and
+  // a millimetre part's planes would still land on the centre.
+  const parsedOffset = typeof offset === 'string' ? parseFloat(offset) : offset
+  const finiteOffset = Number.isFinite(parsedOffset) ? parsedOffset : 0
 
   switch (direction) {
     case 'x':

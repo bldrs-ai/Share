@@ -397,7 +397,15 @@ export async function load(
         } catch (evictError) {
           debug().warn('Loader#load: could not evict stale LFS pointer entry:', evictError)
         }
-        // Falls through to the direct-fetch block below.
+        // Falls through to the direct-fetch block below. Two lines above
+        // already told a different story — undo both: the store's
+        // opfsFile still points at the (now deleted) pointer entry, so a
+        // later "Save" would write the 130-byte pointer instead of the
+        // rendered model, and the report's Source line claims a cache
+        // hit for bytes that are about to come from the network.
+        setOpfsFile(null)
+        reportSourceInfo(
+          'Source: OPFS entry was a stale Git LFS pointer — evicted, re-fetching from network')
         modelData = undefined
         glbExportContext = null
         cameFromGlbCache = false

@@ -23,7 +23,12 @@ jobs:
     # is chosen so screenshot baselines regenerated in the dev/sandbox env
     # (also noble + chromium 1194) match CI's renders pixel-for-pixel.
     container: mcr.microsoft.com/playwright:v1.56.1-noble
-    timeout-minutes: 20
+    # Headroom, not a fitted bound: a clean run at the worker count below
+    # measured 11.7m on this runner. The margin is for the degraded case --
+    # a starved run burns far longer than a healthy one because each failure
+    # drags a 30s timeout plus a retry behind it (the 3-worker run with 4
+    # failures took 12.8m, and main's 53-failure run took 14.4m).
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -44,8 +49,21 @@ jobs:
       - name: Playwright Info
         run: npx playwright --version
 
+      # Worker count is tied to `runs-on` above, and overrides the local
+      # default in tools/playwright.config.js. Update it whenever the runner
+      # changes size.
+      #
+      # RAM is the binding constraint here, not vCPU: this runner has 8GB
+      # against the previous runner's 32GB, and every worker holds a whole
+      # Chromium rendering a WebGL scene with the conway wasm heap resident.
+      # Starvation shows up as click/visibility timeouts and as
+      # `#viewer-container` never mounting at all — not as honest assertion
+      # failures — so it reads like flake. Measured on this runner:
+      # 6 workers => 53 failed / 81 passed (the state main landed in at
+      # 6df8de7), 3 workers => 4 failed / 134 passed, 2 workers => green in
+      # 11.7m. 2 also matches Playwright's own default heuristic of vCPU/2.
       - name: Run Playwright tests
-        run: yarn test-flows --reporter=github,list,html --workers=6
+        run: yarn test-flows --reporter=github,list,html --workers=2
 
       # Always upload the HTML report (handy to debug failures)
       - name: Upload Playwright HTML report
