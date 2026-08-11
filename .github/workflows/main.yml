@@ -26,6 +26,27 @@ on:
       - 'notes/**'
   workflow_dispatch:
 
+# Hoisted here from the `build` job, which is where this used to live. A job
+# skipped by `if:` never enters its own concurrency group, so with the draft
+# gate in place a job-level group could not do the one thing converted_to_draft
+# needs it to do — have the replacement run's skipped job cancel the build the
+# withdrawn PR left in flight. At workflow level the group is claimed by the
+# run itself, so the cancellation happens regardless of what the jobs decide.
+#
+# Per-ref for PRs, so a push to one branch only cancels builds for that same
+# branch (the original static `build-group` cancelled across every branch in
+# the repo, so any push anywhere aborted running PR builds).
+#
+# Per-COMMIT for everything else. Every push to main shares one ref, and
+# `cancel-in-progress: false` does not mean "never cancel" — GitHub cancels any
+# run still PENDING in a group when a newer one joins it. A ref-keyed group
+# would therefore queue main's builds and drop the middle one whenever three
+# merges landed inside a single build window. github.sha gives each commit its
+# own group.
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     # Draft PRs don't build. Several PRs are typically in flight at once and
@@ -48,13 +69,6 @@ jobs:
     # of the expression language. The clause states the intent instead.
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     timeout-minutes: 10
-    # Per-ref group so a push to one branch only cancels in-progress builds
-    # for that same branch. The previous static `build-group` cancelled
-    # across every branch in the repo, so any push anywhere aborted PR
-    # builds that happened to be running.
-    concurrency:
-      group: build-${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
     env:
       SHARE_CONFIG: dev
     runs-on: ubuntu-latest

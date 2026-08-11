@@ -32,12 +32,20 @@ on:
 # against a 4-job cap -- which is the exact starvation the draft gate exists to
 # prevent, just relocated from drafts to rework pushes.
 #
-# Grouped per ref, so PRs never cancel each other (refs/pull/<n>/merge is
-# unique per PR). cancel-in-progress is scoped to pull_request: a push to main
-# should run to completion, since its result is the record of what main is in
-# rather than feedback on a diff still being edited.
+# Grouped per ref for PRs, so PRs never cancel each other (refs/pull/<n>/merge
+# is unique per PR). cancel-in-progress is scoped to pull_request: a push to
+# main should run to completion, since its result is the record of what main is
+# in rather than feedback on a diff still being edited.
+#
+# Keyed per COMMIT for everything else, which is what actually delivers that
+# guarantee. Every push to main shares one ref, and `cancel-in-progress: false`
+# does not mean "never cancel" — GitHub cancels any run still PENDING in a
+# group when a newer one joins it. With a ref-keyed group, three merges inside
+# one flows window (12-25m, so not rare) would queue behind each other and the
+# middle commit's run would be cancelled before it started, leaving that commit
+# with no flow coverage at all. github.sha gives each commit its own group.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
