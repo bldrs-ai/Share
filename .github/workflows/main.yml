@@ -22,6 +22,14 @@ on:
     # job-level, for the reason given there — a skipped job never enters its
     # own group, so a job-level group could not cancel anything here.
     types: [ opened, synchronize, reopened, ready_for_review, converted_to_draft ]
+    # NOTE: this is a workflow-level skip, and it interacts badly with the
+    # job-level draft gate below in one specific way. A skipped-by-`if` job
+    # still reports a `skipped` conclusion, which satisfies a required status
+    # check; a path-skipped workflow reports NOTHING. So if `build` is ever
+    # made a required check in branch protection, a docs-only PR will have no
+    # check to satisfy it and will sit unmergeable forever. Convert this to a
+    # per-job `if` gate at that point. conway's build.yml carries the same
+    # note for the same reason.
     paths-ignore:
       - '**/*.md'
       - 'design/**'
@@ -39,14 +47,16 @@ on:
 # branch (the original static `build-group` cancelled across every branch in
 # the repo, so any push anywhere aborted running PR builds).
 #
-# Per-COMMIT for everything else. Every push to main shares one ref, and
-# `cancel-in-progress: false` does not mean "never cancel" — GitHub cancels any
-# run still PENDING in a group when a newer one joins it. A ref-keyed group
-# would therefore queue main's builds and drop the middle one whenever three
-# merges landed inside a single build window. github.sha gives each commit its
-# own group.
+# Ref-keyed for non-PR events too, which serializes main's builds. Note that
+# `cancel-in-progress: false` does not mean "never cancel" — GitHub cancels a
+# run still PENDING in a group when a newer one joins — so three merges inside
+# one build window drop the middle commit's build. That is the accepted cost:
+# keying on github.sha instead would run them in parallel against the 4-job cap
+# and would collide across event types (a workflow_dispatch re-run on a main
+# commit joining that commit's push run). Same choice as test-flows.yml, and as
+# conway, which has an npm release riding on the ordering (conway#468).
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

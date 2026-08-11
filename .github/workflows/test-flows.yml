@@ -37,15 +37,23 @@ on:
 # main should run to completion, since its result is the record of what main is
 # in rather than feedback on a diff still being edited.
 #
-# Keyed per COMMIT for everything else, which is what actually delivers that
-# guarantee. Every push to main shares one ref, and `cancel-in-progress: false`
-# does not mean "never cancel" — GitHub cancels any run still PENDING in a
-# group when a newer one joins it. With a ref-keyed group, three merges inside
-# one flows window (12-25m, so not rare) would queue behind each other and the
-# middle commit's run would be cancelled before it started, leaving that commit
-# with no flow coverage at all. github.sha gives each commit its own group.
+# That guarantee is not absolute, and the ref key is a deliberate choice about
+# which way to fail. All main pushes share one ref, so they land in one group
+# and run one at a time — and `cancel-in-progress: false` does not mean "never
+# cancel": GitHub cancels a run still PENDING in a group when a newer one
+# joins. Three merges inside one flows window (12-25m, so not rare) therefore
+# drop the middle commit's run before it starts.
+#
+# Keying non-PR events on github.sha would avoid that, and it is the wrong
+# trade here. It lets those three merges run six large-runner jobs at once
+# against the 4-job cap — relocating onto main exactly the starvation the draft
+# gate removes from drafts — and it collides across event types the ref keeps
+# apart, so a workflow_dispatch re-run on a main commit would queue behind that
+# commit's push run. What is lost by serializing is one main commit's flow run,
+# which ships nothing; conway keys on the ref for the same reason with more at
+# stake (see conway#468).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
