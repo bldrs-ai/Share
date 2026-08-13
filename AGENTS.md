@@ -91,6 +91,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Adding a new model format (`supportedTypes` + header sniffing → `findLoader` arm → `ShareModel` capabilities → fixtures/tests), what NavTree naming and raycast picking give you for free, Git LFS on GitHub-hosted models | [design/new/adding-model-formats.md](design/new/adding-model-formats.md) |
 | Asset pipeline, fonts, icons | [src/assets/README.md](src/assets/README.md) |
 | Sample-model thumbnails (Open dialog Samples tab), regenerating them, aiming them via `#c:` permalink cameras | [tools/thumbnails/README.md](tools/thumbnails/README.md) |
+| Hosted demo models that are generated rather than authored — `public/index.step` (the logo as an AP214 assembly, the `/viewer/step` landing target), regenerating it, why it shares world space with `index.ifc` | [tools/models/README.md](tools/models/README.md) |
 | Route schemas, URL parsing | [src/routes/README.md](src/routes/README.md) |
 | Keeping the test console clean — fix `act()` warnings, divert+assert expected `[glb]` output, narrow `suppressActWarnings()`, back a global mute with a static test (`singleThreeInstance.test.js`), jsdom canvas stubs | [PLAYBOOK.md](PLAYBOOK.md) §"Keep the test console clean" (+ [STYLE.md](STYLE.md) §"Console hygiene") |
 | Dev HTTPS certificate setup | [tools/esbuild/certificates/README.md](tools/esbuild/certificates/README.md) |

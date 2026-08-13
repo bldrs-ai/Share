@@ -690,6 +690,10 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   is the second acquisition campaign's landing target), then STL/OBJ/FBX.
 - Doubles as the destination for paid Search (bizdev §4) — until these exist the
   campaigns land on the homepage, which is a viewer, not a pitch.
+- `/viewer/step`'s demo-model deep link has its target: `/share/v/p/index.step`,
+  the logo as an AP214 assembly (`tools/models/README.md`). It shares world space
+  with `index.ifc`, so the two pages can use the same `#c:` camera. `/viewer/ifc`
+  points at `index.ifc`; the remaining formats still need one each.
 - **Phase G.**
 
 **Epic `grow-120`: Funnel instrumentation + analytics hygiene** ⬜ (NEW)
