@@ -18,10 +18,27 @@ node tools/models/makeIndexStep.mjs /tmp/x.step # → somewhere else
 ```
 
 Then open `/share/v/p/index.step` and check it against
-`/share/v/p/index.ifc`. Both files occupy the **same world-space box**
-(the STEP is millimetre-unit with ×1000 coordinates), so a `#c:` camera
-permalink can be moved between them unchanged — which is how the landing
-page aims at the logo.
+`/share/v/p/index.ifc` — **with a `#c:` camera on the URL**, not just
+side by side. Both files occupy the same world-space box, so one camera
+permalink frames both, which is how the landing page aims at the logo.
+Auto-framing hides misalignment (it centres whatever it's given), so a
+bare comparison of the two will look right even when they're 76m apart.
+
+### The block order in `BLOCKS` is load-bearing
+
+Conway's `COORDINATE_TO_ORIGIN` open puts a model's world origin at the
+**first geometry the file emits**: one coordination matrix, derived from
+that placement × the geometry's first vertex, reused for the whole model
+(`compat/web-ifc/coordination_f64.deriveCoordinationF64`). A model's
+world position therefore depends on which element its file happens to
+declare first, and two files of the same object coincide only when they
+agree on that.
+
+So `BLOCKS` lists the logo in `index.ifc`'s declaration order — x=76
+first, not the x=0 the eye expects. Sorting it "tidily" slides the STEP
+model 76m down +X and silently breaks every camera permalink that spans
+the two formats. `src/Containers/indexStepLogo.spec.ts` compares the two
+models' world bounds and fails if that happens.
 
 Two things to know about the twin; `makeIndexStep.mjs`'s header comment
 has the detail:

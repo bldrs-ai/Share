@@ -20,12 +20,59 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  *   - The seven blocks are seven independently selectable occurrences of
  *     two shared part shapes — the property that makes this a cheap
  *     regression asset for design/new/step-occurrence-selection.md.
+ *   - It lands in the same world space as `index.ifc`, so one `#c:`
+ *     camera frames both. See the second test for why that's fragile.
  */
 const NAME_LEAF = 'Together'
 const BLOCK_COUNT = 7
 // STEP parse + BREP tessellation is slower than an IFC smoke model, and
 // the first load also warms the Conway wasm.
 const TEST_TIMEOUT_MS = 60_000
+// Both models are ~86m across; a millimetre of float32 tessellation
+// noise between the IFC and STEP paths is expected, 76m is the bug.
+const ALIGNMENT_TOLERANCE_M = 0.01
+
+
+/**
+ * World-space bounds of everything rendered in the scene, in metres.
+ * BatchedMesh/InstancedMesh need `computeBoundingBox()` on the mesh —
+ * `geometry.boundingBox` is the un-instanced prototype shape, which for
+ * the STEP model is one block rather than the whole logo.
+ *
+ * @param page the Playwright page, on a loaded model
+ * @return `{min, max}` as `[x, y, z]` metre triples
+ */
+function sceneBounds(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const scene = (window as any).store?.getState?.()?.viewer?.context?.getScene?.()
+    if (!scene) {
+      throw new Error('window.store viewer unavailable — is this a playwright-config build?')
+    }
+    scene.updateMatrixWorld(true)
+    const min = [Infinity, Infinity, Infinity]
+    const max = [-Infinity, -Infinity, -Infinity]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    scene.traverse((o: any) => {
+      if (!o.isMesh || !o.geometry) {
+        return
+      }
+      let box
+      if (o.isBatchedMesh || o.isInstancedMesh) {
+        o.computeBoundingBox()
+        box = o.boundingBox.clone().applyMatrix4(o.matrixWorld)
+      } else {
+        o.geometry.computeBoundingBox()
+        box = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)
+      }
+      for (const [i, axis] of ['x', 'y', 'z'].entries()) {
+        min[i] = Math.min(min[i], box.min[axis])
+        max[i] = Math.max(max[i], box.max[axis])
+      }
+    })
+    return {min, max}
+  })
+}
 
 describeMobileAndDesktop('index.step logo', () => {
   test('loads and shows the logo assembly, one selectable node per block', async ({page}) => {
@@ -60,5 +107,41 @@ describeMobileAndDesktop('index.step logo', () => {
     await node(NAME_LEAF).first().getByTestId('NavTreeNodeLabel').click()
     await expect(node(NAME_LEAF).first()).toHaveAttribute('data-is-selected', 'true')
     await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
+  })
+
+  test('lands in the same world space as index.ifc, so one camera frames both', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+
+    // Why this needs pinning: Conway's `COORDINATE_TO_ORIGIN` open puts a
+    // model's world origin at the FIRST geometry it emits — one
+    // coordination matrix derived from that placement × the geometry's
+    // first vertex, reused model-wide
+    // (`compat/web-ifc/coordination_f64.deriveCoordinationF64`). So world
+    // position depends on which element a file declares first, and the two
+    // logo files only coincide because `makeIndexStep.mjs` lists its blocks
+    // in the IFC's declaration order. Sorting that array by x — the obvious
+    // tidy-up — slides the STEP model 76m down +X, which auto-framing hides
+    // and only a `#c:` permalink reveals. That was the bug this test exists
+    // to catch.
+    await page.goto('/share/v/p/index.ifc')
+    await waitForModelReady(page)
+    const ifcBounds = await sceneBounds(page)
+
+    await page.goto('/share/v/p/index.step')
+    await waitForModelReady(page)
+    const stepBounds = await sceneBounds(page)
+
+    for (const corner of ['min', 'max'] as const) {
+      for (const [axis, name] of ['x', 'y', 'z'].entries()) {
+        const drift = Math.abs(stepBounds[corner][axis] - ifcBounds[corner][axis])
+        expect(
+          drift,
+          `${corner}.${name} drifted: STEP ${stepBounds[corner][axis]} vs IFC ${ifcBounds[corner][axis]}`,
+        ).toBeLessThan(ALIGNMENT_TOLERANCE_M)
+      }
+    }
   })
 })

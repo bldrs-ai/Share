@@ -64,15 +64,29 @@ const MM_PER_M = 1000
  * minimum corner; every block is the same 10 × 11.4504 footprint and
  * differs only in height, which is what lets seven blocks share two
  * part shapes.
+ *
+ * **The order is load-bearing — keep it identical to the IFC's.** Conway
+ * puts a model's world origin at the first geometry it emits: the open
+ * derives one coordination matrix from the first placement × that
+ * geometry's first vertex and reuses it for the whole model
+ * (`compat/web-ifc/coordination_f64.deriveCoordinationF64`, gated on
+ * `COORDINATE_TO_ORIGIN`, which Share passes — `conwayDirectIfcLoader`).
+ * So a model's world position depends on which element its file happens
+ * to declare first, and two files of the same object only land on top of
+ * each other when they agree on that. Listing the blocks in the IFC's
+ * declaration order — x=76 first, not the x=0 the eye expects — is what
+ * makes `index.step` and `index.ifc` share world space, and with it the
+ * `#c:` camera. Sorting this array "tidily" silently slides the STEP
+ * model 76m down +X; `indexStepLogo.spec.ts` fails if it does.
  */
 const BLOCKS = [
-  {x: 0, y: -11.4504049888, z: 0, height: 30},
-  {x: 24, y: -11.4504049888, z: 0, height: 30},
-  {x: 48, y: -11.4504049888, z: 0, height: 30},
-  {x: 62, y: -11.4504049888, z: 0, height: 15},
   {x: 76, y: -11.4504049888, z: 0, height: 15},
+  {x: 48, y: -11.4504049888, z: 0, height: 30},
+  {x: 0, y: -11.4504049888, z: 0, height: 30},
   {x: 0.00232304809423, y: -24.0980424609, z: 0, height: 15},
+  {x: 24, y: -11.4504049888, z: 0, height: 30},
   {x: 47.8596390944, y: 0.973380492763, z: 0, height: 15},
+  {x: 62, y: -11.4504049888, z: 0, height: 15},
 ]
 
 const BLOCK_WIDTH = 10
