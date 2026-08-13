@@ -742,13 +742,18 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   **Remaining GA4-side config:** a second custom definition, scope **User**,
   from user property `open_cid` — the event- and user-scoped dimensions
   coexist because GA4 namespaces event parameters separately from user
-  properties. Query it as `customUser:<name>`.
+  properties. Query it as `customUser:<name>`. Withdrawing analytics consent
+  retracts the property explicitly (`analytics#setIsAllowed`): unlike an event,
+  which re-checks consent per call, a user property is sticky and gtag/js keeps
+  attaching it to its own automatic events until it is set to null.
 - Local time of day (2026-08-13): GA4's `hour` dimension is in the *property's*
   timezone, which says nothing about when a Europe/Brazil-heavy audience
   actually works. `real_model_open` now carries `local_hour`, the browser's own
-  hour, zero-padded to a string for the same typing reason `open_cid` is
-  prefixed. **Remaining GA4-side config:** an event-scoped dimension from event
-  parameter `local_hour`.
+  hour, prefixed `h.` for the same typing reason `open_cid` is prefixed — and
+  note zero-padding alone does *not* achieve it, since `Number('08')` is 8, so
+  a padded-but-unprefixed hour would still beacon as a number and leave the
+  dimension empty for all 24 values. **Remaining GA4-side config:** an
+  event-scoped dimension from event parameter `local_hour`.
 - Model *name* was considered and deliberately not sent. For remote models the
   name is already derivable from `content_id`; the only case it would add
   information is local uploads, which route by OPFS blob id — so sending it

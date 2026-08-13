@@ -20,6 +20,14 @@ export function isAllowed() {
 export function setIsAllowed(allowed) {
   assertDefined(allowed)
   Cookies.set(COOKIE_NAME, allowed, {expires: Expires.DAYS})
+  // gtagEvent re-reads consent on every call, so withholding it is
+  // enough to stop our own events. A user property is different: it is
+  // sticky once set, and gtag/js keeps attaching it to the automatic
+  // events it sends on its own (page_view, user_engagement) for the
+  // rest of the page's life — including after an opt-out, since
+  // index/ga.js has no way to unload the tag it already injected.
+  // Withdrawal therefore has to clear it explicitly.
+  syncUserCidProperty(allowed)
 }
 
 
@@ -73,10 +81,35 @@ export const OPEN_CID_PARAM = 'open_cid'
  * GA4 already has an `hour` dimension, but it is in the property's
  * timezone, which says nothing about when someone in Milan or São Paulo
  * actually works — and real authored opens are a Europe + Brazil story
- * (bizdev growth-strategy §2). Sent as a zero-padded string; see the
- * emission site in CadView for why the type matters.
+ * (bizdev growth-strategy §2).
  */
 export const LOCAL_HOUR_PARAM = 'local_hour'
+
+
+/*
+ * Prefix on the LOCAL_HOUR_PARAM value, for the same reason
+ * OPEN_CID_PREFIX exists: gtag types each param when it builds the
+ * beacon, and anything that parses as a number goes out as `epn.`,
+ * which an event-scoped custom *dimension* will not populate from.
+ *
+ * Zero-padding alone does NOT achieve this — `Number('08')` is 8, so
+ * every one of the 24 values would still be numeric and the dimension
+ * would stay empty. The padding is kept only so values sort correctly
+ * and read like GA4's own `hour`.
+ */
+const LOCAL_HOUR_PREFIX = 'h.'
+
+
+/**
+ * The LOCAL_HOUR_PARAM value for right now: the browser's hour, padded
+ * and prefixed so GA4 stores it as text.
+ *
+ * @return {string} e.g. 'h.09'
+ */
+export function getLocalHour() {
+  const HOUR_DIGITS = 2
+  return `${LOCAL_HOUR_PREFIX}${String(new Date().getHours()).padStart(HOUR_DIGITS, '0')}`
+}
 
 
 // Cookie GA writes the client id into, as `GA<version>.<domain depth>.<id>`
@@ -192,8 +225,26 @@ export const OPEN_CID_USER_PROPERTY = OPEN_CID_PARAM
  * Setting it twice with the same value is a no-op GA4-side.
  */
 export function setUserCidProperty() {
+  syncUserCidProperty(isAllowed())
+}
+
+
+/**
+ * Publish or retract the user property to match a consent decision.
+ * Null is how gtag unsets a user property; there is no delete.
+ *
+ * @param {boolean} allowed current analytics consent
+ */
+function syncUserCidProperty(allowed) {
+  if (!window.gtag) {
+    return
+  }
+  if (!allowed) {
+    window.gtag('set', 'user_properties', {[OPEN_CID_USER_PROPERTY]: null})
+    return
+  }
   const cid = getOpenCid()
-  if (cid && window.gtag && isAllowed()) {
+  if (cid) {
     window.gtag('set', 'user_properties', {[OPEN_CID_USER_PROPERTY]: cid})
   }
 }

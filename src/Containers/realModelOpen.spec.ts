@@ -114,12 +114,15 @@ describeMobileAndDesktop('real_model_open GA event', () => {
   /*
    * local_hour exists because GA4's own `hour` dimension is in the
    * property's timezone, which says nothing about when a user in Milan
-   * or São Paulo works. Same typing trap as open_cid: sent as a
-   * zero-padded string so gtag keeps it in the text slot, where an
-   * event-scoped custom dimension can populate from it. An unpadded
-   * hour would beacon as a number and silently fail to populate.
+   * or São Paulo works.
+   *
+   * Same typing trap as open_cid, and the reason for the `h.` prefix:
+   * gtag beacons anything numeric-looking as `epn.`, which a text
+   * custom dimension will not populate from. Zero-padding alone does
+   * not help — Number('08') is 8 — so the NaN assertion below is the
+   * one that actually pins this.
    */
-  test('sends local_hour as a zero-padded string in the browser timezone', async ({page}) => {
+  test('sends local_hour as a non-numeric string in the browser timezone', async ({page}) => {
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
     // Read before the model loads, and accept the next hour too: a run that
@@ -131,10 +134,11 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     const events = await realModelOpenEvents(page)
     expect(events).toHaveLength(1)
     expect(typeof events[0].localHour).toBe('string')
-    expect(events[0].localHour).toMatch(/^[0-2][0-9]$/)
+    expect(Number(events[0].localHour)).toBeNaN()
     const HOURS_PER_DAY = 24
+    const HOUR_DIGITS = 2
     const accepted = [hourAtStart, (hourAtStart + 1) % HOURS_PER_DAY]
-      .map((h) => String(h).padStart(2, '0'))
+      .map((h) => `h.${String(h).padStart(HOUR_DIGITS, '0')}`)
     expect(accepted).toContain(events[0].localHour)
   })
 

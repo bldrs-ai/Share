@@ -68,7 +68,7 @@ export default function setupGa(env = undefined) {
       )
     }
     document.head.appendChild(script)
-    // Third and last place the user property is published, each for a
+    // Second of three places the user property is published, each for a
     // distinct reason. index.html's inline stub sets it before `config`
     // — the only point early enough to reach page_view/session_start.
     // This call re-sets it from the bundle's own cookie parser, which
