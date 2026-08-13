@@ -68,12 +68,13 @@ export default function setupGa(env = undefined) {
       )
     }
     document.head.appendChild(script)
-    // A returning visitor already has the id in the `_ga` cookie, so
-    // publish the user property now: user properties only attach to
-    // events sent *after* they are set, and the `get` callback below
-    // does not land until gtag/js has loaded. Without this, every
-    // event in that window — which includes each visitor's first
-    // model open — would carry the event param but not the property.
+    // Third and last place the user property is published, each for a
+    // distinct reason. index.html's inline stub sets it before `config`
+    // — the only point early enough to reach page_view/session_start.
+    // This call re-sets it from the bundle's own cookie parser, which
+    // covers a stub-regex miss and costs nothing when it agrees. The
+    // callback below is the only path that works for a first-ever
+    // visitor, who has no cookie for either parser to read.
     setUserCidProperty()
     // Ask GA for this browser's client id so model-open events can
     // carry it as open_cid (see privacy/analytics#setGaClientId for

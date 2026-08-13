@@ -122,13 +122,50 @@ describeMobileAndDesktop('real_model_open GA event', () => {
   test('sends local_hour as a zero-padded string in the browser timezone', async ({page}) => {
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    // Read before the model loads, and accept the next hour too: a run that
+    // straddles a clock boundary would otherwise fail looking like a product
+    // bug. Comparing against the browser's clock at all is the point — it is
+    // what distinguishes this from GA4's property-timezone `hour`.
+    const hourAtStart = await page.evaluate(() => new Date().getHours())
     await waitForModelReady(page)
     const events = await realModelOpenEvents(page)
     expect(events).toHaveLength(1)
     expect(typeof events[0].localHour).toBe('string')
     expect(events[0].localHour).toMatch(/^[0-2][0-9]$/)
-    // matches what the browser itself reports, not the server's clock
-    const browserHour = await page.evaluate(() => String(new Date().getHours()).padStart(2, '0'))
-    expect(events[0].localHour).toBe(browserHour)
+    const HOURS_PER_DAY = 24
+    const accepted = [hourAtStart, (hourAtStart + 1) % HOURS_PER_DAY]
+      .map((h) => String(h).padStart(2, '0'))
+    expect(accepted).toContain(events[0].localHour)
+  })
+
+  /*
+   * The ordering the user property depends on. gtag/js drains dataLayer in
+   * order and a user property only attaches to events sent after it is set,
+   * so the stub must publish it before `config` — config is what triggers
+   * page_view/session_start/first_visit, the events that make landing page
+   * and new-vs-returning queryable per user. Asserting on queue order is the
+   * only way to see this with the loader blocked.
+   */
+  test('publishes open_cid as a user property before gtag config', async ({page}) => {
+    await page.context().addCookies([
+      {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
+    ])
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const queue = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayer: any[] = (window as any).dataLayer || []
+      return {
+        setIndex: dataLayer.findIndex((e) => e?.[0] === 'set' && e?.[1] === 'user_properties'),
+        configIndex: dataLayer.findIndex((e) => e?.[0] === 'config'),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        value: dataLayer.find((e: any) => e?.[0] === 'set' && e?.[1] === 'user_properties')?.[2],
+      }
+    })
+    expect(queue.setIndex).toBeGreaterThanOrEqual(0)
+    expect(queue.configIndex).toBeGreaterThanOrEqual(0)
+    expect(queue.setIndex).toBeLessThan(queue.configIndex)
+    expect(queue.value).toEqual({open_cid: `cid.${FAKE_CLIENT_ID}`})
   })
 })

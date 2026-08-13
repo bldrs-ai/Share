@@ -54,6 +54,23 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
+      // MUST precede config. gtag/js drains this queue in order, and a user
+      // property only attaches to events sent after it is set — config is what
+      // triggers page_view / session_start / first_visit, which are exactly the
+      // events that make landing page and new-vs-returning queryable per user.
+      // The bundle cannot do this: it loads long after config is queued.
+      //
+      // Deliberate duplication of privacy/analytics.js — the `cid.` prefix must
+      // stay in step with analytics#OPEN_CID_PREFIX (a bare id is
+      // numeric-looking, and GA4 won't populate a text dimension from a number),
+      // and the consent check with analytics#isAllowed. Same arrangement the
+      // config ID above already has with ga.js#GA_MEASUREMENT_ID.
+      (function setUserCidBeforeConfig() {
+        if (/(?:^|;\s*)isAnalyticsAllowed=false(?:;|$)/.test(document.cookie)) return;
+        // _ga is `GA<version>.<domain depth>.<id>`, and the id itself has a dot
+        var m = document.cookie.match(/(?:^|;\s*)_ga=GA\d+\.\d+\.([^;]+)/);
+        if (m) gtag('set', 'user_properties', {open_cid: 'cid.' + m[1]});
+      })();
       gtag('config', 'G-GRLNVMZRGW');
     </script>
     <!-- AdSense site verification. Body-after-bundle placement so MSW takes control before the script's network requests fire in dev/test. design/new/ads.md captures why Auto ads stay OFF and which routes may carry ad slots. -->

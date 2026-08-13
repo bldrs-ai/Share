@@ -111,7 +111,10 @@ describe('setupGa', () => {
     expect(setCalls[0][2]).toEqual({open_cid: 'cid.1234567890.0987654321'})
   })
 
-  test('does not publish the user property off-prod', () => {
+  // Scoped to setupGa: index.html's inline stub publishes it on every host,
+  // which is harmless off-prod because ga.js never loads gtag/js there, so
+  // the queued entry has nowhere to go.
+  test('setupGa does not publish the user property off-prod', () => {
     Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
     setupGa({hostname: 'localhost', isWebdriver: false})
     expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(0)
