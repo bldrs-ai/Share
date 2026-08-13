@@ -23,11 +23,11 @@ const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * before they cross the evaluate boundary.
  *
  * @param page Playwright page object
- * @return Array of {name, contentId, hasOpenCid, openCid} per real_model_open event
+ * @return Array of {name, contentId, hasOpenCid, openCid, localHour} per real_model_open event
  */
 async function realModelOpenEvents(
   page: Page,
-): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown}[]> {
+): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown, localHour?: unknown}[]> {
   return await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataLayer: any[] = (window as any).dataLayer || []
@@ -38,6 +38,7 @@ async function realModelOpenEvents(
         contentId: String(entry[2]?.content_id ?? ''),
         hasOpenCid: entry[2]?.open_cid !== undefined,
         openCid: entry[2]?.open_cid,
+        localHour: entry[2]?.local_hour,
       }))
   })
 }
@@ -108,5 +109,26 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     // it in the text slot with all its digits intact.
     expect(Number(events[0].openCid)).toBeNaN()
     expect(String(events[0].openCid)).toContain(FAKE_CLIENT_ID)
+  })
+
+  /*
+   * local_hour exists because GA4's own `hour` dimension is in the
+   * property's timezone, which says nothing about when a user in Milan
+   * or São Paulo works. Same typing trap as open_cid: sent as a
+   * zero-padded string so gtag keeps it in the text slot, where an
+   * event-scoped custom dimension can populate from it. An unpadded
+   * hour would beacon as a number and silently fail to populate.
+   */
+  test('sends local_hour as a zero-padded string in the browser timezone', async ({page}) => {
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const events = await realModelOpenEvents(page)
+    expect(events).toHaveLength(1)
+    expect(typeof events[0].localHour).toBe('string')
+    expect(events[0].localHour).toMatch(/^[0-2][0-9]$/)
+    // matches what the browser itself reports, not the server's clock
+    const browserHour = await page.evaluate(() => String(new Date().getHours()).padStart(2, '0'))
+    expect(events[0].localHour).toBe(browserHour)
   })
 })

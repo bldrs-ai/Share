@@ -1,5 +1,5 @@
 import {captureException} from '@sentry/react'
-import {setGaClientId} from '../privacy/analytics'
+import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
 
 
 // Must match the ID in public/index.html's inline gtag('config') stub —
@@ -68,13 +68,25 @@ export default function setupGa(env = undefined) {
       )
     }
     document.head.appendChild(script)
+    // A returning visitor already has the id in the `_ga` cookie, so
+    // publish the user property now: user properties only attach to
+    // events sent *after* they are set, and the `get` callback below
+    // does not land until gtag/js has loaded. Without this, every
+    // event in that window — which includes each visitor's first
+    // model open — would carry the event param but not the property.
+    setUserCidProperty()
     // Ask GA for this browser's client id so model-open events can
     // carry it as open_cid (see privacy/analytics#setGaClientId for
     // why). The call buffers in dataLayer like any other gtag call and
     // the callback fires once gtag/js has loaded and resolved the id —
     // so it never fires on a blocked client. Events fired before it
     // lands fall back to the _ga cookie in analytics#getGaClientId.
-    window.gtag('get', GA_MEASUREMENT_ID, 'client_id', setGaClientId)
+    window.gtag('get', GA_MEASUREMENT_ID, 'client_id', (cid) => {
+      setGaClientId(cid)
+      // The only path that works for a first-ever visitor, who had no
+      // cookie for the call above to read.
+      setUserCidProperty()
+    })
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}})
   }

@@ -67,6 +67,18 @@ let gaClientId = null
 export const OPEN_CID_PARAM = 'open_cid'
 
 
+/*
+ * Hour of day in the *user's* timezone, on model-open events.
+ *
+ * GA4 already has an `hour` dimension, but it is in the property's
+ * timezone, which says nothing about when someone in Milan or São Paulo
+ * actually works — and real authored opens are a Europe + Brazil story
+ * (bizdev growth-strategy §2). Sent as a zero-padded string; see the
+ * emission site in CadView for why the type matters.
+ */
+export const LOCAL_HOUR_PARAM = 'local_hour'
+
+
 // Cookie GA writes the client id into, as `GA<version>.<domain depth>.<id>`
 // where the id itself contains a dot (GA1.1.1234567890.0987654321).
 const GA_COOKIE_NAME = '_ga'
@@ -143,6 +155,47 @@ const OPEN_CID_PREFIX = 'cid.'
 export function getOpenCid() {
   const cid = getGaClientId()
   return cid === null ? null : `${OPEN_CID_PREFIX}${cid}`
+}
+
+
+/*
+ * Name of the GA4 *user property* carrying the same value as
+ * OPEN_CID_PARAM. Same string on purpose — it is the same identifier,
+ * and GA4 keeps event parameters and user properties in separate
+ * namespaces, so an event-scoped and a user-scoped custom dimension can
+ * both be registered from `open_cid` without colliding.
+ */
+export const OPEN_CID_USER_PROPERTY = OPEN_CID_PARAM
+
+
+/**
+ * Publish the client id as a user property as well as an event param.
+ *
+ * The event param answers "how many models did this person open",
+ * because it rides on real_model_open. It cannot answer anything else:
+ * an event-scoped dimension exists only on the events that carry it, so
+ * session count, engagement duration, landing page and
+ * new-vs-returning are unreachable per user no matter how the GA4 Data
+ * API query is written — filtering to real_model_open yields no
+ * engagement, and not filtering yields "(not set)" for every other
+ * event. A user property attaches to *every* subsequent event and
+ * session from this browser, which is what makes those queryable.
+ *
+ * Requires a matching User-scoped custom dimension GA4-side; without
+ * one the property is collected but not reportable. No backfill, as
+ * ever.
+ *
+ * Called twice by index/ga.js by design — once at setup, so events
+ * fired before gtag/js resolves the id still carry it via the `_ga`
+ * cookie fallback, and again from the `get` callback, which is the
+ * only path that works for a first-ever visitor who has no cookie yet.
+ * Setting it twice with the same value is a no-op GA4-side.
+ */
+export function setUserCidProperty() {
+  const cid = getOpenCid()
+  if (cid && window.gtag && isAllowed()) {
+    window.gtag('set', 'user_properties', {[OPEN_CID_USER_PROPERTY]: cid})
+  }
 }
 
 

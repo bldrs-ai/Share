@@ -82,6 +82,42 @@ describe('setupGa', () => {
     expect(getGaClientId()).toBe('1234567890.0987654321')
   })
 
+  // Set at BOTH points on purpose: user properties only attach to events
+  // sent after they are set, so a returning visitor's early events —
+  // including their first model open — would otherwise miss it.
+  test('publishes the client id as a user property before and after the callback', () => {
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    const setCalls = window.dataLayer.filter((entry) => entry?.[0] === 'set')
+    expect(setCalls).toHaveLength(1)
+    expect(setCalls[0][1]).toBe('user_properties')
+    expect(setCalls[0][2]).toEqual({open_cid: 'cid.1234567890.0987654321'})
+
+    const getCall = window.dataLayer.find((entry) => entry?.[0] === 'get')
+    getCall[3]('1234567890.0987654321')
+    expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(2)
+  })
+
+  // A first-ever visitor has no cookie, so the setup-time call finds
+  // nothing; the callback is the only path that publishes for them.
+  test('publishes the user property for a first visit, once the callback lands', () => {
+    setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+    expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(0)
+
+    const getCall = window.dataLayer.find((entry) => entry?.[0] === 'get')
+    getCall[3]('1234567890.0987654321')
+    const setCalls = window.dataLayer.filter((entry) => entry?.[0] === 'set')
+    expect(setCalls).toHaveLength(1)
+    expect(setCalls[0][2]).toEqual({open_cid: 'cid.1234567890.0987654321'})
+  })
+
+  test('does not publish the user property off-prod', () => {
+    Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+    setupGa({hostname: 'localhost', isWebdriver: false})
+    expect(window.dataLayer.filter((entry) => entry?.[0] === 'set')).toHaveLength(0)
+  })
+
+
   test('does not request a client id off-prod', () => {
     setupGa({hostname: 'localhost', isWebdriver: false})
     expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()

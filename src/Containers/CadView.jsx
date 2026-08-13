@@ -7,7 +7,7 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {OPEN_CID_PARAM, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {LOCAL_HOUR_PARAM, OPEN_CID_PARAM, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -588,6 +588,18 @@ export default function CadView({
       if (openCid) {
         eventParams[OPEN_CID_PARAM] = openCid
       }
+      // GA4's own `hour` dimension is in the *property's* timezone, which
+      // says nothing about when a user in Milan or São Paulo actually
+      // works — and the real-opens audience is Europe + Brazil (bizdev
+      // growth-strategy §2). This is their local hour.
+      //
+      // Zero-padded string, not a number: gtag types each param when it
+      // builds the beacon, and a numeric-looking value goes out in the
+      // number slot, where an event-scoped custom *dimension* won't
+      // populate from it at all. Same trap that made open_cid render as
+      // 1.87152e+09 — see analytics#OPEN_CID_PREFIX. Padding also makes
+      // it sort correctly and match GA4's own `hour` formatting.
+      eventParams[LOCAL_HOUR_PARAM] = String(new Date().getHours()).padStart(2, '0')
       gtagEvent('real_model_open', eventParams)
     }
 

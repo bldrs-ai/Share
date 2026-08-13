@@ -112,6 +112,67 @@ describe('Analytics', () => {
   // Route-result shapes mirror routes.ts#handleRoute output. The one
   // excluded shape is the homepage's bundled demo — everything else is
   // a real open.
+  // The event param answers open depth; the user property is what makes
+  // session- and engagement-scoped questions answerable per user at all.
+  describe('setUserCidProperty', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    test('sets the client id as a user property', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setUserCidProperty()
+      expect(window.gtag).toHaveBeenCalledWith(
+        'set', 'user_properties', {open_cid: 'cid.1234567890.0987654321'})
+    })
+
+    // Same prefix trap as the event param: a bare id is numeric-looking,
+    // and a user-scoped custom dimension won't populate from a number.
+    test('sends the prefixed value, never a bare numeric id', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setUserCidProperty()
+      const [, , props] = window.gtag.mock.calls[0]
+      expect(props[Analytics.OPEN_CID_USER_PROPERTY]).toMatch(/^cid\./)
+      expect(Number.isNaN(Number(props[Analytics.OPEN_CID_USER_PROPERTY]))).toBe(true)
+    })
+
+    test('falls back to the _ga cookie before the gtag callback lands', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      Analytics.setUserCidProperty()
+      expect(window.gtag).toHaveBeenCalledWith(
+        'set', 'user_properties', {open_cid: 'cid.1234567890.0987654321'})
+    })
+
+    test('no-op when no client id is available', () => {
+      Analytics.setUserCidProperty()
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    // The property is as much a user identifier as the event param, so
+    // it honours the same consent gate gtagEvent does.
+    test('no-op when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setIsAllowed(false)
+      Analytics.setUserCidProperty()
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    test('no-op when gtag never loaded', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      delete window.gtag
+      expect(() => Analytics.setUserCidProperty()).not.toThrow()
+    })
+  })
+
+
   describe('isRealModelOpen', () => {
     test('false for the bundled homepage demo (/share/v/p/index.ifc)', () => {
       expect(Analytics.isRealModelOpen({
