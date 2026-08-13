@@ -731,6 +731,38 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   accrues from ship time, so land it early in a campaign window for a clean
   baseline. At larger scale GA4 rolls high-cardinality values into "(other)";
   that's the cue to move the query to the BigQuery export.
+- Per-user *behaviour* beyond open depth (2026-08-13): an event-scoped
+  dimension exists only on the events carrying it, so session count,
+  engagement duration, landing page and new-vs-returning are unreachable per
+  user however the query is written — filtering to `real_model_open` yields no
+  engagement, not filtering yields `(not set)` everywhere else. Share now also
+  publishes the same id as a **user property** (`analytics#setUserCidProperty`,
+  called from `index/ga.js` both at setup and from the `client_id` callback,
+  since user properties only attach to events sent after they are set).
+  **Remaining GA4-side config:** a second custom definition, scope **User**,
+  from user property `open_cid` — the event- and user-scoped dimensions
+  coexist because GA4 namespaces event parameters separately from user
+  properties. Query it as `customUser:<name>`. Withdrawing analytics consent
+  retracts the property explicitly (`analytics#setIsAllowed`): unlike an event,
+  which re-checks consent per call, a user property is sticky and gtag/js keeps
+  attaching it to its own automatic events until it is set to null. **Before
+  restoring PrivacyControl to the UI** (commented out of `AboutDialog` today),
+  confirm in GA4 DebugView that null actually clears the property rather than
+  storing null as a value — the retraction path rests on that.
+- Local time of day (2026-08-13): GA4's `hour` dimension is in the *property's*
+  timezone, which says nothing about when a Europe/Brazil-heavy audience
+  actually works. `real_model_open` now carries `local_hour`, the browser's own
+  hour, prefixed `h.` for the same typing reason `open_cid` is prefixed — and
+  note zero-padding alone does *not* achieve it, since `Number('08')` is 8, so
+  a padded-but-unprefixed hour would still beacon as a number and leave the
+  dimension empty for all 24 values. **Remaining GA4-side config:** an
+  event-scoped dimension from event parameter `local_hour`.
+- Model *name* was considered and deliberately not sent. For remote models the
+  name is already derivable from `content_id`; the only case it would add
+  information is local uploads, which route by OPFS blob id — so sending it
+  would newly disclose user-chosen filenames to Google for exactly the files
+  that never leave the browser today. Left as a product decision rather than
+  slipped in with the rest.
 - Channel-grouping + dashboard slices are bizdev-side config; the Share-side
   deliverable is the events existing and firing.
 - v0.4 addition: capture **model size/complexity** (bucketed — bytes, element
