@@ -143,33 +143,50 @@ describeMobileAndDesktop('real_model_open GA event', () => {
   })
 
   /*
-   * The ordering the user property depends on. gtag/js drains dataLayer in
-   * order and a user property only attaches to events sent after it is set,
-   * so the stub must publish it before `config` — config is what triggers
-   * page_view/session_start/first_visit, the events that make landing page
-   * and new-vs-returning queryable per user. Asserting on queue order is the
-   * only way to see this with the loader blocked.
+   * The user property has to reach config's own events — page_view,
+   * session_start, first_visit — since those are what make landing page and
+   * new-vs-returning queryable per user. Carrying it IN the config call is
+   * what guarantees that; a `set` queued beforehand would depend on
+   * queue-drain ordering gtag does not document. With the loader blocked,
+   * inspecting the queued config call is the only way to see it.
    */
-  test('publishes open_cid as a user property before gtag config', async ({page}) => {
+  test('carries open_cid as a user property on the gtag config call', async ({page}) => {
     await page.context().addCookies([
       {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
     ])
     await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
     await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
-    const queue = await page.evaluate(() => {
+    const config = await page.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const dataLayer: any[] = (window as any).dataLayer || []
-      return {
-        setIndex: dataLayer.findIndex((e) => e?.[0] === 'set' && e?.[1] === 'user_properties'),
-        configIndex: dataLayer.findIndex((e) => e?.[0] === 'config'),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        value: dataLayer.find((e: any) => e?.[0] === 'set' && e?.[1] === 'user_properties')?.[2],
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entry = dataLayer.find((e: any) => e?.[0] === 'config')
+      return entry ? {params: entry[2]} : null
     })
-    expect(queue.setIndex).toBeGreaterThanOrEqual(0)
-    expect(queue.configIndex).toBeGreaterThanOrEqual(0)
-    expect(queue.setIndex).toBeLessThan(queue.configIndex)
-    expect(queue.value).toEqual({open_cid: `cid.${FAKE_CLIENT_ID}`})
+    expect(config).not.toBeNull()
+    expect(config?.params?.user_properties).toEqual({open_cid: `cid.${FAKE_CLIENT_ID}`})
+    // the same typing rule the event param follows
+    expect(Number(config?.params?.user_properties?.open_cid)).toBeNaN()
+  })
+
+  // The stub duplicates analytics#isAllowed rather than importing it, so the
+  // duplicate needs its own coverage — a consent gate that fails open is
+  // worse than one that never existed.
+  test('omits the user property when analytics consent is withheld', async ({page}) => {
+    await page.context().addCookies([
+      {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
+      {name: 'isAnalyticsAllowed', value: 'false', domain: 'localhost', path: '/'},
+    ])
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    const config = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayer: any[] = (window as any).dataLayer || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entry = dataLayer.find((e: any) => e?.[0] === 'config')
+      return entry ? {params: entry[2]} : null
+    })
+    expect(config?.params?.user_properties).toBeUndefined()
   })
 })

@@ -27,7 +27,7 @@ export function setIsAllowed(allowed) {
   // rest of the page's life — including after an opt-out, since
   // index/ga.js has no way to unload the tag it already injected.
   // Withdrawal therefore has to clear it explicitly.
-  syncUserCidProperty(allowed)
+  syncUserCidProperty()
 }
 
 
@@ -225,21 +225,30 @@ export const OPEN_CID_USER_PROPERTY = OPEN_CID_PARAM
  * Setting it twice with the same value is a no-op GA4-side.
  */
 export function setUserCidProperty() {
-  syncUserCidProperty(isAllowed())
+  syncUserCidProperty()
 }
 
 
 /**
- * Publish or retract the user property to match a consent decision.
- * Null is how gtag unsets a user property; there is no delete.
+ * Publish or retract the user property to match current consent.
  *
- * @param {boolean} allowed current analytics consent
+ * Reads isAllowed() rather than taking the decision as an argument, so
+ * a caller passing something merely truthy — setIsAllowed('false')
+ * writes a cookie that isAllowed() then reads as a denial — cannot
+ * publish an identifier the cookie says is not allowed. Consent gates
+ * should fail closed.
+ *
+ * Retraction sets the property to null. Verify in GA4 DebugView that
+ * this actually clears it, rather than storing null as a value, before
+ * PrivacyControl is restored to the UI (AboutDialog has it commented
+ * out today, so nothing in the app can currently withdraw consent). If
+ * null does not clear, this is the one place to change.
  */
-function syncUserCidProperty(allowed) {
+function syncUserCidProperty() {
   if (!window.gtag) {
     return
   }
-  if (!allowed) {
+  if (!isAllowed()) {
     window.gtag('set', 'user_properties', {[OPEN_CID_USER_PROPERTY]: null})
     return
   }

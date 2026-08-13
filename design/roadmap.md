@@ -745,7 +745,10 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   properties. Query it as `customUser:<name>`. Withdrawing analytics consent
   retracts the property explicitly (`analytics#setIsAllowed`): unlike an event,
   which re-checks consent per call, a user property is sticky and gtag/js keeps
-  attaching it to its own automatic events until it is set to null.
+  attaching it to its own automatic events until it is set to null. **Before
+  restoring PrivacyControl to the UI** (commented out of `AboutDialog` today),
+  confirm in GA4 DebugView that null actually clears the property rather than
+  storing null as a value — the retraction path rests on that.
 - Local time of day (2026-08-13): GA4's `hour` dimension is in the *property's*
   timezone, which says nothing about when a Europe/Brazil-heavy audience
   actually works. `real_model_open` now carries `local_hour`, the browser's own
