@@ -12,9 +12,10 @@ import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * logo, not just parse.
  *
  * What this pins:
- *   - The file loads through Conway's AP214 path (a malformed BREP or a
- *     styling chain Conway doesn't walk still "loads" — it renders as
- *     nothing, or as default grey).
+ *   - The file loads through Conway's AP214 path — a malformed BREP
+ *     still "loads", it just renders nothing.
+ *   - It renders lime. A styling chain Conway doesn't walk also loads
+ *     clean and leaves the blocks to Share's default palette.
  *   - The assembly reads as the logo's sentence in the NavTree:
  *     Bldrs → Build → Every → Thing → Together ×7.
  *   - The seven blocks are seven independently selectable occurrences of
@@ -31,46 +32,113 @@ const TEST_TIMEOUT_MS = 60_000
 // Both models are ~86m across; a millimetre of float32 tessellation
 // noise between the IFC and STEP paths is expected, 76m is the bug.
 const ALIGNMENT_TOLERANCE_M = 0.01
+// Conway's fallback for an unread styling chain is 0.8 grey, so these
+// bounds separate lime from the failure they guard with room to spare.
+const CHANNEL_OFF_MAX = 0.2
+const CHANNEL_ON_MIN = 0.9
 
 
 /**
- * World-space bounds of everything rendered in the scene, in metres.
- * BatchedMesh/InstancedMesh need `computeBoundingBox()` on the mesh —
- * `geometry.boundingBox` is the un-instanced prototype shape, which for
- * the STEP model is one block rather than the whole logo.
+ * World-space bounds of the loaded models, in metres.
+ *
+ * The models, not the scene: with `?feature=look` the ground plane is a
+ * real mesh sized to `GROUND_SIZE_FACTOR` times the model's robust
+ * bounds, so a whole-scene walk both reads far too large and multiplies
+ * any difference between the two models' partitioning past the
+ * tolerance here — failing for a reason that has nothing to do with
+ * alignment. `smallPartNearPlane.spec.ts` documents the same trap.
+ *
+ * `Box3.expandByObject` also handles the BatchedMesh/InstancedMesh
+ * placements by itself, which a hand walk over `geometry.boundingBox`
+ * gets wrong: that is the un-instanced prototype shape, one block rather
+ * than the whole logo. Box3 is borrowed off a geometry rather than
+ * imported so the spec doesn't pull a second copy of three into the page.
  *
  * @param page the Playwright page, on a loaded model
  * @return `{min, max}` as `[x, y, z]` metre triples
  */
-function sceneBounds(page: import('@playwright/test').Page) {
+function modelBounds(page: import('@playwright/test').Page) {
   return page.evaluate(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const scene = (window as any).store?.getState?.()?.viewer?.context?.getScene?.()
-    if (!scene) {
-      throw new Error('window.store viewer unavailable — is this a playwright-config build?')
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const context = (window as any).store?.getState?.()?.viewer?.context
+    const models = context?.getLoadedModels?.()
+    if (!models?.length) {
+      throw new Error('no loaded models — is this a playwright-config build?')
     }
-    scene.updateMatrixWorld(true)
-    const min = [Infinity, Infinity, Infinity]
-    const max = [-Infinity, -Infinity, -Infinity]
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    scene.traverse((o: any) => {
-      if (!o.isMesh || !o.geometry) {
+
+    let box: any = null
+    const borrowBox = (obj: any) => {
+      if (box || !obj.isMesh || !obj.geometry) {
         return
       }
-      let box
-      if (o.isBatchedMesh || o.isInstancedMesh) {
-        o.computeBoundingBox()
-        box = o.boundingBox.clone().applyMatrix4(o.matrixWorld)
-      } else {
-        o.geometry.computeBoundingBox()
-        box = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)
+      if (!obj.geometry.boundingBox) {
+        obj.geometry.computeBoundingBox()
       }
-      for (const [i, axis] of ['x', 'y', 'z'].entries()) {
-        min[i] = Math.min(min[i], box.min[axis])
-        max[i] = Math.max(max[i], box.max[axis])
-      }
-    })
-    return {min, max}
+      box = obj.geometry.boundingBox?.clone() ?? null
+    }
+    for (const model of models) {
+      model.updateMatrixWorld(true)
+      model.traverse(borrowBox)
+    }
+    if (!box) {
+      throw new Error('no mesh geometry to measure')
+    }
+
+    box.makeEmpty()
+    for (const model of models) {
+      box.expandByObject(model)
+    }
+    return {
+      min: [box.min.x, box.min.y, box.min.z],
+      max: [box.max.x, box.max.y, box.max.z],
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
+ * Every colour the loaded models actually render with, as `[r, g, b]` in
+ * 0..1.
+ *
+ * Not `material.color`: the batched path shares one white material per
+ * batch and carries the real colour per instance, which
+ * `buildBatchedConwayModel` retains on the mesh as `instanceColors` (the
+ * same array `batchedHighlight` restores a deselected instance from).
+ * Reading the material alone reports `[1,1,1]` for every model and would
+ * make this assertion vacuous. The material is still the fallback, for
+ * the merged path the batched builder falls back to.
+ *
+ * @param page the Playwright page, on a loaded model
+ * @return one triple per colour encountered
+ */
+function modelColours(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const models = (window as any).store?.getState?.()?.viewer?.context?.getLoadedModels?.()
+    const colours: number[][] = []
+    for (const model of models ?? []) {
+      model.traverse((obj: any) => {
+        if (!obj.isMesh) {
+          return
+        }
+        if (obj.instanceColors?.length) {
+          for (const c of obj.instanceColors) {
+            if (c) {
+              colours.push([c.x, c.y, c.z])
+            }
+          }
+          return
+        }
+        for (const material of [obj.material].flat()) {
+          if (material?.color) {
+            colours.push([material.color.r, material.color.g, material.color.b])
+          }
+        }
+      })
+    }
+    return colours
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   })
 }
 
@@ -109,6 +177,38 @@ describeMobileAndDesktop('index.step logo', () => {
     await expect(page.locator('[data-is-selected="true"]')).toHaveCount(1)
   })
 
+  test('renders lime, not the default grey of an unread styling chain', async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+
+    await homepageSetup(page)
+    await setIsReturningUser(page.context())
+
+    await page.goto('/share/v/p/index.step')
+    await waitForModelReady(page)
+
+    // `emitSolidColour` writes the full chain Conway walks: STYLED_ITEM →
+    // PRESENTATION_STYLE_ASSIGNMENT → SURFACE_STYLE_USAGE →
+    // SURFACE_SIDE_STYLE → SURFACE_STYLE_FILL_AREA → FILL_AREA_STYLE →
+    // FILL_AREA_STYLE_COLOUR → COLOUR_RGB. Drop any one link and
+    // `extractSurfaceStyle` stops resolving a colour, leaving the blocks
+    // to Share's per-element default palette — verified by cutting
+    // SURFACE_SIDE_STYLE's link and watching the logo come back blue and
+    // orange, with every other assertion in this file still passing.
+    //
+    // Lime is (0,1,0), whose components are fixed points of the sRGB
+    // transfer function, so this reads the same whichever colour space
+    // three hands back.
+    const colours = await modelColours(page)
+    expect(colours.length).toBeGreaterThan(0)
+
+    const isLime = ([r, g, b]: number[]) =>
+      g > CHANNEL_ON_MIN && r < CHANNEL_OFF_MAX && b < CHANNEL_OFF_MAX
+    expect(
+      colours.some(isLime),
+      `no lime material; got ${JSON.stringify(colours)}`,
+    ).toBe(true)
+  })
+
   test('lands in the same world space as index.ifc, so one camera frames both', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
 
@@ -128,11 +228,11 @@ describeMobileAndDesktop('index.step logo', () => {
     // to catch.
     await page.goto('/share/v/p/index.ifc')
     await waitForModelReady(page)
-    const ifcBounds = await sceneBounds(page)
+    const ifcBounds = await modelBounds(page)
 
     await page.goto('/share/v/p/index.step')
     await waitForModelReady(page)
-    const stepBounds = await sceneBounds(page)
+    const stepBounds = await modelBounds(page)
 
     for (const corner of ['min', 'max'] as const) {
       for (const [axis, name] of ['x', 'y', 'z'].entries()) {

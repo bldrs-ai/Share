@@ -53,6 +53,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import {fileURLToPath} from 'node:url'
 
 
 /** STEP files are millimetre by convention; the IFC logo is in metres. */
@@ -99,6 +100,19 @@ const LIME = [0, 1, 0]
  * Box corners in the part's local frame, indexed 0-7: 0-3 walk the
  * z=0 face counter-clockwise from the origin, 4-7 the z=depth face
  * directly above them. Edge and face tables below index into this.
+ *
+ * **`CORNERS[0]` is the other half of the alignment invariant** the
+ * BLOCKS note describes, and it is easy to miss because it looks like
+ * pure geometry. Conway anchors a model at `placement x
+ * geometry.getPoint(0)` — the first *tessellated vertex* of the first
+ * placed geometry — which is local `(0,0,0)` only because `CORNERS[0]`
+ * is the minimum corner and `FACES[0]`'s loop starts there. Tidy this
+ * to start at `[1,1,1]`, or reorder FACES so a different face is
+ * tessellated first, and the anchor moves to another corner: the STEP
+ * slides up to (10, 11.45, height) metres away from the IFC and every
+ * cross-format `#c:` permalink is wrong. `indexStepLogo.spec.ts` fails
+ * if it happens — but its message points at BLOCKS, which will be
+ * innocent, so start here.
  */
 const CORNERS = [
   [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
@@ -135,7 +149,16 @@ const FACES = [
 
 /**
  * Formats a JS number as a STEP real, which — unlike JSON — must carry
- * a decimal point even when integral.
+ * a decimal point even when integral, and must spell an exponent with a
+ * capital `E`.
+ *
+ * The exponent arm looks unreachable from today's BLOCKS, and is not:
+ * BLOCKS is a hand transcription that gets redone when the logo changes,
+ * and JS switches to exponential form at 1e21 and below 1e-6. Both
+ * escape the naive formatting — `Number.isInteger(1e21)` is true, so the
+ * integer branch would emit `1e+21.` — and neither is a legal Part 21
+ * REAL. The failure mode is silent: an unparseable file that only shows
+ * up as the viewer refusing to load it.
  *
  * @param {number} value
  * @return {string} STEP real literal
@@ -143,7 +166,14 @@ const FACES = [
 function real(value) {
   // -0 prints as '-0.', which is legal but noise in a diff.
   const normalized = value === 0 ? 0 : value
-  return Number.isInteger(normalized) ? `${normalized}.` : `${normalized}`
+  const text = `${normalized}`
+
+  if (text.includes('e')) {
+    const [mantissa, exponent] = text.split('e')
+    return `${mantissa.includes('.') ? mantissa : `${mantissa}.`}E${exponent.replace('+', '')}`
+  }
+
+  return Number.isInteger(normalized) ? `${text}.` : text
 }
 
 
@@ -275,13 +305,20 @@ function emitSolidColour(step, solid, rgb) {
  * shows: `AP214ProductStructureExtraction.resolveLabel` prefers the
  * product name over the occurrence's.
  *
+ * `id` is the separate identity attribute, and AP214 expects it to be
+ * unique per part. It defaults to `name` because for the assembly nodes
+ * the two coincide; the two part shapes must pass their own, since both
+ * are named 'Together' and an importer that keys parts by id would
+ * otherwise merge the 30m and 15m blocks into one.
+ *
  * @param {object} step Emitter
  * @param {object} contexts Shared `{product, definition}` context refs
- * @param {string} name Product name
+ * @param {string} name Product name — the NavTree label
+ * @param {string} [id] Unique product id; defaults to `name`
  * @return {{definition: string, shape: string}} refs
  */
-function emitProduct(step, contexts, name) {
-  const product = step.add(`PRODUCT('${name}','${name}','',(${contexts.product}))`)
+function emitProduct(step, contexts, name, id = name) {
+  const product = step.add(`PRODUCT('${id}','${name}','',(${contexts.product}))`)
   const formation = step.add(`PRODUCT_DEFINITION_FORMATION('','',${product})`)
   const definition = step.add(`PRODUCT_DEFINITION('design','',${formation},${contexts.definition})`)
   const shape = step.add(`PRODUCT_DEFINITION_SHAPE('','',${definition})`)
@@ -362,7 +399,7 @@ function generate() {
       [BLOCK_WIDTH * MM_PER_M, BLOCK_DEPTH * MM_PER_M, height * MM_PER_M])
     styledItems.push(emitSolidColour(step, solid, LIME))
     return [height, {
-      product: emitProduct(step, contexts, 'Together'),
+      product: emitProduct(step, contexts, 'Together', `Together-${height}m`),
       representation: step.add(
         `ADVANCED_BREP_SHAPE_REPRESENTATION('',(${identity},${solid}),${geometricContext})`),
     }]
@@ -420,7 +457,11 @@ function generate() {
   return [
     'ISO-10303-21;',
     'HEADER;',
-    `FILE_DESCRIPTION(('Bldrs logo — the STEP twin of public/index.ifc'),'2;1');`,
+    // ASCII only: Part 21 strings are ISO 8859-1, and anything outside it
+    // has to be escaped as `\X2\....\X0\`. An em dash here reaches STEP
+    // users as mojibake in the first line they read, and fails a strict
+    // syntax checker.
+    `FILE_DESCRIPTION(('Bldrs logo - the STEP twin of public/index.ifc'),'2;1');`,
     `FILE_NAME('index.step','2022-03-04T16:39:21',('Bldrs'),('Bldrs, Inc.'),` +
       `'tools/models/makeIndexStep.mjs','Bldrs: Share','');`,
     `FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));`,
@@ -434,7 +475,12 @@ function generate() {
 }
 
 
-const outPath = process.argv[2] ?? path.join(process.cwd(), 'public', 'index.step')
+// Resolved against the script, not the caller: a cwd-relative default
+// makes `cd tools/models && node makeIndexStep.mjs` throw ENOENT, and
+// from any other directory that happens to have a `public/` it writes
+// the wrong file while still reporting success.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+const outPath = process.argv[2] ?? path.join(repoRoot, 'public', 'index.step')
 fs.writeFileSync(outPath, generate())
 // eslint-disable-next-line no-console
 console.log(`Wrote ${outPath}`)

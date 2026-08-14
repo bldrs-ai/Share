@@ -13,9 +13,12 @@ the format the page is about — landing a STEP search on an IFC model is a
 bounce.
 
 ```
-node tools/models/makeIndexStep.mjs            # → public/index.step
+node tools/models/makeIndexStep.mjs             # → public/index.step
 node tools/models/makeIndexStep.mjs /tmp/x.step # → somewhere else
 ```
+
+The default output resolves against the script, not the shell, so the
+first form works from any directory — including `tools/models/` itself.
 
 Then open `/share/v/p/index.step` and check it against
 `/share/v/p/index.ifc` — **with a `#c:` camera on the URL**, not just
