@@ -201,12 +201,16 @@ describeMobileAndDesktop('index.step logo', () => {
     const colours = await modelColours(page)
     expect(colours.length).toBeGreaterThan(0)
 
+    // Counted, not `.some()`: the generator emits one STYLED_ITEM per
+    // part shape, so losing just the 30m one leaves the four 15m blocks
+    // lime and three blocks unstyled — which `.some()` would call a pass
+    // against this test's own "it renders lime".
     const isLime = ([r, g, b]: number[]) =>
       g > CHANNEL_ON_MIN && r < CHANNEL_OFF_MAX && b < CHANNEL_OFF_MAX
     expect(
-      colours.some(isLime),
-      `no lime material; got ${JSON.stringify(colours)}`,
-    ).toBe(true)
+      colours.filter(isLime).length,
+      `expected ${BLOCK_COUNT} lime blocks; got ${JSON.stringify(colours)}`,
+    ).toBe(BLOCK_COUNT)
   })
 
   test('lands in the same world space as index.ifc, so one camera frames both', async ({page}) => {

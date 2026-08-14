@@ -480,7 +480,19 @@ function generate() {
 // from any other directory that happens to have a `public/` it writes
 // the wrong file while still reporting success.
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-const outPath = process.argv[2] ?? path.join(repoRoot, 'public', 'index.step')
-fs.writeFileSync(outPath, generate())
-// eslint-disable-next-line no-console
-console.log(`Wrote ${outPath}`)
+
+export {generate}
+
+// Guarded so `makeIndexStep.test.js` can import `generate` and compare it
+// against the committed bytes without writing into `public/`. That drift
+// test is the only thing standing between an edit here and a stale
+// `index.step`: every other check in the repo — eslint, Jest, even the
+// alignment E2E — reads the committed file, so editing BLOCKS without
+// regenerating would otherwise pass everything and surface later, at
+// some unrelated regeneration.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const outPath = process.argv[2] ?? path.join(repoRoot, 'public', 'index.step')
+  fs.writeFileSync(outPath, generate())
+  // eslint-disable-next-line no-console
+  console.log(`Wrote ${outPath}`)
+}
