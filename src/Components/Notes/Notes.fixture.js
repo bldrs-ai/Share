@@ -1,19 +1,19 @@
 export const MOCK_NOTES = [
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34;i:2',
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-65.9,72.88,33.11,32.52,15.73,7.11;i:2',
     index: 2,
     id: 13,
     number: 3,
     title: 'placemark_test_1',
     // eslint-disable-next-line max-len
-    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0;c:71.225,28.586,-45.341,-33,15,-5.613)',
+    body: 'Placemark test1 note: [placemark](https://bldrs.ai/share/v/gh/nickcastel50/test-public/main/index.ifc#m:-18,20.289,-3.92,1,0,0;c:147.225,28.586,-33.891,43,15,5.837)',
     date: '2022-06-01T22:10:49Z',
     username: 'TEST_ISSUE_USERNAME',
     numberOfComments: 2,
     imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34;i:2',
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-65.9,72.88,33.11,32.52,15.73,7.11;i:2',
     index: 3,
     id: 14,
     number: 4,
@@ -25,7 +25,7 @@ export const MOCK_NOTES = [
     imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34;i:1',
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-65.9,72.88,33.11,32.52,15.73,7.11;i:1',
     index: 0,
     id: 10,
     number: 1,
@@ -37,7 +37,7 @@ export const MOCK_NOTES = [
     imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34;i:2',
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-65.9,72.88,33.11,32.52,15.73,7.11;i:2',
     index: 0,
     id: 11,
     number: 2,
