@@ -317,9 +317,16 @@ export async function load(
           'Source: network download (GitHub), cached to OPFS')
       }
 
-      // For non-GitHub sources we don't have an upstream sha, so we hash the
-      // bytes ourselves to build the cache key. This is the same File we'd
-      // read for parse below; reading it twice is cheap (OPFS).
+      // Disk handle of the *source* (IFC/STEP), captured before any GLB
+      // swap. Spill pages this File; the hash/parse ArrayBuffer is a
+      // separate JS copy. An OPFS File pins nothing.
+      const opfsSourceFile = file
+
+      // Non-GitHub sources have no upstream sha. Hash the parse buffer
+      // itself so we do not materialise the file twice (once for SHA-1,
+      // once for Conway) — ~860 MB on PSB. sha1Hex only reads; it does
+      // not copy. A GLB cache hit still replaces modelData with the
+      // artifact (different bytes).
       //
       // Self-contained try/catch: if the hash or cache lookup fails (e.g.
       // `window.crypto.subtle` absent in some jsdom test envs, OPFS sync-
@@ -331,8 +338,9 @@ export async function load(
       // do anyway if the lookup returned null.
       if (wantGlb && !cacheKeyArgs && file) {
         try {
-          const sourceBytes = await file.arrayBuffer()
-          const contentSha = await sha1Hex(sourceBytes)
+          onProgress('Buffering model bytes...')
+          modelData = await file.arrayBuffer()
+          const contentSha = await sha1Hex(modelData)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
             glbVerbose(
@@ -346,6 +354,7 @@ export async function load(
               ;[loader, isLoaderAsync, isFormatText, isIfc, fixupCb] = swapToGlbLoader(viewer)
               file = glbFile
               cameFromGlbCache = true
+              modelData = await glbFile.arrayBuffer()
             } else {
               glbInfo(`reader: ${kindLabel} cache MISS, will export after parse`)
             }
@@ -359,17 +368,16 @@ export async function load(
       }
 
       if (wantGlb && isIfc && cacheKeyArgs) {
-        // `sourceFile` is the OPFS-backed File whose exact bytes are
-        // parsed below (`modelData = await file.arrayBuffer()`; IFC/STEP
-        // load with isFormatText=false, so no decode in between). The
-        // post-writer source spill backs Conway's window reads with it —
-        // identity by construction, and a disk-backed handle, so
-        // capturing it here pins nothing.
-        glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: file}
+        // Spill backs Conway's window reads with this OPFS File — the
+        // source, never a swapped-in GLB. Identity by construction
+        // (same handle we arrayBuffer'd for parse on a miss).
+        glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: opfsSourceFile}
       }
 
-      onProgress('Buffering model bytes...')
-      modelData = await file.arrayBuffer()
+      if (modelData === undefined) {
+        onProgress('Buffering model bytes...')
+        modelData = await file.arrayBuffer()
+      }
       if (opfsEntryKey !== null && looksLikeLfsPointer(modelData)) {
         // A cache entry written before the Git LFS redirect landed
         // holds the ~130-byte pointer instead of the model, and its key

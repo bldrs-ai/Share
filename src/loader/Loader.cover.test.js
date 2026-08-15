@@ -413,6 +413,31 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  it('reads an uploaded OPFS file only once so SHA-1 shares the parse buffer', async () => {
+    // wantGlb is default-on. Non-GitHub sources hash the bytes for the
+    // GLB cache key; that used to be a second arrayBuffer() of the same
+    // File (~860 MB on PSB). The parse buffer is the hash input.
+    const file = new MockFile(new Uint8Array(4))
+    const spy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.stl',
+      '',
+      false,
+      false,
+    ])
+
+    const uuidPath = '12345678-1234-4abc-9def-123456789abc.stl'
+
+    await expect(
+      load(uuidPath, viewer, onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+
   // TODO: Loader.js tags errors with `isOutOfMemory` by calling
   // `isOutOfMemoryError(err)` from src/utils/oom.js, which is message-
   // sniffing based. The refactor should confirm the OOM shapes it looks
