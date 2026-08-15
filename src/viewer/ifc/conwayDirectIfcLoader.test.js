@@ -198,6 +198,19 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
       })
 
+      it('reports a Geometry progress stage across the demand pump', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const progress = []
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, (event) => progress.push(event))
+        const geometry = progress.filter((event) => event.phase === 'geometry')
+        expect(geometry.length).toBeGreaterThan(1)
+        expect(geometry[0]).toMatchObject({completed: 0, total: 150, unit: 'products'})
+        expect(geometry[geometry.length - 1]).toMatchObject({completed: 150, total: 150})
+        expect(geometry.every((event) => event.elapsedMs === undefined)).toBe(true)
+      })
+
       it('falls through to the classic selection when the engine lacks the pump', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)

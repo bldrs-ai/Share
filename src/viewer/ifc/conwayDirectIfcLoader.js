@@ -158,12 +158,39 @@ export async function parseIfcWithConway(
     // onto the screen and one that shows nothing until the end-of-load
     // build, and until now the log said nothing either way — a blank
     // 9-second parse and a healthy streaming parse looked identical.
+    //
+    // Conway's deferred open only emits headerParse/dataParse; the
+    // pump never starts a geometry phase. Report one here so the load
+    // log splits Parsing from Geometry (same labels as a classic
+    // extractIFCGeometryData open). elapsedMs omitted: the reporter
+    // stamps wall-clock so we don't fight Conway's parse-relative clock.
     let pumpedBatches = 0
+    let geometryTotal
+    let geometryDone = 0
+    const reportGeometry = (completed, total) => {
+      if (typeof onProgress !== 'function') {
+        return
+      }
+      onProgress({
+        phase: 'geometry',
+        completed,
+        total,
+        unit: 'products',
+      })
+    }
     for (;;) {
       const batch = []
       // eslint-disable-next-line new-cap
       const {extracted, remaining} = ifcAPI.ExtractGeometryBatch(
         modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+      if (geometryTotal === undefined && (extracted > 0 || remaining > 0)) {
+        geometryTotal = extracted + remaining
+        reportGeometry(0, geometryTotal)
+      }
+      geometryDone += extracted
+      if (geometryTotal !== undefined) {
+        reportGeometry(geometryDone, geometryTotal)
+      }
       if (batch.length > 0) {
         captured.push(...batch)
         pumpedBatches++
