@@ -72,7 +72,7 @@ describe('Note: CRUD operations', () => {
       beforeEach(async ({page}) => {
         await homepageSetup(page)
         await returningUserVisitsHomepageWaitForModel(page)
-        await page.goto('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+        await page.goto('/share/v/p/index.ifc#c:-57.022,131.828,173.3,37.922,22.64,9.136')
         await auth0Login(page)
       })
 

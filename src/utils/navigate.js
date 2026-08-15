@@ -10,12 +10,20 @@ import {disablePageReloadApprovalCheck} from './event'
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
+  //
+  // The camera below is tied to where the model lands in world space, and
+  // that moved with conway 1.502+: `COORDINATE_TO_ORIGIN` used to anchor a
+  // model on whichever element its file declared first, and now leaves
+  // near-origin models on their authored coordinates (conway#87). index.ifc
+  // shifted by exactly (+76, 0, +11.4504) — x ∈ [-76, 10] became x ∈ [0, 86]
+  // — so this hash was shifted by the same amount. Re-capture it rather than
+  // hand-edit it if the model or the frame changes again.
   const mediaSizeTabletWith = 900
   disablePageReloadApprovalCheck()
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-    `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-    `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+    `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136` :
+    `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136`
   navWith(navigate, defaultPath, {
     search: location.search,
     hash: cameraHash,
@@ -53,7 +61,7 @@ export function homeModelPath(appPrefix) {
   const prefix = appPrefix ||
     `${window.location.pathname.startsWith('/Share') ? '/Share' : ''}/share`
   const search = window.location.search || ''
-  const cameraHash = `#${HASH_PREFIX_CAMERA}:-133.022,131.828,161.85,-38.078,22.64,-2.314`
+  const cameraHash = `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136`
   return `${prefix}/v/p/index.ifc${search}${cameraHash}`
 }
 

@@ -20,7 +20,7 @@ jest.mock('../net/github/Files', () => ({
 
 describe('parseUrl', () => {
   it('parses bldrs index.ifc', () => {
-    const url = new URL('https://bldrs.ai/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+    const url = new URL('https://bldrs.ai/share/v/p/index.ifc#c:-57.022,131.828,173.3,37.922,22.64,9.136')
     const converted = new URL('https://raw.githubusercontent.com/bldrs-ai/Share/main/public/index.ifc')
     const parsed = parseUrl(url)
     expect(parsed).toEqual({
@@ -32,7 +32,7 @@ describe('parseUrl', () => {
         ref: 'main',
         url: converted,
       },
-      params: {c: '-133.022,131.828,161.85,-38.078,22.64,-2.314'},
+      params: {c: '-57.022,131.828,173.3,37.922,22.64,9.136'},
     })
   })
 

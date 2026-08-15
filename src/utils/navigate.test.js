@@ -104,21 +104,21 @@ describe('homeModelPath', () => {
 
   it('uses the given appPrefix', () => {
     expect(homeModelPath('/share')).toBe(
-      '/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+      '/share/v/p/index.ifc#c:-57.022,131.828,173.3,37.922,22.64,9.136')
   })
 
   it('derives the install prefix when appPrefix is omitted', () => {
     locationGetter = jest.spyOn(window, 'location', 'get')
       .mockReturnValue({pathname: '/Share/share/v/new/uuid.ifc'})
     expect(homeModelPath()).toBe(
-      '/Share/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+      '/Share/share/v/p/index.ifc#c:-57.022,131.828,173.3,37.922,22.64,9.136')
   })
 
   it('carries the current query string forward (feature flags)', () => {
     locationGetter = jest.spyOn(window, 'location', 'get')
       .mockReturnValue({pathname: '/share/v/new/uuid.ifc', search: '?feature=bot'})
     expect(homeModelPath('/share')).toBe(
-      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+      '/share/v/p/index.ifc?feature=bot#c:-57.022,131.828,173.3,37.922,22.64,9.136')
   })
 })
 
@@ -152,7 +152,7 @@ describe('reloadAfterCacheClear', () => {
     mockLocation('/share/v/new/uuid.ifc')
     reloadAfterCacheClear('/share')
     expect(assignCalls).toEqual([
-      '/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
+      '/share/v/p/index.ifc#c:-57.022,131.828,173.3,37.922,22.64,9.136'])
     expect(reloadCalls).toBe(0)
   })
 
@@ -160,7 +160,7 @@ describe('reloadAfterCacheClear', () => {
     mockLocation('/share/v/new/uuid.ifc', '?feature=bot')
     reloadAfterCacheClear('/share')
     expect(assignCalls).toEqual([
-      '/share/v/p/index.ifc?feature=bot#c:-133.022,131.828,161.85,-38.078,22.64,-2.314'])
+      '/share/v/p/index.ifc?feature=bot#c:-57.022,131.828,173.3,37.922,22.64,9.136'])
     expect(reloadCalls).toBe(0)
   })
 
