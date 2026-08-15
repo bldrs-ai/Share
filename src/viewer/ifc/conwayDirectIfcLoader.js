@@ -48,6 +48,7 @@
 
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
+import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -116,7 +117,14 @@ export async function parseIfcWithConway(
   if (typeof ifcAPI.getConwayVersion === 'function') {
     reportEngineVersion(ifcAPI.getConwayVersion())
   }
-  const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+  const store = isBlobSource(buffer) &&
+      !isFeatureEnabled('disableStreamOpen') &&
+      typeof ifcAPI.OpenModelStream === 'function' ?
+    makeBlobByteStore(buffer) :
+    null
+  const data = store === null ?
+    (buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)) :
+    null
   let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
   if (onProgress) {
     // ON_MODEL_INFO (conway extension) arrives once, right after the header
@@ -137,8 +145,10 @@ export async function parseIfcWithConway(
   // through to the classic selection below.
   if (isFeatureEnabled('demandGeometry') &&
       !isFeatureEnabled('disableStreamOpen') &&
-      typeof ifcAPI.OpenModelStreamed === 'function' &&
-      typeof ifcAPI.ExtractGeometryBatch === 'function') {
+      (typeof ifcAPI.OpenModelStreamed === 'function' ||
+        typeof ifcAPI.OpenModelStream === 'function') &&
+      (typeof ifcAPI.ExtractGeometryBatch === 'function' ||
+        typeof ifcAPI.ExtractGeometryBatchAsync === 'function')) {
     const deferSettings = {...openSettings, DEFER_GEOMETRY: true}
     if (onPreviewMesh) {
       // Slice A2 (parse-time preview channel): conway emits preview
@@ -147,8 +157,14 @@ export async function parseIfcWithConway(
       // settings are ignored), so no feature detection is needed here.
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
     }
-    // eslint-disable-next-line new-cap
-    const modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
+    let modelID
+    if (store !== null) {
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStream(store, deferSettings)
+    } else {
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
+    }
     if (typeof modelID !== 'number' || modelID < 0) {
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }
@@ -180,9 +196,21 @@ export async function parseIfcWithConway(
     }
     for (;;) {
       const batch = []
-      // eslint-disable-next-line new-cap
-      const {extracted, remaining} = ifcAPI.ExtractGeometryBatch(
-        modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+      let extracted
+      let remaining
+      if (typeof ifcAPI.ExtractGeometryBatchAsync === 'function') {
+        // eslint-disable-next-line new-cap
+        const pumped = await ifcAPI.ExtractGeometryBatchAsync(
+          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+        extracted = pumped.extracted
+        remaining = pumped.remaining
+      } else {
+        // eslint-disable-next-line new-cap
+        const pumped = ifcAPI.ExtractGeometryBatch(
+          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+        extracted = pumped.extracted
+        remaining = pumped.remaining
+      }
       if (geometryTotal === undefined && (extracted > 0 || remaining > 0)) {
         geometryTotal = extracted + remaining
         reportGeometry(0, geometryTotal)
@@ -256,7 +284,10 @@ export async function parseIfcWithConway(
   //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
-  if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+  if (!isFeatureEnabled('disableStreamOpen') && store !== null) {
+    // eslint-disable-next-line new-cap
+    modelID = await ifcAPI.OpenModelStream(store, openSettings)
+  } else if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
   } else if (typeof ifcAPI.OpenModelAsync === 'function') {
@@ -282,6 +313,19 @@ export async function parseIfcWithConway(
 // capture/render overhead amortizes, small enough that first pixels
 // arrive within a couple of seconds of parse completing.
 const DEMAND_EXTRACT_BATCH_SIZE = 64
+
+
+/**
+ * A Blob/File the M1b store-backed open can read via `slice()`.
+ *
+ * @param {unknown} value
+ * @return {boolean}
+ */
+function isBlobSource(value) {
+  return value !== null && value !== undefined &&
+    typeof value.size === 'number' && typeof value.slice === 'function' &&
+    !(value instanceof ArrayBuffer) && !ArrayBuffer.isView(value)
+}
 
 
 /**

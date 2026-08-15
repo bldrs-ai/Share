@@ -62,7 +62,7 @@ import stlToThree from './stl'
 import xyzToThree from './xyz'
 import {isFeatureEnabled} from '../FeatureFlags'
 import useStore from '../store/useStore'
-import {sha1Hex} from '../utils/contentHash'
+import {sha1Hex, sha1HexFromBlob} from '../utils/contentHash'
 import {markIfOutOfMemory} from '../utils/oom'
 
 
@@ -80,6 +80,7 @@ import {markIfOutOfMemory} from '../utils/oom'
 // the camera nonstop). 5s is past the point where a returning visitor
 // would notice "cache hasn't warmed yet."
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
+const LFS_POINTER_PROBE_BYTES = 256
 
 
 /**
@@ -91,6 +92,42 @@ function scheduleIdleWork(fn) {
     return
   }
   setTimeout(fn, 0)
+}
+
+
+/**
+ * True when Conway can parse an OPFS File through `OpenModelStream`
+ * (M1b) so we never allocate a full-source ArrayBuffer.
+ *
+ * @param {object} viewer
+ * @param {boolean} isIfc
+ * @return {boolean}
+ */
+function canOpenFromStore(viewer, isIfc) {
+  if (!isIfc || isFeatureEnabled('disableStreamOpen')) {
+    return false
+  }
+  const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
+  return typeof ifcAPI?.OpenModelStream === 'function'
+}
+
+
+/**
+ * Bytes for the Git LFS pointer sniff. A live File/Blob was already
+ * probed via its first 256 bytes before being passed through as
+ * `modelData`; don't treat the handle itself as a pointer.
+ *
+ * @param {ArrayBuffer|Uint8Array|Blob|string|null|undefined} data
+ * @return {ArrayBuffer|Uint8Array|string|null|undefined}
+ */
+function probeLfsBytes(data) {
+  if (data !== null && data !== undefined &&
+      typeof data.size === 'number' && typeof data.slice === 'function' &&
+      !(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data) &&
+      typeof data !== 'string') {
+    return null
+  }
+  return data
 }
 
 
@@ -338,9 +375,18 @@ export async function load(
       // do anyway if the lookup returned null.
       if (wantGlb && !cacheKeyArgs && file) {
         try {
-          onProgress('Buffering model bytes...')
-          modelData = await file.arrayBuffer()
-          const contentSha = await sha1Hex(modelData)
+          // M1b: when Conway can parse from the OPFS File store, hash
+          // the File in slices and skip the full-source ArrayBuffer —
+          // ~860 MB on PSB. Older engines fall through to buffering.
+          if (canOpenFromStore(viewer, isIfc)) {
+            onProgress('Hashing model...')
+          } else {
+            onProgress('Buffering model bytes...')
+            modelData = await file.arrayBuffer()
+          }
+          const contentSha = modelData !== undefined ?
+            await sha1Hex(modelData) :
+            await sha1HexFromBlob(file)
           cacheKeyArgs = buildNonGitHubCacheArgs(kindLabel, path, contentSha)
           if (cacheKeyArgs) {
             glbVerbose(
@@ -374,11 +420,23 @@ export async function load(
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: opfsSourceFile}
       }
 
+      if (modelData === undefined &&
+          canOpenFromStore(viewer, isIfc) &&
+          !cameFromGlbCache) {
+        const head = await file.slice(0, LFS_POINTER_PROBE_BYTES).arrayBuffer()
+        if (opfsEntryKey !== null && looksLikeLfsPointer(head)) {
+          // Fall through to the existing LFS-evict path below with a
+          // tiny probe so we don't have to buffer the whole file.
+          modelData = head
+        } else {
+          modelData = file
+        }
+      }
       if (modelData === undefined) {
         onProgress('Buffering model bytes...')
         modelData = await file.arrayBuffer()
       }
-      if (opfsEntryKey !== null && looksLikeLfsPointer(modelData)) {
+      if (opfsEntryKey !== null && looksLikeLfsPointer(probeLfsBytes(modelData))) {
         // A cache entry written before the Git LFS redirect landed
         // holds the ~130-byte pointer instead of the model, and its key
         // (pointer-blob sha + owner/repo/branch/path) is exactly the
@@ -480,7 +538,7 @@ export async function load(
   // us ~130 bytes of text naming the object instead of the model, and
   // the format loader then fails somewhere deep in its parser with an
   // error that never mentions LFS. Say what actually went wrong.
-  if (looksLikeLfsPointer(modelData)) {
+  if (looksLikeLfsPointer(probeLfsBytes(modelData))) {
     throw new Error(
       'This file is stored with Git LFS, so the URL returned a pointer file instead of the model. ' +
       'Open it via its github.com/<org>/<repo>/blob/<ref>/<path> URL, which resolves LFS content.')
@@ -505,7 +563,7 @@ export async function load(
   reportModelInfo({
     fileName: path.substring(path.lastIndexOf('/') + 1) || path,
     schema: formatTag,
-    byteLength: modelData?.byteLength ?? modelData?.length,
+    byteLength: modelData?.byteLength ?? modelData?.length ?? modelData?.size,
   })
 
   // readModel throws on any falsy model (surfacing viewer.IFC.ifcLastError
