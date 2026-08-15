@@ -122,7 +122,7 @@ export async function parseIfcWithConway(
       typeof ifcAPI.OpenModelStream === 'function' ?
     makeBlobByteStore(buffer) :
     null
-  const data = store === null ?
+  let data = store === null ?
     (buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)) :
     null
   let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
@@ -158,12 +158,20 @@ export async function parseIfcWithConway(
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
     }
     let modelID
+    let openData = data
     if (store !== null) {
       // eslint-disable-next-line new-cap
       modelID = await ifcAPI.OpenModelStream(store, deferSettings)
+      if (typeof modelID !== 'number' || modelID < 0) {
+        // IFC-only store path: STEP / failed sniff falls back to a
+        // buffered streamed open (conway#510 contract).
+        openData = await bytesFromSource(buffer)
+        // eslint-disable-next-line new-cap
+        modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
+      }
     } else {
       // eslint-disable-next-line new-cap
-      modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
+      modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
     }
     if (typeof modelID !== 'number' || modelID < 0) {
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
@@ -287,6 +295,11 @@ export async function parseIfcWithConway(
   if (!isFeatureEnabled('disableStreamOpen') && store !== null) {
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStream(store, openSettings)
+    if (typeof modelID !== 'number' || modelID < 0) {
+      data = await bytesFromSource(buffer)
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
+    }
   } else if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
@@ -325,6 +338,26 @@ function isBlobSource(value) {
   return value !== null && value !== undefined &&
     typeof value.size === 'number' && typeof value.slice === 'function' &&
     !(value instanceof ArrayBuffer) && !ArrayBuffer.isView(value)
+}
+
+
+/**
+ * Materialise a parse source as a Uint8Array (store-open fallback).
+ *
+ * @param {ArrayBuffer|Uint8Array|Blob} source
+ * @return {Promise<Uint8Array>}
+ */
+async function bytesFromSource(source) {
+  if (source instanceof Uint8Array) {
+    return source
+  }
+  if (source instanceof ArrayBuffer) {
+    return new Uint8Array(source)
+  }
+  if (typeof source?.arrayBuffer === 'function') {
+    return new Uint8Array(await source.arrayBuffer())
+  }
+  throw new Error('parseIfcWithConway: cannot buffer source for fallback open')
 }
 
 

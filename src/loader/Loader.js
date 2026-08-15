@@ -414,9 +414,8 @@ export async function load(
       }
 
       if (wantGlb && isIfc && cacheKeyArgs) {
-        // Spill backs Conway's window reads with this OPFS File — the
-        // source, never a swapped-in GLB. Identity by construction
-        // (same handle we arrayBuffer'd for parse on a miss).
+        // Spill pages from the OPFS source handle captured before any
+        // GLB swap — never a cache-hit artifact.
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: opfsSourceFile}
       }
 
@@ -424,9 +423,7 @@ export async function load(
           canOpenFromStore(viewer, isIfc) &&
           !cameFromGlbCache) {
         const head = await file.slice(0, LFS_POINTER_PROBE_BYTES).arrayBuffer()
-        if (opfsEntryKey !== null && looksLikeLfsPointer(head)) {
-          // Fall through to the existing LFS-evict path below with a
-          // tiny probe so we don't have to buffer the whole file.
+        if (looksLikeLfsPointer(head)) {
           modelData = head
         } else {
           modelData = file

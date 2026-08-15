@@ -311,6 +311,20 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.ExtractGeometryBatchAsync).toHaveBeenCalled()
         expect(result.captured).toHaveLength(10)
       })
+
+      it('falls back to OpenModelStreamed when OpenModelStream returns -1', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(-1))
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        const result = await parseIfcWithConway(file, ifcAPI)
+        expect(result.modelID).toBe(5)
+        expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+        const [data] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(data).toBeInstanceOf(Uint8Array)
+        expect(result.captured).toHaveLength(10)
+      })
     })
 
     describe('open-path selection (disableStreamOpen flag)', () => {
