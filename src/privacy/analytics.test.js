@@ -188,4 +188,131 @@ describe('Analytics', () => {
       expect(Analytics.isRealModelOpen(githubOpen, 'localhost')).toBe(true)
     })
   })
+
+
+  // The event param answers open depth; the user property is what makes
+  // session- and engagement-scoped questions answerable per user at all.
+  describe('setUserCidProperty', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    test('sets the client id as a user property', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setUserCidProperty()
+      expect(window.gtag).toHaveBeenCalledWith(
+        'set', 'user_properties', {open_cid: 'cid.1234567890.0987654321'})
+    })
+
+    // Same prefix trap as the event param: a bare id is numeric-looking,
+    // and a user-scoped custom dimension won\'t populate from a number.
+    test('sends the prefixed value, never a bare numeric id', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setUserCidProperty()
+      const [, , props] = window.gtag.mock.calls[0]
+      expect(props[Analytics.OPEN_CID_USER_PROPERTY]).toMatch(/^cid\./)
+      expect(Number.isNaN(Number(props[Analytics.OPEN_CID_USER_PROPERTY]))).toBe(true)
+    })
+
+    test('falls back to the _ga cookie before the gtag callback lands', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      Analytics.setUserCidProperty()
+      expect(window.gtag).toHaveBeenCalledWith(
+        'set', 'user_properties', {open_cid: 'cid.1234567890.0987654321'})
+    })
+
+    test('no-op when no client id is available', () => {
+      Analytics.setUserCidProperty()
+      expect(window.gtag).not.toHaveBeenCalled()
+    })
+
+    // The property is as much a user identifier as the event param, so
+    // it honours the same consent gate gtagEvent does.
+    test('publishes no identifier when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setIsAllowed(false)
+      // setIsAllowed itself retracts the property — that is the
+      // withdrawal suite's subject. Only what follows is under test.
+      window.gtag.mockClear()
+      Analytics.setUserCidProperty()
+      expect(window.gtag).not.toHaveBeenCalledWith(
+        'set', 'user_properties', expect.objectContaining({open_cid: expect.any(String)}))
+    })
+
+    test('no-op when gtag never loaded', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      delete window.gtag
+      expect(() => Analytics.setUserCidProperty()).not.toThrow()
+    })
+  })
+
+
+  // The typing trap that zero-padding alone does NOT solve: Number('08')
+  // is 8, so a padded-but-unprefixed hour still beacons as a number and
+  // the event-scoped dimension stays empty for all 24 values.
+  describe('getLocalHour', () => {
+    test('is not parseable as a number', () => {
+      expect(Number(Analytics.getLocalHour())).toBeNaN()
+    })
+
+    test('carries the browser hour, zero-padded', () => {
+      const HOUR_DIGITS = 2
+      const expected = String(new Date().getHours()).padStart(HOUR_DIGITS, '0')
+      expect(Analytics.getLocalHour()).toBe(`h.${expected}`)
+    })
+
+    test('every hour of the day stays non-numeric', () => {
+      const HOURS_PER_DAY = 24
+      const spy = jest.spyOn(Date.prototype, 'getHours')
+      try {
+        for (let h = 0; h < HOURS_PER_DAY; h++) {
+          spy.mockReturnValue(h)
+          expect(Number(Analytics.getLocalHour())).toBeNaN()
+        }
+      } finally {
+        spy.mockRestore()
+      }
+    })
+  })
+
+
+  // gtagEvent re-reads consent per call, but a user property is sticky —
+  // gtag/js keeps attaching it to its own automatic events after an
+  // opt-out unless it is explicitly cleared.
+  describe('consent withdrawal clears the user property', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Analytics.setIsAllowed(true)
+      window.gtag = jest.fn()
+    })
+
+    afterEach(() => {
+      delete window.gtag
+      Analytics.setIsAllowed(true)
+    })
+
+    test('opting out retracts it with null', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setIsAllowed(false)
+      expect(window.gtag).toHaveBeenLastCalledWith(
+        'set', 'user_properties', {open_cid: null})
+    })
+
+    test('opting back in republishes it', () => {
+      Analytics.setGaClientId('1234567890.0987654321')
+      Analytics.setIsAllowed(false)
+      Analytics.setIsAllowed(true)
+      expect(window.gtag).toHaveBeenLastCalledWith(
+        'set', 'user_properties', {open_cid: 'cid.1234567890.0987654321'})
+    })
+  })
 })

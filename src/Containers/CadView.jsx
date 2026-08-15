@@ -7,7 +7,7 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {OPEN_CID_PARAM, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {LOCAL_HOUR_PARAM, OPEN_CID_PARAM, getLocalHour, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -588,6 +588,12 @@ export default function CadView({
       if (openCid) {
         eventParams[OPEN_CID_PARAM] = openCid
       }
+      // GA4's own `hour` dimension is in the *property's* timezone, which
+      // says nothing about when a user in Milan or São Paulo actually
+      // works — and the real-opens audience is Europe + Brazil (bizdev
+      // growth-strategy §2). This is their local hour, prefixed so gtag
+      // keeps it in the text slot; see analytics#getLocalHour.
+      eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent('real_model_open', eventParams)
     }
 

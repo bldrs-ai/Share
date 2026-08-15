@@ -23,11 +23,11 @@ const REAL_MODEL = '/share/v/gh/bldrs-ai/test-models/main/ifc/misc/box.ifc'
  * before they cross the evaluate boundary.
  *
  * @param page Playwright page object
- * @return Array of {name, contentId, hasOpenCid, openCid} per real_model_open event
+ * @return Array of {name, contentId, hasOpenCid, openCid, localHour} per real_model_open event
  */
 async function realModelOpenEvents(
   page: Page,
-): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown}[]> {
+): Promise<{name: string, contentId: string, hasOpenCid: boolean, openCid?: unknown, localHour?: unknown}[]> {
   return await page.evaluate(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataLayer: any[] = (window as any).dataLayer || []
@@ -38,6 +38,7 @@ async function realModelOpenEvents(
         contentId: String(entry[2]?.content_id ?? ''),
         hasOpenCid: entry[2]?.open_cid !== undefined,
         openCid: entry[2]?.open_cid,
+        localHour: entry[2]?.local_hour,
       }))
   })
 }
@@ -108,5 +109,84 @@ describeMobileAndDesktop('real_model_open GA event', () => {
     // it in the text slot with all its digits intact.
     expect(Number(events[0].openCid)).toBeNaN()
     expect(String(events[0].openCid)).toContain(FAKE_CLIENT_ID)
+  })
+
+  /*
+   * local_hour exists because GA4's own `hour` dimension is in the
+   * property's timezone, which says nothing about when a user in Milan
+   * or São Paulo works.
+   *
+   * Same typing trap as open_cid, and the reason for the `h.` prefix:
+   * gtag beacons anything numeric-looking as `epn.`, which a text
+   * custom dimension will not populate from. Zero-padding alone does
+   * not help — Number('08') is 8 — so the NaN assertion below is the
+   * one that actually pins this.
+   */
+  test('sends local_hour as a non-numeric string in the browser timezone', async ({page}) => {
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    // Read before the model loads, and accept the next hour too: a run that
+    // straddles a clock boundary would otherwise fail looking like a product
+    // bug. Comparing against the browser's clock at all is the point — it is
+    // what distinguishes this from GA4's property-timezone `hour`.
+    const hourAtStart = await page.evaluate(() => new Date().getHours())
+    await waitForModelReady(page)
+    const events = await realModelOpenEvents(page)
+    expect(events).toHaveLength(1)
+    expect(typeof events[0].localHour).toBe('string')
+    expect(Number(events[0].localHour)).toBeNaN()
+    const HOURS_PER_DAY = 24
+    const HOUR_DIGITS = 2
+    const accepted = [hourAtStart, (hourAtStart + 1) % HOURS_PER_DAY]
+      .map((h) => `h.${String(h).padStart(HOUR_DIGITS, '0')}`)
+    expect(accepted).toContain(events[0].localHour)
+  })
+
+  /*
+   * The user property has to reach config's own events — page_view,
+   * session_start, first_visit — since those are what make landing page and
+   * new-vs-returning queryable per user. Carrying it IN the config call is
+   * what guarantees that; a `set` queued beforehand would depend on
+   * queue-drain ordering gtag does not document. With the loader blocked,
+   * inspecting the queued config call is the only way to see it.
+   */
+  test('carries open_cid as a user property on the gtag config call', async ({page}) => {
+    await page.context().addCookies([
+      {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
+    ])
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    const config = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayer: any[] = (window as any).dataLayer || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entry = dataLayer.find((e: any) => e?.[0] === 'config')
+      return entry ? {params: entry[2]} : null
+    })
+    expect(config).not.toBeNull()
+    expect(config?.params?.user_properties).toEqual({open_cid: `cid.${FAKE_CLIENT_ID}`})
+    // the same typing rule the event param follows
+    expect(Number(config?.params?.user_properties?.open_cid)).toBeNaN()
+  })
+
+  // The stub duplicates analytics#isAllowed rather than importing it, so the
+  // duplicate needs its own coverage — a consent gate that fails open is
+  // worse than one that never existed.
+  test('omits the user property when analytics consent is withheld', async ({page}) => {
+    await page.context().addCookies([
+      {name: '_ga', value: `GA1.1.${FAKE_CLIENT_ID}`, domain: 'localhost', path: '/'},
+      {name: 'isAnalyticsAllowed', value: 'false', domain: 'localhost', path: '/'},
+    ])
+    await setupVirtualPathIntercept(page, REAL_MODEL, 'box.ifc')
+    await page.goto(REAL_MODEL, {waitUntil: 'domcontentloaded'})
+    const config = await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dataLayer: any[] = (window as any).dataLayer || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const entry = dataLayer.find((e: any) => e?.[0] === 'config')
+      return entry ? {params: entry[2]} : null
+    })
+    expect(config?.params?.user_properties).toBeUndefined()
   })
 })

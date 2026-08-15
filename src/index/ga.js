@@ -1,5 +1,5 @@
 import {captureException} from '@sentry/react'
-import {setGaClientId} from '../privacy/analytics'
+import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
 
 
 // Must match the ID in public/index.html's inline gtag('config') stub —
@@ -68,13 +68,26 @@ export default function setupGa(env = undefined) {
       )
     }
     document.head.appendChild(script)
+    // Second of three places the user property is published, each for a
+    // distinct reason. index.html's inline stub sets it before `config`
+    // — the only point early enough to reach page_view/session_start.
+    // This call re-sets it from the bundle's own cookie parser, which
+    // covers a stub-regex miss and costs nothing when it agrees. The
+    // callback below is the only path that works for a first-ever
+    // visitor, who has no cookie for either parser to read.
+    setUserCidProperty()
     // Ask GA for this browser's client id so model-open events can
     // carry it as open_cid (see privacy/analytics#setGaClientId for
     // why). The call buffers in dataLayer like any other gtag call and
     // the callback fires once gtag/js has loaded and resolved the id —
     // so it never fires on a blocked client. Events fired before it
     // lands fall back to the _ga cookie in analytics#getGaClientId.
-    window.gtag('get', GA_MEASUREMENT_ID, 'client_id', setGaClientId)
+    window.gtag('get', GA_MEASUREMENT_ID, 'client_id', (cid) => {
+      setGaClientId(cid)
+      // The only path that works for a first-ever visitor, who had no
+      // cookie for the call above to read.
+      setUserCidProperty()
+    })
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}})
   }
