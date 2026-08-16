@@ -56,21 +56,55 @@ export async function sha1HexFromBlob(blob, chunkBytes = HASH_CHUNK_BYTES) {
   if (size === 0) {
     return sha1Hex(new Uint8Array(0))
   }
+  return hexFromBytes_(await digestBlobSliced_(blob, chunkBytes))
+}
+
+
+/**
+ * Fold `sliceDigest` into the running 20-byte hash.
+ *
+ * @param {Uint8Array|undefined} running
+ * @param {Uint8Array} sliceDigest
+ * @return {Promise<Uint8Array>}
+ */
+async function foldDigest_(running, sliceDigest) {
+  if (running === undefined) {
+    return sliceDigest
+  }
+  const folded = new Uint8Array(running.length + sliceDigest.length)
+  folded.set(running)
+  folded.set(sliceDigest, running.length)
+  return new Uint8Array(await window.crypto.subtle.digest('SHA-1', folded))
+}
+
+
+/**
+ * One scratch buffer: copy each slice into it and drop the slice.
+ * Yields every few chunks so a tight await loop cannot pin
+ * unreclaimed ArrayBuffers the way the 1.510 smoke did (+410 MB).
+ *
+ * @param {Blob} blob
+ * @param {number} chunkBytes
+ * @return {Promise<Uint8Array>}
+ */
+async function digestBlobSliced_(blob, chunkBytes) {
+  const scratch = new Uint8Array(chunkBytes)
+  const size = blob.size
   let running
+  let slices = 0
   for (let at = 0; at < size; at += chunkBytes) {
     const end = Math.min(at + chunkBytes, size)
+    const incoming = new Uint8Array(await blob.slice(at, end).arrayBuffer())
+    scratch.set(incoming)
     const sliceDigest = new Uint8Array(
-      await window.crypto.subtle.digest('SHA-1', await blob.slice(at, end).arrayBuffer()))
-    if (running === undefined) {
-      running = sliceDigest
-    } else {
-      const folded = new Uint8Array(running.length + sliceDigest.length)
-      folded.set(running)
-      folded.set(sliceDigest, running.length)
-      running = new Uint8Array(await window.crypto.subtle.digest('SHA-1', folded))
+      await window.crypto.subtle.digest('SHA-1', scratch.subarray(0, incoming.length)))
+    running = await foldDigest_(running, sliceDigest)
+    slices++
+    if (slices % 8 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
     }
   }
-  return hexFromBytes_(running)
+  return running
 }
 
 

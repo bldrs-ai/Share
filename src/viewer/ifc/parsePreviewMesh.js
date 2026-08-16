@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   DoubleSide,
@@ -7,6 +8,9 @@ import {
   Mesh,
 } from 'three'
 import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
+
+
+const AABB_GEOMETRY_KEY = -1
 
 
 /**
@@ -45,6 +49,9 @@ import {makeSurfaceColor, makeSurfaceMaterial} from '../lookMaterial'
  *   references geometry this load has not seen (nothing to render)
  */
 export function payloadToPreviewMesh(payload, geometryCache, materialCache, coordination = null) {
+  if (payload.aabb) {
+    return aabbPayloadToMesh_(payload, geometryCache, materialCache)
+  }
   let geometry = geometryCache.get(payload.geometryExpressID)
   if (geometry === undefined) {
     if (payload.vertexData === undefined || payload.indexData === undefined) {
@@ -81,5 +88,40 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache, coor
     mesh.matrix.elements[13] -= coordination.offset[1]
     mesh.matrix.elements[14] -= coordination.offset[2]
   }
+  return mesh
+}
+
+
+/**
+ * Shared unit cube + per-payload transform. One BufferGeometry for the
+ * whole load; Share recycles the last N Mesh wrappers.
+ *
+ * @param {object} payload
+ * @param {Map} geometryCache
+ * @param {Map} materialCache
+ * @return {object}
+ */
+function aabbPayloadToMesh_(payload, geometryCache, materialCache) {
+  let geometry = geometryCache.get(AABB_GEOMETRY_KEY)
+  if (geometry === undefined) {
+    geometry = new BoxGeometry(1, 1, 1)
+    geometryCache.set(AABB_GEOMETRY_KEY, geometry)
+  }
+  const {x, y, z, w} = payload.color
+  const materialKey = `aabb:${x},${y},${z},${w}`
+  let material = materialCache.get(materialKey)
+  if (material === undefined) {
+    material = makeSurfaceMaterial({color: makeSurfaceColor(x, y, z), side: DoubleSide})
+    material.wireframe = true
+    if (w !== 1) {
+      material.transparent = true
+      material.opacity = w
+    }
+    materialCache.set(materialKey, material)
+  }
+  const mesh = new Mesh(geometry, material)
+  mesh.matrixAutoUpdate = false
+  mesh.matrix.fromArray(payload.flatTransformation)
+  mesh.userData.aabbImposter = true
   return mesh
 }

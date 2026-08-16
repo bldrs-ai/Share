@@ -58,6 +58,34 @@ describe('viewer/ifc/parsePreviewMesh', () => {
     expect(mesh).toBeNull()
   })
 
+  it('instances a shared unit cube for aabb imposters', () => {
+    const geometryCache = new Map()
+    const materialCache = new Map()
+    const aabb = {min: [0, 0, 0], max: [2, 4, 6]}
+    const first = payloadToPreviewMesh(
+      makePayload({
+        aabb,
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      geometryCache, materialCache)
+    const second = payloadToPreviewMesh(
+      makePayload({
+        expressID: 99,
+        aabb,
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      geometryCache, materialCache)
+    expect(first).not.toBeNull()
+    expect(first.material.wireframe).toBe(true)
+    expect(first.userData.aabbImposter).toBe(true)
+    expect(second.geometry).toBe(first.geometry)
+    expect(geometryCache.size).toBe(1)
+  })
+
   it('marks translucent colors transparent', () => {
     const materialCache = new Map()
     const mesh = payloadToPreviewMesh(

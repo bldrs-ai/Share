@@ -211,14 +211,42 @@ export default class ShareIfcLoader {
       // whose placement never resolved), so it must never decide where
       // the durable model renders.
       const coordination = {offset: undefined}
+      const aabbRing = []
+      // Last-N wire boxes: enough to read as a growing mass, cheap
+      // enough that the preview group stays fixed-mem.
+      const aabbCap = 100
+      const matTx = 12
+      const matTy = 13
+      const matTz = 14
+      const aabbOrigin = {xyz: null}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
           const mesh = payloadToPreviewMesh(
             payload, previewGeometryCache, previewMaterialCache, coordination)
-          if (mesh !== null) {
-            session.addPreviewMesh(mesh)
+          if (mesh === null) {
+            return
           }
+          if (payload.aabb) {
+            if (aabbOrigin.xyz === null) {
+              aabbOrigin.xyz = [
+                mesh.matrix.elements[matTx],
+                mesh.matrix.elements[matTy],
+                mesh.matrix.elements[matTz],
+              ]
+            }
+            mesh.matrix.elements[matTx] -= aabbOrigin.xyz[0]
+            mesh.matrix.elements[matTy] -= aabbOrigin.xyz[1]
+            mesh.matrix.elements[matTz] -= aabbOrigin.xyz[2]
+            if (aabbRing.length >= aabbCap) {
+              const old = aabbRing.shift()
+              if (old !== undefined && session.previewGroup !== null) {
+                session.previewGroup.remove(old)
+              }
+            }
+            aabbRing.push(mesh)
+          }
+          session.addPreviewMesh(mesh)
         } catch (e) {
           debug(WARN).warn('parse preview mesh skipped:', e)
         }
