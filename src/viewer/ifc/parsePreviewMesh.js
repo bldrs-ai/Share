@@ -108,11 +108,12 @@ function aabbPayloadToMesh_(payload, geometryCache, materialCache) {
     geometryCache.set(AABB_GEOMETRY_KEY, geometry)
   }
   const {x, y, z, w} = payload.color
-  const materialKey = `aabb:${x},${y},${z},${w}`
+  const filled = payload.solid === true
+  const materialKey = `aabb:${x},${y},${z},${w}:${filled ? 'solid' : 'wire'}`
   let material = materialCache.get(materialKey)
   if (material === undefined) {
     material = makeSurfaceMaterial({color: makeSurfaceColor(x, y, z), side: DoubleSide})
-    material.wireframe = true
+    material.wireframe = !filled
     if (w !== 1) {
       material.transparent = true
       material.opacity = w

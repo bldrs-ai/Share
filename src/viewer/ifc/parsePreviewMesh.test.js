@@ -87,6 +87,25 @@ describe('viewer/ifc/parsePreviewMesh', () => {
   })
 
 
+  it('fills spatial-structure imposters when payload.solid is set', () => {
+    const mesh = payloadToPreviewMesh(
+      makePayload({
+        aabb: {min: [0, 0, 0], max: [2, 4, 6]},
+        solid: true,
+        color: {x: 0, y: 0, z: 0, w: 0.3},
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      new Map(),
+      new Map())
+    expect(mesh.material.wireframe).toBe(false)
+    expect(mesh.material.transparent).toBe(true)
+    expect(mesh.material.opacity).toBe(0.3)
+    expect(mesh.userData.aabbImposter).toBe(true)
+  })
+
+
   it('does not apply the durable coordination offset to aabb imposters', () => {
     const mesh = payloadToPreviewMesh(
       makePayload({
