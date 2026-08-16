@@ -54,6 +54,65 @@ function makeViewerStub() {
 }
 
 
+/**
+ * Viewer whose Conway API can optionally parse an OPFS File via
+ * OpenModelStream. Parse rejects after Loader has hashed so the
+ * hash/buffering spies stay observable.
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.streamOpen]
+ * @return {object}
+ */
+function makeIfcViewer({streamOpen = false} = {}) {
+  const ifcAPI = {
+    OpenModel: jest.fn(() => {
+      throw new Error('open failed')
+    }),
+    StreamAllMeshes: jest.fn(),
+    GetCoordinationMatrix: jest.fn().mockResolvedValue(new Array(16).fill(0)),
+    getStatistics: jest.fn().mockReturnValue({
+      getGeometryMemory: () => 0,
+      getGeometryTime: () => 0,
+      getVersion: () => 'IFC4',
+      getLoadStatus: () => 'SUCCESS',
+      getOriginatingSystem: () => 'test',
+      getPreprocessorVersion: () => '1.0',
+      getParseTime: () => 0,
+      getTotalTime: () => 0,
+    }),
+    getConwayVersion: () => '1.0.0',
+  }
+  if (streamOpen) {
+    ifcAPI.OpenModelStream = jest.fn(() => {
+      throw new Error('stream open failed')
+    })
+    ifcAPI.ExtractGeometryBatchAsync = jest.fn()
+  }
+  const ifc = {
+    type: null,
+    ifcLastError: null,
+    addIfcModel: jest.fn(),
+    loader: {
+      parse: jest.fn(),
+      ifcManager: {
+        state: {models: []},
+        applyWebIfcConfig: jest.fn().mockResolvedValue(),
+        setupCoordinationMatrix: jest.fn(),
+        ifcAPI,
+      },
+    },
+    context: {
+      items: {ifcModels: []},
+      fitToFrame: jest.fn(),
+    },
+  }
+  return {
+    IFC: ifc,
+    ifcLoader: new ShareIfcLoader({ifcAPI, ifc}),
+  }
+}
+
+
 /** MockBlob with an arrayBuffer() that yields the given bytes. */
 class MockFile {
   /** @param {ArrayBuffer|Uint8Array|string} content */
@@ -61,18 +120,35 @@ class MockFile {
     this.content = content
   }
 
-  /** @return {Promise<ArrayBuffer>} */
-  async arrayBuffer() {
+  /** @return {Uint8Array} */
+  bytes_() {
     if (typeof this.content === 'string') {
-      return new TextEncoder().encode(this.content).buffer
+      return new TextEncoder().encode(this.content)
     }
     if (this.content instanceof Uint8Array) {
-      return this.content.buffer.slice(
-        this.content.byteOffset,
-        this.content.byteOffset + this.content.byteLength,
-      )
+      return this.content
     }
-    return this.content
+    return new Uint8Array(this.content)
+  }
+
+  /** @return {number} */
+  get size() {
+    return this.bytes_().byteLength
+  }
+
+  /**
+   * @param {number} start
+   * @param {number} [end]
+   * @return {MockFile}
+   */
+  slice(start, end = this.size) {
+    return new MockFile(this.bytes_().subarray(start, end))
+  }
+
+  /** @return {Promise<ArrayBuffer>} */
+  async arrayBuffer() {
+    const bytes = this.bytes_()
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
   }
 }
 
@@ -435,6 +511,56 @@ describe('load() error/edge paths with OPFS enabled', () => {
     ).rejects.toThrow()
 
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+
+  it('does not arrayBuffer an uploaded IFC when OpenModelStream can take the File', async () => {
+    const file = new MockFile(new Uint8Array(512).fill(0x20))
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    const sliceSpy = jest.spyOn(file, 'slice')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.ifc',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).not.toHaveBeenCalled()
+    expect(sliceSpy).toHaveBeenCalled()
+    expect(onProgress).toHaveBeenCalledWith('Hashing model...')
+  })
+
+
+  it('hashes the single parse buffer when store-open is unavailable', async () => {
+    const file = new MockFile(new Uint8Array(512).fill(0x20))
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.ifc',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.ifc',
+        makeIfcViewer({streamOpen: false}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
+    expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
   })
 
 

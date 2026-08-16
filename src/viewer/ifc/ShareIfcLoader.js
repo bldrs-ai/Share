@@ -96,6 +96,56 @@ function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
  */
 
 
+/** Column-major Matrix4 translation slots. */
+const MAT_TX = 12
+const MAT_TY = 13
+const MAT_TZ = 14
+
+/**
+ * Last-N wire boxes: enough to read as a growing mass, cheap enough
+ * that the preview group stays fixed-mem.
+ */
+export const AABB_IMPOSTER_CAP = 100
+
+
+/**
+ * Recenter an AABB wire cube onto the first accepted box, then add it.
+ * Only ring-track meshes that `addPreviewMesh` actually parented —
+ * outlier rejects must not occupy a slot or evict a visible cube.
+ *
+ * This translation is local to the parse-time preview. It must not
+ * write `coordination.offset`; that latch belongs to the durable
+ * builder's COORDINATE_TO_ORIGIN frame.
+ *
+ * @param {object} mesh three.js Mesh, matrix already stamped
+ * @param {object} session ProgressiveLoadSession
+ * @param {object} ring `{meshes, origin:{xyz}, cap}`
+ */
+export function applyAabbImposter(mesh, session, ring) {
+  if (ring.origin.xyz === null) {
+    ring.origin.xyz = [
+      mesh.matrix.elements[MAT_TX],
+      mesh.matrix.elements[MAT_TY],
+      mesh.matrix.elements[MAT_TZ],
+    ]
+  }
+  mesh.matrix.elements[MAT_TX] -= ring.origin.xyz[0]
+  mesh.matrix.elements[MAT_TY] -= ring.origin.xyz[1]
+  mesh.matrix.elements[MAT_TZ] -= ring.origin.xyz[2]
+  session.addPreviewMesh(mesh)
+  if (mesh.parent !== session.previewGroup) {
+    return
+  }
+  if (ring.meshes.length >= ring.cap) {
+    const old = ring.meshes.shift()
+    if (old !== undefined && session.previewGroup !== null) {
+      session.previewGroup.remove(old)
+    }
+  }
+  ring.meshes.push(mesh)
+}
+
+
 /**
  * IFC loader for ShareViewer. Single entry point: `parse(buffer)`.
  *
@@ -211,14 +261,7 @@ export default class ShareIfcLoader {
       // whose placement never resolved), so it must never decide where
       // the durable model renders.
       const coordination = {offset: undefined}
-      const aabbRing = []
-      // Last-N wire boxes: enough to read as a growing mass, cheap
-      // enough that the preview group stays fixed-mem.
-      const aabbCap = 100
-      const matTx = 12
-      const matTy = 13
-      const matTz = 14
-      const aabbOrigin = {xyz: null}
+      const aabbRing = {meshes: [], origin: {xyz: null}, cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
@@ -228,23 +271,8 @@ export default class ShareIfcLoader {
             return
           }
           if (payload.aabb) {
-            if (aabbOrigin.xyz === null) {
-              aabbOrigin.xyz = [
-                mesh.matrix.elements[matTx],
-                mesh.matrix.elements[matTy],
-                mesh.matrix.elements[matTz],
-              ]
-            }
-            mesh.matrix.elements[matTx] -= aabbOrigin.xyz[0]
-            mesh.matrix.elements[matTy] -= aabbOrigin.xyz[1]
-            mesh.matrix.elements[matTz] -= aabbOrigin.xyz[2]
-            if (aabbRing.length >= aabbCap) {
-              const old = aabbRing.shift()
-              if (old !== undefined && session.previewGroup !== null) {
-                session.previewGroup.remove(old)
-              }
-            }
-            aabbRing.push(mesh)
+            applyAabbImposter(mesh, session, aabbRing)
+            return
           }
           session.addPreviewMesh(mesh)
         } catch (e) {

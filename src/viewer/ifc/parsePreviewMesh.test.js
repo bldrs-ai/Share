@@ -86,6 +86,24 @@ describe('viewer/ifc/parsePreviewMesh', () => {
     expect(geometryCache.size).toBe(1)
   })
 
+
+  it('does not apply the durable coordination offset to aabb imposters', () => {
+    const mesh = payloadToPreviewMesh(
+      makePayload({
+        aabb: {min: [0, 0, 0], max: [1, 1, 1]},
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      new Map(),
+      new Map(),
+      {offset: [100, 200, 300]},
+    )
+    expect(mesh.matrix.elements[12]).toBe(10)
+    expect(mesh.matrix.elements[13]).toBe(20)
+    expect(mesh.matrix.elements[14]).toBe(30)
+  })
+
   it('marks translucent colors transparent', () => {
     const materialCache = new Map()
     const mesh = payloadToPreviewMesh(
