@@ -309,6 +309,7 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(settings.DEFER_GEOMETRY).toBe(true)
         expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
         expect(ifcAPI.ExtractGeometryBatchAsync).toHaveBeenCalled()
+        expect(ifcAPI.ExtractGeometryBatchAsync.mock.calls[0][1]).toBe(8)
         expect(result.captured).toHaveLength(10)
       })
 

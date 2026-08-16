@@ -207,9 +207,14 @@ export async function parseIfcWithConway(
       let extracted
       let remaining
       if (typeof ifcAPI.ExtractGeometryBatchAsync === 'function') {
+        // Store-backed extract pages each product's #ref closure from
+        // OPFS before extracting it. A 64-product batch serialises
+        // that I/O and holds first pixels until ~halfway through
+        // Geometry; 8 keeps file-order streaming and still amortises
+        // the per-batch scene update.
         // eslint-disable-next-line new-cap
         const pumped = await ifcAPI.ExtractGeometryBatchAsync(
-          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+          modelID, ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
         extracted = pumped.extracted
         remaining = pumped.remaining
       } else {
@@ -324,8 +329,11 @@ export async function parseIfcWithConway(
 
 // Products extracted per demand batch: large enough that per-batch
 // capture/render overhead amortizes, small enough that first pixels
-// arrive within a couple of seconds of parse completing.
+// arrive within a couple of seconds of parse completing. The async
+// (store-backed) path is smaller because each product pays OPFS
+// prefetch before extract — see ExtractGeometryBatchAsync above.
 const DEMAND_EXTRACT_BATCH_SIZE = 64
+const ASYNC_DEMAND_EXTRACT_BATCH_SIZE = 8
 
 
 /**

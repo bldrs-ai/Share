@@ -362,8 +362,9 @@ export async function load(
       // Non-GitHub sources have no upstream sha. Hash the parse buffer
       // itself so we do not materialise the file twice (once for SHA-1,
       // once for Conway) — ~860 MB on PSB. sha1Hex only reads; it does
-      // not copy. A GLB cache hit still replaces modelData with the
-      // artifact (different bytes).
+      // not copy. Store-backed opens fingerprint the File in native
+      // per-slice SHA-1s (not a JS SHA-1 of the whole object). A GLB
+      // cache hit still replaces modelData with the artifact.
       //
       // Self-contained try/catch: if the hash or cache lookup fails (e.g.
       // `window.crypto.subtle` absent in some jsdom test envs, OPFS sync-

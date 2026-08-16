@@ -65,7 +65,7 @@ describe('utils/contentHash sha1HexFromBlob', () => {
       .toBe('da39a3ee5e6b4b0d3255bfef95601890afd80709')
   })
 
-  it('hashes a multi-chunk blob identically to sha1Hex', async () => {
+  it('hashes a multi-chunk blob identically to sha1Hex when it fits one slice', async () => {
     const bytes = new Uint8Array(MIB + OVERSIZE_TAIL)
     for (let i = 0; i < bytes.length; i++) {
       bytes[i] = i & BYTE_MASK
@@ -73,7 +73,41 @@ describe('utils/contentHash sha1HexFromBlob', () => {
     expect(await sha1HexFromBlob(new Blob([bytes]))).toBe(await sha1Hex(bytes))
   })
 
+  it('folds per-slice SHA-1s when the blob spans several slices', async () => {
+    const bytes = new Uint8Array(MIB + OVERSIZE_TAIL)
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = i & BYTE_MASK
+    }
+    const blob = new Blob([bytes])
+    const chunk = MIB
+    const first = await sha1Hex(bytes.subarray(0, chunk))
+    const second = await sha1Hex(bytes.subarray(chunk))
+    const firstBytes = hexToBytes_(first)
+    const secondBytes = hexToBytes_(second)
+    const folded = new Uint8Array(firstBytes.length + secondBytes.length)
+    folded.set(firstBytes)
+    folded.set(secondBytes, firstBytes.length)
+    expect(await sha1HexFromBlob(blob, chunk)).toBe(await sha1Hex(folded))
+    expect(await sha1HexFromBlob(blob, chunk)).not.toBe(await sha1Hex(bytes))
+    expect(await sha1HexFromBlob(blob, chunk)).toBe(await sha1HexFromBlob(blob, chunk))
+  })
+
   it('throws on null input', async () => {
     await expect(sha1HexFromBlob(null)).rejects.toThrow(/blob/)
   })
 })
+
+
+/**
+ * @param {string} hex
+ * @return {Uint8Array}
+ */
+function hexToBytes_(hex) {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.slice(i * 2, (i * 2) + 2), HEX_PARSE)
+  }
+  return out
+}
+
+const HEX_PARSE = 16

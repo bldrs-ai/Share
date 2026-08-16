@@ -1,4 +1,4 @@
-/* eslint-disable no-magic-numbers -- SHA-1 constants and bit widths */
+/* eslint-disable no-magic-numbers -- SHA-1 digest length and hex width */
 // Content-hash helpers for the GLB cache.
 //
 // For non-GitHub source kinds (local, upload, external URL, Google Drive
@@ -24,175 +24,64 @@ export async function sha1Hex(buffer) {
   }
   const view = ArrayBuffer.isView(buffer) ? buffer : new Uint8Array(buffer)
   const digest = await window.crypto.subtle.digest('SHA-1', view)
-  const bytes = new Uint8Array(digest)
+  return hexFromBytes_(new Uint8Array(digest))
+}
+
+
+// Cache fingerprint only — not a standard SHA-1 of the file.
+// Native SHA-1 per slice (the same SubtleCrypto path as sha1Hex), then
+// fold each digest into the running hash. A JS incremental SHA-1 of
+// an 860 MB OPFS File was ~23s; this stays I/O + native digest.
+//
+// Single-slice inputs (the common test / small-file case) are exactly
+// sha1Hex of the bytes. Multi-slice is sha1(prevDigest || sliceDigest)
+// and is not interchangeable with a whole-file SHA-1.
+const HASH_CHUNK_BYTES = 8 * 1024 * 1024
+
+
+/**
+ * Cache fingerprint of a Blob/File. Slices so the whole object is never
+ * resident. Same digest as {@link sha1Hex} when the blob fits in one
+ * slice; otherwise a chained fold of per-slice SHA-1s.
+ *
+ * @param {Blob} blob a Blob or File (OPFS handle)
+ * @param {number} [chunkBytes] slice size; tests pass a small value
+ * @return {Promise<string>} 40-char lowercase hex string
+ */
+export async function sha1HexFromBlob(blob, chunkBytes = HASH_CHUNK_BYTES) {
+  if (blob === null || blob === undefined || typeof blob.slice !== 'function') {
+    throw new Error('sha1HexFromBlob: blob is required')
+  }
+  const size = blob.size
+  if (size === 0) {
+    return sha1Hex(new Uint8Array(0))
+  }
+  let running
+  for (let at = 0; at < size; at += chunkBytes) {
+    const end = Math.min(at + chunkBytes, size)
+    const sliceDigest = new Uint8Array(
+      await window.crypto.subtle.digest('SHA-1', await blob.slice(at, end).arrayBuffer()))
+    if (running === undefined) {
+      running = sliceDigest
+    } else {
+      const folded = new Uint8Array(running.length + sliceDigest.length)
+      folded.set(running)
+      folded.set(sliceDigest, running.length)
+      running = new Uint8Array(await window.crypto.subtle.digest('SHA-1', folded))
+    }
+  }
+  return hexFromBytes_(running)
+}
+
+
+/**
+ * @param {Uint8Array} bytes
+ * @return {string} lowercase hex
+ */
+function hexFromBytes_(bytes) {
   let out = ''
   for (let i = 0; i < bytes.length; i++) {
     out += bytes[i].toString(HEX_BASE).padStart(2, '0')
   }
   return out
-}
-
-
-// 1 MiB slices — small enough that hashing an OPFS File never allocates
-// the whole model, large enough that SubtleCrypto-equivalent throughput
-// stays I/O bound.
-const HASH_CHUNK_BYTES = 1024 * 1024
-const SHA1_BLOCK = 64
-const SHA1_WORD_COUNT = 80
-const BITS_PER_BYTE = 8
-const SHA1_LEN_BYTES = 8
-
-
-/**
- * Compute the hex-encoded SHA-1 of a Blob/File by hashing 1 MiB slices
- * so the whole object is never resident. Same digest as {@link sha1Hex}
- * on the concatenated bytes.
- *
- * @param {Blob} blob a Blob or File (OPFS handle)
- * @return {Promise<string>} 40-char lowercase hex string
- */
-export async function sha1HexFromBlob(blob) {
-  if (blob === null || blob === undefined || typeof blob.slice !== 'function') {
-    throw new Error('sha1HexFromBlob: blob is required')
-  }
-  const hasher = new Sha1()
-  const size = blob.size
-  for (let at = 0; at < size; at += HASH_CHUNK_BYTES) {
-    const end = Math.min(at + HASH_CHUNK_BYTES, size)
-    const buf = await blob.slice(at, end).arrayBuffer()
-    hasher.update(new Uint8Array(buf))
-  }
-  return hasher.hex()
-}
-
-
-/**
- * Incremental SHA-1. Used only for Blob hashing — `sha1Hex` stays on
- * `crypto.subtle` so a one-buffer digest doesn't fork implementations.
- */
-class Sha1 {
-  /** Construct a fresh hasher. */
-  constructor() {
-    this.h0 = 0x67452301
-    this.h1 = 0xEFCDAB89
-    this.h2 = 0x98BADCFE
-    this.h3 = 0x10325476
-    this.h4 = 0xC3D2E1F0
-    this.block = new Uint8Array(SHA1_BLOCK)
-    this.blockUsed = 0
-    this.bytesHashed = 0
-  }
-
-  /**
-   * Absorb `bytes`.
-   *
-   * @param {Uint8Array} bytes
-   */
-  update(bytes) {
-    this.bytesHashed += bytes.length
-    let offset = 0
-    while (offset < bytes.length) {
-      const take = Math.min(SHA1_BLOCK - this.blockUsed, bytes.length - offset)
-      this.block.set(bytes.subarray(offset, offset + take), this.blockUsed)
-      this.blockUsed += take
-      offset += take
-      if (this.blockUsed === SHA1_BLOCK) {
-        this.compress_(this.block)
-        this.blockUsed = 0
-      }
-    }
-  }
-
-  /**
-   * @return {string} 40-char lowercase hex digest
-   */
-  hex() {
-    const bitLenHi = Math.floor(this.bytesHashed / 0x20000000)
-    const bitLenLo = (this.bytesHashed * BITS_PER_BYTE) >>> 0
-    this.update(new Uint8Array([0x80]))
-    if (this.blockUsed > SHA1_BLOCK - SHA1_LEN_BYTES) {
-      this.block.fill(0, this.blockUsed)
-      this.compress_(this.block)
-      this.blockUsed = 0
-    }
-    this.block.fill(0, this.blockUsed, SHA1_BLOCK - SHA1_LEN_BYTES)
-    const view = new DataView(this.block.buffer)
-    view.setUint32(SHA1_BLOCK - SHA1_LEN_BYTES, bitLenHi)
-    view.setUint32(SHA1_BLOCK - 4, bitLenLo)
-    this.compress_(this.block)
-
-    const out = new Uint8Array(20)
-    const result = new DataView(out.buffer)
-    result.setUint32(0, this.h0)
-    result.setUint32(4, this.h1)
-    result.setUint32(8, this.h2)
-    result.setUint32(12, this.h3)
-    result.setUint32(16, this.h4)
-    let hex = ''
-    for (let i = 0; i < out.length; i++) {
-      hex += out[i].toString(HEX_BASE).padStart(2, '0')
-    }
-    return hex
-  }
-
-  /**
-   * Process one 64-byte block.
-   *
-   * @param {Uint8Array} block
-   */
-  compress_(block) {
-    const w = new Uint32Array(SHA1_WORD_COUNT)
-    const view = new DataView(block.buffer, block.byteOffset, SHA1_BLOCK)
-    for (let i = 0; i < 16; i++) {
-      w[i] = view.getUint32(i * 4)
-    }
-    for (let i = 16; i < SHA1_WORD_COUNT; i++) {
-      w[i] = rotl_(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1)
-    }
-    let a = this.h0
-    let b = this.h1
-    let c = this.h2
-    let d = this.h3
-    let e = this.h4
-    for (let i = 0; i < SHA1_WORD_COUNT; i++) {
-      let f
-      let k
-      if (i < 20) {
-        f = (b & c) | ((~b) & d)
-        k = 0x5A827999
-      } else if (i < 40) {
-        f = b ^ c ^ d
-        k = 0x6ED9EBA1
-      } else if (i < 60) {
-        f = (b & c) | (b & d) | (c & d)
-        k = 0x8F1BBCDC
-      } else {
-        f = b ^ c ^ d
-        k = 0xCA62C1D6
-      }
-      const temp = (rotl_(a, 5) + f + e + k + w[i]) >>> 0
-      e = d
-      d = c
-      c = rotl_(b, 30)
-      b = a
-      a = temp
-    }
-    this.h0 = (this.h0 + a) >>> 0
-    this.h1 = (this.h1 + b) >>> 0
-    this.h2 = (this.h2 + c) >>> 0
-    this.h3 = (this.h3 + d) >>> 0
-    this.h4 = (this.h4 + e) >>> 0
-  }
-}
-
-
-/**
- * 32-bit left rotate.
- *
- * @param {number} value
- * @param {number} bits
- * @return {number}
- */
-function rotl_(value, bits) {
-  return ((value << bits) | (value >>> (32 - bits))) >>> 0
 }
