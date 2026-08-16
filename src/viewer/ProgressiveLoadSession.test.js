@@ -157,6 +157,18 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(1)
   })
 
+  it('finish removes aabb imposters even if they left the preview group', () => {
+    session.addPreviewMesh(cubeAt(0))
+    const stray = cubeAt(5)
+    stray.userData.aabbImposter = true
+    scene.add(stray)
+    expect(scene.children).toContain(stray)
+    session.finish()
+    expect(scene.children).not.toContain(stray)
+    expect(stray.parent).toBeNull()
+  })
+
+
   it('abort tears the preview down and lands in aborted', () => {
     session.addPreviewMesh(cubeAt(0))
     session.abort()

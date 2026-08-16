@@ -147,6 +147,25 @@ export function applyAabbImposter(mesh, session, ring) {
 
 
 /**
+ * Detach every accepted AABB wire cube. Called at the end of the load
+ * so none remain once the durable mesh is on screen.
+ *
+ * @param {object} ring `{meshes, origin, cap}`
+ * @param {object} session ProgressiveLoadSession
+ */
+export function clearAabbImposters(ring, session) {
+  const group = session.previewGroup
+  for (const mesh of ring.meshes) {
+    if (group !== null && group !== undefined) {
+      group.remove(mesh)
+    }
+    mesh.removeFromParent?.()
+  }
+  ring.meshes.length = 0
+}
+
+
+/**
  * IFC loader for ShareViewer. Single entry point: `parse(buffer)`.
  *
  * Holds a `ShareIfcManager` (`this.ifcManager`) — consumer code
@@ -354,8 +373,9 @@ export default class ShareIfcLoader {
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
       }
 
-      // Swap the preview out before the real model installs — the
-      // session stops the camera follow and disposes preview meshes.
+      // Drop parse-time imposters before the durable model installs.
+      // finish() also scene-walks leftover aabb wire cubes.
+      clearAabbImposters(aabbRing, session)
       session.finish()
 
       ifc.addIfcModel(ifcModel)

@@ -650,18 +650,29 @@ export default class ProgressiveLoadSession {
 
   /** Remove the preview group and dispose its meshes' GPU resources. */
   teardownPreview_() {
+    // Imposters must not survive the durable model. Pull any aabb
+    // wire cubes off the scene first — they can leave the preview
+    // group (outlier eviction) and would otherwise stay after finish.
+    if (this.scene !== null && typeof this.scene.traverse === 'function') {
+      const strays = []
+      this.scene.traverse((obj) => {
+        if (obj.userData && obj.userData.aabbImposter) {
+          strays.push(obj)
+        }
+      })
+      for (const obj of strays) {
+        obj.removeFromParent?.()
+      }
+    }
     if (this.previewGroup === null || !this.previewInstalled) {
       return
     }
     try {
-      this.scene.remove(this.previewGroup)
-      for (const child of this.previewGroup.children) {
-        child.geometry?.dispose?.()
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        for (const material of materials) {
-          material?.dispose?.()
-        }
+      const group = this.previewGroup
+      while (group.children.length > 0) {
+        group.remove(group.children[0])
       }
+      this.scene.remove(group)
     } catch (e) {
       debug(WARN).warn('demand preview teardown failed:', e)
     }

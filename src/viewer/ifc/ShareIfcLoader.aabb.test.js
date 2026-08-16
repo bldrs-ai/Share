@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {AABB_IMPOSTER_CAP, applyAabbImposter} from './ShareIfcLoader'
+import {AABB_IMPOSTER_CAP, applyAabbImposter, clearAabbImposters} from './ShareIfcLoader'
 
 
 /**
@@ -124,5 +124,21 @@ describe('viewer/ifc/ShareIfcLoader applyAabbImposter', () => {
     expect(ring.meshes.includes(rejected)).toBe(false)
     expect(accepting.previewGroup.children).toHaveLength(3)
     expect(rejected.parent).toBeNull()
+  })
+
+
+  it('detaches every accepted box at the end of the load', () => {
+    const session = makeSession()
+    const ring = makeRing()
+    const first = makeMesh(0, 0, 0)
+    const second = makeMesh(4, 0, 0)
+    applyAabbImposter(first, session, ring)
+    applyAabbImposter(second, session, ring)
+    expect(session.previewGroup.children).toHaveLength(2)
+    clearAabbImposters(ring, session)
+    expect(ring.meshes).toHaveLength(0)
+    expect(session.previewGroup.children).toHaveLength(0)
+    expect(first.parent).toBeNull()
+    expect(second.parent).toBeNull()
   })
 })
