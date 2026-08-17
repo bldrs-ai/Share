@@ -52,7 +52,7 @@ function makeSession(accept = true) {
  * @return {object}
  */
 function makeRing() {
-  return {meshes: [], cap: AABB_IMPOSTER_CAP}
+  return {meshes: [], byExpressID: new Map(), cap: AABB_IMPOSTER_CAP}
 }
 
 
@@ -94,21 +94,88 @@ describe('viewer/ifc/ShareIfcLoader applyAabbImposter', () => {
     const session = makeSession()
     const ring = makeRing()
     const first = makeMesh(0, 0, 0)
-    applyAabbImposter(first, session, ring)
+    applyAabbImposter(first, session, ring, 0)
     for (let i = 1; i < AABB_IMPOSTER_CAP; i++) {
-      applyAabbImposter(makeMesh(i, 0, 0), session, ring)
+      applyAabbImposter(makeMesh(i, 0, 0), session, ring, i)
     }
     expect(ring.meshes).toHaveLength(AABB_IMPOSTER_CAP)
     expect(session.previewGroup.children).toHaveLength(AABB_IMPOSTER_CAP)
     expect(session.previewGroup.children[0]).toBe(first)
 
     const extra = makeMesh(AABB_IMPOSTER_CAP, 0, 0)
-    applyAabbImposter(extra, session, ring)
+    applyAabbImposter(extra, session, ring, AABB_IMPOSTER_CAP)
     expect(ring.meshes).toHaveLength(AABB_IMPOSTER_CAP)
     expect(session.previewGroup.children).toHaveLength(AABB_IMPOSTER_CAP)
     expect(session.previewGroup.children.includes(first)).toBe(false)
     expect(session.previewGroup.children.includes(extra)).toBe(true)
     expect(first.parent).toBeNull()
+    // The evicted plate's key goes with it — otherwise a later
+    // re-emission of expressID 0 would try to replace a detached mesh.
+    expect(ring.byExpressID.size).toBe(AABB_IMPOSTER_CAP)
+    expect(ring.byExpressID.has(0)).toBe(false)
+    expect(ring.byExpressID.get(AABB_IMPOSTER_CAP)).toBe(extra)
+  })
+
+
+  // conway#519: the store path emits each spatial node twice by design —
+  // an early coarse plate from a prefix generation, then a refined one
+  // after the parse. The second emission refines the first in place.
+  it('replaces the plate already drawn for the same expressID', () => {
+    const session = makeSession()
+    const ring = makeRing()
+    const coarse = makeMesh(1, 2, 3)
+    const refined = makeMesh(10, 20, 30)
+    applyAabbImposter(coarse, session, ring, 42)
+    applyAabbImposter(refined, session, ring, 42)
+    expect(ring.meshes).toEqual([refined])
+    expect(session.previewGroup.children).toEqual([refined])
+    expect(coarse.parent).toBeNull()
+    expect(session.previewGroup.children[0].matrix.elements[12]).toBe(10)
+    expect(ring.byExpressID.size).toBe(1)
+    expect(ring.byExpressID.get(42)).toBe(refined)
+  })
+
+
+  it('does not spend a cap slot on a replacement', () => {
+    const session = makeSession()
+    const ring = makeRing()
+    for (let i = 0; i < AABB_IMPOSTER_CAP; i++) {
+      applyAabbImposter(makeMesh(i, 0, 0), session, ring, i)
+    }
+    const oldest = ring.meshes[0]
+    const refined = makeMesh(0, 0, 7)
+    applyAabbImposter(refined, session, ring, AABB_IMPOSTER_CAP - 1)
+    // A full ring plus a replacement is still a full ring, and the
+    // replacement must not have evicted the oldest plate to make room.
+    expect(ring.meshes).toHaveLength(AABB_IMPOSTER_CAP)
+    expect(session.previewGroup.children).toHaveLength(AABB_IMPOSTER_CAP)
+    expect(ring.meshes[0]).toBe(oldest)
+    expect(oldest.parent).toBe(session.previewGroup)
+    expect(ring.meshes[AABB_IMPOSTER_CAP - 1]).toBe(refined)
+    expect(ring.byExpressID.size).toBe(AABB_IMPOSTER_CAP)
+  })
+
+
+  // A refused update must not delete standing scenery: the outlier guard
+  // rejecting the NEW plate leaves the old one on screen and tracked.
+  it('keeps the standing plate when its replacement is rejected', () => {
+    const accepting = makeSession(true)
+    const ring = makeRing()
+    const standing = makeMesh(1, 1, 1)
+    applyAabbImposter(standing, accepting, ring, 7)
+    const rejecting = {
+      previewGroup: accepting.previewGroup,
+      addPreviewMesh() {
+        // Outlier: do not parent.
+      },
+    }
+    const rejected = makeMesh(10000, 0, 0)
+    applyAabbImposter(rejected, rejecting, ring, 7)
+    expect(ring.meshes).toEqual([standing])
+    expect(accepting.previewGroup.children).toEqual([standing])
+    expect(standing.parent).toBe(accepting.previewGroup)
+    expect(rejected.parent).toBeNull()
+    expect(ring.byExpressID.get(7)).toBe(standing)
   })
 
 
@@ -138,11 +205,12 @@ describe('viewer/ifc/ShareIfcLoader applyAabbImposter', () => {
     const ring = makeRing()
     const first = makeMesh(0, 0, 0)
     const second = makeMesh(4, 0, 0)
-    applyAabbImposter(first, session, ring)
-    applyAabbImposter(second, session, ring)
+    applyAabbImposter(first, session, ring, 1)
+    applyAabbImposter(second, session, ring, 2)
     expect(session.previewGroup.children).toHaveLength(2)
     clearAabbImposters(ring, session)
     expect(ring.meshes).toHaveLength(0)
+    expect(ring.byExpressID.size).toBe(0)
     expect(session.previewGroup.children).toHaveLength(0)
     expect(first.parent).toBeNull()
     expect(second.parent).toBeNull()

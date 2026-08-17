@@ -104,7 +104,8 @@ export const AABB_IMPOSTER_CAP = 100
 
 
 /**
- * Add an AABB wire cube to the preview, ring-tracked for eviction.
+ * Add an AABB wire cube to the preview, keyed by expressID and
+ * ring-tracked for eviction.
  *
  * Placement is NOT this function's business: conway emits imposter
  * `flatTransformation` in the same durable coordination frame as regular
@@ -117,25 +118,90 @@ export const AABB_IMPOSTER_CAP = 100
  * recentres nothing) invented an offset that had not existed. See
  * conway#515's review-findings comment for the frame contract.
  *
+ * REPLACE-BY-EXPRESSID (conway#519): the store preview channel emits each
+ * spatial node TWICE by design — once early, from a prefix generation
+ * seconds into the parse (possibly a coarse Z band with degenerate XY),
+ * and again after the parse with full samples and the latched coordination
+ * frame. A re-emitted `aabb` payload REPLACES the plate already drawn for
+ * that expressID; it must not add a second one, and the replacement takes
+ * the old plate's slot rather than consuming a fresh one. Vertex-carrying
+ * payloads are unaffected — they are keyed by `geometryExpressID` and
+ * never re-sent.
+ *
+ * The old mesh is only detached, never disposed: the unit-cube geometry
+ * and the wire materials are pooled per load in
+ * `payloadToPreviewMesh`'s caches, so the replacement is very likely
+ * holding the same instances.
+ *
+ * `ProgressiveLoadSession`'s preview bounds union is grow-only, so a
+ * replaced coarse plate's old bounds linger in the camera-fit union until
+ * the next refit. Acceptable for preview scenery: it can only over-frame
+ * for a moment, and the whole imposter set is torn down at load end.
+ *
  * Ring-track only meshes that `addPreviewMesh` actually parented —
- * outlier rejects must not occupy a slot or evict a visible cube.
+ * outlier rejects must not occupy a slot or evict a visible cube. That
+ * also means a REJECTED replacement leaves the standing plate for its
+ * expressID alone: a refused update must never delete visible scenery.
  *
  * @param {object} mesh three.js Mesh, matrix already stamped
  * @param {object} session ProgressiveLoadSession
- * @param {object} ring `{meshes, cap}`
+ * @param {object} ring `{meshes, byExpressID, cap}`
+ * @param {number} [expressID] the payload's expressID — the replace key
  */
-export function applyAabbImposter(mesh, session, ring) {
+export function applyAabbImposter(mesh, session, ring, expressID) {
   session.addPreviewMesh(mesh)
   if (mesh.parent !== session.previewGroup) {
     return
   }
+  const keyed = expressID !== undefined && expressID !== null
+  const prior = keyed ? ring.byExpressID.get(expressID) : undefined
+  if (prior !== undefined) {
+    detachImposter_(prior, session)
+    // Eviction below deletes the map entry with the mesh, so a mapped
+    // mesh is always still in the ring — but take the push fallback
+    // rather than corrupting the ring on an index of -1.
+    const at = ring.meshes.indexOf(prior)
+    if (at === -1) {
+      ring.meshes.push(mesh)
+    } else {
+      ring.meshes[at] = mesh
+    }
+    ring.byExpressID.set(expressID, mesh)
+    return
+  }
   if (ring.meshes.length >= ring.cap) {
     const old = ring.meshes.shift()
-    if (old !== undefined && session.previewGroup !== null) {
-      session.previewGroup.remove(old)
+    if (old !== undefined) {
+      detachImposter_(old, session)
+      // Reverse lookup by scan: the ring is capped at AABB_IMPOSTER_CAP,
+      // so this is a bounded walk on an eviction that only happens once
+      // per accepted plate, and it keeps the ring to one map.
+      for (const [id, tracked] of ring.byExpressID) {
+        if (tracked === old) {
+          ring.byExpressID.delete(id)
+          break
+        }
+      }
     }
   }
   ring.meshes.push(mesh)
+  if (keyed) {
+    ring.byExpressID.set(expressID, mesh)
+  }
+}
+
+
+/**
+ * Detach one imposter from the preview group. Geometry/materials are
+ * pooled per load, so nothing is disposed here.
+ *
+ * @param {object} mesh
+ * @param {object} session ProgressiveLoadSession
+ */
+function detachImposter_(mesh, session) {
+  if (session.previewGroup !== null && session.previewGroup !== undefined) {
+    session.previewGroup.remove(mesh)
+  }
 }
 
 
@@ -143,7 +209,7 @@ export function applyAabbImposter(mesh, session, ring) {
  * Detach every accepted AABB wire cube. Called at the end of the load
  * so none remain once the durable mesh is on screen.
  *
- * @param {object} ring `{meshes, cap}`
+ * @param {object} ring `{meshes, byExpressID, cap}`
  * @param {object} session ProgressiveLoadSession
  */
 export function clearAabbImposters(ring, session) {
@@ -155,6 +221,9 @@ export function clearAabbImposters(ring, session) {
     mesh.removeFromParent?.()
   }
   ring.meshes.length = 0
+  // The replace key map holds a strong ref to every accepted plate —
+  // clearing the list alone would keep the whole ring alive past teardown.
+  ring.byExpressID.clear()
 }
 
 
@@ -273,7 +342,11 @@ export default class ShareIfcLoader {
       // whose placement never resolved), so it must never decide where
       // the durable model renders.
       const coordination = {offset: undefined}
-      const aabbRing = {meshes: [], cap: AABB_IMPOSTER_CAP}
+      // `byExpressID` is the replace key for spatial imposters: conway's
+      // store path emits each spatial node early and again at parse end
+      // (conway#519), and the second emission must refine the first plate
+      // rather than stack a second one on top of it.
+      const aabbRing = {meshes: [], byExpressID: new Map(), cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
@@ -283,7 +356,7 @@ export default class ShareIfcLoader {
             return
           }
           if (payload.aabb) {
-            applyAabbImposter(mesh, session, aabbRing)
+            applyAabbImposter(mesh, session, aabbRing, payload.expressID)
             return
           }
           session.addPreviewMesh(mesh)
