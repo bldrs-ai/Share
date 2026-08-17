@@ -96,11 +96,6 @@ function logInstancedModelStats(ifcAPI, modelID, captured, force = false) {
  */
 
 
-/** Column-major Matrix4 translation slots. */
-const MAT_TX = 12
-const MAT_TY = 13
-const MAT_TZ = 14
-
 /**
  * Last-N wire boxes: enough to read as a growing mass, cheap enough
  * that the preview group stays fixed-mem.
@@ -109,29 +104,27 @@ export const AABB_IMPOSTER_CAP = 100
 
 
 /**
- * Recenter an AABB wire cube onto the first accepted box, then add it.
- * Only ring-track meshes that `addPreviewMesh` actually parented —
- * outlier rejects must not occupy a slot or evict a visible cube.
+ * Add an AABB wire cube to the preview, ring-tracked for eviction.
  *
- * This translation is local to the parse-time preview. It must not
- * write `coordination.offset`; that latch belongs to the durable
- * builder's COORDINATE_TO_ORIGIN frame.
+ * Placement is NOT this function's business: conway emits imposter
+ * `flatTransformation` in the same durable coordination frame as regular
+ * preview meshes (metres, Y-up, COORDINATE_TO_ORIGIN-recentred), and
+ * `payloadToPreviewMesh` has already applied the shared Share-side
+ * `coordination` offset. This used to re-anchor every box by subtracting
+ * the first accepted box's translation — an arbitrary anchor that pushed
+ * the plates off the durable geometry by (first plate centre − durable
+ * anchor), and on near-origin models (where conway's model-zero policy
+ * recentres nothing) invented an offset that had not existed. See
+ * conway#515's review-findings comment for the frame contract.
+ *
+ * Ring-track only meshes that `addPreviewMesh` actually parented —
+ * outlier rejects must not occupy a slot or evict a visible cube.
  *
  * @param {object} mesh three.js Mesh, matrix already stamped
  * @param {object} session ProgressiveLoadSession
- * @param {object} ring `{meshes, origin:{xyz}, cap}`
+ * @param {object} ring `{meshes, cap}`
  */
 export function applyAabbImposter(mesh, session, ring) {
-  if (ring.origin.xyz === null) {
-    ring.origin.xyz = [
-      mesh.matrix.elements[MAT_TX],
-      mesh.matrix.elements[MAT_TY],
-      mesh.matrix.elements[MAT_TZ],
-    ]
-  }
-  mesh.matrix.elements[MAT_TX] -= ring.origin.xyz[0]
-  mesh.matrix.elements[MAT_TY] -= ring.origin.xyz[1]
-  mesh.matrix.elements[MAT_TZ] -= ring.origin.xyz[2]
   session.addPreviewMesh(mesh)
   if (mesh.parent !== session.previewGroup) {
     return
@@ -150,7 +143,7 @@ export function applyAabbImposter(mesh, session, ring) {
  * Detach every accepted AABB wire cube. Called at the end of the load
  * so none remain once the durable mesh is on screen.
  *
- * @param {object} ring `{meshes, origin, cap}`
+ * @param {object} ring `{meshes, cap}`
  * @param {object} session ProgressiveLoadSession
  */
 export function clearAabbImposters(ring, session) {
@@ -280,7 +273,7 @@ export default class ShareIfcLoader {
       // whose placement never resolved), so it must never decide where
       // the durable model renders.
       const coordination = {offset: undefined}
-      const aabbRing = {meshes: [], origin: {xyz: null}, cap: AABB_IMPOSTER_CAP}
+      const aabbRing = {meshes: [], cap: AABB_IMPOSTER_CAP}
 
       const onPreviewMesh = !usePreview ? undefined : (payload) => {
         try {
