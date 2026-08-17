@@ -1,8 +1,8 @@
 import {
-  addHashParams,
   getHashParams,
   getObjectParams,
   removeHashParams,
+  setHashParams,
 } from '../../utils/location'
 import {ColorMode} from '../../viewer/display/colorMode'
 import {ShadingMode} from '../../viewer/display/shadingMode'
@@ -72,8 +72,14 @@ export function writeModelDisplayHash(location, colorMode, shadingMode) {
   if (Object.keys(params).length === 0) {
     removeHashParams(location, HASH_PREFIX_DISPLAY)
   } else {
-    // includeNames: emit `k=v`, matching the cp: token shape.
-    addHashParams(location, HASH_PREFIX_DISPLAY, params, true)
+    // setHashParams (remove-then-add), NOT addHashParams: add merges into
+    // the existing token, so an axis returning to its default (which stops
+    // being emitted) would survive from the previous write — e.g.
+    // Source+Wireframe -> Auto+Wireframe kept a stale `color=src` and the
+    // shared URL restored a different display than the sender saw. The
+    // whole token is the value; replace it. includeNames: emit `k=v`,
+    // matching the cp: token shape.
+    setHashParams(location, HASH_PREFIX_DISPLAY, params, true)
   }
 }
 

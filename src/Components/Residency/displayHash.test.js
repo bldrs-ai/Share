@@ -69,6 +69,24 @@ describe('#d: round-trip', () => {
     expect(readModelDisplayHash(location)).toEqual({})
   })
 
+  it('drops a stale axis when it returns to default while another stays set', () => {
+    // Regression (Codex review on #1714): addHashParams MERGES into the
+    // existing token, so Source+Wireframe -> Auto+Wireframe kept `color=src`
+    // and the shared URL restored the wrong display. The write must replace
+    // the whole token.
+    const location = loc()
+    writeModelDisplayHash(location, SOURCE, WIREFRAME)
+    writeModelDisplayHash(location, AUTO, WIREFRAME)
+    expect(location.hash).not.toContain('color')
+    expect(readModelDisplayHash(location)).toEqual({shading: WIREFRAME})
+
+    // And the mirror image: wireframe back to shaded drops `wire`.
+    writeModelDisplayHash(location, SOURCE, WIREFRAME)
+    writeModelDisplayHash(location, SOURCE, SHADED)
+    expect(location.hash).not.toContain('wire')
+    expect(readModelDisplayHash(location)).toEqual({color: SOURCE})
+  })
+
   it('clears the d: token when state returns to default, keeping other tokens', () => {
     const location = loc('#c:1,2,3,4,5,6')
     writeModelDisplayHash(location, SOURCE, WIREFRAME)

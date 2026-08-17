@@ -126,5 +126,20 @@ export function setShadingMode(model, mode) {
     eachMaterial(mesh, (mat) => {
       mat.wireframe = wireframe
     })
+    // BatchedMesh caches its multi-draw start/count arrays and
+    // `onBeforeRender` early-returns when `!_visibilityChanged &&
+    // !perObjectFrustumCulled && !sortObjects` — and wireframe changes what
+    // those ranges mean (three r184 doubles counts and recomputes byte
+    // offsets under `material.wireframe`). Today the ranges rebuild every
+    // frame anyway because we leave `perObjectFrustumCulled` at its default
+    // true, but the opaque batch already runs `sortObjects = false`
+    // (flatMeshToBatchedModel), so turning off per-object culling — an
+    // obvious future perf move — would silently truncate every wireframe
+    // draw. Invalidate explicitly on toggle; three exposes no public
+    // invalidation API, so this pokes the same flag its own mutators
+    // (setVisibleAt et al.) set.
+    if (mesh.isBatchedMesh && '_visibilityChanged' in mesh) {
+      mesh._visibilityChanged = true
+    }
   })
 }

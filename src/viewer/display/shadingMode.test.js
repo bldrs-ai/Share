@@ -7,11 +7,16 @@ import {
 
 
 /**
- * A BatchedMesh double with one material.
+ * A BatchedMesh double with one material, carrying the private draw-list
+ * invalidation flag three's BatchedMesh keeps (`_visibilityChanged`).
  *
  * @return {object} mesh double
  */
-const batchedMesh = () => ({isBatchedMesh: true, material: {wireframe: false}})
+const batchedMesh = () => ({
+  isBatchedMesh: true,
+  material: {wireframe: false},
+  _visibilityChanged: false,
+})
 
 
 /**
@@ -70,6 +75,20 @@ describe('shadingMode', () => {
       expect(mat.wireframe).toBe(true)
     }
     expect(activeShadingMode(mesh)).toBe(ShadingMode.WIREFRAME)
+  })
+
+  it('invalidates the BatchedMesh draw list on toggle', () => {
+    // Regression (Codex review on #1714): three r184 caches the multi-draw
+    // start/count arrays and only rebuilds when invalidated (or when
+    // per-object culling / sorting force a per-frame rebuild). Wireframe
+    // doubles the counts, so a toggle that skips invalidation draws
+    // truncated ranges the moment the per-frame rebuild conditions go away.
+    const mesh = batchedMesh()
+    setShadingMode(mesh, ShadingMode.WIREFRAME)
+    expect(mesh._visibilityChanged).toBe(true)
+    mesh._visibilityChanged = false
+    setShadingMode(mesh, ShadingMode.SHADED)
+    expect(mesh._visibilityChanged).toBe(true)
   })
 
   it('supports shading whenever a material exists, not otherwise', () => {
