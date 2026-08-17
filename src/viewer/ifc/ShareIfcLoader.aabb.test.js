@@ -52,25 +52,28 @@ function makeSession(accept = true) {
  * @return {object}
  */
 function makeRing() {
-  return {meshes: [], origin: {xyz: null}, cap: AABB_IMPOSTER_CAP}
+  return {meshes: [], cap: AABB_IMPOSTER_CAP}
 }
 
 
 describe('viewer/ifc/ShareIfcLoader applyAabbImposter', () => {
-  it('places the first box at the origin and later boxes relative to it', () => {
+  // Conway emits imposters in the durable coordination frame, so the
+  // matrix that arrives is already where the box belongs. The old
+  // re-anchor onto the first accepted box shifted every plate off the
+  // durable geometry (conway#515 review findings).
+  it('leaves the stamped matrix alone', () => {
     const session = makeSession()
     const ring = makeRing()
     const first = makeMesh(100, 200, 300)
     const second = makeMesh(110, 200, 300)
     applyAabbImposter(first, session, ring)
     applyAabbImposter(second, session, ring)
-    expect(first.matrix.elements[12]).toBe(0)
-    expect(first.matrix.elements[13]).toBe(0)
-    expect(first.matrix.elements[14]).toBe(0)
-    expect(second.matrix.elements[12]).toBe(10)
-    expect(second.matrix.elements[13]).toBe(0)
-    expect(second.matrix.elements[14]).toBe(0)
-    expect(ring.origin.xyz).toEqual([100, 200, 300])
+    expect(first.matrix.elements[12]).toBe(100)
+    expect(first.matrix.elements[13]).toBe(200)
+    expect(first.matrix.elements[14]).toBe(300)
+    expect(second.matrix.elements[12]).toBe(110)
+    expect(second.matrix.elements[13]).toBe(200)
+    expect(second.matrix.elements[14]).toBe(300)
   })
 
 
@@ -78,9 +81,12 @@ describe('viewer/ifc/ShareIfcLoader applyAabbImposter', () => {
     const session = makeSession()
     const ring = makeRing()
     const coordination = {offset: undefined}
-    applyAabbImposter(makeMesh(8, 16, 24), session, ring)
+    const mesh = makeMesh(8, 16, 24)
+    applyAabbImposter(mesh, session, ring)
     expect(coordination.offset).toBeUndefined()
-    expect(ring.origin.xyz).toEqual([8, 16, 24])
+    expect(mesh.matrix.elements[12]).toBe(8)
+    expect(mesh.matrix.elements[13]).toBe(16)
+    expect(mesh.matrix.elements[14]).toBe(24)
   })
 
 
