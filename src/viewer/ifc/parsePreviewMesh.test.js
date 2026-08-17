@@ -106,21 +106,58 @@ describe('viewer/ifc/parsePreviewMesh', () => {
   })
 
 
-  it('does not apply the durable coordination offset to aabb imposters', () => {
+  /**
+   * @param {object} [overrides] payload field overrides
+   * @return {object} an imposter payload (box, no vertex/index data)
+   */
+  function makeAabbPayload(overrides = {}) {
+    return makePayload({
+      aabb: {min: [0, 0, 0], max: [1, 1, 1]},
+      vertexData: undefined,
+      indexData: undefined,
+      geometryExpressID: -1,
+      ...overrides,
+    })
+  }
+
+
+  // Imposters arrive in the same durable frame as carrier payloads
+  // (conway#515 review findings), so they take the same Share-side
+  // recentre — no imposter-specific anchoring anywhere.
+  it('applies the durable coordination offset to aabb imposters', () => {
     const mesh = payloadToPreviewMesh(
-      makePayload({
-        aabb: {min: [0, 0, 0], max: [1, 1, 1]},
-        vertexData: undefined,
-        indexData: undefined,
-        geometryExpressID: -1,
-      }),
-      new Map(),
-      new Map(),
-      {offset: [100, 200, 300]},
-    )
+      makeAabbPayload(), new Map(), new Map(), {offset: [100, 200, 300]})
+    expect(mesh.matrix.elements[12]).toBe(-90)
+    expect(mesh.matrix.elements[13]).toBe(-180)
+    expect(mesh.matrix.elements[14]).toBe(-270)
+  })
+
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+  ])('renders aabb imposters unrecentred while offset is %s', (label, offset) => {
+    const mesh = payloadToPreviewMesh(
+      makeAabbPayload(), new Map(), new Map(), {offset})
     expect(mesh.matrix.elements[12]).toBe(10)
     expect(mesh.matrix.elements[13]).toBe(20)
     expect(mesh.matrix.elements[14]).toBe(30)
+  })
+
+
+  it('never latches the coordination frame from an aabb imposter', () => {
+    const coordination = {offset: undefined}
+    payloadToPreviewMesh(makeAabbPayload(), new Map(), new Map(), coordination)
+    expect(coordination.offset).toBeUndefined()
+  })
+
+
+  it('applies the durable coordination offset to carrier payloads', () => {
+    const mesh = payloadToPreviewMesh(
+      makePayload(), new Map(), new Map(), {offset: [1, 2, 3]})
+    expect(mesh.matrix.elements[12]).toBe(9)
+    expect(mesh.matrix.elements[13]).toBe(18)
+    expect(mesh.matrix.elements[14]).toBe(27)
   })
 
   it('marks translucent colors transparent', () => {

@@ -50,7 +50,7 @@ const AABB_GEOMETRY_KEY = -1
  */
 export function payloadToPreviewMesh(payload, geometryCache, materialCache, coordination = null) {
   if (payload.aabb) {
-    return aabbPayloadToMesh_(payload, geometryCache, materialCache)
+    return aabbPayloadToMesh_(payload, geometryCache, materialCache, coordination)
   }
   let geometry = geometryCache.get(payload.geometryExpressID)
   if (geometry === undefined) {
@@ -79,16 +79,30 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache, coor
   const mesh = new Mesh(geometry, material)
   mesh.matrixAutoUpdate = false
   mesh.matrix.fromArray(payload.flatTransformation)
-  // Read-only: `offset === undefined` means the durable builder has not
-  // decided the frame yet — render unrecentred rather than letting an
-  // untrusted preview payload decide it (see the coordination param doc).
-  if (coordination !== null &&
-      coordination.offset !== undefined && coordination.offset !== null) {
-    mesh.matrix.elements[12] -= coordination.offset[0]
-    mesh.matrix.elements[13] -= coordination.offset[1]
-    mesh.matrix.elements[14] -= coordination.offset[2]
-  }
+  recenterOntoCoordination_(mesh, coordination)
   return mesh
+}
+
+
+/**
+ * Subtract the shared origin-recenter offset from an already-stamped
+ * preview matrix. READ-ONLY on `coordination`: `offset === undefined`
+ * means the durable builder has not decided the frame yet — render
+ * unrecentred rather than letting an untrusted preview payload decide it
+ * (see the `coordination` param doc on `payloadToPreviewMesh`).
+ *
+ * @param {object} mesh Mesh whose `matrix` is already `fromArray`'d
+ * @param {object|null} coordination shared frame, `{offset}`
+ */
+function recenterOntoCoordination_(mesh, coordination) {
+  if (coordination === null ||
+      coordination.offset === undefined || coordination.offset === null) {
+    return
+  }
+  const [ox, oy, oz] = coordination.offset
+  mesh.matrix.elements[12] -= ox
+  mesh.matrix.elements[13] -= oy
+  mesh.matrix.elements[14] -= oz
 }
 
 
@@ -96,12 +110,28 @@ export function payloadToPreviewMesh(payload, geometryCache, materialCache, coor
  * Shared unit cube + per-payload transform. One BufferGeometry for the
  * whole load; Share recycles the last N Mesh wrappers.
  *
+ * Imposters are coordinated exactly like carrier payloads: conway emits
+ * their `flatTransformation` in the same durable frame (metres, Y-up,
+ * recentred by COORDINATE_TO_ORIGIN) as regular preview meshes, so the
+ * only Share-side adjustment is the shared `coordination` offset. It used
+ * to arrive in raw IFC model space, which Share compensated for by
+ * re-anchoring the boxes onto the first one that landed — an arbitrary
+ * anchor that offset the plates from the durable geometry, and invented
+ * an offset on near-origin models where conway recentres nothing. See
+ * conway#515's review-findings comment for the frame contract.
+ * `payload.aabb` itself stays RAW model-space bounds, for reference only:
+ * it is the "is this an imposter?" discriminator here, never a source of
+ * placement. `payload.solid` is still honoured when present, but conway
+ * stopped sending it in the same change — plates fall through to the
+ * wireframe default.
+ *
  * @param {object} payload
  * @param {Map} geometryCache
  * @param {Map} materialCache
+ * @param {object} [coordination] shared origin-recenter frame, `{offset}`
  * @return {object}
  */
-function aabbPayloadToMesh_(payload, geometryCache, materialCache) {
+function aabbPayloadToMesh_(payload, geometryCache, materialCache, coordination = null) {
   let geometry = geometryCache.get(AABB_GEOMETRY_KEY)
   if (geometry === undefined) {
     geometry = new BoxGeometry(1, 1, 1)
@@ -123,6 +153,7 @@ function aabbPayloadToMesh_(payload, geometryCache, materialCache) {
   const mesh = new Mesh(geometry, material)
   mesh.matrixAutoUpdate = false
   mesh.matrix.fromArray(payload.flatTransformation)
+  recenterOntoCoordination_(mesh, coordination)
   mesh.userData.aabbImposter = true
   return mesh
 }
