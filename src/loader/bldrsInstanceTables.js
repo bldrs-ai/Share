@@ -1,4 +1,5 @@
 import {base64ToUint32Array, uint32ArrayToBase64} from './bldrsFaceIds'
+import {glbInfo} from './glbLog'
 
 
 /**
@@ -144,4 +145,62 @@ export function parseInstanceTablesExtensionData(raw) {
     offset = end
   }
   return nodes
+}
+
+
+/**
+ * GLTFLoader plugin surfacing `BLDRS_instance_tables` onto
+ * `gltf.scene.userData.bldrsInstanceTables` (parsed per-node shape, or
+ * absent). Mirrors `BldrsFaceIdsReader`'s envelope handling — the inject
+ * step stores every BLDRS_* payload as `{compressed, bufferView}` with a
+ * gzipped-JSON buffer view. Registered in `Loader.js#newGltfLoader`.
+ */
+export class BldrsInstanceTablesReader {
+  /**
+   * @param {object} parser GLTFLoader parser passed at registration time.
+   */
+  constructor(parser) {
+    this.name = BLDRS_INSTANCE_TABLES_EXTENSION_NAME
+    this.parser = parser
+  }
+
+  /**
+   * @param {object} gltf parsed GLTF object
+   * @return {Promise<object>} the same gltf (GLTFLoader plugin contract)
+   */
+  async afterRoot(gltf) {
+    const json = this.parser.json
+    const ext = json.extensions?.[this.name]
+    if (!ext) {
+      return gltf
+    }
+    if (!ext.compressed || !Number.isInteger(ext.bufferView) ||
+        !Array.isArray(json.bufferViews) ||
+        ext.bufferView < 0 || ext.bufferView >= json.bufferViews.length) {
+      glbInfo(`${this.name}: malformed extension envelope; skipping`)
+      return gltf
+    }
+    let parsed
+    try {
+      const bv = json.bufferViews[ext.bufferView]
+      const arrayBuffer = await this.parser.getDependency('buffer', bv.buffer)
+      const compressed = new Uint8Array(arrayBuffer, bv.byteOffset || 0, bv.byteLength)
+      const pako = await import('pako')
+      parsed = JSON.parse(pako.ungzip(compressed, {to: 'string'}))
+    } catch (e) {
+      glbInfo(`${this.name}: failed to decompress/parse payload:`, e)
+      return gltf
+    }
+    const nodes = parseInstanceTablesExtensionData(parsed)
+    if (!nodes) {
+      glbInfo(`${this.name}: payload failed validation; skipping`)
+      return gltf
+    }
+    if (gltf.scene) {
+      gltf.scene.userData.bldrsInstanceTables = nodes
+      const total = nodes.reduce((n, node) => n + node.count, 0)
+      glbInfo(`${this.name}: resolved ${nodes.length} node(s), ${total} instance(s)`)
+    }
+    return gltf
+  }
 }

@@ -92,29 +92,23 @@ function buildOccurrencePathIndex(instanceOccurrencePaths) {
 
 
 /**
- * Decorate prepared batches into the final batched model — shared by the
- * one-shot path above and the incremental demand-path builder (slice B1,
- * `incrementalBatchedBuilder.js`), which assembles the same BatchHandle
- * shape progressively during the pump and only needs this decoration at
- * the end.
+ * Stamp a BatchHandle list's tables onto its meshes — the shared decoration
+ * core for every path that produces a renderable batched model: the one-shot
+ * and incremental Conway-direct builds (via `assembleBatchedModel` below)
+ * and the batched-native GLB cache-hit hydration
+ * (`instancedGlbToBatchedModel`), which arrives with no Conway parser and
+ * only needs this mesh-level decoration. Keeping one function is what makes
+ * cache-hit and cache-miss models behave identically for highlight /
+ * subsets / display controls — parity by construction, not by parallel code.
+ *
+ * Includes the source-color snapshot + colorless-palette pass (S1/S2 of
+ * design/new/model-display-controls.md), so a hydrated model's auto-color
+ * state is RE-DERIVED from the artifact's source colors exactly as a fresh
+ * parse derives it — the determinism the cache round-trip relies on.
  *
  * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
- * @param {object} ifcAPI Conway-compatible IfcAPI
- * @param {number} modelID
- * @param {object} [opts]
- * @param {object} [opts.scene] subset fallbackParent (see above)
- * @param {object} [opts.root] existing Group already holding the batch
- *   meshes (the incremental path's scene-installed root) — used as the
- *   model object so the on-screen group IS the durable model, no swap.
- * @return {object} the decorated model
  */
-export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
-  if (batches.length === 0) {
-    // Degenerate (no renderable geometry). Throw so ShareIfcLoader falls
-    // back to the merged path rather than adding an empty model.
-    throw new Error('buildBatchedConwayModel: no renderable geometry')
-  }
-
+export function decorateBatchMeshes(batches) {
   // Snapshot the file's own colors before any display override repaints
   // them. `applyProductPalette` REPLACES entries in `instanceColors` — the
   // restore table `batchedHighlight` reads — so without this the source
@@ -175,6 +169,34 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     // mock and present only in the production prototype patch.
     batch.mesh.computeBoundsTree?.()
   }
+}
+
+
+/**
+ * Decorate prepared batches into the final batched model — shared by the
+ * one-shot path above and the incremental demand-path builder (slice B1,
+ * `incrementalBatchedBuilder.js`), which assembles the same BatchHandle
+ * shape progressively during the pump and only needs this decoration at
+ * the end.
+ *
+ * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
+ * @param {object} ifcAPI Conway-compatible IfcAPI
+ * @param {number} modelID
+ * @param {object} [opts]
+ * @param {object} [opts.scene] subset fallbackParent (see above)
+ * @param {object} [opts.root] existing Group already holding the batch
+ *   meshes (the incremental path's scene-installed root) — used as the
+ *   model object so the on-screen group IS the durable model, no swap.
+ * @return {object} the decorated model
+ */
+export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
+  if (batches.length === 0) {
+    // Degenerate (no renderable geometry). Throw so ShareIfcLoader falls
+    // back to the merged path rather than adding an empty model.
+    throw new Error('buildBatchedConwayModel: no renderable geometry')
+  }
+
+  decorateBatchMeshes(batches)
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
   // The incremental path passes its scene-installed root instead.

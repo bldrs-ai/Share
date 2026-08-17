@@ -241,6 +241,11 @@ export async function exportBatchedModelAsInstancedGlb(model) {
 
     const node = doc.createNode().setMesh(mesh)
     node.setExtension('EXT_mesh_gpu_instancing', batch)
+    // Table-join identity: GLTFLoader promotes node extras to
+    // `object.userData`, so the reader matches each InstancedMesh to its
+    // table slice by this index instead of trusting traversal order — the
+    // same lesson face_ids' `firstExpressId` canary encodes.
+    node.setExtras({bldrsTableNode: tableNodes.length})
     scene.addChild(node)
 
     const anyGeometryId = entries.some((e) => e.geometryId !== null && e.geometryId !== undefined)

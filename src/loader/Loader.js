@@ -42,7 +42,9 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
-import {activeArtifactSpec} from './glbCompress'
+import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
+import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
@@ -436,6 +438,25 @@ export async function load(
       lastErr.isOutOfMemory = true
     }
     throw lastErr
+  }
+
+  // Batched-native artifact hydration (view-140 S9, `?feature=glbBatched`):
+  // GLTFLoader parsed the EXT_mesh_gpu_instancing nodes to InstancedMeshes
+  // and the tables plugin stashed BLDRS_instance_tables on userData —
+  // rebuild the decorated BatchedMesh model the cache-miss path produces,
+  // so highlight / isolate / residency / display controls work on reload.
+  // Fail-soft: a null hydration keeps the GLTFLoader model, which still
+  // renders correctly (three draws the instancing natively) — degraded to
+  // table-less, never wrong. Runs before convertToShareModel so the
+  // hydrated model is what every downstream decoration sees.
+  if (cameFromGlbCache && isGlbBatchedActive() && model?.userData?.bldrsInstanceTables) {
+    const hydrateScene =
+      typeof viewer?.context?.getScene === 'function' ? viewer.context.getScene() : null
+    const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene})
+    if (hydrated) {
+      glbInfo('reader: hydrated batched-native artifact to a BatchedMesh model')
+      model = hydrated
+    }
   }
 
   model.isUploadedFile = isUploadedFile
@@ -1623,6 +1644,7 @@ function newGltfLoader() {
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
   loader.register((parser) => new BldrsFaceIdsReader(parser))
+  loader.register((parser) => new BldrsInstanceTablesReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')
