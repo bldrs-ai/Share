@@ -7,7 +7,8 @@ and the review of conway#508 that motivated the rubric); this is the
 org direction for both repos, not a conway-only experiment. conway
 carries the same guidance inline in its
 [AGENTS.md](https://github.com/bldrs-ai/conway/blob/main/AGENTS.md)
-§"Issue-queue burndowns".
+§"Issue-queue burndowns: sub-agents and the rubric" (landing via
+conway#520 — merge that before this doc, or the reference dangles).
 
 ## Roles and models
 
