@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react'
+import React, {useEffect, useRef} from 'react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
 import {clearPendingGithubScope, getGrantedGithubScope, stashPendingGithubScope} from '../../Auth0/githubGrant'
 
@@ -11,9 +11,18 @@ import {clearPendingGithubScope, getGrantedGithubScope, stashPendingGithubScope}
  * @return {React.Element} A div indicating the user is being redirected to Auth0.
  */
 function PopupAuth() {
-  const {loginWithRedirect} = useAuth0()
+  const {loginWithRedirect, isLoading, user} = useAuth0()
+  // The effect re-runs when the SDK settles (isLoading flips) — redirect once.
+  const redirectedRef = useRef(false)
 
   useEffect(() => {
+    // Wait for the SDK to restore any cached session (cacheLocation is
+    // localstorage, shared with the opener): `user` below is how a plain
+    // re-auth proves WHOSE remembered grant it may re-request.
+    if (isLoading || redirectedRef.current) {
+      return
+    }
+    redirectedRef.current = true
     // Extract scope from the query parameters
     const params = new URLSearchParams(window.location.search)
     const connection = params.get('connection') || 'github'
@@ -39,7 +48,11 @@ function PopupAuth() {
         // round trip succeeds — a cancelled popup must not record a grant.
         stashPendingGithubScope(requestedScope)
       } else {
-        connectionScope = getGrantedGithubScope()
+        // The record is keyed to the Auth0 user; only the cached session's
+        // own grant is forwarded. No cached identity (fresh login after
+        // logout, new device) → no remembered scope — the next user must
+        // not inherit the previous user's `repo` opt-in.
+        connectionScope = getGrantedGithubScope(user?.sub)
       }
     }
 
@@ -61,7 +74,7 @@ function PopupAuth() {
         ...(linkToken && {linkToken}), // ← forward it
       },
     })
-  }, [loginWithRedirect]) // Include loginWithRedirect as a dependency
+  }, [loginWithRedirect, isLoading, user])
 
   return <div>Redirecting to Auth0…</div>
 }

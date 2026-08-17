@@ -98,9 +98,12 @@ export default function GitHubFileBrowser({
   // GitHub's last-request-wins scope handling doesn't drop the grant. It
   // only describes the legacy Auth0-federated token, so it's ignored (and
   // never written) when a connection override token drives this browser.
+  // The record is keyed to the Auth0 user (githubGrant.js) — reads pass the
+  // current identity so one account's opt-in never leaks to another on a
+  // shared browser.
   const isLegacyAuthPath = accessTokenOverride === undefined || accessTokenOverride === null
   const [hasPersistedGrant, setHasPersistedGrant] = useState(
-    () => isLegacyAuthPath && getGrantedGithubScope() === 'repo',
+    () => isLegacyAuthPath && getGrantedGithubScope(user?.sub) === 'repo',
   )
   const privateReposEnabled = hasPrivateRepos || hasPersistedGrant
   // True from the moment the user opts into private repos until the token
@@ -143,7 +146,7 @@ export default function GitHubFileBrowser({
         const hasRepoScope = scopes.includes('repo')
         setHasPersistedGrant(hasRepoScope)
         if (hasRepoScope) {
-          saveGrantedGithubScope('repo')
+          saveGrantedGithubScope('repo', user?.sub)
         } else {
           clearGrantedGithubScope()
         }
@@ -201,7 +204,7 @@ export default function GitHubFileBrowser({
       // Evidence the federated token carries `repo` — persist it so PopupAuth
       // keeps re-requesting the scope (covers grants that predate the
       // persistence record, e.g. from before this fix shipped).
-      saveGrantedGithubScope('repo')
+      saveGrantedGithubScope('repo', user?.sub)
       setHasPersistedGrant(true)
     }
     setCurrentPath('')
@@ -356,7 +359,7 @@ export default function GitHubFileBrowser({
         // PopupCallback committed the granted scope (popup window wrote
         // localStorage) — pick it up so the checkbox locks in even when the
         // refetched org has no private repos to evidence the grant.
-        setHasPersistedGrant(isLegacyAuthPath && getGrantedGithubScope() === 'repo')
+        setHasPersistedGrant(isLegacyAuthPath && getGrantedGithubScope(user?.sub) === 'repo')
         selectOrg(selectedOrgName)
       }
     }

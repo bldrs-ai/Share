@@ -18,6 +18,16 @@
  * scope change only after the auth round trip actually succeeds (a
  * cancelled popup must not record a grant that never happened).
  *
+ * The record is keyed to the Auth0 user (`sub` claim): reads and writes
+ * both require the caller to say whose grant this is, and a read under a
+ * different identity evicts the record. Without this, the origin-wide key
+ * would outlive logout on a shared browser, and the next account's plain
+ * GitHub login would inherit the previous account's `repo` opt-in —
+ * silently widening a token the new user never consented to widen, and
+ * skipping the Pro gate on the opt-in. Callers that can't establish an
+ * identity (e.g. a fresh login popup with no cached Auth0 session) simply
+ * get no remembered scope — the same safe default as a fresh device.
+ *
  * Lifespan: this exists only for the legacy Auth0-federated token path and
  * should be deleted with it when the connection-based GitHub flow
  * (src/connections/github/, which always requests `repo` itself) fully
@@ -32,27 +42,64 @@ const PENDING_SCOPE_KEY = 'bldrs.github.pendingScope'
 
 
 /**
- * The GitHub connection_scope the user has previously granted, or null.
+ * The GitHub connection_scope the given user has previously granted, or
+ * null. Identity is required: no `sub` means no remembered scope. A record
+ * held by a DIFFERENT user is evicted on sight — the caller has proven a
+ * new identity is active in this browser, so the old user's grant must not
+ * survive to be attached to the new user's logins.
  *
+ * @param {string|undefined} sub Auth0 user id (`sub` claim) of the current user
  * @return {string|null}
  */
-export function getGrantedGithubScope() {
+export function getGrantedGithubScope(sub) {
+  let raw = null
   try {
-    return localStorage.getItem(GRANTED_SCOPE_KEY)
+    raw = localStorage.getItem(GRANTED_SCOPE_KEY)
   } catch {
     return null
   }
+  if (!raw) {
+    return null
+  }
+  let record = null
+  try {
+    record = JSON.parse(raw)
+  } catch {
+    record = null
+  }
+  if (!record || typeof record !== 'object' || !record.sub) {
+    // Unparseable or unattributed (e.g. a pre-user-scoping plain string):
+    // evict — a record that can't name its owner can't be trusted.
+    clearGrantedGithubScope()
+    return null
+  }
+  if (!sub) {
+    // Caller has no identity (fresh popup, no cached session): the record
+    // stays — its owner may be about to log back in — but is not usable.
+    return null
+  }
+  if (record.sub !== sub) {
+    clearGrantedGithubScope()
+    return null
+  }
+  return record.scope || null
 }
 
 
 /**
- * Record a granted GitHub connection_scope (e.g. 'repo').
+ * Record a granted GitHub connection_scope (e.g. 'repo') for a user.
+ * No-op without an identity to key it to — an unattributed grant is
+ * exactly the cross-account leak this record must not create.
  *
  * @param {string} scope
+ * @param {string|undefined} sub Auth0 user id (`sub` claim) of the granting user
  */
-export function saveGrantedGithubScope(scope) {
+export function saveGrantedGithubScope(scope, sub) {
+  if (!sub) {
+    return
+  }
   try {
-    localStorage.setItem(GRANTED_SCOPE_KEY, scope)
+    localStorage.setItem(GRANTED_SCOPE_KEY, JSON.stringify({scope, sub}))
   } catch {
     // localStorage can throw (quota / private mode); persistence is best-effort.
   }
@@ -105,12 +152,17 @@ export function clearPendingGithubScope() {
 
 /**
  * Commit the stashed scope after a successful auth round trip (called by
- * PopupCallback). `repo` records the widened grant; any other explicit
- * scope (e.g. the `public_repo` downgrade for a lapsed-Pro reauth) resets
- * the record so later logins stop re-requesting `repo`. No stash — e.g. a
- * plain login — is a no-op.
+ * PopupCallback, with the `sub` of the identity that just authenticated —
+ * the only party the grant can honestly be attributed to). `repo` records
+ * the widened grant for that user; any other explicit scope (e.g. the
+ * `public_repo` downgrade for a lapsed-Pro reauth) resets the record so
+ * later logins stop re-requesting `repo`. No stash — e.g. a plain login —
+ * is a no-op, and a widen with no identity is dropped rather than saved
+ * unattributed.
+ *
+ * @param {string|undefined} sub Auth0 user id from the fresh id token
  */
-export function commitPendingGithubScope() {
+export function commitPendingGithubScope(sub) {
   let pending = null
   try {
     pending = sessionStorage.getItem(PENDING_SCOPE_KEY)
@@ -122,7 +174,7 @@ export function commitPendingGithubScope() {
     return
   }
   if (pending === 'repo') {
-    saveGrantedGithubScope(pending)
+    saveGrantedGithubScope(pending, sub)
   } else {
     clearGrantedGithubScope()
   }

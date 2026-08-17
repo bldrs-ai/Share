@@ -18,9 +18,11 @@ function PopupCallback() {
       await handleRedirectCallback() // waits until tokens are cached
 
       // Auth succeeded, so a scope change PopupAuth stashed (repo widen /
-      // public_repo downgrade) is now real — record it so future plain
-      // logins keep re-requesting the granted scope. See githubGrant.js.
-      commitPendingGithubScope()
+      // public_repo downgrade) is now real — record it, keyed to the
+      // identity that just authenticated, so future plain logins by the
+      // SAME user keep re-requesting the granted scope. See githubGrant.js.
+      const claims = await getIdTokenClaims()
+      commitPendingGithubScope(claims?.sub)
 
       if (localStorage.getItem('linkStatus') === 'inProgress') {
         // Signal main tab that linking should happen

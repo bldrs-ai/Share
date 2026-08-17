@@ -9,6 +9,7 @@ import {getBranches} from '../../net/github/Branches'
 import {getOAuthScopes} from '../../net/github/OAuthScopes'
 import {navigateToModel} from '../../utils/navigate'
 import {addRecentFileEntry, setPendingModelNameUpdate} from '../../connections/persistence'
+import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import useStore from '../../store/useStore'
 import GitHubFileBrowser from './GitHubFileBrowser'
 
@@ -30,6 +31,8 @@ jest.mock('../../connections/persistence', () => ({
 
 
 const GH_BROWSER_STATE_KEY = 'bldrs.openDialog.github'
+/** The signed-in Auth0 user id the grant record is keyed to in these tests. */
+const SUB = 'github|123'
 
 
 /**
@@ -80,7 +83,7 @@ describe('GitHubFileBrowser', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     localStorage.clear()
-    useAuth0.mockReturnValue({user: {nickname: 'cypresstester'}})
+    useAuth0.mockReturnValue({user: {nickname: 'cypresstester', sub: SUB}})
     getOrganizations.mockResolvedValue({0: {login: 'bldrs-ai'}})
     getRepositories.mockResolvedValue([
       {name: 'repoA', private: false},
@@ -207,7 +210,7 @@ describe('GitHubFileBrowser', () => {
       await selectOption('openOrganization', '@bldrs-ai')
       // PopupAuth reads this record to re-request `repo` on every later
       // login, so GitHub's last-request-wins scoping can't drop the grant.
-      await waitFor(() => expect(localStorage.getItem('bldrs.github.grantedScope')).toBe('repo'))
+      await waitFor(() => expect(getGrantedGithubScope(SUB)).toBe('repo'))
     })
 
     it('shows checked + locked when the token truly carries repo scope, even in an all-public org', async () => {
@@ -219,14 +222,14 @@ describe('GitHubFileBrowser', () => {
       expect(checkbox).toBeDisabled()
       expect(screen.getByText('Private repos are enabled for this account.')).toBeInTheDocument()
       // Token truth also (re)writes the record for PopupAuth to re-request.
-      expect(localStorage.getItem('bldrs.github.grantedScope')).toBe('repo')
+      expect(getGrantedGithubScope(SUB)).toBe('repo')
     })
 
     it('clears a stale record and re-enables the opt-in when the token lacks repo scope', async () => {
       // A record can lie: the widening request may not have reached GitHub,
       // or another environment narrowed the grant. Token truth must win, or
       // the checkbox freezes checked with no way to retry.
-      localStorage.setItem('bldrs.github.grantedScope', 'repo')
+      saveGrantedGithubScope('repo', SUB)
       getOAuthScopes.mockResolvedValue(['public_repo', 'read:org'])
       act(() => {
         useStore.setState({appMetadata: {subscriptionStatus: 'sharePro'}})
@@ -237,6 +240,18 @@ describe('GitHubFileBrowser', () => {
       const checkbox = await screen.findByRole('checkbox')
       expect(checkbox).not.toBeChecked()
       expect(checkbox).not.toBeDisabled()
+    })
+
+    it('another user\'s recorded grant neither checks the box nor survives', async () => {
+      // Shared browser: the record belongs to a previous account. The new
+      // user's browser session must not present it as their grant, and
+      // reading it under the new identity evicts it.
+      saveGrantedGithubScope('repo', 'github|previous-user')
+      await renderBrowser()
+      await selectOption('openOrganization', '@bldrs-ai')
+      const checkbox = await screen.findByRole('checkbox')
+      expect(checkbox).not.toBeChecked()
+      expect(localStorage.getItem('bldrs.github.grantedScope')).toBeNull()
     })
 
     it('does not record a grant when a connection override token drives the browser', async () => {

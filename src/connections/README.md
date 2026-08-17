@@ -73,15 +73,19 @@ Related keys on the **legacy Auth0-federated GitHub path** (not this
 directory's provider flow — they die with that path; see
 `src/Auth0/githubGrant.js`):
 
-- `localStorage['bldrs.github.grantedScope']` — the GitHub
-  `connection_scope` the user has granted (currently only `repo`, from the
-  private-repos opt-in). `PopupAuth` re-requests it on every GitHub login
-  because GitHub OAuth-App grants are last-request-wins on scope — without
-  this, any plain re-login silently narrows the grant back to the
-  connection defaults. `GitHubFileBrowser` reconciles it against the
-  token's actual `X-OAuth-Scopes` (via `net/github/OAuthScopes`), so a
-  record that a failed widening or another environment made stale gets
-  cleared instead of freezing the opt-in checkbox.
+- `localStorage['bldrs.github.grantedScope']` — JSON `{scope, sub}`: the
+  GitHub `connection_scope` the user has granted (currently only `repo`,
+  from the private-repos opt-in), keyed to the granting Auth0 user's `sub`.
+  `PopupAuth` re-requests it on every GitHub login because GitHub OAuth-App
+  grants are last-request-wins on scope — without this, any plain re-login
+  silently narrows the grant back to the connection defaults. Reads require
+  a matching `sub` (a read under a different identity evicts the record),
+  so on a shared browser one account's opt-in never widens another
+  account's token or bypasses the Pro gate. `GitHubFileBrowser` reconciles
+  it against the token's actual `X-OAuth-Scopes` (via
+  `net/github/OAuthScopes`), so a record that a failed widening or another
+  environment made stale gets cleared instead of freezing the opt-in
+  checkbox.
 - `sessionStorage['bldrs.github.pendingScope']` — per-popup-window stash of
   an explicit scope change, committed to the key above by `PopupCallback`
   only after the auth round trip succeeds.

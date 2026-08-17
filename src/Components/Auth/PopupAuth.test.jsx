@@ -1,10 +1,15 @@
 import React from 'react'
 import {render, waitFor} from '@testing-library/react'
 import {useAuth0} from '../../Auth0/Auth0Proxy'
+import {getGrantedGithubScope, saveGrantedGithubScope} from '../../Auth0/githubGrant'
 import PopupAuth from './PopupAuth'
 
 
 jest.mock('../../Auth0/Auth0Proxy')
+
+
+/** The Auth0 user id the popup's cached session resolves to in these tests. */
+const SUB = 'github|111'
 
 
 describe('PopupAuth', () => {
@@ -15,7 +20,7 @@ describe('PopupAuth', () => {
     localStorage.clear()
     sessionStorage.clear()
     loginWithRedirect = jest.fn()
-    useAuth0.mockReturnValue({loginWithRedirect})
+    useAuth0.mockReturnValue({loginWithRedirect, isLoading: false, user: {sub: SUB}})
   })
 
 
@@ -44,12 +49,32 @@ describe('PopupAuth', () => {
   })
 
   it('a plain github login re-requests the recorded grant so GitHub does not narrow it', async () => {
-    localStorage.setItem('bldrs.github.grantedScope', 'repo')
+    saveGrantedGithubScope('repo', SUB)
     const params = await renderAt('?connection=github')
     expect(params.connection_scope).toBe('repo')
     // No forced upstream re-auth for plain logins — a live Auth0 session
     // means the stored federated token is already right.
     expect(params.prompt).toBeUndefined()
+  })
+
+  it('a different user\'s recorded grant is never inherited — and is evicted', async () => {
+    // Shared browser: user A opted in, user B's session is now cached. B's
+    // plain login must not widen B's token with A's grant (Pro-gate bypass,
+    // and a scope B never consented to) — and A's record must not linger.
+    saveGrantedGithubScope('repo', 'github|other-user')
+    const params = await renderAt('?connection=github')
+    expect(params.connection_scope).toBeUndefined()
+    expect(getGrantedGithubScope('github|other-user')).toBeNull()
+  })
+
+  it('no cached session (post-logout / fresh device) forwards no scope but keeps the record', async () => {
+    // The record's owner may be about to log back in — don't destroy their
+    // grant, just don't attach it to an unproven identity.
+    saveGrantedGithubScope('repo', SUB)
+    useAuth0.mockReturnValue({loginWithRedirect, isLoading: false, user: undefined})
+    const params = await renderAt('?connection=github')
+    expect(params.connection_scope).toBeUndefined()
+    expect(getGrantedGithubScope(SUB)).toBe('repo')
   })
 
   it('a plain github login with no recorded grant adds no connection_scope', async () => {
@@ -59,7 +84,7 @@ describe('PopupAuth', () => {
   })
 
   it('a non-github connection never inherits the github grant', async () => {
-    localStorage.setItem('bldrs.github.grantedScope', 'repo')
+    saveGrantedGithubScope('repo', SUB)
     const params = await renderAt('?connection=google-oauth2')
     expect(params.connection_scope).toBeUndefined()
   })
@@ -79,9 +104,19 @@ describe('PopupAuth', () => {
   })
 
   it('forwards a linkToken alongside the remembered scope', async () => {
-    localStorage.setItem('bldrs.github.grantedScope', 'repo')
+    saveGrantedGithubScope('repo', SUB)
     const params = await renderAt('?connection=github&linkToken=tok123')
     expect(params.linkToken).toBe('tok123')
     expect(params.connection_scope).toBe('repo')
+  })
+
+  it('waits for the Auth0 SDK to settle before redirecting', async () => {
+    // The cached-session identity gates the remembered scope, so redirecting
+    // while isLoading would race it and silently drop the re-request.
+    useAuth0.mockReturnValue({loginWithRedirect, isLoading: true, user: undefined})
+    window.history.replaceState(null, '', '/popup-auth?connection=github')
+    render(<PopupAuth/>)
+    await Promise.resolve()
+    expect(loginWithRedirect).not.toHaveBeenCalled()
   })
 })
