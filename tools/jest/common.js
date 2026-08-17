@@ -5,6 +5,12 @@
  */
 export const excludedNodeModules = [
   '@bldrs-ai',
+  // Scoped to the two subpackages the batched-native GLB writer imports
+  // (they pull the ESM-only `property-graph`). Deliberately NOT the whole
+  // org: transforming `@gltf-transform/functions` changes how the DRACO
+  // compression path resolves and its glbCompress test times out.
+  '@gltf-transform/core',
+  '@gltf-transform/extensions',
   'bail',
   'character-entities',
   'comma-separated-tokens',
@@ -17,6 +23,7 @@ export const excludedNodeModules = [
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
+  'property-graph',
   'property-information',
   'space-separated-tokens',
   'remark-rehype',

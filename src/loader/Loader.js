@@ -42,7 +42,7 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
-import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
+import {activeArtifactSpec} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
@@ -1697,11 +1697,12 @@ export class NotFoundError extends Error {
  */
 async function tryLoadCachedGlb(cacheKeyArgs) {
   try {
-    // Schema version varies with the active compression flag so a flag-
-    // off reader never picks up a flag-on writer's compressed bytes
-    // (and vice versa). See glbCompress.js#schemaVersionFor.
-    const requestedMode = activeGlbCompressionMode()
-    const schemaVer = activeSchemaVersion()
+    // Schema version varies with the active flag state — compression mode
+    // AND the batched-native layout flag — so a flag-off reader never picks
+    // up a flag-on writer's bytes (and vice versa). One spec helper keeps
+    // this lookup and the writer's key derivation in agreement; see
+    // glbCompress.js#activeArtifactSpec.
+    const {schemaVer, mode: requestedMode} = activeArtifactSpec()
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     const exists = await doesFileExistInOPFS(
       key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)

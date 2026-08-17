@@ -8,8 +8,24 @@ jest.mock('../FeatureFlags', () => ({
   isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
 }))
 
-import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
+// Fail the gltf-transform import deterministically. Historically this
+// import failed ON ITS OWN under jest (the ESM-only `property-graph` dep
+// didn't transform), and the compressGlb tests below silently relied on
+// that: "DRACO proceeds past the guard" really asserted "the import after
+// the guard threw fast". Now that jest transforms
+// @gltf-transform/core|extensions for the batched-native writer's tests,
+// the import would SUCCEED here and compressGlb would advance to
+// `loadDracoEncoder()` — a script-tag injection jsdom never completes, so
+// the test hangs to timeout instead. The real encoder paths are
+// browser-smoke territory (module doc); this keeps these tests pinned to
+// the guard/fallback logic they were written for.
+jest.mock('@gltf-transform/core', () => {
+  throw new Error('gltf-transform unavailable under jsdom (see mock comment)')
+})
+
+import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {
+  activeArtifactSpec,
   activeGlbCompressionMode,
   activeSchemaVersion,
   compressGlb,
@@ -71,6 +87,45 @@ describe('loader/glbCompress', () => {
       expect(activeSchemaVersion()).toBe(BLDRS_GLB_SCHEMA_VERSION)
       mockIsFeatureEnabled.mockImplementation((n) => n === 'glbMeshopt')
       expect(activeSchemaVersion()).toBe(`${BLDRS_GLB_SCHEMA_VERSION}-meshopt`)
+    })
+  })
+
+  describe('activeArtifactSpec', () => {
+    it('defaults to the merged slot, uncompressed', () => {
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_SCHEMA_VERSION, mode: null})
+    })
+
+    it('selects the batched slot when glbBatched is on', () => {
+      mockIsFeatureEnabled.mockImplementation((n) => n === 'glbBatched')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_BATCHED_SCHEMA_VERSION, mode: null})
+    })
+
+    it('lets glbBatched win over a compression flag — mode stays null', () => {
+      // Without this precedence, a `glbBatched,glbDraco` reader would look
+      // in the batched slot but demand draco-marked bytes and false-miss
+      // its own writer's artifact every load.
+      mockIsFeatureEnabled.mockImplementation(
+        (n) => n === 'glbBatched' || n === 'glbDraco')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_BATCHED_SCHEMA_VERSION, mode: null})
+    })
+
+    it('keeps compression slots for merged artifacts when glbBatched is off', () => {
+      mockIsFeatureEnabled.mockImplementation((n) => n === 'glbDraco')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: `${BLDRS_GLB_SCHEMA_VERSION}-draco`, mode: 'draco'})
+    })
+
+    it('keeps the batched slot disjoint from every merged slot', () => {
+      const slots = new Set([
+        BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+        schemaVersionFor(null),
+        schemaVersionFor('draco'),
+        schemaVersionFor('meshopt'),
+      ])
+      expect(slots.size).toBe(4)
     })
   })
 

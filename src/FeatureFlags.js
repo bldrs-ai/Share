@@ -131,6 +131,21 @@ export const flags = [
   // discoverable, so it ships on regardless.
   // See design/new/model-display-controls.md §7.
   {name: 'displayControls', isActive: false},
+  // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
+  // §3b.v): the writer serializes the batched model via
+  // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged
+  // bake, and the reader rebuilds a real BatchedMesh on cache hit — so
+  // display controls (color/shading) and residency survive a cached
+  // re-load, and the artifact keeps the instancing dedup. Source colors are
+  // baked (not the display palette), fixing model-display-controls.md
+  // §1.2's lossy-artifact problem. Default off as a stored-format
+  // validation gate — artifacts land in their own schema slot
+  // (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION), so flag-off readers
+  // never see them and flipping the flag back strands nothing. Flip on via
+  // `?feature=glbBatched`. Acceptance bar: the four risk checks recorded in
+  // model-display-controls.md §1.2 (schema gate, round-trip parity,
+  // re-derive determinism, third-party appearance).
+  {name: 'glbBatched', isActive: false},
 ]
 
 
@@ -147,7 +162,7 @@ export const flags = [
  * caller-supplied name in `isFeatureEnabled`.
  */
 const FEATURE_IMPLICATIONS = {
-  glb: ['glbdraco', 'glbmeshopt', 'glbverbose'],
+  glb: ['glbdraco', 'glbmeshopt', 'glbverbose', 'glbbatched'],
 }
 
 

@@ -127,6 +127,23 @@ export const BLDRS_GLB_SCHEMA_VERSION = '0.14.0'
 
 
 /**
+ * Schema version for the batched-NATIVE artifact layout (view-140 S9 /
+ * viewer-replacement §3b.v, `?feature=glbBatched`): geometry deduped via
+ * `EXT_mesh_gpu_instancing`, per-instance identity + verbatim SOURCE colors
+ * in `BLDRS_instance_tables` (replacing the per-triangle `BLDRS_face_ids`),
+ * no compression. A separate constant, not a bump of the merged version:
+ * the two layouts co-exist behind the flag — flag-on writers/readers use
+ * this slot, flag-off ones stay on the 0.14.0 merged slot, and neither can
+ * ever half-read the other's artifact because the version is part of the
+ * filename. The merged layout remains the writer's fallback for models
+ * that load merged (or that the batched writer refuses — shear, missing
+ * attributes), written to its own slot as before.
+ * 0.15.0-batched — first batched-native layout.
+ */
+export const BLDRS_GLB_BATCHED_SCHEMA_VERSION = '0.15.0-batched'
+
+
+/**
  * Derive the OPFS originalFilePath for the GLB artifact corresponding to a
  * source file. The returned path is the value to pass as `originalFilePath`
  * to `doesFileExistInOPFS` and to the worker's retrieveFileWithPathNew.

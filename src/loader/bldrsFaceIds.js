@@ -449,7 +449,7 @@ export async function captureGeometryItemIdentities(ifcManager, modelID, geometr
  * @param {Uint32Array} arr
  * @return {string}
  */
-function uint32ArrayToBase64(arr) {
+export function uint32ArrayToBase64(arr) {
   const bytes = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength)
   let binary = ''
   // String.fromCharCode trips on long arg lists — encode in 32KB chunks.

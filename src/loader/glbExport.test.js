@@ -25,6 +25,9 @@ const mockActiveMode = jest.fn(() => null)
 const mockCompressGlb = jest.fn((bytes, mode) => Promise.resolve({bytes, mode: mode || null}))
 jest.mock('./glbCompress', () => ({
   activeGlbCompressionMode: () => mockActiveMode(),
+  // Batched-native layout off in these tests — they pin the MERGED
+  // writer path (bake + face_ids + compression slots).
+  isGlbBatchedActive: () => false,
   schemaVersionFor: (mode) => {
     const {BLDRS_GLB_SCHEMA_VERSION: ver} = jest.requireActual('./glbCacheKey')
     return mode ? `${ver}-${mode}` : ver
