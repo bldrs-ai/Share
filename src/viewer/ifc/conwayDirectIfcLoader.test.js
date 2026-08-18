@@ -190,6 +190,9 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         // Deferred settings rode the open.
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.DEFER_GEOMETRY).toBe(true)
+        // The residency budget rides on the deferred path only, and is what
+        // keeps the wasm high-water bounded (PSB: 1284 MB -> 298 MB).
+        expect(settings.GEOMETRY_BUDGET_MB).toBe(64)
         // 150 products in batches of 64 → 3 extraction rounds; all
         // meshes accumulate AND stream incrementally.
         expect(result.captured).toHaveLength(150)
@@ -207,6 +210,9 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(result.modelID).toBe(5)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings?.DEFER_GEOMETRY).toBeUndefined()
+        // ...and never on the classic path, which does not pump and would
+        // have geometry evicted from under a consumer reading it later.
+        expect(settings?.GEOMETRY_BUDGET_MB).toBeUndefined()
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
       })
 
