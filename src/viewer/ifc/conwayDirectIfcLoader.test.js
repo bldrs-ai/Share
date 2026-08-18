@@ -201,6 +201,19 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.StreamAllMeshes).not.toHaveBeenCalled()
       })
 
+      it('reports a Geometry progress stage across the demand pump', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(150)
+        const progress = []
+        await parseIfcWithConway(
+          new ArrayBuffer(4), ifcAPI, undefined, (event) => progress.push(event))
+        const geometry = progress.filter((event) => event.phase === 'geometry')
+        expect(geometry.length).toBeGreaterThan(1)
+        expect(geometry[0]).toMatchObject({completed: 0, total: 150, unit: 'products'})
+        expect(geometry[geometry.length - 1]).toMatchObject({completed: 150, total: 150})
+        expect(geometry.every((event) => event.elapsedMs === undefined)).toBe(true)
+      })
+
       it('falls through to the classic selection when the engine lacks the pump', async () => {
         mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
         const ifcAPI = makeDemandAPI(10)
@@ -283,6 +296,41 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         await parseIfcWithConway(new ArrayBuffer(4), ifcAPI)
         const [, settings] = ifcAPI.OpenModelStreamed.mock.calls[0]
         expect(settings.ON_PREVIEW_MESH).toBeUndefined()
+      })
+
+      it('opens a File via OpenModelStream and pumps ExtractGeometryBatchAsync', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(3))
+        ifcAPI.ExtractGeometryBatchAsync = jest.fn((modelID, batchSize, cb) =>
+          // eslint-disable-next-line new-cap
+          ifcAPI.ExtractGeometryBatch(modelID, batchSize, cb))
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        const result = await parseIfcWithConway(file, ifcAPI)
+        expect(result.modelID).toBe(3)
+        expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
+        const [store, settings] = ifcAPI.OpenModelStream.mock.calls[0]
+        expect(store.byteLength).toBe(4)
+        expect(typeof store.read).toBe('function')
+        expect(settings.DEFER_GEOMETRY).toBe(true)
+        expect(ifcAPI.OpenModelStreamed).not.toHaveBeenCalled()
+        expect(ifcAPI.ExtractGeometryBatchAsync).toHaveBeenCalled()
+        expect(ifcAPI.ExtractGeometryBatchAsync.mock.calls[0][1]).toBe(8)
+        expect(result.captured).toHaveLength(10)
+      })
+
+      it('falls back to OpenModelStreamed when OpenModelStream returns -1', async () => {
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const ifcAPI = makeDemandAPI(10)
+        ifcAPI.OpenModelStream = jest.fn(() => Promise.resolve(-1))
+        const file = new Blob([new Uint8Array([1, 2, 3, 4])])
+        const result = await parseIfcWithConway(file, ifcAPI)
+        expect(result.modelID).toBe(5)
+        expect(ifcAPI.OpenModelStream).toHaveBeenCalledTimes(1)
+        expect(ifcAPI.OpenModelStreamed).toHaveBeenCalledTimes(1)
+        const [data] = ifcAPI.OpenModelStreamed.mock.calls[0]
+        expect(data).toBeInstanceOf(Uint8Array)
+        expect(result.captured).toHaveLength(10)
       })
     })
 

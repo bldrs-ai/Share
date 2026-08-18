@@ -58,6 +58,108 @@ describe('viewer/ifc/parsePreviewMesh', () => {
     expect(mesh).toBeNull()
   })
 
+  it('instances a shared unit cube for aabb imposters', () => {
+    const geometryCache = new Map()
+    const materialCache = new Map()
+    const aabb = {min: [0, 0, 0], max: [2, 4, 6]}
+    const first = payloadToPreviewMesh(
+      makePayload({
+        aabb,
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      geometryCache, materialCache)
+    const second = payloadToPreviewMesh(
+      makePayload({
+        expressID: 99,
+        aabb,
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      geometryCache, materialCache)
+    expect(first).not.toBeNull()
+    expect(first.material.wireframe).toBe(true)
+    expect(first.userData.aabbImposter).toBe(true)
+    expect(second.geometry).toBe(first.geometry)
+    expect(geometryCache.size).toBe(1)
+  })
+
+
+  it('fills spatial-structure imposters when payload.solid is set', () => {
+    const mesh = payloadToPreviewMesh(
+      makePayload({
+        aabb: {min: [0, 0, 0], max: [2, 4, 6]},
+        solid: true,
+        color: {x: 0, y: 0, z: 0, w: 0.3},
+        vertexData: undefined,
+        indexData: undefined,
+        geometryExpressID: -1,
+      }),
+      new Map(),
+      new Map())
+    expect(mesh.material.wireframe).toBe(false)
+    expect(mesh.material.transparent).toBe(true)
+    expect(mesh.material.opacity).toBe(0.3)
+    expect(mesh.userData.aabbImposter).toBe(true)
+  })
+
+
+  /**
+   * @param {object} [overrides] payload field overrides
+   * @return {object} an imposter payload (box, no vertex/index data)
+   */
+  function makeAabbPayload(overrides = {}) {
+    return makePayload({
+      aabb: {min: [0, 0, 0], max: [1, 1, 1]},
+      vertexData: undefined,
+      indexData: undefined,
+      geometryExpressID: -1,
+      ...overrides,
+    })
+  }
+
+
+  // Imposters arrive in the same durable frame as carrier payloads
+  // (conway#515 review findings), so they take the same Share-side
+  // recentre — no imposter-specific anchoring anywhere.
+  it('applies the durable coordination offset to aabb imposters', () => {
+    const mesh = payloadToPreviewMesh(
+      makeAabbPayload(), new Map(), new Map(), {offset: [100, 200, 300]})
+    expect(mesh.matrix.elements[12]).toBe(-90)
+    expect(mesh.matrix.elements[13]).toBe(-180)
+    expect(mesh.matrix.elements[14]).toBe(-270)
+  })
+
+
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+  ])('renders aabb imposters unrecentred while offset is %s', (label, offset) => {
+    const mesh = payloadToPreviewMesh(
+      makeAabbPayload(), new Map(), new Map(), {offset})
+    expect(mesh.matrix.elements[12]).toBe(10)
+    expect(mesh.matrix.elements[13]).toBe(20)
+    expect(mesh.matrix.elements[14]).toBe(30)
+  })
+
+
+  it('never latches the coordination frame from an aabb imposter', () => {
+    const coordination = {offset: undefined}
+    payloadToPreviewMesh(makeAabbPayload(), new Map(), new Map(), coordination)
+    expect(coordination.offset).toBeUndefined()
+  })
+
+
+  it('applies the durable coordination offset to carrier payloads', () => {
+    const mesh = payloadToPreviewMesh(
+      makePayload(), new Map(), new Map(), {offset: [1, 2, 3]})
+    expect(mesh.matrix.elements[12]).toBe(9)
+    expect(mesh.matrix.elements[13]).toBe(18)
+    expect(mesh.matrix.elements[14]).toBe(27)
+  })
+
   it('marks translucent colors transparent', () => {
     const materialCache = new Map()
     const mesh = payloadToPreviewMesh(
