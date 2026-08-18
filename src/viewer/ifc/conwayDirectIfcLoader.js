@@ -149,7 +149,11 @@ export async function parseIfcWithConway(
         typeof ifcAPI.OpenModelStream === 'function') &&
       (typeof ifcAPI.ExtractGeometryBatch === 'function' ||
         typeof ifcAPI.ExtractGeometryBatchAsync === 'function')) {
-    const deferSettings = {...openSettings, DEFER_GEOMETRY: true}
+    const deferSettings = {
+      ...openSettings,
+      DEFER_GEOMETRY: true,
+      GEOMETRY_BUDGET_MB: GEOMETRY_BUDGET_MB,
+    }
     if (onPreviewMesh) {
       // Slice A2 (parse-time preview channel): conway emits preview
       // payloads between the parse's cooperative yields. Passing the
@@ -332,6 +336,28 @@ export async function parseIfcWithConway(
 // arrive within a couple of seconds of parse completing. The async
 // (store-backed) path is smaller because each product pays OPFS
 // prefetch before extract — see ExtractGeometryBatchAsync above.
+/**
+ * Cap on the native geometry conway keeps resident, in MB, for the deferred
+ * path only. Least-recently-used assets are evicted at each pump batch.
+ *
+ * Measured engine-side on PSB (860 MB) at our batch size: the wasm high-water
+ * falls from 1284 MB to 298 MB, with the geometry stage slightly faster
+ * (23.6s against 25.7s) and identical delivered meshes. 256 MB was also
+ * measured and buys much less (803 MB), because the live set rarely reaches
+ * the ceiling. The heap runs 3-4x the budget — allocator overhead and
+ * fragmentation — so this targets roughly a 300 MB residency, not 64 MB.
+ *
+ * Safe here for one specific reason: eviction frees an asset from
+ * GetGeometry until something re-extracts it, and this loader copies every
+ * payload at delivery (the bldrs-ai/Share#1640 invariant). A change that
+ * made it hold geometry IDs and fetch them later would break quietly, so
+ * that invariant is now load-bearing rather than merely true.
+ *
+ * Ignored by engines predating conway#535 — unknown settings are dropped —
+ * so ordering against the conway bump does not matter.
+ */
+const GEOMETRY_BUDGET_MB = 64
+
 const DEMAND_EXTRACT_BATCH_SIZE = 64
 const ASYNC_DEMAND_EXTRACT_BATCH_SIZE = 8
 

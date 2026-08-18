@@ -104,6 +104,15 @@ export const AABB_IMPOSTER_CAP = 100
 
 
 /**
+ * Whether parse-time spatial imposters (the storey/space AABB plates) are
+ * rendered. Off: they are cosmetic, and the last unpolished corner of an
+ * otherwise release-ready load path. The real prefix meshes still stream
+ * during parse, so first pixels are unaffected.
+ */
+const SHOW_AABB_IMPOSTERS = false
+
+
+/**
  * Add an AABB wire cube to the preview, keyed by expressID and
  * ring-tracked for eviction.
  *
@@ -356,6 +365,16 @@ export default class ShareIfcLoader {
             return
           }
           if (payload.aabb) {
+            // Spatial imposters are off for this release: the plates are
+            // the least-settled part of the preview channel (rotation,
+            // scale and banding each took a conway round to get right)
+            // and they are cosmetic — the real prefix meshes below give
+            // first pixels on their own. Dropping the payload rather
+            // than asking conway not to emit it keeps the engine
+            // contract unchanged, so flipping this back is one constant.
+            if (!SHOW_AABB_IMPOSTERS) {
+              return
+            }
             applyAabbImposter(mesh, session, aabbRing, payload.expressID)
             return
           }
