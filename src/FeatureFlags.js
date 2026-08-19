@@ -111,6 +111,27 @@ export const flags = [
   // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
   // the classic-path escape hatch and this flag the demand kill switch.
   {name: 'demandGeometry', isActive: true},
+  // Geometry worker pool (conway#394 M3, design/new/geometry-workers.md).
+  // Cache-miss IFC geometry extraction moves off the main thread into N
+  // conway instances, each with its own wasm heap, pumping a disjoint shard
+  // of the products. Measured in node at 2.59x on PSB at N=4; the browser
+  // number is what the smoke instance is for.
+  //
+  // Off by default because the worker-side wasm init cost in a BROWSER is
+  // unmeasured — in node it dominated small models, so PSB-scale wins and
+  // MB-Khaya-scale losses are both plausible until a real run says.
+  // `?feature=workers` sizes the pool from hardwareConcurrency;
+  // `?feature=workers1` (…2, …3, …) pins a count, which is how N is compared
+  // against N=1 on one machine.
+  {name: 'workers', isActive: false},
+  {name: 'workers1', isActive: false},
+  {name: 'workers2', isActive: false},
+  {name: 'workers3', isActive: false},
+  {name: 'workers4', isActive: false},
+  {name: 'workers5', isActive: false},
+  {name: 'workers6', isActive: false},
+  {name: 'workers7', isActive: false},
+  {name: 'workers8', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-

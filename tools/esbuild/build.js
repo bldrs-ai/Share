@@ -59,10 +59,15 @@ const opfsBuilds = workerBuilds('OPFS/OPFS.worker.js', 'OPFS.worker')
 // hover-pick / camera-controls stay responsive during the post-IFC-
 // parse write. See `src/loader/GlbWriter.worker.js`.
 const glbWriterBuilds = workerBuilds('loader/GlbWriter.worker.js', 'GlbWriter.worker')
+// Geometry worker — one conway instance per worker, each extracting a
+// disjoint shard of a model's products off the main thread. See
+// `src/viewer/ifc/ConwayGeometry.worker.js` and conway#394 M3.
+const geometryWorkerBuilds = workerBuilds(
+  'viewer/ifc/ConwayGeometry.worker.js', 'ConwayGeometry.worker')
 
 
 // Wait for every build to complete
-Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds])
+Promise.all([mainBuild, ...opfsBuilds, ...glbWriterBuilds, ...geometryWorkerBuilds])
   .then(([result]) => {
     // Remove development resources from non-development builds
     if (config.define['process.env.MSW_IS_ENABLED'] !== 'true') {

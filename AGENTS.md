@@ -101,6 +101,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | AdSense / ads strategy, route policy, test-hermeticity rules | [design/new/ads.md](design/new/ads.md) |
 | Usage quotas: tiers, 30-day rolling window, `record-load` server gate, GitHub privacy detection, OPFS local fallback, `quotas` feature flag | [design/new/quotas.md](design/new/quotas.md) |
 | Conway-direct IFC pipeline, IfcInstanceMap, per-instance picking, `?feature=conwayDirectIfc` | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §3b |
+| Geometry worker pool — extraction in N workers with sharded products, `?feature=workers`, why the origin-recenter offset has to be gated on shard 0, reading one OPFS file from N workers | [design/new/geometry-workers.md](design/new/geometry-workers.md) |
 | STEP occurrence-keyed selection (NavTree↔scene per-occurrence), `PlacedGeometry.occurrencePath`, why one nut highlights all | [design/new/step-occurrence-selection.md](design/new/step-occurrence-selection.md) |
 | The `?feature=look` render look — PBR materials + gradient IBL + tone-mapping, Neutral/Flat toggle, `looks.js`/`lookMaterial.js`, `LightingGui`, why it's all behind one flag (default off) | [design/new/viewer-replacement.md](design/new/viewer-replacement.md) §6e |
 | Removing the `conway-web-ifc-adapter` shim, the `web-ifc` engine seam (`webIfcShimAlias`/`USE_WEBIFC_SHIM`), Conway version-lag, runtime engine swap | [design/new/adapter-removal.md](design/new/adapter-removal.md) |
