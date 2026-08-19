@@ -209,6 +209,30 @@ The node spike ran 4 processes on an idle box over **resident in-memory
 buffers**. Redundant parses were cheap there. In a browser, over OPFS, with
 six wasm heaps competing for bandwidth, they are not.
 
+## Worker startup is cheap — it is not what you are waiting for
+
+Measured on `index.ifc` (18 KB, 7 products), so parse and extract are ~0 and
+what remains IS the cost of standing workers up:
+
+| N | last worker ready | conway `Init()` | model open | phase total |
+|---|---|---|---|---|
+| 1 | 780 ms | 82 ms | 82 ms | 0.75 s |
+| 2 | 894 ms | ~100 ms | ~57 ms | 0.93 s |
+| 4 | 1 329 ms | 77–122 ms | ~38 ms | 1.35 s |
+| 6 | 1 751 ms | 131–221 ms | ~44 ms | 1.77 s |
+
+Roughly **0.7 s for the first worker and ~0.2 s for each after** — about 2 s at
+N=6, fixed, regardless of model size.
+
+The decomposition matters more than the total. wasm `Init()` is **80–220 ms**
+and the model open is **tens of ms**; nearly all of the rest is fetching and
+compiling the worker bundle, which is 5.5 MB because it carries all of conway.
+Trimming that bundle to the extraction path is the lever if startup ever needs
+to be faster — not the wasm.
+
+So the ~20 s gap a user sees between parse and first geometry on PSB is **not**
+worker startup. It is the redundant parse, and startup is ~10 % of it at N=6.
+
 ## The ceiling, stated honestly
 
 Even with a free shared index, PSB is bounded by Amdahl — parse is not
@@ -221,6 +245,41 @@ prep 6 + parse 15.8 + geometry 9.5 + assemble 5.3  ≈  37 s   vs   52.9 s
 So **~30 %**, not the 5× the geometry-phase headline suggests. That is the
 same observation conway#536 made when it noted the bottleneck had moved to
 parse. Construct-from-columns is the lever that matters after this one.
+
+## Parallelising the parse
+
+The geometry pool alone caps at ~30 % because parse is serial. Sharding the
+parse too is what makes the pipeline worth rebuilding, and it looks tractable:
+a STEP parse is a scan over `#N=…;` records, so N workers can each tokenise a
+disjoint byte range into partial index columns. conway already emits SoA
+columns in 64 K-row segments (`ColumnarIndexSink`), which is a friendly shape
+to concatenate.
+
+The parts that need care, none of them blocking:
+
+- **Local IDs are parse-order**, and parse order is byte order — so shard
+  columns concatenate in address order provided each shard reports its record
+  count so bases can be assigned at merge.
+- **Inline entities** unfold into a tail range, and the express-ID lookup
+  table is built from the merged columns. Both are post-merge steps.
+- **Shard boundaries** must land between records, and a STEP string literal
+  can contain `;` — so the boundary scan has to be tokenizer-aware rather
+  than a naive search. This is the genuinely fiddly bit.
+
+The payoff compounds with the geometry pool. PSB parse is 15.8 s for 860 MB
+(~54 MB/s), which is CPU-bound tokenising, so even 3× gives:
+
+```
+prep 6 + parse 5.3 + geometry 9.5 + assemble 5.3  ≈  26 s   vs   52.9 s
+```
+
+roughly **2×**, against the geometry pool's ~30 % alone.
+
+Note this does **not** remove the need for conway#541. A worker that parsed
+one byte range holds a partial index, and extraction needs the whole model —
+a product references records anywhere. So the shape is: parse shards → merge
+columns once → hand the merged columns to every worker → extract shards. The
+distribution step is conway#541 either way; parse sharding feeds it.
 
 **The unblock is conway#541**: an `IfcAPI` entry that opens from a prebuilt
 index. The serialisation half already exists (M4a's `index_sidecar.ts`, whose

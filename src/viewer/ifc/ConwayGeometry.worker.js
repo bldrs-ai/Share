@@ -209,6 +209,12 @@ async function run(request) {
 
   declareWebPlatform()
 
+  // Phase timings, reported on `opened`. Without them a slow pool is one
+  // opaque number: the first browser run on PSB spent 120s in "geometry"
+  // and nothing said how much of that was wasm init, how much was each
+  // worker re-parsing 860 MB, and how much was actual extraction.
+  const startedAt = Date.now()
+
   api = new IfcAPI()
   if (typeof api.SetWasmPath === 'function') {
     // eslint-disable-next-line new-cap
@@ -217,11 +223,17 @@ async function run(request) {
   // eslint-disable-next-line new-cap
   await api.Init()
 
+  const initMs = Date.now() - startedAt
+  const openStartedAt = Date.now()
+
   // eslint-disable-next-line new-cap
   modelID = await api.OpenModelStream(makeBlobByteStore(file), settings)
   if (typeof modelID !== 'number' || modelID < 0) {
     throw new Error(`OpenModelStream returned ${modelID}`)
   }
+
+  const openMs = Date.now() - openStartedAt
+  const extractStartedAt = Date.now()
 
   // Order matters and is enforced engine-side: a COORDINATE_TO_ORIGIN model
   // refuses a shard claim until it has been given a frame, because each
@@ -237,7 +249,7 @@ async function run(request) {
     api.SetGeometryShard(modelID, shard)
   }
 
-  self.postMessage({type: 'opened', shard: shardLabel, shardIndex})
+  self.postMessage({type: 'opened', shard: shardLabel, shardIndex, initMs, openMs})
 
   let meshes = 0
   for (;;) {
@@ -280,6 +292,9 @@ async function run(request) {
     shardIndex,
     placements: meshes,
     geometries: sentGeometries.size,
+    initMs,
+    openMs,
+    extractMs: Date.now() - extractStartedAt,
     ...workerMemory(),
   })
 }

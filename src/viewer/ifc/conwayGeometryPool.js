@@ -147,6 +147,13 @@ export function runGeometryWorkerPool({
     let wasmHeapMb = 0
     let jsHeapMb = 0
 
+    /* Per-worker phase timings, so a slow pool decomposes instead of being
+     * one opaque number. The first browser run on PSB spent 120s in
+     * "geometry" and nothing said how much was wasm init, how much was each
+     * worker re-parsing 860 MB, and how much was extraction. */
+    const spawnedAt = Date.now()
+    const phases = []
+
     /* Per-shard product counts, so the load report's Geometry line keeps
      * ticking and keeps meaning PRODUCTS. Each worker's `remaining` is its
      * own shard's, so the sums are the model's — and the total firms up as
@@ -249,6 +256,12 @@ export function runGeometryWorkerPool({
         return
       }
       switch (message.type) {
+        case 'opened':
+          phases.push(
+            `${message.shardIndex}:spawn+init=${
+              Date.now() - spawnedAt}ms(init=${message.initMs}ms) open=${
+              message.openMs}ms`)
+          break
         case 'batch':
           // The builder fixes the model-wide origin-recenter offset from
           // the FIRST placement it is handed, rounded to whole metres
@@ -273,6 +286,9 @@ export function runGeometryWorkerPool({
         case 'done':
           wasmHeapMb += message.wasmHeapMb ?? 0
           jsHeapMb += message.jsHeapMb ?? 0
+          if (message.extractMs !== undefined) {
+            phases.push(`${message.shardIndex}:extract=${message.extractMs}ms`)
+          }
           // Shard 0 finishing without ever emitting a batch still settles
           // the offset — otherwise a model whose shard 0 owns no geometry
           // would queue every other shard forever.
@@ -292,6 +308,7 @@ export function runGeometryWorkerPool({
               workers: count,
               wasmHeapMb,
               jsHeapMb,
+              phases,
             })
           }
           break
@@ -330,6 +347,7 @@ export function runGeometryWorkerPool({
       settled = true
       resolve({
         placements: 0, geometries: 0, workers: 0, wasmHeapMb: 0, jsHeapMb: 0,
+        phases: [],
       })
     }
   }).catch((error) => {

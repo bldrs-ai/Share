@@ -265,8 +265,12 @@ describe('viewer/ifc/conwayGeometryPool', () => {
     }
 
     const result = await promise
+    // Exact shape on purpose: this assertion caught a field being added to
+    // the resolve without the loader's summary handling it, which made the
+    // pool silently fall back and re-run the whole model on the main thread.
     expect(result).toEqual({
       placements: 3, geometries: 2, workers: 3, wasmHeapMb: 0, jsHeapMb: 0,
+      phases: [],
     })
     expect(pooled().every((each) => each.terminated)).toBe(true)
   })

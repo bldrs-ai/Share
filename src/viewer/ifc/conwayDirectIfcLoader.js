@@ -384,6 +384,42 @@ export async function parseIfcWithConway(
 
 
 /**
+ * Log what the pool did.
+ *
+ * Never allowed to fail the load. It sits inside the pool's try/catch, and a
+ * throw there is indistinguishable from the pool itself failing — which
+ * silently re-runs the whole model on the main thread. That is not
+ * hypothetical: a missing field in the result made `.join` throw here, and
+ * the only visible symptom was the main-thread pump quietly doing the work a
+ * moment after the pool reported success. A diagnostic must never change
+ * behaviour.
+ *
+ * @param {object} result what runGeometryWorkerPool resolved
+ * @param {?Array<number>} coordination the frame the workers were given
+ */
+function reportPoolSummary(result, coordination) {
+  try {
+    // The frame is on this line on purpose: supplying the wrong one renders
+    // the whole model rotated, and every other number here stays identical
+    // when that happens.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] geometry workers: n=${result.workers} ` +
+      `placements=${result.placements} geometries=${result.geometries} ` +
+      `wasmHeapMb=${Math.round(result.wasmHeapMb)} ` +
+      `frame=[${(coordination ?? []).map((v) => +v.toFixed(3)).join(',')}]`)
+    // Per-worker phases: this is what says whether a slow pool is startup,
+    // redundant parse, or extraction.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] worker phases: ${(result.phases ?? []).join(' | ')}`)
+  } catch (error) {
+    debug(WARN).warn('geometry worker pool summary failed to log:', error)
+  }
+}
+
+
+/**
  * Extract this model's geometry across a pool of workers.
  *
  * The main-thread model stays open and untouched — it is what serves
@@ -505,15 +541,7 @@ async function pumpGeometryInWorkers({
       return null
     }
 
-    // The frame is on this line on purpose: supplying the wrong one renders
-    // the whole model rotated, and every other number here stays identical
-    // when that happens.
-    // eslint-disable-next-line no-console
-    console.info(
-      `[conwayDirect] geometry workers: n=${result.workers} ` +
-      `placements=${result.placements} geometries=${result.geometries} ` +
-      `wasmHeapMb=${Math.round(result.wasmHeapMb)} ` +
-      `frame=[${(coordination ?? []).map((v) => +v.toFixed(3)).join(',')}]`)
+    reportPoolSummary(result, coordination)
 
     return {geometryApi}
   } catch (error) {
