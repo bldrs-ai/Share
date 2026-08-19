@@ -421,6 +421,27 @@ async function pumpGeometryInWorkers({
   delete workerSettings.ON_MODEL_INFO
   delete workerSettings.ON_PREVIEW_MESH
 
+  // Derive the frame the way a single-threaded load does — by extracting a
+  // product — BEFORE reading it.
+  //
+  // A deferred model's coordination frame is anchored on the first geometry
+  // it captures, so until something is pumped GetAppliedCoordinationMatrix
+  // returns IDENTITY. Handing that to the workers is not a no-op: a supplied
+  // frame suppresses the one each worker would otherwise derive, and the
+  // frame carries the Z-up -> Y-up normalize, so every product renders 90
+  // degrees out. That is what a first working version of this shipped, and
+  // the counts a batch reports (vertices, triangles, instances) are all
+  // rotation-invariant, so nothing downstream noticed.
+  //
+  // One product is enough, and it is the SAME product a single-threaded load
+  // would anchor on, so the pooled frame is not merely shared — it matches.
+  const seedBatch = []
+  if (typeof ifcAPI.ExtractGeometryBatchAsync === 'function') {
+    // eslint-disable-next-line new-cap
+    await ifcAPI.ExtractGeometryBatchAsync(
+      modelID, 1, (flatMesh) => seedBatch.push(flatMesh))
+  }
+
   const coordination =
     typeof ifcAPI.GetAppliedCoordinationMatrix === 'function' ?
       // eslint-disable-next-line new-cap
@@ -428,6 +449,23 @@ async function pumpGeometryInWorkers({
 
   let geometryApi = ifcAPI
   let delivered = 0
+
+  /**
+   * Hand the frame-derivation product to the builder.
+   *
+   * Called ONLY when the pool does not run to completion. The shard that
+   * owns this product extracts it too, so forwarding it on the happy path
+   * would place it twice; but on a fallback the main-thread pump resumes
+   * from the next product and would otherwise leave this one missing from
+   * the model with nothing to say so.
+   */
+  const deliverSeedBatch = () => {
+    if (seedBatch.length === 0) {
+      return
+    }
+    captured.push(...seedBatch)
+    onMeshBatch(seedBatch, modelID, ifcAPI)
+  }
 
   try {
     const result = await runGeometryWorkerPool({
@@ -442,6 +480,16 @@ async function pumpGeometryInWorkers({
         captured.push(...flatMeshes)
         onMeshBatch(flatMeshes, modelID, api)
       },
+      // Products, summed across shards, per batch. Reporting only on
+      // completion collapsed the load report's Geometry line to `0.007s,
+      // +0.000000 MB heap` — the phase began and ended in one event — and
+      // left the reporter's 30s stall watchdog with nothing to hear during
+      // the longest phase of a large load.
+      onProgress: (completed, total) => {
+        if (typeof onProgress === 'function') {
+          onProgress({phase: 'geometry', completed, total, unit: 'products'})
+        }
+      },
     })
 
     if (result.placements === 0) {
@@ -453,22 +501,19 @@ async function pumpGeometryInWorkers({
         '[conwayDirect] geometry worker pool delivered no placements; ' +
         'falling back to the main-thread pump')
       captured.length = 0
+      deliverSeedBatch()
       return null
     }
 
+    // The frame is on this line on purpose: supplying the wrong one renders
+    // the whole model rotated, and every other number here stays identical
+    // when that happens.
     // eslint-disable-next-line no-console
     console.info(
       `[conwayDirect] geometry workers: n=${result.workers} ` +
-      `placements=${result.placements} geometries=${result.geometries}`)
-
-    if (typeof onProgress === 'function') {
-      onProgress({
-        phase: 'geometry',
-        completed: result.placements,
-        total: result.placements,
-        unit: 'products',
-      })
-    }
+      `placements=${result.placements} geometries=${result.geometries} ` +
+      `wasmHeapMb=${Math.round(result.wasmHeapMb)} ` +
+      `frame=[${(coordination ?? []).map((v) => +v.toFixed(3)).join(',')}]`)
 
     return {geometryApi}
   } catch (error) {
@@ -490,6 +535,7 @@ async function pumpGeometryInWorkers({
       }
       onGeometryReset()
     }
+    deliverSeedBatch()
     return null
   }
 }

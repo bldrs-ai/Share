@@ -64,9 +64,11 @@ class FakeWorker {
  * @param {number} shardIndex which shard
  * @param {number} count shards in the pool
  * @param {number} parent the parent express id
+ * @param {number} [extracted] products this batch finished, for the shard
+ * @param {number} [remaining] products left in that shard
  * @return {object} the message
  */
-function batchMessage(shardIndex, count, parent) {
+function batchMessage(shardIndex, count, parent, extracted = 1, remaining = 0) {
   return {
     type: 'batch',
     shard: `${shardIndex}/${count}`,
@@ -83,8 +85,8 @@ function batchMessage(shardIndex, count, parent) {
       indices: new Uint32Array([0, 1, 2]),
       vertCount: 1,
     }],
-    extracted: 1,
-    remaining: 0,
+    extracted,
+    remaining,
   }
 }
 
@@ -203,6 +205,52 @@ describe('viewer/ifc/conwayGeometryPool', () => {
     await promise
   })
 
+  it('reports progress in products, summed across shards, as batches land',
+    async () => {
+      // The load report's Geometry line counts PRODUCTS, and each worker's
+      // `remaining` is its own shard's — so the sums are the model's, and
+      // the total firms up as shards check in rather than being known at
+      // the first batch.
+      //
+      // Reporting per batch rather than once at the end is also what keeps
+      // the reporter's 30s stall watchdog fed: an earlier version reported
+      // only on completion and the Geometry line came out as
+      // `0.007s, +0.000000 MB heap` on a real model.
+      const progress = []
+      const {promise} = await startPool({
+        onProgress: (completed, total) => progress.push([completed, total]),
+      })
+
+      pooled()[0].fire(batchMessage(0, 3, 10, 2, 4))
+      expect(progress[progress.length - 1]).toEqual([2, 6])
+
+      pooled()[1].fire(batchMessage(1, 3, 20, 3, 1))
+      expect(progress[progress.length - 1]).toEqual([5, 10])
+
+      pooled()[0].fire(batchMessage(0, 3, 11, 4, 0))
+      expect(progress[progress.length - 1]).toEqual([9, 10])
+
+      for (let index = 0; index < 3; ++index) {
+        pooled()[index].fire(doneMessage(index, 3))
+      }
+      await promise
+    })
+
+  it('sums the wasm heap each worker reports', async () => {
+    // Without this the load report is actively flattering under a pool: its
+    // heap figures come from the MAIN thread, and extraction moving into
+    // workers moves the allocations somewhere that sample cannot see.
+    const {promise} = await startPool()
+
+    pooled()[0].fire({...doneMessage(0, 3), wasmHeapMb: 100, jsHeapMb: 10})
+    pooled()[1].fire({...doneMessage(1, 3), wasmHeapMb: 50, jsHeapMb: 5})
+    pooled()[2].fire(doneMessage(2, 3))
+
+    const result = await promise
+    expect(result.wasmHeapMb).toBe(150)
+    expect(result.jsHeapMb).toBe(15)
+  })
+
   it('reports placements and distinct geometries once every shard is done', async () => {
     const {promise} = await startPool()
 
@@ -217,7 +265,9 @@ describe('viewer/ifc/conwayGeometryPool', () => {
     }
 
     const result = await promise
-    expect(result).toEqual({placements: 3, geometries: 2, workers: 3})
+    expect(result).toEqual({
+      placements: 3, geometries: 2, workers: 3, wasmHeapMb: 0, jsHeapMb: 0,
+    })
     expect(pooled().every((each) => each.terminated)).toBe(true)
   })
 

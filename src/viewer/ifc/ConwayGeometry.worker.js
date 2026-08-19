@@ -30,6 +30,9 @@ import {forEachVectorItem} from './conwayVector'
 /* Column-major mat4 elements per placement. */
 const MATRIX_ELEMENTS = 16
 
+/* eslint-disable-next-line no-magic-numbers */
+const BYTES_PER_MB = 1024 * 1024
+
 /* Interleaved floats per vertex (position + normal) — must match the
  * builder's VERT_STRIDE, since the builder divides by it to recover the
  * vertex count from the size this worker reports. */
@@ -277,7 +280,36 @@ async function run(request) {
     shardIndex,
     placements: meshes,
     geometries: sentGeometries.size,
+    ...workerMemory(),
   })
+}
+
+
+/**
+ * This worker's own memory, for the load report.
+ *
+ * Without it the report is actively flattering under a pool: its heap figures
+ * come from `performance.memory` on the MAIN thread, and moving extraction
+ * into workers moves the geometry allocations — JS heap and wasm heap both —
+ * somewhere that sample cannot see. The Geometry line would show a large
+ * improvement while real process memory went UP by N wasm heaps.
+ *
+ * `HEAPU8.byteLength` can lag the real heap by one growth step (conway#485),
+ * so this is a floor rather than a high-water mark. It is reported as a
+ * separate line rather than folded into the report's heap column, because
+ * summing a main-thread sample with N worker samples would invent a number
+ * neither engine measured.
+ *
+ * @return {object} `{wasmHeapMb, jsHeapMb}`, either possibly undefined
+ */
+function workerMemory() {
+  const wasmBytes = api?.wasmModule?.HEAPU8?.byteLength
+  const jsBytes = typeof performance !== 'undefined' ?
+    performance.memory?.usedJSHeapSize : undefined
+  return {
+    wasmHeapMb: Number.isFinite(wasmBytes) ? wasmBytes / BYTES_PER_MB : undefined,
+    jsHeapMb: Number.isFinite(jsBytes) ? jsBytes / BYTES_PER_MB : undefined,
+  }
 }
 
 

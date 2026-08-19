@@ -130,10 +130,13 @@ function spawnWorker() {
  * @param {?Array<number>} args.coordination the shared recentre frame
  * @param {string} args.wasmPath where the workers load conway's wasm from
  * @param {Function} args.onBatch `(flatMeshes, api)` per merged delta
- * @return {Promise<object>} `{placements, geometries, workers}`
+ * @param {Function} [args.onProgress] `(completed, total)` in PRODUCTS,
+ *   summed across shards, as each batch lands
+ * @return {Promise<object>} `{placements, geometries, workers, wasmHeapMb,
+ *   jsHeapMb}`
  */
 export function runGeometryWorkerPool({
-  file, settings, count, coordination, wasmPath, onBatch,
+  file, settings, count, coordination, wasmPath, onBatch, onProgress,
 }) {
   return new Promise((resolve, reject) => {
     const store = makeWorkerGeometryApi()
@@ -141,6 +144,42 @@ export function runGeometryWorkerPool({
     let live = count
     let settled = false
     let placements = 0
+    let wasmHeapMb = 0
+    let jsHeapMb = 0
+
+    /* Per-shard product counts, so the load report's Geometry line keeps
+     * ticking and keeps meaning PRODUCTS. Each worker's `remaining` is its
+     * own shard's, so the sums are the model's — and the total firms up as
+     * shards report rather than being known at the first batch. Ticking at
+     * all matters beyond the progress bar: the reporter's stall watchdog
+     * fires after 30s of silence, and a pooled geometry phase that reported
+     * only on completion would trip it on a big model. */
+    const shardProgress = new Map()
+
+    /**
+     * Push the summed product counts to the caller.
+     *
+     * @param {number} index the reporting shard
+     * @param {number} extracted products this batch finished
+     * @param {number} remaining products left in that shard
+     */
+    const reportProgress = (index, extracted, remaining) => {
+      if (typeof onProgress !== 'function') {
+        return
+      }
+      const shard = shardProgress.get(index) ?? {done: 0, total: 0}
+      shard.done += extracted
+      shard.total = shard.done + remaining
+      shardProgress.set(index, shard)
+
+      let done = 0
+      let total = 0
+      for (const each of shardProgress.values()) {
+        done += each.done
+        total += each.total
+      }
+      onProgress(done, total)
+    }
 
     // Deterministic origin-recenter (see below): batches queue until shard 0
     // has spoken, so the builder always takes its model-wide offset from the
@@ -179,6 +218,7 @@ export function runGeometryWorkerPool({
       }
       placements += message.placements.parents.length
       onBatch(decodePlacements(message.placements), store.api)
+      reportProgress(message.shardIndex, message.extracted, message.remaining)
     }
 
     /**
@@ -231,6 +271,8 @@ export function runGeometryWorkerPool({
           }
           break
         case 'done':
+          wasmHeapMb += message.wasmHeapMb ?? 0
+          jsHeapMb += message.jsHeapMb ?? 0
           // Shard 0 finishing without ever emitting a batch still settles
           // the offset — otherwise a model whose shard 0 owns no geometry
           // would queue every other shard forever.
@@ -244,7 +286,13 @@ export function runGeometryWorkerPool({
             // future message-ordering change cannot silently drop meshes.
             flushQueued()
             shutdown()
-            resolve({placements, geometries: store.size, workers: count})
+            resolve({
+              placements,
+              geometries: store.size,
+              workers: count,
+              wasmHeapMb,
+              jsHeapMb,
+            })
           }
           break
         case 'error':
@@ -280,7 +328,9 @@ export function runGeometryWorkerPool({
 
     if (count === 0) {
       settled = true
-      resolve({placements: 0, geometries: 0, workers: 0})
+      resolve({
+        placements: 0, geometries: 0, workers: 0, wasmHeapMb: 0, jsHeapMb: 0,
+      })
     }
   }).catch((error) => {
     debug(WARN).warn('geometry worker pool failed:', error)

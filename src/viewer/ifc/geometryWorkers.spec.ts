@@ -23,8 +23,14 @@ import {waitForModelReady} from '../../tests/e2e/models'
 // the pool declines to run on any source that is not store-backed. Without
 // that assertion a route whose model never reaches the store path would let
 // this whole spec pass while exercising nothing.
-const POOL_LINE = /\[conwayDirect\] geometry workers: n=(\d+) placements=(\d+) geometries=(\d+)/
+const POOL_LINE =
+  /\[conwayDirect\] geometry workers: n=(\d+) placements=(\d+) geometries=(\d+) wasmHeapMb=(\d+) frame=\[([^\]]*)\]/
 const PARSED_LINE = /\[conwayDirect\] parsed .*vertices=(\d+) triangles=(\d+) instances=(\d+)/
+
+/* Share opens with COORDINATE_TO_ORIGIN, so the frame a load applies always
+ * carries at least the Z-up -> Y-up normalize. Identity means no frame was
+ * derived — see the assertion below. */
+const IDENTITY_MAT4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 
 /**
@@ -90,6 +96,21 @@ describeMobileAndDesktop('viewer/ifc: geometry worker pool', (formFactor) => {
     expect(pool[1]).toBe('2')
     expect(Number(pool[2])).toBeGreaterThan(0)
     expect(Number(pool[3])).toBeGreaterThan(0)
+
+    // The frame handed to the workers must be the one a single-threaded load
+    // would apply — NOT identity.
+    //
+    // This is the assertion the first version of this spec was missing, and
+    // the bug it missed: the frame is derived from the first geometry a model
+    // captures, so read before anything is pumped it comes back identity, and
+    // supplying identity SUPPRESSES the recentre each worker would otherwise
+    // derive. The Z-up -> Y-up normalize lives in that frame, so the whole
+    // model rendered 90 degrees out — while vertices, triangles and instances,
+    // which is all this spec compared, stayed identical, because they are
+    // rotation-invariant.
+    const frame = pool[5].split(',').map(Number)
+    expect(frame.length).toBe(IDENTITY_MAT4.length)
+    expect(frame).not.toEqual(IDENTITY_MAT4)
 
     // And the durable model built from what the workers sent.
     const parsed = firstMatch(lines, PARSED_LINE)

@@ -88,6 +88,31 @@ the resident bytes are wrapped in a `Blob` once. A Blob clones by reference,
 so N workers share **one** copy rather than N. Without this the pool would
 only ever engage on a cache hit, which is not the load a user waits for.
 
+## The frame has to be derived before it is handed out
+
+A deferred model's coordination frame is anchored on the **first geometry it
+captures**, so until something is pumped `GetAppliedCoordinationMatrix`
+returns **identity**. Handing that to the workers is not a no-op: a supplied
+frame *suppresses* the one each worker would otherwise derive, and the frame
+carries the Z-up → Y-up normalize — so every product renders 90° out.
+
+The first working version of this shipped exactly that bug, and it survived
+the whole test suite: vertices, triangles, instances and placement counts are
+all **rotation-invariant**, so the E2E's "identical to a single-threaded load"
+comparison passed on a model lying on its side. It took a human loading the
+page to see it.
+
+So the pool pumps **one product on the main thread first**, purely to derive
+the frame, then reads it back. That is the same product a single-threaded load
+anchors on, so the pooled frame doesn't merely agree across workers — it
+*matches* the single-threaded one. The seed product's mesh is deliberately not
+forwarded to the builder (the shard that owns it extracts it too), except on a
+fallback, where the main-thread pump resumes past it and it would otherwise go
+missing.
+
+The frame is printed on the pool's summary line for the same reason: supplying
+the wrong one leaves every other number on that line unchanged.
+
 ## Determinism, which is the part that bites
 
 `incrementalBatchedBuilder` fixes the model-wide origin-recenter offset from
@@ -105,6 +130,25 @@ removed.
 This is the same class of bug as the coordination frame conway#538 fixed, one
 layer up — worth stating plainly, because it will recur anywhere a "first
 one wins" rule meets a pool.
+
+## What the load report can and cannot see
+
+Two things go stale under a pool, and both are fixed rather than documented
+around:
+
+- **Progress.** The report's Geometry line counts products, and the pool
+  reports per batch, summing each shard's `extracted`/`remaining`. Reporting
+  only on completion collapsed the line to `0.007s, +0.000000 MB heap` — the
+  phase began and ended in one event — and left the reporter's 30-second
+  stall watchdog with nothing to hear during the longest phase of a big load.
+- **Memory.** The report's heap figures come from `performance.memory` on the
+  **main thread**. Moving extraction into workers moves those allocations —
+  JS heap and wasm heap both — somewhere that sample cannot see, so the
+  Geometry line would show a large improvement while real process memory went
+  *up* by N wasm heaps. Each worker reports its own, and the pool's summary
+  line carries the sum (`wasmHeapMb=`). It is a separate line, not folded
+  into the report's heap column: adding a main-thread sample to N worker
+  samples would invent a number neither engine measured.
 
 ## Failure
 

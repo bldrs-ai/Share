@@ -193,6 +193,48 @@ const FEATURE_IMPLICATIONS = {
 }
 
 
+/* One-shot guard: the warning below is about the URL, which does not change
+ * within a page load, so it is worth saying once and never again. */
+let warnedUnknownFlags = false
+
+
+/**
+ * Warn once about `?feature=` names that match no flag.
+ *
+ * `?feature=` can only turn flags ON, and an unrecognised name is simply not
+ * found — so a typo is indistinguishable from the feature being off. That is
+ * fine for a flag you can see the effect of, and quietly costly for one whose
+ * whole purpose is a measurement: `?feature=worker4` (singular) reads exactly
+ * like `?feature=workers4` and silently produces a baseline run, which is a
+ * benchmark you then believe.
+ *
+ * Warn, don't guess: correcting a near-miss to the flag we think was meant
+ * would turn a typo into a different silent behaviour.
+ */
+function warnUnknownUrlFlags() {
+  if (warnedUnknownFlags || typeof window === 'undefined' || !window.location) {
+    return
+  }
+  warnedUnknownFlags = true
+
+  const requested = new URLSearchParams(window.location.search).get('feature')
+  if (!requested) {
+    return
+  }
+  const known = new Set(flags.map((f) => f.name.toLowerCase()))
+  const unknown = requested
+    .split(',')
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0 && !known.has(f.toLowerCase()))
+
+  if (unknown.length > 0) {
+    console.warn(
+      `[features] ignoring unknown ?feature= value(s): ${unknown.join(', ')} — ` +
+      'nothing was enabled by them')
+  }
+}
+
+
 /**
  * Non-React feature-flag check. Mirrors `useExistInFeature` (in
  * src/hooks/useExistInFeature.js) but is usable from non-component modules
@@ -213,6 +255,8 @@ export function isFeatureEnabled(name) {
     return false
   }
   const lowerName = name.toLowerCase()
+
+  warnUnknownUrlFlags()
 
   const staticFlag = flags.find((f) => f.name.toLowerCase() === lowerName)
   if (staticFlag?.isActive) {
