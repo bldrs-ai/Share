@@ -176,17 +176,62 @@ thread over, no sharding at all. It is worth measuring separately, because
 worker wasm init in a *browser* is unmeasured — in node it dominated small
 models, so small-model regressions are plausible.
 
-## What is measured, and what is not
+## Measured in a browser: 3x SLOWER, and why
 
-Measured: node, 4 cores, PSB 40.5 s → 7.4 s at N=4; MB-Khaya 1.76×; D3D
-2.34×. E2E on `index.ifc` confirms the pool engages in a real browser at N=2
-and assembles byte-identical build stats (vertices, triangles, instances) to
-a single-threaded load, on desktop and mobile.
+The node spike said PSB 40.5 s → 7.4 s at N=4. The first real browser run says
+the opposite, and the difference is the whole story.
 
-**Not** measured: browser wall-clock on a large model. `index.ifc` has seven
-products — it proves the machinery, not the speedup. That number comes from
-the smoke instance on PSB, and it is the one that decides whether this flag
-ever goes default-on.
+**PSB (860.7 MB), Chrome, OPFS cache hit:**
+
+| | baseline | `?feature=workers` (n=6) |
+|---|---|---|
+| Parsing | 15.8 s | **27.7 s** (+75 %) |
+| Geometry | 24.6 s | **120.0 s** (4.9×) |
+| Total | **52.9 s** | **159.1 s** (3.0×) |
+| main-thread heap | 1 760 MB | 2 798 MB |
+| worker wasm heap | — | **+1 938 MB** (6 × ~323 MB) |
+
+**The partition is exact — this is not a duplication bug.** The pool reported
+`placements=23454`, identical to the model's instance count, and
+`geometries=20178`, matching conway's own PSB figure exactly. Nothing
+duplicated, nothing dropped. The residency-independent dispatch key and the
+affinity placement did precisely what they were measured to do.
+
+**It loses because every worker parses the whole model first.** Six
+concurrent 860 MB parses, and the main thread's own parse is the control that
+proves the contention: 15.8 s → 27.7 s for work that did not change. The ~20 s
+of nothing a user sees between parse and first geometry *is* the workers
+parsing. It is currently serial on top of that — Share parses on the main
+thread, then spawns the pool — so the N parses start after the main one
+finishes instead of overlapping it.
+
+The node spike ran 4 processes on an idle box over **resident in-memory
+buffers**. Redundant parses were cheap there. In a browser, over OPFS, with
+six wasm heaps competing for bandwidth, they are not.
+
+## The ceiling, stated honestly
+
+Even with a free shared index, PSB is bounded by Amdahl — parse is not
+parallelised, geometry is. At the spike's 2.59× on extraction:
+
+```
+prep 6 + parse 15.8 + geometry 9.5 + assemble 5.3  ≈  37 s   vs   52.9 s
+```
+
+So **~30 %**, not the 5× the geometry-phase headline suggests. That is the
+same observation conway#536 made when it noted the bottleneck had moved to
+parse. Construct-from-columns is the lever that matters after this one.
+
+**The unblock is conway#541**: an `IfcAPI` entry that opens from a prebuilt
+index. The serialisation half already exists (M4a's `index_sidecar.ts`, whose
+functions are exported from conway's root barrel); nothing on the public open
+surface consumes one. This is what #394 assumed from the start — *"workers can
+be handed transferable index columns and pull by localID"* — and what M2's
+columns-from-birth index was supposed to enable.
+
+Until that lands the flag stays **off**, and the summary line reports
+`wasmHeapMb=` so the cost is visible rather than hidden from
+`performance.memory`, which only samples the main thread.
 
 ## Known workaround to remove
 
