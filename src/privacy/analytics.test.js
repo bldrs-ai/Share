@@ -176,6 +176,13 @@ describe('Analytics', () => {
       expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app')).toBe(false)
     })
 
+    it('counts an opted-in deploy-preview open but not a branch deploy', () => {
+      const githubOpen = {kind: 'file', isUploadedFile: false, filepath: 'models/house.ifc'}
+      const preview = 'deploy-preview-1741--bldrs-share-prod.netlify.app'
+      expect(Analytics.isRealModelOpen(githubOpen, preview, true)).toBe(true)
+      expect(Analytics.isRealModelOpen(githubOpen, 'bldrs-share-dev.netlify.app', true)).toBe(false)
+    })
+
     test('true on production and localhost hosts for real sources', () => {
       const githubOpen = {
         kind: 'provider',

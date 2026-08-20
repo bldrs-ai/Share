@@ -41,6 +41,17 @@ describe('shouldInitGa', () => {
   test('false under automation even on prod', () => {
     expect(shouldInitGa({hostname: 'bldrs.ai', isWebdriver: true})).toBe(false)
   })
+
+  test('allows an opted-in deploy preview without enabling other Netlify deploys', () => {
+    const preview = 'deploy-preview-1741--bldrs-share-prod.netlify.app'
+    expect(shouldInitGa({hostname: preview, isWebdriver: false, enableInPreview: true})).toBe(true)
+    expect(shouldInitGa({hostname: preview, isWebdriver: true, enableInPreview: true})).toBe(false)
+    expect(shouldInitGa({
+      hostname: 'bldrs-share-dev.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+  })
 })
 
 

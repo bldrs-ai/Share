@@ -1,5 +1,6 @@
 import Cookies from 'js-cookie'
 import {assertDefined} from '../utils/assert'
+import {isFeatureEnabled} from '../FeatureFlags'
 import Expires from './Expires'
 
 
@@ -297,11 +298,12 @@ export function _resetGaClientIdForTests() {
  * and isUploadedFile comes back false — upload filepaths are
  * UUID-derived, never 'index.ifc'.
  *
- * Also false on Netlify deploy hosts (*.netlify.app), so team review
- * sessions on a PR preview don't register as conversions. This is
- * deliberate defense-in-depth behind index/ga.js#shouldInitGa, whose
- * prod-hostname allowlist already keeps gtag/js from loading off-prod
- * at all. The two predicates differ on purpose and can't be merged:
+ * Also false on Netlify hosts (*.netlify.app), except deploy previews with
+ * `?feature=gaEnableInPreview`, so ordinary team review sessions don't
+ * register as conversions. This is deliberate defense-in-depth behind
+ * index/ga.js#shouldInitGa, whose host allowlist keeps gtag/js from loading
+ * off-prod unless that same preview override is present. The two predicates
+ * differ on purpose and can't be merged:
  * localhost must stay *included* here because the Playwright E2E suite
  * (realModelOpen.spec.ts) asserts this event lands in the dataLayer
  * buffer on localhost, while shouldInitGa excludes localhost from
@@ -309,10 +311,16 @@ export function _resetGaClientIdForTests() {
  *
  * @param {object} routeResult from routes.ts#handleRoute
  * @param {string} hostname current page host; parameterized for tests
+ * @param {boolean} enableInPreview feature override; parameterized for tests
  * @return {boolean}
  */
-export function isRealModelOpen(routeResult, hostname = window.location.hostname) {
-  if (hostname.endsWith('.netlify.app')) {
+export function isRealModelOpen(
+  routeResult,
+  hostname = window.location.hostname,
+  enableInPreview = isFeatureEnabled('gaEnableInPreview'),
+) {
+  const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
+  if (hostname.endsWith('.netlify.app') && !(isDeployPreview && enableInPreview)) {
     return false
   }
   const isBundledDemo = routeResult?.kind === 'file' &&

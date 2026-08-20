@@ -1,5 +1,6 @@
 import {captureException} from '@sentry/react'
 import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
+import {isFeatureEnabled} from '../FeatureFlags'
 
 
 // Must match the ID in public/index.html's inline gtag('config') stub —
@@ -14,22 +15,26 @@ const PROD_HOSTNAMES = ['bldrs.ai', 'www.bldrs.ai']
 
 
 /**
- * True when this page should load Google Analytics: production host
- * only, and never under automation (Playwright/Selenium/Puppeteer set
- * navigator.webdriver). Off-prod and automated traffic polluted the
- * metrics Google Ads bids on — see design/roadmap.md grow-120 and the
- * matching event-level guard in privacy/analytics#isRealModelOpen.
+ * True when this page should load Google Analytics: production hosts, or a
+ * manually opted-in Netlify deploy preview, and never under automation
+ * (Playwright/Selenium/Puppeteer set navigator.webdriver). Other off-prod and
+ * automated traffic polluted the metrics Google Ads bids on — see
+ * design/roadmap.md grow-120 and the matching event-level guard in
+ * privacy/analytics#isRealModelOpen.
  *
  * @param {object} [env] overrides for tests
  * @param {string} [env.hostname]
  * @param {boolean} [env.isWebdriver]
+ * @param {boolean} [env.enableInPreview]
  * @return {boolean}
  */
 export function shouldInitGa({
   hostname = window.location.hostname,
   isWebdriver = navigator.webdriver === true,
+  enableInPreview = isFeatureEnabled('gaEnableInPreview'),
 } = {}) {
-  return PROD_HOSTNAMES.includes(hostname) && !isWebdriver
+  const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
+  return (PROD_HOSTNAMES.includes(hostname) || (isDeployPreview && enableInPreview)) && !isWebdriver
 }
 
 
