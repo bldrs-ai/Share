@@ -71,6 +71,24 @@ describe('setupGa', () => {
     expect(captureException).not.toHaveBeenCalled()
   })
 
+  test('logs preview smoke-test activation before injecting the loader', () => {
+    const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {})
+    const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    setupGa({
+      hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })
+    expect(findGtagScript()).not.toBeNull()
+    expect(consoleInfo).toHaveBeenCalledWith(
+      '[ga] preview smoke test enabled; browser privacy tools may still block GA requests')
+    findGtagScript().onerror()
+    expect(consoleWarn).toHaveBeenCalledWith(
+      '[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
+    consoleInfo.mockRestore()
+    consoleWarn.mockRestore()
+  })
+
   test('reports a load failure to Sentry, tagged ga_init', () => {
     setupGa({hostname: 'bldrs.ai', isWebdriver: false})
     findGtagScript().onerror()

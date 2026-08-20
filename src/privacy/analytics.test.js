@@ -17,6 +17,26 @@ describe('Analytics', () => {
   })
 
 
+  test('logs preview events for smoke testing even when gtag is blocked', () => {
+    const originalLocation = window.location
+    const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {})
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+        search: '?feature=gaEnableInPreview',
+      },
+    })
+    delete window.gtag
+    Analytics.gtagEvent('real_model_open', {content_id: 'house.ifc'})
+    expect(consoleInfo).toHaveBeenCalledWith(
+      '[ga] event real_model_open', {content_id: 'house.ifc'})
+    Object.defineProperty(window, 'location', {configurable: true, value: originalLocation})
+    consoleInfo.mockRestore()
+  })
+
+
   describe('model engagement', () => {
     let hasFocusSpy
     let visibilityState

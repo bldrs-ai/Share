@@ -58,6 +58,16 @@ export default function setupGa(env = undefined) {
     return
   }
   try {
+    const hostname = env?.hostname ?? window.location.hostname
+    const enableInPreview = env?.enableInPreview ?? isFeatureEnabled('gaEnableInPreview')
+    const isPreviewSmokeTest = hostname.startsWith('deploy-preview-') &&
+      hostname.endsWith('.netlify.app') && enableInPreview
+    if (isPreviewSmokeTest) {
+      // Unlike GA DebugView, this remains visible when Brave/Shields or an
+      // extension blocks googletagmanager.com, making that failure explicit.
+      // eslint-disable-next-line no-console
+      console.info('[ga] preview smoke test enabled; browser privacy tools may still block GA requests')
+    }
     // The stub is declared inline in index.html before the bundle
     // loads; its absence means the bootstrap contract broke.
     if (typeof window.gtag !== 'function' || !Array.isArray(window.dataLayer)) {
@@ -67,6 +77,9 @@ export default function setupGa(env = undefined) {
     script.async = true
     script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
     script.onerror = () => {
+      if (isPreviewSmokeTest) {
+        console.warn('[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
+      }
       captureException(
         new Error('ga_init: gtag/js failed to load (blocked client or network failure)'),
         {tags: {subsystem: 'ga_init'}},

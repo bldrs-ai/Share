@@ -37,6 +37,14 @@ export function setIsAllowed(allowed) {
  * @param {object} parameters
  */
 export function gtagEvent(eventName, parameters) {
+  if (window.location.hostname.startsWith('deploy-preview-') &&
+      window.location.hostname.endsWith('.netlify.app') &&
+      isFeatureEnabled('gaEnableInPreview')) {
+    // Preview-only observability: production stays quiet, while a smoke test
+    // remains inspectable even when browser privacy tooling blocks gtag/js.
+    // eslint-disable-next-line no-console
+    console.info(`[ga] event ${eventName}`, parameters)
+  }
   if (window.gtag && isAllowed()) {
     window.gtag('event', eventName, parameters)
   }
