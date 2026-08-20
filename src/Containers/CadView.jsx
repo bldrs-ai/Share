@@ -16,6 +16,7 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   endLoadProgress,
+  getCompletedLoadStats,
   reportFramingExclusion,
   reportLoadProgress,
 } from '../loader/loadProgress'
@@ -576,7 +577,10 @@ export default function CadView({
         content_type: loadedModel.type || 'undefined',
         content_id: filepath,
       }
-      // TODO(pablo): currently only IFC/STEP are populated with stats.
+      // The progress reporter supplies cross-format fallbacks. Conway's
+      // IFC/STEP engine stats then override memory/time/diagnostic counts
+      // with engine-scoped values from loadedModel.loadStats.
+      addProperties(eventParams, getCompletedLoadStats() ?? {}, 'stats_')
       if (loadedModel.loadStats) {
         addProperties(eventParams, loadedModel.loadStats, 'stats_')
       }
