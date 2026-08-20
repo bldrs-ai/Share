@@ -41,6 +41,17 @@ describe('shouldInitGa', () => {
   test('false under automation even on prod', () => {
     expect(shouldInitGa({hostname: 'bldrs.ai', isWebdriver: true})).toBe(false)
   })
+
+  test('allows an opted-in deploy preview without enabling other Netlify deploys', () => {
+    const preview = 'deploy-preview-1741--bldrs-share-prod.netlify.app'
+    expect(shouldInitGa({hostname: preview, isWebdriver: false, enableInPreview: true})).toBe(true)
+    expect(shouldInitGa({hostname: preview, isWebdriver: true, enableInPreview: true})).toBe(false)
+    expect(shouldInitGa({
+      hostname: 'bldrs-share-dev.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })).toBe(false)
+  })
 })
 
 
@@ -58,6 +69,24 @@ describe('setupGa', () => {
     expect(script.async).toBe(true)
     expect(script.src).toBe(`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`)
     expect(captureException).not.toHaveBeenCalled()
+  })
+
+  test('logs preview smoke-test activation before injecting the loader', () => {
+    const consoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {})
+    const consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    setupGa({
+      hostname: 'deploy-preview-1757--bldrs-share-dev.netlify.app',
+      isWebdriver: false,
+      enableInPreview: true,
+    })
+    expect(findGtagScript()).not.toBeNull()
+    expect(consoleInfo).toHaveBeenCalledWith(
+      '[ga] preview smoke test enabled; browser privacy tools may still block GA requests')
+    findGtagScript().onerror()
+    expect(consoleWarn).toHaveBeenCalledWith(
+      '[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
+    consoleInfo.mockRestore()
+    consoleWarn.mockRestore()
   })
 
   test('reports a load failure to Sentry, tagged ga_init', () => {

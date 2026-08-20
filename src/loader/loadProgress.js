@@ -33,6 +33,7 @@ const STATUS_LINE_INTERVAL_MS = 100
 // long enough to recognize which family of warning dominated, short enough
 // that the line still reads as a summary.
 const MAX_DIAGNOSTIC_SAMPLE_CHARS = 80
+const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
 
 /**
  * No event during a tickable phase for this long → stalled. Long enough
@@ -116,6 +117,9 @@ class LoadProgressReporter {
     this.stallTimer = null
     this.stallReported = false
     this.startTime = Date.now()
+    this.fileSize = undefined
+    this.warningCount = 0
+    this.errorCount = 0
     // Engine events carry their own elapsedMs measured from the ENGINE's
     // clock (conway's tracker starts at OpenModel), not from load start.
     // This offset rebases them onto the load clock — set once at the first
@@ -148,7 +152,12 @@ class LoadProgressReporter {
   installConsoleTee() {
     this.originalWarn = console.warn
     this.originalError = console.error
-    const capture = (args) => {
+    const capture = (args, level) => {
+      if (level === 'warning') {
+        this.warningCount++
+      } else {
+        this.errorCount++
+      }
       const text = args
         .map((arg) => (arg instanceof Error ? arg.message : String(arg)))
         .join(' ').replace(/\s+/g, ' ').trim()
@@ -157,11 +166,11 @@ class LoadProgressReporter {
       }
     }
     console.warn = (...args) => {
-      capture(args)
+      capture(args, 'warning')
       this.originalWarn.apply(console, args)
     }
     console.error = (...args) => {
-      capture(args)
+      capture(args, 'error')
       this.originalError.apply(console, args)
     }
   }
@@ -215,6 +224,7 @@ class LoadProgressReporter {
     }
 
     if (isModelInfoProgress(progressArg)) {
+      this.recordModelInfo(progressArg.modelInfo)
       this.addReportLine(this.log.setModelInfo(progressArg.modelInfo))
       this.armStallWatchdog()
       return
@@ -272,6 +282,17 @@ class LoadProgressReporter {
 
     this.breadcrumb(this.log.currentLine() ?? event.phase, event)
     this.armStallWatchdog()
+  }
+
+  /**
+   * Remember machine-readable values that also appear in the model line.
+   *
+   * @param {object} info model metadata
+   */
+  recordModelInfo(info) {
+    if (Number.isFinite(info?.byteLength)) {
+      this.fileSize = info.byteLength
+    }
   }
 
   /**
@@ -370,7 +391,9 @@ class LoadProgressReporter {
    * live line.
    */
   finishReport() {
-    const closedLine = this.log.closeCurrentStage(Date.now() - this.startTime, usedHeapMb())
+    const finishedAt = Date.now()
+    const heapMb = usedHeapMb()
+    const closedLine = this.log.closeCurrentStage(finishedAt - this.startTime, heapMb)
     if (closedLine !== undefined) {
       this.addReportLine(closedLine)
     }
@@ -385,6 +408,17 @@ class LoadProgressReporter {
     // first so re-echoing these lines can't loop back through the tee.
     this.restoreConsole()
     this.appendDiagnostics()
+
+    // Keep the dashboard fields beside the report source of truth. Values
+    // are captured before dispose restores the console tee and before the
+    // next load replaces this reporter.
+    this.completedStats = {
+      fileSize: this.fileSize,
+      memoryUsed: heapMb === undefined ? undefined : Math.round(heapMb * BYTES_PER_MB),
+      loadTime: finishedAt - this.startTime,
+      errorCount: this.errorCount,
+      warningCount: this.warningCount,
+    }
 
     useStore.getState().setCurrentLoadLine(null)
   }
@@ -524,8 +558,20 @@ export function reportEngineVersion(versionLine) {
  */
 export function reportModelInfo(info) {
   if (activeReporter && !activeReporter.ended) {
+    activeReporter.recordModelInfo(info)
     activeReporter.addReportLine(activeReporter.log.setModelInfo(info))
   }
+}
+
+
+/**
+ * Stats from the most recently completed load, named to match the GA4
+ * custom dimensions consumed by the bizdev dashboard.
+ *
+ * @return {object|null}
+ */
+export function getCompletedLoadStats() {
+  return activeReporter?.completedStats ?? null
 }
 
 
@@ -668,4 +714,3 @@ export function reportFramingExclusion(bounds) {
 export function _getActiveReporterForTests() {
   return activeReporter
 }
-
