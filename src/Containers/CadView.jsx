@@ -7,7 +7,15 @@ import {captureException} from '@sentry/react'
 import {fileSuffixBoundaryRegex} from '../Filetype'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import {onHash} from '../Components/Camera/CameraControl'
-import {LOCAL_HOUR_PARAM, OPEN_CID_PARAM, getLocalHour, getOpenCid, gtagEvent, isRealModelOpen} from '../privacy/analytics'
+import {
+  LOCAL_HOUR_PARAM,
+  OPEN_CID_PARAM,
+  getLocalHour,
+  getOpenCid,
+  gtagEvent,
+  isRealModelOpen,
+  startModelEngagement,
+} from '../privacy/analytics'
 import {getRenderMode} from '../privacy/preferences'
 import {resetState as resetCutPlaneState} from '../Components/CutPlane/CutPlaneMenu'
 import {useIsMobile} from '../Components/Hooks'
@@ -114,6 +122,7 @@ export default function CadView({
   // (not module-level state) so two CadView mounts in the same process —
   // tests, multi-pane layouts — don't stomp each other.
   const previousThemeChangeCbRef = useRef(null)
+  const stopModelEngagementRef = useRef(null)
 
   // Two useEffects below can each trigger `onViewer()` — the
   // [viewer]-dep effect fires when `onModelPath` sets a new viewer, and the
@@ -572,6 +581,10 @@ export default function CadView({
     // conflated with homepage visits because the demo model fired it
     // too. The isRealModelOpen guard keeps that from recurring — see
     // its doc for why the demo must stay out of this event.
+    // The successfully loaded model replaces the prior engagement window,
+    // including when this load is the bundled demo (which is never tracked).
+    stopModelEngagementRef.current?.()
+    stopModelEngagementRef.current = null
     if (isRealModelOpen(routeResult)) {
       const eventParams = {
         content_type: loadedModel.type || 'undefined',
@@ -599,6 +612,10 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent('real_model_open', eventParams)
+      stopModelEngagementRef.current = startModelEngagement({
+        content_type: eventParams.content_type,
+        content_id: eventParams.content_id,
+      })
     }
 
     return loadedModel
@@ -1496,6 +1513,8 @@ export default function CadView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => () => stopModelEngagementRef.current?.(), [])
 
 
   const abs = {position: 'absolute'}

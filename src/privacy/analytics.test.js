@@ -17,6 +17,60 @@ describe('Analytics', () => {
   })
 
 
+  describe('model engagement', () => {
+    let hasFocusSpy
+    let visibilityState
+
+    beforeEach(() => {
+      jest.useFakeTimers()
+      window.gtag = jest.fn()
+      hasFocusSpy = jest.spyOn(document, 'hasFocus').mockReturnValue(true)
+      visibilityState = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    })
+
+    afterEach(() => {
+      hasFocusSpy.mockRestore()
+      visibilityState.mockRestore()
+      delete window.gtag
+      jest.useRealTimers()
+    })
+
+    test('emits foreground time with stable model identity when stopped', () => {
+      const ENGAGEMENT_MS = 2500
+      const stop = Analytics.startModelEngagement({content_id: 'house.ifc', content_type: 'ifc'})
+      jest.advanceTimersByTime(ENGAGEMENT_MS)
+      stop()
+      stop()
+
+      expect(window.gtag).toHaveBeenCalledTimes(1)
+      expect(window.gtag).toHaveBeenCalledWith('event', 'model_engagement', {
+        content_id: 'house.ifc',
+        content_type: 'ifc',
+        engagement_time_msec: ENGAGEMENT_MS,
+        transport_type: 'beacon',
+      })
+    })
+
+    test('splits engagement around background time without counting it', () => {
+      const FIRST_ENGAGEMENT_MS = 1000
+      const BACKGROUND_MS = 5000
+      const SECOND_ENGAGEMENT_MS = 2000
+      const stop = Analytics.startModelEngagement({content_id: 'house.ifc'})
+      jest.advanceTimersByTime(FIRST_ENGAGEMENT_MS)
+      visibilityState.mockReturnValue('hidden')
+      document.dispatchEvent(new Event('visibilitychange'))
+      jest.advanceTimersByTime(BACKGROUND_MS)
+      visibilityState.mockReturnValue('visible')
+      document.dispatchEvent(new Event('visibilitychange'))
+      jest.advanceTimersByTime(SECOND_ENGAGEMENT_MS)
+      stop()
+
+      const durations = window.gtag.mock.calls.map((call) => call[2].engagement_time_msec)
+      expect(durations).toEqual([FIRST_ENGAGEMENT_MS, SECOND_ENGAGEMENT_MS])
+    })
+  })
+
+
   // open_cid carries GA4's client id on model-open events so per-user
   // open depth is queryable; see the module doc for why the param is
   // simply absent when GA never initialized.

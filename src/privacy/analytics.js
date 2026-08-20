@@ -43,6 +43,62 @@ export function gtagEvent(eventName, parameters) {
 }
 
 
+/**
+ * Track foreground engagement with one loaded model. Durations are emitted
+ * when the page loses focus/visibility, unloads, or the next model replaces
+ * this one. This follows GA4's foreground-engagement semantics while keeping
+ * the model identity explicit instead of relying on a mutable page title.
+ *
+ * @param {object} modelParams stable `content_id` / `content_type` identity
+ * @return {Function} idempotent stop function that flushes the final interval
+ */
+export function startModelEngagement(modelParams) {
+  let startedAt = null
+  let stopped = false
+  const isForeground = () => document.visibilityState === 'visible' && document.hasFocus()
+  const resume = () => {
+    if (!stopped && startedAt === null && isForeground()) {
+      startedAt = performance.now()
+    }
+  }
+  const pause = () => {
+    if (startedAt === null) {
+      return
+    }
+    const engagementTimeMs = Math.round(performance.now() - startedAt)
+    startedAt = null
+    if (engagementTimeMs > 0) {
+      gtagEvent('model_engagement', {
+        ...modelParams,
+        engagement_time_msec: engagementTimeMs,
+        transport_type: 'beacon',
+      })
+    }
+  }
+  const onVisibilityChange = () => isForeground() ? resume() : pause()
+
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('focus', resume)
+  window.addEventListener('blur', pause)
+  window.addEventListener('pagehide', pause)
+  window.addEventListener('pageshow', resume)
+  resume()
+
+  return () => {
+    if (stopped) {
+      return
+    }
+    pause()
+    stopped = true
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('focus', resume)
+    window.removeEventListener('blur', pause)
+    window.removeEventListener('pagehide', pause)
+    window.removeEventListener('pageshow', resume)
+  }
+}
+
+
 /*
  * GA4's client id, captured at init by index/ga.js.
  *
