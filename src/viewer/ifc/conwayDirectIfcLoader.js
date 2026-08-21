@@ -427,6 +427,96 @@ function reportPoolSummary(result, coordination) {
 
 
 /**
+ * Whether a coordination matrix is the identity.
+ *
+ * conway documents identity as `GetAppliedCoordinationMatrix`'s "no recentre
+ * ran" sentinel, so this is the anchored/not-anchored test rather than a
+ * guess: a Share open always sets COORDINATE_TO_ORIGIN, and an anchored IFC
+ * frame therefore always carries at least the Z-up -> Y-up normalize, which
+ * is not identity.
+ *
+ * @param {?Array<number>} matrix a column-major mat4, or nothing
+ * @return {boolean} true when the frame is absent or identity
+ */
+function isIdentityFrame(matrix) {
+  if (!matrix || matrix.length !== IDENTITY_MAT4.length) {
+    return true
+  }
+  for (let where = 0; where < IDENTITY_MAT4.length; ++where) {
+    if (matrix[where] !== IDENTITY_MAT4[where]) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * Pump main-thread products until this model anchors its recentre frame, and
+ * return that frame.
+ *
+ * The pool cannot start without it: conway refuses to shard a
+ * COORDINATE_TO_ORIGIN model that has not been given a frame, and a frame it
+ * IS given is applied rather than derived — so handing over the identity a
+ * not-yet-anchored model reports suppresses the recentre and the Z-up ->
+ * Y-up normalize with it, leaving every product rotated 90 degrees while
+ * vertices, triangles and instances all stay identical (Share#1761).
+ *
+ * Pumping one product was the original mistake. `extracted` counts
+ * PRODUCTS, and a product with no representation emits no FlatMesh and
+ * anchors nothing; a model that leads with containers — every assembly-first
+ * steel export does — hands back identity for as long as those last. Stopping
+ * at the first product that actually anchors costs the geometry-less prefix
+ * plus one product, which is also exactly where a single-threaded load
+ * anchors, so the pooled frame does not merely agree across workers: it
+ * matches the frame the same file gets with the flag off.
+ *
+ * Exported for `conwayDirectIfcLoader.coordinationFrame.test.js`, which
+ * drives it with engines that anchor at different depths.
+ *
+ * @param {object} ifcAPI the main thread's engine
+ * @param {number} modelID an open deferred model
+ * @param {Array} seedBatch collects the FlatMeshes the seed pumped, so a
+ *   caller that ends up falling back can still deliver them — the
+ *   main-thread pump resumes AFTER them and would otherwise leave those
+ *   products missing from the model with nothing to say so
+ * @return {Promise<?Array<number>>} the anchored frame, or null when this
+ *   model never anchors one (in which case the pool must decline rather
+ *   than supply identity)
+ */
+export async function deriveCoordinationFrame(ifcAPI, modelID, seedBatch) {
+  if (typeof ifcAPI?.GetAppliedCoordinationMatrix !== 'function' ||
+      typeof ifcAPI?.ExtractGeometryBatchAsync !== 'function') {
+    return null
+  }
+  // Bounded by ITERATIONS, not by products extracted: an engine that keeps
+  // reporting work remaining while extracting nothing would otherwise spin
+  // this loop forever on the main thread.
+  for (let seeded = 0; seeded < MAX_FRAME_SEED_PRODUCTS; ++seeded) {
+    // eslint-disable-next-line new-cap
+    const applied = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+    if (!isIdentityFrame(applied)) {
+      return applied
+    }
+    // One product at a time so the seed stops at the FIRST product that
+    // anchors. A larger batch would pump geometry-bearing products past the
+    // anchor, and every one of those is main-thread work the pool exists to
+    // move off the main thread.
+    // eslint-disable-next-line new-cap
+    const {extracted, remaining} = await ifcAPI.ExtractGeometryBatchAsync(
+      modelID, 1, (flatMesh) => seedBatch.push(flatMesh))
+    if (remaining === 0 && extracted === 0) {
+      // Exhausted. Read once more — the last product may have anchored it.
+      // eslint-disable-next-line new-cap
+      const last = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+      return isIdentityFrame(last) ? null : last
+    }
+  }
+  return null
+}
+
+
+/**
  * Extract this model's geometry across a pool of workers.
  *
  * The main-thread model stays open and untouched — it is what serves
@@ -464,8 +554,8 @@ async function pumpGeometryInWorkers({
   delete workerSettings.ON_MODEL_INFO
   delete workerSettings.ON_PREVIEW_MESH
 
-  // Derive the frame the way a single-threaded load does — by extracting a
-  // product — BEFORE reading it.
+  // Derive the frame the way a single-threaded load does — by extracting
+  // products until one ANCHORS it — BEFORE reading it.
   //
   // A deferred model's coordination frame is anchored on the first geometry
   // it captures, so until something is pumped GetAppliedCoordinationMatrix
@@ -476,31 +566,27 @@ async function pumpGeometryInWorkers({
   // the counts a batch reports (vertices, triangles, instances) are all
   // rotation-invariant, so nothing downstream noticed.
   //
-  // One product is enough, and it is the SAME product a single-threaded load
-  // would anchor on, so the pooled frame is not merely shared — it matches.
+  // Seeding ONE product is not enough, which is what Share#1761 turned up:
+  // `extracted` counts products, not geometry, and a product that emits no
+  // FlatMesh anchors nothing. Assembly-first models lead with exactly such
+  // products — on the AISC/SDS-2 steel fixture the first 49 products are
+  // IfcElementAssembly containers and the frame does not anchor until the
+  // 50th — so the pool read identity, supplied it, and rendered the whole
+  // model on its side. See deriveCoordinationFrame.
   const seedBatch = []
-  if (typeof ifcAPI.ExtractGeometryBatchAsync === 'function') {
-    // eslint-disable-next-line new-cap
-    await ifcAPI.ExtractGeometryBatchAsync(
-      modelID, 1, (flatMesh) => seedBatch.push(flatMesh))
-  }
-
-  const coordination =
-    typeof ifcAPI.GetAppliedCoordinationMatrix === 'function' ?
-      // eslint-disable-next-line new-cap
-      ifcAPI.GetAppliedCoordinationMatrix(modelID) : null
+  const coordination = await deriveCoordinationFrame(ifcAPI, modelID, seedBatch)
 
   let geometryApi = ifcAPI
   let delivered = 0
 
   /**
-   * Hand the frame-derivation product to the builder.
+   * Hand the frame-derivation products to the builder.
    *
-   * Called ONLY when the pool does not run to completion. The shard that
-   * owns this product extracts it too, so forwarding it on the happy path
-   * would place it twice; but on a fallback the main-thread pump resumes
-   * from the next product and would otherwise leave this one missing from
-   * the model with nothing to say so.
+   * Called ONLY when the pool does not run to completion. The shards that
+   * own these products extract them too, so forwarding them on the happy
+   * path would place them twice; but on a fallback the main-thread pump
+   * resumes from the next product and would otherwise leave them missing
+   * from the model with nothing to say so.
    */
   const deliverSeedBatch = () => {
     if (seedBatch.length === 0) {
@@ -508,6 +594,22 @@ async function pumpGeometryInWorkers({
     }
     captured.push(...seedBatch)
     onMeshBatch(seedBatch, modelID, ifcAPI)
+  }
+
+  if (coordination === null) {
+    // No frame to hand out. Supplying identity is the one thing that must
+    // not happen here — conway APPLIES a supplied frame, so identity
+    // suppresses the recentre and the Z-up -> Y-up normalize with it, and
+    // every count this load reports stays identical while the model lies on
+    // its side (Share#1761). Sharding without a frame is not an option
+    // either: SetGeometryShard refuses a COORDINATE_TO_ORIGIN model that has
+    // not been given one. So decline the pool and let the main-thread pump,
+    // which derives its own frame as it goes, serve the load.
+    console.warn(
+      '[conwayDirect] geometry worker pool declined: the model never ' +
+      'anchored a coordination frame; falling back to the main-thread pump')
+    deliverSeedBatch()
+    return null
   }
 
   try {
@@ -606,6 +708,16 @@ async function pumpGeometryInWorkers({
  * worker bundle sits beside index.html in `docs/`, so the same page-relative
  * path resolves to the same directory. */
 const WORKER_WASM_PATH = './static/js/'
+
+/* Column-major identity mat4 — conway's documented "no coordination frame
+ * applied" report from GetAppliedCoordinationMatrix. See isIdentityFrame. */
+const IDENTITY_MAT4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+/* Safety net on deriveCoordinationFrame's seed loop. The loop normally stops
+ * at the first product that emits geometry, so this only binds a model that
+ * anchors nothing at all — where the cost of finding that out has to stay
+ * bounded, because every iteration is main-thread extraction. */
+const MAX_FRAME_SEED_PRODUCTS = 4096
 
 const GEOMETRY_BUDGET_MB = 64
 
