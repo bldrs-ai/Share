@@ -237,6 +237,53 @@ describe('viewer/ifc/conwayDirectIfcLoader', () => {
         expect(ifcAPI.StreamAllMeshes).toHaveBeenCalledTimes(1)
       })
 
+      it('constructs no Worker when the pool flag is off (Share#1760)', async () => {
+        // The geometry worker pool is off by default, and "off" has to mean
+        // nothing is spawned, capability-probed or engine-instantiated —
+        // not merely that no shard runs. Any of those ahead of the flag
+        // check is charged to every ordinary load, which is the shape of
+        // regression Share#1760 was opened on. The static half of this guard
+        // is `geometryWorkerBundle.test.js`; this is the runtime half.
+        mockIsFeatureEnabled.mockImplementation((name) => name === 'demandGeometry')
+        const originalWorker = global.Worker
+        global.Worker = jest.fn()
+        try {
+          const ifcAPI = makeDemandAPI(10)
+          const result = await parseIfcWithConway(
+            new ArrayBuffer(4), ifcAPI, undefined, undefined, () => {})
+          expect(global.Worker).not.toHaveBeenCalled()
+          // And the geometry reader handed back is the model's own engine
+          // rather than the worker-payload adapter, so nothing downstream
+          // resolves vertices through a second instance either.
+          expect(result.geometryApi).toBe(ifcAPI)
+          expect(result.captured).toHaveLength(10)
+        } finally {
+          global.Worker = originalWorker
+        }
+      })
+
+      it('declines the pool on a source too small to pay for it (Share#1760)', async () => {
+        // `?feature=workers` means "use the pool where it pays". The size gate
+        // lives in `geometryWorkerCount`; what this pins is the wiring — that
+        // the loader hands it the source's size at all. Without that argument
+        // the gate cannot fire and a seven-product model spawns a pool.
+        mockIsFeatureEnabled.mockImplementation(
+          (name) => name === 'demandGeometry' || name === 'workers')
+        const originalWorker = global.Worker
+        global.Worker = jest.fn()
+        try {
+          const ifcAPI = makeDemandAPI(10)
+          const result = await parseIfcWithConway(
+            new ArrayBuffer(4), ifcAPI, undefined, undefined, () => {})
+          expect(global.Worker).not.toHaveBeenCalled()
+          // ...and the main-thread pump did the work instead.
+          expect(ifcAPI.ExtractGeometryBatch).toHaveBeenCalled()
+          expect(result.captured).toHaveLength(10)
+        } finally {
+          global.Worker = originalWorker
+        }
+      })
+
       it('disableStreamOpen also disables the demand path', async () => {
         mockIsFeatureEnabled.mockImplementation(
           (name) => name === 'demandGeometry' || name === 'disableStreamOpen')

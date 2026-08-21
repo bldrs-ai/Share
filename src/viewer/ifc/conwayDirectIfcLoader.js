@@ -199,7 +199,14 @@ export async function parseIfcWithConway(
     //
     // Needs `onMeshBatch`, because the pool's output only reaches the screen
     // through the incremental builder.
-    const workerCount = onMeshBatch ? geometryWorkerCount() : 0
+    //
+    // The source size goes in because the pool's standup is a fixed cost paid
+    // before the first product is touched, so on a small model it is pure
+    // overhead (Share#1760). Bytes are the only proxy for extraction cost
+    // available at this point — the product count is not known until the
+    // model has been pumped, which is the thing being decided about.
+    const sourceBytes = store !== null ? buffer.size : data.length
+    const workerCount = onMeshBatch ? geometryWorkerCount(sourceBytes) : 0
 
     if (workerCount > 0) {
       // Every worker reads the source through `blob.slice()`, which is

@@ -120,9 +120,12 @@ export const flags = [
   // Off by default because the worker-side wasm init cost in a BROWSER is
   // unmeasured — in node it dominated small models, so PSB-scale wins and
   // MB-Khaya-scale losses are both plausible until a real run says.
-  // `?feature=workers` sizes the pool from hardwareConcurrency;
-  // `?feature=workers1` (…2, …3, …) pins a count, which is how N is compared
-  // against N=1 on one machine.
+  // `?feature=workers` sizes the pool from hardwareConcurrency AND declines
+  // on sources below `MIN_POOL_SOURCE_MB` — standing the pool up is a fixed
+  // cost charged before the first product is touched, so on a small model it
+  // is pure overhead (Share#1760). `?feature=workers1` (…2, …3, …) pins a
+  // count, which is how N is compared against N=1 on one machine, and is
+  // honoured at any size so a benchmark cannot silently opt itself out.
   {name: 'workers', isActive: false},
   {name: 'workers1', isActive: false},
   {name: 'workers2', isActive: false},

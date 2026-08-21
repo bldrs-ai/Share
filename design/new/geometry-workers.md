@@ -168,13 +168,38 @@ end-of-load builders would assemble an empty model from an empty `captured`.
 
 | flag | effect |
 |---|---|
-| `?feature=workers` | pool sized from `hardwareConcurrency − 2`, capped at 8 |
-| `?feature=workers1` … `workers8` | pin the count — how N is compared against N=1 on one machine |
+| `?feature=workers` | pool sized from `hardwareConcurrency − 2`, capped at 8 — **and only on sources ≥ 16 MB** |
+| `?feature=workers1` … `workers8` | pin the count — how N is compared against N=1 on one machine, at any size |
 
 `workers1` is the move-to-worker baseline: same products, same order, one
 thread over, no sharding at all. It is worth measuring separately, because
 worker wasm init in a *browser* is unmeasured — in node it dominated small
 models, so small-model regressions are plausible.
+
+### The size gate, and why the pin ignores it
+
+Standing the pool up is a fixed cost charged before the first product is
+touched: 0.75 s at N=1, ~1.4 s at N=4, ~1.8 s at N=6 (table below). On
+`index.ifc` — seven products, 0.035 s of geometry — that is the entire load
+several times over, and it is what Share#1760 was opened on.
+
+So `?feature=workers` means *use the pool where it pays*, and declines below
+`MIN_POOL_SOURCE_MB` (16 MB) in `conwayGeometryPool.js`. The arithmetic behind
+the constant: extraction runs at roughly 1.2 s/MB single-threaded (D3D:
+213 MB in 251 s) and the pool returns about 1.45×, so it saves ~0.31 of a
+model's geometry time; a standup of a few seconds needs ~19 s of geometry to
+break even, which is ~16 MB of IFC. It is a heuristic on the only quantity
+known before extraction — the product count is not known until the model has
+been pumped, which is the thing being decided about.
+
+**A pinned count overrides it**, deliberately. Pinning is how N is compared
+against N=1 on one machine, and `geometryWorkers.spec.ts` pins N=2 on
+`index.ifc` precisely because a tiny model makes the machinery cheap to
+exercise. A gate that silently overrode the pin would turn every small-model
+benchmark into a baseline run you then believe — the same failure the unknown-
+`?feature=` warning exists to prevent. A decline is announced on the console
+for the same reason: `?feature=workers` with no pool summary after it is
+indistinguishable from a pool that failed.
 
 ## Measured in a browser: 3x SLOWER, and why
 
@@ -232,6 +257,21 @@ to be faster — not the wasm.
 
 So the ~20 s gap a user sees between parse and first geometry on PSB is **not**
 worker startup. It is the redundant parse, and startup is ~10 % of it at N=6.
+
+**Reproduced independently** (Share#1760, headless Chromium, 4 cores, the
+Playwright build): `spawn+init` 0.74 s at N=1, 1.0 s at N=2, 1.3–1.6 s at N=4,
+with conway `Init()` 63–188 ms and the model open 26–99 ms throughout. The
+table above holds, and so does its conclusion: the standup is bundle fetch and
+evaluation, not wasm. The 5.9 s at N=6 quoted in Share#1760's body does not
+reproduce and is ~3× this doc's own N=6 figure on the same model — treat it as
+a loaded-machine or DevTools-open outlier, not the cost to design against.
+
+The consequence for the fix list: sharing one compiled `WebAssembly.Module`
+across the workers, which reads as the obvious remedy, is aimed at the 63–188 ms
+that `Init()` costs, not at the ~0.6 s per worker that dominates. Trimming the
+worker bundle — it carries all of conway to reach the extraction path — and
+spawning the pool *during* the parse rather than after it are the levers that
+match where the time goes.
 
 ## The ceiling, stated honestly
 

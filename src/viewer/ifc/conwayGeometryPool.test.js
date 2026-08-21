@@ -298,8 +298,17 @@ describe('viewer/ifc/conwayGeometryPool', () => {
 
 
 describe('geometryWorkerCount', () => {
+  let infoSpy
+
   beforeEach(() => {
     jest.resetModules()
+    // The size gate says out loud that it declined — divert it rather than
+    // let the suite narrate. PLAYBOOK.md §"Keep the test console clean".
+    infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    infoSpy.mockRestore()
   })
 
   /**
@@ -329,6 +338,60 @@ describe('geometryWorkerCount', () => {
     // thread over. It has to be reachable independently of core count.
     const count = await withFlags(['workers1'])
     expect(count()).toBe(1)
+  })
+
+  it('declines a model too small to pay back the standup (Share#1760)', async () => {
+    // Standing up the pool is a fixed cost charged before the first product
+    // is touched — 0.74 s at N=1 and ~5.9 s at N=6 in a browser — while
+    // `index.ifc`'s seven products take 0.035 s to extract. `?feature=workers`
+    // means "use the pool where it pays", so on a small source it does not.
+    const count = await withFlags(['workers'])
+    const oneMb = 1024 * 1024
+    expect(count(oneMb)).toBe(0)
+  })
+
+  it('says so when it declines, since silence reads as a pool failure', async () => {
+    // `?feature=workers` and no pool summary on the console is exactly what a
+    // pool that FAILED looks like, and the smoke instructions treat a missing
+    // summary line as a fallback to report.
+    const count = await withFlags(['workers'])
+    count(1024 * 1024)
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('declined'))
+  })
+
+  it('runs on a model big enough for the standup to pay back', async () => {
+    const original = globalThis.navigator?.hardwareConcurrency
+    Object.defineProperty(globalThis.navigator, 'hardwareConcurrency', {
+      value: 8, configurable: true,
+    })
+    const count = await withFlags(['workers'])
+    const bigBytes = 64 * 1024 * 1024
+    expect(count(bigBytes)).toBe(6)
+    Object.defineProperty(globalThis.navigator, 'hardwareConcurrency', {
+      value: original, configurable: true,
+    })
+  })
+
+  it('honours a pinned count at any size — a benchmark must not opt itself out', async () => {
+    // Pinning is how N is compared against N=1 on one machine, and
+    // `geometryWorkers.spec.ts` pins N=2 on `index.ifc` precisely because a
+    // tiny model makes the machinery cheap to exercise. A size gate that
+    // silently overrode the pin would leave that spec comparing two
+    // single-threaded loads and passing forever.
+    const count = await withFlags(['workers4'])
+    expect(count(1024)).toBe(4)
+  })
+
+  it('skips the size gate when the size is unknown', async () => {
+    const original = globalThis.navigator?.hardwareConcurrency
+    Object.defineProperty(globalThis.navigator, 'hardwareConcurrency', {
+      value: 8, configurable: true,
+    })
+    const count = await withFlags(['workers'])
+    expect(count()).toBe(6)
+    Object.defineProperty(globalThis.navigator, 'hardwareConcurrency', {
+      value: original, configurable: true,
+    })
   })
 
   it('leaves the main thread cores when sizing itself', async () => {

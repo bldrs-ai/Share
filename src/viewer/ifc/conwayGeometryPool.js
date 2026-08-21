@@ -44,23 +44,64 @@ const RESERVED_CORES = 2
  * with the shard count. */
 const MAX_WORKERS = 8
 
+/* Below this much source, `?feature=workers` declines and the main-thread
+ * pump runs instead (Share#1760).
+ *
+ * Standing up the pool is a fixed cost paid before the first product is
+ * touched: each worker fetches and evaluates the ~5.8 MB engine bundle, and
+ * because every worker does it independently the wall cost grows with N
+ * rather than staying flat — measured at 0.74 s at N=1, 1.0 s at N=2 and
+ * 1.4 s at N=4 on an idle 4-core headless Chromium, and at ~5.9 s at N=6 on
+ * the workstation in Share#1760.
+ *
+ * Against that, extraction runs at roughly 1.2 s/MB single-threaded (D3D:
+ * 213 MB in 251 s) and the pool returns about 1.45x, so it saves ~0.31 of a
+ * model's geometry time. A 6 s standup therefore needs ~19 s of geometry to
+ * break even, which is ~16 MB of IFC. Below that the pool is at best a wash
+ * and on a small model it is pure overhead: `index.ifc` (7 products) spends
+ * 0.035 s in geometry and 0.74–1.6 s standing up a pool to do it.
+ *
+ * A PINNED count (`?feature=workers4`) ignores this — pinning is how N is
+ * compared against N=1 on one machine, and a benchmark that silently
+ * declined to run would be worse than a slow one. */
+const MIN_POOL_SOURCE_MB = 16
+
+/* eslint-disable-next-line no-magic-numbers */
+const BYTES_PER_MB = 1024 * 1024
+
 
 /**
  * How many geometry workers this session should use, or 0 for none.
  *
- * `?feature=workers` turns the pool on at the machine's own width;
+ * `?feature=workers` turns the pool on at the machine's own width, on models
+ * big enough to pay back the standup (see `MIN_POOL_SOURCE_MB`);
  * `?feature=workers2` (…3, …4) pins a count, which is what a smoke run needs
- * to compare N against N=1 on one machine.
+ * to compare N against N=1 on one machine, and is honoured at any size.
  *
+ * @param {number} [sourceBytes] the model source's size. Omit when it is not
+ *   known — the size gate is then skipped rather than guessed at.
  * @return {number} worker count, 0 when the pool is off
  */
-export function geometryWorkerCount() {
+export function geometryWorkerCount(sourceBytes = undefined) {
   for (let count = 1; count <= MAX_WORKERS; ++count) {
     if (isFeatureEnabled(`workers${count}`)) {
       return count
     }
   }
   if (!isFeatureEnabled('workers')) {
+    return 0
+  }
+  if (Number.isFinite(sourceBytes) &&
+      sourceBytes < MIN_POOL_SOURCE_MB * BYTES_PER_MB) {
+    // Said out loud: `?feature=workers` with no pool summary afterwards is
+    // exactly what a pool that FAILED looks like, and the PR's smoke
+    // instructions read an absent summary line as a fallback to report.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] geometry worker pool declined: source ` +
+      `${(sourceBytes / BYTES_PER_MB).toFixed(1)} MB is below the ` +
+      `${MIN_POOL_SOURCE_MB} MB the standup needs to pay for itself — ` +
+      'pin a count (?feature=workers4) to force it')
     return 0
   }
   const cores = globalThis.navigator?.hardwareConcurrency ?? RESERVED_CORES + 1
