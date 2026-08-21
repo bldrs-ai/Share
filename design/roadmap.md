@@ -761,6 +761,21 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   a padded-but-unprefixed hour would still beacon as a number and leave the
   dimension empty for all 24 values. **Remaining GA4-side config:** an
   event-scoped dimension from event parameter `local_hour`.
+- Time spent per model (2026-08-20): `analytics#startModelEngagement` emits a
+  `model_engagement` event for each foreground, focused interval a model is
+  open for, carrying the same `content_id`/`content_type` identity as the open
+  and the interval's duration in GA4's reserved `engagement_time_msec`.
+  **Remaining GA4-side config: none** — and deliberately so. Registering
+  `engagement_time_msec` as a custom metric was tried (2026-08-21) and is
+  impossible: Admin rejects the name inline with "Parameter name is not allowed
+  for this scope", so `customEvent:engagement_time_msec` can never resolve and
+  a report naming it 400s. The name is reserved because GA4 consumes it to
+  compute the standard `userEngagementDuration` metric, which is therefore
+  where these durations already are: query `userEngagementDuration` ×
+  `customEvent:content_id`, filtered to eventName `model_engagement`, for total
+  time per model across all users (in *seconds* — GA4 sums our milliseconds).
+  Unlike `open_cid`, this event carries no client id, so engagement is not
+  per-user; the bizdev card labels it "all users" for that reason.
 - Model *name* was considered and deliberately not sent. For remote models the
   name is already derivable from `content_id`; the only case it would add
   information is local uploads, which route by OPFS blob id — so sending it

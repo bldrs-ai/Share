@@ -57,6 +57,33 @@ export function gtagEvent(eventName, parameters) {
  * this one. This follows GA4's foreground-engagement semantics while keeping
  * the model identity explicit instead of relying on a mutable page title.
  *
+ * The duration rides in `engagement_time_msec`, which is GA4's own reserved
+ * parameter rather than a name of our choosing. Two consequences, both
+ * load-bearing:
+ *
+ *   1. It can never be a custom metric. Admin → Custom definitions rejects
+ *      the name inline with "Parameter name is not allowed for this scope"
+ *      (tried 2026-08-21), so `customEvent:engagement_time_msec` never
+ *      resolves and a Data API report naming it 400s forever.
+ *   2. It doesn't need to be. GA4 reserves the name precisely because it
+ *      consumes it to compute the standard `userEngagementDuration` metric,
+ *      so these intervals are already queryable with no GA4-side
+ *      registration at all: metric `userEngagementDuration`, dimension
+ *      `customEvent:content_id`, filtered to eventName `model_engagement`
+ *      — which is what the bizdev dashboard's per-user card asks for
+ *      (bizdev `ga/README.md` §"Model engagement"). Note the unit: that
+ *      metric reports seconds, GA4 having summed the milliseconds sent here.
+ *
+ * So the name is fixed, not incidental. Renaming it to something
+ * registerable would take these durations straight back out of
+ * `userEngagementDuration` — where every consumer now reads them — in
+ * exchange for a custom metric that has to be created GA4-side first.
+ *
+ * Sending it explicitly is also what ties the interval to *this* model:
+ * gtag accrues foreground time on its own and attaches it to whatever event
+ * it sends next, which is neither model-scoped nor aligned with the
+ * visibility windows tracked here.
+ *
  * @param {object} modelParams stable `content_id` / `content_type` identity
  * @return {Function} idempotent stop function that flushes the final interval
  */
