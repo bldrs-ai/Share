@@ -761,6 +761,28 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   a padded-but-unprefixed hour would still beacon as a number and leave the
   dimension empty for all 24 values. **Remaining GA4-side config:** an
   event-scoped dimension from event parameter `local_hour`.
+- Time spent per model (2026-08-20): `analytics#startModelEngagement` emits a
+  `model_engagement` event for each foreground, focused interval a model is
+  open for, carrying the same `content_id`/`content_type` identity as the open
+  and the interval's duration in GA4's reserved `engagement_time_msec`.
+  **Remaining GA4-side config: none** — and deliberately so. Registering
+  `engagement_time_msec` as a custom metric was tried (2026-08-21) and is
+  impossible: Admin rejects the name inline with "Parameter name is not allowed
+  for this scope", so `customEvent:engagement_time_msec` can never resolve and
+  a report naming it 400s. The name is reserved because GA4 consumes it to
+  compute the standard `userEngagementDuration` metric, which is therefore
+  where these durations already are: query `userEngagementDuration` ×
+  `customEvent:content_id`, filtered to eventName `model_engagement`, for total
+  time per model across all users (the metric is in *seconds*, against the
+  milliseconds we send). This event carries no `open_cid` *param*, so that query
+  is all-users and the bizdev card labels it so. Per-user engagement is not
+  blocked on adding the param here: the user property above rides on every
+  event including this one, so it comes from registering the **User**-scoped
+  `open_cid` dimension — the config that bullet already lists as outstanding.
+  One caveat to settle in DebugView before anyone treats the number as exact:
+  gtag accrues foreground time itself, and whether it replaces that with the
+  value we pass or adds to it decides whether the metric is our intervals or
+  runs high.
 - Model *name* was considered and deliberately not sent. For remote models the
   name is already derivable from `content_id`; the only case it would add
   information is local uploads, which route by OPFS blob id — so sending it

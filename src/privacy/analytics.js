@@ -57,6 +57,52 @@ export function gtagEvent(eventName, parameters) {
  * this one. This follows GA4's foreground-engagement semantics while keeping
  * the model identity explicit instead of relying on a mutable page title.
  *
+ * The duration rides in `engagement_time_msec`, which is GA4's own reserved
+ * parameter rather than a name of our choosing. Two consequences, both
+ * load-bearing:
+ *
+ *   1. It can never be a custom metric. Admin → Custom definitions rejects
+ *      the name inline with "Parameter name is not allowed for this scope"
+ *      (tried 2026-08-21), so `customEvent:engagement_time_msec` never
+ *      resolves and a Data API report naming it 400s forever.
+ *   2. It doesn't need to be. GA4 reserves the name precisely because it
+ *      consumes it to compute the standard `userEngagementDuration` metric,
+ *      so these intervals are already queryable with no GA4-side
+ *      registration at all: metric `userEngagementDuration`, dimension
+ *      `customEvent:content_id`, filtered to eventName `model_engagement`
+ *      — which is what the bizdev dashboard reads (bizdev `ga/README.md`
+ *      §"Model engagement"). As queried today that total is across *all*
+ *      users: unlike `real_model_open` this event carries no `open_cid`
+ *      event param, so that query has nothing to group people by. But
+ *      per-user is reachable, and not by adding that param here — the
+ *      same id also rides as the sticky user property below
+ *      (`setUserCidProperty`), which attaches to this event like any
+ *      other, so a User-scoped dimension would key engagement by person.
+ *      That definition is still unregistered GA4-side, so until it
+ *      exists the number must be labelled all users. Mind the unit too
+ *      — the metric reports seconds, against the milliseconds sent from
+ *      here.
+ *
+ * So the name is load-bearing while the query above is what reads these
+ * durations. Renaming it to something registerable is not impossible, but
+ * it is a migration rather than an edit: the durations leave
+ * `userEngagementDuration` the moment the name changes, and only come back
+ * as a custom metric once one is registered GA4-side and the dashboard is
+ * repointed at it. Don't rename one end alone.
+ *
+ * Sending it explicitly is also what ties the interval to *this* model:
+ * gtag accrues foreground time on its own and attaches it to whatever event
+ * it sends next, which is neither model-scoped nor aligned with the
+ * visibility windows tracked here.
+ *
+ * How gtag reconciles the two is unverified, and the answer decides how
+ * exact the reported total is: if it replaces its accrued value with the
+ * one sent here, the metric is these intervals; if it adds the two, the
+ * metric runs high. So treat per-model engagement as close rather than
+ * exact until a DebugView pass (or a look at `_et` on the collect beacon)
+ * settles it — and don't write "GA4 summed exactly what we sent" anywhere
+ * downstream before then.
+ *
  * @param {object} modelParams stable `content_id` / `content_type` identity
  * @return {Function} idempotent stop function that flushes the final interval
  */
