@@ -70,9 +70,12 @@ export function gtagEvent(eventName, parameters) {
  *      so these intervals are already queryable with no GA4-side
  *      registration at all: metric `userEngagementDuration`, dimension
  *      `customEvent:content_id`, filtered to eventName `model_engagement`
- *      — which is what the bizdev dashboard's per-user card asks for
- *      (bizdev `ga/README.md` §"Model engagement"). Note the unit: that
- *      metric reports seconds, GA4 having summed the milliseconds sent here.
+ *      — which is what the bizdev dashboard reads (bizdev `ga/README.md`
+ *      §"Model engagement"). That total is across *all* users and cannot
+ *      be anything else: unlike `real_model_open` this event carries no
+ *      `open_cid`, so there is nothing to key a person to. Mind the unit
+ *      too — the metric reports seconds, against the milliseconds sent
+ *      from here.
  *
  * So the name is fixed, not incidental. Renaming it to something
  * registerable would take these durations straight back out of
@@ -83,6 +86,14 @@ export function gtagEvent(eventName, parameters) {
  * gtag accrues foreground time on its own and attaches it to whatever event
  * it sends next, which is neither model-scoped nor aligned with the
  * visibility windows tracked here.
+ *
+ * How gtag reconciles the two is unverified, and the answer decides how
+ * exact the reported total is: if it replaces its accrued value with the
+ * one sent here, the metric is these intervals; if it adds the two, the
+ * metric runs high. So treat per-model engagement as close rather than
+ * exact until a DebugView pass (or a look at `_et` on the collect beacon)
+ * settles it — and don't write "GA4 summed exactly what we sent" anywhere
+ * downstream before then.
  *
  * @param {object} modelParams stable `content_id` / `content_type` identity
  * @return {Function} idempotent stop function that flushes the final interval

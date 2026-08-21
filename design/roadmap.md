@@ -773,9 +773,13 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   compute the standard `userEngagementDuration` metric, which is therefore
   where these durations already are: query `userEngagementDuration` ×
   `customEvent:content_id`, filtered to eventName `model_engagement`, for total
-  time per model across all users (in *seconds* — GA4 sums our milliseconds).
-  Unlike `open_cid`, this event carries no client id, so engagement is not
-  per-user; the bizdev card labels it "all users" for that reason.
+  time per model across all users (the metric is in *seconds*, against the
+  milliseconds we send). Unlike `open_cid`, this event carries no client id, so
+  engagement is not per-user; the bizdev card labels it "all users" for that
+  reason. One caveat to settle in DebugView before anyone treats the number as
+  exact: gtag accrues foreground time itself, and whether it replaces that with
+  the value we pass or adds to it decides whether the metric is our intervals
+  or runs high.
 - Model *name* was considered and deliberately not sent. For remote models the
   name is already derivable from `content_id`; the only case it would add
   information is local uploads, which route by OPFS blob id — so sending it
