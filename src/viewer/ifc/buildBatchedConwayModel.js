@@ -54,7 +54,14 @@ import {occurrencePathKey} from '../../utils/occurrencePaths'
  * @return {object} `{model, stats}` — `model` is a BatchedMesh or a Group of them.
  */
 export function buildBatchedConwayModel(capturedFlatMeshes, ifcAPI, modelID, opts = {}) {
-  const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, ifcAPI, modelID)
+  // Two engines, deliberately. `opts.geometryApi` resolves the captured
+  // meshes' VERTICES; `ifcAPI` is the model's own engine and is what the
+  // assembled model's property/spatial closures bind to. They are the same
+  // object on every path but the geometry worker pool, where the vertices
+  // live in payloads the workers copied out of their own wasm heaps and the
+  // properties still come from the model on this thread.
+  const geometryApi = opts.geometryApi ?? ifcAPI
+  const {batches, stats} = flatMeshToBatchedModel(capturedFlatMeshes, geometryApi, modelID)
   return {model: assembleBatchedModel(batches, ifcAPI, modelID, opts), stats}
 }
 

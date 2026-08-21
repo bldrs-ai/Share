@@ -51,6 +51,7 @@ import {reportEngineVersion} from '../../loader/loadProgress'
 import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
+import {geometryWorkerCount, runGeometryWorkerPool} from './conwayGeometryPool'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
 
 
@@ -86,20 +87,29 @@ import {instanceMapFromGeometry} from './IfcInstanceMap'
  *   the parse — a conway `Loadersettings.ON_PROGRESS` extension (#301);
  *   silently ignored by engines that predate it (real web-ifc, old pins).
  * @param {Function} [onMeshBatch] demand/tiled slice A: receives
- *   `(flatMeshes, modelID)` for each extracted batch as it lands (only
- *   on the `demandGeometry` deferred path) so callers can render
- *   progressively;
- *   `captured` still accumulates everything for one-shot consumers.
+ *   `(flatMeshes, modelID, geometryApi)` for each extracted batch as it
+ *   lands (only on the `demandGeometry` deferred path) so callers can render
+ *   progressively; `captured` still accumulates everything for one-shot
+ *   consumers. `geometryApi` is the engine that can resolve the batch's
+ *   geometry — the model's own IfcAPI normally, and the worker-payload
+ *   adapter when the geometry worker pool ran.
  * @param {Function} [onPreviewMesh] demand/tiled slice A2: receives
  *   conway PreviewMeshPayloads WHILE THE PARSE RUNS (self-contained
  *   copied geometry, preview quality — openings/materials can be
  *   missing; replaced wholesale by the durable batches). Only on the
  *   `demandGeometry` deferred path with engines that support
  *   ON_PREVIEW_MESH; silently ignored otherwise.
- * @return {Promise<{modelID: number, captured: Array}>}
+ * @param {Function} [onGeometryReset] called when geometry already handed
+ *   to `onMeshBatch` must be thrown away and rebuilt from a different
+ *   source — the geometry worker pool failing part-way through is the only
+ *   case. Drop whatever was assembled from those batches; without it a
+ *   part-way pool failure has to fail the load, since falling back to the
+ *   main-thread pump would stack two sources into one model.
+ * @return {Promise<{modelID: number, captured: Array, geometryApi: object}>}
  */
 export async function parseIfcWithConway(
-  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined, onPreviewMesh = undefined) {
+  buffer, ifcAPI, settings = undefined, onProgress = undefined, onMeshBatch = undefined,
+  onPreviewMesh = undefined, onGeometryReset = undefined) {
   if (!ifcAPI || typeof ifcAPI.OpenModel !== 'function') {
     throw new Error('parseIfcWithConway: ifcAPI.OpenModel is unavailable')
   }
@@ -181,6 +191,55 @@ export async function parseIfcWithConway(
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }
     const captured = []
+
+    // Geometry worker pool (conway#394 M3, `?feature=workers`). The main
+    // thread keeps THIS model — properties, the spatial tree, the
+    // coordination frame — and hands extraction to N conway instances in
+    // workers, each pumping a disjoint shard of the products.
+    //
+    // Needs `onMeshBatch`, because the pool's output only reaches the screen
+    // through the incremental builder.
+    //
+    // The source size goes in because the pool's standup is a fixed cost paid
+    // before the first product is touched, so on a small model it is pure
+    // overhead (Share#1760). Bytes are the only proxy for extraction cost
+    // available at this point — the product count is not known until the
+    // model has been pumped, which is the thing being decided about.
+    const sourceBytes = store !== null ? buffer.size : data.length
+    const workerCount = onMeshBatch ? geometryWorkerCount(sourceBytes) : 0
+
+    if (workerCount > 0) {
+      // Every worker reads the source through `blob.slice()`, which is
+      // non-exclusive — unlike an OPFS sync access handle, which is what
+      // made N workers on one file look impossible.
+      //
+      // On the store path that blob IS the OPFS `File`, so the workers add
+      // no copy at all. Off it (a fresh download, no OPFS entry yet) the
+      // resident bytes are wrapped once: a Blob is structured-cloned by
+      // reference, so N workers share ONE copy rather than N. That costs one
+      // extra copy of the source and is what lets the pool serve an ordinary
+      // first load rather than only an OPFS cache hit — which is every load
+      // until a model has been opened once.
+      const source = store !== null ? buffer : new Blob([data])
+      const pooled = await pumpGeometryInWorkers({
+        file: source,
+        settings: deferSettings,
+        count: workerCount,
+        ifcAPI,
+        modelID,
+        captured,
+        onMeshBatch,
+        onProgress,
+        onGeometryReset,
+      })
+      if (pooled !== null) {
+        return {modelID, captured, geometryApi: pooled.geometryApi}
+      }
+      // Fell through: the pool failed before delivering anything, and the
+      // model on this thread has extracted nothing yet, so the main-thread
+      // pump below is a complete recovery rather than a partial one.
+    }
+
     // Batch-pump accounting for the load log. Whether the pump actually
     // produced anything is the difference between a model that streams
     // onto the screen and one that shows nothing until the end-of-load
@@ -282,7 +341,7 @@ export async function parseIfcWithConway(
         captured.push(flatMesh)
       })
     }
-    return {modelID, captured}
+    return {modelID, captured, geometryApi: ifcAPI}
   }
 
   // Open-path selection, most preferred first:
@@ -327,7 +386,295 @@ export async function parseIfcWithConway(
   ifcAPI.StreamAllMeshes(modelID, (flatMesh) => {
     captured.push(flatMesh)
   })
-  return {modelID, captured}
+  return {modelID, captured, geometryApi: ifcAPI}
+}
+
+
+/**
+ * Log what the pool did.
+ *
+ * Never allowed to fail the load. It sits inside the pool's try/catch, and a
+ * throw there is indistinguishable from the pool itself failing — which
+ * silently re-runs the whole model on the main thread. That is not
+ * hypothetical: a missing field in the result made `.join` throw here, and
+ * the only visible symptom was the main-thread pump quietly doing the work a
+ * moment after the pool reported success. A diagnostic must never change
+ * behaviour.
+ *
+ * @param {object} result what runGeometryWorkerPool resolved
+ * @param {?Array<number>} coordination the frame the workers were given
+ */
+function reportPoolSummary(result, coordination) {
+  try {
+    // The frame is on this line on purpose: supplying the wrong one renders
+    // the whole model rotated, and every other number here stays identical
+    // when that happens.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] geometry workers: n=${result.workers} ` +
+      `placements=${result.placements} geometries=${result.geometries} ` +
+      `wasmHeapMb=${Math.round(result.wasmHeapMb)} ` +
+      `frame=[${(coordination ?? []).map((v) => +v.toFixed(3)).join(',')}]`)
+    // Per-worker phases: this is what says whether a slow pool is startup,
+    // redundant parse, or extraction.
+    // eslint-disable-next-line no-console
+    console.info(
+      `[conwayDirect] worker phases: ${(result.phases ?? []).join(' | ')}`)
+  } catch (error) {
+    debug(WARN).warn('geometry worker pool summary failed to log:', error)
+  }
+}
+
+
+/**
+ * Whether a coordination matrix is the identity.
+ *
+ * conway documents identity as `GetAppliedCoordinationMatrix`'s "no recentre
+ * ran" sentinel, so this is the anchored/not-anchored test rather than a
+ * guess: a Share open always sets COORDINATE_TO_ORIGIN, and an anchored IFC
+ * frame therefore always carries at least the Z-up -> Y-up normalize, which
+ * is not identity.
+ *
+ * @param {?Array<number>} matrix a column-major mat4, or nothing
+ * @return {boolean} true when the frame is absent or identity
+ */
+function isIdentityFrame(matrix) {
+  if (!matrix || matrix.length !== IDENTITY_MAT4.length) {
+    return true
+  }
+  for (let where = 0; where < IDENTITY_MAT4.length; ++where) {
+    if (matrix[where] !== IDENTITY_MAT4[where]) {
+      return false
+    }
+  }
+  return true
+}
+
+
+/**
+ * Pump main-thread products until this model anchors its recentre frame, and
+ * return that frame.
+ *
+ * The pool cannot start without it: conway refuses to shard a
+ * COORDINATE_TO_ORIGIN model that has not been given a frame, and a frame it
+ * IS given is applied rather than derived — so handing over the identity a
+ * not-yet-anchored model reports suppresses the recentre and the Z-up ->
+ * Y-up normalize with it, leaving every product rotated 90 degrees while
+ * vertices, triangles and instances all stay identical (Share#1761).
+ *
+ * Pumping one product was the original mistake. `extracted` counts
+ * PRODUCTS, and a product with no representation emits no FlatMesh and
+ * anchors nothing; a model that leads with containers — every assembly-first
+ * steel export does — hands back identity for as long as those last. Stopping
+ * at the first product that actually anchors costs the geometry-less prefix
+ * plus one product, which is also exactly where a single-threaded load
+ * anchors, so the pooled frame does not merely agree across workers: it
+ * matches the frame the same file gets with the flag off.
+ *
+ * Exported for `conwayDirectIfcLoader.coordinationFrame.test.js`, which
+ * drives it with engines that anchor at different depths.
+ *
+ * @param {object} ifcAPI the main thread's engine
+ * @param {number} modelID an open deferred model
+ * @param {Array} seedBatch collects the FlatMeshes the seed pumped, so a
+ *   caller that ends up falling back can still deliver them — the
+ *   main-thread pump resumes AFTER them and would otherwise leave those
+ *   products missing from the model with nothing to say so
+ * @return {Promise<?Array<number>>} the anchored frame, or null when this
+ *   model never anchors one (in which case the pool must decline rather
+ *   than supply identity)
+ */
+export async function deriveCoordinationFrame(ifcAPI, modelID, seedBatch) {
+  if (typeof ifcAPI?.GetAppliedCoordinationMatrix !== 'function' ||
+      typeof ifcAPI?.ExtractGeometryBatchAsync !== 'function') {
+    return null
+  }
+  // Bounded by ITERATIONS, not by products extracted: an engine that keeps
+  // reporting work remaining while extracting nothing would otherwise spin
+  // this loop forever on the main thread.
+  for (let seeded = 0; seeded < MAX_FRAME_SEED_PRODUCTS; ++seeded) {
+    // eslint-disable-next-line new-cap
+    const applied = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+    if (!isIdentityFrame(applied)) {
+      return applied
+    }
+    // One product at a time so the seed stops at the FIRST product that
+    // anchors. A larger batch would pump geometry-bearing products past the
+    // anchor, and every one of those is main-thread work the pool exists to
+    // move off the main thread.
+    // eslint-disable-next-line new-cap
+    const {extracted, remaining} = await ifcAPI.ExtractGeometryBatchAsync(
+      modelID, 1, (flatMesh) => seedBatch.push(flatMesh))
+    if (remaining === 0 && extracted === 0) {
+      // Exhausted. Read once more — the last product may have anchored it.
+      // eslint-disable-next-line new-cap
+      const last = ifcAPI.GetAppliedCoordinationMatrix(modelID)
+      return isIdentityFrame(last) ? null : last
+    }
+  }
+  return null
+}
+
+
+/**
+ * Extract this model's geometry across a pool of workers.
+ *
+ * The main-thread model stays open and untouched — it is what serves
+ * properties, the spatial tree and the coordination frame afterwards — but
+ * it extracts nothing. Each worker opens the same source independently,
+ * claims a shard, and posts back placements plus the geometry payloads that
+ * placements reference, since those live in the worker's own wasm heap and
+ * no other thread can read them.
+ *
+ * **The recentre frame is derived here and handed down.** conway refuses to
+ * shard a COORDINATE_TO_ORIGIN model without one, because each worker would
+ * otherwise anchor on whichever product it reached first and the shards
+ * would merge shifted by whole grid cells (conway#538). This model's own
+ * applied frame is exactly the right value: it is what a single-threaded
+ * load would have used.
+ *
+ * Returns null rather than throwing when the pool cannot deliver, so the
+ * caller falls back to the main-thread pump. Nothing has been extracted on
+ * this thread at that point, so the fallback is complete rather than
+ * partial.
+ *
+ * @param {object} args see the call site
+ * @return {Promise<?object>} `{geometryApi}` on success, null to fall back
+ */
+async function pumpGeometryInWorkers({
+  file, settings, count, ifcAPI, modelID, captured, onMeshBatch, onProgress,
+  onGeometryReset,
+}) {
+  // The open settings the workers get must NOT carry this thread's
+  // callbacks: ON_PROGRESS / ON_MODEL_INFO / ON_PREVIEW_MESH are functions,
+  // which structured clone rejects outright, and a preview channel in a
+  // worker would emit unpartitioned imposters N times over besides.
+  const workerSettings = {...settings}
+  delete workerSettings.ON_PROGRESS
+  delete workerSettings.ON_MODEL_INFO
+  delete workerSettings.ON_PREVIEW_MESH
+
+  // Derive the frame the way a single-threaded load does — by extracting
+  // products until one ANCHORS it — BEFORE reading it.
+  //
+  // A deferred model's coordination frame is anchored on the first geometry
+  // it captures, so until something is pumped GetAppliedCoordinationMatrix
+  // returns IDENTITY. Handing that to the workers is not a no-op: a supplied
+  // frame suppresses the one each worker would otherwise derive, and the
+  // frame carries the Z-up -> Y-up normalize, so every product renders 90
+  // degrees out. That is what a first working version of this shipped, and
+  // the counts a batch reports (vertices, triangles, instances) are all
+  // rotation-invariant, so nothing downstream noticed.
+  //
+  // Seeding ONE product is not enough, which is what Share#1761 turned up:
+  // `extracted` counts products, not geometry, and a product that emits no
+  // FlatMesh anchors nothing. Assembly-first models lead with exactly such
+  // products — on the AISC/SDS-2 steel fixture the first 49 products are
+  // IfcElementAssembly containers and the frame does not anchor until the
+  // 50th — so the pool read identity, supplied it, and rendered the whole
+  // model on its side. See deriveCoordinationFrame.
+  const seedBatch = []
+  const coordination = await deriveCoordinationFrame(ifcAPI, modelID, seedBatch)
+
+  let geometryApi = ifcAPI
+  let delivered = 0
+
+  /**
+   * Hand the frame-derivation products to the builder.
+   *
+   * Called ONLY when the pool does not run to completion. The shards that
+   * own these products extract them too, so forwarding them on the happy
+   * path would place them twice; but on a fallback the main-thread pump
+   * resumes from the next product and would otherwise leave them missing
+   * from the model with nothing to say so.
+   */
+  const deliverSeedBatch = () => {
+    if (seedBatch.length === 0) {
+      return
+    }
+    captured.push(...seedBatch)
+    onMeshBatch(seedBatch, modelID, ifcAPI)
+  }
+
+  if (coordination === null) {
+    // No frame to hand out. Supplying identity is the one thing that must
+    // not happen here — conway APPLIES a supplied frame, so identity
+    // suppresses the recentre and the Z-up -> Y-up normalize with it, and
+    // every count this load reports stays identical while the model lies on
+    // its side (Share#1761). Sharding without a frame is not an option
+    // either: SetGeometryShard refuses a COORDINATE_TO_ORIGIN model that has
+    // not been given one. So decline the pool and let the main-thread pump,
+    // which derives its own frame as it goes, serve the load.
+    console.warn(
+      '[conwayDirect] geometry worker pool declined: the model never ' +
+      'anchored a coordination frame; falling back to the main-thread pump')
+    deliverSeedBatch()
+    return null
+  }
+
+  try {
+    const result = await runGeometryWorkerPool({
+      file,
+      settings: workerSettings,
+      count,
+      coordination,
+      wasmPath: WORKER_WASM_PATH,
+      onBatch: (flatMeshes, api) => {
+        geometryApi = api
+        delivered += flatMeshes.length
+        captured.push(...flatMeshes)
+        onMeshBatch(flatMeshes, modelID, api)
+      },
+      // Products, summed across shards, per batch. Reporting only on
+      // completion collapsed the load report's Geometry line to `0.007s,
+      // +0.000000 MB heap` — the phase began and ended in one event — and
+      // left the reporter's 30s stall watchdog with nothing to hear during
+      // the longest phase of a large load.
+      onProgress: (completed, total) => {
+        if (typeof onProgress === 'function') {
+          onProgress({phase: 'geometry', completed, total, unit: 'products'})
+        }
+      },
+    })
+
+    if (result.placements === 0) {
+      // A pool that ran cleanly and produced nothing is indistinguishable
+      // on screen from a failed one, and the end-of-load builders would
+      // assemble an empty model from an empty `captured`. Treat it as a
+      // miss so the main-thread pump gets its turn.
+      console.warn(
+        '[conwayDirect] geometry worker pool delivered no placements; ' +
+        'falling back to the main-thread pump')
+      captured.length = 0
+      deliverSeedBatch()
+      return null
+    }
+
+    reportPoolSummary(result, coordination)
+
+    return {geometryApi}
+  } catch (error) {
+    debug(WARN).warn('geometry worker pool failed; main-thread pump:', error)
+    // Anything already delivered was built from payloads that only the
+    // workers could resolve, and the main-thread pump is about to append to
+    // the SAME builder from a different source — so the partial scene has to
+    // go, not just `captured`. Without the reset the two sources would stack
+    // and every product the pool already placed would be drawn twice.
+    captured.length = 0
+    if (delivered > 0) {
+      if (typeof onGeometryReset !== 'function') {
+        // Nothing can undo the partial build, so falling back would ship a
+        // doubled model. Fail the load instead and say why.
+        throw new Error(
+          'geometry worker pool failed after delivering ' +
+          `${delivered} meshes and no reset hook was supplied: ` +
+          `${error.message}`)
+      }
+      onGeometryReset()
+    }
+    deliverSeedBatch()
+    return null
+  }
 }
 
 
@@ -356,6 +703,22 @@ export async function parseIfcWithConway(
  * Ignored by engines predating conway#535 — unknown settings are dropped —
  * so ordering against the conway bump does not matter.
  */
+/* Where a geometry worker loads conway's wasm from. Must match the main
+ * thread's `viewer.IFC.setWasmPath` call in `src/Containers/viewer.js`: the
+ * worker bundle sits beside index.html in `docs/`, so the same page-relative
+ * path resolves to the same directory. */
+const WORKER_WASM_PATH = './static/js/'
+
+/* Column-major identity mat4 — conway's documented "no coordination frame
+ * applied" report from GetAppliedCoordinationMatrix. See isIdentityFrame. */
+const IDENTITY_MAT4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+
+/* Safety net on deriveCoordinationFrame's seed loop. The loop normally stops
+ * at the first product that emits geometry, so this only binds a model that
+ * anchors nothing at all — where the cost of finding that out has to stay
+ * bounded, because every iteration is main-thread extraction. */
+const MAX_FRAME_SEED_PRODUCTS = 4096
+
 const GEOMETRY_BUDGET_MB = 64
 
 const DEMAND_EXTRACT_BATCH_SIZE = 64

@@ -111,6 +111,30 @@ export const flags = [
   // milestone: PSB 77s -> 57s); `?feature=disableStreamOpen` remains
   // the classic-path escape hatch and this flag the demand kill switch.
   {name: 'demandGeometry', isActive: true},
+  // Geometry worker pool (conway#394 M3, design/new/geometry-workers.md).
+  // Cache-miss IFC geometry extraction moves off the main thread into N
+  // conway instances, each with its own wasm heap, pumping a disjoint shard
+  // of the products. Measured in node at 2.59x on PSB at N=4; the browser
+  // number is what the smoke instance is for.
+  //
+  // Off by default because the worker-side wasm init cost in a BROWSER is
+  // unmeasured — in node it dominated small models, so PSB-scale wins and
+  // MB-Khaya-scale losses are both plausible until a real run says.
+  // `?feature=workers` sizes the pool from hardwareConcurrency AND declines
+  // on sources below `MIN_POOL_SOURCE_MB` — standing the pool up is a fixed
+  // cost charged before the first product is touched, so on a small model it
+  // is pure overhead (Share#1760). `?feature=workers1` (…2, …3, …) pins a
+  // count, which is how N is compared against N=1 on one machine, and is
+  // honoured at any size so a benchmark cannot silently opt itself out.
+  {name: 'workers', isActive: false},
+  {name: 'workers1', isActive: false},
+  {name: 'workers2', isActive: false},
+  {name: 'workers3', isActive: false},
+  {name: 'workers4', isActive: false},
+  {name: 'workers5', isActive: false},
+  {name: 'workers6', isActive: false},
+  {name: 'workers7', isActive: false},
+  {name: 'workers8', isActive: false},
   // BatchedMesh render path: render the Conway-direct geometry as a
   // THREE.BatchedMesh (one geometry per shared shape + per-instance
   // transforms) instead of the merged BufferGeometry — the ~60% vertex-
@@ -172,6 +196,48 @@ const FEATURE_IMPLICATIONS = {
 }
 
 
+/* One-shot guard: the warning below is about the URL, which does not change
+ * within a page load, so it is worth saying once and never again. */
+let warnedUnknownFlags = false
+
+
+/**
+ * Warn once about `?feature=` names that match no flag.
+ *
+ * `?feature=` can only turn flags ON, and an unrecognised name is simply not
+ * found — so a typo is indistinguishable from the feature being off. That is
+ * fine for a flag you can see the effect of, and quietly costly for one whose
+ * whole purpose is a measurement: `?feature=worker4` (singular) reads exactly
+ * like `?feature=workers4` and silently produces a baseline run, which is a
+ * benchmark you then believe.
+ *
+ * Warn, don't guess: correcting a near-miss to the flag we think was meant
+ * would turn a typo into a different silent behaviour.
+ */
+function warnUnknownUrlFlags() {
+  if (warnedUnknownFlags || typeof window === 'undefined' || !window.location) {
+    return
+  }
+  warnedUnknownFlags = true
+
+  const requested = new URLSearchParams(window.location.search).get('feature')
+  if (!requested) {
+    return
+  }
+  const known = new Set(flags.map((f) => f.name.toLowerCase()))
+  const unknown = requested
+    .split(',')
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0 && !known.has(f.toLowerCase()))
+
+  if (unknown.length > 0) {
+    console.warn(
+      `[features] ignoring unknown ?feature= value(s): ${unknown.join(', ')} — ` +
+      'nothing was enabled by them')
+  }
+}
+
+
 /**
  * Non-React feature-flag check. Mirrors `useExistInFeature` (in
  * src/hooks/useExistInFeature.js) but is usable from non-component modules
@@ -192,6 +258,8 @@ export function isFeatureEnabled(name) {
     return false
   }
   const lowerName = name.toLowerCase()
+
+  warnUnknownUrlFlags()
 
   const staticFlag = flags.find((f) => f.name.toLowerCase() === lowerName)
   if (staticFlag?.isActive) {
