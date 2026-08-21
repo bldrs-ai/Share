@@ -71,11 +71,17 @@ export function gtagEvent(eventName, parameters) {
  *      registration at all: metric `userEngagementDuration`, dimension
  *      `customEvent:content_id`, filtered to eventName `model_engagement`
  *      — which is what the bizdev dashboard reads (bizdev `ga/README.md`
- *      §"Model engagement"). That total is across *all* users and cannot
- *      be anything else: unlike `real_model_open` this event carries no
- *      `open_cid`, so there is nothing to key a person to. Mind the unit
- *      too — the metric reports seconds, against the milliseconds sent
- *      from here.
+ *      §"Model engagement"). As queried today that total is across *all*
+ *      users: unlike `real_model_open` this event carries no `open_cid`
+ *      event param, so that query has nothing to group people by. But
+ *      per-user is reachable, and not by adding that param here — the
+ *      same id also rides as the sticky user property below
+ *      (`setUserCidProperty`), which attaches to this event like any
+ *      other, so a User-scoped dimension would key engagement by person.
+ *      That definition is still unregistered GA4-side, so until it
+ *      exists the number must be labelled all users. Mind the unit too
+ *      — the metric reports seconds, against the milliseconds sent from
+ *      here.
  *
  * So the name is fixed, not incidental. Renaming it to something
  * registerable would take these durations straight back out of
