@@ -83,10 +83,12 @@ export function gtagEvent(eventName, parameters) {
  *      — the metric reports seconds, against the milliseconds sent from
  *      here.
  *
- * So the name is fixed, not incidental. Renaming it to something
- * registerable would take these durations straight back out of
- * `userEngagementDuration` — where every consumer now reads them — in
- * exchange for a custom metric that has to be created GA4-side first.
+ * So the name is load-bearing while the query above is what reads these
+ * durations. Renaming it to something registerable is not impossible, but
+ * it is a migration rather than an edit: the durations leave
+ * `userEngagementDuration` the moment the name changes, and only come back
+ * as a custom metric once one is registered GA4-side and the dashboard is
+ * repointed at it. Don't rename one end alone.
  *
  * Sending it explicitly is also what ties the interval to *this* model:
  * gtag accrues foreground time on its own and attaches it to whatever event

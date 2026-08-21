@@ -778,10 +778,11 @@ which channel *reaches* that audience is the open GTM question owned bizdev-side
   is all-users and the bizdev card labels it so. Per-user engagement is not
   blocked on adding the param here: the user property above rides on every
   event including this one, so it comes from registering the **User**-scoped
-  `open_cid` dimension — the config that bullet already lists as outstanding. One caveat to settle in DebugView before anyone treats the number as
-  exact: gtag accrues foreground time itself, and whether it replaces that with
-  the value we pass or adds to it decides whether the metric is our intervals
-  or runs high.
+  `open_cid` dimension — the config that bullet already lists as outstanding.
+  One caveat to settle in DebugView before anyone treats the number as exact:
+  gtag accrues foreground time itself, and whether it replaces that with the
+  value we pass or adds to it decides whether the metric is our intervals or
+  runs high.
 - Model *name* was considered and deliberately not sent. For remote models the
   name is already derivable from `content_id`; the only case it would add
   information is local uploads, which route by OPFS blob id — so sending it

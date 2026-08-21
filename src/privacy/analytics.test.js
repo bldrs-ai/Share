@@ -55,11 +55,12 @@ describe('Analytics', () => {
       jest.useRealTimers()
     })
 
-    // The param name is pinned, not incidental: GA4 reserves
+    // The param name is load-bearing as things are configured: GA4 reserves
     // engagement_time_msec and folds it into the standard
-    // userEngagementDuration metric, which is the only way the durations are
-    // reportable at all (a custom metric on that name cannot be registered).
-    // Renaming it here would empty the bizdev dashboard's engagement column.
+    // userEngagementDuration metric, which is what the bizdev dashboard
+    // queries. So a rename here is a migration, not an edit — it empties that
+    // column until the new name is registered as a custom metric GA4-side and
+    // the query is repointed at it. See startModelEngagement's doc.
     test('emits foreground time with stable model identity when stopped', () => {
       const ENGAGEMENT_MS = 2500
       const stop = Analytics.startModelEngagement({content_id: 'house.ifc', content_type: 'ifc'})
