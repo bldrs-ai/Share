@@ -1,5 +1,6 @@
 import {captureException} from '@sentry/react'
 import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
+import {isFeatureEnabled} from '../FeatureFlags'
 
 
 // Must match the ID in public/index.html's inline gtag('config') stub —
@@ -14,22 +15,26 @@ const PROD_HOSTNAMES = ['bldrs.ai', 'www.bldrs.ai']
 
 
 /**
- * True when this page should load Google Analytics: production host
- * only, and never under automation (Playwright/Selenium/Puppeteer set
- * navigator.webdriver). Off-prod and automated traffic polluted the
- * metrics Google Ads bids on — see design/roadmap.md grow-120 and the
- * matching event-level guard in privacy/analytics#isRealModelOpen.
+ * True when this page should load Google Analytics: production hosts, or a
+ * manually opted-in Netlify deploy preview, and never under automation
+ * (Playwright/Selenium/Puppeteer set navigator.webdriver). Other off-prod and
+ * automated traffic polluted the metrics Google Ads bids on — see
+ * design/roadmap.md grow-120 and the matching event-level guard in
+ * privacy/analytics#isRealModelOpen.
  *
  * @param {object} [env] overrides for tests
  * @param {string} [env.hostname]
  * @param {boolean} [env.isWebdriver]
+ * @param {boolean} [env.enableInPreview]
  * @return {boolean}
  */
 export function shouldInitGa({
   hostname = window.location.hostname,
   isWebdriver = navigator.webdriver === true,
+  enableInPreview = isFeatureEnabled('gaEnableInPreview'),
 } = {}) {
-  return PROD_HOSTNAMES.includes(hostname) && !isWebdriver
+  const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
+  return (PROD_HOSTNAMES.includes(hostname) || (isDeployPreview && enableInPreview)) && !isWebdriver
 }
 
 
@@ -53,6 +58,16 @@ export default function setupGa(env = undefined) {
     return
   }
   try {
+    const hostname = env?.hostname ?? window.location.hostname
+    const enableInPreview = env?.enableInPreview ?? isFeatureEnabled('gaEnableInPreview')
+    const isPreviewSmokeTest = hostname.startsWith('deploy-preview-') &&
+      hostname.endsWith('.netlify.app') && enableInPreview
+    if (isPreviewSmokeTest) {
+      // Unlike GA DebugView, this remains visible when Brave/Shields or an
+      // extension blocks googletagmanager.com, making that failure explicit.
+      // eslint-disable-next-line no-console
+      console.info('[ga] preview smoke test enabled; browser privacy tools may still block GA requests')
+    }
     // The stub is declared inline in index.html before the bundle
     // loads; its absence means the bootstrap contract broke.
     if (typeof window.gtag !== 'function' || !Array.isArray(window.dataLayer)) {
@@ -62,6 +77,9 @@ export default function setupGa(env = undefined) {
     script.async = true
     script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`
     script.onerror = () => {
+      if (isPreviewSmokeTest) {
+        console.warn('[ga] gtag/js was blocked; allow googletagmanager.com and reload to send events')
+      }
       captureException(
         new Error('ga_init: gtag/js failed to load (blocked client or network failure)'),
         {tags: {subsystem: 'ga_init'}},

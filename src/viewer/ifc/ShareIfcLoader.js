@@ -500,17 +500,28 @@ export default class ShareIfcLoader {
       // `loadedModel.loadStats` before reading it.
       if (typeof ifcAPI.getStatistics === 'function') {
         const statsApi = ifcAPI.getStatistics(modelID)
+        const geometryMemory = statsApi.getGeometryMemory()
+        const totalTime = statsApi.getTotalTime()
+        const errorCount = statsApi.getErrorCount?.()
+        const warningCount = statsApi.getWarningCount?.()
         ifcModel.name = statsApi.projectName ?? undefined
         ifcModel.loadStats = {
           loaderVersion: ifcAPI.getConwayVersion?.(),
-          geometryMemory: statsApi.getGeometryMemory(),
+          geometryMemory,
           geometryTime: statsApi.getGeometryTime(),
           ifcVersion: statsApi.getVersion(),
           loadStatus: statsApi.getLoadStatus(),
           originatingSystem: statsApi.getOriginatingSystem(),
           preprocessorVersion: statsApi.getPreprocessorVersion(),
           parseTime: statsApi.getParseTime(),
-          totalTime: statsApi.getTotalTime(),
+          totalTime,
+          // These aliases are the cross-format GA names consumed by bizdev.
+          // For IFC/STEP they must describe Conway itself, rather than the
+          // browser-wide heap and console tee used as other-format fallbacks.
+          memoryUsed: geometryMemory,
+          loadTime: totalTime,
+          ...(errorCount === undefined ? {} : {errorCount}),
+          ...(warningCount === undefined ? {} : {warningCount}),
         }
       }
 
