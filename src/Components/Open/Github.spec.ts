@@ -97,6 +97,21 @@ describe('Open 100: GitHub Integration', () => {
    * (orgs, repos, branches, contents) is served by the MSW handlers.
    */
   describe('File browser Selector UI', () => {
+    // These three tests are the suite's most interaction-heavy, and on a
+    // GPU-less runner every interaction is expensive. Measured on a 4-core
+    // headless box (#1759): a marketing page with no viewer round-trips
+    // page.evaluate in ~9ms and hits rAF every ~16ms, but once the viewer's
+    // always-on render loop is driving an EffectComposer through
+    // SwiftShader those become ~90ms and ~85ms — the main thread is pinned
+    // at ~12fps. Playwright's actionability checks poll on rAF, so a plain
+    // click on the settled viewer page costs ~1.3s. At ~12 interactions
+    // plus a model load these tests run ~16s alone and ~40s when several
+    // land on the same runner at once, which is how they blew the 30s
+    // default. The budget below is sized off that worst case with headroom;
+    // it is a budget fix, not a cause fix — the render loop is the cause
+    // and it is untouched here.
+    describe.configure({timeout: 90_000})
+
     /**
      * Log in and reveal the GitHub file browser inside the Open dialog.
      *
@@ -105,8 +120,12 @@ describe('Open 100: GitHub Integration', () => {
     async function openGithubBrowser(page: Page) {
       await homepageSetup(page)
       await setupAuthenticationIntercepts(page)
+      // No second goto to /share/v/p/index.ifc here: the helper above
+      // already lands on exactly that URL with the model ready and MSW's
+      // service worker controlling the page. Re-navigating starts a second
+      // IFC+wasm load that nothing awaits, so it burns the main thread
+      // underneath every click that follows — worth ~5s per test (#1759).
       await returningUserVisitsHomepageWaitForModel(page)
-      await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
       await auth0Login(page)
       await page.getByTestId('control-button-open').click()
       await page.getByRole('tab', {name: 'GitHub'}).click()
