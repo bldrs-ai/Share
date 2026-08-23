@@ -12,6 +12,7 @@ import {
   attachLoadFailureContext,
   beginLoadProgress,
   endLoadProgress,
+  getCompletedLoadStats,
   isModelInfoProgress,
   isStructuredProgress,
   reportEngineVersion,
@@ -75,6 +76,36 @@ describe('loadProgress', () => {
       beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
       reportModelInfo({fileName: 'ISS_stationary.glb', schema: 'GLB', byteLength: 39_950_000})
       expect(reportLines()).toContain('Model: ISS_stationary.glb — GLB, 38.1 MB')
+    })
+
+    it('exposes completed GA load stats with separate diagnostic counts', () => {
+      const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
+      const HEAP_MB = 64
+      const LOAD_TIME_MS = 1250
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      Object.defineProperty(performance, 'memory', {
+        configurable: true,
+        value: {usedJSHeapSize: HEAP_MB * BYTES_PER_MB},
+      })
+      beginLoadProgress({fileInfo: 'ISS_stationary.glb'})
+      reportModelInfo({fileName: 'ISS_stationary.glb', byteLength: 39_950_000})
+      console.warn('recoverable material issue')
+      console.error('missing texture')
+      console.warn('recoverable material issue')
+      jest.advanceTimersByTime(LOAD_TIME_MS)
+      endLoadProgress()
+
+      expect(getCompletedLoadStats()).toEqual({
+        fileSize: 39_950_000,
+        memoryUsed: HEAP_MB * BYTES_PER_MB,
+        loadTime: LOAD_TIME_MS,
+        errorCount: 1,
+        warningCount: 2,
+      })
+      delete performance.memory
+      consoleWarnSpy.mockRestore()
+      consoleErrorSpy.mockRestore()
     })
 
     it('reportSourceInfo appends a byte-source line', () => {

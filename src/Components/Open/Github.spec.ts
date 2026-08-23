@@ -2,6 +2,7 @@ import {Page, expect, test} from '@playwright/test'
 import {
   auth0Login,
   homepageSetup,
+  pauseViewerRendering,
   returningUserVisitsHomepageWaitForModel,
   setIsReturningUser,
   setupAuthenticationIntercepts,
@@ -100,13 +101,28 @@ describe('Open 100: GitHub Integration', () => {
     /**
      * Log in and reveal the GitHub file browser inside the Open dialog.
      *
+     * These are the most interaction-heavy tests in the suite, and they
+     * used to overrun the 30s budget whenever more than one landed on a
+     * runner at once (#1759). Two things in this setup were paying for a
+     * 3D viewer these tests never look at; both are removed below, which
+     * is what keeps them inside the default timeout.
+     *
      * @param page - Playwright page object
      */
     async function openGithubBrowser(page: Page) {
       await homepageSetup(page)
       await setupAuthenticationIntercepts(page)
+      // No second goto to /share/v/p/index.ifc here: the helper below
+      // already lands on exactly that URL with the model ready and MSW's
+      // service worker controlling the page. Re-navigating started a
+      // second IFC+wasm load that nothing awaited, so it burned the main
+      // thread underneath every click that followed.
       await returningUserVisitsHomepageWaitForModel(page)
-      await page.goto('/share/v/p/index.ifc', {waitUntil: 'domcontentloaded'})
+      // Freeze the scene before touching any UI. Everything below is
+      // dialog interaction — no screenshots, no camera, no highlighting —
+      // so the frames the viewer would keep painting buy nothing and cost
+      // ~7x on every click. See pauseViewerRendering for the measurements.
+      await pauseViewerRendering(page)
       await auth0Login(page)
       await page.getByTestId('control-button-open').click()
       await page.getByRole('tab', {name: 'GitHub'}).click()
@@ -122,12 +138,18 @@ describe('Open 100: GitHub Integration', () => {
      * @param optionName - the option's accessible name
      */
     async function pickOption(page: Page, testId: string, optionName: string) {
-      // force: MUI's Select renders a zero-opacity native <input> over the
-      // combobox, so a normal click fails the actionability hit-test. MUI opens
-      // the menu on mousedown regardless, so a forced click is both safe and
-      // sufficient here (same reason for the other combobox opens below).
+      // Deliberately NOT force-clicked. Closing a MUI menu runs a ~400ms Grow
+      // transition, and its full-screen backdrop stays mounted for the whole
+      // exit — so right after picking an option, the next field is still
+      // covered. A forced click punches straight through that backdrop: the
+      // backdrop swallows it as a click-away, the menu never opens, and the
+      // test hangs later on a locator that looks unrelated. An ordinary click
+      // hit-tests instead, so Playwright simply waits for the backdrop to
+      // unmount. That also keeps the test honest — a dropdown that genuinely
+      // will not open now fails here rather than being clicked through
+      // (#1759).
       const combobox = page.getByTestId(testId).getByRole('combobox')
-      await combobox.click({force: true})
+      await combobox.click()
       const option = page.getByRole('option', {name: optionName, exact: true})
       await option.waitFor({state: 'visible'})
       await option.click()
@@ -165,7 +187,7 @@ describe('Open 100: GitHub Integration', () => {
       await selectOrgSettled(page)
 
       // Switch the Repository field into "Enter name..." text mode and type.
-      await page.getByTestId('openRepository').getByRole('combobox').click({force: true})
+      await page.getByTestId('openRepository').getByRole('combobox').click()
       const enterName = page.getByRole('option', {name: 'Enter name...', exact: true})
       await enterName.waitFor({state: 'visible'})
       await enterName.click()
@@ -181,7 +203,7 @@ describe('Open 100: GitHub Integration', () => {
       await expect(page.getByTestId('openRepository').getByRole('combobox')).toContainText('test-repo')
 
       // Selecting the filtered match drives the downstream file listing.
-      await page.getByTestId('openFile').getByRole('combobox').click({force: true})
+      await page.getByTestId('openFile').getByRole('combobox').click()
       await expect(page.getByRole('option', {name: 'window.ifc', exact: true})).toBeVisible()
     })
 

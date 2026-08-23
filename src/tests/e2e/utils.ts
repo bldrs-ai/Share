@@ -319,6 +319,52 @@ export async function dismissLoadGrace(page: Page) {
 
 
 /**
+ * Stop the viewer painting frames, for tests that drive UI over a loaded
+ * model but never assert on the canvas.
+ *
+ * The render loop is always-on: the fork's rAF loop calls the closure
+ * installed via `ThreeContext.setRenderUpdate`, which drives an
+ * `EffectComposer` (DESIGN.md §"Render loop & perf monitor"). Headless CI
+ * has no GPU, so that composer runs through SwiftShader and pins the page's
+ * main thread even when nothing on screen is moving. Playwright polls
+ * actionability on rAF, so the whole harness inherits the frame time.
+ * Measured on a 4-core headless runner: rAF every ~74ms and a single click
+ * ~978ms while painting, versus ~16ms and ~139ms once paused (#1759).
+ *
+ * Replacing the update closure leaves the rAF loop itself running, so the
+ * page keeps ticking normally — it just stops rendering, and the canvas
+ * holds its last painted frame. That makes this safe for dialog/panel flows
+ * and WRONG for anything that screenshots the scene, moves the camera, or
+ * asserts on highlighting. There is no resume: call it after the model is
+ * ready and treat the scene as frozen for the rest of the test.
+ *
+ * Throws rather than degrading if the seam moves. A silent no-op here would
+ * quietly restore the slow path and show up much later as unexplained
+ * timeouts, which is exactly the failure #1759 spent two runs diagnosing.
+ *
+ * @param page - Playwright page object
+ */
+export async function pauseViewerRendering(page: Page) {
+  const paused = await page.evaluate(() => {
+    // `window.useStore` is exposed by BaseRoutes under the test client id
+    // (see the OAUTH_2_CLIENT_ID guard there); `viewer` is set by CadView
+    // once the viewer is initialized.
+    const withStore = window as unknown as {
+      useStore?: {getState: () => {viewer?: {context?: {setRenderUpdate?: (fn: () => void) => void}}}}
+    }
+    const context = withStore.useStore?.getState().viewer?.context
+    if (typeof context?.setRenderUpdate !== 'function') {
+      return false
+    }
+    // Paused deliberately; see this helper's docstring.
+    context.setRenderUpdate(() => undefined)
+    return true
+  })
+  expect(paused, 'pauseViewerRendering: no render seam at window.useStore.getState().viewer.context').toBe(true)
+}
+
+
+/**
  * Helper to register an intercept and navigate to a route
  *
  * @param page - Playwright page object

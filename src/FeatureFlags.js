@@ -4,6 +4,10 @@ export const flags = [
   },
   {name: 'googleOAuth2', isActive: true},
   {name: 'googleDrive', isActive: true},
+  // Opt-in production GA on a Netlify deploy preview for manual analytics
+  // smoke tests. Branch deploys and local builds remain excluded, and
+  // navigator.webdriver still suppresses automated traffic.
+  {name: 'gaEnableInPreview', isActive: false},
   // Multi-user sharing UI (Share dialog, visibility chip). Provider scaffolding
   // ships unconditionally; this flag gates the consumer surface in PR2+.
   // See design/new/multi-user-sharing.md.

@@ -82,6 +82,8 @@ describe('Loader', () => {
               GetCoordinationMatrix: jest.fn().mockResolvedValue([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
               getStatistics: jest.fn().mockReturnValue({
                 getGeometryMemory: jest.fn().mockReturnValue(1024), // eslint-disable-line no-magic-numbers
+                getErrorCount: jest.fn().mockReturnValue(2),
+                getWarningCount: jest.fn().mockReturnValue(3),
                 getGeometryTime: jest.fn().mockReturnValue(100), // eslint-disable-line no-magic-numbers
                 getVersion: jest.fn().mockReturnValue('IFC4'),
                 getLoadStatus: jest.fn().mockReturnValue('SUCCESS'),
@@ -334,6 +336,12 @@ describe('Loader', () => {
     try {
       const model = await load(testPathToUrl(testPath), mockViewer, onProgress, true, setOpfsFile, '')
       expect(model).toBeDefined()
+      expect(model.loadStats).toMatchObject({
+        memoryUsed: 1024,
+        loadTime: 150,
+        errorCount: 2,
+        warningCount: 3,
+      })
       expect(model).toMatchSnapshot()
     } finally {
       restoreArrayBuffer()
