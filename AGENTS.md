@@ -39,10 +39,12 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **What the gate covers:** `build` (main.yml) and both `test-flows`
   jobs are skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
-  normally has a preview URL to click through. (Not for a docs-only PR:
-  `tools/netlify/ignore-build.sh` skips the deploy when every changed
-  file matches `.md` / `design/` / `notes/`. Marketing posts are `.mdx`,
-  so they still build.) Before editing those
+  normally has a preview URL to click through. (`tools/netlify/ignore-build.sh`
+  skips the deploy when every changed file matches `.md` / `design/` /
+  `notes/` — but only from a branch's *second* push onward, since it
+  bails to build when `CACHED_COMMIT_REF` is unset and a new branch has
+  no prior deploy, so the push that opens a docs-only PR still builds
+  (#1766). Marketing posts are `.mdx`, so they always build.) Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
   PR waiting forever); `ready_for_review` and `converted_to_draft` must
@@ -109,7 +111,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 | Conversational-CAD epic plan (workspace shell / ProjectsDrawer + TopBar, fluid Nav+search, convo panel, multi-user channels), wireframe→issue mapping, epic/sub-issue process | [design/new/conversational-cad.md](design/new/conversational-cad.md) |
 | Persistence direction: OPFS as a git-versioned workspace (repo-as-workspace, LFS-pointer blobs, record-vs-stream convo split, wasm-git vs isomorphic-git investigation, exit plan) | [design/new/workspace-store.md](design/new/workspace-store.md) |
-| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements and the 10-point rubric | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
+| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle (codex first, sub-agent on ~10min timeout, docs-only skips review) | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
 
