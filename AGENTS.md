@@ -28,13 +28,12 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   runs the full suite on every rework push starves the PRs that are
   ready. (1) Open it with `draft: true` — not opened-then-marked.
   (2) Keep it in draft until review has run and every finding is
-  fixed or answered in the thread. **codex is the reviewer** — usually
-  automatic, otherwise `@codex review` on the PR; if it hasn't answered
-  ~10 min after the request, dispatch a sub-agent review and treat that
-  as the round. Docs-only PRs skip review by default, except when the
-  doc *is* the policy (how we review, dispatch or release). Full rules:
-  [design/new/agent-workflow.md](design/new/agent-workflow.md)
-  §"Review". (3) Flip to ready
+  fixed or answered in the thread — who reviews, the timeout fallback,
+  the round cap, and which PRs skip review entirely are all specified
+  in [design/new/agent-workflow.md](design/new/agent-workflow.md)
+  §"Review", which is the single source for review policy. Read it
+  before requesting or skipping a round; don't restate its rules here.
+  (3) Flip to ready
   (`update_pull_request`, `draft: false`); that fires
   `ready_for_review`, which is what starts the gated jobs. (4) Drive CI
   green, and re-request review if the fixes changed the diff beyond a
@@ -63,7 +62,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **Consequence to be aware of:** because every job is gated here, a
   draft gets no CI signal at all, and the husky pre-commit hook covers
   only part of the gap. Three things it does not run, each of which will
-  otherwise first fail at step 3 — after codex has signed off, which
+  otherwise first fail at step 3 — after review has signed off, which
   is exactly the step-4 re-review this lifecycle is trying to avoid:
   (a) `yarn build-prod`, so an esbuild-only breakage (missing asset
   loader, plugin misconfig) survives every draft commit; (b) coverage —
@@ -117,7 +116,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 | Conversational-CAD epic plan (workspace shell / ProjectsDrawer + TopBar, fluid Nav+search, convo panel, multi-user channels), wireframe→issue mapping, epic/sub-issue process | [design/new/conversational-cad.md](design/new/conversational-cad.md) |
 | Persistence direction: OPFS as a git-versioned workspace (repo-as-workspace, LFS-pointer blobs, record-vs-stream convo split, wasm-git vs isomorphic-git investigation, exit plan) | [design/new/workspace-store.md](design/new/workspace-store.md) |
-| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle (codex first, sub-agent on ~10min timeout, docs-only skips review) | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
+| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle — the single source for who reviews a PR, when review is skipped, and how rounds are capped | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
 
