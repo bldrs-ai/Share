@@ -84,7 +84,14 @@ Sub-agents do not review their own code, and the coordinator does not
 review theirs. Review comes from **codex** — usually automatic;
 otherwise request it with an `@codex review` comment on the PR.
 
-Two rules keep that from becoming a bottleneck or a rubber stamp.
+**Docs-only changes skip review by default.** There is no code to
+attack, and a review round on a paragraph costs more than it finds.
+Make an exception where the doc *is* the policy — a change to how we
+review, dispatch or release is worth having codex read, precisely
+because it is the thing codex will be held to.
+
+Three rules keep review from becoming either a bottleneck or a
+rubber stamp.
 
 **Timeout.** If codex has not responded ~10 minutes after the
 request, dispatch a **sub-agent review** and treat that as the round
