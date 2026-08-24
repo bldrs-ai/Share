@@ -27,11 +27,17 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   in flight and CI runners are capped at 4 concurrent jobs, so a PR that
   runs the full suite on every rework push starves the PRs that are
   ready. (1) Open it with `draft: true` — not opened-then-marked.
-  (2) Keep it in draft until `/review` has run and every finding is
-  fixed or answered in the thread. (3) Flip to ready
+  (2) Keep it in draft until review has run and every finding is
+  fixed or answered in the thread. **codex is the reviewer** — usually
+  automatic, otherwise `@codex review` on the PR; if it hasn't answered
+  ~10 min after the request, dispatch a sub-agent review and treat that
+  as the round. Docs-only PRs skip review by default, except when the
+  doc *is* the policy (how we review, dispatch or release). Full rules:
+  [design/new/agent-workflow.md](design/new/agent-workflow.md)
+  §"Review". (3) Flip to ready
   (`update_pull_request`, `draft: false`); that fires
   `ready_for_review`, which is what starts the gated jobs. (4) Drive CI
-  green, and `/review` again if the fixes changed the diff beyond a
+  green, and re-request review if the fixes changed the diff beyond a
   trivial revert — otherwise the reviewed diff isn't the merged diff.
   (5) Update the PR description to match what the change became, merge,
   then close or narrow its issues (partly-addressed → a comment saying
