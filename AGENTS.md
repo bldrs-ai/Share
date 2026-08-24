@@ -63,14 +63,14 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **Consequence to be aware of:** because every job is gated here, a
   draft gets no CI signal at all, and the husky pre-commit hook covers
   only part of the gap. Three things it does not run, each of which will
-  otherwise first fail at step 3 — after `/review` has signed off, which
+  otherwise first fail at step 3 — after codex has signed off, which
   is exactly the step-4 re-review this lifecycle is trying to avoid:
   (a) `yarn build-prod`, so an esbuild-only breakage (missing asset
   loader, plugin misconfig) survives every draft commit; (b) coverage —
   the hook's `yarn test` runs `test-src`, while CI runs `test-ci` →
   `test-coverage` with thresholds enforced (`tools/jest/jest.config.js`);
   (c) **Playwright**, the big one — E2E specs never execute before step
-  3, so `/review` is reading specs that have never run, against this
+  3, so the reviewer is reading specs that have never run, against this
   file's own mandatory desktop+mobile E2E rule. Before flipping to ready,
   run `yarn build-prod`, `yarn test-ci`, and
   `yarn test-flows-build-and-serve` + `yarn test-flows [spec]` — then undo
