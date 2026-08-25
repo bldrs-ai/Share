@@ -189,6 +189,55 @@ describe('Analytics', () => {
   })
 
 
+  /*
+   * Sentry's half of the same id (issue #1767). Bare, because the
+   * `cid.` prefix only exists to stop GA4 typing the value as a float,
+   * and the dashboard strips it before searching Sentry.
+   */
+  describe('getOpenCidForSentry', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('null when no client id is available, so the tag is omitted', () => {
+      expect(Analytics.getOpenCidForSentry()).toBeNull()
+    })
+
+    test('is the bare id, not the cid.-prefixed GA param value', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).toBe('1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).not.toBe(Analytics.getOpenCid())
+    })
+
+    test('reads the cookie fallback, so a returning visitor is tagged at first paint', () => {
+      Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).toBe('1871520000.1754700000')
+    })
+
+    // Fails closed for the same reason syncUserCidProperty does: a
+    // declined visitor must not have an analytics id on their error
+    // reports either.
+    test('null when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setIsAllowed(false)
+      expect(Analytics.getOpenCidForSentry()).toBeNull()
+    })
+
+    // Same identifier, and the dashboard builds the Sentry query from
+    // the GA param name.
+    test('the Sentry tag name matches the GA param name', () => {
+      expect(Analytics.SENTRY_CID_TAG).toBe(Analytics.OPEN_CID_PARAM)
+      expect(Analytics.SENTRY_CID_TAG).toBe('open_cid')
+    })
+  })
+
+
   // Route-result shapes mirror routes.ts#handleRoute output. The one
   // excluded shape is the homepage's bundled demo — everything else is
   // a real open.

@@ -303,6 +303,50 @@ export function getOpenCid() {
 
 
 /*
+ * Name of the *Sentry tag* carrying the same client id. Identical to
+ * OPEN_CID_PARAM on purpose: it is the same identifier, the bizdev
+ * dashboard builds its Sentry search URL straight from the GA param
+ * name, and the two live in separate namespaces so there is no
+ * collision to avoid (issue #1767).
+ *
+ * It has to be a tag and not a context field. Sentry indexes tags for
+ * issue search; context values are display-only, so a cid folded into
+ * the `load` context that loadProgress#applySentryLoadState already
+ * sets would be invisible to `open_cid:<id>` queries.
+ */
+export const SENTRY_CID_TAG = OPEN_CID_PARAM
+
+
+/**
+ * The SENTRY_CID_TAG value for this client: the *bare* client id, not
+ * the `cid.`-prefixed getOpenCid form. That prefix exists purely to stop
+ * GA4 typing a numeric-looking id as a float (see OPEN_CID_PREFIX);
+ * Sentry stores tag values as strings and has no such problem, and the
+ * dashboard strips the prefix before building the search URL — so bare
+ * is what makes the two ids compare equal.
+ *
+ * Null when no id has resolved, and null when analytics consent is
+ * withheld: a cid is an analytics identifier, so a visitor who declined
+ * must not have one stapled to their error reports either. Same reason
+ * syncUserCidProperty retracts the GA user property, and read from
+ * isAllowed() here for the same fail-closed reason. Callers must omit
+ * the tag rather than send a blank.
+ *
+ * Coverage is structurally partial and will stay that way: a client
+ * that blocks GA never resolves a cid, and per the triage notes in
+ * index/sentry.js that ad-blocked emerging-markets mobile cohort is
+ * this project's single largest source of Sentry events. An empty
+ * search result therefore cannot distinguish "this user hit no errors"
+ * from "this user had no cid".
+ *
+ * @return {string|null}
+ */
+export function getOpenCidForSentry() {
+  return isAllowed() ? getGaClientId() : null
+}
+
+
+/*
  * Name of the GA4 *user property* carrying the same value as
  * OPEN_CID_PARAM. Same string on purpose — it is the same identifier,
  * and GA4 keeps event parameters and user properties in separate

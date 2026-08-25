@@ -5,7 +5,9 @@ jest.mock('@sentry/react', () => ({
   setTag: jest.fn(),
 }))
 
+import Cookies from 'js-cookie'
 import {captureMessage, setContext, setTag} from '@sentry/react'
+import {_resetGaClientIdForTests} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
@@ -385,6 +387,146 @@ describe('loadProgress', () => {
         fileInfo: 'index.ifc',
         report: expect.stringContaining('Share v'),
       }))
+    })
+
+    /*
+     * The end-of-load diagnostics event (issue #1767). Its whole
+     * purpose is to give a model-open chip with non-zero
+     * errors/warnings something to link to: before it, a load that
+     * warned and then succeeded produced no Sentry event at all, while
+     * the loads that did reach Sentry had hard-failed and so never
+     * became a chip.
+     */
+    describe('load diagnostics event', () => {
+      /** @return {Array} the [message, context] of the diagnostics capture */
+      function diagnosticsCall() {
+        return captureMessage.mock.calls.find(([, arg]) => typeof arg === 'object' && arg !== null)
+      }
+
+      beforeEach(() => {
+        _resetGaClientIdForTests()
+        // The tag value comes from the real analytics module, whose
+        // cookie fallback is what a returning visitor has.
+        Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      })
+
+      afterEach(() => {
+        Cookies.remove('_ga')
+        Cookies.remove('isAnalyticsAllowed')
+      })
+
+      it('sends one event per noisy load, tagged with the bare cid and content_id', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'gdrive:abc123', contentId: 'https://drive/abc123', isRealOpen: true})
+        console.warn('No basis found for brep!')
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        // Warnings only — nothing here failed.
+        expect(context.level).toBe('warning')
+        // Bare id: the GA param's `cid.` prefix would not match the
+        // dashboard's Sentry query.
+        expect(context.tags.open_cid).toBe('1234567890.0987654321')
+        // The GA content_id, not the shorter `gdrive:` report label, so
+        // the event names the same model as the chip.
+        expect(context.tags.content_id).toBe('https://drive/abc123')
+        expect(context.contexts.loadDiagnostics).toEqual(expect.objectContaining({
+          warningCount: 2,
+          errorCount: 0,
+          distinct: 1,
+          total: 2,
+          messages: ['2× No basis found for brep!'],
+          report: expect.stringContaining('Share v'),
+        }))
+        warnSpy.mockRestore()
+      })
+
+      it('raises the level to error when the load logged errors', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp', isRealOpen: true})
+        console.error('CDT Exception (hemisphere: 0)')
+        endLoadProgress()
+
+        expect(diagnosticsCall()[1].level).toBe('error')
+        // No contentId given, so the report's own file identity stands in.
+        expect(diagnosticsCall()[1].tags.content_id).toBe('index.stp')
+        errorSpy.mockRestore()
+      })
+
+      it('stays silent for a clean load', () => {
+        beginLoadProgress({fileInfo: 'index.ifc', isRealOpen: true})
+        reportLoadProgress({phase: 'geometry', completed: 1, total: 1, elapsedMs: 5})
+        endLoadProgress()
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      // The bundled demo loads on every homepage visit and can never be
+      // a chip, so counting it would make this a firehose.
+      it('stays silent for the bundled demo', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.ifc', isRealOpen: false})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        expect(captureMessage).not.toHaveBeenCalled()
+        warnSpy.mockRestore()
+      })
+
+      // The failure path already reaches Sentry via CadView's
+      // captureException, with this same report attached.
+      it('stays silent for a failed load', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.ifc', isRealOpen: true})
+        console.warn('No basis found for brep!')
+        endLoadProgress(new Error('bad header'))
+        expect(captureMessage).not.toHaveBeenCalled()
+        warnSpy.mockRestore()
+      })
+
+      // Sentry groups a message event by its text, and engine
+      // diagnostics are per-entity, so the digits have to go or every
+      // entity of every model opens its own issue.
+      it('groups by message family, collapsing per-entity numbers', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp', isRealOpen: true})
+        console.warn('Error processing representation #1204')
+        endLoadProgress()
+        expect(diagnosticsCall()[0]).toBe('Load diagnostics: Error processing representation #')
+        warnSpy.mockRestore()
+      })
+
+      it('caps the distinct messages it carries but still reports the true totals', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        const distinctCount = 200
+        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp', isRealOpen: true})
+        for (let i = 0; i < distinctCount; i++) {
+          console.warn(`Error processing representation #${i}`)
+        }
+        console.warn('No basis found for brep!')
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+
+        const {loadDiagnostics} = diagnosticsCall()[1].contexts
+        const maxCarried = 25
+        expect(loadDiagnostics.messages).toHaveLength(maxCarried)
+        // Most frequent first, so the sample that won the report line
+        // leads here too.
+        expect(loadDiagnostics.messages[0]).toBe('2× No basis found for brep!')
+        expect(loadDiagnostics.distinct).toBe(distinctCount + 1)
+        expect(loadDiagnostics.total).toBe(distinctCount + 2)
+        warnSpy.mockRestore()
+      })
+
+      it('omits the cid tag when analytics consent is withheld', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        Cookies.set('isAnalyticsAllowed', 'false')
+        beginLoadProgress({fileInfo: 'index.ifc', isRealOpen: true})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        expect(diagnosticsCall()[1].tags).not.toHaveProperty('open_cid')
+        warnSpy.mockRestore()
+      })
     })
 
     it('ignores straggler progress after endLoadProgress', () => {

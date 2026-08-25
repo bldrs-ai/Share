@@ -1,4 +1,5 @@
 import {addBreadcrumb, captureMessage, setContext, setTag} from '@sentry/react'
+import {SENTRY_CID_TAG, getOpenCidForSentry} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 // Named import so esbuild can prune the rest of the JSON (same trick as
@@ -33,6 +34,16 @@ const STATUS_LINE_INTERVAL_MS = 100
 // long enough to recognize which family of warning dominated, short enough
 // that the line still reads as a summary.
 const MAX_DIAGNOSTIC_SAMPLE_CHARS = 80
+// Sentry truncates tag values past 200 characters, so do it here rather
+// than shipping a value that silently differs from what's searchable. A
+// Drive download URL — the content_id of a Google Drive open — is the
+// realistic case.
+const MAX_TAG_CHARS = 200
+// Distinct diagnostic texts carried on the Sentry event. Same shape
+// problem appendDiagnostics documents: engines emit per-entity messages
+// dedup can't collapse, so one STEP load can produce hundreds. The
+// frequent ones are the triageable ones; the rest stay in the console.
+const MAX_SENTRY_DIAGNOSTICS = 25
 const BYTES_PER_MB = 1024 * 1024 // eslint-disable-line no-magic-numbers
 
 /**
@@ -95,11 +106,20 @@ class LoadProgressReporter {
    * @param {object} opts
    * @param {string} opts.fileInfo short model identity (path/type/size) for
    *   Sentry context and the fallback model line
+   * @param {string} [opts.contentId] the GA `content_id` this load reports
+   *   if it succeeds, so the Sentry diagnostics event and the dashboard's
+   *   model-open chip name the same model. Falls back to fileInfo, which
+   *   differs for Drive opens (`gdrive:<id>` vs the download URL).
+   * @param {boolean} [opts.isRealOpen] analytics#isRealModelOpen's verdict
+   *   for this load; gates the end-of-load Sentry diagnostics event —
+   *   see captureDiagnostics
    * @param {Function} [opts.onStall] called once per silent period with the
    *   last event when the watchdog fires
    */
-  constructor({fileInfo, onStall}) {
+  constructor({fileInfo, contentId = undefined, isRealOpen = false, onStall}) {
     this.fileInfo = fileInfo
+    this.contentId = contentId
+    this.isRealOpen = isRealOpen
     this.onStall = onStall
     // Filename for the "Loaded <name>" grace line when the snackbar has no
     // better name. The STEP header's fileName is unreliable (often a comment),
@@ -389,8 +409,12 @@ class LoadProgressReporter {
    * point so its duration is real), add the separate before/after Total
    * line, then append the captured console warnings/errors, and clear the
    * live line.
+   *
+   * @param {Error} [error] the loader error when the load failed; omitted /
+   *   null on success. Only decides whether this load also reports its
+   *   console diagnostics to Sentry — see captureDiagnostics.
    */
-  finishReport() {
+  finishReport(error = null) {
     const finishedAt = Date.now()
     const heapMb = usedHeapMb()
     const closedLine = this.log.closeCurrentStage(finishedAt - this.startTime, heapMb)
@@ -420,7 +444,114 @@ class LoadProgressReporter {
       warningCount: this.warningCount,
     }
 
+    if (!error) {
+      this.captureDiagnostics()
+    }
+
     useStore.getState().setCurrentLoadLine(null)
+  }
+
+  /**
+   * Fold the deduped diagnostics map into the numbers its two consumers
+   * share: the one-line report summary below Total, and the Sentry event.
+   *
+   * @return {{total: number, distinct: number, topText: string, topCount: number}}
+   */
+  diagnosticsSummary() {
+    let total = 0
+    let topText = ''
+    let topCount = 0
+    for (const [text, count] of this.diagnostics) {
+      total += count
+      if (count > topCount) {
+        topCount = count
+        topText = text
+      }
+    }
+    return {total, distinct: this.diagnostics.size, topText, topCount}
+  }
+
+  /**
+   * Send one Sentry event for a load that finished but logged console
+   * warnings or errors (issue #1767).
+   *
+   * The two populations the bizdev dashboard tries to join were close to
+   * disjoint before this. The errorCount/warningCount behind each
+   * model-open chip come from installConsoleTee above, which only
+   * counts and transcribes — a load that logs five warnings and then
+   * goes on to *succeed* produced no Sentry event at all, and that is
+   * the typical chip. The loads that did reach Sentry hard-failed, so
+   * they never fired `real_model_open` and never became a chip. This is
+   * the missing overlap: one event per noisy load, carrying the same
+   * client id the chip does, so the chip's `open_cid:<id>` link resolves
+   * to something.
+   *
+   * One event per load, not one per console line. Sentry's
+   * captureConsoleIntegration would do the latter and wasm loaders are
+   * chatty enough that it would flood the project.
+   *
+   * Two gates, both about not becoming that flood ourselves:
+   *
+   *   - Real opens only. CadView passes analytics#isRealModelOpen's
+   *     verdict, the same predicate that decides whether this load is a
+   *     chip. The bundled demo loads on every homepage visit, so
+   *     counting it here would turn ordinary traffic into a firehose
+   *     against a load that can never be a chip anyway.
+   *   - Successes only. finishReport skips this on failure, where
+   *     CadView's handler already captures the exception with this same
+   *     report attached by attachLoadFailureContext — a second event
+   *     would just double-report it.
+   */
+  captureDiagnostics() {
+    if (!this.isRealOpen || this.errorCount + this.warningCount === 0) {
+      return
+    }
+    const summary = this.diagnosticsSummary()
+    const tags = {}
+    // Also set on the global scope at init by index/ga.js. Re-set here
+    // because this reads later: a first-ever visitor's id only resolves
+    // once gtag/js loads, which can land after bootstrap but before this
+    // load finishes.
+    const cid = getOpenCidForSentry()
+    if (cid) {
+      tags[SENTRY_CID_TAG] = cid
+    }
+    const contentId = this.contentId ?? this.fileInfo
+    if (contentId) {
+      tags.content_id = String(contentId).slice(0, MAX_TAG_CHARS)
+    }
+    try {
+      captureMessage(diagnosticsTitle(summary.topText), {
+        level: this.errorCount > 0 ? 'error' : 'warning',
+        tags,
+        contexts: {
+          loadDiagnostics: {
+            errorCount: this.errorCount,
+            warningCount: this.warningCount,
+            distinct: summary.distinct,
+            total: summary.total,
+            messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
+            report: this.lines.join('\n'),
+          },
+        },
+      })
+    } catch (e) {
+      debug().log('loadProgress#captureDiagnostics: ', e)
+    }
+  }
+
+  /**
+   * The most frequent diagnostics, each prefixed with its occurrence
+   * count, most frequent first.
+   *
+   * @param {number} limit how many distinct messages to keep
+   * @return {string[]} e.g. ['12× Error processing representation #4', …]
+   */
+  topDiagnostics(limit) {
+    return [...this.diagnostics.entries()]
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, limit)
+      .map(([text, count]) => `${count}× ${text}`)
   }
 
   /**
@@ -439,20 +570,9 @@ class LoadProgressReporter {
     if (this.diagnostics.size === 0) {
       return
     }
-    let total = 0
-    let topText = ''
-    let topCount = 0
-    for (const [text, count] of this.diagnostics) {
-      total += count
-      if (count > topCount) {
-        topCount = count
-        topText = text
-      }
-    }
-    const distinctNote = this.diagnostics.size > 1 ? `, ${this.diagnostics.size} distinct` : ''
-    const sample = topText.length > MAX_DIAGNOSTIC_SAMPLE_CHARS ?
-      `${topText.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
-      topText
+    const {total, distinct, topText, topCount} = this.diagnosticsSummary()
+    const distinctNote = distinct > 1 ? `, ${distinct} distinct` : ''
+    const sample = ellipsize(topText)
     const sampleNote = topCount > 1 ? `${sample} (×${topCount})` : sample
     this.addReportLine(`Warnings & errors (${total}${distinctNote}): ${sampleNote}`, false)
   }
@@ -521,6 +641,45 @@ function basenameOf(fileInfo) {
   const lastSegment = noQuery.split('/').pop() ?? ''
   // Drop a leading `provider:` tag (gdrive:, opfs:, …) if that's all we have.
   return lastSegment.includes(':') ? lastSegment.split(':').pop() ?? '' : lastSegment
+}
+
+
+/**
+ * Trim a diagnostic to the sample length the report and the Sentry
+ * title share, with an ellipsis when something was dropped.
+ *
+ * @param {string} text
+ * @return {string}
+ */
+function ellipsize(text) {
+  return text.length > MAX_DIAGNOSTIC_SAMPLE_CHARS ?
+    `${text.slice(0, MAX_DIAGNOSTIC_SAMPLE_CHARS - 1)}…` :
+    text
+}
+
+
+/**
+ * The Sentry message for a noisy load, which is also how Sentry groups
+ * and titles the event — it has no exception to fingerprint, so the
+ * message text *is* the grouping key.
+ *
+ * Numbers collapse to `#` because engine diagnostics are per-entity
+ * ("Error processing representation #1234"): the raw text would open a
+ * fresh Sentry issue for every entity of every model, which is the
+ * per-line flood captureDiagnostics exists to avoid. Normalized, each
+ * family of warning gets one issue. An entity marker the message
+ * already spelled `#` is swallowed by the same pass rather than
+ * doubling up into `##`.
+ *
+ * @param {string} topText most frequent diagnostic, '' when every
+ *   captured message was blank
+ * @return {string}
+ */
+function diagnosticsTitle(topText) {
+  const normalized = ellipsize(topText.replace(/#?\d+/g, '#')).trim()
+  return normalized === '' ?
+    'Load completed with console diagnostics' :
+    `Load diagnostics: ${normalized}`
 }
 
 
@@ -637,7 +796,7 @@ export function setLoadSummary(text) {
  */
 export function endLoadProgress(error = null) {
   if (activeReporter && !activeReporter.ended) {
-    activeReporter.finishReport()
+    activeReporter.finishReport(error)
     // The collapsed grace line stays deliberately terse — just the outcome
     // and a name; the timing/heap Total and diagnostics live one expand (or
     // the "i" report) away. The snackbar prefers the store's model.name (the

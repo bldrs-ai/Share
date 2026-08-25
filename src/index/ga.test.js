@@ -1,10 +1,10 @@
 import Cookies from 'js-cookie'
-import {captureException} from '@sentry/react'
-import {_resetGaClientIdForTests, getGaClientId} from '../privacy/analytics'
+import {captureException, setTag} from '@sentry/react'
+import {_resetGaClientIdForTests, getGaClientId, setIsAllowed} from '../privacy/analytics'
 import setupGa, {GA_MEASUREMENT_ID, shouldInitGa} from './ga'
 
 
-jest.mock('@sentry/react', () => ({captureException: jest.fn()}))
+jest.mock('@sentry/react', () => ({captureException: jest.fn(), setTag: jest.fn()}))
 
 
 /** @return {HTMLScriptElement|null} the injected gtag/js tag, if any */
@@ -19,6 +19,7 @@ beforeEach(() => {
   // getGaClientId falls back to this cookie; clear it so the assertions
   // below see only what setupGa's callback provides.
   Cookies.remove('_ga')
+  Cookies.remove('isAnalyticsAllowed')
   document.head.querySelectorAll('script').forEach((s) => s.remove())
   // Mirror the inline bootstrap index.html declares before the bundle.
   window.dataLayer = []
@@ -153,6 +154,54 @@ describe('setupGa', () => {
   test('does not request a client id off-prod', () => {
     setupGa({hostname: 'localhost', isWebdriver: false})
     expect(window.dataLayer.find((entry) => entry?.[0] === 'get')).toBeUndefined()
+  })
+
+  // The bizdev dashboard links each noisy model-open chip to a Sentry
+  // search on this tag, so nothing matched before it was sent (#1767).
+  describe('open_cid Sentry tag', () => {
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    // Set from the cookie at setup so a load-failure exception thrown
+    // before gtag/js resolves still carries the tag.
+    test('tags from the _ga cookie at setup, for a returning visitor', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
+    })
+
+    // Bare: the cid. prefix exists only to stop GA4 typing the id as a
+    // float, and the dashboard strips it before building the query.
+    test('sends the bare id, without the GA cid. prefix', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      const values = setTag.mock.calls.map(([, value]) => value)
+      expect(values).not.toContain('cid.1234567890.0987654321')
+    })
+
+    // A first-ever visitor has no cookie; the callback is their only path.
+    test('tags from the gtag callback for a first visit', () => {
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      expect(setTag).not.toHaveBeenCalled()
+
+      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
+      expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
+    })
+
+    test('does not tag off-prod, where GA never initializes', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname: 'localhost', isWebdriver: false})
+      expect(setTag).not.toHaveBeenCalled()
+    })
+
+    test('does not tag when analytics consent is withheld', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setIsAllowed(false)
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
+      expect(setTag).not.toHaveBeenCalled()
+    })
   })
 
   test('reports a missing inline bootstrap to Sentry without throwing', () => {

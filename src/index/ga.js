@@ -1,5 +1,5 @@
-import {captureException} from '@sentry/react'
-import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
+import {captureException, setTag} from '@sentry/react'
+import {SENTRY_CID_TAG, getOpenCidForSentry, setGaClientId, setUserCidProperty} from '../privacy/analytics'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
@@ -35,6 +35,26 @@ export function shouldInitGa({
 } = {}) {
   const isDeployPreview = hostname.startsWith('deploy-preview-') && hostname.endsWith('.netlify.app')
   return (PROD_HOSTNAMES.includes(hostname) || (isDeployPreview && enableInPreview)) && !isWebdriver
+}
+
+
+/**
+ * Stamp the GA client id onto every subsequent Sentry event as the
+ * `open_cid` tag (issue #1767). That tag is the only join between the
+ * bizdev dashboard's model-open chips and Sentry: a chip with non-zero
+ * errors/warnings links to `open_cid:<id>` on the Sentry issue search,
+ * which matched nothing before this existed.
+ *
+ * Global scope on purpose — set once, carried by everything captured
+ * afterwards, load-failure exceptions included. No-op when no id has
+ * resolved or consent is withheld; see analytics#getOpenCidForSentry
+ * for both, and for why the value is the bare id.
+ */
+function applySentryCidTag() {
+  const cid = getOpenCidForSentry()
+  if (cid) {
+    setTag(SENTRY_CID_TAG, cid)
+  }
 }
 
 
@@ -94,6 +114,11 @@ export default function setupGa(env = undefined) {
     // callback below is the only path that works for a first-ever
     // visitor, who has no cookie for either parser to read.
     setUserCidProperty()
+    // Same two-call shape, same reason: this one reads the `_ga` cookie,
+    // so a *returning* visitor's tag is in place from first paint and an
+    // exception thrown before gtag/js resolves still carries it. The
+    // callback below covers the first-ever visitor, who has no cookie.
+    applySentryCidTag()
     // Ask GA for this browser's client id so model-open events can
     // carry it as open_cid (see privacy/analytics#setGaClientId for
     // why). The call buffers in dataLayer like any other gtag call and
@@ -105,6 +130,7 @@ export default function setupGa(env = undefined) {
       // The only path that works for a first-ever visitor, who had no
       // cookie for the call above to read.
       setUserCidProperty()
+      applySentryCidTag()
     })
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}})

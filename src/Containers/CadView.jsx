@@ -459,6 +459,14 @@ export default function CadView({
     // so the snackbar keeps only the base "Loading <file>" message.
     beginLoadProgress({
       fileInfo: isGoogleResult ? `gdrive:${routeResult.fileId}` : filepath,
+      // The `content_id` the real_model_open event below will carry, so the
+      // end-of-load Sentry diagnostics event names the same model as the
+      // dashboard chip it's meant to be searched from. Not fileInfo, which
+      // prefers the short `gdrive:<id>` label over Drive's download URL.
+      contentId: filepath,
+      // Keeps that Sentry event on the same population as the GA event —
+      // see loadProgress#captureDiagnostics for why the demo must stay out.
+      isRealOpen: isRealModelOpen(routeResult),
       onStall: (lastEvent) => {
         const where = lastEvent?.phase ? ` on ${lastEvent.phase}` : ''
         setSnackMessage(`${loadingMessageBase}: still working${where}…`)
