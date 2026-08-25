@@ -27,11 +27,16 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   in flight and CI runners are capped at 4 concurrent jobs, so a PR that
   runs the full suite on every rework push starves the PRs that are
   ready. (1) Open it with `draft: true` — not opened-then-marked.
-  (2) Keep it in draft until `/review` has run and every finding is
-  fixed or answered in the thread. (3) Flip to ready
+  (2) Keep it in draft until review has run and every finding is
+  fixed or answered in the thread — who reviews, the timeout fallback,
+  the round cap, and which PRs skip review entirely are all specified
+  in [design/new/agent-workflow.md](design/new/agent-workflow.md)
+  §"Review", which is the single source for review policy. Read it
+  before requesting or skipping a round; don't restate its rules here.
+  (3) Flip to ready
   (`update_pull_request`, `draft: false`); that fires
   `ready_for_review`, which is what starts the gated jobs. (4) Drive CI
-  green, and `/review` again if the fixes changed the diff beyond a
+  green, and re-request review if the fixes changed the diff beyond a
   trivial revert — otherwise the reviewed diff isn't the merged diff.
   (5) Update the PR description to match what the change became, merge,
   then close or narrow its issues (partly-addressed → a comment saying
@@ -39,10 +44,12 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **What the gate covers:** `build` (main.yml) and both `test-flows`
   jobs are skipped on drafts. **Netlify deploy previews still run** —
   they come from Netlify's GitHub integration, not Actions — so a draft
-  normally has a preview URL to click through. (Not for a docs-only PR:
-  `tools/netlify/ignore-build.sh` skips the deploy when every changed
-  file matches `.md` / `design/` / `notes/`. Marketing posts are `.mdx`,
-  so they still build.) Before editing those
+  normally has a preview URL to click through. (`tools/netlify/ignore-build.sh`
+  skips the deploy when every changed file matches `.md` / `design/` /
+  `notes/` — but only from a branch's *second* push onward, since it
+  bails to build when `CACHED_COMMIT_REF` is unset and a new branch has
+  no prior deploy, so the push that opens a docs-only PR still builds
+  (#1766). Marketing posts are `.mdx`, so they always build.) Before editing those
   workflows: the gate is a job-level `if:` (a skipped-by-if job
   satisfies a required check; a workflow that never triggers leaves the
   PR waiting forever); `ready_for_review` and `converted_to_draft` must
@@ -55,14 +62,14 @@ This file is the router for AI assistants working in this repo. Keep it small. T
   **Consequence to be aware of:** because every job is gated here, a
   draft gets no CI signal at all, and the husky pre-commit hook covers
   only part of the gap. Three things it does not run, each of which will
-  otherwise first fail at step 3 — after `/review` has signed off, which
+  otherwise first fail at step 3 — after review has signed off, which
   is exactly the step-4 re-review this lifecycle is trying to avoid:
   (a) `yarn build-prod`, so an esbuild-only breakage (missing asset
   loader, plugin misconfig) survives every draft commit; (b) coverage —
   the hook's `yarn test` runs `test-src`, while CI runs `test-ci` →
   `test-coverage` with thresholds enforced (`tools/jest/jest.config.js`);
   (c) **Playwright**, the big one — E2E specs never execute before step
-  3, so `/review` is reading specs that have never run, against this
+  3, so the reviewer is reading specs that have never run, against this
   file's own mandatory desktop+mobile E2E rule. Before flipping to ready,
   run `yarn build-prod`, `yarn test-ci`, and
   `yarn test-flows-build-and-serve` + `yarn test-flows [spec]` — then undo
@@ -109,7 +116,7 @@ This file is the router for AI assistants working in this repo. Keep it small. T
 | Epic/Story/Track catalogue, milestone tier rubric (§2.1), MVP bar + phase plan (§6, ex-"Pro-MVP"), growth-funnel Phase G, AI-workspace pivot (§7), post-MVP loveables | [design/roadmap.md](design/roadmap.md) |
 | Conversational-CAD epic plan (workspace shell / ProjectsDrawer + TopBar, fluid Nav+search, convo panel, multi-user channels), wireframe→issue mapping, epic/sub-issue process | [design/new/conversational-cad.md](design/new/conversational-cad.md) |
 | Persistence direction: OPFS as a git-versioned workspace (repo-as-workspace, LFS-pointer blobs, record-vs-stream convo split, wasm-git vs isomorphic-git investigation, exit plan) | [design/new/workspace-store.md](design/new/workspace-store.md) |
-| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements and the 10-point rubric | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
+| Working an issue queue with AI agents — coordinator + per-issue sub-agents, model tiers (Fable coordinates, Opus executes), the dispatch-brief requirements, the 10-point rubric, and the review lifecycle — the single source for who reviews a PR, when review is skipped, and how rounds are capped | [design/new/agent-workflow.md](design/new/agent-workflow.md) |
 
 Anything not in this table is invisible to the router. When you create a doc that future assistants should consult, add a row above with a one-line "when to read" hint. Don't rely on filesystem discovery.
 
