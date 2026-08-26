@@ -106,20 +106,11 @@ class LoadProgressReporter {
    * @param {object} opts
    * @param {string} opts.fileInfo short model identity (path/type/size) for
    *   Sentry context and the fallback model line
-   * @param {string} [opts.contentId] the GA `content_id` this load reports
-   *   if it succeeds, so the Sentry diagnostics event and the dashboard's
-   *   model-open chip name the same model. Falls back to fileInfo, which
-   *   differs for Drive opens (`gdrive:<id>` vs the download URL).
-   * @param {boolean} [opts.isRealOpen] analytics#isRealModelOpen's verdict
-   *   for this load; gates the end-of-load Sentry diagnostics event —
-   *   see captureDiagnostics
    * @param {Function} [opts.onStall] called once per silent period with the
    *   last event when the watchdog fires
    */
-  constructor({fileInfo, contentId = undefined, isRealOpen = false, onStall}) {
+  constructor({fileInfo, onStall}) {
     this.fileInfo = fileInfo
-    this.contentId = contentId
-    this.isRealOpen = isRealOpen
     this.onStall = onStall
     // Filename for the "Loaded <name>" grace line when the snackbar has no
     // better name. The STEP header's fileName is unreliable (often a comment),
@@ -409,12 +400,8 @@ class LoadProgressReporter {
    * point so its duration is real), add the separate before/after Total
    * line, then append the captured console warnings/errors, and clear the
    * live line.
-   *
-   * @param {Error} [error] the loader error when the load failed; omitted /
-   *   null on success. Only decides whether this load also reports its
-   *   console diagnostics to Sentry — see captureDiagnostics.
    */
-  finishReport(error = null) {
+  finishReport() {
     const finishedAt = Date.now()
     const heapMb = usedHeapMb()
     const closedLine = this.log.closeCurrentStage(finishedAt - this.startTime, heapMb)
@@ -444,10 +431,6 @@ class LoadProgressReporter {
       warningCount: this.warningCount,
     }
 
-    if (!error) {
-      this.captureDiagnostics()
-    }
-
     useStore.getState().setCurrentLoadLine(null)
   }
 
@@ -472,43 +455,20 @@ class LoadProgressReporter {
   }
 
   /**
-   * Send one Sentry event for a load that finished but logged console
-   * warnings or errors (issue #1767).
+   * Build and send this load's Sentry diagnostics event (issue #1767).
+   * Called only via captureLoadDiagnostics — see there for why the
+   * counts are the caller's rather than this reporter's.
    *
-   * The two populations the bizdev dashboard tries to join were close to
-   * disjoint before this. The errorCount/warningCount behind each
-   * model-open chip come from installConsoleTee above, which only
-   * counts and transcribes — a load that logs five warnings and then
-   * goes on to *succeed* produced no Sentry event at all, and that is
-   * the typical chip. The loads that did reach Sentry hard-failed, so
-   * they never fired `real_model_open` and never became a chip. This is
-   * the missing overlap: one event per noisy load, carrying the same
-   * client id the chip does, so the chip's `open_cid:<id>` link resolves
-   * to something.
-   *
-   * One event per load, not one per console line. Sentry's
-   * captureConsoleIntegration would do the latter and wasm loaders are
-   * chatty enough that it would flood the project.
-   *
-   * Two gates, both about not becoming that flood ourselves:
-   *
-   *   - Real opens only. CadView passes analytics#isRealModelOpen's
-   *     verdict, the same predicate that decides whether this load is a
-   *     chip. The bundled demo loads on every homepage visit, so
-   *     counting it here would turn ordinary traffic into a firehose
-   *     against a load that can never be a chip anyway.
-   *   - Successes only. finishReport skips this on failure, where
-   *     CadView's handler already captures the exception with this same
-   *     report attached by attachLoadFailureContext — a second event
-   *     would just double-report it.
+   * @param {object} opts
+   * @param {number} opts.errorCount the GA `stats_errorCount` for this load
+   * @param {number} opts.warningCount the GA `stats_warningCount`
+   * @param {string} [opts.contentId] the GA `content_id`
+   * @param {string} [opts.contentType] the GA `content_type`
    */
-  captureDiagnostics() {
-    if (!this.isRealOpen || this.errorCount + this.warningCount === 0) {
-      return
-    }
+  captureDiagnostics({errorCount, warningCount, contentId, contentType}) {
     const summary = this.diagnosticsSummary()
     const tags = {}
-    // Also set on the global scope at init by index/ga.js. Re-set here
+    // Also set on the global scope at init by index/ga.js. Re-read here
     // because this reads later: a first-ever visitor's id only resolves
     // once gtag/js loads, which can land after bootstrap but before this
     // load finishes.
@@ -516,33 +476,39 @@ class LoadProgressReporter {
     if (cid) {
       tags[SENTRY_CID_TAG] = cid
     }
-    const contentId = this.contentId ?? this.fileInfo
     if (contentId) {
       tags.content_id = String(contentId).slice(0, MAX_TAG_CHARS)
     }
-    try {
-      captureMessage(diagnosticsTitle(summary.topText), {
-        level: this.errorCount > 0 ? 'error' : 'warning',
-        tags,
-        contexts: {
-          loadDiagnostics: {
-            errorCount: this.errorCount,
-            warningCount: this.warningCount,
-            distinct: summary.distinct,
-            total: summary.total,
-            messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
-            report: this.lines.join('\n'),
-          },
-        },
-      })
-    } catch (e) {
-      debug().log('loadProgress#captureDiagnostics: ', e)
+    if (contentType) {
+      tags.content_type = String(contentType).slice(0, MAX_TAG_CHARS)
     }
+    captureMessage(diagnosticsTitle(summary.topText), {
+      level: errorCount > 0 ? 'error' : 'warning',
+      tags,
+      contexts: {
+        loadDiagnostics: {
+          // The counts the dashboard chip is coloured by: Conway's own
+          // for IFC/STEP, this reporter's console tee as the
+          // cross-format fallback (ShareIfcLoader#loadStats).
+          errorCount,
+          warningCount,
+          // The console tee's own view, which on IFC/STEP can disagree
+          // with the counts above — these two describe the messages
+          // carried below, not the chip.
+          consoleTotal: summary.total,
+          consoleDistinct: summary.distinct,
+          messages: this.topDiagnostics(MAX_SENTRY_DIAGNOSTICS),
+          report: this.lines.join('\n'),
+        },
+      },
+    })
   }
 
   /**
    * The most frequent diagnostics, each prefixed with its occurrence
-   * count, most frequent first.
+   * count, most frequent first. Trimmed per entry as well as capped in
+   * number: installConsoleTee collapses multi-line wasm stack traces
+   * onto one line, so an untrimmed entry can be very long.
    *
    * @param {number} limit how many distinct messages to keep
    * @return {string[]} e.g. ['12× Error processing representation #4', …]
@@ -551,7 +517,7 @@ class LoadProgressReporter {
     return [...this.diagnostics.entries()]
       .sort(([, a], [, b]) => b - a)
       .slice(0, limit)
-      .map(([text, count]) => `${count}× ${text}`)
+      .map(([text, count]) => `${count}× ${ellipsize(text)}`)
   }
 
   /**
@@ -666,19 +632,25 @@ function ellipsize(text) {
  * Numbers collapse to `#` because engine diagnostics are per-entity
  * ("Error processing representation #1234"): the raw text would open a
  * fresh Sentry issue for every entity of every model, which is the
- * per-line flood captureDiagnostics exists to avoid. Normalized, each
- * family of warning gets one issue. An entity marker the message
+ * per-line flood captureLoadDiagnostics exists to avoid. Normalized,
+ * each family of warning gets one issue. An entity marker the message
  * already spelled `#` is swallowed by the same pass rather than
  * doubling up into `##`.
  *
- * @param {string} topText most frequent diagnostic, '' when every
- *   captured message was blank
+ * The pass is deliberately indiscriminate: it also collapses digits
+ * inside identifiers, so "IFC4" titles as "IFC#" and "Revit 2024" as
+ * "Revit #". That costs nothing for grouping — the schema and authoring
+ * tool are already on the event's `load` context and the report — and
+ * keeping them would reopen the per-value split this exists to close.
+ *
+ * @param {string} topText most frequent diagnostic, '' when the console
+ *   tee captured nothing (the counts can come from the engine instead)
  * @return {string}
  */
 function diagnosticsTitle(topText) {
   const normalized = ellipsize(topText.replace(/#?\d+/g, '#')).trim()
   return normalized === '' ?
-    'Load completed with console diagnostics' :
+    'Load completed with diagnostics' :
     `Load diagnostics: ${normalized}`
 }
 
@@ -766,6 +738,72 @@ export function attachLoadFailureContext() {
 
 
 /**
+ * Send one Sentry event for a completed load that reported console or
+ * engine diagnostics (issue #1767), so a dashboard model-open chip with
+ * non-zero errors/warnings has a searchable counterpart to link to.
+ *
+ * The two populations the bizdev dashboard tries to join were close to
+ * disjoint before this. The counts behind each chip come from a load
+ * that *succeeded*, and a successful load produced no Sentry event at
+ * all; the loads that did reach Sentry hard-failed, so they never fired
+ * `real_model_open` and never became a chip. This is the missing
+ * overlap: one event per noisy load, carrying the same client id the
+ * chip does, so the chip's `open_cid:<id>` link resolves to something.
+ *
+ * One event per load, not one per console line. Sentry's
+ * captureConsoleIntegration would do the latter and wasm loaders are
+ * chatty enough that it would flood the project.
+ *
+ * **The counts must be the caller's, not this reporter's.** The obvious
+ * gate — the console tee's own errorCount/warningCount — is the wrong
+ * number on exactly the formats this join is about. What colours a chip
+ * is GA's `stats_errorCount` / `stats_warningCount`, and for IFC/STEP
+ * those are Conway's, not the tee's: ShareIfcLoader publishes them on
+ * `loadStats`, which CadView applies *after* getCompletedLoadStats() so
+ * the engine's numbers win. Gating on the tee would let the two
+ * disagree, and each direction of disagreement is worse than the gap
+ * this closes — a red chip whose Sentry link resolves to nothing, or a
+ * green chip with an issue behind it. Both look like the join working.
+ *
+ * So CadView calls this with the very numbers it is about to send to
+ * GA, from inside the `isRealModelOpen` success branch. That siting is
+ * what makes the other two gates structural rather than flags: only
+ * real opens reach it (never the bundled demo, which loads on every
+ * homepage visit and can never be a chip), and only successes do (a
+ * failure is already reported by that path's captureException, with
+ * this same report attached by attachLoadFailureContext).
+ *
+ * Safe no-op when the load reported nothing, or when no reporter ran.
+ * Reads the reporter *after* endLoadProgress disposed it, which is
+ * deliberate and matches getCompletedLoadStats: dispose stops the
+ * watchdog and restores the console but leaves the report readable.
+ *
+ * @param {object} opts
+ * @param {number} [opts.errorCount] GA `stats_errorCount` for this load
+ * @param {number} [opts.warningCount] GA `stats_warningCount`
+ * @param {string} [opts.contentId] GA `content_id`, tagged so the event
+ *   names the same model as the chip
+ * @param {string} [opts.contentType] GA `content_type`, tagged because
+ *   it is the first filter worth having when triaging these
+ */
+export function captureLoadDiagnostics({
+  errorCount = 0,
+  warningCount = 0,
+  contentId = undefined,
+  contentType = undefined,
+} = {}) {
+  if (errorCount + warningCount === 0 || activeReporter === null) {
+    return
+  }
+  try {
+    activeReporter.captureDiagnostics({errorCount, warningCount, contentId, contentType})
+  } catch (e) {
+    debug().log('loadProgress#captureLoadDiagnostics: ', e)
+  }
+}
+
+
+/**
  * Attach a one-line model summary (products, triangles, units, ...) to the
  * in-flight load report — appended to the Total line at finish. No-op when
  * no load is being reported.
@@ -796,7 +834,7 @@ export function setLoadSummary(text) {
  */
 export function endLoadProgress(error = null) {
   if (activeReporter && !activeReporter.ended) {
-    activeReporter.finishReport(error)
+    activeReporter.finishReport()
     // The collapsed grace line stays deliberately terse — just the outcome
     // and a name; the timing/heap Total and diagnostics live one expand (or
     // the "i" report) away. The snackbar prefers the store's model.name (the
