@@ -173,17 +173,24 @@ export async function setupVirtualPathIntercept(
 }
 
 
+// Enough for every fixture-sized model in this repo. Deliberately not
+// generous: a spec that hangs on a broken load should fail fast. Callers
+// that legitimately need longer — a measurement run against a
+// hundred-megabyte model, or one under CPU throttling — pass their own.
+const MODEL_READY_TIMEOUT = 15000
+
+
 /**
  * Wait for model to be ready after loading
  * Playwright equivalent of cypress/support/models.js waitForModelReady
  *
  * @param page Playwright page object
+ * @param timeoutMs How long to wait for `data-model-ready`
  */
-export async function waitForModelReady(page: Page) {
+export async function waitForModelReady(page: Page, timeoutMs: number = MODEL_READY_TIMEOUT) {
   // Wait for model ready attribute on dropzone (matching working tests)
   const dropzone = page.getByTestId('cadview-dropzone')
-  const MODEL_READY_TIMEOUT = 15000
-  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: MODEL_READY_TIMEOUT})
+  await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: timeoutMs})
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
   await page.waitForTimeout(animWaitTimeMs)
