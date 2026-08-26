@@ -48,6 +48,7 @@
 
 import {isFeatureEnabled} from '../../FeatureFlags'
 import {reportEngineVersion} from '../../loader/loadProgress'
+import {makeBlobByteStore} from '../../loader/opfsSourceByteStore'
 import debug, {WARN} from '../../utils/debug'
 import {attachInstanceMapSubsets} from '../three/elementSubsets'
 import {instanceMapFromGeometry} from './IfcInstanceMap'
@@ -116,7 +117,14 @@ export async function parseIfcWithConway(
   if (typeof ifcAPI.getConwayVersion === 'function') {
     reportEngineVersion(ifcAPI.getConwayVersion())
   }
-  const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+  const store = isBlobSource(buffer) &&
+      !isFeatureEnabled('disableStreamOpen') &&
+      typeof ifcAPI.OpenModelStream === 'function' ?
+    makeBlobByteStore(buffer) :
+    null
+  let data = store === null ?
+    (buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)) :
+    null
   let openSettings = settings ?? {COORDINATE_TO_ORIGIN: true, USE_FAST_BOOLS: true}
   if (onProgress) {
     // ON_MODEL_INFO (conway extension) arrives once, right after the header
@@ -137,9 +145,15 @@ export async function parseIfcWithConway(
   // through to the classic selection below.
   if (isFeatureEnabled('demandGeometry') &&
       !isFeatureEnabled('disableStreamOpen') &&
-      typeof ifcAPI.OpenModelStreamed === 'function' &&
-      typeof ifcAPI.ExtractGeometryBatch === 'function') {
-    const deferSettings = {...openSettings, DEFER_GEOMETRY: true}
+      (typeof ifcAPI.OpenModelStreamed === 'function' ||
+        typeof ifcAPI.OpenModelStream === 'function') &&
+      (typeof ifcAPI.ExtractGeometryBatch === 'function' ||
+        typeof ifcAPI.ExtractGeometryBatchAsync === 'function')) {
+    const deferSettings = {
+      ...openSettings,
+      DEFER_GEOMETRY: true,
+      GEOMETRY_BUDGET_MB: GEOMETRY_BUDGET_MB,
+    }
     if (onPreviewMesh) {
       // Slice A2 (parse-time preview channel): conway emits preview
       // payloads between the parse's cooperative yields. Passing the
@@ -147,8 +161,22 @@ export async function parseIfcWithConway(
       // settings are ignored), so no feature detection is needed here.
       deferSettings.ON_PREVIEW_MESH = onPreviewMesh
     }
-    // eslint-disable-next-line new-cap
-    const modelID = await ifcAPI.OpenModelStreamed(data, deferSettings)
+    let modelID
+    let openData = data
+    if (store !== null) {
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStream(store, deferSettings)
+      if (typeof modelID !== 'number' || modelID < 0) {
+        // IFC-only store path: STEP / failed sniff falls back to a
+        // buffered streamed open (conway#510 contract).
+        openData = await bytesFromSource(buffer)
+        // eslint-disable-next-line new-cap
+        modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
+      }
+    } else {
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStreamed(openData, deferSettings)
+    }
     if (typeof modelID !== 'number' || modelID < 0) {
       throw new Error(`parseIfcWithConway: OpenModel returned ${modelID}`)
     }
@@ -158,12 +186,56 @@ export async function parseIfcWithConway(
     // onto the screen and one that shows nothing until the end-of-load
     // build, and until now the log said nothing either way — a blank
     // 9-second parse and a healthy streaming parse looked identical.
+    //
+    // Conway's deferred open only emits headerParse/dataParse; the
+    // pump never starts a geometry phase. Report one here so the load
+    // log splits Parsing from Geometry (same labels as a classic
+    // extractIFCGeometryData open). elapsedMs omitted: the reporter
+    // stamps wall-clock so we don't fight Conway's parse-relative clock.
     let pumpedBatches = 0
+    let geometryTotal
+    let geometryDone = 0
+    const reportGeometry = (completed, total) => {
+      if (typeof onProgress !== 'function') {
+        return
+      }
+      onProgress({
+        phase: 'geometry',
+        completed,
+        total,
+        unit: 'products',
+      })
+    }
     for (;;) {
       const batch = []
-      // eslint-disable-next-line new-cap
-      const {extracted, remaining} = ifcAPI.ExtractGeometryBatch(
-        modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+      let extracted
+      let remaining
+      if (typeof ifcAPI.ExtractGeometryBatchAsync === 'function') {
+        // Store-backed extract pages each product's #ref closure from
+        // OPFS before extracting it. A 64-product batch serialises
+        // that I/O and holds first pixels until ~halfway through
+        // Geometry; 8 keeps file-order streaming and still amortises
+        // the per-batch scene update.
+        // eslint-disable-next-line new-cap
+        const pumped = await ifcAPI.ExtractGeometryBatchAsync(
+          modelID, ASYNC_DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+        extracted = pumped.extracted
+        remaining = pumped.remaining
+      } else {
+        // eslint-disable-next-line new-cap
+        const pumped = ifcAPI.ExtractGeometryBatch(
+          modelID, DEMAND_EXTRACT_BATCH_SIZE, (flatMesh) => batch.push(flatMesh))
+        extracted = pumped.extracted
+        remaining = pumped.remaining
+      }
+      if (geometryTotal === undefined && (extracted > 0 || remaining > 0)) {
+        geometryTotal = extracted + remaining
+        reportGeometry(0, geometryTotal)
+      }
+      geometryDone += extracted
+      if (geometryTotal !== undefined) {
+        reportGeometry(geometryDone, geometryTotal)
+      }
       if (batch.length > 0) {
         captured.push(...batch)
         pumpedBatches++
@@ -229,7 +301,15 @@ export async function parseIfcWithConway(
   //   3. OpenModel: classic synchronous open (real web-ifc, old pins).
   // All feature-detected, so any engine pin keeps loading.
   let modelID
-  if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
+  if (!isFeatureEnabled('disableStreamOpen') && store !== null) {
+    // eslint-disable-next-line new-cap
+    modelID = await ifcAPI.OpenModelStream(store, openSettings)
+    if (typeof modelID !== 'number' || modelID < 0) {
+      data = await bytesFromSource(buffer)
+      // eslint-disable-next-line new-cap
+      modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
+    }
+  } else if (!isFeatureEnabled('disableStreamOpen') && typeof ifcAPI.OpenModelStreamed === 'function') {
     // eslint-disable-next-line new-cap
     modelID = await ifcAPI.OpenModelStreamed(data, openSettings)
   } else if (typeof ifcAPI.OpenModelAsync === 'function') {
@@ -253,8 +333,66 @@ export async function parseIfcWithConway(
 
 // Products extracted per demand batch: large enough that per-batch
 // capture/render overhead amortizes, small enough that first pixels
-// arrive within a couple of seconds of parse completing.
+// arrive within a couple of seconds of parse completing. The async
+// (store-backed) path is smaller because each product pays OPFS
+// prefetch before extract — see ExtractGeometryBatchAsync above.
+/**
+ * Cap on the native geometry conway keeps resident, in MB, for the deferred
+ * path only. Least-recently-used assets are evicted at each pump batch.
+ *
+ * Measured engine-side on PSB (860 MB) at our batch size: the wasm high-water
+ * falls from 1284 MB to 298 MB, with the geometry stage slightly faster
+ * (23.6s against 25.7s) and identical delivered meshes. 256 MB was also
+ * measured and buys much less (803 MB), because the live set rarely reaches
+ * the ceiling. The heap runs 3-4x the budget — allocator overhead and
+ * fragmentation — so this targets roughly a 300 MB residency, not 64 MB.
+ *
+ * Safe here for one specific reason: eviction frees an asset from
+ * GetGeometry until something re-extracts it, and this loader copies every
+ * payload at delivery (the bldrs-ai/Share#1640 invariant). A change that
+ * made it hold geometry IDs and fetch them later would break quietly, so
+ * that invariant is now load-bearing rather than merely true.
+ *
+ * Ignored by engines predating conway#535 — unknown settings are dropped —
+ * so ordering against the conway bump does not matter.
+ */
+const GEOMETRY_BUDGET_MB = 64
+
 const DEMAND_EXTRACT_BATCH_SIZE = 64
+const ASYNC_DEMAND_EXTRACT_BATCH_SIZE = 8
+
+
+/**
+ * A Blob/File the M1b store-backed open can read via `slice()`.
+ *
+ * @param {unknown} value
+ * @return {boolean}
+ */
+function isBlobSource(value) {
+  return value !== null && value !== undefined &&
+    typeof value.size === 'number' && typeof value.slice === 'function' &&
+    !(value instanceof ArrayBuffer) && !ArrayBuffer.isView(value)
+}
+
+
+/**
+ * Materialise a parse source as a Uint8Array (store-open fallback).
+ *
+ * @param {ArrayBuffer|Uint8Array|Blob} source
+ * @return {Promise<Uint8Array>}
+ */
+async function bytesFromSource(source) {
+  if (source instanceof Uint8Array) {
+    return source
+  }
+  if (source instanceof ArrayBuffer) {
+    return new Uint8Array(source)
+  }
+  if (typeof source?.arrayBuffer === 'function') {
+    return new Uint8Array(await source.arrayBuffer())
+  }
+  throw new Error('parseIfcWithConway: cannot buffer source for fallback open')
+}
 
 
 /**

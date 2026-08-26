@@ -650,21 +650,64 @@ export default class ProgressiveLoadSession {
 
   /** Remove the preview group and dispose its meshes' GPU resources. */
   teardownPreview_() {
-    if (this.previewGroup === null || !this.previewInstalled) {
-      return
-    }
-    try {
-      this.scene.remove(this.previewGroup)
-      for (const child of this.previewGroup.children) {
-        child.geometry?.dispose?.()
-        const materials = Array.isArray(child.material) ? child.material : [child.material]
-        for (const material of materials) {
-          material?.dispose?.()
+    // Preview geometry and materials are SHARED across meshes by design:
+    // parsePreviewMesh pools materials by rgba, keys payload geometry by
+    // geometryExpressID for mapped reuse, and every aabb imposter
+    // instances one unit cube. So disposal collects UNIQUE resources
+    // from every preview object and frees each once — the pre-imposter
+    // per-child dispose would hit shared ones repeatedly, and dropping
+    // disposal outright (this PR's interim state) retained up to the
+    // preview byte cap of uploaded WebGL buffers per load until page
+    // refresh (Codex review on #1753). The caches themselves are
+    // per-load Maps in ShareIfcLoader.parse, so nothing re-uses these
+    // instances after finish/abort.
+    const geometries = new Set()
+    const materials = new Set()
+    const retire = (obj) => {
+      if (obj.geometry !== undefined && obj.geometry !== null) {
+        geometries.add(obj.geometry)
+      }
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+      for (const material of mats) {
+        if (material !== undefined && material !== null) {
+          materials.add(material)
         }
       }
-    } catch (e) {
-      debug(WARN).warn('demand preview teardown failed:', e)
     }
-    this.previewInstalled = false
+    // Imposters must not survive the durable model. Pull any aabb
+    // wire cubes off the scene first — they can leave the preview
+    // group (outlier eviction) and would otherwise stay after finish.
+    if (this.scene !== null && typeof this.scene.traverse === 'function') {
+      const strays = []
+      this.scene.traverse((obj) => {
+        if (obj.userData && obj.userData.aabbImposter) {
+          strays.push(obj)
+        }
+      })
+      for (const obj of strays) {
+        retire(obj)
+        obj.removeFromParent?.()
+      }
+    }
+    if (this.previewGroup !== null && this.previewInstalled) {
+      try {
+        const group = this.previewGroup
+        while (group.children.length > 0) {
+          const child = group.children[0]
+          retire(child)
+          group.remove(child)
+        }
+        this.scene.remove(group)
+      } catch (e) {
+        debug(WARN).warn('demand preview teardown failed:', e)
+      }
+      this.previewInstalled = false
+    }
+    for (const geometry of geometries) {
+      geometry.dispose?.()
+    }
+    for (const material of materials) {
+      material.dispose?.()
+    }
   }
 }

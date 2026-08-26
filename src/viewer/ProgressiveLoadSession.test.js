@@ -157,6 +157,44 @@ describe('ProgressiveLoadSession', () => {
     expect(controls.fits).toHaveLength(1)
   })
 
+  it('finish removes aabb imposters even if they left the preview group', () => {
+    session.addPreviewMesh(cubeAt(0))
+    const stray = cubeAt(5)
+    stray.userData.aabbImposter = true
+    scene.add(stray)
+    expect(scene.children).toContain(stray)
+    session.finish()
+    expect(scene.children).not.toContain(stray)
+    expect(stray.parent).toBeNull()
+  })
+
+  // Codex review on #1753: teardown had lost its dispose pass when the
+  // shared aabb cube arrived, retaining every load's uploaded preview
+  // buffers until page refresh. Resources are pooled across meshes
+  // (parsePreviewMesh caches; the imposter unit cube), so each unique
+  // one must be disposed exactly once — not per mesh, not zero times.
+  it('finish disposes shared preview resources exactly once', () => {
+    const geometry = new BoxGeometry(1, 1, 1)
+    const material = new MeshBasicMaterial()
+    const geometryDispose = jest.spyOn(geometry, 'dispose')
+    const materialDispose = jest.spyOn(material, 'dispose')
+    const shared = (x) => {
+      const mesh = new Mesh(geometry, material)
+      mesh.matrixAutoUpdate = false
+      mesh.matrix = new Matrix4().makeTranslation(x, 0, 0)
+      return mesh
+    }
+    session.addPreviewMesh(shared(0))
+    session.addPreviewMesh(shared(1))
+    const stray = shared(2)
+    stray.userData.aabbImposter = true
+    scene.add(stray)
+    session.finish()
+    expect(geometryDispose).toHaveBeenCalledTimes(1)
+    expect(materialDispose).toHaveBeenCalledTimes(1)
+  })
+
+
   it('abort tears the preview down and lands in aborted', () => {
     session.addPreviewMesh(cubeAt(0))
     session.abort()
