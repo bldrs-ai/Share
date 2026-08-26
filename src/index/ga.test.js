@@ -180,13 +180,15 @@ describe('setupGa', () => {
       expect(values).not.toContain('cid.1234567890.0987654321')
     })
 
-    // A first-ever visitor has no cookie; the callback is their only path.
+    // A first-ever visitor has no cookie; the callback is their only
+    // path. The setup-time sync still runs — it just has no id to
+    // publish, which is the same undefined a retraction writes.
     test('tags from the gtag callback for a first visit', () => {
       setupGa({hostname: 'bldrs.ai', isWebdriver: false})
-      expect(setTag).not.toHaveBeenCalled()
+      expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
 
       window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
-      expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
+      expect(setTag).toHaveBeenLastCalledWith('open_cid', '1234567890.0987654321')
     })
 
     test('does not tag off-prod, where GA never initializes', () => {
@@ -195,12 +197,38 @@ describe('setupGa', () => {
       expect(setTag).not.toHaveBeenCalled()
     })
 
-    test('does not tag when analytics consent is withheld', () => {
+    // undefined is what removes a tag — Sentry drops undefined keys when
+    // it merges scope tags onto an event.
+    test('sends no id when analytics consent is withheld', () => {
       Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
       setIsAllowed(false)
       setupGa({hostname: 'bldrs.ai', isWebdriver: false})
       window.dataLayer.find((entry) => entry?.[0] === 'get')[3]('1234567890.0987654321')
-      expect(setTag).not.toHaveBeenCalled()
+      const values = setTag.mock.calls.filter(([key]) => key === 'open_cid').map(([, value]) => value)
+      expect(values.every((value) => value === undefined)).toBe(true)
+    })
+
+    // Codex review on #1770: gating only the *set* left a previously
+    // published id on Sentry's global scope for the rest of the page's
+    // life, so withdrawal has to clear it — and an event's own tags
+    // merge over the global scope, so even a deliberately cid-less
+    // diagnostics event would have inherited the stale one.
+    test('retracts an already-published tag when consent is withdrawn', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+      expect(setTag).toHaveBeenCalledWith('open_cid', '1234567890.0987654321')
+
+      setIsAllowed(false)
+      expect(setTag).toHaveBeenLastCalledWith('open_cid', undefined)
+    })
+
+    test('republishes the tag when consent is granted again', () => {
+      Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      setIsAllowed(false)
+      setupGa({hostname: 'bldrs.ai', isWebdriver: false})
+
+      setIsAllowed(true)
+      expect(setTag).toHaveBeenLastCalledWith('open_cid', '1234567890.0987654321')
     })
   })
 

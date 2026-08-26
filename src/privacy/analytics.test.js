@@ -1,4 +1,7 @@
+jest.mock('@sentry/react', () => ({setTag: jest.fn()}))
+
 import Cookies from 'js-cookie'
+import {setTag} from '@sentry/react'
 import * as Analytics from './analytics'
 
 
@@ -234,6 +237,51 @@ describe('Analytics', () => {
     test('the Sentry tag name matches the GA param name', () => {
       expect(Analytics.SENTRY_CID_TAG).toBe(Analytics.OPEN_CID_PARAM)
       expect(Analytics.SENTRY_CID_TAG).toBe('open_cid')
+    })
+  })
+
+
+  /*
+   * The tag lives on Sentry's global scope, so it outlives a consent
+   * withdrawal unless something clears it — and an event's own tags
+   * merge over the global scope, so a deliberately cid-less event would
+   * inherit a stale one (Codex review on #1770).
+   */
+  describe('syncSentryCidTag', () => {
+    beforeEach(() => {
+      setTag.mockClear()
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('publishes the bare id when consent allows', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.syncSentryCidTag()
+      expect(setTag).toHaveBeenCalledWith('open_cid', '1871520000.1754700000')
+    })
+
+    // undefined, not null: Sentry's applyScopeDataToEvent runs scope
+    // tags through dropUndefinedKeys, so undefined is what removes the
+    // tag while null would transmit as a literal value.
+    test('retracts with undefined when consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Cookies.set('isAnalyticsAllowed', 'false')
+      Analytics.syncSentryCidTag()
+      expect(setTag).toHaveBeenCalledWith('open_cid', undefined)
+    })
+
+    test('setIsAllowed(false) retracts a tag already published', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.syncSentryCidTag()
+      setTag.mockClear()
+
+      Analytics.setIsAllowed(false)
+      expect(setTag).toHaveBeenCalledWith('open_cid', undefined)
     })
   })
 

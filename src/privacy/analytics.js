@@ -1,4 +1,5 @@
 import Cookies from 'js-cookie'
+import {setTag} from '@sentry/react'
 import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
 import Expires from './Expires'
@@ -29,6 +30,12 @@ export function setIsAllowed(allowed) {
   // index/ga.js has no way to unload the tag it already injected.
   // Withdrawal therefore has to clear it explicitly.
   syncUserCidProperty()
+  // Sentry's global-scope tag is sticky in exactly the same way, and for
+  // a sharper reason: it outlives withdrawal on *every* later event, and
+  // an event's own tags merge OVER the global scope, so even a
+  // deliberately cid-less event (loadProgress#captureDiagnostics) would
+  // still inherit the stale one.
+  syncSentryCidTag()
 }
 
 
@@ -343,6 +350,29 @@ export const SENTRY_CID_TAG = OPEN_CID_PARAM
  */
 export function getOpenCidForSentry() {
   return isAllowed() ? getGaClientId() : null
+}
+
+
+/**
+ * Publish or retract the Sentry `open_cid` tag to match current consent,
+ * the exact counterpart of syncUserCidProperty for the GA user property.
+ *
+ * Both halves matter. The tag lives on Sentry's *global* scope so that
+ * everything captured afterwards carries it — load-failure exceptions
+ * included, which is the point — but that same stickiness means merely
+ * declining to set a new value leaves a previously published id
+ * attached to every later event. Withdrawal has to clear it.
+ *
+ * Retraction sets the tag to `undefined` rather than null, which is what
+ * actually removes it: applyScopeDataToEvent runs the scope's tags
+ * through dropUndefinedKeys before merging, so an undefined value is
+ * omitted from the payload, while null would transmit as a literal.
+ *
+ * Called at init from index/ga.js (twice, tracking the cookie fallback
+ * and the gtag callback) and from setIsAllowed on any consent change.
+ */
+export function syncSentryCidTag() {
+  setTag(SENTRY_CID_TAG, getOpenCidForSentry() ?? undefined)
 }
 
 
