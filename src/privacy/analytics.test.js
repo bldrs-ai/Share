@@ -1,4 +1,7 @@
+jest.mock('@sentry/react', () => ({setTag: jest.fn()}))
+
 import Cookies from 'js-cookie'
+import {setTag} from '@sentry/react'
 import * as Analytics from './analytics'
 
 
@@ -185,6 +188,100 @@ describe('Analytics', () => {
     test('tags the cookie-derived id too', () => {
       Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
       expect(Analytics.getOpenCid()).toBe('cid.1871520000.1754700000')
+    })
+  })
+
+
+  /*
+   * Sentry's half of the same id (issue #1767). Bare, because the
+   * `cid.` prefix only exists to stop GA4 typing the value as a float,
+   * and the dashboard strips it before searching Sentry.
+   */
+  describe('getOpenCidForSentry', () => {
+    beforeEach(() => {
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('null when no client id is available, so the tag is omitted', () => {
+      expect(Analytics.getOpenCidForSentry()).toBeNull()
+    })
+
+    test('is the bare id, not the cid.-prefixed GA param value', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).toBe('1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).not.toBe(Analytics.getOpenCid())
+    })
+
+    test('reads the cookie fallback, so a returning visitor is tagged at first paint', () => {
+      Cookies.set('_ga', 'GA1.1.1871520000.1754700000')
+      expect(Analytics.getOpenCidForSentry()).toBe('1871520000.1754700000')
+    })
+
+    // Fails closed for the same reason syncUserCidProperty does: a
+    // declined visitor must not have an analytics id on their error
+    // reports either.
+    test('null when analytics consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.setIsAllowed(false)
+      expect(Analytics.getOpenCidForSentry()).toBeNull()
+    })
+
+    // Same identifier, and the dashboard builds the Sentry query from
+    // the GA param name.
+    test('the Sentry tag name matches the GA param name', () => {
+      expect(Analytics.SENTRY_CID_TAG).toBe(Analytics.OPEN_CID_PARAM)
+      expect(Analytics.SENTRY_CID_TAG).toBe('open_cid')
+    })
+  })
+
+
+  /*
+   * The tag lives on Sentry's global scope, so it outlives a consent
+   * withdrawal unless something clears it — and an event's own tags
+   * merge over the global scope, so a deliberately cid-less event would
+   * inherit a stale one (Codex review on #1770).
+   */
+  describe('syncSentryCidTag', () => {
+    beforeEach(() => {
+      setTag.mockClear()
+      Analytics._resetGaClientIdForTests()
+      Cookies.remove('_ga')
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    afterEach(() => {
+      Cookies.remove('isAnalyticsAllowed')
+    })
+
+    test('publishes the bare id when consent allows', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.syncSentryCidTag()
+      expect(setTag).toHaveBeenCalledWith('open_cid', '1871520000.1754700000')
+    })
+
+    // undefined, not null: Sentry's applyScopeDataToEvent runs scope
+    // tags through dropUndefinedKeys, so undefined is what removes the
+    // tag while null would transmit as a literal value.
+    test('retracts with undefined when consent is withheld', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Cookies.set('isAnalyticsAllowed', 'false')
+      Analytics.syncSentryCidTag()
+      expect(setTag).toHaveBeenCalledWith('open_cid', undefined)
+    })
+
+    test('setIsAllowed(false) retracts a tag already published', () => {
+      Analytics.setGaClientId('1871520000.1754700000')
+      Analytics.syncSentryCidTag()
+      setTag.mockClear()
+
+      Analytics.setIsAllowed(false)
+      expect(setTag).toHaveBeenCalledWith('open_cid', undefined)
     })
   })
 

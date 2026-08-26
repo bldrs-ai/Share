@@ -1,4 +1,5 @@
 import Cookies from 'js-cookie'
+import {setTag} from '@sentry/react'
 import {assertDefined} from '../utils/assert'
 import {isFeatureEnabled} from '../FeatureFlags'
 import Expires from './Expires'
@@ -29,6 +30,12 @@ export function setIsAllowed(allowed) {
   // index/ga.js has no way to unload the tag it already injected.
   // Withdrawal therefore has to clear it explicitly.
   syncUserCidProperty()
+  // Sentry's global-scope tag is sticky in exactly the same way, and for
+  // a sharper reason: it outlives withdrawal on *every* later event, and
+  // an event's own tags merge OVER the global scope, so even a
+  // deliberately cid-less event (loadProgress#captureDiagnostics) would
+  // still inherit the stale one.
+  syncSentryCidTag()
 }
 
 
@@ -299,6 +306,73 @@ const OPEN_CID_PREFIX = 'cid.'
 export function getOpenCid() {
   const cid = getGaClientId()
   return cid === null ? null : `${OPEN_CID_PREFIX}${cid}`
+}
+
+
+/*
+ * Name of the *Sentry tag* carrying the same client id. Identical to
+ * OPEN_CID_PARAM on purpose: it is the same identifier, the bizdev
+ * dashboard builds its Sentry search URL straight from the GA param
+ * name, and the two live in separate namespaces so there is no
+ * collision to avoid (issue #1767).
+ *
+ * It has to be a tag and not a context field. Sentry indexes tags for
+ * issue search; context values are display-only, so a cid folded into
+ * the `load` context that loadProgress#applySentryLoadState already
+ * sets would be invisible to `open_cid:<id>` queries.
+ */
+export const SENTRY_CID_TAG = OPEN_CID_PARAM
+
+
+/**
+ * The SENTRY_CID_TAG value for this client: the *bare* client id, not
+ * the `cid.`-prefixed getOpenCid form. That prefix exists purely to stop
+ * GA4 typing a numeric-looking id as a float (see OPEN_CID_PREFIX);
+ * Sentry stores tag values as strings and has no such problem, and the
+ * dashboard strips the prefix before building the search URL — so bare
+ * is what makes the two ids compare equal.
+ *
+ * Null when no id has resolved, and null when analytics consent is
+ * withheld: a cid is an analytics identifier, so a visitor who declined
+ * must not have one stapled to their error reports either. Same reason
+ * syncUserCidProperty retracts the GA user property, and read from
+ * isAllowed() here for the same fail-closed reason. Callers must omit
+ * the tag rather than send a blank.
+ *
+ * Coverage is structurally partial and will stay that way: a client
+ * that blocks GA never resolves a cid, and per the triage notes in
+ * index/sentry.js that ad-blocked emerging-markets mobile cohort is
+ * this project's single largest source of Sentry events. An empty
+ * search result therefore cannot distinguish "this user hit no errors"
+ * from "this user had no cid".
+ *
+ * @return {string|null}
+ */
+export function getOpenCidForSentry() {
+  return isAllowed() ? getGaClientId() : null
+}
+
+
+/**
+ * Publish or retract the Sentry `open_cid` tag to match current consent,
+ * the exact counterpart of syncUserCidProperty for the GA user property.
+ *
+ * Both halves matter. The tag lives on Sentry's *global* scope so that
+ * everything captured afterwards carries it — load-failure exceptions
+ * included, which is the point — but that same stickiness means merely
+ * declining to set a new value leaves a previously published id
+ * attached to every later event. Withdrawal has to clear it.
+ *
+ * Retraction sets the tag to `undefined` rather than null, which is what
+ * actually removes it: applyScopeDataToEvent runs the scope's tags
+ * through dropUndefinedKeys before merging, so an undefined value is
+ * omitted from the payload, while null would transmit as a literal.
+ *
+ * Called at init from index/ga.js (twice, tracking the cookie fallback
+ * and the gtag callback) and from setIsAllowed on any consent change.
+ */
+export function syncSentryCidTag() {
+  setTag(SENTRY_CID_TAG, getOpenCidForSentry() ?? undefined)
 }
 
 

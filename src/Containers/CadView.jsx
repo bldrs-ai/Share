@@ -23,6 +23,7 @@ import {load} from '../loader/Loader'
 import {
   attachLoadFailureContext,
   beginLoadProgress,
+  captureLoadDiagnostics,
   endLoadProgress,
   getCompletedLoadStats,
   reportFramingExclusion,
@@ -612,6 +613,19 @@ export default function CadView({
       // keeps it in the text slot; see analytics#getLocalHour.
       eventParams[LOCAL_HOUR_PARAM] = getLocalHour()
       gtagEvent('real_model_open', eventParams)
+      // Give a chip with non-zero errors/warnings a Sentry event to link
+      // to (issue #1767). Gated on the very counts just assembled above,
+      // because those are what colour the chip — for IFC/STEP they are
+      // Conway's, applied over the reporter's console-tee fallbacks a few
+      // lines up, so gating on the tee would let the event and the chip
+      // disagree. Siting the call here is also what keeps it to real,
+      // successful opens. See loadProgress#captureLoadDiagnostics.
+      captureLoadDiagnostics({
+        errorCount: eventParams.stats_errorCount,
+        warningCount: eventParams.stats_warningCount,
+        contentId: eventParams.content_id,
+        contentType: eventParams.content_type,
+      })
       stopModelEngagementRef.current = startModelEngagement({
         content_type: eventParams.content_type,
         content_id: eventParams.content_id,
