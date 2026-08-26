@@ -389,29 +389,57 @@ export default class ShareIfcLoader {
       // there is no monolithic end-of-load build and no swap. Falls
       // back to the render-only preview mesh (and the end-of-load
       // builds below) on any builder failure.
-      const onMeshBatch = !usePreview ? undefined : (batch, batchModelID) => {
-        try {
-          if (builder === null) {
-            builder = new IncrementalBatchedBuilder(ifcAPI, batchModelID, {
-              onBounds: (box) => session.notifyBounds(box),
-              coordination,
-            })
-            scene.add(builder.root)
-          }
-          builder.appendBatch(batch)
-        } catch (e) {
-          debug(WARN).warn('incremental batch append failed; preview fallback:', e)
+      // The engine that can resolve a batch's geometry. Normally the
+      // model's own IfcAPI; when the geometry worker pool ran it is the
+      // adapter over the payloads the workers copied out of THEIR wasm
+      // heaps, which is the only thing on this thread that can read them.
+      // Every geometry builder below has to use this rather than `ifcAPI`.
+      let geometryApi = ifcAPI
+
+      const onMeshBatch = !usePreview ? undefined :
+        (batch, batchModelID, batchApi = ifcAPI) => {
           try {
-            const assembled = flatMeshToBufferGeometry(batch, ifcAPI, batchModelID)
-            session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
-          } catch (previewError) {
-            debug(WARN).warn('demand preview batch skipped:', previewError)
+            if (builder === null) {
+              builder = new IncrementalBatchedBuilder(batchApi, batchModelID, {
+                onBounds: (box) => session.notifyBounds(box),
+                coordination,
+              })
+              scene.add(builder.root)
+            }
+            builder.appendBatch(batch)
+          } catch (e) {
+            debug(WARN).warn('incremental batch append failed; preview fallback:', e)
+            try {
+              const assembled = flatMeshToBufferGeometry(batch, batchApi, batchModelID)
+              session.addPreviewMesh(new Mesh(assembled.geometry, assembled.materials))
+            } catch (previewError) {
+              debug(WARN).warn('demand preview batch skipped:', previewError)
+            }
           }
         }
+
+      // Only the geometry worker pool calls this, and only when it fails
+      // part-way: whatever it already placed came from payloads the
+      // main-thread pump cannot resolve, so the partial group is removed and
+      // the builder rebuilt from the pump's own batches. Leaving it would
+      // draw those products twice, from two engines.
+      const onGeometryReset = () => {
+        if (builder === null) {
+          return
+        }
+        try {
+          scene.remove(builder.root)
+        } catch (e) {
+          debug(WARN).warn('geometry reset could not detach the partial group:', e)
+        }
+        builder = null
       }
 
-      const {modelID, captured} =
-        await parseIfcWithConway(buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh)
+      const parsed = await parseIfcWithConway(
+        buffer, ifcAPI, undefined, onProgress, onMeshBatch, onPreviewMesh,
+        onGeometryReset)
+      const {modelID, captured} = parsed
+      geometryApi = parsed.geometryApi ?? ifcAPI
 
       session.beginAssembly()
 
@@ -425,6 +453,9 @@ export default class ShareIfcLoader {
       if (builder !== null && builder.hasContent()) {
         try {
           const incremental = builder.finalize()
+          // ifcAPI, not geometryApi: the batches already hold resolved
+          // geometry, and what this binds is the model's property and
+          // spatial closures, which only the real engine can serve.
           ifcModel = assembleBatchedModel(
             incremental.batches, ifcAPI, modelID, {scene, root: builder.root})
           buildStats = incremental.stats
@@ -444,7 +475,8 @@ export default class ShareIfcLoader {
       // path on any construction error so the flag can never break a load.
       if (ifcModel === undefined && isFeatureEnabled('batchedMesh')) {
         try {
-          const batched = buildBatchedConwayModel(captured, ifcAPI, modelID, {scene})
+          const batched =
+            buildBatchedConwayModel(captured, ifcAPI, modelID, {scene, geometryApi})
           ifcModel = batched.model
           buildStats = batched.stats
         } catch (e) {
@@ -452,7 +484,7 @@ export default class ShareIfcLoader {
         }
       }
       if (ifcModel === undefined) {
-        const merged = buildConwayIfcModel(captured, ifcAPI, modelID)
+        const merged = buildConwayIfcModel(captured, ifcAPI, modelID, {geometryApi})
         ifcModel = merged.mesh
         buildStats = merged.stats
         decorateConwayDirectIfcModel(ifcModel, ifcAPI, modelID, {scene})
@@ -562,7 +594,9 @@ export default class ShareIfcLoader {
       // vertex-memory delta. Logged under verbose normally; forced to info
       // level when `?feature=batchedMesh` is on so the eval shows the
       // numbers alongside what just rendered as a BatchedMesh.
-      logInstancedModelStats(ifcAPI, modelID, captured, isFeatureEnabled('batchedMesh'))
+      // geometryApi, not ifcAPI: this walks `captured`'s geometry, which the
+      // worker pool holds in its payload adapter rather than in the model.
+      logInstancedModelStats(geometryApi, modelID, captured, isFeatureEnabled('batchedMesh'))
       // Always-on integration-boundary log. `conwayDirect.spec.ts`
       // (and the deploy-preview smoke checks) gate on `[conwayDirect]
       // parsed modelID=…` firing — it's the single observable signal
