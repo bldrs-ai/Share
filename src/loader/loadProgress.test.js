@@ -5,12 +5,15 @@ jest.mock('@sentry/react', () => ({
   setTag: jest.fn(),
 }))
 
+import Cookies from 'js-cookie'
 import {captureMessage, setContext, setTag} from '@sentry/react'
+import {_resetGaClientIdForTests} from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {
   STALL_TIMEOUT_MS,
   attachLoadFailureContext,
   beginLoadProgress,
+  captureLoadDiagnostics,
   endLoadProgress,
   getCompletedLoadStats,
   isModelInfoProgress,
@@ -385,6 +388,168 @@ describe('loadProgress', () => {
         fileInfo: 'index.ifc',
         report: expect.stringContaining('Share v'),
       }))
+    })
+
+    /*
+     * The end-of-load diagnostics event (issue #1767): the counterpart
+     * a dashboard model-open chip with non-zero errors/warnings links
+     * to. CadView drives it from inside the real_model_open branch, so
+     * the counts here are the GA stats_* ones that colour the chip —
+     * NOT the console tee's, which disagree with them on IFC/STEP.
+     */
+    describe('captureLoadDiagnostics', () => {
+      /** @return {Array} the [message, context] of the diagnostics capture */
+      function diagnosticsCall() {
+        return captureMessage.mock.calls.find(([, arg]) => typeof arg === 'object' && arg !== null)
+      }
+
+      beforeEach(() => {
+        _resetGaClientIdForTests()
+        // The tag value comes from the real analytics module, whose
+        // cookie fallback is what a returning visitor has.
+        Cookies.set('_ga', 'GA1.1.1234567890.0987654321')
+      })
+
+      afterEach(() => {
+        Cookies.remove('_ga')
+        Cookies.remove('isAnalyticsAllowed')
+      })
+
+      it('sends one event per noisy load, tagged with the bare cid, content_id and type', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'gdrive:abc123'})
+        console.warn('No basis found for brep!')
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({
+          warningCount: 2,
+          contentId: 'https://drive/abc123',
+          contentType: 'ifc',
+        })
+
+        const [message, context] = diagnosticsCall()
+        expect(message).toBe('Load diagnostics: No basis found for brep!')
+        // Warnings only — nothing here failed.
+        expect(context.level).toBe('warning')
+        // Bare id: the GA param's `cid.` prefix would not match the
+        // dashboard's Sentry query.
+        expect(context.tags.open_cid).toBe('1234567890.0987654321')
+        expect(context.tags.content_id).toBe('https://drive/abc123')
+        expect(context.tags.content_type).toBe('ifc')
+        expect(context.contexts.loadDiagnostics).toEqual(expect.objectContaining({
+          warningCount: 2,
+          errorCount: 0,
+          consoleDistinct: 1,
+          consoleTotal: 2,
+          messages: ['2× No basis found for brep!'],
+          report: expect.stringContaining('Share v'),
+        }))
+        warnSpy.mockRestore()
+      })
+
+      it('raises the level to error when the load reported errors', () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.stp'})
+        console.error('CDT Exception (hemisphere: 0)')
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 1})
+
+        expect(diagnosticsCall()[1].level).toBe('error')
+        errorSpy.mockRestore()
+      })
+
+      it('stays silent when the load reported no errors or warnings', () => {
+        beginLoadProgress({fileInfo: 'index.ifc'})
+        reportLoadProgress({phase: 'geometry', completed: 1, total: 1, elapsedMs: 5})
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 0, warningCount: 0})
+        expect(captureMessage).not.toHaveBeenCalled()
+      })
+
+      /*
+       * The bug this gating shape exists to prevent (PR #1770 review).
+       * On IFC/STEP the chip is coloured by Conway's counts, which
+       * ShareIfcLoader publishes on loadStats and CadView applies over
+       * the reporter's console-tee fallbacks. A tee-gated capture would
+       * disagree with the chip in both directions.
+       */
+      it('fires on engine counts even when the console tee caught nothing', () => {
+        beginLoadProgress({fileInfo: 'index.ifc'})
+        endLoadProgress()
+        captureLoadDiagnostics({errorCount: 4, contentType: 'ifc'})
+
+        const [message, context] = diagnosticsCall()
+        // No console text to name a family by, so the title stays generic.
+        expect(message).toBe('Load completed with diagnostics')
+        expect(context.contexts.loadDiagnostics).toEqual(expect.objectContaining({
+          errorCount: 4,
+          consoleTotal: 0,
+          messages: [],
+        }))
+      })
+
+      it('stays silent when the engine reports clean but the console was chatty', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'index.ifc'})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        // Conway said zero, so the chip is green — no event behind it.
+        captureLoadDiagnostics({errorCount: 0, warningCount: 0, contentType: 'ifc'})
+        expect(captureMessage).not.toHaveBeenCalled()
+        warnSpy.mockRestore()
+      })
+
+      // Sentry groups a message event by its text, and engine
+      // diagnostics are per-entity, so the digits have to go or every
+      // entity of every model opens its own issue.
+      it('groups by message family, collapsing per-entity numbers', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        console.warn('Error processing representation #1204')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+        expect(diagnosticsCall()[0]).toBe('Load diagnostics: Error processing representation #')
+        warnSpy.mockRestore()
+      })
+
+      it('caps both the number of messages and the length of each', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        const distinctCount = 200
+        const overlongChars = 300
+        beginLoadProgress({fileInfo: 'Arty_Z7_PCB.stp'})
+        for (let i = 0; i < distinctCount; i++) {
+          console.warn(`Error processing representation #${i}`)
+        }
+        // A collapsed wasm stack trace: one very long line.
+        console.warn(`stack ${'x'.repeat(overlongChars)}`)
+        console.warn(`stack ${'x'.repeat(overlongChars)}`)
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: distinctCount + 2})
+
+        const {loadDiagnostics} = diagnosticsCall()[1].contexts
+        const maxCarried = 25
+        const maxEntryChars = 90
+        expect(loadDiagnostics.messages).toHaveLength(maxCarried)
+        // Most frequent first, and trimmed.
+        expect(loadDiagnostics.messages[0]).toMatch(/^2× stack x+…$/)
+        expect(Math.max(...loadDiagnostics.messages.map((m) => m.length)))
+          .toBeLessThan(maxEntryChars)
+        // The true totals still ride along.
+        expect(loadDiagnostics.consoleDistinct).toBe(distinctCount + 1)
+        expect(loadDiagnostics.consoleTotal).toBe(distinctCount + 2)
+        warnSpy.mockRestore()
+      })
+
+      it('omits the cid tag when analytics consent is withheld', () => {
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+        Cookies.set('isAnalyticsAllowed', 'false')
+        beginLoadProgress({fileInfo: 'index.ifc'})
+        console.warn('No basis found for brep!')
+        endLoadProgress()
+        captureLoadDiagnostics({warningCount: 1})
+        expect(diagnosticsCall()[1].tags).not.toHaveProperty('open_cid')
+        warnSpy.mockRestore()
+      })
     })
 
     it('ignores straggler progress after endLoadProgress', () => {

@@ -1,5 +1,5 @@
 import {captureException} from '@sentry/react'
-import {setGaClientId, setUserCidProperty} from '../privacy/analytics'
+import {setGaClientId, setUserCidProperty, syncSentryCidTag} from '../privacy/analytics'
 import {isFeatureEnabled} from '../FeatureFlags'
 
 
@@ -94,6 +94,13 @@ export default function setupGa(env = undefined) {
     // callback below is the only path that works for a first-ever
     // visitor, who has no cookie for either parser to read.
     setUserCidProperty()
+    // The Sentry half of the same id, on the same two-call shape and for
+    // the same reason: this one reads the `_ga` cookie, so a *returning*
+    // visitor's tag is in place from first paint and a load-failure
+    // exception thrown before gtag/js resolves still carries it. It is
+    // the only join between Sentry and the bizdev dashboard's model-open
+    // chips (issue #1767); see analytics#syncSentryCidTag.
+    syncSentryCidTag()
     // Ask GA for this browser's client id so model-open events can
     // carry it as open_cid (see privacy/analytics#setGaClientId for
     // why). The call buffers in dataLayer like any other gtag call and
@@ -105,6 +112,7 @@ export default function setupGa(env = undefined) {
       // The only path that works for a first-ever visitor, who had no
       // cookie for the call above to read.
       setUserCidProperty()
+      syncSentryCidTag()
     })
   } catch (err) {
     captureException(err, {tags: {subsystem: 'ga_init'}})
