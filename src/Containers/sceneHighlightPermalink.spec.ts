@@ -1,7 +1,7 @@
 import {expect, test} from '@playwright/test'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
-import {captureGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
 
 
 /**
@@ -116,7 +116,7 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     // cache-hit specs wait on.
     await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_WRITE_TIMEOUT_MS)
 
-    glbLogs.length = 0
+    resetGlbLogs(glbLogs)
     await page.reload({waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
     // Prove the reload actually served the artifact. Waiting for a `.glb` to
@@ -183,20 +183,28 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     // Selection restored from the URL on the cache-hit load too, with a
     // live merged-path highlight.
     expect(hit.selectedElements).toEqual(['2867'])
-    // Highlight counted across BOTH render paths, exactly as the live-path
-    // test above does. The merged path exposes it as
-    // `viewer._conwaySelectionSubsets`, the batched/incremental path — which
-    // is the default — as per-batch `userData.batchedHighlight.selSet`.
-    // Asserting only the merged counter reported 0 on a model that was
-    // highlighting perfectly well.
+    // Pin the render path FIRST, because the alignment assertion below is
+    // vacuous without it. `misaligned` only counts inside a traverse guarded
+    // by `if (!o.isMesh || !o.instanceMap) return`, so `misaligned === 0` is
+    // satisfied for free by `meshes === 0` — and an OR across both paths would
+    // permit exactly that.
+    //
+    // On a cache HIT the model comes out of `GLTFLoader` (`swapToGlbLoader`),
+    // which cannot emit a `BatchedMesh`; `restoreCacheHitPicking` then attaches
+    // one `IfcInstanceMap` per child Mesh. So this leg is the merged path, and
+    // `meshes` is the picking table this test is named after being present at
+    // all. Measured on the fixture: 16 meshes, 0 batched, 1 merged subset.
+    expect(hit.meshes, 'cache-hit model carried no per-mesh instanceMap').toBeGreaterThan(0)
+    // Selection restored on the merged path, exposed as
+    // `viewer._conwaySelectionSubsets`. (Counted together with the batched
+    // path's `userData.batchedHighlight.selSet` so this reads the same as the
+    // live-path test above, where the batched path is the one that runs.)
     expect(hit.batchedSelSetTotal + hit.mergedSubsets).toBeGreaterThan(0)
-    // Geometry is actually present on whichever path built it.
-    expect(hit.batchedMeshes + hit.meshes).toBeGreaterThan(0)
-    // The picking tables agree with the geometry on every triangle — fails
-    // if the BVH build ever goes back to permuting the index in place. Only
-    // the merged path carries per-mesh `instanceMap`, so on the batched path
-    // this is vacuously satisfied; the invariant is additionally pinned by
-    // `Loader.restoreCacheHitPicking.test.js`.
+    // The picking tables agree with the geometry on every triangle — fails if
+    // the BVH build ever goes back to permuting `geometry.index` in place
+    // after the per-triangle maps are built (#1639). The `meshes > 0` gate
+    // above is what keeps this loop from being skipped entirely; the invariant
+    // is additionally pinned by `Loader.restoreCacheHitPicking.test.js`.
     expect(hit.misaligned).toBe(0)
   })
 })

@@ -5,10 +5,10 @@ import {
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
-import {captureGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 
 
-const {afterEach, beforeEach, describe} = test
+const {beforeEach, describe} = test
 
 
 /**
@@ -34,17 +34,14 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-  })
-
-  // Belt-and-suspenders: each test's BrowserContext is per-test under
-  // `fullyParallel: true`, so OPFS is naturally fresh — but if a test
-  // run is interrupted mid-write (kill -9, CI timeout), the next run
-  // on the same worker could see a half-written artifact. Clearing
-  // after every test in this describe block makes the populate→hit
-  // pattern's first-half always start from a known-empty state.
-  afterEach(async ({page}) => {
+    // Belt-and-suspenders, and deliberately BEFORE rather than after: each
+    // test gets a fresh `BrowserContext` and Chromium partitions OPFS per
+    // context, so this is normally a no-op. The case it is insurance against —
+    // a run interrupted mid-write — is exactly the case where an `afterEach`
+    // does not execute, so clearing afterwards could not have provided it.
     await clearOpfs(page)
   })
+
 
   // Un-skipped in bldrs-ai/Share#1779. These ran green for the first time
   // once the `expect.poll` fix above landed and OPFS was enabled under
@@ -79,7 +76,7 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     // hit AND select an element so the Properties panel has something
     // to render. Reset log buffer so the second-load assertions don't
     // see the first load's lines.
-    glbLogs.length = 0
+    resetGlbLogs(glbLogs)
     await page.goto('/share/v/p/index.ifc/81/621?feature=glbVerbose')
     await waitForModelReady(page)
     await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
@@ -88,8 +85,15 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     // time — confirms the closure was attached. (The lazy-decode log
     // is gated on first call to getItemProperties; the Properties
     // panel open below triggers it.)
-    expect(glbLogs.some((l) =>
-      l.includes('hydrated Properties panel from BLDRS_element_properties'))).toBe(true)
+    //
+    // A wait, not a bare `.some()`: this line is emitted AFTER the `cache HIT`
+    // above, and console events reach the Node-side buffer asynchronously over
+    // CDP with no flush barrier — so the poll can return on `cache HIT` before
+    // this one has been dispatched. A synchronous read there is a false-failure
+    // flake, and this is the only assertion in the file guarding the
+    // element-properties closure attachment.
+    await waitForGlbLog(
+      glbLogs, 'hydrated Properties panel from BLDRS_element_properties', CACHE_TIMEOUT)
 
     // Open the Properties panel — opening triggers the first
     // `model.getItemProperties(expressID)` call, which inflates the

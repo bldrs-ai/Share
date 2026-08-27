@@ -73,20 +73,36 @@ opens (`isDialogDisplayed` → true), so the entry is visible immediately withou
 without OPFS they could only ever have tested a live parse.
 
 The flag is compile-time and all-or-nothing (`store/BrowserSlice.js` hard-gates the setter), so it
-cannot be enabled per-spec. Two consequences worth knowing:
+cannot be enabled per-spec. Four consequences worth knowing:
 
-- Per-test isolation comes from Playwright's fresh `BrowserContext`, not from anything the app does.
-  A spec that populates the cache and then reloads should still `clearOpfs` in `afterEach` — see
-  `NavTree.cacheHit.spec.ts` — so an interrupted run can't leave an artifact a later test reads as a
-  hit.
+- **It changes every model-loading spec, not just the cache-hit ones.** `Loader.js#load` gates the
+  whole OPFS block on `isOpfsAvailable`, so turning the flag on also turns on, suite-wide: the model
+  fetch moving into `OPFS.worker.js` (see "Intercept model fetches" below); a full GLTFExporter +
+  gzip + OPFS write scheduled on `requestIdleCallback` at the tail of every load, fire-and-forget and
+  often still in flight when the context closes; and `spillModelSource` + `ReleaseModelGeometry`,
+  which free Conway's native geometry mid-test. A spec that picks, isolates or screenshots late is
+  running against a materially different runtime state than it was written against. If a spec starts
+  failing after touching this flag, that is the first place to look.
+- Per-test isolation comes from Playwright's fresh `BrowserContext`, not from anything the app does —
+  Chromium partitions OPFS per context, and a retry gets a fresh context too. A spec that populates
+  the cache and then reloads can still `clearOpfs`, but put it in `beforeEach`: the case it insures
+  against is a run interrupted mid-write, which is exactly the case where an `afterEach` never runs.
 - Waiting on a `[glb]` console line is the way to observe cache state (`cache HIT`, `writer: wrote`).
   Use `waitForGlbLog` from `src/tests/e2e/glbLogs.ts` and **not** `page.waitForFunction(pred, {logs})`
   — that serialises its argument into the page once, so Node-side pushes never reach the predicate and
-  the wait can only succeed if the line already arrived. Three specs were `fixme`'d for years on
-  exactly that mistake (#1779).
+  the wait can only succeed if the line already arrived. Two specs sat `fixme`'d on exactly that
+  mistake, and a third was written already-`fixme`'d beside them, for five weeks (#1779).
+- Wait for `writer: wrote`, never for a `.glb` to appear in OPFS. The file exists from creation, so
+  the existence check is satisfied while the artifact is still half-written and the reload then reads
+  it as a `cache MISS`.
 
 **Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
-from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.
+from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request. Note that
+with OPFS on, the model fetch is issued from `OPFS.worker.js`, not the page — so page-level
+`context.route` handlers (`setupVirtualPathIntercept`'s own, and `blockExternalNetwork`'s
+real-network guard) are not the mechanism keeping it hermetic; MSW's service worker is. Gate
+navigation on the service worker being active (`visitHomepageWaitForModel` does; a bare `page.goto`
+does not) before assuming a fixture will be served.
 
 **Screenshot goldens**: A new `expectScreen(page, 'Name.png')` test has no baseline, so it fails until
 you generate one:

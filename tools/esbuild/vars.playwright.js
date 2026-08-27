@@ -31,6 +31,16 @@ export default {
   // navigation on a network response, where a DOM-state gate
   // (`data-model-ready`, which `waitForModelReady` already uses) is correct
   // whether the bytes come from the network, a worker, or a cache.
+  //
+  // What the flip changes suite-wide, beyond the cache-hit specs, because
+  // `Loader.js#load` gates the whole OPFS block on `isOpfsAvailable`: the
+  // model fetch moves into `OPFS.worker.js` (so page-level `context.route`
+  // handlers are no longer what keeps a GitHub-model spec hermetic — MSW's
+  // service worker is); a GLTFExporter + gzip + OPFS write is scheduled on
+  // `requestIdleCallback` at the tail of EVERY load; and `spillModelSource`
+  // + `ReleaseModelGeometry` free Conway's native geometry mid-test. None of
+  // that ran under Playwright before. It is the first thing to suspect if a
+  // spec unrelated to caching starts failing.
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
 }

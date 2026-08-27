@@ -5,41 +5,85 @@ import {
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
-import {captureGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 
 
-const {afterEach, beforeEach, describe} = test
+const {beforeEach, describe} = test
 
 
-// Rounds of expansion, so a nested tree opens fully rather than one level.
-const EXPAND_ROUNDS = 6
-const EXPAND_SETTLE_MS = 400
+// Upper bound on toggles clicked. One click per iteration (see below), so this
+// is a click budget, not a depth: generous enough to open the whole mounted
+// window of either fixture, small enough that a runaway can't eat the timeout.
+const MAX_EXPAND_CLICKS = 40
+const EXPAND_SETTLE_MS = 150
+// Distinct labels a real hierarchy must beat. The bug this guards produces a
+// root whose children repeat the root's own name, so DISTINCT labels — not
+// rows — is the discriminant; see the count assertion for why.
+const MIN_DISTINCT_LABELS = 5
+
+
+const COLLAPSED_TOGGLE =
+  '[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]'
 
 
 /**
- * Expand every open-able NavTree node, repeatedly, so descendants render.
+ * Expand NavTree nodes until nothing mounted is still collapsed.
  *
- * Clicks are dispatched in-page rather than through `locator.click()`: the
- * toggles sit over a live canvas that keeps the compositor busy, and
- * Playwright's actionability wait times out against it on a GPU-less runner
- * even though the element is perfectly clickable.
+ * Two things this has to work around, neither obvious:
+ *
+ *   - **One click per turn, not a batch.** `NavTreePanel`'s `handleToggle`
+ *     closes over the render-time `expandedNodeIds` and calls
+ *     `setExpandedNodeIds([...expandedNodeIds, nodeId])`, and
+ *     `NavTreeSlice.setExpandedElements` REPLACES the array. Dispatching N
+ *     clicks in one synchronous task gives every handler the same stale
+ *     snapshot and the last write wins, so a batch of N expands exactly one
+ *     node. Clicking one at a time with a settle between lets React re-render
+ *     and the next click read fresh state.
+ *   - **Clicks are dispatched in-page** rather than through `locator.click()`:
+ *     the toggles sit over a live canvas that keeps the compositor busy, and
+ *     Playwright's actionability wait times out against it on a GPU-less
+ *     runner even though the element is perfectly clickable.
+ *
+ * Termination is bounded by what is MOUNTED: the panel renders through
+ * `react-window`'s `VariableSizeList`, so rows below the fold are absent from
+ * the DOM and their collapsed state is invisible here. This opens the visible
+ * window, which is all the assertions below need — it is not a whole-tree
+ * expansion and shouldn't be read as one.
  *
  * @param panel locator for the NavTree panel
  */
 async function expandTree(panel: Locator) {
-  for (let round = 0; round < EXPAND_ROUNDS; round++) {
-    // Only the toggles of nodes still marked collapsed. Clicking every toggle
-    // each round would re-close what the previous round opened, so the tree
-    // oscillates instead of opening monotonically and the final count depends
-    // on which round happened to land last.
-    const collapsed = panel.locator(
-      '[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]')
-    if (await collapsed.count() === 0) {
+  for (let click = 0; click < MAX_EXPAND_CLICKS; click++) {
+    const next = panel.locator(COLLAPSED_TOGGLE).first()
+    if (await next.count() === 0) {
       break
     }
-    await collapsed.evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()))
+    await next.evaluate((e) => (e as HTMLElement).click())
     await panel.page().waitForTimeout(EXPAND_SETTLE_MS)
   }
+}
+
+
+/**
+ * Assert the panel shows a real hierarchy rather than the #1776 fallback.
+ *
+ * Counts DISTINCT `data-node-label` values, not rows. Two reasons rows are the
+ * wrong measure: the list is virtualized, so the row count saturates at the
+ * viewport (~25-30 at the config's 1280x800) and no threshold above that is
+ * even expressible; and the failure being guarded — `Loader.js`'s
+ * `ifcManager.getSpatialStructure = () => model` fallback walking the GLB
+ * scene graph — emits a root whose children carry the root's own name, which
+ * is plenty of ROWS and one label.
+ *
+ * @param panel locator for the NavTree panel
+ */
+async function expectRealHierarchy(panel: Locator) {
+  const labels = await panel.locator('[data-node-label]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('data-node-label')))
+  const distinct = new Set(labels).size
+  expect(distinct, `expanded tree had ${distinct} distinct label(s) over ` +
+    `${labels.length} row(s): ${JSON.stringify(labels)}`)
+    .toBeGreaterThanOrEqual(MIN_DISTINCT_LABELS)
 }
 
 
@@ -77,13 +121,13 @@ describe('View 100: NavTree on cache-hit GLB', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-  })
-
-  // Belt-and-suspenders: per-test BrowserContext isolation already
-  // gives fresh OPFS, but clearing after every test in this describe
-  // block defends against an interrupted run leaving a partial
-  // artifact behind that a subsequent test would read as HIT.
-  afterEach(async ({page}) => {
+    // Belt-and-suspenders, and deliberately BEFORE rather than after: each
+    // test gets a fresh `BrowserContext` and Chromium partitions OPFS per
+    // context, so this is normally a no-op. The case it is insurance against —
+    // a run interrupted mid-write — is exactly the case where an `afterEach`
+    // does not execute, so clearing afterwards could not have provided it.
+    // Clearing here guarantees the populate half starts from a known-empty
+    // store whatever preceded it.
     await clearOpfs(page)
   })
 
@@ -113,7 +157,7 @@ describe('View 100: NavTree on cache-hit GLB', () => {
 
     // Second load: cache HIT — spatial-tree extension provides the
     // NavTree data without a live IFC parser. Reset log buffer.
-    glbLogs.length = 0
+    resetGlbLogs(glbLogs)
     await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
     await waitForModelReady(page)
     await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
@@ -134,19 +178,13 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     const treeItems = navTreePanel.locator('[data-node-label]')
     await expect(treeItems.first()).toBeVisible()
 
-    // The tree renders collapsed, so counting without expanding sees exactly
+    // The tree renders collapsed, so measuring without expanding sees exactly
     // the root — which is also what the bug this guards against produced. In
     // bldrs-ai/Share#1776 the cache-hit tree was the GLB scene graph walked by
     // `Loader.js`'s fallback, a root whose children repeat the root's own
     // name. Expanding is what tells the two apart.
     await expandTree(navTreePanel)
-    const itemCount = await treeItems.count()
-    const MIN_TREE_ITEMS = 5
-    expect(itemCount,
-      `expanded tree had ${itemCount} node(s): ` +
-        `${JSON.stringify(await treeItems.evaluateAll(
-          (els) => els.map((e) => e.getAttribute('data-node-label'))))}`)
-      .toBeGreaterThan(MIN_TREE_ITEMS)
+    await expectRealHierarchy(navTreePanel)
   })
 
   // Worth having as its own test rather than a parameterisation of the one
@@ -173,7 +211,7 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT)
     expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
 
-    glbLogs.length = 0
+    resetGlbLogs(glbLogs)
     await page.goto('/share/v/p/index.step?feature=glbVerbose')
     await waitForModelReady(page)
     await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
@@ -187,5 +225,14 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     const navTreePanel = page.getByTestId('NavTreePanel')
     await expect(navTreePanel).toBeVisible()
     await expect(navTreePanel.locator('[data-node-label]').first()).toBeVisible()
+
+    // The log line above is the discriminant for "which source fed the tree",
+    // but it says nothing about what that source CONTAINED: a captured tree
+    // that is a bare root, or whose children `mapSpatialNode` filters out for
+    // want of an `expressID`, hydrates and logs exactly the same. Since this
+    // is the test for the regression #1776 actually was, it carries the
+    // content assertion too.
+    await expandTree(navTreePanel)
+    await expectRealHierarchy(navTreePanel)
   })
 })
