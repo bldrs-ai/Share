@@ -82,6 +82,24 @@ import {markIfOutOfMemory} from '../utils/oom'
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
 
+// Matches conway's own `STORE_DETECT_PREFIX_BYTES`
+// (`compat/web-ifc/ifc_api_model_passthrough_factory.js`) — the window its
+// store-backed open sniffs the format in. Reading the same amount means our
+// answer to "will `fromStore` take this?" comes from the same bytes it will
+// look at, rather than from a smaller window that could disagree.
+const STORE_FORMAT_SNIFF_BYTES = 65_536
+
+// The formats `findLoader` routes to conway via `parseIfcWithConway`. All
+// three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
+// separates IFC from STEP, so the suffix is not evidence either way.
+const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
+
+// Presence check for the classifier's input. `classifyStepFamily` answers
+// 'ifc' when FILE_SCHEMA is absent — the right default for naming an upload,
+// the wrong one here, where a false 'ifc' burns a model handle. Require the
+// entry to actually be in the sniffed window before trusting the verdict.
+const FILE_SCHEMA_PRESENT = /FILE_SCHEMA\s*\(/i
+
 
 /**
  * @param {Function} fn
@@ -99,29 +117,58 @@ function scheduleIdleWork(fn) {
  * True when Conway can parse an OPFS File through `OpenModelStream`
  * (M1b) so we never allocate a full-source ArrayBuffer.
  *
- * Gated on the resolved format (`loader.type`, the extension
- * `findLoader` settled on — sniffed for extension-less uploads), NOT on
- * `isIfc`: `isIfc` is true for STEP too, but Conway's store-backed open
- * is IFC-only (`IfcApiModelPassthroughFactory.fromStore` returns
- * `undefined` for AP214/AP203/AP242), and it reserves the model handle
- * before it sniffs. Offering it a STEP file therefore burns handle 0
- * on a model that never opens, and the buffered `OpenModelStreamed`
- * retry parses as handle 1 — which silently broke every Share call site
- * that passes the scene-level id 0 (`CadView.jsx` pins
- * `model.modelID = 0`), the GLB writer's spatial-tree and
- * element-properties captures among them (#1776). Buffering STEP here
- * costs nothing: the store path had no STEP implementation to lose.
+ * Decided by the file's own FILE_SCHEMA, because neither `isIfc` nor the
+ * suffix is evidence of the format and both are wrong in a different
+ * direction. Conway's store-backed open is IFC-only
+ * (`IfcApiModelPassthroughFactory.fromStore` returns `undefined` for
+ * AP214/AP203/AP242) and it reserves the model handle before it sniffs:
+ *
+ *   - `isIfc` is true for STEP as well, so it offered STEP files a path
+ *     that always refuses them. That burned handle 0 on a model which
+ *     never opened, and the buffered `OpenModelStreamed` retry parsed as
+ *     handle 1 — misaddressing every Share call site that passes the
+ *     scene-level id 0 (`CadView.jsx#loadModel` pins `model.modelID` to
+ *     it), the GLB writer's spatial-tree and element-properties captures
+ *     among them (#1776).
+ *   - A suffix test is wrong the other way: `findLoader` takes
+ *     `loader.type` from the filename, so an IFC payload named `.step`
+ *     would be denied the windowed parse and buffer its whole source —
+ *     re-introducing on a mislabelled large model exactly the
+ *     hundreds-of-MB allocation M3 removed.
+ *
+ * An absent or unrecognised FILE_SCHEMA buffers rather than gambling: a
+ * wrong "yes" costs a burned handle and a broken cache artifact, a wrong
+ * "no" costs one load's memory win. Within conway's own 64 KiB sniff
+ * window every real part-21 file carries FILE_SCHEMA, so that branch is
+ * a corrupt-or-truncated-file path, not a format we are giving up on.
  *
  * @param {object} viewer
  * @param {string} loaderType resolved format tag, i.e. `loader.type`
- * @return {boolean}
+ * @param {Blob} file the source handle, sniffed for its part-21 header
+ * @return {Promise<boolean>}
  */
-function canOpenFromStore(viewer, loaderType) {
-  if (loaderType !== 'ifc' || isFeatureEnabled('disableStreamOpen')) {
+async function canOpenFromStore(viewer, loaderType, file) {
+  if (!PART21_LOADER_TYPES.has(loaderType) || isFeatureEnabled('disableStreamOpen')) {
     return false
   }
   const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
-  return typeof ifcAPI?.OpenModelStream === 'function'
+  if (typeof ifcAPI?.OpenModelStream !== 'function') {
+    return false
+  }
+  if (file === null || file === undefined || typeof file.slice !== 'function') {
+    return false
+  }
+  try {
+    const head = await file.slice(0, STORE_FORMAT_SNIFF_BYTES).arrayBuffer()
+    const header = new TextDecoder('utf-8').decode(new Uint8Array(head))
+    if (!FILE_SCHEMA_PRESENT.test(header)) {
+      return false
+    }
+    return Filetype.classifyStepFamily(header) === 'ifc'
+  } catch (e) {
+    debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
+    return false
+  }
 }
 
 
@@ -372,6 +419,14 @@ export async function load(
       // separate JS copy. An OPFS File pins nothing.
       const opfsSourceFile = file
 
+      // One sniff, two decisions: whether to hash the File in slices
+      // instead of buffering it (below) and whether to hand conway the
+      // File itself rather than an ArrayBuffer (further below). Computed
+      // from the SOURCE handle, before any GLB cache hit can swap `file`
+      // for the artifact; the second call site additionally guards on
+      // `cameFromGlbCache` so a hit never takes the store path.
+      const canStreamOpen = await canOpenFromStore(viewer, loader.type, opfsSourceFile)
+
       // Non-GitHub sources have no upstream sha. Hash the parse buffer
       // itself so we do not materialise the file twice (once for SHA-1,
       // once for Conway) — ~860 MB on PSB. sha1Hex only reads; it does
@@ -392,7 +447,7 @@ export async function load(
           // M1b: when Conway can parse from the OPFS File store, hash
           // the File in slices and skip the full-source ArrayBuffer —
           // ~860 MB on PSB. Older engines fall through to buffering.
-          if (canOpenFromStore(viewer, loader.type)) {
+          if (canStreamOpen) {
             onProgress('Hashing model...')
           } else {
             onProgress('Buffering model bytes...')
@@ -433,9 +488,7 @@ export async function load(
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: opfsSourceFile}
       }
 
-      if (modelData === undefined &&
-          canOpenFromStore(viewer, loader.type) &&
-          !cameFromGlbCache) {
+      if (modelData === undefined && canStreamOpen && !cameFromGlbCache) {
         const head = await file.slice(0, LFS_POINTER_PROBE_BYTES).arrayBuffer()
         if (looksLikeLfsPointer(head)) {
           modelData = head
