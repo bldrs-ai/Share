@@ -38,6 +38,27 @@ Start using Bldrs Share today to transform your CAD workflows. Join our communit
 ### Getting Started
 - Visit our [wiki](https://github.com/bldrs-ai/Share/wiki) for Share's Design, Developer Guide and instructions for hosting your models.
   - See our [Conway engine](https://github.com/bldrs-ai/conway) repository
+- Repo docs for contributors: [DESIGN.md](DESIGN.md) (architecture), [PLAYBOOK.md](PLAYBOOK.md) (build, dev server, CI, Playwright), [STYLE.md](STYLE.md) (code style). [CLAUDE.md](CLAUDE.md) is the full topic router.
 - Join us on [Bldrs Discord](https://discord.gg/9SxguBkFfQ)
 - Follow us on [X @bldrs_ai](https://x.com/bldrs_ai)
 - Connect with us on [LinkedIn](https://www.linkedin.com/company/bldrs-ai/)
+
+### Measuring a model load
+Share ships a Playwright harness that measures a real browser load of a real
+model end to end — time to first mesh, time to first pixel, and the per-stage
+breakdown the viewer's own load report shows — and writes it out as a JSON
+record you can diff across branches. Use it before optimizing anything in the
+loader or the [Conway](https://github.com/bldrs-ai/conway) engine, so a change
+is judged against a measurement rather than an intuition.
+
+```bash
+yarn test-flows-build-and-serve          # build + serve the app under test
+yarn test-flows src/viewer/loadTiming.spec.ts
+```
+
+How to point it at another model, what each field of the JSON record means, and
+how it cross-checks against Conway's Node-side harness are documented in
+[design/new/browser-load-measurement.md](design/new/browser-load-measurement.md).
+The harness helpers live in `src/tests/e2e/` (`loadMeasure.ts`, `loadProbe.ts`,
+`loadReport.ts`, `loadRun.ts`) — see
+[src/tests/e2e/README.md](src/tests/e2e/README.md).
