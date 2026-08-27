@@ -190,9 +190,19 @@ function modelHasBatchedMesh(model) {
  *   so cache-hit GLBs render NavTree and Properties panel without
  *   re-parsing. Pass `null` for non-IFC sources or when no live
  *   parser state is available.
+ * @param {number} [args.modelID] Conway's engine handle for this parse,
+ *   which every capture below is addressed to. Pass it explicitly:
+ *   `model.modelID` is the SCENE-level id by the time the (idle-
+ *   scheduled) writer runs — `CadView.jsx` pins that property to 0 as
+ *   soon as `load()` resolves — and the two numbers differ whenever
+ *   Conway did not hand this parse handle 0. Aiming a capture at a
+ *   handle Conway never opened returns `undefined` from every
+ *   `properties.*` call, which reaches here as "no tree, no
+ *   properties" and cached an artifact with neither (#1776). Falls
+ *   back to `model.modelID` for call sites that predate the argument.
  * @return {Promise<boolean>}
  */
-export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null}) {
+export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcManager = null, modelID = null}) {
   const startMs = Date.now()
   try {
     // BatchedMesh render path (`?feature=batchedMesh`): `GLTFExporter` can't
@@ -254,7 +264,7 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // Element properties depend on the spatial tree (the slow-path BFS
     // uses tree expressIDs as BFS seeds; the fast path ignores it), so
     // the two captures are sequential rather than parallel.
-    const modelId = model?.modelID ?? 0
+    const modelId = modelID ?? model?.modelID ?? 0
     // Capture per-triangle element IDs from the pristine raw bytes
     // BEFORE any compression. The vertex-level `_EXPRESSID` /
     // `_INSTANCEID` attributes are still intact here; we read them

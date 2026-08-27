@@ -540,6 +540,38 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
+  it('buffers an uploaded STEP file rather than offering it to the store open', async () => {
+    // Conway's store-backed open is IFC-only, and it reserves the model
+    // handle before it sniffs the format — so handing it a STEP file burns
+    // handle 0 on a model that never opens and the buffered retry parses as
+    // handle 1. Every Share call site that passes the scene-level id 0 then
+    // addresses a model Conway does not have, which is how a STEP model's
+    // cached GLB ended up with no NavTree and no Properties (#1776). Nothing
+    // is lost by buffering here: the store path had no STEP implementation.
+    const file = new MockFile(new Uint8Array(512).fill(0x20))
+    const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
+    getModelFromOPFS.mockReset()
+    getModelFromOPFS.mockResolvedValue(file)
+    dereferenceAndProxyDownloadContents.mockResolvedValue([
+      'blob:http://localhost/uuid.stp',
+      '',
+      false,
+      false,
+    ])
+
+    await expect(
+      load(
+        '12345678-1234-4abc-9def-123456789abc.stp',
+        makeIfcViewer({streamOpen: true}),
+        onProgress, true, setOpfsFile, ''),
+    ).rejects.toThrow()
+
+    expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
+    expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
+    expect(onProgress).not.toHaveBeenCalledWith('Hashing model...')
+  })
+
+
   it('hashes the single parse buffer when store-open is unavailable', async () => {
     const file = new MockFile(new Uint8Array(512).fill(0x20))
     const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
