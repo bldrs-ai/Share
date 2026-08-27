@@ -295,13 +295,25 @@ const SHARE_VIEWER_PATH_RE = /\/share\/v\/(?:p|new|gh|u|g)(?:\/|$)/i
  * they are separated on structure rather than on a heuristic:
  *
  * 1. **Not absolute** (`new URL` throws — `/share/v/gh/o/r/main/x.ifc`) — a
- *    route, resolved against the Playwright `baseURL`. Unchanged.
+ *    route, resolved against the Playwright `baseURL`. Unchanged, and this
+ *    is the only way to reach a viewer.
  * 2. **Absolute with a Share viewer route in its path**
  *    (`https://deploy-preview-1774--bldrs-share.netlify.app/share/v/gh/…`)
- *    — already a viewer URL, pointed at some other deployment on purpose.
- *    Unchanged.
+ *    — **rejected**, see below.
  * 3. **Absolute, anything else** (`https://host/PSB.ifc`) — a hosted model.
  *    Wrapped in the generic-URL route, `/share/v/u/<encoded>`.
+ *
+ * Case 2 used to be passed through, which advertised a mode that cannot
+ * work. `BaseRoutes.jsx` exposes `window.store` only when the build was
+ * configured for playwright, so against a production or deploy-preview
+ * origin the injected probe finds no store — and therefore no viewer, no
+ * scene, no stage transitions and no ready timestamp. The model loads and
+ * every cross-check assertion fails anyway. A remote viewer is not
+ * measurable by this harness, so it says so, at the point of use, instead
+ * of failing later and blaming the model. Measuring a *different build* is
+ * the interesting version of that request and it needs a different design
+ * (a probe observable that survives a production build); it is not
+ * something this function can paper over.
  *
  * The wrapped URL is percent-encoded, as `SearchBar` and `routes.spec.ts`
  * both do: it keeps a signed URL's own `?…` inside the splat segment
@@ -314,7 +326,8 @@ const SHARE_VIEWER_PATH_RE = /\/share\/v\/(?:p|new|gh|u|g)(?:\/|$)/i
  * same requirement any `/share/v/u/` load has.
  *
  * @param modelUrl the caller's `modelUrl` / `BLDRS_MEASURE_MODEL`
- * @return a URL that lands on the Share viewer
+ * @return a URL that lands on the local, instrumented Share viewer
+ * @throws when handed an absolute Share viewer URL, which is unmeasurable
  */
 export function toViewerUrl(modelUrl: string): string {
   let parsed: URL
@@ -324,7 +337,15 @@ export function toViewerUrl(modelUrl: string): string {
     return modelUrl
   }
   if (SHARE_VIEWER_PATH_RE.test(parsed.pathname)) {
-    return modelUrl
+    throw new Error(
+      `Cannot measure a remote Share viewer URL (${modelUrl}). ` +
+      'window.store is exposed only in a playwright-configured build ' +
+      '(src/BaseRoutes.jsx), so the probe would see no store, no scene, no stage ' +
+      'transitions and no ready flip, and the run would fail its cross-check ' +
+      'assertions even though the model loaded. Pass the route instead ' +
+      '(e.g. /share/v/gh/org/repo/main/model.ifc), which runs against the local ' +
+      'instrumented build, or pass the model file URL to have it wrapped in ' +
+      '/share/v/u/.')
   }
   return `/share/v/u/${encodeURIComponent(modelUrl)}`
 }

@@ -13,6 +13,7 @@ diffable JSON record.
 | Measurement library | [`src/tests/e2e/loadMeasure.ts`](../../src/tests/e2e/loadMeasure.ts) |
 | In-page probe + model-URL resolution (no Playwright import) | [`src/tests/e2e/loadProbe.ts`](../../src/tests/e2e/loadProbe.ts) + `loadProbe.test.js` |
 | Real-network guard decision (no Playwright import) | [`src/tests/e2e/networkGuard.ts`](../../src/tests/e2e/networkGuard.ts) + `networkGuard.test.js` |
+| Run budget + summary statistics (no Playwright import) | [`src/tests/e2e/loadRun.ts`](../../src/tests/e2e/loadRun.ts) + `loadRun.test.js` |
 | Report-line parsers (no Playwright import) | [`src/tests/e2e/loadReport.ts`](../../src/tests/e2e/loadReport.ts) + `loadReport.test.js` |
 | The spec that drives it | [`src/viewer/loadTiming.spec.ts`](../../src/viewer/loadTiming.spec.ts) |
 | Output | `tools/measure/<label>-<formFactor>.json` (gitignored) |
@@ -55,11 +56,22 @@ The browser has to land on **Share**, not on the model bytes, so
 `toViewerUrl` (`loadProbe.ts`) resolves three cases on structure rather
 than on a guess:
 
-| You pass | Recognized by | Chromium goes to |
+| You pass | Recognized by | What happens |
 |---|---|---|
-| a route — `/share/v/gh/o/r/main/x.ifc` | not absolute (`new URL` throws) | it, against the dev server |
-| an absolute **Share viewer** URL — `https://…/share/v/gh/…` | `/share/v/{p,new,gh,u,g}/` in its **pathname** | it, unchanged |
-| an absolute **hosted model** URL — `https://host/PSB.ifc` | absolute, no viewer route in the path | `/share/v/u/<percent-encoded>` |
+| a route — `/share/v/gh/o/r/main/x.ifc` | not absolute (`new URL` throws) | navigated against the dev server — the only way to reach a viewer |
+| an absolute **Share viewer** URL — `https://…/share/v/gh/…` | `/share/v/{p,new,gh,u,g}/` in its **pathname** | **rejected**, with an error naming the route form to use instead |
+| an absolute **hosted model** URL — `https://host/PSB.ifc` | absolute, no viewer route in the path | wrapped: `/share/v/u/<percent-encoded>` |
+
+**A remote viewer is not measurable, and the harness now says so instead of
+timing out.** `BaseRoutes.jsx` exposes `window.store` only when the build
+was configured for playwright, so pointed at production or a deploy preview
+the injected probe finds no store — and therefore no viewer, no scene, no
+stage transitions and no ready timestamp. The model loads and every
+cross-check assertion fails anyway. Measuring a *different build* is the
+interesting version of that request, and it needs a probe observable that
+survives a production build; that is a different design, not something
+`toViewerUrl` can paper over. Until then the mode is unsupported and
+refused at the point of use.
 
 The wrap is percent-encoded (as `SearchBar` and `routes.spec.ts` do), which
 is what keeps a signed URL's own `?…` inside the splat instead of colliding
@@ -178,6 +190,15 @@ conway #541 measured PSB at 52.9 s → 159.1 s under `?feature=workers` and
 nobody knew whether that regression was CPU- or bandwidth-bound. Three
 signals are wired in, all of them cheap:
 
+Scope note, because half the question has since been answered elsewhere:
+conway's own M2 concurrency measurement (N concurrent full index builds of
+PSB, efficiency 0.935 at N=4 against a 0.96 pure-CPU calibration) shows the
+**engine parse** is CPU-bound in Node. That does not settle #541's browser
+regression — there PSB fits in page cache while the browser pages through
+OPFS, which is a different system — so what this harness is for is
+specifically the **browser/OPFS half**, not the engine-parse half.
+
+
 1. **`sample.cpu`** — a CDP `Performance.getMetrics` delta across the load.
    `processTimeMs` is whole-renderer-process CPU (dedicated-worker threads
    included); `threadTimeMs` is the main thread's share; `offMainThreadMs`
@@ -253,6 +274,14 @@ the same box:
 | `cpu.processTimeOverWall` | 0.76 | 0.39 | — |
 | `cpu.sampledAtMs − modelReadyMs` | 323 | 453 | — |
 
+**Audited after the completed-samples-only fix landed:** every surviving
+`tools/measure/*.json` behind the tables above has `ok: true` on every
+sample — the 5-iteration CPU ×4 run, all three network A/B pairs, and the
+MB-Khaya run — so no published number here was ever contaminated by an
+aborted iteration. The one record that can no longer be checked is the
+unthrottled column of the CPU table: a later single-iteration run wrote to
+the same `sculpture-desktop.json` slug and overwrote it.
+
 That last row is the endpoint audit, and it is worth reading rather than
 skipping: the window closes a few hundred ms after the store's ready flip,
 because Playwright's attribute poll and the CDP round trip both take time.
@@ -308,6 +337,24 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   mesh lands *after* the parse ends, so it exercises the harness but says
   nothing about whether a parse-time preview helps. That question needs a
   deferring model.
+- **A failed iteration is excluded from `summary`, not from the record.**
+  An aborted load keeps a finite `harnessWallMs` (the timeout it died at), a
+  CPU record covering that window, and whatever partial first-mesh marks the
+  probe managed — every one of them shaped exactly like a real measurement.
+  So `summarizeSamples` rolls up completed samples only, `run.iterationsOk`
+  and `run.iterationsFailed` say how many of each there were, and the failed
+  sample stays in `samples` with its `error` because that is the evidence
+  worth reading. **A non-zero `iterationsFailed` means the record is not a
+  measurement of that configuration, however plausible `summary` looks** —
+  the printed block says so above the numbers, and `loadTiming.spec.ts`
+  asserts it is zero, so a lost iteration fails the run rather than quietly
+  shrinking `n`.
+- **The outer test budget is computed, not fixed.** `measureTestTimeoutMs`
+  scales it with `iterations × the per-load budget` (floored at the 300 s it
+  used to be). A fixed 300 s could expire while every individual load was
+  still inside its advertised 120 s — five 70 s iterations need ~350 s — and
+  an outer-timeout abort is exactly how a partial sample reaches the array
+  in the first place, so the two defects compound.
 - **Cold versus warm.** `sample.warm` is true from iteration 1 on, meaning
   the HTTP cache holds the bundle and the wasm binary. It does **not** mean
   a warm engine: each iteration is a full `page.goto`, so wasm init runs

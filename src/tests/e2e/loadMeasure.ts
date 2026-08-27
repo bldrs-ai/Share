@@ -3,6 +3,7 @@ import {mkdir, readFile, writeFile} from 'fs/promises'
 import {dirname, resolve} from 'path'
 import {modelBasenameOf, probeSource, toViewerUrl, urlMatchesModel, withFeatures} from './loadProbe'
 import {ParsedReport, parseReportLines} from './loadReport'
+import {MetricSummary, SummaryMetric, summarizeSamples} from './loadRun'
 import {waitForModelReady} from './models'
 
 
@@ -180,13 +181,9 @@ export interface LoadSample {
   consoleErrors: string[]
 }
 
-/** Central tendency for one metric across iterations. */
-export interface MetricSummary {
-  n: number
-  min: number
-  median: number
-  max: number
-}
+// Re-exported so a consumer of a record does not have to know the summary
+// arithmetic lives in its own Playwright-free module.
+export type {MetricSummary} from './loadRun'
 
 /** The file this harness writes. `schema` is the compatibility handle. */
 export interface LoadMeasurementRecord {
@@ -198,6 +195,14 @@ export interface LoadMeasurementRecord {
     formFactor: string
     features: string[]
     iterations: number
+    /** Iterations that completed. Only these appear in `summary`. */
+    iterationsOk: number
+    /**
+     * Iterations that did not. Non-zero means this record is not a
+     * measurement, however plausible `summary` looks — see
+     * {@link summarizeSamples}.
+     */
+    iterationsFailed: number
     cpuThrottleRate: number
     network: NetworkProfile | null
   }
@@ -412,28 +417,6 @@ function deriveTimings(timings: LoadSample['timings']): LoadSample['derived'] {
     firstMeshSinceOpenMs: delta(timings.firstMeshMs, at(/^opening/i)),
     firstMeshSinceParseStartMs: delta(timings.firstMeshMs, at(/^pars/i)),
     firstMeshSinceDownloadMs: delta(timings.firstMeshMs, timings.modelResponseEndMs),
-  }
-}
-
-
-/**
- * min/median/max over the finite values of one metric.
- *
- * @param values
- * @return the summary, or null when no iteration produced a value
- */
-function summarize(values: (number | null)[]): MetricSummary | null {
-  const finite = values.filter((v): v is number => v !== null && Number.isFinite(v)).sort((a, b) => a - b)
-  if (finite.length === 0) {
-    return null
-  }
-  const mid = Math.floor(finite.length / 2)
-  const median = finite.length % 2 === 0 ? (finite[mid - 1] + finite[mid]) / 2 : finite[mid]
-  return {
-    n: finite.length,
-    min: round1(finite[0]) ?? 0,
-    median: round1(median) ?? 0,
-    max: round1(finite[finite.length - 1]) ?? 0,
   }
 }
 
@@ -684,7 +667,7 @@ export async function installLoadProbe(page: Page): Promise<void> {
  * The metrics rolled up in `summary` — the short list a before/after
  * comparison actually reads. Everything else stays in `samples`.
  */
-const SUMMARY_METRICS: {key: string, pick: (s: LoadSample) => number | null}[] = [
+const SUMMARY_METRICS: SummaryMetric<LoadSample>[] = [
   {key: 'harnessWallMs', pick: (s) => s.timings.harnessWallMs},
   {key: 'firstMeshMs', pick: (s) => s.timings.firstMeshMs},
   {key: 'firstMeshSinceOpenMs', pick: (s) => s.derived.firstMeshSinceOpenMs},
@@ -720,7 +703,11 @@ export async function measureLoad(page: Page, options: MeasureOptions): Promise<
     samples.push(await measureOnce(page, options, i))
   }
 
-  const first = samples[0]
+  // Environment is read off a *completed* sample where there is one: a
+  // failed iteration's report is whatever the load had published before it
+  // aborted, which for iteration 0 can be nothing at all.
+  const {summary, iterationsOk, iterationsFailed} = summarizeSamples(samples, SUMMARY_METRICS)
+  const first = samples.find((sample) => sample.ok) ?? samples[0]
   const engineLine = first?.report?.lines.find((l) => /^Conway\b|^web-ifc\b/i.test(l)) ?? null
   const probe = await readProbe(page)
   const record: LoadMeasurementRecord = {
@@ -732,6 +719,8 @@ export async function measureLoad(page: Page, options: MeasureOptions): Promise<
       formFactor: options.formFactor ?? 'desktop',
       features: options.features ?? [],
       iterations,
+      iterationsOk,
+      iterationsFailed,
       cpuThrottleRate: options.cpuThrottleRate ?? 1,
       network: options.network ?? null,
     },
@@ -745,13 +734,7 @@ export async function measureLoad(page: Page, options: MeasureOptions): Promise<
       viewport: probe?.viewport ?? null,
     },
     samples,
-    summary: {},
-  }
-  for (const metric of SUMMARY_METRICS) {
-    const summary = summarize(samples.map(metric.pick))
-    if (summary !== null) {
-      record.summary[metric.key] = summary
-    }
+    summary,
   }
 
   const outDir = options.outDir ?? process.env.BLDRS_MEASURE_OUT ?? DEFAULT_OUT_DIR
@@ -778,6 +761,18 @@ export function formatRecord(record: LoadMeasurementRecord): string {
   out.push(`  features=${run.features.length ? run.features.join(',') : 'none'}` +
     ` iterations=${run.iterations} cpuThrottle=${run.cpuThrottleRate}` +
     ` network=${run.network ? `${run.network.downloadMbps}Mbps/${run.network.latencyMs}ms` : 'unthrottled'}`)
+  if (run.iterationsFailed > 0) {
+    // Loud, and above the numbers rather than below them: the summary that
+    // follows is a statistic over the survivors, and quoting it as a
+    // measurement of this configuration would be wrong.
+    out.push(`  !! ${run.iterationsFailed} of ${run.iterations} iterations FAILED` +
+      ` — excluded from the summary below; this run is NOT a measurement`)
+    for (const sample of record.samples) {
+      if (!sample.ok) {
+        out.push(`     iteration ${sample.iteration}: ${sample.error ?? 'unknown error'}`)
+      }
+    }
+  }
   for (const [key, value] of Object.entries(summary)) {
     out.push(`  ${key.padEnd(SUMMARY_KEY_WIDTH)} min ${String(value.min).padStart(SUMMARY_VALUE_WIDTH)}` +
       `  med ${String(value.median).padStart(SUMMARY_VALUE_WIDTH)}  max ${String(value.max).padStart(SUMMARY_VALUE_WIDTH)}  (n=${value.n})`)

@@ -21,10 +21,12 @@ specs. Keep it that way.
 - `networkGuard.ts` — `isBlockedRealNetworkHost`, the decision
   `utils.blockExternalNetwork` wraps in a `context.route`, plus the host
   denylist itself.
+- `loadRun.ts` — run-level bookkeeping for a measurement: `summarizeSamples`
+  (statistics over *completed* samples only) and `measureTestTimeoutMs`.
 
-  All three are deliberately free of any Playwright import so they can be
+  All four are deliberately free of any Playwright import so they can be
   unit-tested under Jest (`loadProbe.test.js`, `loadReport.test.js`,
-  `networkGuard.test.js`). That is load-bearing, not tidy: importing
+  `networkGuard.test.js`, `loadRun.test.js`). That is load-bearing, not tidy: importing
   `@playwright/test` into a module a Jest suite loads brings Playwright's
   own `expect` along, and every `toEqual` in that suite then dies with
   `TypeError: this.customTesters is not iterable`.

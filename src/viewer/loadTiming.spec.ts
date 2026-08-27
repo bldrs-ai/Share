@@ -2,6 +2,7 @@ import {expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {LoadMeasurementRecord, MeasureOptions, measureLoad} from '../tests/e2e/loadMeasure'
 import {measureAllowHosts} from '../tests/e2e/loadProbe'
+import {measureTestTimeoutMs} from '../tests/e2e/loadRun'
 import {setupVirtualPathIntercept} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
@@ -59,10 +60,14 @@ const ALLOW_HOSTS = measureAllowHosts(MODEL_URL)
 // close before it, not after — see the assertion below.
 const SETTLE_WAIT_MS = 1000
 
-// The measured load itself can be long on a big model; the outer test
-// budget has to clear iterations × that, plus page boot.
-const TEST_TIMEOUT_MS = 300_000
+// The measured load itself can be long on a big model, so the outer budget
+// is computed from the per-load one rather than fixed: at five iterations a
+// constant 300 s expired while every individual load was still well inside
+// its advertised 120 s, and an outer-timeout abort is precisely how a
+// partial sample gets into the record. Never shorter than the 300 s this
+// used to be — see measureTestTimeoutMs.
 const LOAD_TIMEOUT_MS = 120_000
+const TEST_TIMEOUT_MS = measureTestTimeoutMs(ITERATIONS, LOAD_TIMEOUT_MS)
 
 
 /**
@@ -102,6 +107,14 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
 
     expect(record.schema).toBe('bldrs.loadMeasure/1')
     expect(record.samples).toHaveLength(ITERATIONS)
+    // Every iteration, not just the first. `summary` covers completed
+    // samples only, so a failed one no longer corrupts the statistics —
+    // but it would silently shrink `n` instead, and a run that lost an
+    // iteration is not the run that was asked for. Assert the whole set
+    // and report which ones died.
+    expect(record.samples.filter((s) => !s.ok).map((s) => `#${s.iteration}: ${s.error}`)).toEqual([])
+    expect(record.run.iterationsFailed).toBe(0)
+    expect(record.run.iterationsOk).toBe(ITERATIONS)
     const sample = record.samples[0]
     expect(sample.error).toBeNull()
     expect(sample.ok).toBe(true)

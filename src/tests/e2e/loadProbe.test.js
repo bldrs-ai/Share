@@ -189,15 +189,32 @@ describe('loadProbe', () => {
       expect(toViewerUrl(route)).toBe(route)
     })
 
-    it('leaves an absolute Share viewer URL alone', () => {
+    it('refuses an absolute Share viewer URL, and says why', () => {
+      // This mode used to be advertised and passed through, but it cannot
+      // work: `BaseRoutes.jsx` exposes `window.store` only in a
+      // playwright-configured build, so against a production or
+      // deploy-preview origin the probe sees no store — no viewer, no
+      // scene, no stages, no ready flip — and every cross-check assertion
+      // fails while the model itself loads perfectly well. Refusing at the
+      // point of use is the difference between a legible error and a
+      // 120-second timeout that gets blamed on the model.
       const preview = 'https://deploy-preview-1774--bldrs-share.netlify.app/share/v/gh/o/r/main/x.ifc'
-      expect(toViewerUrl(preview)).toBe(preview)
+      expect(() => toViewerUrl(preview)).toThrow(/Cannot measure a remote Share viewer URL/)
       // The GitHub-Pages install prefix doubles the `share` segment.
-      const pages = 'https://bldrs-ai.github.io/Share/share/v/p/index.ifc'
-      expect(toViewerUrl(pages)).toBe(pages)
-      // Already wrapped, pointed at another deployment on purpose.
-      const wrapped = 'https://bldrs.ai/share/v/u/https%3A%2F%2Fhost%2FPSB.ifc'
-      expect(toViewerUrl(wrapped)).toBe(wrapped)
+      expect(() => toViewerUrl('https://bldrs-ai.github.io/Share/share/v/p/index.ifc'))
+        .toThrow(/window\.store is exposed only in a playwright-configured build/)
+      // Already wrapped, pointed at another deployment: same problem.
+      expect(() => toViewerUrl('https://bldrs.ai/share/v/u/https%3A%2F%2Fhost%2FPSB.ifc'))
+        .toThrow(/Cannot measure a remote Share viewer URL/)
+      // And the message has to name the way out, or the operator is stuck.
+      expect(() => toViewerUrl(preview)).toThrow(/Pass the route instead/)
+    })
+
+    it('still accepts the route form that reaches the instrumented build', () => {
+      // The escape hatch the error names must actually be the supported
+      // path, or the advice is wrong.
+      const route = '/share/v/gh/org/repo/main/model.ifc'
+      expect(toViewerUrl(route)).toBe(route)
     })
 
     it('routes a hosted model URL through the viewer, recoverably', () => {
