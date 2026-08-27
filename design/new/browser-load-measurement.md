@@ -349,6 +349,21 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   the printed block says so above the numbers, and `loadTiming.spec.ts`
   asserts it is zero, so a lost iteration fails the run rather than quietly
   shrinking `n`.
+- **A summary's `n` must equal the completed-iteration count.** `ok` says
+  only that navigation reached model-ready; a completed iteration can still
+  lose an individual observation (a first mesh, a stage, the download, a
+  report line), and `summarize` drops that null silently — leaving a
+  plausible summary computed over fewer points than were asked for. The spec
+  therefore checks every metric's `n` against `run.iterationsOk`, which
+  catches any field going null without a per-field list that would drift.
+  The rule is all-or-nothing by construction: a metric null on *every*
+  iteration is omitted from `summary` entirely (`previewFirstMeshMs` today),
+  so a key that is present must cover every completed iteration. Both this
+  and the failed-iteration guard are asserted on **each** record — the two
+  tests each call `measureLoad` and write their own file, and a guarantee
+  asserted on one of them is not a guarantee. Note both only bite at
+  `BLDRS_MEASURE_ITERATIONS > 1`, i.e. in deliberate measurement runs; the
+  default and CI path is a single iteration and was never at risk.
 - **The outer test budget is computed, not fixed.** `measureTestTimeoutMs`
   scales it with `iterations × the per-load budget` (floored at the 300 s it
   used to be). A fixed 300 s could expire while every individual load was
