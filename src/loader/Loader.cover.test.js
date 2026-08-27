@@ -212,7 +212,48 @@ describe('Loader exported helpers', () => {
 })
 
 
+// `ShareIfcLoader#parse` logs the parse failure with `console.error` before
+// rethrowing, so every rejection-based case below emits one by design. A test
+// run should print nothing unexpected (STYLE.md §"Console hygiene"), so divert
+// them into a buffer — and assert on the buffer rather than silently
+// swallowing it, per PLAYBOOK §"Keep the test console clean" move 2. Anything
+// that is NOT one of these induced failures fails the test instead of
+// scrolling past in the noise.
+const EXPECTED_LOADER_ERRORS =
+  /open failed|is not a function|Failed to fetch model data|Unknown filetype|Could not guess filetype/i
+
+
+/**
+ * Divert `console.error` for one test. Returns the buffer plus a restore.
+ *
+ * @return {{lines: string[], restore: Function}}
+ */
+function divertConsoleError() {
+  const original = console.error
+  const lines = []
+  console.error = (...args) => {
+    lines.push(args.map((a) => (a instanceof Error ? `${a.name}: ${a.message}` : String(a))).join(' '))
+  }
+  return {lines, restore: () => {
+    console.error = original
+  }}
+}
+
+
 describe('load() with isOpfsAvailable=false (axios path)', () => {
+  let consoleError
+
+  beforeEach(() => {
+    consoleError = divertConsoleError()
+  })
+
+  afterEach(() => {
+    consoleError.restore()
+    for (const line of consoleError.lines) {
+      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
+    }
+  })
+
   let viewer
   let onProgress
   let setOpfsFile
@@ -365,6 +406,19 @@ describe('load() with isOpfsAvailable=false (axios path)', () => {
 
 
 describe('load() error/edge paths with OPFS enabled', () => {
+  let consoleError
+
+  beforeEach(() => {
+    consoleError = divertConsoleError()
+  })
+
+  afterEach(() => {
+    consoleError.restore()
+    for (const line of consoleError.lines) {
+      expect(line).toMatch(EXPECTED_LOADER_ERRORS)
+    }
+  })
+
   let viewer
   let onProgress
   let setOpfsFile

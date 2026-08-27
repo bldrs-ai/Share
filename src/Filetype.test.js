@@ -388,6 +388,31 @@ describe('Filetype', () => {
       expect(stepSchemaName('FILE_SCHEMA((\'IFC4\'));/* trailing */')).toBe('IFC4')
     })
 
+    it('ignores a FILE_SCHEMA entity that is itself inside a comment', () => {
+      // The dangerous direction, and the one a comment-tolerant gap pattern
+      // cannot fix: the whole entity sits INSIDE the comment, so no amount of
+      // tolerance BETWEEN tokens excludes it. conway's parser skips the
+      // comment and reads AP214; a raw-text scan would answer IFC, send a
+      // STEP file down conway's IFC-only store open, and burn a model handle.
+      const header =
+        '/* FILE_SCHEMA((\'IFC4\')); */\nFILE_SCHEMA((\'AUTOMOTIVE_DESIGN\'));'
+      expect(stepSchemaName(header)).toBe('AUTOMOTIVE_DESIGN')
+      expect(analyzeHeaderStr(`ISO-10303-21;\n${header}`)).toBe('step')
+    })
+
+    it('keeps a comment-like sequence inside a string literal', () => {
+      // Inside a Part-21 string `/*` is ordinary text. Masking it would join
+      // the surrounding text and could resurrect the bug it exists to fix.
+      expect(stepSchemaName(
+        'FILE_NAME(\'/* not a comment\',\'*/\');\nFILE_SCHEMA((\'AUTOMOTIVE_DESIGN\'));',
+      )).toBe('AUTOMOTIVE_DESIGN')
+      // A doubled apostrophe escapes one inside the string; the string stays
+      // open across it, so the `/*` after it is still literal.
+      expect(stepSchemaName(
+        'FILE_NAME(\'it\'\'s /* fine\');\nFILE_SCHEMA((\'IFC4\'));',
+      )).toBe('IFC4')
+    })
+
     it('separates "did not say" from "said STEP"', () => {
       // The distinction `classifyStepFamily` cannot express, because it
       // folds both into 'ifc'. A caller whose false-'ifc' is expensive —

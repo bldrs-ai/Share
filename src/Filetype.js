@@ -410,25 +410,83 @@ export function classifyStepFamily(header) {
  * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
  */
 export function stepSchemaName(header) {
-  const schemaMatch = header.match(FILE_SCHEMA_VALUE)
+  const schemaMatch = maskPart21Comments(header).match(FILE_SCHEMA_VALUE)
   return schemaMatch === null ? null : schemaMatch[1]
 }
 
 
-// ISO-10303-21 permits a `/* ... */` comment anywhere whitespace is allowed,
-// and conway's `StepHeaderParser` consumes one AS whitespace (its
-// `whitespace()` loops on the comment parser), so `ModelFormatDetector` reads
-// `FILE_SCHEMA /* exported by ... */ (('IFC4'))` as IFC. A bare `\s*` here
-// would not, and this function's job is to reach conway's answer from the
-// same bytes: disagreeing costs a large model its windowed parse and the
-// whole-source allocation that avoids (`Loader.js#canOpenFromStore`).
-//
-// Deliberately NOT applied after the opening quote — inside a Part-21 string
-// literal `/*` is ordinary text, not a comment. An unterminated comment
-// matches nothing and yields null, which is the safe direction: buffer.
-const PART21_GAP = String.raw`(?:\s|/\*[\s\S]*?\*/)*`
-const FILE_SCHEMA_VALUE = new RegExp(
-  `FILE_SCHEMA${PART21_GAP}\\(${PART21_GAP}\\(${PART21_GAP}'\\s*([A-Za-z0-9_]+)`, 'i')
+const FILE_SCHEMA_VALUE = /FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i
+
+
+/**
+ * Blank out ISO-10303-21 `/* ... *``/` comments, leaving string literals
+ * intact, so a text scan sees what conway's parser sees.
+ *
+ * Two failures motivate this, and only masking fixes both. Part-21 permits a
+ * comment anywhere whitespace is allowed and conway's `StepHeaderParser`
+ * consumes one AS whitespace (its `whitespace()` loops on the comment
+ * parser), so:
+ *
+ *   - `FILE_SCHEMA /* note *``/ (('IFC4'))` is IFC to conway. A plain `\s*`
+ *     scan misses it and reports no schema — costing a large IFC its
+ *     windowed parse.
+ *   - `/* FILE_SCHEMA(('IFC4')); *``/ FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` is
+ *     AP214 to conway. A raw-text scan finds the commented-out entity first
+ *     and reports IFC — the dangerous direction, which sends a STEP file
+ *     down conway's IFC-only store open and burns a model handle
+ *     (bldrs-ai/Share#1776).
+ *
+ * The second is why this masks rather than making the gap pattern
+ * comment-aware: a token can be *inside* a comment, not merely separated by
+ * one, and no amount of tolerance between tokens excludes it.
+ *
+ * String-literal aware, because inside a Part-21 string `/*` is ordinary
+ * text. An apostrophe is escaped by doubling it (`''`), which keeps the
+ * string open. An unterminated comment swallows the rest of the window,
+ * which matches conway's own reading and fails safe: no schema found.
+ *
+ * @param {string} text a Part-21 header window
+ * @return {string} the same text with comment spans replaced by a space
+ */
+function maskPart21Comments(text) {
+  let out = ''
+  let at = 0
+  let inString = false
+  while (at < text.length) {
+    const c = text[at]
+    if (inString) {
+      if (c === `'` && text[at + 1] === `'`) {
+        out += `''`
+        at += 2
+        continue
+      }
+      if (c === `'`) {
+        inString = false
+      }
+      out += c
+      at++
+      continue
+    }
+    if (c === `'`) {
+      inString = true
+      out += c
+      at++
+      continue
+    }
+    if (c === '/' && text[at + 1] === '*') {
+      const end = text.indexOf('*/', at + 2)
+      if (end === -1) {
+        return out
+      }
+      out += ' '
+      at = end + 2
+      continue
+    }
+    out += c
+    at++
+  }
+  return out
+}
 
 
 /**
