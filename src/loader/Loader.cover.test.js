@@ -627,12 +627,17 @@ describe('load() error/edge paths with OPFS enabled', () => {
   })
 
 
-  it('buffers a part-21 file whose FILE_SCHEMA is missing', async () => {
+  it('buffers a part-21 file that declares no schema name', async () => {
     // Unknown format buffers rather than gambling: a wrong "yes" burns a model
     // handle and caches a GLB with no NavTree, a wrong "no" costs one load's
     // memory win. Every real part-21 file carries FILE_SCHEMA well inside
     // conway's 64 KiB sniff window, so this is a corrupt-file path.
-    const file = new MockFile('ISO-10303-21;\nHEADER;\nENDSEC;\n')
+    //
+    // The entry is PRESENT here but empty — the case a bare "is FILE_SCHEMA in
+    // the header?" guard waves through, since `classifyStepFamily` answers
+    // 'ifc' for anything it cannot parse. The gate requires a parsed schema
+    // name (`Filetype.stepSchemaName`), so this buffers.
+    const file = new MockFile('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'\'));\nENDSEC;\n')
     const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
     getModelFromOPFS.mockReset()
     getModelFromOPFS.mockResolvedValue(file)

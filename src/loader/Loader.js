@@ -94,12 +94,6 @@ const STORE_FORMAT_SNIFF_BYTES = 65_536
 // separates IFC from STEP, so the suffix is not evidence either way.
 const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
 
-// Presence check for the classifier's input. `classifyStepFamily` answers
-// 'ifc' when FILE_SCHEMA is absent — the right default for naming an upload,
-// the wrong one here, where a false 'ifc' burns a model handle. Require the
-// entry to actually be in the sniffed window before trusting the verdict.
-const FILE_SCHEMA_PRESENT = /FILE_SCHEMA\s*\(/i
-
 
 /**
  * @param {Function} fn
@@ -160,8 +154,16 @@ async function canOpenFromStore(viewer, loaderType, file) {
   }
   try {
     const head = await file.slice(0, STORE_FORMAT_SNIFF_BYTES).arrayBuffer()
+    // Non-fatal by default, so a multi-byte sequence cut at the slice
+    // boundary — or a mislabelled binary — yields replacement characters
+    // rather than throwing. Both then fail the schema match below and
+    // buffer, which is the outcome we want for bytes we cannot read.
     const header = new TextDecoder('utf-8').decode(new Uint8Array(head))
-    if (!FILE_SCHEMA_PRESENT.test(header)) {
+    // Require a schema NAME, not merely a FILE_SCHEMA entry.
+    // `classifyStepFamily` answers 'ifc' whenever it cannot parse one, and
+    // an empty `FILE_SCHEMA(( ))` would otherwise inherit that default and
+    // send an unidentified file down the IFC-only store path.
+    if (Filetype.stepSchemaName(header) === null) {
       return false
     }
     return Filetype.classifyStepFamily(header) === 'ifc'

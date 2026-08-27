@@ -383,11 +383,35 @@ export function analyzeHeaderStr(header) {
  * @return {string} 'ifc' or 'step'
  */
 export function classifyStepFamily(header) {
-  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
-  if (schemaMatch === null) {
+  const schema = stepSchemaName(header)
+  if (schema === null) {
     return 'ifc'
   }
-  return /^IFC/i.test(schemaMatch[1]) ? 'ifc' : 'step'
+  return /^IFC/i.test(schema) ? 'ifc' : 'step'
+}
+
+
+/**
+ * The FILE_SCHEMA value of an ISO-10303-21 header, or null when the entry
+ * is absent from the sniffed window or carries no parseable name — an
+ * empty `FILE_SCHEMA(( ))` / `FILE_SCHEMA(( '' ))`, which is malformed but
+ * does occur in the wild.
+ *
+ * Split out of {@link classifyStepFamily} so a caller can tell "this file
+ * says STEP" apart from "this file did not say". The classifier folds both
+ * into 'ifc': the right default when the answer only picks a filename, and
+ * the wrong one for a caller whose false-'ifc' costs more than a false
+ * 'step'. `Loader.js#canOpenFromStore` is the second kind — it gates
+ * conway's IFC-only store open, where guessing 'ifc' burns a model handle
+ * and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it requires a
+ * non-null name here before it trusts the classification.
+ *
+ * @param {string} header
+ * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
+ */
+export function stepSchemaName(header) {
+  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
+  return schemaMatch === null ? null : schemaMatch[1]
 }
 
 

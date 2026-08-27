@@ -8,6 +8,7 @@ import {
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
+  stepSchemaName,
   supportedTypes,
 } from './Filetype'
 
@@ -361,6 +362,27 @@ describe('Filetype', () => {
       expect(getValidExtension('model.usda')).toBe('usda')
       expect(getValidExtension('model.usdc')).toBe('usdc')
       expect(getValidExtension('model.USDZ')).toBe('usdz')
+    })
+  })
+
+  describe('stepSchemaName', () => {
+    it('returns the declared schema for both families', () => {
+      expect(stepSchemaName('FILE_SCHEMA((\'IFC4\'));')).toBe('IFC4')
+      expect(stepSchemaName('FILE_SCHEMA((\'AUTOMOTIVE_DESIGN\'));')).toBe('AUTOMOTIVE_DESIGN')
+      expect(stepSchemaName('FILE_SCHEMA  ( ( \' IFC2X3 \' ) );')).toBe('IFC2X3')
+    })
+
+    it('separates "did not say" from "said STEP"', () => {
+      // The distinction `classifyStepFamily` cannot express, because it
+      // folds both into 'ifc'. A caller whose false-'ifc' is expensive —
+      // `Loader.js#canOpenFromStore` gating conway's IFC-only store open —
+      // needs a non-null name before it trusts the classification.
+      expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
+      expect(stepSchemaName('FILE_SCHEMA(());')).toBeNull()
+      expect(stepSchemaName('FILE_SCHEMA((\'\'));')).toBeNull()
+      // Same inputs, classifier still answers 'ifc' — that default is why
+      // the guard above exists.
+      expect(analyzeHeaderStr('ISO-10303-21;\nFILE_SCHEMA((\'\'));')).toBe('ifc')
     })
   })
 })
