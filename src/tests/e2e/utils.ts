@@ -1,6 +1,7 @@
 import {BrowserContext, Page, Request, Response, Route, expect} from '@playwright/test'
 import {readFile} from 'fs/promises'
 import {resolve} from 'path'
+import {isBlockedRealNetworkHost} from './networkGuard'
 
 
 /**
@@ -97,33 +98,6 @@ export async function clearOpfs(page: Page) {
 
 
 /**
- * Hosts whose traffic carries data the SPA reads or writes (model files,
- * GitHub API responses, auth tokens, AI completions). Reaching these from
- * a test is the leak we *must* fail on — it can paper over a broken mock
- * and produce non-hermetic results. Ad / analytics / tracking script
- * hosts (googletagmanager, google-analytics, googlesyndication,
- * doubleclick) are deliberately NOT in this list: MSW handles them, but
- * on the first page navigation a `<script>` tag for gtag or adsbygoogle
- * may fire before MSW's service worker takes control, and a hard abort
- * there only breaks page init without protecting any data.
- */
-const REAL_NETWORK_HOST_DENYLIST = [
-  // Real GitHub
-  'api.github.com',
-  'raw.githubusercontent.com',
-  'media.githubusercontent.com',
-  'github.com',
-  // The proxy this PR removed
-  'rawgit.bldrs.dev',
-  // Real auth + bldrs hosts that test setups suffix with .msw / .pw
-  'bldrs.us.auth0.com',
-  'git.bldrs.dev',
-  // Real OpenRouter (AI completions)
-  'openrouter.ai',
-]
-
-
-/**
  * Block real-internet network calls during tests.
  *
  * Tests must serve all traffic locally — fixtures, MSW handlers, page.route
@@ -137,13 +111,22 @@ const REAL_NETWORK_HOST_DENYLIST = [
  * 127.0.0.1, and any host whose hostname ends with one of the test-fake
  * suffixes (.msw, .pw, .jest, .cypress).
  *
+ * `allowHosts` names hosts the caller *deliberately* asked for and must not
+ * be blocked — the load-measurement harness pointed at a corpus model on
+ * raw.githubusercontent.com, for instance. Without it that request is
+ * aborted by this guard and the run dies as a model-ready timeout, which
+ * reads like a slow model rather than a blocked fetch. The allow is an
+ * exact host match; everything else stays blocked (see
+ * {@link isBlockedRealNetworkHost}).
+ *
  * @param context - Playwright browser context
+ * @param allowHosts - hosts the caller deliberately requested, exact match
  */
-export async function blockExternalNetwork(context: BrowserContext) {
+export async function blockExternalNetwork(context: BrowserContext, allowHosts: string[] = []) {
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url())
     const hostname = url.hostname.toLowerCase()
-    if (REAL_NETWORK_HOST_DENYLIST.includes(hostname)) {
+    if (isBlockedRealNetworkHost(hostname, allowHosts)) {
       console.error(`Blocked real-network request from test: ${route.request().method()} ${url}`)
       await route.abort('blockedbyclient')
       return
@@ -157,13 +140,15 @@ export async function blockExternalNetwork(context: BrowserContext) {
  * Setup homepage intercepts and navigate to root path
  *
  * @param page - Playwright page object
+ * @param allowHosts - real hosts this test deliberately needs, exact match;
+ *   defaults to none, which is what every hermetic spec wants
  */
-export async function homepageSetup(page: Page) {
+export async function homepageSetup(page: Page, allowHosts: string[] = []) {
   // Register the real-network guard FIRST so it sits at the bottom of the
   // route stack: fixture-specific routes registered later will match first
   // and short-circuit; only requests no test handler claimed reach this
   // guard.
-  await blockExternalNetwork(page.context())
+  await blockExternalNetwork(page.context(), allowHosts)
   // The next two steps are necessary to avoid font synthesis issues in GitHub Actions.
   // Wait for fonts to load
   /*
