@@ -140,4 +140,64 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     const MIN_TREE_ITEMS = 5
     expect(itemCount).toBeGreaterThan(MIN_TREE_ITEMS)
   })
+
+  // SKIP REASON: the OPFS/MSW harness gap above, same as its IFC sibling.
+  //
+  // Worth having as its own test rather than a parameterisation of the one
+  // above, because the two formats reach the writer through different Conway
+  // opens and a STEP-only regression is invisible to an IFC fixture. That is
+  // exactly what bldrs-ai/Share#1776 was: Conway's store-backed open reserves
+  // the model handle before it sniffs the format and is IFC-only, so a STEP
+  // file burned handle 0 and parsed as handle 1, the writer's captures went to
+  // a handle Conway had never opened, and the artifact cached with neither
+  // BLDRS_spatial_tree nor BLDRS_element_properties. The IFC path was
+  // untouched throughout. The observable symptom is the assertion below: the
+  // cache-hit tree collapses to the model root repeated a couple of times
+  // (Loader.js's `ifcManager.getSpatialStructure = () => model` fallback,
+  // walking the GLB scene graph) instead of the real assembly hierarchy.
+  test.fixme('cache-hit GLB renders NavTree for a STEP model', async ({page}) => {
+    const TEST_TIMEOUT = 120_000
+    test.setTimeout(TEST_TIMEOUT)
+
+    const glbLogs: string[] = []
+    page.on('console', (msg) => {
+      const text = msg.text()
+      if (text.startsWith('[glb]')) {
+        glbLogs.push(text)
+      }
+    })
+
+    const CACHE_TIMEOUT = 30_000
+    await page.goto('/share/v/p/index.step')
+    await waitForModelReady(page)
+    await page.waitForFunction(
+      ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
+      {logs: glbLogs},
+      {timeout: CACHE_TIMEOUT},
+    )
+    expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
+
+    glbLogs.length = 0
+    await page.goto('/share/v/p/index.step')
+    await waitForModelReady(page)
+    await page.waitForFunction(
+      ({logs}) => logs.some((l: string) => l.includes('cache HIT')),
+      {logs: glbLogs},
+      {timeout: CACHE_TIMEOUT},
+    )
+
+    // The tree must come from the cached extension, not the scene-graph
+    // fallback. This log line IS the discriminant — without it the panel
+    // still renders rows, just the wrong ones.
+    await page.waitForFunction(
+      ({logs}) => logs.some((l: string) => l.includes('hydrated NavTree from BLDRS_spatial_tree')),
+      {logs: glbLogs},
+      {timeout: CACHE_TIMEOUT},
+    )
+
+    await page.getByTestId('control-button-navigation').click()
+    const navTreePanel = page.getByTestId('NavTreePanel')
+    await expect(navTreePanel).toBeVisible()
+    await expect(navTreePanel.locator('[role="treeitem"]').first()).toBeVisible()
+  })
 })
