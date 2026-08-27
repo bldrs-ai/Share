@@ -429,6 +429,17 @@ describe('Filetype', () => {
       ))).toBe('IFC4')
     })
 
+    it('does not match FILE_SCHEMA inside a longer entity name', () => {
+      // conway parses header records under their exact names and inspects
+      // only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA` is invisible to it.
+      // An unanchored scan reads it as the schema — and with last-wins that
+      // is the dangerous direction whenever the lookalike follows the real
+      // entity: we answer IFC where conway answers AP214.
+      const body = `FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nNOT_FILE_SCHEMA(('IFC4'));`
+      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    })
+
     it('separates "did not say" from "said STEP"', () => {
       // The distinction `classifyStepFamily` cannot express, because it
       // folds both into 'ifc'. A caller whose false-'ifc' is expensive —

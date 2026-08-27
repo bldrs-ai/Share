@@ -426,7 +426,15 @@ export function stepSchemaName(header) {
 }
 
 
-const FILE_SCHEMA_VALUE = /FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
+// `\b` anchors the entity name so the scan cannot start inside a longer
+// identifier. conway parses header records under their exact names and
+// inspects only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA(('IFC4'));` is
+// invisible to it — while an unanchored scan reads it as the schema. With
+// last-wins that is the dangerous direction whenever the lookalike follows
+// the real entity: we answer IFC, conway answers AP214. `\b` suffices
+// because `_` is a word character, so there is no boundary inside
+// `NOT_FILE_SCHEMA`.
+const FILE_SCHEMA_VALUE = /\bFILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
 
 
 /**
