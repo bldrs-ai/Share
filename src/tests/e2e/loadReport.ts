@@ -52,8 +52,28 @@ export interface ParsedReport {
    * this repo can run today. Absent, not an error: the field starts
    * populating itself the moment the conway pin and Share's report arm
    * (conway #544) make the line appear.
+   *
+   * Read together with {@link ParsedReport.previewError}: null preview with
+   * a null error means the line was absent, null preview with a non-null
+   * error means it was present and corrupt. Those are different facts.
    */
   preview: PreviewStats | null
+  /**
+   * The verbatim `Preview:` line when one was present but did not parse;
+   * null otherwise.
+   *
+   * conway's `formatPreviewLine` interpolates whatever the caller handed it,
+   * so a JS caller passing partial stats emits a *well-formed-looking* line
+   * carrying `undefined` counters — e.g.
+   * `Preview: first mesh 0.275s, 1 meshes from undefined units, ...`.
+   * Folding that into `preview: null` would record "no preview channel ran"
+   * for a run where it did, and a measurement rig must not conflate
+   * absence with corruption. Deliberately NOT salvaged by a lenient
+   * re-parse: the surviving first-mesh number belongs to a payload whose
+   * other fields are known broken, so publishing it would turn a visible
+   * upstream bug into a plausible-looking measurement.
+   */
+  previewError: string | null
   total: TotalStats | null
 }
 
@@ -131,11 +151,13 @@ export function parsePreviewLine(line: string): PreviewStats | null {
 export function parseReportLines(lines: string[]): ParsedReport {
   const stages: StageStats[] = []
   let preview: PreviewStats | null = null
+  let previewError: string | null = null
   let total: TotalStats | null = null
   let modelLine: string | null = null
   for (const line of lines) {
     if (line.startsWith('Preview:')) {
       preview = parsePreviewLine(line)
+      previewError = preview === null ? line : null
       continue
     }
     if (line.startsWith('Model:')) {
@@ -165,5 +187,5 @@ export function parseReportLines(lines: string[]): ParsedReport {
       })
     }
   }
-  return {lines, modelLine, stages, preview, total}
+  return {lines, modelLine, stages, preview, previewError, total}
 }

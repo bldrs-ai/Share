@@ -1,6 +1,7 @@
 import {CDPSession, ConsoleMessage, Page, Request, Response} from '@playwright/test'
 import {mkdir, readFile, writeFile} from 'fs/promises'
 import {dirname, resolve} from 'path'
+import {probeSource, toViewerUrl, withFeatures} from './loadProbe'
 import {ParsedReport, parseReportLines} from './loadReport'
 import {waitForModelReady} from './models'
 
@@ -26,8 +27,11 @@ import {waitForModelReady} from './models'
  * - **conway #541** asks whether the `?feature=workers` regression is CPU-
  *   or bandwidth-bound. `cpu` carries the CDP `Performance.getMetrics`
  *   delta, where `processTimeMs` (whole renderer process, worker threads
- *   included) against `wallMs` is the saturation signal, and
- *   `processTimeMs - threadTimeMs` is the off-main-thread half.
+ *   included) against `loadWallMs` is the saturation signal, and
+ *   `processTimeMs - threadTimeMs` is the off-main-thread half. Both are
+ *   contaminated by CDP CPU throttling and must not be read in that arm —
+ *   see {@link CpuMetrics.processTimeOverWall}; the durable signals there
+ *   are `report.total.seconds` and `derived.firstMeshSinceOpenMs`.
  *
  * Nothing here touches product code: every in-page observable is read from
  * the Zustand store already exposed on `window.store` (playwright builds
@@ -51,12 +55,39 @@ export interface CpuMetrics {
   processTimeMs: number
   jsHeapUsedMbEnd: number
   /**
-   * `processTimeMs / wallMs`. At or above ~1.0 the renderer burned a full
-   * core for the whole load (CPU-bound); well below it the load spent its
-   * time waiting (network, disk, locks) — conway #541's question.
+   * Wall time from just before `page.goto` to `isModelReady`, the
+   * denominator of {@link CpuMetrics.processTimeOverWall}. Recorded so the
+   * ratio is auditable, and deliberately NOT `harnessWallMs`: that one runs
+   * to the end of `waitForModelReady`, which pads it with the helper's
+   * fixed 1 s animation-settle wait (models.ts). A fixed pad is a shrinking
+   * fraction of a slower run, so it biases every across-condition ratio in
+   * one direction.
+   */
+  loadWallMs: number
+  /**
+   * `processTimeMs / loadWallMs`. Near 1.0 the renderer burned about a full
+   * core for the whole load; well below it the load spent its time waiting
+   * (network, disk, locks).
+   *
+   * Only interpretable in the unthrottled and network-throttled arms.
+   * Under `Emulation.setCPUThrottlingRate` this number — and `processTimeMs`
+   * and `offMainThreadMs` with it — is invalid: Chromium implements the
+   * throttle by suspending and re-scheduling the target from inside the
+   * renderer, and that overhead lands in the same process `ProcessTime`
+   * sums. Fixed work under a 4× throttle should show CPU flat and wall ~4×;
+   * what is actually observed is CPU *rising* 5.3× (see
+   * design/new/browser-load-measurement.md §"CPU-bound or bandwidth-bound?"),
+   * which throttling cannot manufacture. Use `report.total.seconds` and
+   * `derived.firstMeshSinceOpenMs` for the CPU arm instead.
    */
   processTimeOverWall: number
-  /** `processTimeMs - threadTimeMs`: CPU spent off the main thread. */
+  /**
+   * `processTimeMs - threadTimeMs`: CPU spent off the main thread — the
+   * half a worker-pool change moves, and the quantity conway #541 wants.
+   * Carries the same CPU-throttle contamination as
+   * {@link CpuMetrics.processTimeOverWall}; trust it only in the
+   * unthrottled and network-throttled arms.
+   */
   offMainThreadMs: number
 }
 
@@ -264,216 +295,6 @@ function delta(end: number | null, start: number | null): number | null {
 
 
 /**
- * The in-page probe, injected at document start so its first
- * `requestAnimationFrame` runs long before the viewer exists.
- *
- * **First-mesh observable, and why this one.** The probe censuses the
- * three.js scene once per frame and reports the first frame containing a
- * mesh that was not in the scene when the scene first became reachable.
- * The baseline is everything the viewer builds at init (ground plane,
- * helpers); anything new is model geometry, whether it arrived through the
- * parse-time preview channel (`ON_PREVIEW_MESH` →
- * `ProgressiveLoadSession.addPreviewMesh`), the durable batch pump, or a
- * one-shot end-of-load build. Being uuid-based rather than name-based, it
- * needs no knowledge of which path produced the mesh — which is the point,
- * since the whole M3 question is which path fires first.
- *
- * It measures *scene-graph presence*, accurate to about one frame (~16 ms)
- * of the first frame that actually paints those pixels; two rAF callbacks
- * in the same frame have no defined order relative to each other. It does
- * NOT include download or wasm init (both happen before any mesh exists);
- * `derived` carries the anchors that put those back in.
- *
- * Rejected alternatives: reading the canvas back needs
- * `preserveDrawingBuffer`, i.e. a product change with a real per-frame
- * cost; CDP screencast frames are throttled and re-encoded, so their
- * timestamps are worse than a frame; hooking `ON_PREVIEW_MESH` directly is
- * only reachable from inside product code and would see preview meshes
- * only, missing every non-deferring path.
- */
-function probeSource(): void {
-  /** The subset of a three.js Object3D the census reads. */
-  interface SceneObject {
-    uuid: string
-    name?: string
-    type?: string
-    isMesh?: boolean
-    isBatchedMesh?: boolean
-    isInstancedMesh?: boolean
-    geometry?: {index?: {count: number} | null, attributes?: {position?: {count: number}}}
-  }
-  interface SceneLike {
-    traverse: (visit: (obj: SceneObject) => void) => void
-  }
-  interface ViewerLike {
-    context?: {getScene?: () => SceneLike, scene?: SceneLike}
-    scene?: SceneLike
-  }
-  interface ProbeState {
-    timeOrigin: number
-    frames: number
-    sceneFirstSeenMs: number | null
-    baselineMeshCount: number | null
-    firstMeshMs: number | null
-    firstMeshFrame: number | null
-    firstMeshName: string | null
-    stageTransitions: {label: string, atMs: number}[]
-    modelReadyMs: number | null
-    reportSettledMs: number | null
-    reportLines: string[] | null
-    sceneMeshes: number | null
-    sceneTriangles: number | null
-  }
-  interface StoreSnapshot {
-    isModelReady?: boolean
-    loadReportLines?: string[]
-    currentLoadLine?: string | null
-    viewer?: ViewerLike | null
-  }
-  interface ProbeWindow extends Window {
-    __bldrsLoadProbe?: ProbeState
-    store?: {
-      getState: () => StoreSnapshot
-      subscribe?: (listener: (state: StoreSnapshot) => void) => () => void
-    }
-  }
-
-  const VERTICES_PER_TRIANGLE = 3
-  const self = window as unknown as ProbeWindow
-  const probe: ProbeState = {
-    timeOrigin: performance.timeOrigin,
-    frames: 0,
-    sceneFirstSeenMs: null,
-    baselineMeshCount: null,
-    firstMeshMs: null,
-    firstMeshFrame: null,
-    firstMeshName: null,
-    stageTransitions: [],
-    modelReadyMs: null,
-    reportSettledMs: null,
-    reportLines: null,
-    sceneMeshes: null,
-    sceneTriangles: null,
-  }
-  self.__bldrsLoadProbe = probe
-
-  const baseline = new Set<string>()
-  let lastStageLabel: string | null = null
-  let subscribed = false
-
-  /**
-   * The scene, if the viewer has built it yet. `context.getScene()` is the
-   * fork's accessor (src/viewer/ShareViewer.js uses it throughout); the
-   * fallbacks cover shapes an engine swap could produce.
-   *
-   * @return the three.js scene, or null if the viewer has not built it
-   */
-  function findScene(): SceneLike | null {
-    const viewer = self.store?.getState?.().viewer
-    const scene = viewer?.context?.getScene?.() ?? viewer?.context?.scene ?? viewer?.scene ?? null
-    return scene && typeof scene.traverse === 'function' ? scene : null
-  }
-
-  /**
-   * @param obj
-   * @return triangles the object's geometry would draw
-   */
-  function triangleCount(obj: SceneObject): number {
-    const count = obj.geometry?.index?.count ?? obj.geometry?.attributes?.position?.count ?? 0
-    return Math.floor(count / VERTICES_PER_TRIANGLE)
-  }
-
-  /**
-   * Record everything observable from one store state.
-   *
-   * Driven by a Zustand `subscribe`, not by the frame loop: stage
-   * transitions are the anchors the whole cross-check hangs off, and
-   * sampling for them loses short stages outright. loadProgress.js
-   * republishes `currentLoadLine` on stage close *and* on a 100 ms tick,
-   * so a 74 ms `Parsing` stage is a single ~14 ms window that a 16 ms rAF
-   * sampler misses about half the time — observed, not theorized. A
-   * subscription sees every set.
-   *
-   * @param state
-   */
-  function recordStore(state: StoreSnapshot): void {
-    if (probe.modelReadyMs === null && state.isModelReady === true) {
-      probe.modelReadyMs = performance.now()
-    }
-    const lines = state.loadReportLines
-    if (Array.isArray(lines) && lines.length > 0) {
-      probe.reportLines = lines.slice()
-    }
-    const current = state.currentLoadLine
-    // "Settled" is LoadReportControl's own test for a finished load:
-    // report lines present and no stage still animating. The report
-    // becomes non-empty at the *first* progress event (publishReport runs
-    // on every one), so a first-non-empty mark would time load start.
-    if (lastStageLabel !== null && probe.reportSettledMs === null &&
-        (current === null || current === undefined) &&
-        Array.isArray(lines) && lines.length > 0) {
-      probe.reportSettledMs = performance.now()
-    }
-    if (typeof current === 'string' && current.length > 0) {
-      // `Label [0%...56%] 1.2s` or `Label: 1.2s` — the label is the stable
-      // part, and a new label IS a new stage (progress_log.js infers stage
-      // transitions exactly this way).
-      const label = current.split(/[[:]/)[0].trim()
-      if (label.length > 0 && label !== lastStageLabel) {
-        lastStageLabel = label
-        probe.stageTransitions.push({label, atMs: performance.now()})
-      }
-    }
-  }
-
-  /** One frame of observation. */
-  function tick(): void {
-    probe.frames++
-    const store = self.store
-    if (store !== undefined) {
-      if (!subscribed && typeof store.subscribe === 'function') {
-        subscribed = true
-        store.subscribe(recordStore)
-      }
-      recordStore(store.getState())
-    }
-    const scene = findScene()
-    if (scene !== null) {
-      let meshes = 0
-      let triangles = 0
-      let newMesh: SceneObject | null = null
-      scene.traverse((obj: SceneObject) => {
-        if (obj.isMesh !== true && obj.isBatchedMesh !== true && obj.isInstancedMesh !== true) {
-          return
-        }
-        meshes++
-        triangles += triangleCount(obj)
-        if (probe.sceneFirstSeenMs === null) {
-          baseline.add(obj.uuid)
-        } else if (newMesh === null && !baseline.has(obj.uuid)) {
-          newMesh = obj
-        }
-      })
-      probe.sceneMeshes = meshes
-      probe.sceneTriangles = triangles
-      if (probe.sceneFirstSeenMs === null) {
-        probe.sceneFirstSeenMs = performance.now()
-        probe.baselineMeshCount = meshes
-      } else if (probe.firstMeshMs === null && newMesh !== null) {
-        probe.firstMeshMs = performance.now()
-        probe.firstMeshFrame = probe.frames
-        const found: SceneObject = newMesh
-        probe.firstMeshName = String(found.name || found.type || 'unnamed')
-      }
-    }
-    requestAnimationFrame(tick)
-  }
-
-  requestAnimationFrame(tick)
-}
-
-
-/**
  * Read the probe out of the page.
  *
  * @param page
@@ -502,25 +323,6 @@ async function readProbe(page: Page) {
 
 
 /**
- * Build the model URL with any `?feature=` flags applied.
- *
- * Share reads features off the query string, and multiple flags are
- * comma-joined on a single `feature` param (src/utils/featureFlags.js).
- *
- * @param modelUrl
- * @param features
- * @return the URL with a `feature=` query param applied
- */
-export function withFeatures(modelUrl: string, features: string[]): string {
-  if (features.length === 0) {
-    return modelUrl
-  }
-  const separator = modelUrl.includes('?') ? '&' : '?'
-  return `${modelUrl}${separator}feature=${features.join(',')}`
-}
-
-
-/**
  * CDP `Performance.getMetrics` as a flat map. Chromium reports durations in
  * seconds and sizes in bytes.
  *
@@ -542,7 +344,7 @@ async function metricsMap(cdp: CDPSession): Promise<Record<string, number>> {
  *
  * @param before
  * @param after
- * @param wallMs
+ * @param wallMs wall time to `isModelReady`, not to the end of the settle wait
  * @return the CPU record for the load window
  */
 function cpuDelta(
@@ -566,6 +368,7 @@ function cpuDelta(
     threadTimeMs: round1(threadTimeMs) ?? 0,
     processTimeMs: round1(processTimeMs) ?? 0,
     jsHeapUsedMbEnd: round1((after.JSHeapUsedSize ?? 0) / BYTES_PER_MB) ?? 0,
+    loadWallMs: round1(wallMs) ?? 0,
     processTimeOverWall: wallMs > 0 ? round2(processTimeMs / wallMs) : 0,
     offMainThreadMs: round1(processTimeMs - threadTimeMs) ?? 0,
   }
@@ -630,7 +433,7 @@ function summarize(values: (number | null)[]): MetricSummary | null {
  * @return one measured sample
  */
 async function measureOnce(page: Page, options: MeasureOptions, iteration: number): Promise<LoadSample> {
-  const url = withFeatures(options.modelUrl, options.features ?? [])
+  const url = withFeatures(toViewerUrl(options.modelUrl), options.features ?? [])
   const modelBasename = decodeURIComponent(options.modelUrl.split('?')[0].split('/').pop() ?? '')
   // Named so both listeners can be detached at the end of the iteration.
   // Leaving them attached would let iteration 0's arrays keep filling
@@ -702,17 +505,27 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
   }
   const harnessWallMs = Date.now() - startedAt
 
-  let cpu: CpuMetrics | null = null
-  if (cdp !== null) {
-    try {
-      cpu = cpuDelta(metricsBefore, await metricsMap(cdp), harnessWallMs)
-    } catch {
-      cpu = null
-    }
-  }
-
+  // Sampled before `readProbe` so the "after" mark sits as close to
+  // model-ready as the sequence allows.
+  const metricsAfter = cdp === null ? null : await metricsMap(cdp).catch(() => null)
   const probe = await readProbe(page)
   const timeOrigin = probe?.timeOrigin ?? 0
+
+  // The CPU ratio's denominator: navigation-to-`isModelReady`, in the
+  // harness's epoch domain. `harnessWallMs` runs on past that through
+  // `waitForModelReady`'s fixed 1 s settle wait, and a fixed pad shrinks as
+  // a fraction of a slower run — which tilts every across-condition ratio
+  // the same way. Falls back to `harnessWallMs` only when the probe never
+  // saw the ready flip (a failed load), where the ratio is moot anyway.
+  const modelReadyEpochMs = timeOrigin === 0 || probe?.modelReadyMs === null || probe?.modelReadyMs === undefined ?
+    null :
+    timeOrigin + probe.modelReadyMs
+  const loadWallMs = modelReadyEpochMs === null ? harnessWallMs : modelReadyEpochMs - startedAt
+
+  let cpu: CpuMetrics | null = null
+  if (metricsAfter !== null) {
+    cpu = cpuDelta(metricsBefore, metricsAfter, loadWallMs)
+  }
   /**
    * Playwright resource timings are epoch-ms `startTime` plus ms offsets;
    * the probe's marks are `performance.now()`. Put both in one domain.
@@ -778,6 +591,15 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
 
   page.off('console', onConsole)
   page.off('response', onResponse)
+  // One CDP session is created per iteration; without this an N-iteration
+  // run leaves N attached, each still receiving Performance/Network events.
+  if (cdp !== null) {
+    try {
+      await cdp.detach()
+    } catch {
+      // A session whose page already closed is already detached.
+    }
+  }
 
   return {
     iteration,
@@ -935,7 +757,13 @@ export function formatRecord(record: LoadMeasurementRecord): string {
     for (const line of report.lines) {
       out.push(`    ${line}`)
     }
-    if (report.preview === null) {
+    if (report.previewError !== null) {
+      // Absence and corruption are different facts (loadReport.ts
+      // ParsedReport.previewError) and the summary must not print the one
+      // for the other: a Preview line conway emitted with `undefined`
+      // counters is an upstream bug to chase, not a missing feature.
+      out.push(`    (!! Preview: line present but unparseable: ${report.previewError})`)
+    } else if (report.preview === null) {
       out.push('    (no Preview: line — Share does not call conway setPreviewStats yet; conway#544)')
     }
   }

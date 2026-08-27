@@ -39,6 +39,13 @@ const CPU_THROTTLE = Number(process.env.BLDRS_MEASURE_CPU_THROTTLE || '1')
 const NETWORK_MBPS = Number(process.env.BLDRS_MEASURE_NET_MBPS || '0')
 const NETWORK_LATENCY_MS = Number(process.env.BLDRS_MEASURE_NET_LATENCY_MS || '0')
 
+// The fixture mock is only reachable — and only wanted — for the in-repo
+// `/share/v/gh/bldrs-ai/test-models/...` route. `setupVirtualPathIntercept`
+// throws on anything that is not that route prefix, so an absolute
+// BLDRS_MEASURE_MODEL (a hosted corpus model, which measureLoad wraps into
+// `/share/v/u/...`) must not reach it: that caller wants the real network.
+const USES_REPO_FIXTURE = MODEL_URL.startsWith('/share/v/gh/bldrs-ai/test-models/')
+
 // The measured load itself can be long on a big model; the outer test
 // budget has to clear iterations × that, plus page boot.
 const TEST_TIMEOUT_MS = 300_000
@@ -74,9 +81,7 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-    // Only needed for a repo-fixture URL; a caller pointing
-    // BLDRS_MEASURE_MODEL at a real host wants the real network.
-    if (MODEL_URL.includes('/bldrs-ai/test-models/')) {
+    if (USES_REPO_FIXTURE) {
       await setupVirtualPathIntercept(page, MODEL_URL, '')
     }
 
@@ -101,9 +106,20 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
     expect(sample.timings.modelReadyMs as number)
       .toBeGreaterThanOrEqual(sample.timings.firstMeshMs as number)
     // The viewer's own furniture is in the baseline; model geometry must
-    // not be. A baseline that already swallowed the model would show up
-    // here as an implausibly large count.
+    // not be. Stated as a bound, not a not-null: a census taken late enough
+    // to have swallowed the model's meshes would sit at or above the final
+    // scene count, and `firstMeshMs` — "the first mesh NOT in the baseline"
+    // — could then never fire at all.
     expect(sample.timings.baselineMeshCount).not.toBeNull()
+    expect(sample.scene.meshes).toBeGreaterThan(0)
+    expect(sample.timings.baselineMeshCount as number)
+      .toBeLessThan(sample.scene.meshes as number)
+    // The mesh that anchored firstMeshMs, recorded so a reader can tell
+    // model geometry from viewer furniture. Only asserted non-empty: the
+    // durable model on the default path is a THREE.BatchedMesh, which
+    // three.js names `Mesh`, so a name assertion would pin nothing — the
+    // guard that actually holds is the uuid baseline bound above.
+    expect(sample.timings.firstMeshName).toBeTruthy()
 
     // The model fetch was seen, so download can be separated from parse.
     expect(sample.timings.modelResponseEndMs).not.toBeNull()
@@ -121,6 +137,10 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
     // field today. If this ever becomes non-null here without the pin
     // moving, something is emitting a Preview line we did not expect.
     expect(sample.report).toHaveProperty('preview')
+    // ...and null there has to mean absent, not "a Preview line arrived
+    // and did not parse". A non-null previewError is a real upstream
+    // change to look at, and it would otherwise hide inside the null above.
+    expect(sample.report?.previewError).toBeNull()
 
     // Stage transitions are what anchor the #544 cross-check number.
     // `Opening model` in particular: without it firstMeshSinceOpenMs is
@@ -140,7 +160,7 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-    if (MODEL_URL.includes('/bldrs-ai/test-models/')) {
+    if (USES_REPO_FIXTURE) {
       await setupVirtualPathIntercept(page, MODEL_URL, '')
     }
 

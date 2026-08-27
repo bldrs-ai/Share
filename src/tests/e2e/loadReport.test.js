@@ -109,6 +109,53 @@ describe('load report parsing', () => {
       expect(parsed.preview?.meshes).toBe(10)
     })
 
+    it('records a malformed Preview line as an error, not as absence', () => {
+      // conway's formatter interpolates whatever the caller handed it, so a
+      // JS caller with partial stats emits a line that *looks* well formed
+      // and carries `undefined` counters. Generated here rather than
+      // hand-written, so the case stays exactly what conway would produce.
+      const line = formatPreviewLine({firstMeshMs: 275, meshes: 1})
+      expect(line).toContain('undefined units')
+      const parsed = parseReportLines(['Parsing: 1.500s', line, 'Total: 2.000s'])
+      // The strict parse still refuses the payload — the surviving
+      // first-mesh value belongs to a record whose other fields are broken.
+      expect(parsed.preview).toBeNull()
+      // ...but the line was there, and saying otherwise would hide an
+      // upstream bug behind "Share does not emit Preview lines yet".
+      expect(parsed.previewError).toBe(line)
+      // The rest of the report is unaffected: one bad line is not a bad run.
+      expect(parsed.stages.map((st) => st.label)).toEqual(['Parsing'])
+      expect(parsed.total?.seconds).toBeCloseTo(2.0, 3)
+    })
+
+    it('leaves previewError null when the Preview line is merely absent', () => {
+      // The distinction is only worth anything if the common case stays
+      // clean: absence is `preview === null && previewError === null`.
+      const log = new LoadLogAccumulator()
+      log.onProgress({phase: 'dataParse', completed: 1, total: 1, elapsedMs: 0})
+      log.closeCurrentStage(500)
+      const parsed = parseReportLines(log.allLines())
+      expect(parsed.preview).toBeNull()
+      expect(parsed.previewError).toBeNull()
+    })
+
+    it('leaves previewError null for a Preview line that parses', () => {
+      const log = new LoadLogAccumulator()
+      log.onProgress({phase: 'dataParse', completed: 1, total: 1, elapsedMs: 0})
+      log.setPreviewStats({
+        firstMeshMs: 1234.5,
+        meshes: 10,
+        emitted: 4,
+        deferred: 1,
+        deferredOnPlacement: 1,
+        retried: 0,
+      })
+      log.closeCurrentStage(2000)
+      const parsed = parseReportLines(log.allLines())
+      expect(parsed.preview).not.toBeNull()
+      expect(parsed.previewError).toBeNull()
+    })
+
     it('ignores preamble lines it does not recognize', () => {
       const parsed = parseReportLines([
         'Share 1.0.0',

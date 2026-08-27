@@ -11,6 +11,7 @@ diffable JSON record.
 | Piece | Path |
 |---|---|
 | Measurement library | [`src/tests/e2e/loadMeasure.ts`](../../src/tests/e2e/loadMeasure.ts) |
+| In-page probe + model-URL resolution (no Playwright import) | [`src/tests/e2e/loadProbe.ts`](../../src/tests/e2e/loadProbe.ts) + `loadProbe.test.js` |
 | Report-line parsers (no Playwright import) | [`src/tests/e2e/loadReport.ts`](../../src/tests/e2e/loadReport.ts) + `loadReport.test.js` |
 | The spec that drives it | [`src/viewer/loadTiming.spec.ts`](../../src/viewer/loadTiming.spec.ts) |
 | Output | `tools/measure/<label>-<formFactor>.json` (gitignored) |
@@ -47,10 +48,32 @@ big corpus model, with no code change:
 | `BLDRS_MEASURE_NET_MBPS` / `_NET_LATENCY_MS` | `0` / `0` | CDP `Network.emulateNetworkConditions` |
 | `BLDRS_MEASURE_OUT` | `tools/measure` | output directory |
 
-A URL under `bldrs-ai/test-models` is served from
-`src/tests/fixtures/github/**` by the playwright dev server. Any other URL
-is fetched for real — point `BLDRS_MEASURE_MODEL` at a hosted big model and
-the intercept is skipped automatically.
+### What `BLDRS_MEASURE_MODEL` may be
+
+The browser has to land on **Share**, not on the model bytes, so
+`toViewerUrl` (`loadProbe.ts`) resolves three cases on structure rather
+than on a guess:
+
+| You pass | Recognized by | Chromium goes to |
+|---|---|---|
+| a route — `/share/v/gh/o/r/main/x.ifc` | not absolute (`new URL` throws) | it, against the dev server |
+| an absolute **Share viewer** URL — `https://…/share/v/gh/…` | `/share/v/{p,new,gh,u,g}/` in its **pathname** | it, unchanged |
+| an absolute **hosted model** URL — `https://host/PSB.ifc` | absolute, no viewer route in the path | `/share/v/u/<percent-encoded>` |
+
+The wrap is percent-encoded (as `SearchBar` and `routes.spec.ts` do), which
+is what keeps a signed URL's own `?…` inside the splat instead of colliding
+with the `?feature=` query. Two consequences worth knowing: an external
+model must carry its scheme (`host/x.ifc` reads as a route and 404s), and
+the host must serve CORS headers the viewer can fetch through — the same
+requirement any `/share/v/u/` load has.
+
+`timings.documentUrl` in every sample records what was actually navigated
+to, so a mis-resolution is visible in the record rather than only as a
+timeout.
+
+A route under `bldrs-ai/test-models` is served from
+`src/tests/fixtures/github/**` by the playwright dev server. Anything else
+is fetched for real — the fixture intercept is skipped automatically.
 
 
 ## Reading the output
@@ -120,6 +143,15 @@ formatter** rather than from hand-typed strings. The moment #544 lands,
 `report.preview` and the `previewFirstMeshMs` summary metric start
 populating with no change here.
 
+`report.previewError` is the other half of that field: a `Preview:` line
+that was **present and did not parse** is recorded there verbatim, and
+`preview` stays null. conway's `formatPreviewLine` interpolates whatever
+the caller hands it, so a JS caller with partial stats emits a
+well-formed-looking line carrying `undefined` counters — folding that into
+`preview: null` would claim no preview channel ran when one did. Absence is
+`preview === null && previewError === null`; anything else is a bug to
+chase upstream, and the printed summary says which it saw.
+
 One precision note the cross-check depends on: conway renders seconds to
 three decimals, so the `Preview:` line carries whole milliseconds and
 nothing finer. Agreement below ~1 ms is not observable through the report
@@ -136,8 +168,12 @@ signals are wired in, all of them cheap:
    `processTimeMs` is whole-renderer-process CPU (dedicated-worker threads
    included); `threadTimeMs` is the main thread's share; `offMainThreadMs`
    is the difference, which is the half a worker-pool change moves.
-   `processTimeOverWall` at ~1.0 means the renderer burned a full core for
-   the whole load; well below 1.0 means it spent its time waiting.
+   `processTimeOverWall` is `processTimeMs / cpu.loadWallMs`, near 1.0 when
+   the renderer burned about a full core for the whole load. **All three are
+   invalid in the CPU-throttled arm** — see the box below. `loadWallMs` runs
+   to `isModelReady`, deliberately not to the end of `waitForModelReady`,
+   whose fixed 1 s settle wait would pad the denominator by a shrinking
+   fraction as runs get slower.
 2. **CPU throttling A/B** — `BLDRS_MEASURE_CPU_THROTTLE=4`. If the load
    scales with the multiplier it is CPU-bound.
 3. **Network throttling A/B** — `BLDRS_MEASURE_NET_MBPS`. Note this
@@ -146,38 +182,80 @@ signals are wired in, all of them cheap:
    the model dominates the byte count.
 
 Measured on this sandbox (4 cores / 16 GB, 320 KB sculpture fixture,
-5 iterations, medians):
+5 iterations, medians). Compare **within** a table only: the unthrottled
+column here and the one in the network table below come from different
+sessions on a shared box, and their medians differ by more than some of the
+effects being measured.
 
 | | unthrottled | CPU ×4 | ratio |
 |---|---|---|---|
 | `report.total.seconds` | 1.9 | 5.5 | 2.9× |
 | `derived.firstMeshSinceOpenMs` | 298 | 1064 | 3.6× |
-| `cpu.processTimeMs` | 2920 | 15420 | 5.3× |
-| `cpu.processTimeOverWall` | 0.5 | 1.0 | — |
 
 Engine work scales near-linearly with CPU (3.6× for a 4× throttle) while
 end-to-end load scales 2.9×, because download and fixed boot costs do not
-throttle. `processTimeOverWall` moving 0.5 → 1.0 is the saturation
-crossing.
+throttle.
 
-The network arm separates cleanly from it (3 iterations, medians):
+> **`cpu.*` cannot be read in the CPU-throttled arm.** An earlier revision
+> of this doc quoted `cpu.processTimeMs` 2920 → 15420 (5.3×) and
+> `processTimeOverWall` 0.5 → 1.0 as "the saturation crossing". That reading
+> is wrong, and so is the metric. Throttling cannot manufacture CPU time:
+> for fixed work under a 4× throttle the correct signature is CPU roughly
+> flat and wall ~4×, i.e. the ratio *falling* to ~0.13. Chromium implements
+> `Emulation.setCPUThrottlingRate` by suspending and re-scheduling the
+> target from inside the renderer, and that overhead is inside the same
+> process `ProcessTime` sums — so `processTimeMs`, `processTimeOverWall`
+> **and `offMainThreadMs`** are all contaminated in this arm, the last of
+> which is exactly what conway #541 wants. The defect is specific to CPU
+> throttling: in the network arm below the ratio moves the way physics
+> requires. The conclusion stands on `report.total.seconds` and
+> `firstMeshSinceOpenMs`, which are engine-side clocks and unaffected.
+
+The network arm separates cleanly from it. Re-measured after
+`processTimeOverWall`'s denominator changed to `cpu.loadWallMs`, so every
+number in this table is from one pair of runs (desktop, 3 iterations,
+medians) and is **not** comparable to the CPU table above, which is an
+earlier session on the same box:
 
 | | unthrottled | 10 Mbps / 50 ms | ratio |
 |---|---|---|---|
-| `timings.firstMeshMs` (navigation-anchored) | 3906 | 19108 | 4.9× |
-| `derived.firstMeshSinceOpenMs` (engine-anchored) | 298 | 689 | 2.3× |
-| `report.total.seconds` | 1.9 | 2.4 | 1.3× |
-| `cpu.processTimeOverWall` | 0.5 | 0.3 | — |
+| `timings.firstMeshMs` (navigation-anchored) | 2988 | 16361 | 5.5× |
+| `derived.firstMeshSinceOpenMs` (engine-anchored) | 410 | 448 | 1.1× |
+| `report.total.seconds` | 1.3 | 1.4 | 1.1× |
+| `cpu.loadWallMs` | 3805 | 17091 | 4.5× |
+| `cpu.processTimeMs` | 3270 | 7010 | 2.1× |
+| `cpu.processTimeOverWall` | 0.9 | 0.4 | — |
+
+Stated precisely, because the CPU arm shows what happens when it is not:
+wall grows 4.5×, CPU grows 2.1×, so the ratio *falls*. CPU is not flat —
+a page alive four and a half times as long does more network-stack, compositor and
+idle-render work — but it grows far slower than wall, which is what
+"waiting, not computing" looks like. Contrast the CPU arm, where CPU rose
+*faster* than wall on identical work; that is not a physical outcome, it is
+the instrument.
 
 That contrast is the whole reason the record carries both anchors:
-bandwidth moves the navigation-anchored number by 5× and what the engine
-actually does by 1.3×. On this 320 KB fixture nearly all of that is the
+bandwidth moves the navigation-anchored number by 5.5× and what the engine
+actually does by 1.1×. On this 320 KB fixture nearly all of that is the
 bundle and the wasm binary, not the model — CDP network emulation is
 page-wide. At 1 Mbps the run does not finish inside a 120 s per-load
 budget at all, which is worth knowing before choosing a profile.
 
-This is the methodology; **it has not been run against PSB or any other big
-model, because none is in this sandbox.**
+### What it has actually been run against
+
+| model | route taken | `firstMeshSinceOpenMs` | `report.total.seconds` |
+|---|---|---|---|
+| sculpture fixture, 320 KB | `/share/v/gh/…` (dev-server fixture) | 492 | 1.6 |
+| MB-Khaya, 33 MB, hosted over HTTP | `/share/v/u/<percent-encoded>` | 1986 | 21.7 |
+
+The second row is what proves the hosted-model path end to end: an absolute
+`http://…/MB-Khaya.ifc` in `BLDRS_MEASURE_MODEL`, wrapped into
+`/share/v/u/http%3A%2F%2F…`, 32,936,578 bytes seen by the byte counter, a
+full six-stage report, and every cross-check field populated.
+
+**Still not run against PSB (902 MB) or DOWA** — no corpus model of that
+size has been through it, and the CPU-versus-bandwidth numbers below remain
+a 320 KB fixture's.
 
 Not built, deliberately: `performance.measureUserAgentSpecificMemory()`
 needs cross-origin isolation, waits on a GC, and answers a memory question
@@ -202,9 +280,35 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   again every time, inside the `firstMeshSinceOpenMs` window. The summary
   reports min/median/max rather than a mean so one cold outlier cannot
   quietly move the number.
-- **Scene triangle counts are coarse.** `scene.triangles` sums geometry
-  attribute counts and over-counts a `BatchedMesh`'s preallocated buffers.
+- **Scene triangle counts are coarse.** `scene.triangles` sums
+  `geometry.index.count` across the scene, which on the default path is
+  *buffer capacity*, not drawn triangles: `IncrementalBatchedBuilder`
+  assembles the durable model into `THREE.BatchedMesh` batches preallocated
+  at `INITIAL_INDICES = 1 << 19` and grown 2× in place
+  (`src/viewer/ifc/incrementalBatchedBuilder.js`). The arithmetic is exact
+  and worth keeping here, because this caveat has been misread once as an
+  instancing artifact and once as not applying at all:
+
+  | run | `scene.meshes` | `scene.triangles` | = | `healthSuffix` |
+  |---|---|---|---|---|
+  | sculpture (320 KB) | 1 | 174,762 | `⌊2^19/3⌋` | `triangles=3326` |
+  | MB-Khaya (33 MB) | 2 | 524,287 | `⌊2^20/3⌋ + ⌊2^19/3⌋` | `triangles=251242` |
+
+  Note this is **not** the `?feature=batchedMesh` path
+  (`buildBatchedConwayModel`, `isActive: false`). That flag gates only the
+  *end-of-load* builder at `ShareIfcLoader.js:445`; the incremental builder
+  at `:395` runs whenever the preview session is on, which is the default.
   Use `report.total.healthSuffix` for the real figure.
+- **Records written by CI are measurement garbage.** `tools/playwright.config.js`
+  sets `fullyParallel: true` with `workers: 4`, and the spec's
+  `describe.configure({mode: 'serial'})` only serializes *within* one
+  describe — so `[desktop]` and `[mobile]` run concurrently with each other
+  and with every other spec in the suite. A `test-flows` run therefore
+  executes these model loads under 4-way contention on a shared runner, and
+  the `tools/measure/*.json` it writes must never be quoted as a
+  measurement. Only a deliberate local `--workers=1` run produces numbers.
+  The specs are still worth running in CI: they are asserting that the
+  harness observes what it claims to, which contention does not change.
 - **`waitForModelReady`'s budget.** The shared helper defaults to 15 s;
   `measureLoad` passes its own `timeoutMs` (120 s default) because a big
   model or a throttled CPU blows straight through 15 s.
