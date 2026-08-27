@@ -372,6 +372,22 @@ describe('Filetype', () => {
       expect(stepSchemaName('FILE_SCHEMA  ( ( \' IFC2X3 \' ) );')).toBe('IFC2X3')
     })
 
+    it('skips Part-21 comments the way conway\'s header parser does', () => {
+      // ISO-10303-21 allows a comment anywhere whitespace is allowed, and
+      // conway's `StepHeaderParser` consumes one as whitespace — so
+      // `ModelFormatDetector` calls these IFC. Reading them as "no schema"
+      // would cost a large IFC its windowed parse.
+      expect(stepSchemaName('FILE_SCHEMA /* exported by X */ ((\'IFC4\'));')).toBe('IFC4')
+      expect(stepSchemaName('FILE_SCHEMA((/* why */\'IFC4\'));')).toBe('IFC4')
+      expect(stepSchemaName('FILE_SCHEMA/* a */(/* b */(/* c */\'IFC4\'));')).toBe('IFC4')
+      // An unterminated comment matches nothing — null, i.e. buffer. That is
+      // the safe direction for a header we cannot read.
+      expect(stepSchemaName('FILE_SCHEMA /* unterminated ((\'IFC4\'));')).toBeNull()
+      // `/*` inside the string literal is ordinary text, not a comment, so
+      // the gap rule must not be applied after the opening quote.
+      expect(stepSchemaName('FILE_SCHEMA((\'IFC4\'));/* trailing */')).toBe('IFC4')
+    })
+
     it('separates "did not say" from "said STEP"', () => {
       // The distinction `classifyStepFamily` cannot express, because it
       // folds both into 'ifc'. A caller whose false-'ifc' is expensive —

@@ -410,9 +410,25 @@ export function classifyStepFamily(header) {
  * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
  */
 export function stepSchemaName(header) {
-  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
+  const schemaMatch = header.match(FILE_SCHEMA_VALUE)
   return schemaMatch === null ? null : schemaMatch[1]
 }
+
+
+// ISO-10303-21 permits a `/* ... */` comment anywhere whitespace is allowed,
+// and conway's `StepHeaderParser` consumes one AS whitespace (its
+// `whitespace()` loops on the comment parser), so `ModelFormatDetector` reads
+// `FILE_SCHEMA /* exported by ... */ (('IFC4'))` as IFC. A bare `\s*` here
+// would not, and this function's job is to reach conway's answer from the
+// same bytes: disagreeing costs a large model its windowed parse and the
+// whole-source allocation that avoids (`Loader.js#canOpenFromStore`).
+//
+// Deliberately NOT applied after the opening quote — inside a Part-21 string
+// literal `/*` is ordinary text, not a comment. An unterminated comment
+// matches nothing and yields null, which is the safe direction: buffer.
+const PART21_GAP = String.raw`(?:\s|/\*[\s\S]*?\*/)*`
+const FILE_SCHEMA_VALUE = new RegExp(
+  `FILE_SCHEMA${PART21_GAP}\\(${PART21_GAP}\\(${PART21_GAP}'\\s*([A-Za-z0-9_]+)`, 'i')
 
 
 /**
