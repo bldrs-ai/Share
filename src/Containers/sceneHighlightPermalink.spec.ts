@@ -1,6 +1,7 @@
 import {expect, test} from '@playwright/test'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
+import {captureGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
 
 
 /**
@@ -32,6 +33,8 @@ const MODEL_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/1712
 const ELEMENT_PERMALINK = `${MODEL_PATH}/120010/120020/120023/4998/2867`
 const TEST_TIMEOUT_MS = 180_000
 // Cache-hit test: two full loads plus the OPFS GLB write wait between them.
+const CACHE_WRITE_TIMEOUT_MS = 120_000
+const CACHE_HIT_LOG_TIMEOUT_MS = 30_000
 const CACHE_HIT_TIMEOUT_MS = 300_000
 const SETTLE_MS = 3_000
 
@@ -100,31 +103,29 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     test.setTimeout(CACHE_HIT_TIMEOUT_MS)
     await permalinkSetup(page)
 
+    const glbLogs = captureGlbLogs(page)
     await page.goto(`${ELEMENT_PERMALINK}#n:`, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
     await page.waitForTimeout(SETTLE_MS)
 
-    // Wait for the GLB cache write, then reload into the cache-hit path.
-    await page.waitForFunction(async () => {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const walk = async (dir: any): Promise<boolean> => {
-        for await (const [name, handle] of (dir as any).entries()) {
-          if (handle.kind === 'directory') {
-            if (await walk(handle)) {
-              return true
-            }
-          } else if (name.includes('.glb')) {
-            return true
-          }
-        }
-        return false
-      }
-      return walk(await navigator.storage.getDirectory())
-      /* eslint-enable @typescript-eslint/no-explicit-any */
-    }, undefined, {timeout: 120_000})
+    // Wait for the writer to FINISH, not merely for a `.glb` to appear in
+    // OPFS. This used to walk the directory for any `.glb` name, which the
+    // entry satisfies the moment it is created — so the reload could read a
+    // half-written artifact, miss, and re-parse live. `writer: wrote` is
+    // emitted after the bytes land, and is the same signal the sibling
+    // cache-hit specs wait on.
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_WRITE_TIMEOUT_MS)
 
+    glbLogs.length = 0
     await page.reload({waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
+    // Prove the reload actually served the artifact. Waiting for a `.glb` to
+    // appear in OPFS only shows the writer ran; if the reader then misses it —
+    // a lookup failure, a changed key — the source is re-parsed live into an
+    // ordinary BatchedMesh, whose highlight and geometry satisfy every
+    // assertion below. Without this the test can pass while exercising none of
+    // the cache-hit behaviour its name claims.
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_HIT_LOG_TIMEOUT_MS)
     await page.waitForTimeout(SETTLE_MS)
 
     const hit = await page.evaluate(() => {

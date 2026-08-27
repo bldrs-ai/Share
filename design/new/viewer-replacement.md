@@ -1500,32 +1500,42 @@ Recommendation: try (1) first as a one-line change, then evaluate
 whether (2) is worth the memory hit. (3) only if neither lands the
 remaining responsiveness budget.
 
-### 4b.2. Cache-hit Playwright specs need OPFS-worker fetch routing
+### 4b.2. Cache-hit Playwright specs — resolved in #1779
 
-`Properties.cacheHit.spec.ts` + `NavTree.cacheHit.spec.ts` are
-`test.fixme`'d as of PR #1531. The flag flip (`OPFS_IS_ENABLED: true`
-in `vars.playwright.js`) is in place but the specs time out waiting
-for `writer: wrote` because **`downloadToOPFS` runs inside the OPFS
-Worker, and worker-context fetches are not intercepted by
-Playwright's `context.route(...)`**. Three viable un-skip paths:
+`Properties.cacheHit.spec.ts`, `NavTree.cacheHit.spec.ts` and
+`sceneHighlightPermalink.spec.ts`'s cache-hit leg ran for the first time
+in #1779. They are no longer `fixme`'d and `OPFS_IS_ENABLED` is on in
+`vars.playwright.js`.
 
-1. **MSW handler for `/index.ifc`** that fulfils worker-context
-   fetches. MSW's service worker DOES intercept worker fetches once
-   it's controlling the page; the gap is the race window before
-   activation.
-2. **Gate the first `page.goto` on `waitForServiceWorker`** so MSW
-   is guaranteed in place before any fetch (worker or main).
-3. **Pre-seed OPFS via `page.evaluate`** before the first goto so
-   the test doesn't need a download at all — the reader path
-   exercises against pre-staged bytes.
+**The diagnosis recorded here was wrong**, which is worth keeping rather
+than deleting, because it cost the project #1776. This section (and the
+specs, and `vars.playwright.js`) attributed the timeouts to
+worker-context fetches escaping Playwright's `context.route`, and listed
+three un-skip paths built on that premise. None was needed. The specs
+waited with `page.waitForFunction(pred, {logs: glbLogs})`, and
+`waitForFunction` serialises its argument into the page **once**, then
+re-invokes the predicate against that frozen copy — so the Node-side
+`page.on('console')` pushes never reached it. Every line they waited for
+arrives after the wait starts, so each wait burned its full timeout by
+construction, whatever OPFS was doing. Measured: against an array
+appended at 1s, `waitForFunction` times out at 4s where `expect.poll`
+resolves at 1.2s.
 
-(2) is the smallest change and probably the right first try. (1)
-makes the specs portable to environments where SW activation is
-slower. (3) is the most deterministic but loses the writer-side
-coverage.
+The ≈80-spec regression the flag flip was blamed for did not reappear
+either: the full suite with OPFS on is 161 passed / 41 skipped / 0
+failed.
 
-The cache-hit round-trip is currently validated manually on deploy
-preview (Snowdon, Schependomlaan).
+Two things generalise from it:
+
+- **A `fixme`'d spec rots.** Running these turned up four assertions that
+  had quietly stopped meaning anything — a `role="treeitem"` selector the
+  tree no longer emits, a count taken against a collapsed tree, two
+  `glbVerbose`-gated log lines asserted without the flag, and a
+  `GlobalId` row that is not rendered on either path. None could fail, so
+  none could be noticed.
+- **A wrong diagnosis in a comment outlives the bug.** This one was
+  repeated in four places and cited as settled for long enough that the
+  coverage gap it explained became normal.
 
 ### 4b.3. Other recommendations from PR #1531 review
 

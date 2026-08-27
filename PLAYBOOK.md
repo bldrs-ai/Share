@@ -46,7 +46,8 @@ substitution explicit (and visible to the user) rather than letting
 - `yarn test-flows [spec] -g "test name"` - Run a single test by name grep
 
 **Build config**: Playwright tests use `SHARE_CONFIG=playwright` (`tools/esbuild/vars.playwright.js`).
-Key differences from production: `OPFS_IS_ENABLED=false`, `MSW_IS_ENABLED=true`, `NODE_ENV=development`.
+Key differences from production: `MSW_IS_ENABLED=true`, `NODE_ENV=development`. `OPFS_IS_ENABLED` is
+**on**, as in production — it was off until #1779, so treat any older note saying otherwise as stale.
 
 **SPA routing**: The static file server (`http-server docs`) has no SPA fallback. Missing paths return
 a 404 which serves `docs/404.html`, which redirects to `/?/the/path`. `docs/index.html` then uses
@@ -66,9 +67,23 @@ await page.evaluate(() => {
 The `OpenModelDialog` reads `loadRecentFilesBySource('local')` from localStorage whenever the dialog
 opens (`isDialogDisplayed` → true), so the entry is visible immediately without a page reload.
 
-**OPFS in tests**: With `OPFS_IS_ENABLED=false`, `saveDnDFileToOpfs` is never called; the fallback
-(`saveDnDFileToOpfsFallback`) runs instead and produces a UUID without an extension. This makes
-post-DnD navigation unreliable in tests — prefer testing the persistence→UI layer directly (see above).
+**OPFS in tests**: on since #1779, so a spec exercises the same OPFS path as production —
+`saveDnDFileToOpfs` runs rather than `saveDnDFileToOpfsFallback`, and the GLB cache round-trip
+(writer → OPFS → reader) is reachable at all. That round-trip is what the cache-hit specs guard;
+without OPFS they could only ever have tested a live parse.
+
+The flag is compile-time and all-or-nothing (`store/BrowserSlice.js` hard-gates the setter), so it
+cannot be enabled per-spec. Two consequences worth knowing:
+
+- Per-test isolation comes from Playwright's fresh `BrowserContext`, not from anything the app does.
+  A spec that populates the cache and then reloads should still `clearOpfs` in `afterEach` — see
+  `NavTree.cacheHit.spec.ts` — so an interrupted run can't leave an artifact a later test reads as a
+  hit.
+- Waiting on a `[glb]` console line is the way to observe cache state (`cache HIT`, `writer: wrote`).
+  Use `waitForGlbLog` from `src/tests/e2e/glbLogs.ts` and **not** `page.waitForFunction(pred, {logs})`
+  — that serialises its argument into the page once, so Node-side pushes never reach the predicate and
+  the wait can only succeed if the line already arrived. Three specs were `fixme`'d for years on
+  exactly that mistake (#1779).
 
 **Intercept model fetches**: For tests that navigate to a GitHub model URL, use `setupVirtualPathIntercept`
 from `src/tests/e2e/models.ts` to serve a fixture file in place of the real network request.

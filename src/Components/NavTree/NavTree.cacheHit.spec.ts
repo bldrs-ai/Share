@@ -28,11 +28,16 @@ const EXPAND_SETTLE_MS = 400
  */
 async function expandTree(panel: Locator) {
   for (let round = 0; round < EXPAND_ROUNDS; round++) {
-    const toggles = panel.locator('[data-testid="NavTreeNodeToggle"]')
-    if (await toggles.count() === 0) {
+    // Only the toggles of nodes still marked collapsed. Clicking every toggle
+    // each round would re-close what the previous round opened, so the tree
+    // oscillates instead of opening monotonically and the final count depends
+    // on which round happened to land last.
+    const collapsed = panel.locator(
+      '[data-node-label][data-is-expanded="false"] [data-testid="NavTreeNodeToggle"]')
+    if (await collapsed.count() === 0) {
       break
     }
-    await toggles.evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()))
+    await collapsed.evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()))
     await panel.page().waitForTimeout(EXPAND_SETTLE_MS)
   }
 }
