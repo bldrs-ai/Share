@@ -184,13 +184,31 @@ const MODEL_READY_TIMEOUT = 15000
  * Wait for model to be ready after loading
  * Playwright equivalent of cypress/support/models.js waitForModelReady
  *
+ * `onReady` runs at the ready transition itself, *before* the settle wait
+ * and grace dismissal below. It exists for the load-measurement harness,
+ * whose CPU window has to close where its wall-clock denominator closes:
+ * sampling after this function returns would put the fixed second (plus the
+ * dismissal) in the numerator only, inflating every CPU-versus-wall ratio.
+ * Every other caller omits it and is unaffected.
+ *
  * @param page Playwright page object
  * @param timeoutMs How long to wait for `data-model-ready`
+ * @param onReady Awaited the moment `data-model-ready` flips, before settling
  */
-export async function waitForModelReady(page: Page, timeoutMs: number = MODEL_READY_TIMEOUT) {
+export async function waitForModelReady(
+  page: Page,
+  timeoutMs: number = MODEL_READY_TIMEOUT,
+  // Explicitly defaulted rather than `onReady?:` so it counts as a default
+  // parameter — eslint's default-param-last rejects an optional one after
+  // `timeoutMs`'s default.
+  onReady: (() => Promise<void>) | undefined = undefined,
+) {
   // Wait for model ready attribute on dropzone (matching working tests)
   const dropzone = page.getByTestId('cadview-dropzone')
   await expect(dropzone).toHaveAttribute('data-model-ready', 'true', {timeout: timeoutMs})
+  if (onReady !== undefined) {
+    await onReady()
+  }
   // Wait for animations to settle (equivalent to cy.wait(animWaitTimeMs))
   const animWaitTimeMs = 1000
   await page.waitForTimeout(animWaitTimeMs)

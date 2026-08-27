@@ -1,7 +1,7 @@
 import {CDPSession, ConsoleMessage, Page, Request, Response} from '@playwright/test'
 import {mkdir, readFile, writeFile} from 'fs/promises'
 import {dirname, resolve} from 'path'
-import {probeSource, toViewerUrl, withFeatures} from './loadProbe'
+import {modelBasenameOf, probeSource, toViewerUrl, urlMatchesModel, withFeatures} from './loadProbe'
 import {ParsedReport, parseReportLines} from './loadReport'
 import {waitForModelReady} from './models'
 
@@ -27,7 +27,8 @@ import {waitForModelReady} from './models'
  * - **conway #541** asks whether the `?feature=workers` regression is CPU-
  *   or bandwidth-bound. `cpu` carries the CDP `Performance.getMetrics`
  *   delta, where `processTimeMs` (whole renderer process, worker threads
- *   included) against `loadWallMs` is the saturation signal, and
+ *   included) against `loadWallMs` — measured to the same instant the
+ *   metrics were sampled — is the saturation signal, and
  *   `processTimeMs - threadTimeMs` is the off-main-thread half. Both are
  *   contaminated by CDP CPU throttling and must not be read in that arm —
  *   see {@link CpuMetrics.processTimeOverWall}; the durable signals there
@@ -55,15 +56,27 @@ export interface CpuMetrics {
   processTimeMs: number
   jsHeapUsedMbEnd: number
   /**
-   * Wall time from just before `page.goto` to `isModelReady`, the
-   * denominator of {@link CpuMetrics.processTimeOverWall}. Recorded so the
-   * ratio is auditable, and deliberately NOT `harnessWallMs`: that one runs
-   * to the end of `waitForModelReady`, which pads it with the helper's
-   * fixed 1 s animation-settle wait (models.ts). A fixed pad is a shrinking
-   * fraction of a slower run, so it biases every across-condition ratio in
-   * one direction.
+   * Wall time from just before `page.goto` to the instant the metrics above
+   * were sampled — the denominator of
+   * {@link CpuMetrics.processTimeOverWall}, over exactly the window its
+   * numerator covers.
+   *
+   * Deliberately NOT `harnessWallMs`, which runs to the end of
+   * `waitForModelReady` and so carries that helper's fixed 1 s
+   * animation-settle wait (models.ts). A fixed pad is a shrinking fraction
+   * of a slower run, so leaving it in biases every across-condition ratio
+   * in one direction — and putting it in only *one* of the two halves,
+   * which an earlier revision of this file did, is worse still.
    */
   loadWallMs: number
+  /**
+   * Where the CPU window closed, in the page's `performance.now()` domain,
+   * so the endpoint can be checked rather than trusted. It must sit at the
+   * ready transition: `loadTiming.spec.ts` asserts
+   * `sampledAtMs - modelReadyMs` is below the settle wait, which is the
+   * test that fails if the sample ever drifts back past it.
+   */
+  sampledAtMs: number | null
   /**
    * `processTimeMs / loadWallMs`. Near 1.0 the renderer burned about a full
    * core for the whole load; well below it the load spent its time waiting
@@ -344,13 +357,16 @@ async function metricsMap(cdp: CDPSession): Promise<Record<string, number>> {
  *
  * @param before
  * @param after
- * @param wallMs wall time to `isModelReady`, not to the end of the settle wait
+ * @param wallMs wall time to the instant `after` was sampled — the same
+ *   endpoint, or the ratio measures two different windows
+ * @param sampledAtMs that same instant, page-relative, for auditing
  * @return the CPU record for the load window
  */
 function cpuDelta(
   before: Record<string, number>,
   after: Record<string, number>,
   wallMs: number,
+  sampledAtMs: number | null,
 ): CpuMetrics {
   /**
    * @param name
@@ -369,6 +385,7 @@ function cpuDelta(
     processTimeMs: round1(processTimeMs) ?? 0,
     jsHeapUsedMbEnd: round1((after.JSHeapUsedSize ?? 0) / BYTES_PER_MB) ?? 0,
     loadWallMs: round1(wallMs) ?? 0,
+    sampledAtMs,
     processTimeOverWall: wallMs > 0 ? round2(processTimeMs / wallMs) : 0,
     offMainThreadMs: round1(processTimeMs - threadTimeMs) ?? 0,
   }
@@ -434,7 +451,7 @@ function summarize(values: (number | null)[]): MetricSummary | null {
  */
 async function measureOnce(page: Page, options: MeasureOptions, iteration: number): Promise<LoadSample> {
   const url = withFeatures(toViewerUrl(options.modelUrl), options.features ?? [])
-  const modelBasename = decodeURIComponent(options.modelUrl.split('?')[0].split('/').pop() ?? '')
+  const modelBasename = modelBasenameOf(options.modelUrl)
   // Named so both listeners can be detached at the end of the iteration.
   // Leaving them attached would let iteration 0's arrays keep filling
   // during iterations 1..N — the record is written after every iteration
@@ -457,10 +474,10 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
   // where the fixture is an order of magnitude bigger than its metadata.
   const modelCandidates: Response[] = []
   const onResponse = (response: Response) => {
-    if (modelBasename.length === 0 || response.request().resourceType() === 'document') {
+    if (response.request().resourceType() === 'document') {
       return
     }
-    if (response.url().includes(modelBasename)) {
+    if (urlMatchesModel(response.url(), modelBasename)) {
       modelCandidates.push(response)
     }
   }
@@ -493,39 +510,48 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
   const startedAt = Date.now()
   let ok = true
   let error: string | null = null
+  // The CPU window's closing mark. Numerator and denominator have to share
+  // it: the metrics are sampled here and the wall is measured to the same
+  // instant, so no interval can land in one and not the other. Getting this
+  // wrong once already produced an inflated ratio — the earlier revision
+  // moved the denominator to the ready transition but left the sample after
+  // `waitForModelReady`, so the helper's fixed 1 s settle plus the grace
+  // dismissal sat in the numerator alone.
+  let metricsAfter: Record<string, number> | null = null
+  let cpuEndEpochMs: number | null = null
+  const sampleCpuEnd = async () => {
+    if (cdp === null || metricsAfter !== null) {
+      return
+    }
+    try {
+      metricsAfter = await metricsMap(cdp)
+      // After the await rather than before: the metrics were read somewhere
+      // inside the CDP round trip, so this overstates the denominator by a
+      // few ms and understates the ratio. That is the safe direction — it
+      // biases against the CPU-bound reading, not toward it.
+      cpuEndEpochMs = Date.now()
+    } catch {
+      metricsAfter = null
+    }
+  }
   try {
     await page.goto(url, {waitUntil: 'domcontentloaded'})
     // The shared helper's own 15 s default is sized for fixture specs; a
     // measurement run is exactly the case that outgrows it (a big model, a
     // throttled CPU), so the caller's budget wins.
-    await waitForModelReady(page, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    await waitForModelReady(page, options.timeoutMs ?? DEFAULT_TIMEOUT_MS, sampleCpuEnd)
   } catch (e) {
     ok = false
     error = e instanceof Error ? e.message : String(e)
   }
   const harnessWallMs = Date.now() - startedAt
+  // A load that never reached ready never ran the callback. Sample now
+  // instead, so a failed iteration still carries a CPU record — and both
+  // halves still share whatever endpoint they got.
+  await sampleCpuEnd()
 
-  // Sampled before `readProbe` so the "after" mark sits as close to
-  // model-ready as the sequence allows.
-  const metricsAfter = cdp === null ? null : await metricsMap(cdp).catch(() => null)
   const probe = await readProbe(page)
   const timeOrigin = probe?.timeOrigin ?? 0
-
-  // The CPU ratio's denominator: navigation-to-`isModelReady`, in the
-  // harness's epoch domain. `harnessWallMs` runs on past that through
-  // `waitForModelReady`'s fixed 1 s settle wait, and a fixed pad shrinks as
-  // a fraction of a slower run — which tilts every across-condition ratio
-  // the same way. Falls back to `harnessWallMs` only when the probe never
-  // saw the ready flip (a failed load), where the ratio is moot anyway.
-  const modelReadyEpochMs = timeOrigin === 0 || probe?.modelReadyMs === null || probe?.modelReadyMs === undefined ?
-    null :
-    timeOrigin + probe.modelReadyMs
-  const loadWallMs = modelReadyEpochMs === null ? harnessWallMs : modelReadyEpochMs - startedAt
-
-  let cpu: CpuMetrics | null = null
-  if (metricsAfter !== null) {
-    cpu = cpuDelta(metricsBefore, metricsAfter, loadWallMs)
-  }
   /**
    * Playwright resource timings are epoch-ms `startTime` plus ms offsets;
    * the probe's marks are `performance.now()`. Put both in one domain.
@@ -535,6 +561,11 @@ async function measureOnce(page: Page, options: MeasureOptions, iteration: numbe
    */
   const toPageRelative = (epochMs: number | null): number | null =>
     epochMs === null || timeOrigin === 0 ? null : round1(epochMs - timeOrigin)
+
+  const cpuEnd = cpuEndEpochMs ?? Date.now()
+  const cpu: CpuMetrics | null = metricsAfter === null ?
+    null :
+    cpuDelta(metricsBefore, metricsAfter, cpuEnd - startedAt, toPageRelative(cpuEnd))
 
   let modelRequest: Request | null = null
   let modelBytes: number | null = null

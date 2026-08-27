@@ -1,6 +1,7 @@
 import {expect, test} from '@playwright/test'
 import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 import {LoadMeasurementRecord, MeasureOptions, measureLoad} from '../tests/e2e/loadMeasure'
+import {measureAllowHosts} from '../tests/e2e/loadProbe'
 import {setupVirtualPathIntercept} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 
@@ -46,6 +47,18 @@ const NETWORK_LATENCY_MS = Number(process.env.BLDRS_MEASURE_NET_LATENCY_MS || '0
 // `/share/v/u/...`) must not reach it: that caller wants the real network.
 const USES_REPO_FIXTURE = MODEL_URL.startsWith('/share/v/gh/bldrs-ai/test-models/')
 
+// `homepageSetup`'s real-network guard denies raw.githubusercontent.com and
+// media.githubusercontent.com among others — correctly, for a hermetic spec.
+// A corpus model deliberately named on one of those hosts is not incidental
+// leakage, and blocking it fails the same way a mis-routed URL did: a
+// `waitForModelReady` timeout that reads like a slow model. Allow exactly
+// the model URL's own host; a route (the default) allows nothing.
+const ALLOW_HOSTS = measureAllowHosts(MODEL_URL)
+
+// `waitForModelReady`'s fixed animation-settle wait. The CPU window must
+// close before it, not after — see the assertion below.
+const SETTLE_WAIT_MS = 1000
+
 // The measured load itself can be long on a big model; the outer test
 // budget has to clear iterations × that, plus page boot.
 const TEST_TIMEOUT_MS = 300_000
@@ -79,7 +92,7 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
 
   test('records a load measurement with every cross-check field populated', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    await homepageSetup(page)
+    await homepageSetup(page, ALLOW_HOSTS)
     await setIsReturningUser(page.context())
     if (USES_REPO_FIXTURE) {
       await setupVirtualPathIntercept(page, MODEL_URL, '')
@@ -158,7 +171,7 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
 
   test('reports CPU-versus-wall metrics for the load', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
-    await homepageSetup(page)
+    await homepageSetup(page, ALLOW_HOSTS)
     await setIsReturningUser(page.context())
     if (USES_REPO_FIXTURE) {
       await setupVirtualPathIntercept(page, MODEL_URL, '')
@@ -180,5 +193,21 @@ describeMobileAndDesktop('Browser load measurement', (ff) => {
     // asserted.
     expect(cpu?.processTimeMs as number).toBeGreaterThanOrEqual(cpu?.threadTimeMs as number)
     expect(cpu?.processTimeOverWall).toBeGreaterThan(0)
+
+    // The window's two halves have to share an endpoint. `waitForModelReady`
+    // waits a fixed second and dismisses the grace snackbar *after*
+    // `data-model-ready` flips, so a sample taken once it returns puts that
+    // interval in the numerator while the denominator ends earlier —
+    // inflating every CPU-versus-wall number in the same direction as the
+    // conclusion they support. `sampledAtMs` is where the numerator closed;
+    // it must sit at the ready transition, well inside the settle wait.
+    const sample = record.samples[0]
+    expect(cpu?.sampledAtMs).not.toBeNull()
+    expect(sample.timings.modelReadyMs).not.toBeNull()
+    expect((cpu?.sampledAtMs as number) - (sample.timings.modelReadyMs as number))
+      .toBeLessThan(SETTLE_WAIT_MS)
+    // ...and the denominator is measured to that same instant, not to the
+    // end of the wait.
+    expect(cpu?.loadWallMs as number).toBeLessThan(sample.timings.harnessWallMs)
   })
 })

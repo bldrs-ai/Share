@@ -331,6 +331,85 @@ export function toViewerUrl(modelUrl: string): string {
 
 
 /**
+ * The real hosts a measurement run deliberately asked for, for
+ * `homepageSetup`'s network guard.
+ *
+ * The guard (`utils.ts` / `networkGuard.ts`) aborts `raw.githubusercontent.com`
+ * and `media.githubusercontent.com` among others, and it is right to: a
+ * hermetic spec reaching real GitHub can paper over a broken mock. But a
+ * `BLDRS_MEASURE_MODEL` pointed at a corpus model on one of those hosts is
+ * the opposite of incidental leakage — an operator named that exact file —
+ * and blocking it produces the same `waitForModelReady` timeout that
+ * {@link toViewerUrl} exists to eliminate, which again reads like a slow
+ * model rather than a blocked fetch.
+ *
+ * So: exactly the model URL's own host, and only when the caller passed an
+ * absolute URL. A route (the in-repo fixture, the default) allows nothing
+ * and the guard is untouched.
+ *
+ * @param modelUrl the caller's `modelUrl` / `BLDRS_MEASURE_MODEL`
+ * @return the hosts to allow, empty for a route
+ */
+export function measureAllowHosts(modelUrl: string): string[] {
+  try {
+    return [new URL(modelUrl).hostname]
+  } catch {
+    return []
+  }
+}
+
+
+/**
+ * The model file's name, as it identifies the download among a page's
+ * responses.
+ *
+ * Percent-decoded, and {@link urlMatchesModel} decodes the response URL to
+ * match — the two must be normalized the same way or a filename with an
+ * escaped character never matches at all. Corpus paths with spaces are not
+ * hypothetical (`ISSUE_021_Mini Project.ifc` is in conway's smoke set), and
+ * the failure is quiet: no response is collected, so `bytes.model` and every
+ * download timing come back null on a model that loaded fine.
+ *
+ * @param modelUrl the caller's `modelUrl` / `BLDRS_MEASURE_MODEL`
+ * @return the decoded basename, or '' when there is none
+ */
+export function modelBasenameOf(modelUrl: string): string {
+  return decodeMaybe(modelUrl.split('?')[0].split('#')[0].split('/').pop() ?? '')
+}
+
+
+/**
+ * Whether a response URL is plausibly the model download.
+ *
+ * @param responseUrl `response.url()`, which keeps its percent-encoding
+ * @param modelBasename from {@link modelBasenameOf}
+ * @return true when the response URL names that file
+ */
+export function urlMatchesModel(responseUrl: string, modelBasename: string): boolean {
+  if (modelBasename.length === 0) {
+    return false
+  }
+  return decodeMaybe(responseUrl).includes(modelBasename)
+}
+
+
+/**
+ * Percent-decode, tolerating a string that is not validly encoded — a URL
+ * may legitimately contain a bare `%`, and `decodeURIComponent` throws on it.
+ *
+ * @param value
+ * @return the decoded value, or the input when it does not decode
+ */
+function decodeMaybe(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+
+/**
  * Build the model URL with any `?feature=` flags applied.
  *
  * Share reads features off the query string, and multiple flags are

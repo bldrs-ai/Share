@@ -12,6 +12,7 @@ diffable JSON record.
 |---|---|
 | Measurement library | [`src/tests/e2e/loadMeasure.ts`](../../src/tests/e2e/loadMeasure.ts) |
 | In-page probe + model-URL resolution (no Playwright import) | [`src/tests/e2e/loadProbe.ts`](../../src/tests/e2e/loadProbe.ts) + `loadProbe.test.js` |
+| Real-network guard decision (no Playwright import) | [`src/tests/e2e/networkGuard.ts`](../../src/tests/e2e/networkGuard.ts) + `networkGuard.test.js` |
 | Report-line parsers (no Playwright import) | [`src/tests/e2e/loadReport.ts`](../../src/tests/e2e/loadReport.ts) + `loadReport.test.js` |
 | The spec that drives it | [`src/viewer/loadTiming.spec.ts`](../../src/viewer/loadTiming.spec.ts) |
 | Output | `tools/measure/<label>-<formFactor>.json` (gitignored) |
@@ -70,6 +71,19 @@ requirement any `/share/v/u/` load has.
 `timings.documentUrl` in every sample records what was actually navigated
 to, so a mis-resolution is visible in the record rather than only as a
 timeout.
+
+**The network guard has to be told, too.** `homepageSetup` installs
+`blockExternalNetwork` (`utils.ts` / `networkGuard.ts`), whose denylist
+aborts `raw.githubusercontent.com`, `media.githubusercontent.com`,
+`api.github.com` and friends — correctly, because a hermetic spec reaching
+real GitHub can paper over a broken mock. A corpus model deliberately named
+on one of those hosts is the opposite of incidental leakage, so
+`loadTiming.spec.ts` passes `measureAllowHosts(MODEL_URL)`: **exactly the
+model URL's own host, exact match, and nothing for a route**. Sibling hosts
+stay blocked — allowing the raw host still leaves the Contents API, where a
+broken mock would hide, denied. Getting this wrong fails the same way a
+mis-routed URL did: a `waitForModelReady` timeout that reads like a slow
+model.
 
 A route under `bldrs-ai/test-models` is served from
 `src/tests/fixtures/github/**` by the playwright dev server. Anything else
@@ -170,10 +184,21 @@ signals are wired in, all of them cheap:
    is the difference, which is the half a worker-pool change moves.
    `processTimeOverWall` is `processTimeMs / cpu.loadWallMs`, near 1.0 when
    the renderer burned about a full core for the whole load. **All three are
-   invalid in the CPU-throttled arm** — see the box below. `loadWallMs` runs
-   to `isModelReady`, deliberately not to the end of `waitForModelReady`,
-   whose fixed 1 s settle wait would pad the denominator by a shrinking
-   fraction as runs get slower.
+   invalid in the CPU-throttled arm** — see the box below.
+
+   The window closes at the **ready transition**, and both halves close
+   there together: the metrics are sampled from a `waitForModelReady`
+   `onReady` callback and `loadWallMs` is measured to that same instant.
+   Neither half may run to the end of `waitForModelReady`, which adds a
+   fixed 1 s settle plus the grace-snackbar dismissal — measured at 1503 ms
+   on a 4.1 s load here, so on a small model it is a third of the window.
+   In the denominator alone a fixed pad is a shrinking fraction of a slower
+   run, which tilts every across-condition ratio one way; in the numerator
+   alone (which an earlier revision of this file did, while the denominator
+   already ended at ready) it inflates every ratio outright. `cpu.sampledAtMs`
+   records where the window closed so this is checkable, and
+   `loadTiming.spec.ts` asserts it sits within the settle wait of
+   `modelReadyMs`.
 2. **CPU throttling A/B** — `BLDRS_MEASURE_CPU_THROTTLE=4`. If the load
    scales with the multiplier it is CPU-bound.
 3. **Network throttling A/B** — `BLDRS_MEASURE_NET_MBPS`. Note this
@@ -211,32 +236,41 @@ throttle.
 > requires. The conclusion stands on `report.total.seconds` and
 > `firstMeshSinceOpenMs`, which are engine-side clocks and unaffected.
 
-The network arm separates cleanly from it. Re-measured after
-`processTimeOverWall`'s denominator changed to `cpu.loadWallMs`, so every
-number in this table is from one pair of runs (desktop, 3 iterations,
-medians) and is **not** comparable to the CPU table above, which is an
-earlier session on the same box:
+The network arm separates cleanly from it. **Re-measured twice**: once when
+`processTimeOverWall`'s denominator moved to `cpu.loadWallMs`, and again when
+the numerator's sampling point was moved to match it. The table below is the
+second of those, from one pair of runs (desktop, 3 iterations, medians), and
+is **not** comparable to the CPU table above, which is an earlier session on
+the same box:
 
 | | unthrottled | 10 Mbps / 50 ms | ratio |
 |---|---|---|---|
-| `timings.firstMeshMs` (navigation-anchored) | 2988 | 16361 | 5.5× |
-| `derived.firstMeshSinceOpenMs` (engine-anchored) | 410 | 448 | 1.1× |
-| `report.total.seconds` | 1.3 | 1.4 | 1.1× |
-| `cpu.loadWallMs` | 3805 | 17091 | 4.5× |
-| `cpu.processTimeMs` | 3270 | 7010 | 2.1× |
-| `cpu.processTimeOverWall` | 0.9 | 0.4 | — |
+| `timings.firstMeshMs` (navigation-anchored) | 2332 | 16039 | 6.9× |
+| `derived.firstMeshSinceOpenMs` (engine-anchored) | 195 | 475 | 2.4× |
+| `report.total.seconds` | 1.25 | 1.44 | 1.2× |
+| `cpu.loadWallMs` | 3745 | 17299 | 4.6× |
+| `cpu.processTimeMs` | 2830 | 6750 | 2.4× |
+| `cpu.processTimeOverWall` | 0.76 | 0.39 | — |
+| `cpu.sampledAtMs − modelReadyMs` | 323 | 453 | — |
+
+That last row is the endpoint audit, and it is worth reading rather than
+skipping: the window closes a few hundred ms after the store's ready flip,
+because Playwright's attribute poll and the CDP round trip both take time.
+It is **shared** by numerator and denominator, so it adds no bias — it only
+makes the measured window slightly longer than the load itself. Compare the
+1503 ms it was before this fix, when it sat in the numerator alone.
 
 Stated precisely, because the CPU arm shows what happens when it is not:
-wall grows 4.5×, CPU grows 2.1×, so the ratio *falls*. CPU is not flat —
-a page alive four and a half times as long does more network-stack, compositor and
-idle-render work — but it grows far slower than wall, which is what
+wall grows 4.6×, CPU grows 2.4×, so the ratio *falls*. CPU is not flat — a
+page alive four and a half times as long does more network-stack, compositor
+and idle-render work — but it grows far slower than wall, which is what
 "waiting, not computing" looks like. Contrast the CPU arm, where CPU rose
 *faster* than wall on identical work; that is not a physical outcome, it is
 the instrument.
 
 That contrast is the whole reason the record carries both anchors:
-bandwidth moves the navigation-anchored number by 5.5× and what the engine
-actually does by 1.1×. On this 320 KB fixture nearly all of that is the
+bandwidth moves the navigation-anchored number by 6.9× and what the engine
+actually does by 2.4×. On this 320 KB fixture nearly all of that is the
 bundle and the wasm binary, not the model — CDP network emulation is
 page-wide. At 1 Mbps the run does not finish inside a 120 s per-load
 budget at all, which is worth knowing before choosing a profile.
@@ -308,7 +342,14 @@ rather than a CPU-versus-bandwidth one. Playwright has no `page.metrics()`
   the `tools/measure/*.json` it writes must never be quoted as a
   measurement. Only a deliberate local `--workers=1` run produces numbers.
   The specs are still worth running in CI: they are asserting that the
-  harness observes what it claims to, which contention does not change.
+  harness observes what it claims to, which contention does not change —
+  and the cost is small. Measured on the first CI run that executed them
+  (`playwright-run` on `e6e6300`, 157 passed in 12.6 min): 8.3 s + 5.9 s +
+  7.4 s + 5.3 s = 26.9 s of test time across four workers, under 1 % of the
+  suite. An earlier extrapolation from a local `--workers=1` run guessed
+  15–20 s each; that was 2–3× too pessimistic, because the local figure
+  amortized Playwright's fixed per-worker startup over four tests instead of
+  157.
 - **`waitForModelReady`'s budget.** The shared helper defaults to 15 s;
   `measureLoad` passes its own `timeoutMs` (120 s default) because a big
   model or a throttled CPU blows straight through 15 s.

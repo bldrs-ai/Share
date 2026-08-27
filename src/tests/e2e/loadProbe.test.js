@@ -1,5 +1,12 @@
 import {processExternalUrl} from '../../routes/routes'
-import {probeSource, toViewerUrl, withFeatures} from './loadProbe'
+import {
+  measureAllowHosts,
+  modelBasenameOf,
+  probeSource,
+  toViewerUrl,
+  urlMatchesModel,
+  withFeatures,
+} from './loadProbe'
 
 
 /**
@@ -120,6 +127,59 @@ describe('loadProbe', () => {
       const store = fakeStore()
       window.store = store
       expect(window.store).toBe(store)
+    })
+  })
+
+  describe('measureAllowHosts', () => {
+    it('names the hosted model\'s own host, and nothing else', () => {
+      // What `homepageSetup`'s network guard is told to let through. The
+      // guard denies raw.githubusercontent.com, so without this a
+      // GitHub-hosted corpus model is aborted and the run dies as a
+      // model-ready timeout — the same symptom a mis-routed URL produced.
+      expect(measureAllowHosts('https://raw.githubusercontent.com/o/r/main/PSB.ifc'))
+        .toEqual(['raw.githubusercontent.com'])
+      expect(measureAllowHosts('https://media.githubusercontent.com/media/o/r/main/PSB.ifc'))
+        .toEqual(['media.githubusercontent.com'])
+    })
+
+    it('allows nothing for a route', () => {
+      // The default fixture run must leave the guard exactly as it was.
+      expect(measureAllowHosts('/share/v/gh/bldrs-ai/test-models/main/ifc/x.ifc')).toEqual([])
+    })
+  })
+
+  describe('model response matching', () => {
+    it('matches a percent-encoded response URL for a spaced filename', () => {
+      // conway's own smoke set carries `ISSUE_021_Mini Project.ifc`. The
+      // basename decodes but `response.url()` does not, so comparing one
+      // against the other never matches — and the failure is silent: no
+      // response is collected, and `bytes.model` plus every download timing
+      // come back null on a model that loaded fine.
+      const modelUrl = 'https://models.example.com/corpus/ISSUE_021_Mini Project.ifc'
+      const basename = modelBasenameOf(modelUrl)
+      expect(basename).toBe('ISSUE_021_Mini Project.ifc')
+      expect(urlMatchesModel(
+        'https://models.example.com/corpus/ISSUE_021_Mini%20Project.ifc', basename)).toBe(true)
+    })
+
+    it('matches when the caller supplied the encoded form', () => {
+      const basename = modelBasenameOf('https://models.example.com/c/Assembly%20A.ifc')
+      expect(basename).toBe('Assembly A.ifc')
+      expect(urlMatchesModel('https://models.example.com/c/Assembly%20A.ifc', basename)).toBe(true)
+      expect(urlMatchesModel('https://models.example.com/c/Assembly A.ifc', basename)).toBe(true)
+    })
+
+    it('still ignores an unrelated response, and a URL with no basename', () => {
+      const basename = modelBasenameOf('https://models.example.com/c/Assembly%20A.ifc')
+      expect(urlMatchesModel('https://models.example.com/c/other.ifc', basename)).toBe(false)
+      // A bare `%` is legal in a URL and must not throw the decode.
+      expect(urlMatchesModel('https://models.example.com/c/100%discount', basename)).toBe(false)
+      expect(urlMatchesModel('https://models.example.com/c/x.ifc', '')).toBe(false)
+    })
+
+    it('strips a query and a fragment before taking the basename', () => {
+      expect(modelBasenameOf('https://storage.example.com/DOWA.ifc?token=abc&expires=1'))
+        .toBe('DOWA.ifc')
     })
   })
 
