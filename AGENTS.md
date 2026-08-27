@@ -1,8 +1,19 @@
-# CLAUDE.md
+# AGENTS.md
 
 Bldrs Share — IFC/CAD model viewer in the browser, with multiple cloud sources (GitHub, Google Drive). React + MUI front end, Conway and web-ifc engines.
 
 This file is the router for AI assistants working in this repo. Keep it small. Topic docs are linked below; read on demand, not eagerly.
+
+**`CLAUDE.md` and `AGENTS.md` are one file.** `AGENTS.md` is the real
+file; `CLAUDE.md` is a symlink to it (git mode `120000`), so whichever
+name your tooling looks for, you get this content. Edit `AGENTS.md` —
+editing through the `CLAUDE.md` path works too, but only because the
+symlink resolves, and a tool that replaces rather than rewrites a file
+will silently break the link. Never "sync" the two by copying: that
+turns the symlink into a second real file, and they drift from there.
+This keeps getting rediscovered, because `diff` reports the two
+identical and nothing on the surface says why. (conway has no
+`CLAUDE.md` at all — just `AGENTS.md`.)
 
 
 ## Always
