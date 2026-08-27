@@ -383,58 +383,148 @@ export function analyzeHeaderStr(header) {
  * @return {string} 'ifc' or 'step'
  */
 export function classifyStepFamily(header) {
-  const schema = stepSchemaName(header)
-  if (schema === null) {
-    return 'ifc'
-  }
-  return /^IFC/i.test(schema) ? 'ifc' : 'step'
+  return stepFamily(header) ?? 'ifc'
 }
 
 
 /**
- * The FILE_SCHEMA value of an ISO-10303-21 header, or null when the entry
- * is absent from the sniffed window or carries no parseable name — an
- * empty `FILE_SCHEMA(( ))` / `FILE_SCHEMA(( '' ))`, which is malformed but
- * does occur in the wild.
+ * The schema family an ISO-10303-21 header declares — `'ifc'` or `'step'` —
+ * or null when it declares nothing this can read (no HEADER section, no
+ * FILE_SCHEMA entity, or one carrying no schema name at all: an empty
+ * `FILE_SCHEMA(( ))` / `FILE_SCHEMA(( '' ))`, malformed but seen in the wild).
  *
- * Split out of {@link classifyStepFamily} so a caller can tell "this file
- * says STEP" apart from "this file did not say". The classifier folds both
- * into 'ifc': the right default when the answer only picks a filename, and
- * the wrong one for a caller whose false-'ifc' costs more than a false
- * 'step'. `Loader.js#canOpenFromStore` is the second kind — it gates
- * conway's IFC-only store open, where guessing 'ifc' burns a model handle
- * and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it requires a
- * non-null name here before it trusts the classification.
+ * Three-valued on purpose, so a caller can tell "this file says STEP" apart
+ * from "this file did not say". {@link classifyStepFamily} folds those
+ * together into `'ifc'`: the right default when the answer only picks a
+ * filename, and the wrong one for a caller whose false-`'ifc'` costs more
+ * than a false `'step'`. `Loader.js#canOpenFromStore` is the second kind — it
+ * gates conway's IFC-only store open, where guessing `'ifc'` burns a model
+ * handle and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it asks
+ * this function directly and treats null as "buffer".
  *
- * @param {string} header
- * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
+ * Mirrors conway's `ModelFormatDetector.detect`
+ * (`format_detection/model_format_detector.js`) on the points that matter,
+ * because a disagreement in the "we say IFC, conway does not" direction is
+ * exactly #1776 again: every declared entry is considered, not just the
+ * first, and each is compared with spaces stripped.
+ *
+ * One divergence remains, in the safe direction. When an entity declares no
+ * quoted entry at all, conway falls back to testing the raw block text; we
+ * report null. That fallback can only say IFC for input malformed enough to
+ * put a bare `IFC…` token where a quoted list belongs, and null makes us
+ * buffer, which costs a load's memory win and never mis-routes a STEP file.
+ *
+ * @param {string} header a Part-21 header window
+ * @return {string|null} 'ifc', 'step', or null when nothing is declared
  */
-export function stepSchemaName(header) {
-  const section = part21HeaderSection(maskPart21Comments(header))
-  if (section === null) {
+export function stepFamily(header) {
+  const entries = fileSchemaEntries(header)
+  if (entries.length === 0) {
     return null
   }
-  // LAST match, not first: conway's parser stores header entities in a Map
-  // keyed by name (`step_parser.js:193`), so a header carrying FILE_SCHEMA
-  // twice overwrites and the last one wins. Reading the first would have us
-  // answer from one entity and conway from the other — and on
-  // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
-  // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
-  // down the IFC-only store open (bldrs-ai/Share#1776).
-  const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
-  return matches.length === 0 ? null : matches[matches.length - 1][1]
+  return entries.some((entry) => entry.startsWith('IFC')) ? 'ifc' : 'step'
 }
 
 
-// `\b` anchors the entity name so the scan cannot start inside a longer
-// identifier. conway parses header records under their exact names and
-// inspects only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA(('IFC4'));` is
-// invisible to it — while an unanchored scan reads it as the schema. With
-// last-wins that is the dangerous direction whenever the lookalike follows
-// the real entity: we answer IFC, conway answers AP214. `\b` suffices
-// because `_` is a word character, so there is no boundary inside
-// `NOT_FILE_SCHEMA`.
-const FILE_SCHEMA_VALUE = /\bFILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
+/**
+ * Every schema name the effective FILE_SCHEMA entity declares, uppercased
+ * and space-stripped — conway's own normalisation
+ * (`schema.toLocaleUpperCase()` then `rawEntry.replaceAll(' ', '')`), so
+ * `' I FC4 '` reads as `IFC4` here exactly as it does there.
+ *
+ * "Effective" is the LAST FILE_SCHEMA statement in the header section:
+ * conway stores header entities in a Map keyed by name
+ * (`step_parser.js:193`), so a header carrying the entity twice overwrites
+ * and the later one wins.
+ *
+ * @param {string} header
+ * @return {string[]} normalised schema names, empty when none are declared
+ */
+function fileSchemaEntries(header) {
+  const section = part21HeaderSection(maskPart21Comments(header))
+  if (section === null) {
+    return []
+  }
+  const statement = lastFileSchemaStatement(section)
+  if (statement === null) {
+    return []
+  }
+  // `/ /g`, not `\s`: conway strips literal spaces only (`replaceAll(' ', '')`),
+  // so a tab inside a schema name must survive here exactly as it does there.
+  // (`String.replaceAll` itself is past this project's TS lib target.)
+  return [...statement.matchAll(/'([^']*)'/g)]
+    .map((match) => match[1].toUpperCase().replace(/ /g, ''))
+    .filter((entry) => entry.length > 0)
+}
+
+
+/**
+ * The last FILE_SCHEMA statement in a header section, or null.
+ *
+ * Matching at the statement start is what keeps a longer identifier out:
+ * `NOT_FILE_SCHEMA(('IFC4'));` is its own statement and does not begin with
+ * `FILE_SCHEMA`, so it is invisible here just as it is to conway, which
+ * parses records under their exact names.
+ *
+ * @param {string} section comment-masked header-section text
+ * @return {string|null}
+ */
+function lastFileSchemaStatement(section) {
+  let found = null
+  for (const statement of part21Statements(section)) {
+    if (/^\s*FILE_SCHEMA\s*\(/i.test(statement)) {
+      found = statement
+    }
+  }
+  return found
+}
+
+
+/**
+ * Split Part-21 text on `;` into statements, ignoring semicolons inside
+ * string literals (where `;` is ordinary text, and an apostrophe is escaped
+ * by doubling it). Pass comment-masked text — a `;` inside a comment would
+ * otherwise split a statement in two.
+ *
+ * @param {string} text comment-masked Part-21 text
+ * @return {string[]} statement texts, without their terminating semicolons
+ */
+function part21Statements(text) {
+  const out = []
+  let start = 0
+  let at = 0
+  let inString = false
+  while (at < text.length) {
+    const c = text[at]
+    if (inString) {
+      if (c === `'` && text[at + 1] === `'`) {
+        at += 2
+        continue
+      }
+      if (c === `'`) {
+        inString = false
+      }
+      at++
+      continue
+    }
+    if (c === `'`) {
+      inString = true
+      at++
+      continue
+    }
+    if (c === ';') {
+      out.push(text.slice(start, at))
+      at++
+      start = at
+      continue
+    }
+    at++
+  }
+  if (start < text.length) {
+    out.push(text.slice(start))
+  }
+  return out
+}
 
 
 /**

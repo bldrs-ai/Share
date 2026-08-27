@@ -159,14 +159,12 @@ async function canOpenFromStore(viewer, loaderType, file) {
     // rather than throwing. Both then fail the schema match below and
     // buffer, which is the outcome we want for bytes we cannot read.
     const header = new TextDecoder('utf-8').decode(new Uint8Array(head))
-    // Require a schema NAME, not merely a FILE_SCHEMA entry.
-    // `classifyStepFamily` answers 'ifc' whenever it cannot parse one, and
-    // an empty `FILE_SCHEMA(( ))` would otherwise inherit that default and
-    // send an unidentified file down the IFC-only store path.
-    if (Filetype.stepSchemaName(header) === null) {
-      return false
-    }
-    return Filetype.classifyStepFamily(header) === 'ifc'
+    // `stepFamily`, not `classifyStepFamily`: the classifier answers 'ifc'
+    // for anything it cannot read, which is the right default when the answer
+    // only picks a filename and the wrong one here, where a false 'ifc' sends
+    // an unidentified file down the IFC-only store path. Null means "this
+    // file did not say" and buffers.
+    return Filetype.stepFamily(header) === 'ifc'
   } catch (e) {
     debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
     return false

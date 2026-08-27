@@ -8,7 +8,7 @@ import {
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
-  stepSchemaName,
+  stepFamily,
   supportedTypes,
 } from './Filetype'
 
@@ -365,93 +365,126 @@ describe('Filetype', () => {
     })
   })
 
-  describe('stepSchemaName', () => {
+  describe('stepFamily', () => {
     // Real input, because the scan is bounded to the HEADER section: a bare
     // fragment has no section to find and correctly reads as "did not say".
     const hdr = (body) => `ISO-10303-21;\nHEADER;\n${body}\nENDSEC;\nDATA;\nENDSEC;\n`
 
-    it('returns the declared schema for both families', () => {
-      expect(stepSchemaName(hdr(`FILE_SCHEMA(('IFC4'));`))).toBe('IFC4')
-      expect(stepSchemaName(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`))).toBe('AUTOMOTIVE_DESIGN')
-      expect(stepSchemaName(hdr(`FILE_SCHEMA  ( ( ' IFC2X3 ' ) );`))).toBe('IFC2X3')
+    it('reads both families', () => {
+      expect(stepFamily(hdr(`FILE_SCHEMA(('IFC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('IFC2X3'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`))).toBe('step')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AP203_CONFIGURATION_CONTROLLED_3D_DESIGN'));`))).toBe('step')
+    })
+
+    it('considers every declared entry, not just the first', () => {
+      // conway iterates all quoted entries and answers IFC if ANY starts with
+      // IFC (`model_format_detector.js`). Reading only the first made a
+      // header listing IFC second read as STEP here — safe, since it only
+      // costs the windowed parse, but a disagreement all the same.
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'),('IFC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('IFC4'),('AUTOMOTIVE_DESIGN'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'),('CONFIG_CONTROL_DESIGN'));`))).toBe('step')
+    })
+
+    it('strips spaces inside an entry, as conway does', () => {
+      // conway compares after `replaceAll(' ', '')`, so a name broken by
+      // stray spaces is still IFC to it. A capture that stopped at the first
+      // non-word character read `' I FC4'` as `I` and answered STEP.
+      expect(stepFamily(hdr(`FILE_SCHEMA((' IFC4 '));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('I FC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE _ DESIGN'));`))).toBe('step')
+    })
+
+    it('is case-insensitive on the schema name', () => {
+      expect(stepFamily(hdr(`FILE_SCHEMA(('ifc4'));`))).toBe('ifc')
     })
 
     it(`skips Part-21 comments the way conway's header parser does`, () => {
-      // ISO-10303-21 allows a comment anywhere whitespace is allowed, and
-      // conway's `StepHeaderParser` consumes one as whitespace — so
-      // `ModelFormatDetector` calls these IFC. Reading them as "no schema"
+      // conway's `StepHeaderParser` consumes a comment as whitespace, so
+      // `ModelFormatDetector` calls these IFC. Reading them as "did not say"
       // would cost a large IFC its windowed parse.
-      expect(stepSchemaName(hdr(`FILE_SCHEMA /* exported by X */ (('IFC4'));`))).toBe('IFC4')
-      expect(stepSchemaName(hdr(`FILE_SCHEMA((/* why */'IFC4'));`))).toBe('IFC4')
-      expect(stepSchemaName(hdr(`FILE_SCHEMA/* a */(/* b */(/* c */'IFC4'));`))).toBe('IFC4')
+      expect(stepFamily(hdr(`FILE_SCHEMA /* exported by X */ (('IFC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA((/* why */'IFC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA/* a */(/* b */(/* c */'IFC4'));`))).toBe('ifc')
     })
 
     it('ignores a FILE_SCHEMA entity that is itself inside a comment', () => {
-      // The dangerous direction, and the one a comment-tolerant gap pattern
-      // cannot fix: the whole entity sits INSIDE the comment, so no amount of
-      // tolerance BETWEEN tokens excludes it. conway's parser skips the
-      // comment and reads AP214; a raw-text scan would answer IFC, send a
-      // STEP file down conway's IFC-only store open, and burn a model handle.
+      // The dangerous direction: the whole entity sits INSIDE the comment, so
+      // no amount of tolerance BETWEEN tokens excludes it. conway skips the
+      // comment and reads AP214; a raw-text scan would answer IFC and send a
+      // STEP file down the IFC-only store open.
       const body = `/* FILE_SCHEMA(('IFC4')); */\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`
-      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(stepFamily(hdr(body))).toBe('step')
       expect(analyzeHeaderStr(hdr(body))).toBe('step')
     })
 
     it('takes the LAST FILE_SCHEMA, matching conway\'s last-wins Map', () => {
       // conway stores header entities in a Map keyed by name
-      // (`step_parser.js:193`), so a duplicated FILE_SCHEMA overwrites.
-      // Reading the first would answer IFC here where conway answers AP214 —
-      // the dangerous direction again.
+      // (`step_parser.js:193`), so a duplicated entity overwrites.
       const body = `FILE_SCHEMA(('IFC4'));\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`
-      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
+      expect(stepFamily(hdr(body))).toBe('step')
+      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    })
+
+    it('does not match FILE_SCHEMA inside a longer entity name', () => {
+      // conway inspects only the exact `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA`
+      // is invisible to it. Matching at the statement start keeps it out here.
+      const body = `FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nNOT_FILE_SCHEMA(('IFC4'));`
+      expect(stepFamily(hdr(body))).toBe('step')
       expect(analyzeHeaderStr(hdr(body))).toBe('step')
     })
 
     it('ignores a FILE_SCHEMA lookalike past ENDSEC', () => {
       // The caller sniffs a fixed 64 KiB prefix, which on any real model runs
-      // well into DATA, where a quoted string may contain anything. conway
-      // reads FILE_SCHEMA from the HEADER section only.
+      // well into DATA, where a quoted string may contain anything.
       const text = `ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nENDSEC;\n` +
         `DATA;\n#1=IFCPROPERTYSINGLEVALUE('FILE_SCHEMA((''IFC4''));');\nENDSEC;\n`
-      expect(stepSchemaName(text)).toBe('AUTOMOTIVE_DESIGN')
+      expect(stepFamily(text)).toBe('step')
     })
 
     it('keeps a comment-like sequence inside a string literal', () => {
       // Inside a Part-21 string `/*` is ordinary text. Masking it would join
       // the surrounding text and could resurrect the bug it exists to fix.
-      expect(stepSchemaName(hdr(
+      expect(stepFamily(hdr(
         `FILE_NAME('/* not a comment','*/');\nFILE_SCHEMA(('AUTOMOTIVE_DESIGN'));`,
-      ))).toBe('AUTOMOTIVE_DESIGN')
+      ))).toBe('step')
       // A doubled apostrophe escapes one inside the string; the string stays
       // open across it, so the `/*` after it is still literal.
-      expect(stepSchemaName(hdr(
+      expect(stepFamily(hdr(
         `FILE_NAME('it''s /* fine');\nFILE_SCHEMA(('IFC4'));`,
-      ))).toBe('IFC4')
+      ))).toBe('ifc')
     })
 
-    it('does not match FILE_SCHEMA inside a longer entity name', () => {
-      // conway parses header records under their exact names and inspects
-      // only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA` is invisible to it.
-      // An unanchored scan reads it as the schema — and with last-wins that
-      // is the dangerous direction whenever the lookalike follows the real
-      // entity: we answer IFC where conway answers AP214.
-      const body = `FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));\nNOT_FILE_SCHEMA(('IFC4'));`
-      expect(stepSchemaName(hdr(body))).toBe('AUTOMOTIVE_DESIGN')
-      expect(analyzeHeaderStr(hdr(body))).toBe('step')
+    it('does not let a semicolon inside a string split a statement', () => {
+      // Statement splitting is string-aware, matching conway's tokenizer: a
+      // `;` inside a string literal is ordinary text, not a terminator.
+      //
+      // The case that actually distinguishes it is a semicolon inside the
+      // schema name — a naive split cuts the entity in half, and the leading
+      // fragment has no closed quote pair left, so it reads as "did not say".
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTO;MOTIVE_DESIGN'));`))).toBe('step')
+      // Worth recording what this does NOT prove. The realistic case — a
+      // semicolon in a FILE_NAME author or description field, which is common
+      // — comes out the same either way, because the mis-split fragments
+      // never start with FILE_SCHEMA and last-wins still finds the real
+      // entity. The awareness is here so the splitter is correct for the next
+      // caller, not because this input needs it.
+      expect(stepFamily(hdr(
+        `FILE_NAME('m.stp','2024',('Acme; Corp'),(''),'','','');\nFILE_SCHEMA(('IFC4'));`,
+      ))).toBe('ifc')
     })
 
-    it('separates "did not say" from "said STEP"', () => {
-      // The distinction `classifyStepFamily` cannot express, because it
-      // folds both into 'ifc'. A caller whose false-'ifc' is expensive —
-      // `Loader.js#canOpenFromStore` gating conway's IFC-only store open —
-      // needs a non-null name before it trusts the classification.
-      expect(stepSchemaName('HEADER;\nENDSEC;')).toBeNull()
-      expect(stepSchemaName(hdr(`FILE_SCHEMA(());`))).toBeNull()
-      expect(stepSchemaName(hdr(`FILE_SCHEMA((''));`))).toBeNull()
+    it('answers null when the header declares nothing readable', () => {
+      // Null is "did not say", which `Loader.js#canOpenFromStore` treats as
+      // "buffer" — a wrong 'ifc' there burns a model handle.
+      expect(stepFamily('HEADER;\nENDSEC;')).toBeNull()
+      expect(stepFamily(hdr(`FILE_SCHEMA(());`))).toBeNull()
+      expect(stepFamily(hdr(`FILE_SCHEMA((''));`))).toBeNull()
       // No HEADER section at all — nothing conway would parse a schema from.
-      expect(stepSchemaName(`FILE_SCHEMA(('IFC4'));`)).toBeNull()
-      // Same inputs, classifier still answers 'ifc' — that default is why
-      // the guard above exists.
+      expect(stepFamily(`FILE_SCHEMA(('IFC4'));`)).toBeNull()
+      // The classifier folds null into 'ifc'; that default is why the loader
+      // asks `stepFamily` directly rather than going through it.
       expect(analyzeHeaderStr(hdr(`FILE_SCHEMA((''));`))).toBe('ifc')
     })
   })
