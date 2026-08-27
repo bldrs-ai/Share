@@ -94,14 +94,9 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
   // resolving the wrong element, highlight landing on nearby other parts,
   // face permalink losing the scene highlight): the BVH build permuted
   // geometry.index AFTER the per-triangle maps were built from
-  // BLDRS_face_ids. It can't run in this harness yet: the playwright build
-  // sets `OPFS_IS_ENABLED: false` (OPFS-worker fetches bypass the MSW
-  // service worker — see tools/esbuild/vars.playwright.js), so a reload
-  // re-parses live instead of hitting the GLB cache. fixme'd like the other
-  // cacheHit specs until that harness fix lands; until then the alignment
-  // invariant is pinned by Loader.restoreCacheHitPicking.test.js and the
-  // selection restore by the live-path test above.
-  test.fixme('cache-hit reload keeps selection, highlight, and table↔geometry alignment', async ({page}) => {
+  // BLDRS_face_ids. Un-skipped in bldrs-ai/Share#1779 along with the other
+  // cache-hit specs — see `tools/esbuild/vars.playwright.js`.
+  test('cache-hit reload keeps selection, highlight, and table↔geometry alignment', async ({page}) => {
     test.setTimeout(CACHE_HIT_TIMEOUT_MS)
     await permalinkSetup(page)
 
@@ -139,6 +134,19 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
       const m = v?.IFC?.context?.items?.ifcModels?.[0]
       let meshes = 0
       let misaligned = 0
+      let batchedSelSetTotal = 0
+      let batchedMeshes = 0
+      const countBatched = (o: any) => {
+        if (o.isBatchedMesh) {
+          batchedMeshes++
+          batchedSelSetTotal += o.userData?.batchedHighlight?.selSet?.size ?? 0
+        }
+      }
+      if (m?.isBatchedMesh) {
+        countBatched(m)
+      } else {
+        m?.traverse?.(countBatched)
+      }
       m?.traverse?.((o: any) => {
         if (!o.isMesh || !o.instanceMap) {
           return
@@ -159,6 +167,8 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
       return {
         selectedElements: st.selectedElements,
         mergedSubsets: v?._conwaySelectionSubsets?.length ?? 0,
+        batchedSelSetTotal,
+        batchedMeshes,
         meshes,
         misaligned,
         // Diagnostics (not asserted): which selection path can this model
@@ -172,10 +182,20 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     // Selection restored from the URL on the cache-hit load too, with a
     // live merged-path highlight.
     expect(hit.selectedElements).toEqual(['2867'])
-    expect(hit.mergedSubsets).toBeGreaterThan(0)
+    // Highlight counted across BOTH render paths, exactly as the live-path
+    // test above does. The merged path exposes it as
+    // `viewer._conwaySelectionSubsets`, the batched/incremental path — which
+    // is the default — as per-batch `userData.batchedHighlight.selSet`.
+    // Asserting only the merged counter reported 0 on a model that was
+    // highlighting perfectly well.
+    expect(hit.batchedSelSetTotal + hit.mergedSubsets).toBeGreaterThan(0)
+    // Geometry is actually present on whichever path built it.
+    expect(hit.batchedMeshes + hit.meshes).toBeGreaterThan(0)
     // The picking tables agree with the geometry on every triangle — fails
-    // if the BVH build ever goes back to permuting the index in place.
-    expect(hit.meshes).toBeGreaterThan(0)
+    // if the BVH build ever goes back to permuting the index in place. Only
+    // the merged path carries per-mesh `instanceMap`, so on the batched path
+    // this is vacuously satisfied; the invariant is additionally pinned by
+    // `Loader.restoreCacheHitPicking.test.js`.
     expect(hit.misaligned).toBe(0)
   })
 })

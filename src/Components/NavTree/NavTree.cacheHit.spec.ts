@@ -1,13 +1,41 @@
-import {expect, test} from '@playwright/test'
+import {Locator, expect, test} from '@playwright/test'
 import {
   clearOpfs,
   homepageSetup,
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
+import {captureGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 
 
 const {afterEach, beforeEach, describe} = test
+
+
+// Rounds of expansion, so a nested tree opens fully rather than one level.
+const EXPAND_ROUNDS = 6
+const EXPAND_SETTLE_MS = 400
+
+
+/**
+ * Expand every open-able NavTree node, repeatedly, so descendants render.
+ *
+ * Clicks are dispatched in-page rather than through `locator.click()`: the
+ * toggles sit over a live canvas that keeps the compositor busy, and
+ * Playwright's actionability wait times out against it on a GPU-less runner
+ * even though the element is perfectly clickable.
+ *
+ * @param panel locator for the NavTree panel
+ */
+async function expandTree(panel: Locator) {
+  for (let round = 0; round < EXPAND_ROUNDS; round++) {
+    const toggles = panel.locator('[data-testid="NavTreeNodeToggle"]')
+    if (await toggles.count() === 0) {
+      break
+    }
+    await toggles.evaluateAll((els) => els.forEach((e) => (e as HTMLElement).click()))
+    await panel.page().waitForTimeout(EXPAND_SETTLE_MS)
+  }
+}
 
 
 /**
@@ -54,13 +82,9 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     await clearOpfs(page)
   })
 
-  // SKIP REASON: same as Properties.cacheHit.spec.ts —
-  // `OPFS_IS_ENABLED: true` in playwright vars isn't enough on its own
-  // because OPFS-worker fetches aren't intercepted by Playwright's
-  // `context.route(...)`; the first fetch races MSW SW activation.
-  // See the longer note in `Properties.cacheHit.spec.ts` and the
-  // followup list in design/new/viewer-replacement.md §"Followups".
-  test.fixme('cache-hit GLB renders NavTree from BLDRS_spatial_tree extension', async ({page}) => {
+  // Un-skipped in bldrs-ai/Share#1779 — see the sibling note in
+  // `Properties.cacheHit.spec.ts` and `tools/esbuild/vars.playwright.js`.
+  test('cache-hit GLB renders NavTree from BLDRS_spatial_tree extension', async ({page}) => {
     // Two `page.goto` round-trips (cache-populate + cache-hit) plus
     // the writer's async element-properties BFS can easily exceed
     // Playwright's default 30s per-test budget on CI. Bump to 120s so
@@ -71,50 +95,23 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     // Capture the GLB pipeline's `[glb]` log lines so we can assert
     // on observable state transitions (cache MISS / HIT, writer wrote)
     // rather than racing on timing alone.
-    const glbLogs: string[] = []
-    page.on('console', (msg) => {
-      const text = msg.text()
-      if (text.startsWith('[glb]')) {
-        glbLogs.push(text)
-      }
-    })
+    const glbLogs = captureGlbLogs(page)
 
     // First load: cache MISS, writer populates OPFS with the
     // BLDRS_spatial_tree extension. `glb` is default-on as of the
     // Phase-5a flip; no `?feature=` needed.
     const CACHE_TIMEOUT = 30_000
-    await page.goto('/share/v/p/index.ifc')
+    await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
     await waitForModelReady(page)
-    try {
-      await page.waitForFunction(
-        ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
-        {logs: glbLogs},
-        {timeout: CACHE_TIMEOUT},
-      )
-    } catch (e) {
-      // Diagnostic dump: which [glb] lines DID fire before the wait
-      // timed out? Most useful failure mode is `writer: skipped
-      // (threw)` — surfaces a writer-side exception that would
-      // otherwise be invisible (the outer try/catch in
-      // exportAndCacheGlb swallows the throw and only logs).
-      const indented = glbLogs.map((l) => `  ${l}`).join('\n')
-      console.error(
-        `[NavTree.cacheHit] writer:wrote never fired in ${CACHE_TIMEOUT}ms; ` +
-        `captured ${glbLogs.length} [glb] line(s):\n${indented}`)
-      throw e
-    }
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT)
     expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
 
     // Second load: cache HIT — spatial-tree extension provides the
     // NavTree data without a live IFC parser. Reset log buffer.
     glbLogs.length = 0
-    await page.goto('/share/v/p/index.ifc')
+    await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
     await waitForModelReady(page)
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('cache HIT')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
 
     // Open the NavTree panel. The panel renders from the model's
     // `getSpatialStructure(0, true)` closure — on cache HIT this
@@ -126,23 +123,27 @@ describe('View 100: NavTree on cache-hit GLB', () => {
     const navTreePanel = page.getByTestId('NavTreePanel')
     await expect(navTreePanel).toBeVisible()
 
-    // The tree should have at least the IfcProject root + a few
-    // descendants. A writer-side bug that captures an empty /
-    // single-node tree (e.g., recursion bottom-out wrong) would
-    // make this fail. We don't pin a specific count because tree
-    // shape depends on the fixture model (index.ifc), but anything
-    // > 1 confirms the tree is actually being traversed.
-    const treeItems = navTreePanel.locator('[role="treeitem"]')
+    // `data-node-label` is the hook `NavTreeNode.jsx` actually sets. The
+    // `role="treeitem"` this spec used predates the current tree and matched
+    // nothing — invisible while the spec was `fixme`'d.
+    const treeItems = navTreePanel.locator('[data-node-label]')
     await expect(treeItems.first()).toBeVisible()
-    // index.ifc has many storeys / spaces / elements; > 5 is a
-    // comfortable lower bound that's still well below the real count.
+
+    // The tree renders collapsed, so counting without expanding sees exactly
+    // the root — which is also what the bug this guards against produced. In
+    // bldrs-ai/Share#1776 the cache-hit tree was the GLB scene graph walked by
+    // `Loader.js`'s fallback, a root whose children repeat the root's own
+    // name. Expanding is what tells the two apart.
+    await expandTree(navTreePanel)
     const itemCount = await treeItems.count()
     const MIN_TREE_ITEMS = 5
-    expect(itemCount).toBeGreaterThan(MIN_TREE_ITEMS)
+    expect(itemCount,
+      `expanded tree had ${itemCount} node(s): ` +
+        `${JSON.stringify(await treeItems.evaluateAll(
+          (els) => els.map((e) => e.getAttribute('data-node-label'))))}`)
+      .toBeGreaterThan(MIN_TREE_ITEMS)
   })
 
-  // SKIP REASON: the OPFS/MSW harness gap above, same as its IFC sibling.
-  //
   // Worth having as its own test rather than a parameterisation of the one
   // above, because the two formats reach the writer through different Conway
   // opens and a STEP-only regression is invisible to an IFC fixture. That is
@@ -155,49 +156,31 @@ describe('View 100: NavTree on cache-hit GLB', () => {
   // cache-hit tree collapses to the model root repeated a couple of times
   // (Loader.js's `ifcManager.getSpatialStructure = () => model` fallback,
   // walking the GLB scene graph) instead of the real assembly hierarchy.
-  test.fixme('cache-hit GLB renders NavTree for a STEP model', async ({page}) => {
+  test('cache-hit GLB renders NavTree for a STEP model', async ({page}) => {
     const TEST_TIMEOUT = 120_000
     test.setTimeout(TEST_TIMEOUT)
 
-    const glbLogs: string[] = []
-    page.on('console', (msg) => {
-      const text = msg.text()
-      if (text.startsWith('[glb]')) {
-        glbLogs.push(text)
-      }
-    })
+    const glbLogs = captureGlbLogs(page)
 
     const CACHE_TIMEOUT = 30_000
-    await page.goto('/share/v/p/index.step')
+    await page.goto('/share/v/p/index.step?feature=glbVerbose')
     await waitForModelReady(page)
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT)
     expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
 
     glbLogs.length = 0
-    await page.goto('/share/v/p/index.step')
+    await page.goto('/share/v/p/index.step?feature=glbVerbose')
     await waitForModelReady(page)
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('cache HIT')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
 
     // The tree must come from the cached extension, not the scene-graph
     // fallback. This log line IS the discriminant — without it the panel
     // still renders rows, just the wrong ones.
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('hydrated NavTree from BLDRS_spatial_tree')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'hydrated NavTree from BLDRS_spatial_tree', CACHE_TIMEOUT)
 
     await page.getByTestId('control-button-navigation').click()
     const navTreePanel = page.getByTestId('NavTreePanel')
     await expect(navTreePanel).toBeVisible()
-    await expect(navTreePanel.locator('[role="treeitem"]').first()).toBeVisible()
+    await expect(navTreePanel.locator('[data-node-label]').first()).toBeVisible()
   })
 })
