@@ -410,12 +410,49 @@ export function classifyStepFamily(header) {
  * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
  */
 export function stepSchemaName(header) {
-  const schemaMatch = maskPart21Comments(header).match(FILE_SCHEMA_VALUE)
-  return schemaMatch === null ? null : schemaMatch[1]
+  const section = part21HeaderSection(maskPart21Comments(header))
+  if (section === null) {
+    return null
+  }
+  // LAST match, not first: conway's parser stores header entities in a Map
+  // keyed by name (`step_parser.js:193`), so a header carrying FILE_SCHEMA
+  // twice overwrites and the last one wins. Reading the first would have us
+  // answer from one entity and conway from the other — and on
+  // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
+  // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
+  // down the IFC-only store open (bldrs-ai/Share#1776).
+  const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
+  return matches.length === 0 ? null : matches[matches.length - 1][1]
 }
 
 
-const FILE_SCHEMA_VALUE = /FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i
+const FILE_SCHEMA_VALUE = /FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
+
+
+/**
+ * The HEADER section of a Part-21 file, or null when there is none in the
+ * window. Pass comment-masked text.
+ *
+ * Bounding matters because the caller sniffs a fixed 64 KiB prefix, which on
+ * any real model runs well into DATA — where a quoted string is free to
+ * contain something that looks like a header entity. conway reads FILE_SCHEMA
+ * from the parsed HEADER section only, so scanning past ENDSEC could have us
+ * answer IFC from a property value while conway answers AP214 from the real
+ * header. Truncating early (an `ENDSEC;` inside a header string literal, say)
+ * costs at worst a missed schema, which reads as "did not say" and buffers.
+ *
+ * @param {string} masked comment-masked Part-21 text
+ * @return {string|null} the header section's text
+ */
+function part21HeaderSection(masked) {
+  const start = masked.search(/\bHEADER\s*;/i)
+  if (start === -1) {
+    return null
+  }
+  const rest = masked.slice(start)
+  const end = rest.search(/\bENDSEC\s*;/i)
+  return end === -1 ? rest : rest.slice(0, end)
+}
 
 
 /**
