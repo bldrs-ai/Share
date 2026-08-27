@@ -403,10 +403,20 @@ export function classifyStepFamily(header) {
  * this function directly and treats null as "buffer".
  *
  * Mirrors conway's `ModelFormatDetector.detect`
- * (`format_detection/model_format_detector.js`) on the points that matter,
- * because a disagreement in the "we say IFC, conway does not" direction is
- * exactly #1776 again: every declared entry is considered, not just the
- * first, and each is compared with spaces stripped.
+ * (`format_detection/model_format_detector.js`), because a disagreement in
+ * the "we say IFC, conway does not" direction is exactly #1776 again. Two
+ * details of that loop are load-bearing and neither is obvious:
+ *
+ *   - It returns on the FIRST entry matching ANY known schema, testing IFC,
+ *     AUTOMOTIVE_DESIGN, CONFIG_CONTROL_DESIGN/AP203 and AP242 within each
+ *     entry before moving to the next. So `(('AUTOMOTIVE_DESIGN'),('IFC4'))`
+ *     is AP214 to conway, which never sees the IFC4. Asking instead whether
+ *     ANY entry starts with IFC answers 'ifc' there — the dangerous
+ *     direction, and what codex caught on this PR.
+ *   - Entries are compared with spaces stripped, so `' I FC4'` is IFC4.
+ *
+ * An entry conway recognises nothing in is skipped, and a header whose every
+ * entry is unrecognised yields null here just as it yields no format there.
  *
  * One divergence remains, in the safe direction. When an entity declares no
  * quoted entry at all, conway falls back to testing the raw block text; we
@@ -418,11 +428,44 @@ export function classifyStepFamily(header) {
  * @return {string|null} 'ifc', 'step', or null when nothing is declared
  */
 export function stepFamily(header) {
-  const entries = fileSchemaEntries(header)
-  if (entries.length === 0) {
-    return null
+  for (const entry of fileSchemaEntries(header)) {
+    const family = schemaFamily(entry)
+    if (family !== null) {
+      return family
+    }
   }
-  return entries.some((entry) => entry.startsWith('IFC')) ? 'ifc' : 'step'
+  return null
+}
+
+
+// The schema-name prefixes conway's `ModelFormatDetector` recognises, in the
+// order it tests them, each mapped to the family Share cares about. IFC is the
+// only one that reaches conway's IFC-only store open; AP214/AP203/AP242 all
+// mean "STEP" here, and anything unrecognised means conway detects no format
+// at all.
+const SCHEMA_FAMILIES = [
+  ['IFC', 'ifc'],
+  ['AUTOMOTIVE_DESIGN', 'step'],
+  ['CONFIG_CONTROL_DESIGN', 'step'],
+  ['AP203', 'step'],
+  ['AP242', 'step'],
+]
+
+
+/**
+ * The family of one normalised schema name, or null when conway recognises
+ * no format in it.
+ *
+ * @param {string} entry uppercased, space-stripped schema name
+ * @return {string|null} 'ifc', 'step', or null
+ */
+function schemaFamily(entry) {
+  for (const [prefix, family] of SCHEMA_FAMILIES) {
+    if (entry.startsWith(prefix)) {
+      return family
+    }
+  }
+  return null
 }
 
 

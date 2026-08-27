@@ -377,14 +377,32 @@ describe('Filetype', () => {
       expect(stepFamily(hdr(`FILE_SCHEMA(('AP203_CONFIGURATION_CONTROLLED_3D_DESIGN'));`))).toBe('step')
     })
 
-    it('considers every declared entry, not just the first', () => {
-      // conway iterates all quoted entries and answers IFC if ANY starts with
-      // IFC (`model_format_detector.js`). Reading only the first made a
-      // header listing IFC second read as STEP here — safe, since it only
-      // costs the windowed parse, but a disagreement all the same.
-      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'),('IFC4'));`))).toBe('ifc')
+    it('takes the first entry conway recognises, in declaration order', () => {
+      // conway returns on the FIRST entry matching ANY known schema — it tests
+      // IFC, AUTOMOTIVE_DESIGN, CONFIG_CONTROL_DESIGN/AP203 and AP242 within
+      // each entry before moving to the next (`model_format_detector.js`). So
+      // declaration order decides, and a STEP schema listed first wins even
+      // when IFC follows it.
+      //
+      // Asking instead whether ANY entry starts with IFC answers 'ifc' for the
+      // first case below, where conway answers AP214 — we would offer a STEP
+      // file conway's IFC-only store open, burn the handle, and recreate
+      // bldrs-ai/Share#1776. This test asserted exactly that wrong answer
+      // until codex caught it on the PR.
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'),('IFC4'));`))).toBe('step')
       expect(stepFamily(hdr(`FILE_SCHEMA(('IFC4'),('AUTOMOTIVE_DESIGN'));`))).toBe('ifc')
       expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN'),('CONFIG_CONTROL_DESIGN'));`))).toBe('step')
+      // An entry conway recognises nothing in is skipped, not treated as STEP,
+      // so a later recognised entry still decides.
+      expect(stepFamily(hdr(`FILE_SCHEMA(('SOMETHING_ELSE'),('IFC4'));`))).toBe('ifc')
+      expect(stepFamily(hdr(`FILE_SCHEMA(('SOMETHING_ELSE'),('AP242_MANAGED_MODEL'));`))).toBe('step')
+    })
+
+    it('answers null when no entry names a schema conway knows', () => {
+      // conway's detector falls out of its loop and returns undefined, i.e.
+      // no format — so its store open refuses the file. Null here makes
+      // `canOpenFromStore` buffer, which is the same outcome.
+      expect(stepFamily(hdr(`FILE_SCHEMA(('SOMETHING_ELSE'));`))).toBeNull()
     })
 
     it('strips spaces inside an entry, as conway does', () => {
@@ -460,10 +478,12 @@ describe('Filetype', () => {
       // Statement splitting is string-aware, matching conway's tokenizer: a
       // `;` inside a string literal is ordinary text, not a terminator.
       //
-      // The case that actually distinguishes it is a semicolon inside the
-      // schema name — a naive split cuts the entity in half, and the leading
-      // fragment has no closed quote pair left, so it reads as "did not say".
-      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTO;MOTIVE_DESIGN'));`))).toBe('step')
+      // The case that actually distinguishes it is a semicolon inside a schema
+      // name conway still recognises — a naive split cuts the entity in half,
+      // and the leading fragment has no closed quote pair left, so it reads as
+      // "did not say". The name must stay recognisable past the split point:
+      // `AUTO;MOTIVE_DESIGN` is unrecognised either way and proves nothing.
+      expect(stepFamily(hdr(`FILE_SCHEMA(('AUTOMOTIVE_DESIGN;2'));`))).toBe('step')
       // Worth recording what this does NOT prove. The realistic case — a
       // semicolon in a FILE_NAME author or description field, which is common
       // — comes out the same either way, because the mis-split fragments
