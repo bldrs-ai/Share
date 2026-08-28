@@ -190,27 +190,33 @@ ports → `net::ERR_CONNECTION_REFUSED`. Tests look "broken" when they're not.
 Pre-existing quirk; flag as a separate cleanup if it bothers you.
 
 
-## Netlify's Lighthouse Best Practices score oscillates on its own
+## Netlify's Lighthouse Best Practices score is flaky — check, don't assume
 
 The preview comment's **Best Practices** number moves between 83, 92 and 100
-across audits of unrelated commits, and reports the swing as "down 9 from
-production" / "up 8 from production". It is not a signal about the diff.
-
-Established twice, at real cost, so it does not need establishing a third time:
+across audits of unrelated commits, and presents each swing as "down 9 from
+production" / "up 8 from production". Twice it cost a real investigation:
 
 - On #1783 it read −9 on a diff of specs, docs and `vars.playwright.js` — none
   of which reach the `SHARE_CONFIG=prod` bundle the audit loads — and later read
-  +8 on the same PR with no change.
-- On #1790 it read −9 on a diff that *does* touch production code, which is the
-  case worth checking rather than dismissing. Building `main` and the branch
-  side by side under one config and capturing console errors on load gave
-  byte-identical results (two events, both sandbox artefacts, neither from the
-  changed code). The score then recovered to 92 on the next head unaided.
+  +8 on the same PR with no change in between.
+- On #1790 it read −9 on a diff that **does** touch production code. Building
+  `main` and the branch side by side under one config and capturing console
+  errors on load gave byte-identical results; the score recovered to 92 on the
+  next head unaided.
 
-So: a Best Practices delta with no console-error delta is the audit, not you.
-Worth one check if the diff reaches production code — a local A/B on console
-errors is the cheap discriminator, since that category is largely console-driven
-— and worth nothing at all if it doesn't.
+So the score is known-flaky and a delta is not by itself evidence of a
+regression. **It is also not by itself evidence of nothing:**
+
+- **If the diff cannot reach the prod bundle** (specs, docs, Playwright-only
+  config), a delta is the audit. Nothing to do.
+- **If the diff can reach it, open the audit and read which check changed.**
+  Best Practices aggregates several — console errors are only one of them, so a
+  local console A/B is a useful first cut and *not* a clearance: a production
+  change can leave the console identical and still move a legitimate check. The
+  Netlify deploy log names the failing audit; that is the artefact to look at,
+  and it is what neither investigation above actually managed to read (the
+  agent sandbox's proxy blocks `netlify.app`, which is why both fell back to a
+  local A/B).
 
 ## Drive Picker fails on Brave with Shields up
 

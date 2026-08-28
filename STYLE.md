@@ -122,42 +122,47 @@ Use dash-separated, converted from CamelCase:
 
 An assertion that cannot fail is worse than a missing one, because it reads as
 coverage. The #1776 work stream (#1777, #1782, #1783, #1788, #1789, #1790)
-turned up about a dozen, several of them inside code written to prevent exactly
-this. They come in a small number of shapes, so check for them by name:
+produced about a dozen of these — several inside code written to prevent exactly
+that. They are **three different diseases** wearing one symptom, and they take
+different remedies, so name which one you have before reaching for a fix.
 
-- **A negative guard doing duty as a positive one.** "Nothing unexpected
-  appeared" is not "the thing appeared", and an empty collection satisfies the
-  first while disproving the second. `expectOnlyInducedLoaderErrors` iterates a
-  captured buffer, so a buffer left empty *because the diagnostic stopped
-  emitting* ran zero assertions and passed (#1789). Assert the collection's
-  size too, or pair the guard with a positive one — and say at both which is
-  which.
-- **A mock that disables what the test discriminates on.** `jest.mock`
-  auto-mocks return `undefined`. `nextRequestId` mocked that way makes every
-  worker reply match every listener, so nine correlation tests would have
-  passed with no correlation at all (#1790). Give a mocked helper a real
-  implementation whenever its return value is the thing being tested.
-- **A selector or flag that quietly stopped matching.** `[role="treeitem"]`
-  after the tree stopped emitting it; two `glbVerbose`-gated log lines asserted
-  without the flag on; a `GlobalId` row rendered on neither path (#1783). Each
-  matched nothing, and nothing said so.
-- **A threshold with no headroom.** `MIN_DISTINCT_LABELS = 5` reads as a loose
-  floor; both fixtures offer exactly five, so it is the ceiling (#1788). If a
-  bound is the most the fixture can give, say so at the constant, or the next
-  reader goes looking for slack that isn't there.
-- **A precondition satisfied earlier than you think.** Waiting for a `.glb` to
-  exist in OPFS passes at file *creation*, so the reload read a half-written
-  artifact and a spec named "cache-hit" never hit the cache (#1783). Wait for
-  the completion signal, not for existence.
-- **A test that codifies the bug.** #1782's multi-entry case asserted the wrong
-  answer outright, which would have defended the defect against whoever noticed
-  it next.
+**1. The assertion genuinely cannot fail.** No input makes it red.
 
-**The check is cheap: break the thing the assertion guards, watch it go red,
-restore it.** Every repair above was confirmed that way, and the mutation run is
-what caught two of them being vacuous a *second* time after a first fix. Put the
-result in the PR — "26 passed before, 5 failed after" is evidence a reviewer can
-act on; "added a test" is not.
+- Iterating a collection that may be empty runs zero assertions and passes.
+  `expectOnlyInducedLoaderErrors` matched each line of a captured buffer, so a
+  buffer left empty *because the diagnostic had stopped emitting* sailed through
+  (#1789). Assert the size too, or pair the guard with a positive one.
+- A mock returning `undefined` where the return value is what the test
+  discriminates on. `jest.mock` auto-mocks `nextRequestId` to `undefined`, which
+  makes every worker reply match every listener — nine correlation tests would
+  have passed with no correlation at all (#1790). Give it a real implementation.
+- Alternatives nothing can reach: an expected-error regex carried five, only two
+  of which any code path could produce (#1789).
+
+**2. The assertion is sound but never runs.** This is the one most likely to be
+misread as the first, and the remedy is unrelated. Un-skipping three specs in
+#1783 surfaced a `role="treeitem"` selector the tree no longer emits, two
+`glbVerbose`-gated log waits, and a `GlobalId` row rendered on neither path —
+**each would have failed had it executed**, and none had executed for five
+weeks. A `test.fixme` spec rots against the code around it. When you un-skip
+one, expect its assertions to be stale and re-derive them from the current
+behaviour rather than trusting that they still describe it.
+
+**3. The assertion runs, can fail, and says something false.** #1782's
+multi-entry test asserted the *wrong answer* outright, so it would have defended
+the defect against whoever noticed it next. #1788's threshold comment called
+`>= 5` a loose floor when five is the most either fixture can offer — the
+assertion was right, the explanation was not, and the next reader would have
+gone hunting for slack that does not exist. Check the claim, not just the pass;
+a green test proves nothing about the sentence above it.
+
+**For 1 and 3 the check is cheap: break the thing the assertion guards, watch it
+go red, restore it.** Every repair above was confirmed that way, and the mutation
+run is what caught two of them being vacuous a *second* time after a first fix,
+which reading alone had missed both times. Put the result in the PR — "26 passed
+before, 5 failed after" is evidence a reviewer can act on; "added a test" is not.
+Note that this check cannot reach disease 2 at all: a skipped test is not made
+honest by mutating the code it does not run against.
 
 ### Console hygiene
 A test run should print **nothing unexpected** — noise buries the one new
