@@ -318,8 +318,17 @@ describe('CoincidenceSet', () => {
   })
 
   it('keeps thousands of distinct placements distinct', () => {
-    // Exercises the primary-hash chaining path at a scale where a weak or
-    // truncated fingerprint would start merging unrelated placements.
+    // Exercises the primary-hash chaining path: 5,000 entries against a
+    // 32-bit primary means ~0.003 expected primary collisions, so this walks
+    // the `number` → `Array` chain rather than only the empty-slot path.
+    //
+    // What it does NOT guard is fingerprint *width*. A birthday collision
+    // needs 2^bits ≲ n²/2, so at n = 5,000 this only detects a fingerprint
+    // weakened below ~24 bits total; truncating each of the three streams to
+    // 16 bits still leaves ~37 effective bits and passes here. Width is
+    // argued analytically in `CoincidenceSet`'s doc comment (85 bits →
+    // 4e-15 per load), not pinned by this test — don't read a pass here as
+    // evidence the fingerprint is wide enough.
     const seen = new CoincidenceSet()
     const count = 5000
     for (let i = 0; i < count; i++) {
