@@ -14,6 +14,7 @@ import Conway from './pages/share/Conway'
 import Quotas from './pages/share/Quotas'
 import Share from './Share'
 
+
 /**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
@@ -34,8 +35,8 @@ import Share from './Share'
  * Examples for this component:
  *   http://host/share/v/p/haus.ifc
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
- *   ^... here on handled by this component's paths.
- *   ^... path to the component in BaseRoutes.jsx.
+ *                    ^... here on handled by this component's paths.
+ *              ^... path to the component in BaseRoutes.jsx.
  *
  * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
  * @return {object}
@@ -102,9 +103,10 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
   )
 }
 
+
 /**
  * Forward page from /share to /share/v/p per spect at:
- * https://github.com/bldrs-ai/Share/wiki/URL-Structure
+ *   https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
  * @param {string} appPrefix The install prefix, e.g. /share.
  * @return {object}
