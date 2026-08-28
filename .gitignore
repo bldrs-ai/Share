@@ -48,3 +48,9 @@ deno.lock
 # no LFS bandwidth; the generated thumbnails in src/assets/thumbnails ARE
 # committed, these source models are not.
 tools/thumbnails/cache/
+
+# Sandboxes for agent sessions (`git worktree` checkouts under .claude/).
+# Transient and machine-local: the branch inside one is pushed like any other,
+# but the working copy itself is never part of the repo. Untracked they show up
+# as pending changes in every session that dispatches an agent.
+.claude/worktrees/
