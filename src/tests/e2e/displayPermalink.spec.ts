@@ -8,10 +8,11 @@ import {homepageSetup, setIsReturningUser} from './utils'
  * Display permalink — a shared `#d:` link reproduces the sender's display
  * state cold (view-140 S7, #1712).
  *
- * Model-scope color + shading only (what exists pre-S5). Opens the link cold
- * — the state a recipient lands in — and asserts the resulting SCENE, not the
- * URL: colors off the model's own tables, wireframe off its materials. A
- * link that changes the hash but not the pixels is the failure that matters.
+ * Model-scope color + shading + residency (what exists pre-S5). Opens the link
+ * cold — the state a recipient lands in — and asserts the resulting SCENE, not
+ * the URL: colors off the model's own tables, wireframe off its materials,
+ * eviction off `getVisibleAt`. A link that changes the hash but not the pixels
+ * is the failure that matters.
  *
  * Shading is behind ?feature=displayControls, so the wireframe link carries
  * the flag too — a recipient of a wireframe share needs it on to see the
@@ -23,6 +24,10 @@ const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-colorless.
 const TEST_TIMEOUT_MS = 90_000
 const DEFAULT_GREY = 0.8
 const GREY_EPSILON = 0.02
+// Half the model resident. Occupancy (the default metric) keeps
+// `round(target * instanceCount)` instances, so on any fixture with more than
+// one instance this is strictly partial — see ResidencyController#apply.
+const HALF_RESIDENCY = 50
 
 
 /**
@@ -103,6 +108,45 @@ function wireframeState(page: Page): Promise<{wireframe: number, total: number}>
 
 
 /**
+ * Count visible vs total batched instances — the same `getVisibleAt` read
+ * `residencySlider.spec.ts` asserts eviction with, which is the state the
+ * renderer actually draws from.
+ *
+ * @param page Playwright page
+ * @return visible/total instance counts
+ */
+function batchedVisibility(page: Page): Promise<{visible: number, total: number}> {
+  return page.evaluate(() => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const store = (window as unknown as {store?: {getState: () => {model?: unknown}}}).store
+    const model = store?.getState().model as any
+    const meshes: any[] = []
+    if (model?.isBatchedMesh) {
+      meshes.push(model)
+    }
+    (model?.children ?? []).forEach((child: any) => {
+      if (child?.isBatchedMesh) {
+        meshes.push(child)
+      }
+    })
+    let visible = 0
+    let total = 0
+    for (const mesh of meshes) {
+      const count = mesh.instanceParents?.length ?? 0
+      for (let index = 0; index < count; index++) {
+        total++
+        if (mesh.getVisibleAt(index)) {
+          visible++
+        }
+      }
+    }
+    return {visible, total}
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  })
+}
+
+
+/**
  * Open a model cold with an extra hash/query suffix, waiting for the fixture
  * response and model-ready. The intercept keys on the GitHub API URL, so the
  * suffix on the page URL doesn't disturb it.
@@ -147,5 +191,31 @@ describeMobileAndDesktop('Display permalink', () => {
       const {wireframe, total} = await wireframeState(page)
       return total > 0 && wireframe === total
     }).toBe(true)
+  })
+
+  test(`#d:res=${HALF_RESIDENCY} evicts instances cold`, async ({page}) => {
+    test.setTimeout(TEST_TIMEOUT_MS)
+    page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
+
+    // The ordering case this test exists for: `ResidencyController` is built
+    // in its own effect, so on the tick ResidencyControl seeds the override
+    // stack from `#d:` there is nothing to evict yet. The residency override
+    // has to reach the scene once the controller appears — see
+    // ResidencyControl's `applyResidencyOverrides` effect, which is keyed on
+    // (controller, overrides) for exactly this reason. A store-only
+    // regression here still renders the slider at 50 while the whole model
+    // stays on screen, so the scene read below is the assertion that matters.
+    await openColdWith(page, `#d:res=${HALF_RESIDENCY}`)
+
+    await expect.poll(async () => {
+      const {visible, total} = await batchedVisibility(page)
+      return total > 0 && visible > 0 && visible < total
+    }).toBe(true)
+
+    // ...and the control reflects what the sender shared, so the recipient can
+    // see (and undo) the residency they landed in.
+    await page.getByTestId('control-button-residency').click()
+    await expect(page.getByTestId('residency-slider').getByRole('slider'))
+      .toHaveAttribute('aria-valuenow', `${HALF_RESIDENCY}`)
   })
 })
