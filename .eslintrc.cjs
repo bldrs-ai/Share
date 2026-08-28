@@ -1,13 +1,5 @@
 /* eslint-disable no-magic-numbers */
 module.exports = {
-  // Stop the config cascade here. Agent worktrees live under
-  // `.claude/worktrees/<id>/` inside a second checkout, so without this ESLint
-  // walks up to the outer checkout's config: plugins then resolve from two
-  // node_modules trees ("couldn't determine the plugin … uniquely"), and the
-  // ignore base path becomes the outer root, under which every worktree file
-  // sits below a dot-directory and is "ignored by default" — i.e. the husky
-  // pre-commit gate can't lint anything.
-  root: true,
   env: {
     browser: true,
     es2021: true,
