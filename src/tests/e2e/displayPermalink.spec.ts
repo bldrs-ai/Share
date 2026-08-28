@@ -14,9 +14,10 @@ import {homepageSetup, setIsReturningUser} from './utils'
  * eviction off `getVisibleAt`. A link that changes the hash but not the pixels
  * is the failure that matters.
  *
- * Shading is behind ?feature=displayControls, so the wireframe link carries
- * the flag too — a recipient of a wireframe share needs it on to see the
- * control, and the applied state must not depend on the popover being opened.
+ * No `?feature=` anywhere: `displayControls` is default-on, so these are the
+ * links a recipient actually receives. The wireframe case in particular is why
+ * that default matters — while the flag shipped dark, a `#d:wire=1` share only
+ * reproduced the sender's view for a recipient who had opted in.
  *
  * Fixture: the colorless NIST as1 variant (see colorMode.spec.ts).
  */
@@ -185,7 +186,7 @@ describeMobileAndDesktop('Display permalink', () => {
     test.setTimeout(TEST_TIMEOUT_MS)
     page.on('pageerror', (err) => console.warn(`[pageerror] ${err.message}`))
 
-    await openColdWith(page, '?feature=displayControls#d:wire=1')
+    await openColdWith(page, '#d:wire=1')
 
     await expect.poll(async () => {
       const {wireframe, total} = await wireframeState(page)

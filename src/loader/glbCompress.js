@@ -88,12 +88,19 @@ export function activeSchemaVersion() {
 
 /**
  * Whether the batched-native artifact layout is active
- * (`?feature=glbBatched` — see FeatureFlags + glbCacheKey for the design).
+ * (`glbBatched`, default-on — see FeatureFlags + glbCacheKey for the design),
+ * unless this session opted out via the `disableGlbBatched` off-switch.
+ *
+ * The ONE seam both sides of the cache read this through — reader lookup
+ * (`Loader#tryLoadCachedGlb` → `activeArtifactSpec`), reader hydration
+ * (`Loader.js`) and writer (`glbExport`). Keep it that way: a second
+ * `isFeatureEnabled('glbBatched')` call site is how the two ends start
+ * disagreeing about which slot an artifact lives in.
  *
  * @return {boolean}
  */
 export function isGlbBatchedActive() {
-  return isFeatureEnabled('glbBatched')
+  return isFeatureEnabled('glbBatched') && !isFeatureEnabled('disableGlbBatched')
 }
 
 
@@ -107,8 +114,10 @@ export function isGlbBatchedActive() {
  * assume the merged single-primitive layout and its face-ids ordering
  * dance), so when `glbBatched` is on it takes precedence over the
  * compression flags: batched slot, mode null. Without it, a reader running
- * `?feature=glbBatched,glbDraco` would look in the batched slot but demand
- * draco-marked bytes and miss its own writer's artifact every load.
+ * `?feature=glbDraco` would look in the batched slot but demand draco-marked
+ * bytes and miss its own writer's artifact every load. That combination is
+ * now the DEFAULT+opt-in one rather than an exotic pair, since `glbBatched`
+ * ships on: anyone who turns compression on lands here.
  *
  * @return {{schemaVer: string, mode: GlbCompressionMode}}
  */

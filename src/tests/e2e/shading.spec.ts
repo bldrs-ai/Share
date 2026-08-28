@@ -7,19 +7,21 @@ import {homepageSetup, setIsReturningUser} from './utils'
 /**
  * Shading control — Shaded / Wireframe (view-140 S4, #1709).
  *
- * Behind `?feature=displayControls` (additive UI shipping dark), unlike the
- * always-on color toggle — so the spec navigates with the flag on. Asserted
- * against the real scene per the `residencySlider.spec.ts` precedent: the
- * wireframe state is read off the model's own materials, the flag the
- * renderer draws from. A DOM-only check would pass on a radio that toggles
- * nothing.
+ * `displayControls` is default-on, so this navigates with no `?feature=` at
+ * all — the configuration a shipping user is in. (It carried
+ * `?feature=displayControls` while the flag shipped dark; keeping it would
+ * mean the spec passes whether or not the default is right.)
+ *
+ * Asserted against the real scene per the `residencySlider.spec.ts`
+ * precedent: the wireframe state is read off the model's own materials, the
+ * flag the renderer draws from. A DOM-only check would pass on a radio that
+ * toggles nothing.
  *
  * Reuses the colorless-STEP fixture from colorMode.spec.ts — any loaded model
  * works for shading (it's material-flag based), and reusing one keeps the
  * flow-test model set small.
  */
 const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-colorless.stp'
-const DISPLAY_FLAG = '?feature=displayControls'
 const TEST_TIMEOUT_MS = 90_000
 
 
@@ -74,14 +76,8 @@ describeMobileAndDesktop('Shading control', () => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
 
-    // Register the fixture intercept, then navigate with the flag on — the
-    // intercept keys on the GitHub API URL, not the page URL, so the extra
-    // query doesn't disturb it.
-    const {waitForModelResponse} = await setupVirtualPathIntercept(page, AS1_PATH, '')
-    await Promise.all([
-      waitForModelResponse(),
-      page.goto(`${AS1_PATH}${DISPLAY_FLAG}`, {waitUntil: 'domcontentloaded'}),
-    ])
+    const {navigateAndWaitForModel} = await setupVirtualPathIntercept(page, AS1_PATH, '')
+    await navigateAndWaitForModel()
     await waitForModelReady(page)
 
     // Starts shaded: some materials exist, none wireframe.

@@ -18,8 +18,12 @@ import {ResidencyMetric} from '../../viewer/residency/ResidencyController'
 // it for this file the same way ShareViewer.test.js does.
 jest.mock('three', () => jest.requireActual('three'))
 
-// Shading is behind ?feature=displayControls; the color section is not. Mock
-// so a test can flip the flag without a real URL param.
+// Shading is gated on `displayControls`; the color section is not. The mock
+// makes each test state the flag it means, independent of the shipped default
+// — which is why flipping that default to true (the S7 landing) left every
+// assertion here valid: the gate below is pinned in BOTH positions, and
+// neither is claiming to be the default. The real default is covered by the
+// E2E (`tests/e2e/shading.spec.ts`), which navigates with no `?feature=`.
 const mockIsFeatureEnabled = jest.fn()
 jest.mock('../../FeatureFlags', () => ({
   isFeatureEnabled: (name) => mockIsFeatureEnabled(name),
@@ -87,8 +91,9 @@ async function renderWithModel(model) {
 
 
 describe('ResidencyControl color section', () => {
-  // Default: displayControls OFF (so the color section is exercised in
-  // isolation — shading is hidden). Shading tests flip it on explicitly.
+  // Flag OFF for this suite so the color section is exercised in ISOLATION
+  // (shading hidden) — a test-fixture choice, not a claim about the shipped
+  // default, which is on. Shading tests flip it on explicitly.
   beforeEach(() => mockIsFeatureEnabled.mockReturnValue(false))
   afterEach(async () => {
     mockIsFeatureEnabled.mockReset()
@@ -154,6 +159,9 @@ describe('ResidencyControl shading section', () => {
     })
   })
 
+  // The gate itself, not the default: `?feature=` can only turn flags on, so
+  // this configuration is no longer reachable in the shipped app — it is here
+  // to keep the gate honest for S5, which lands its scoped controls behind it.
   it('is hidden when displayControls is off', async () => {
     mockIsFeatureEnabled.mockReturnValue(false)
     const {getByTestId, queryByTestId} = await renderWithModel(colorOnlyModel())

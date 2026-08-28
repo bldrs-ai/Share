@@ -8,7 +8,7 @@ import {glbInfo, glbVerbose} from '../../loader/glbLog'
 /**
  * instancedGlbToBatchedModel — cache-hit hydration for the batched-native
  * GLB artifact (view-140 S9 / viewer-replacement §3b.v,
- * `?feature=glbBatched`).
+ * the default-on `glbBatched` flag).
  *
  * The writer (`loader/glbBatchedExport`) serialized the live batched model
  * as EXT_mesh_gpu_instancing nodes + `BLDRS_instance_tables`. three's

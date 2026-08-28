@@ -118,6 +118,17 @@ describe('loader/glbCompress', () => {
         .toEqual({schemaVer: `${BLDRS_GLB_SCHEMA_VERSION}-draco`, mode: 'draco'})
     })
 
+    it('sends disableGlbBatched back to the merged slot', () => {
+      // The off-switch for the now-default-on layout. Pinned at THIS seam
+      // because it is the one both the reader's lookup and the writer's key
+      // derivation go through — an off-switch honored by only one of them
+      // would write artifacts nothing ever reads.
+      mockIsFeatureEnabled.mockImplementation(
+        (n) => n === 'glbBatched' || n === 'disableGlbBatched')
+      expect(activeArtifactSpec())
+        .toEqual({schemaVer: BLDRS_GLB_SCHEMA_VERSION, mode: null})
+    })
+
     it('keeps the batched slot disjoint from every merged slot', () => {
       const slots = new Set([
         BLDRS_GLB_BATCHED_SCHEMA_VERSION,

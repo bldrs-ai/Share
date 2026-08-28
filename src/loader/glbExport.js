@@ -228,7 +228,7 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
 
-    // Batched-NATIVE layout (S9, `?feature=glbBatched`): keep the batch
+    // Batched-NATIVE layout (S9, `glbBatched`, default-on): keep the batch
     // structure via EXT_mesh_gpu_instancing + per-instance tables instead
     // of de-instancing into the merged bake. `batchedTables` non-null is
     // the discriminator for every layout decision below (no face_ids, no
@@ -245,7 +245,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
         batchedTables = batchedNative.tableNodes
         glbVerbose('writer: batched-native export produced', rawBytes.byteLength, 'bytes')
       } else {
-        glbInfo('writer: batched-native export declined; falling back to merged bake')
+        // Worth saying out loud now that `glbBatched` is default-on: this
+        // artifact lands in the MERGED slot, which a flag-on reader never
+        // looks in, so this model re-parses on every load. Correct, just
+        // uncached — and this line is the only way to tell that apart from
+        // a cache that is simply cold.
+        glbInfo(
+          'writer: batched-native export declined; falling back to merged bake ' +
+          '(merged slot — a glbBatched reader will keep missing this model)')
       }
     }
 

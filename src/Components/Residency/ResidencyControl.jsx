@@ -33,8 +33,9 @@ import {readModelDisplayHash, writeModelDisplayHash} from './displayHash'
  *
  * Three sections today, all scoped to the whole model, in the order they
  * render:
- *   - **Shading** (view-140 S4) — Shaded vs Wireframe. Behind
- *     `?feature=displayControls`. First because it's the coarsest choice:
+ *   - **Shading** (view-140 S4) — Shaded vs Wireframe. Gated on
+ *     `displayControls`, which is default-on; the gate stays because S5's
+ *     scoped controls land behind it. First because it's the coarsest choice:
  *     wireframe changes what you're looking at, color only changes how the
  *     surfaces are tinted.
  *   - **Color** (view-140 S2) — Auto (Share-assigned) vs Source. Auto-coloring
@@ -88,8 +89,8 @@ export default function ResidencyControl() {
   // residency sections self-gate the same way.)
   const showColor = modelHasColorChoice(model)
 
-  // Shading section (S4) — behind ?feature=displayControls (additive UI
-  // shipping dark), unlike the always-on color toggle. Whole-model scope.
+  // Shading section (S4) — gated on `displayControls` (default-on since the
+  // S7 landing; the gate is kept for S5's scoped controls). Whole-model scope.
   const showShading = isFeatureEnabled('displayControls') && modelHasShadingChoice(model)
 
   // Controller lifecycle belongs to an EFFECT, not useMemo: React

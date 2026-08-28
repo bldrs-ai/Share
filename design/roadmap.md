@@ -318,8 +318,13 @@ appearance decision, applied to a scope, that survives a share.*
   over the color restore table (nothing to revert to), and it's baked into the
   GLB cache artifact (so a cache-hit model can't be un-colored at all).
 - Design: [`design/new/model-display-controls.md`](new/model-display-controls.md).
-  Behind `?feature=displayControls`; the color toggle alone goes default-on
-  since it exposes behavior that already ships.
+  `displayControls` and `glbBatched` are **default-on** as of 2026-08-28 (the
+  color toggle was never behind a flag — it exposes behavior that already
+  ships). Both flags survive as gates: `displayControls` for the scoped
+  controls (S5), `glbBatched` for the artifact layout. Flipping the latter
+  changes the stored GLB format, which is safe because batched artifacts live
+  in their own schema slot and the slot is part of the OPFS filename — see
+  the design doc §7.1 for the argument and its two consequences.
 - Track dependency: T1 (subset builders, batched path), T2 (the override
   schema is what T2 Phase 4's view-states embed for anything past the URL cap).
 

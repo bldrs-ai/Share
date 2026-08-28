@@ -50,12 +50,20 @@ export const flags = [
   // DRACO regression is resolved by the r184 upgrade (PR #1514).
   // Off-by-default because compression adds 100-300ms per cache write;
   // flip on via `?feature=glb,glbDraco` to size-compare on your models.
+  // NOTE since `glbBatched` went default-on: this flag is inert until that
+  // one is off. `activeArtifactSpec` gives the batched slot precedence with
+  // mode null, so the reader never asks for compressed bytes — the
+  // batched-native writer skips compression outright, and a merged-fallback
+  // write still compresses but lands in a `-draco` slot nothing reads.
+  // Compressing the instanced layout is a batched-v2 item, not a flag
+  // combination that works today.
   {name: 'glbDraco', isActive: false},
   // Meshopt compression for cached GLBs. Mirror of `glbDraco` using
   // EXT_meshopt_compression via @gltf-transform's meshopt() transform.
   // Typically faster to decode than DRACO with comparable ratios.
   // When both `glbDraco` and `glbMeshopt` are on, DRACO wins
-  // (deterministic; toggle the other off to compare).
+  // (deterministic; toggle the other off to compare). Same `glbBatched`
+  // precedence caveat as `glbDraco` above.
   {name: 'glbMeshopt', isActive: false},
   // Verbose GLB writer/reader diagnostics (cache-key descriptor dump,
   // modelID, geometry size, chunk count). Top-level `[glb] writer/reader:`
@@ -138,13 +146,23 @@ export const flags = [
   // See src/viewer/ifc/productPalette.js.
   {name: 'autoColorParts', isActive: true},
   // Model display controls (view-140): additive Display-popover sections
-  // beyond the always-on color toggle — shading (Shaded/Wireframe, S4) now,
-  // scoped application (S5) next. Default off: these are new UI shipping dark
-  // until validated, same as batchedMesh/workspace. The S2 color toggle is
-  // NOT behind this flag — it makes existing default-on auto-coloring
-  // discoverable, so it ships on regardless.
+  // beyond the always-on color toggle — shading (Shaded/Wireframe, S4) today,
+  // scoped application (S5) next. The S2 color toggle is NOT behind this flag
+  // — it makes existing default-on auto-coloring discoverable, so it ships on
+  // regardless.
+  // Default-ON as of the S7 permalink landing. What flipping means: the
+  // Display popover shows its Shading section to every user, and a `#d:wire=1`
+  // link applies for a recipient who didn't opt in — which is the point, since
+  // a shared wireframe view that silently arrives shaded is a broken share.
+  // Nothing else changes: the flag gates one popover section, and a model in
+  // its default display still contributes no hash token.
+  // Still a gate, not dead code — S5's scoped controls land behind it next,
+  // and `ResidencyControl.test.jsx` pins the gate itself (flag off ⇒ no
+  // Shading section) with a mocked flag, independent of this default.
+  // Covered by src/tests/e2e/shading.spec.ts + displayPermalink.spec.ts,
+  // both of which now run in the default configuration.
   // See design/new/model-display-controls.md §7.
-  {name: 'displayControls', isActive: false},
+  {name: 'displayControls', isActive: true},
   // Batched-native GLB cache artifact (view-140 S9 / viewer-replacement
   // §3b.v): the writer serializes the batched model via
   // EXT_mesh_gpu_instancing + BLDRS_instance_tables instead of the merged
@@ -152,14 +170,51 @@ export const flags = [
   // display controls (color/shading) and residency survive a cached
   // re-load, and the artifact keeps the instancing dedup. Source colors are
   // baked (not the display palette), fixing model-display-controls.md
-  // §1.2's lossy-artifact problem. Default off as a stored-format
-  // validation gate — artifacts land in their own schema slot
-  // (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION), so flag-off readers
-  // never see them and flipping the flag back strands nothing. Flip on via
-  // `?feature=glbBatched`. Acceptance bar: the four risk checks recorded in
-  // model-display-controls.md §1.2 (schema gate, round-trip parity,
-  // re-derive determinism, third-party appearance).
-  {name: 'glbBatched', isActive: false},
+  // §1.2's lossy-artifact problem.
+  //
+  // Default-ON as of the S7 landing. What flipping means, in order of how
+  // much it matters:
+  //  - It changes the STORED ARTIFACT FORMAT for every user. Safe by
+  //    construction, not by luck: the batched layout has its own schema slot
+  //    (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION), and the slot is part
+  //    of the OPFS FILENAME, so a reader can only ever open an artifact
+  //    written for its own flag state. Neither direction can half-read the
+  //    other. `activeArtifactSpec` is the single place both sides derive it.
+  //  - Existing merged artifacts therefore read as MISS once, re-parse, and
+  //    rewrite batched — the same one-time cost as any schema bump. The
+  //    stranded merged artifacts are unreferenced but not deleted; OPFS has
+  //    no GC pass yet.
+  //  - A model the batched writer DECLINES (shear in an instance matrix,
+  //    interleaved/missing attributes, or a load that never produced a
+  //    BatchedMesh) still writes its merged artifact to the MERGED slot,
+  //    which a flag-on reader never looks in — so that model re-parses on
+  //    every load instead of hitting cache. A correctness-preserving perf
+  //    regression confined to models the batched path can't represent; see
+  //    glbExport's fallback branch, which logs it.
+  // Reversible: `?feature=disableGlbBatched` (below) puts a session back on
+  // the merged layout, and flipping THAT flag to true is the prod kill switch.
+  // Acceptance: the round-trip risk checks are automated —
+  // `glbCompress.test.js` (slot selection), `glbBatchedRoundTrip.test.js`
+  // (writer → GLTFLoader → hydrate, in jest) and `batchedGlbCache.spec.ts`
+  // (MISS → OPFS → HIT in a real browser, desktop + mobile). Third-party
+  // appearance is pinned writer-side in `glbBatchedExport.test.js`; how the
+  // artifact actually LOOKS in a generic glTF viewer stays a manual check.
+  // See model-display-controls.md §1.2 / S9.
+  {name: 'glbBatched', isActive: true},
+  // OFF-switch for the batched-native artifact above, same inverted shape and
+  // same reason as `disableStreamOpen`: `?feature=` can only turn flags ON, so
+  // a default-on behavior needs an off-flag to stay reversible.
+  // `?feature=disableGlbBatched` puts one session back on the merged slot for
+  // both read and write (`glbCompress#isGlbBatchedActive` is the single seam);
+  // flipping this to true is the prod-wide kill switch if the batched artifact
+  // turns out bad in the field.
+  // Load-bearing for tests, not just for operations: the merged cache-hit
+  // reader is still the fallback layout for any model the batched writer
+  // declines, and without this flag NOTHING could exercise it end-to-end once
+  // `glbBatched` shipped on. `Containers/sceneHighlightPermalink.spec.ts` uses
+  // it to keep the #1639 per-triangle alignment invariant — which exists only
+  // on the merged layout — under test.
+  {name: 'disableGlbBatched', isActive: false},
   // Diagnostic OFF-switch for the full-screen loading overlay
   // (Components/LoadingBackdrop.jsx). The overlay is a dimmer that sits
   // above the canvas, so it also swallows pointer events for the whole

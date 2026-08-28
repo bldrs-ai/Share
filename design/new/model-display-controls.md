@@ -37,6 +37,8 @@ throw away.
 - Ships behind `?feature=displayControls` (default off), with the
   auto-color toggle the one piece that goes default-on early (§7, S2) since it
   makes existing default-on behavior discoverable rather than adding behavior.
+  **Superseded 2026-08-28:** `displayControls` (and `glbBatched`) are now
+  default-on — see §7's flag-state note. The flags stay as gates for S5.
 
 
 ## 1. What's there today
@@ -316,9 +318,9 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 | # | Story | Content | Depends on |
 |---|---|---|---|
 | S1 | Source-color preservation (in memory) | `instanceSourceColors` snapshot at assemble time; palette reversible on the live batched path. No UI. **Shipped.** The export/reader half of §1.2b (bake source, re-derive on read) is NOT in S1 — see §1.2's 2026-07-29 decision; it moves to S9. | — |
-| S9 | Display controls on cache reload | Bake source colors into the GLB and light up color + residency on reload — via the `EXT_mesh_gpu_instancing` batched-native cache (§3b.v) so reload returns a `BatchedMesh` and S1/S2/S6 all apply unchanged, rather than a throwaway merged recolor backend. **Landed behind `?feature=glbBatched` (default off):** S9a writer (`glbBatchedExport` + `BLDRS_instance_tables`, own schema slot `0.15.0-batched`), S9b reader (`instancedGlbToBatchedModel` + the shared `decorateBatchMeshes` core, so cache-hit behavior IS cache-miss behavior), S9c round-trip tests. Risk checks: 1 (schema gate) + 4 (third-party appearance) pinned in `glbCompress.test.js` / `glbBatchedExport.test.js`; 2 (parity) + 3 (determinism) in `glbBatchedRoundTrip.test.js`, which runs writer → real GLTFLoader → hydrate in jest. The MISS→HIT **E2E now runs** (`src/loader/batchedGlbCache.spec.ts`, desktop + mobile) — `OPFS_IS_ENABLED` was flipped true in the playwright build (Share#1783), so the OPFS hop is under CI too. It asserts parity keyed by instance IDENTITY (occurrence path), not by `batchId`: the writer groups instances by (geometry × source color) and the reader re-adds them group by group, so a HIT's batchIds run in artifact-node order where a MISS's run in Conway's emission order. Same instances, same colors, different indices — batchId is not a cross-cache identity and nothing addresses one. *(→ `view-130`; it's the batched-GLB perf item.)* | S2, §3b.v |
+| S9 | Display controls on cache reload | Bake source colors into the GLB and light up color + residency on reload — via the `EXT_mesh_gpu_instancing` batched-native cache (§3b.v) so reload returns a `BatchedMesh` and S1/S2/S6 all apply unchanged, rather than a throwaway merged recolor backend. **Landed behind `glbBatched`, default-on since 2026-08-28 (§7.1 has the stored-format safety argument and its two consequences):** S9a writer (`glbBatchedExport` + `BLDRS_instance_tables`, own schema slot `0.15.0-batched`), S9b reader (`instancedGlbToBatchedModel` + the shared `decorateBatchMeshes` core, so cache-hit behavior IS cache-miss behavior), S9c round-trip tests. Risk checks: 1 (schema gate) + 4 (third-party appearance) pinned in `glbCompress.test.js` / `glbBatchedExport.test.js`; 2 (parity) + 3 (determinism) in `glbBatchedRoundTrip.test.js`, which runs writer → real GLTFLoader → hydrate in jest. The MISS→HIT **E2E now runs** (`src/loader/batchedGlbCache.spec.ts`, desktop + mobile) — `OPFS_IS_ENABLED` was flipped true in the playwright build (Share#1783), so the OPFS hop is under CI too. It asserts parity keyed by instance IDENTITY (occurrence path), not by `batchId`: the writer groups instances by (geometry × source color) and the reader re-adds them group by group, so a HIT's batchIds run in artifact-node order where a MISS's run in Conway's emission order. Same instances, same colors, different indices — batchId is not a cross-cache identity and nothing addresses one. *(→ `view-130`; it's the batched-GLB perf item.)* | S2, §3b.v |
 | S2 | Color control | Display section in the eyeball popover: Auto (Share-assigned) / Source. Model scope. **Default-on** — makes existing behavior discoverable. | S1 |
-| S3 | Display-override stack | `DisplaySlice` + `DisplayController` + specificity resolution; S2's toggle re-homed onto it. Behind `?feature=displayControls`. | S2 |
+| S3 | Display-override stack | `DisplaySlice` + `DisplayController` + specificity resolution; S2's toggle re-homed onto it. Behind `displayControls` (default-on since 2026-08-28, §7.1). | S2 |
 | S4 | Shading control | Shaded / Wireframe / Shaded+edges. Whole-model material fast-path only. | S3 |
 | S5 | Scoped application | Sub-tree / element / occurrence / mesh scopes; subset-overlay wireframe backend (§4); NavTree row affordance + selection-scoped menu. | S4 |
 | S6 | Residency backends | Backend interface; scene-graph + merged backends; ungate the control for GLB/OBJ/etc; drag-vs-commit. *(→ `view-130`, not `view-140` — it's the perf control.)* | S3 |
@@ -328,6 +330,74 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 Sequencing note: S1 → S2 is worth landing on its own before the rest. It closes
 ask 1 (the one with a user-visible correctness smell) in two small PRs, and S1
 is a prerequisite no matter which way the rest of the design goes.
+
+
+### 7.1 Flag state (2026-08-28): both flags default-on
+
+`displayControls` and `glbBatched` were flipped to `isActive: true` once S7
+landed. Neither flag is deleted — S5's scoped controls land behind
+`displayControls`, and `glbBatched` remains the artifact-layout switch.
+
+**`displayControls`.** The Shading section is now offered to every user, and
+— the reason the flip is part of S7 rather than a later tidy-up — a `#d:wire=1`
+link now reproduces the sender's view for *any* recipient. While the flag
+shipped dark, a shared wireframe view silently arrived shaded for anyone who
+hadn't opted in, which defeats the point of serializing it. Covered in the
+default configuration by `tests/e2e/shading.spec.ts` and
+`displayPermalink.spec.ts` (both now navigate with no `?feature=` at all);
+`ResidencyControl.test.jsx` keeps the gate itself pinned in both positions
+with a mocked flag.
+
+**`glbBatched`.** This one changes the stored artifact format for every user,
+so the safety argument is worth stating explicitly rather than assuming:
+
+- Batched artifacts live in their own schema slot
+  (`glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION = '0.15.0-batched'`), and the
+  slot is part of the OPFS **filename**. `glbCompress#activeArtifactSpec` is
+  the single place both the reader (`Loader#tryLoadCachedGlb`) and the writer
+  (`glbExport`) derive it. So a reader can only ever open an artifact written
+  in its own flag state — no direction can half-read the other's bytes.
+- Reader-side hydration is additionally *content*-gated
+  (`model.userData.bldrsInstanceTables`, `Loader.js`), so even a merged
+  artifact reaching a flag-on reader would degrade to a normal merged hit
+  rather than a wrong one.
+- Consequence 1 — a **one-time** cache invalidation. Every existing merged
+  artifact reads as miss, re-parses once, and rewrites batched. Same cost as
+  any schema bump. The stranded merged artifacts are unreferenced but not
+  deleted; OPFS has no GC pass yet.
+- Consequence 2 — an **asymmetry worth knowing**. When the batched writer
+  declines (shear in an instance matrix, interleaved/missing attributes, or a
+  load that never produced a `BatchedMesh`), the merged fallback artifact
+  lands in the *merged* slot, which a flag-on reader never looks in. That
+  model then re-parses on every load: uncached, never miscached. Narrow, and
+  a perf regression only — `glbExport` logs the fallback so it's diagnosable
+  rather than silent. Deliberately NOT mitigated by having the reader also
+  probe the merged slot: that would make a stale merged artifact permanently
+  preferred over the batched rewrite it should be getting.
+
+**The flip needed an off-switch, and finding that out was the useful part.**
+`?feature=` can only turn flags *on*, so once `glbBatched` defaults on there is
+no way to reach the merged layout at runtime — no A/B, no production kill
+switch, and (the way it surfaced) no way for a test to exercise the merged
+cache-hit reader that is still the fallback for any model the batched writer
+declines. `Containers/sceneHighlightPermalink.spec.ts`'s cache-hit leg failed
+on the flip for exactly that reason: it asserts per-*triangle* `BLDRS_face_ids`
+maps aligned with `geometry.index` (the #1639 invariant), a structure the
+batched artifact doesn't have — so the assertion was reading 0 meshes, not a
+broken cache. Fix, following the `disableStreamOpen` precedent: a
+`disableGlbBatched` off-flag, honored at the single `isGlbBatchedActive` seam
+both the reader and the writer go through. That spec's merged leg now carries
+it, and a sibling test asserts the same permalink selection + highlight on the
+default batched layout (which passes: one `BatchedMesh`, one highlighted
+instance).
+
+Risk-check coverage at flip time — automated: 1 (schema gate,
+`glbCompress.test.js` + the E2E's MISS→HIT), 2 (round-trip parity) and 3
+(re-derive determinism), both in `glbBatchedRoundTrip.test.js` (jest, in-memory)
+and `batchedGlbCache.spec.ts` (real OPFS, desktop + mobile). Check 4
+(third-party appearance) is automated only writer-side —
+`glbBatchedExport.test.js` pins the linearized materials; how the artifact
+actually *looks* opened in a generic glTF viewer remains a manual check.
 
 
 ## 8. Test plan
@@ -344,8 +414,10 @@ up but doesn't change pixels is the failure mode that matters here.
   the shaded instances evicted (sub-model scope); residency control *appears*
   on a GLB and an OBJ and actually reduces visible units; a permalink with a
   `#d:` token reproduces the scene state cold.
-- Regression: `?feature=displayControls` off ⇒ the bottom bar is unchanged
-  (screenshot invariant, matching the `workspace` flag precedent).
+- Regression: with the flag off the bottom bar is unchanged (screenshot
+  invariant, matching the `workspace` flag precedent). Moot for the shipped
+  app since the 2026-08-28 flip (§7.1) — `?feature=` can only turn flags on —
+  and pinned instead as a jsdom gate test in `ResidencyControl.test.jsx`.
 
 
 ## 9. Open questions

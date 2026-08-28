@@ -5,7 +5,7 @@ import {glbInfo} from './glbLog'
 /**
  * BLDRS_instance_tables — per-INSTANCE identity for the batched-native GLB
  * cache artifact (view-140 S9 / viewer-replacement §3b.v, behind
- * `?feature=glbBatched`).
+ * the default-on `glbBatched` flag).
  *
  * The merged artifact keys picking data per TRIANGLE (`BLDRS_face_ids`)
  * because a merged mesh has nothing smaller than a vertex to hang identity

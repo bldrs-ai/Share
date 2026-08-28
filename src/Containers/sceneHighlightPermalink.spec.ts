@@ -31,6 +31,10 @@ const {describe} = test
 const MODEL_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/171210AISC_Sculpture_param.ifc'
 // Element path written by selecting plate 'p58' — project root down to the element.
 const ELEMENT_PERMALINK = `${MODEL_PATH}/120010/120020/120023/4998/2867`
+// Forces the pre-S9 merged artifact layout for the one test that needs it.
+// `?feature=` can only turn flags ON, so the escape hatch from a default-on
+// behavior is an off-flag — see FeatureFlags#disableGlbBatched.
+const MERGED_LAYOUT_FLAG = '?feature=disableGlbBatched'
 const TEST_TIMEOUT_MS = 180_000
 // Cache-hit test: two full loads plus the OPFS GLB write wait between them.
 const CACHE_WRITE_TIMEOUT_MS = 120_000
@@ -99,12 +103,20 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
   // geometry.index AFTER the per-triangle maps were built from
   // BLDRS_face_ids. Un-skipped in bldrs-ai/Share#1779 along with the other
   // cache-hit specs — see `tools/esbuild/vars.playwright.js`.
+  //
+  // Runs on the MERGED artifact layout, forced with `?feature=disableGlbBatched`
+  // now that `glbBatched` ships on (view-140 S9). That is the point rather than
+  // a workaround: the invariant this test is named after — per-TRIANGLE maps
+  // agreeing with `geometry.index` — exists only on the merged layout, which is
+  // still what a model the batched writer declines falls back to. The
+  // default (batched) layout has no per-triangle maps to misalign and is
+  // covered by the sibling test below.
   test('cache-hit reload keeps selection, highlight, and table↔geometry alignment', async ({page}) => {
     test.setTimeout(CACHE_HIT_TIMEOUT_MS)
     await permalinkSetup(page)
 
     const glbLogs = captureGlbLogs(page)
-    await page.goto(`${ELEMENT_PERMALINK}#n:`, {waitUntil: 'domcontentloaded'})
+    await page.goto(`${ELEMENT_PERMALINK}${MERGED_LAYOUT_FLAG}#n:`, {waitUntil: 'domcontentloaded'})
     await waitForModelReady(page)
     await page.waitForTimeout(SETTLE_MS)
 
@@ -189,11 +201,13 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     // satisfied for free by `meshes === 0` — and an OR across both paths would
     // permit exactly that.
     //
-    // On a cache HIT the model comes out of `GLTFLoader` (`swapToGlbLoader`),
-    // which cannot emit a `BatchedMesh`; `restoreCacheHitPicking` then attaches
-    // one `IfcInstanceMap` per child Mesh. So this leg is the merged path, and
-    // `meshes` is the picking table this test is named after being present at
-    // all. Measured on the fixture: 16 meshes, 0 batched, 1 merged subset.
+    // On a MERGED cache HIT the model comes out of `GLTFLoader`
+    // (`swapToGlbLoader`) and stays a plain Mesh tree; `restoreCacheHitPicking`
+    // then attaches one `IfcInstanceMap` per child Mesh. So this leg is the
+    // merged path — which is why it carries `disableGlbBatched`, without which
+    // the S9 reader hydrates a `BatchedMesh` and `meshes` is 0 — and `meshes`
+    // is the picking table this test is named after being present at all.
+    // Measured on the fixture: 16 meshes, 0 batched, 1 merged subset.
     expect(hit.meshes, 'cache-hit model carried no per-mesh instanceMap').toBeGreaterThan(0)
     // Selection restored on the merged path, exposed as
     // `viewer._conwaySelectionSubsets`. (Counted together with the batched
@@ -206,5 +220,63 @@ describe('Element-path permalink on a digit-prefixed filename', () => {
     // above is what keeps this loop from being skipped entirely; the invariant
     // is additionally pinned by `Loader.restoreCacheHitPicking.test.js`.
     expect(hit.misaligned).toBe(0)
+  })
+
+  // The same reload on the layout users actually get (view-140 S9,
+  // `glbBatched` default-on). No `?feature=` at all. The merged leg above
+  // cannot cover this: its central assertion — per-mesh `IfcInstanceMap`s
+  // present, per-triangle tables aligned with `geometry.index` — is about a
+  // structure the batched artifact does not have. Here identity is
+  // per-instance, so what has to survive the cache boundary is that the
+  // permalink's element is still selected AND still highlighted in the scene,
+  // through `userData.batchedHighlight` rather than through selection subsets.
+  test('cache-hit reload keeps selection and highlight on the batched layout', async ({page}) => {
+    test.setTimeout(CACHE_HIT_TIMEOUT_MS)
+    await permalinkSetup(page)
+
+    const glbLogs = captureGlbLogs(page)
+    await page.goto(`${ELEMENT_PERMALINK}#n:`, {waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await page.waitForTimeout(SETTLE_MS)
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_WRITE_TIMEOUT_MS)
+
+    resetGlbLogs(glbLogs)
+    await page.reload({waitUntil: 'domcontentloaded'})
+    await waitForModelReady(page)
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_HIT_LOG_TIMEOUT_MS)
+    // Without this the test would pass on a merged hit too, which is the whole
+    // thing it exists to distinguish from the leg above.
+    await waitForGlbLog(glbLogs, 'hydrated batched-native', CACHE_HIT_LOG_TIMEOUT_MS)
+    await page.waitForTimeout(SETTLE_MS)
+
+    const hit = await page.evaluate(() => {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const st = (window as any).useStore.getState()
+      const m = st.viewer?.IFC?.context?.items?.ifcModels?.[0]
+      let batchedMeshes = 0
+      let batchedSelSetTotal = 0
+      const countBatched = (o: any) => {
+        if (o.isBatchedMesh) {
+          batchedMeshes++
+          batchedSelSetTotal += o.userData?.batchedHighlight?.selSet?.size ?? 0
+        }
+      }
+      if (m?.isBatchedMesh) {
+        countBatched(m)
+      } else {
+        m?.traverse?.(countBatched)
+      }
+      return {selectedElements: st.selectedElements, batchedMeshes, batchedSelSetTotal}
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+    })
+    // eslint-disable-next-line no-console
+    console.log('batched cache-hit state:', JSON.stringify(hit))
+    expect(hit.selectedElements).toEqual(['2867'])
+    expect(hit.batchedMeshes, 'batched cache hit produced no BatchedMesh').toBeGreaterThan(0)
+    // The #1639 failure in its batched dialect: the element resolves but
+    // nothing lights up, because the hydrated batch tables and the selection
+    // layer disagree about which instances belong to 2867.
+    expect(hit.batchedSelSetTotal, 'no batched highlight for the permalinked element')
+      .toBeGreaterThan(0)
   })
 })

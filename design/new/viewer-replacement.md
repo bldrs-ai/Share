@@ -814,6 +814,17 @@ Three settled conclusions:
 
 #### 3b.v. Forward path: `EXT_mesh_gpu_instancing` (batched-native GLB cache)
 
+**Status (2026-08-28): shipped and default-on.** All three "genuinely new
+work" items below were built under view-140 S9 (`loader/glbBatchedExport.js`
+writer, `viewer/ifc/instancedGlbToBatchedModel.js` reader, per-instance colour
+solved by the colour sub-key option — group by geometry × source colour). The
+`glbBatched` flag survives as the layout switch but now defaults on; the
+stored-format safety argument and its two consequences are in
+[`model-display-controls.md`](model-display-controls.md) §7.1. One correction
+to the prose below: the reader does not stop at `InstancedMesh` — it hydrates
+back to a real decorated `BatchedMesh`, so cache-hit behaviour *is* cache-miss
+behaviour rather than merely being conceptually close to it.
+
 The merged-mesh bake (§3b.iv *GLB cache*) is deliberately the
 zero-reader-change MVP: it gets batched models cached *at all* by
 flattening them into the shape the reader already understands. But it

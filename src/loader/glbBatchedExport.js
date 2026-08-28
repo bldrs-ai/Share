@@ -6,7 +6,7 @@ import {glbVerbose} from './glbLog'
 /**
  * glbBatchedExport — serialize a decorated batched model to a
  * batched-NATIVE GLB via `EXT_mesh_gpu_instancing` (view-140 S9 /
- * viewer-replacement §3b.v, behind `?feature=glbBatched`).
+ * viewer-replacement §3b.v, behind the default-on `glbBatched` flag).
  *
  * The merged bake (`batchedToMergedMesh`) de-instances every placement into
  * one giant vertex slab — that's where the instancing win dies and the

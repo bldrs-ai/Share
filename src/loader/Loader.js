@@ -663,7 +663,7 @@ export async function load(
   // diverge again (an IFC whose windowed open throws and falls back).
   const engineModelID = typeof model.modelID === 'number' ? model.modelID : 0
 
-  // Batched-native artifact hydration (view-140 S9, `?feature=glbBatched`):
+  // Batched-native artifact hydration (view-140 S9, `glbBatched`, default-on):
   // GLTFLoader parsed the EXT_mesh_gpu_instancing nodes to InstancedMeshes
   // and the tables plugin stashed BLDRS_instance_tables on userData —
   // rebuild the decorated BatchedMesh model the cache-miss path produces,
