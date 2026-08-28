@@ -1,5 +1,6 @@
 import {
   initializeWorker,
+  nextRequestId,
   opfsDownloadToOPFS,
   opfsDownloadModel,
   opfsReadModel,
@@ -18,6 +19,74 @@ import debug from '../utils/debug'
 
 
 /**
+ * Run one request against the OPFS worker and settle a Promise from *its own*
+ * replies.
+ *
+ * `initializeWorker()` returns one worker per origin, so every helper in this
+ * file listens to the same message stream. Before correlation each listener
+ * settled on the first reply that merely *looked* right — any `wrote`, any
+ * `error` — no matter which operation produced it. `writeGlbBytesToOPFS` was
+ * the sharp edge (#1785): the GLB cache-hit specs reload the page when they see
+ * `writer: wrote`, so resolving on someone else's write reintroduces the
+ * half-written-artifact read that #1783 fixed. The error branch was worse still
+ * — an unrelated operation's failure rejected whatever promise was listening.
+ *
+ * Correlation is a per-request id, not the `commitHash` the worker already
+ * echoed: the hash is absent from every error reply, and two concurrent writes
+ * of the same model at the same commit — the GLB writer runs fire-and-forget on
+ * `requestIdleCallback`, so that overlap is a scheduling accident away — share
+ * one hash and would still cross-talk. The id is minted here, posted with the
+ * command (`OPFSService`), and stamped on every reply the worker produces for
+ * it (`OPFS.worker.js` `postReply`).
+ *
+ * @param {function(string): void} kickoff Posts the command, given the request
+ *   id to stamp on it. Called after the listener is attached so no reply is
+ *   missed.
+ * @param {function(object, {resolve: Function, reject: Function}): void} onReply
+ *   Handles each of this request's replies. Settling detaches the listener;
+ *   returning without settling waits for the next reply (progress events).
+ * @return {Promise<*>}
+ */
+function workerRequest(kickoff, onReply) {
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef === null) {
+      reject(new Error('Worker initialization failed'))
+      return
+    }
+    const requestId = nextRequestId()
+    let listener = null
+    const settle = {
+      resolve: (value) => {
+        workerRef.removeEventListener('message', listener)
+        resolve(value)
+      },
+      reject: (error) => {
+        workerRef.removeEventListener('message', listener)
+        reject(error)
+      },
+    }
+    listener = (event) => {
+      if (event.data.requestId !== requestId) {
+        return
+      }
+      if (event.data.requestFinished) {
+        // The worker's handler returned without a terminal reply. Pre-#1785
+        // that hung forever and left this listener attached to the shared
+        // worker for the life of the page; the worker now closes every request
+        // out so the hang surfaces and the listener always detaches.
+        settle.reject(new Error(`OPFS worker finished ${requestId} without a reply`))
+        return
+      }
+      onReply(event.data, settle)
+    }
+    workerRef.addEventListener('message', listener)
+    kickoff(requestId)
+  })
+}
+
+
+/**
  * Write model to OPFS.
  *
  * @param {File} modelFile - The model file
@@ -29,29 +98,19 @@ import debug from '../utils/debug'
  * @return {Promise<File>}
  */
 export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (workerEvent) => {
-        if (workerEvent.data.error) {
-          debug().error('Error from worker:', workerEvent.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          resolve(false)
-        } else if (workerEvent.data.completed) {
-          if (workerEvent.data.event === 'write') {
-            debug().log('Worker finished writing file')
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(true)
-          }
-        }
+  return workerRequest(
+    (requestId) => opfsWriteModelFileHandle(modelFile, originalFilePath, commitHash, owner, repo, branch, requestId),
+    (data, settle) => {
+      if (data.error) {
+        debug().error('Error from worker:', data.error)
+        settle.resolve(false)
+        return
       }
-      workerRef.addEventListener('message', listener)
-      opfsWriteModelFileHandle(modelFile, originalFilePath, commitHash, owner, repo, branch)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-  })
+      if (data.completed && data.event === 'write') {
+        debug().log('Worker finished writing file')
+        settle.resolve(true)
+      }
+    })
 }
 
 
@@ -65,32 +124,22 @@ export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHas
  * @return {File}
  */
 export function getModelFromOPFS(owner, repo, branch, filepath) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      const parts = filepath.split('/')
-      filepath = parts[parts.length - 1]
+  const parts = filepath.split('/')
+  const fileName = parts[parts.length - 1]
 
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          debug().log('Worker finished retrieving file')
-          const file = event.data.file
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          resolve(file) // Resolve the promise with the file
-        }
+  return workerRequest(
+    (requestId) => opfsReadModel(fileName, requestId),
+    (data, settle) => {
+      if (data.error) {
+        debug().error('Error from worker:', data.error)
+        settle.reject(new Error(data.error))
+        return
       }
-
-      workerRef.addEventListener('message', listener)
-      opfsReadModel(filepath)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-  })
+      if (data.completed) {
+        debug().log('Worker finished retrieving file')
+        settle.resolve(data.file)
+      }
+    })
 }
 
 
@@ -123,41 +172,34 @@ export function downloadToOPFS(
     repo,
     branch)
 
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.progressEvent) {
-          if (onProgress) {
-            onProgress({
-              lengthComputable: event.data.contentLength !== 0,
-              total: event.data.total,
-              loaded: event.data.loaded,
-            }) // Custom progress event
-          }
-        } else if (event.data.completed) {
-          if (event.data.event === 'download') {
-            debug().warn('Worker finished downloading file')
-          } else if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS.')
-          }
-          const file = event.data.file
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          resolve(file) // Resolve the promise with the file
-        }
+  return workerRequest(
+    (requestId) =>
+      opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress), requestId),
+    (data, settle) => {
+      if (data.error) {
+        debug().error('Error from worker:', data.error)
+        settle.reject(new Error(data.error))
+        return
       }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-
-    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
-  })
+      if (data.progressEvent) {
+        if (onProgress) {
+          onProgress({
+            lengthComputable: data.contentLength !== 0,
+            total: data.total,
+            loaded: data.loaded,
+          }) // Custom progress event
+        }
+        return
+      }
+      if (data.completed) {
+        if (data.event === 'download') {
+          debug().warn('Worker finished downloading file')
+        } else if (data.event === 'exists') {
+          debug().warn('Commit exists in OPFS.')
+        }
+        settle.resolve(data.file)
+      }
+    })
 }
 
 /**
@@ -185,7 +227,7 @@ export function writeBase64Model(
   setOpfsFile) {
   assertDefined(content, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile)
   return awaitTerminalWorkerEvent(
-    () => opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken),
+    (requestId) => opfsWriteBase64Model(content, shaHash, originalFilePath, owner, repo, branch, accessToken, requestId),
     {setOpfsFile})
 }
 
@@ -203,9 +245,8 @@ export function writeBase64Model(
  * Extracted from the duplicate listeners in `downloadModel` /
  * `writeBase64Model` so the protocol contract lives in one place.
  *
- * @param {Function} kickoff Invokes the corresponding `opfsService` entry
- *   point. Called after the listener is wired up so we don't miss the
- *   first message.
+ * @param {function(string): void} kickoff Invokes the corresponding
+ *   `opfsService` entry point with the request id to stamp on the command.
  * @param {object} hooks
  * @param {Function} hooks.setOpfsFile Called with the resolved File.
  * @param {Function} [hooks.onProgress] Called on each progress update.
@@ -214,52 +255,41 @@ export function writeBase64Model(
  * @return {Promise<File>}
  */
 function awaitTerminalWorkerEvent(kickoff, {setOpfsFile, onProgress, onLastModifiedGithub}) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef === null) {
-      reject(new Error('Worker initialization failed'))
+  return workerRequest(kickoff, (data, settle) => {
+    if (data.error) {
+      debug().error('Error from worker:', data.error)
+      settle.reject(new Error(data.error))
       return
     }
-    const listener = (event) => {
-      if (event.data.error) {
-        debug().error('Error from worker:', event.data.error)
-        workerRef.removeEventListener('message', listener)
-        reject(new Error(event.data.error))
-        return
+    if (data.progressEvent) {
+      if (onProgress) {
+        onProgress({
+          lengthComputable: data.contentLength !== 0,
+          contentLength: data.contentLength,
+          receivedLength: data.receivedLength,
+        })
       }
-      if (event.data.progressEvent) {
-        if (onProgress) {
-          onProgress({
-            lengthComputable: event.data.contentLength !== 0,
-            contentLength: event.data.contentLength,
-            receivedLength: event.data.receivedLength,
-          })
-        }
-        return
-      }
-      if (!event.data.completed) {
-        return
-      }
-      // Terminal event. Log the variant for diagnostics, then resolve.
-      if (event.data.event === 'download') {
-        debug().warn('Worker finished downloading file')
-      } else if (event.data.event === 'exists') {
-        debug().warn('Commit exists in OPFS.')
-      }
-      if (event.data.lastModifiedGithub && onLastModifiedGithub) {
-        onLastModifiedGithub(event.data.lastModifiedGithub)
-      }
-      workerRef.removeEventListener('message', listener)
-      const file = event.data.file
-      if (file instanceof File) {
-        setOpfsFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-      resolve(file)
+      return
     }
-    workerRef.addEventListener('message', listener)
-    kickoff()
+    if (!data.completed) {
+      return
+    }
+    // Terminal event. Log the variant for diagnostics, then resolve.
+    if (data.event === 'download') {
+      debug().warn('Worker finished downloading file')
+    } else if (data.event === 'exists') {
+      debug().warn('Commit exists in OPFS.')
+    }
+    if (data.lastModifiedGithub && onLastModifiedGithub) {
+      onLastModifiedGithub(data.lastModifiedGithub)
+    }
+    const file = data.file
+    if (file instanceof File) {
+      setOpfsFile(file)
+    } else {
+      debug().error('Retrieved object is not of type File.')
+    }
+    settle.resolve(file)
   })
 }
 
@@ -291,24 +321,21 @@ export function downloadModel(
   onLastModifiedGithub = null) {
   assertDefined(objectUrl, shaHash, originalFilePath, accessToken, owner, repo, branch, setOpfsFile, onProgress)
   return awaitTerminalWorkerEvent(
-    () => opfsDownloadModel(objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress)),
+    (requestId) =>
+      opfsDownloadModel(
+        objectUrl, shaHash, originalFilePath, owner, repo, branch, accessToken, !!(onProgress), requestId),
     {setOpfsFile, onProgress, onLastModifiedGithub})
 }
 
 /**
- * Executes an asynchronous task using a Web Worker and returns a promise that resolves based on the task's outcome.
- * This function initializes a worker, sets up a message listener for the worker's response, and performs cleanup
- * after receiving a response. It abstracts the worker communication logic, making it easier to perform file-related
- * operations asynchronously.
+ * Executes an asynchronous task using the OPFS Web Worker and returns a promise
+ * that resolves based on the task's outcome. Shared by the boolean-result
+ * helpers (exists / delete / clear / snapshot) whose reply protocol is the same
+ * beyond the event name they wait for.
  *
- * @param {Function} callback The function to call that initiates the worker task. This function should
- *     trigger an operation in the worker by sending it a message. The parameters
- *     for this callback include the file path, commit hash, owner, repository, and branch.
- * @param {string} originalFilePath The path of the file on which the operation is performed
- * @param {string} commitHash The commit hash associated with the operation, used for version control
- * @param {string} owner The identifier for the owner of the repository
- * @param {string} repo The name of the repository where the file operation is related
- * @param {string} branch The branch within the repository on which the operation is performed
+ * @param {function(string): void} kickoff Initiates the worker task, given the
+ *     request id to stamp on the command so the reply can be told from a
+ *     concurrent operation's — see {@link workerRequest}.
  * @param {string} eventStatus The specific event status the function waits for to resolve the promise
  *     This parameter allows the function to be used for various operations
  *     by specifying the expected success event type from the worker (e.g., 'deleted', 'written')
@@ -317,38 +344,27 @@ export function downloadModel(
  *     indicates that the file does not exist, the promise will reject with an error or
  *     resolve to false, respectively.
  */
-function makePromise(callback, originalFilePath, commitHash, owner, repo, branch, eventStatus) {
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          if (event.data.event === 'notexist') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(false) // Resolve the promise with false
-          } else if (event.data.event === eventStatus) {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            if (event.data.event === 'clear') {
-              console.warn('OPFS cache cleared.')
-            }
-            if (event.data.directoryStructure) {
-              console.warn(`OPFS Directory Structure:\n${ event.data.directoryStructure}`)
-            }
-            resolve(true) // Resolve the promise with true
-          }
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
+function makePromise(kickoff, eventStatus) {
+  return workerRequest(kickoff, (data, settle) => {
+    if (data.error) {
+      debug().error('Error from worker:', data.error)
+      settle.reject(new Error(data.error))
+      return
     }
-
-    callback(originalFilePath, commitHash, owner, repo, branch)
+    if (!data.completed) {
+      return
+    }
+    if (data.event === 'notexist') {
+      settle.resolve(false)
+    } else if (data.event === eventStatus) {
+      if (data.event === 'clear') {
+        console.warn('OPFS cache cleared.')
+      }
+      if (data.directoryStructure) {
+        console.warn(`OPFS Directory Structure:\n${ data.directoryStructure}`)
+      }
+      settle.resolve(true)
+    }
   })
 }
 
@@ -370,7 +386,9 @@ export function doesFileExistInOPFS(
   branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
-  return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
+  return makePromise(
+    (requestId) => opfsDoesFileExist(originalFilePath, commitHash, owner, repo, branch, requestId),
+    'exist')
 }
 
 
@@ -391,27 +409,18 @@ export function doesFileExistInOPFS(
 export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, repo, branch) {
   assertDefined(bytes, originalFilePath, commitHash, owner, repo, branch)
 
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef === null) {
-      reject(new Error('Worker initialization failed'))
-      return
-    }
-    const listener = (event) => {
-      if (event.data.error) {
-        debug().error('Error from worker:', event.data.error)
-        workerRef.removeEventListener('message', listener)
-        reject(new Error(event.data.error))
+  return workerRequest(
+    (requestId) => opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch, requestId),
+    (data, settle) => {
+      if (data.error) {
+        debug().error('Error from worker:', data.error)
+        settle.reject(new Error(data.error))
         return
       }
-      if (event.data.completed && event.data.event === 'wrote') {
-        workerRef.removeEventListener('message', listener)
-        resolve(true)
+      if (data.completed && data.event === 'wrote') {
+        settle.resolve(true)
       }
-    }
-    workerRef.addEventListener('message', listener)
-    opfsWriteBytesByPath(bytes, originalFilePath, commitHash, owner, repo, branch)
-  })
+    })
 }
 
 
@@ -429,32 +438,22 @@ export function writeGlbBytesToOPFS(bytes, originalFilePath, commitHash, owner, 
 export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, repo, branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef === null) {
-      reject(new Error('Worker initialization failed'))
-      return
-    }
-    const listener = (event) => {
-      if (event.data.error) {
-        debug().error('Error from worker:', event.data.error)
-        workerRef.removeEventListener('message', listener)
-        reject(new Error(event.data.error))
+  return workerRequest(
+    (requestId) => opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch, requestId),
+    (data, settle) => {
+      if (data.error) {
+        debug().error('Error from worker:', data.error)
+        settle.reject(new Error(data.error))
         return
       }
-      if (event.data.completed) {
-        if (event.data.event === 'notexist') {
-          workerRef.removeEventListener('message', listener)
-          resolve(null)
-        } else if (event.data.event === 'read') {
-          workerRef.removeEventListener('message', listener)
-          resolve(event.data.file)
+      if (data.completed) {
+        if (data.event === 'notexist') {
+          settle.resolve(null)
+        } else if (data.event === 'read') {
+          settle.resolve(data.file)
         }
       }
-    }
-    workerRef.addEventListener('message', listener)
-    opfsReadModelByPath(originalFilePath, commitHash, owner, repo, branch)
-  })
+    })
 }
 
 /**
@@ -464,9 +463,7 @@ export function readModelByPathFromOPFS(originalFilePath, commitHash, owner, rep
  * @return {Promise<boolean>}
  */
 export function snapshotOPFS(previewWindow = 0) {
-  // Wrap opfsSnapshotCache so makePromise still receives a callback with standard signature
-  const callback = () => opfsSnapshotCache(previewWindow)
-  return makePromise(callback, null, null, null, null, null, 'snapshot')
+  return makePromise((requestId) => opfsSnapshotCache(previewWindow, requestId), 'snapshot')
 }
 
 /**
@@ -475,7 +472,7 @@ export function snapshotOPFS(previewWindow = 0) {
  * @return {boolean}
  */
 export function clearOPFSCache() {
-  return makePromise(opfsClearCache, null, null, null, null, null, 'clear')
+  return makePromise((requestId) => opfsClearCache(requestId), 'clear')
 }
 
 /**
@@ -497,7 +494,9 @@ export function deleteFileFromOPFS(
   branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
-  return makePromise(opfsDeleteModel, originalFilePath, commitHash, owner, repo, branch, 'deleted')
+  return makePromise(
+    (requestId) => opfsDeleteModel(originalFilePath, commitHash, owner, repo, branch, requestId),
+    'deleted')
 }
 
 
@@ -511,8 +510,6 @@ export function deleteFileFromOPFS(
  */
 export function saveDnDFileToOpfs(file, type, callback) {
   assertDefined(file, type, callback)
-  let workerRef = null
-  workerRef = initializeWorker()
 
   const tmpUrl = URL.createObjectURL(file)
   debug().log('OPFS/utils#saveDnDFileToOpfs: event: url: ', tmpUrl)
@@ -520,37 +517,32 @@ export function saveDnDFileToOpfs(file, type, callback) {
   const parts = tmpUrl.split('/')
   const fileNametmpUrl = parts[parts.length - 1]
 
-  // Listener for messages from the worker.  We can't revoke tmpUrl
-  // until the worker is done with it, so revoke when the listener
-  // detaches (success or error path).
-  const listener = (workerEvent) => {
-    if (workerEvent.data.error) {
-      debug().error('Error from worker:', workerEvent.data.error)
-      workerRef.removeEventListener('message', listener)
-      URL.revokeObjectURL(tmpUrl)
-    } else if (workerEvent.data.completed) {
-      if (workerEvent.data.event === 'write') {
-        debug().log('Worker finished writing file')
-        const fileName = workerEvent.data.fileName
-        workerRef.removeEventListener('message', listener)
-        URL.revokeObjectURL(tmpUrl)
-        callback(fileName)
-      } else if (workerEvent.data.event === 'read') {
-        debug().log('Worker finished reading file')
-        const fileName = workerEvent.data.file.name
-        workerRef.removeEventListener('message', listener)
-        URL.revokeObjectURL(tmpUrl)
-        callback(fileName)
-      }
-    }
-  }
-
-  workerRef.addEventListener('message', listener)
-
   const originalFilename = file.name
   const filename = `${fileNametmpUrl}.${type}`
   debug().log('OPFS/utils#saveDnDFileToOpfs: calling opfsWriteModel with typed filename:', filename)
-  opfsWriteModel(tmpUrl, originalFilename, filename)
+
+  workerRequest(
+    (requestId) => opfsWriteModel(tmpUrl, originalFilename, filename, requestId),
+    (data, settle) => {
+      if (data.error) {
+        settle.reject(new Error(data.error))
+        return
+      }
+      if (data.completed) {
+        if (data.event === 'write') {
+          debug().log('Worker finished writing file')
+          settle.resolve(data.fileName)
+        } else if (data.event === 'read') {
+          debug().log('Worker finished reading file')
+          settle.resolve(data.file.name)
+        }
+      }
+    })
+    .then((fileName) => callback(fileName))
+    .catch((error) => debug().error('Error from worker:', error))
+    // We can't revoke tmpUrl until the worker is done with it, so revoke once
+    // the request settles either way.
+    .finally(() => URL.revokeObjectURL(tmpUrl))
 }
 
 /**

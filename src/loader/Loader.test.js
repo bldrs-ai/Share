@@ -762,6 +762,11 @@ class MockBlob {
 // Mock Worker for testing
 /**
  * A fake Worker implementation for testing purposes.
+ *
+ * The reply is scheduled from `postMessage`, not from `addEventListener`, so it
+ * can echo the `requestId` of the command that triggered it — `OPFS/utils.js`
+ * drops any reply that doesn't carry the id of the request it's waiting on
+ * (#1785), and a reply scheduled at listener-attach time doesn't know the id yet.
  */
 class FakeWorker {
   /**
@@ -771,18 +776,33 @@ class FakeWorker {
    */
   constructor(script) {
     this.script = script
-    this.postMessage = jest.fn()
     this.terminate = jest.fn()
     this.onmessage = null
-    this.addEventListener = jest.fn((event, handler) => {
+    this.listeners = new Set()
+    this.postMessage = jest.fn((message) => {
+      if (!message || message.command === 'initializeWorker') {
+        return
+      }
       // Simulate successful file download
+      process.nextTick(() => {
+        for (const handler of [...this.listeners]) {
+          handler({data: {
+            completed: true,
+            event: 'download',
+            file: new MockBlob(['mock file content']),
+            requestId: message.requestId,
+          }})
+        }
+      })
+    })
+    this.addEventListener = jest.fn((event, handler) => {
       if (event === 'message') {
-        process.nextTick(() => {
-          handler({data: {completed: true, event: 'download', file: new MockBlob(['mock file content'])}})
-        })
+        this.listeners.add(handler)
       }
     })
-    this.removeEventListener = jest.fn()
+    this.removeEventListener = jest.fn((event, handler) => {
+      this.listeners.delete(handler)
+    })
   }
 }
 global.Worker = FakeWorker

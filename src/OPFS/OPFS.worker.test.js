@@ -545,6 +545,26 @@ describe('OPFS writes on a handle without createWritable (Safari)', () => {
     expect(await (await written.getFile()).text()).toBe('glb-artifact-bytes')
   })
 
+  test('writeBytesByPathToOPFS stamps the request id on both success and failure', async () => {
+    // The main-thread half of this contract is in `OPFS/utils.js`
+    // (`workerRequest`): a reply without the id of the request that asked for
+    // it is dropped, so an unstamped reply here would hang the caller rather
+    // than settling someone else's promise (#1785).
+    await worker.writeBytesByPathToOPFS(
+      new Uint8Array([1, 2, 3]), 'commit123', 'model.ifc', 'owner', 'repo', 'main', 'opfs-7')
+    expect(self.postMessage).toHaveBeenCalledWith(
+      {completed: true, event: 'wrote', commitHash: 'commit123', requestId: 'opfs-7'})
+
+    // The error branch matters most: error replies carry no commitHash, so the
+    // id is the ONLY thing tying one to its request.
+    self.postMessage.mockClear()
+    navigator.storage.getDirectory.mockRejectedValueOnce(new Error('opfs unavailable'))
+    await worker.writeBytesByPathToOPFS(
+      new Uint8Array([1]), 'c1', 'model.ifc', 'owner', 'repo', 'main', 'opfs-8')
+    expect(self.postMessage).toHaveBeenCalledWith(
+      {error: 'writeBytesByPath: opfs unavailable', requestId: 'opfs-8'})
+  })
+
   test('writeBytesByPathToOPFS truncates a longer previous entry', async () => {
     await worker.writeBytesByPathToOPFS(
       new Uint8Array(Buffer.from('the-long-original-payload')), 'c1', 'model.ifc', 'o', 'r', 'main')
