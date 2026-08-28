@@ -49,6 +49,7 @@ import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
+import {STORE_DETECT_PREFIX_BYTES, isConwayIfcFormat} from './stepFormat'
 import {
   externalCacheKey,
   gitHubCacheKey,
@@ -81,13 +82,6 @@ import {markIfOutOfMemory} from '../utils/oom'
 // would notice "cache hasn't warmed yet."
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
-
-// Matches conway's own `STORE_DETECT_PREFIX_BYTES`
-// (`compat/web-ifc/ifc_api_model_passthrough_factory.js`) — the window its
-// store-backed open sniffs the format in. Reading the same amount means our
-// answer to "will `fromStore` take this?" comes from the same bytes it will
-// look at, rather than from a smaller window that could disagree.
-const STORE_FORMAT_SNIFF_BYTES = 65_536
 
 // The formats `findLoader` routes to conway via `parseIfcWithConway`. All
 // three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
@@ -130,11 +124,12 @@ function scheduleIdleWork(fn) {
  *     re-introducing on a mislabelled large model exactly the
  *     hundreds-of-MB allocation M3 removed.
  *
- * An absent or unrecognised FILE_SCHEMA buffers rather than gambling: a
- * wrong "yes" costs a burned handle and a broken cache artifact, a wrong
- * "no" costs one load's memory win. Within conway's own 64 KiB sniff
- * window every real part-21 file carries FILE_SCHEMA, so that branch is
- * a corrupt-or-truncated-file path, not a format we are giving up on.
+ * The question is answered by conway's own `ModelFormatDetector`, over the
+ * same 64 KiB prefix `fromStore` will read — see
+ * {@link isConwayIfcFormat}, which explains why this must not go back to
+ * being a header scan of our own. Anything it does not read as IFC —
+ * AP214/AP203/AP242, and equally a truncated or malformed part-21 file it
+ * cannot parse at all — buffers rather than gambling.
  *
  * @param {object} viewer
  * @param {string} loaderType resolved format tag, i.e. `loader.type`
@@ -153,18 +148,12 @@ async function canOpenFromStore(viewer, loaderType, file) {
     return false
   }
   try {
-    const head = await file.slice(0, STORE_FORMAT_SNIFF_BYTES).arrayBuffer()
-    // Non-fatal by default, so a multi-byte sequence cut at the slice
-    // boundary — or a mislabelled binary — yields replacement characters
-    // rather than throwing. Both then fail the schema match below and
-    // buffer, which is the outcome we want for bytes we cannot read.
-    const header = new TextDecoder('utf-8').decode(new Uint8Array(head))
-    // `stepFamily`, not `classifyStepFamily`: the classifier answers 'ifc'
-    // for anything it cannot read, which is the right default when the answer
-    // only picks a filename and the wrong one here, where a false 'ifc' sends
-    // an unidentified file down the IFC-only store path. Null means "this
-    // file did not say" and buffers.
-    return Filetype.stepFamily(header) === 'ifc'
+    // Raw bytes, not decoded text: conway's parser reads bytes, so handing it
+    // the prefix untouched removes the last place our answer could differ
+    // from its — a multi-byte sequence cut at the slice boundary decodes to a
+    // replacement character, which is a different byte than the one it sees.
+    const head = await file.slice(0, STORE_DETECT_PREFIX_BYTES).arrayBuffer()
+    return isConwayIfcFormat(new Uint8Array(head))
   } catch (e) {
     debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
     return false
