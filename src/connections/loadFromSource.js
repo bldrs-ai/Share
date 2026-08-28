@@ -1,5 +1,6 @@
 import {
   initializeWorker,
+  nextRequestId,
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
 import {checkOPFSAvailability} from '../OPFS/utils'
@@ -104,16 +105,29 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
     const workerRef = initializeWorker()
 
     if (workerRef) {
+      // Minted before the listener attaches, so it can close over the id: the
+      // worker stamps it on every reply to this request and we ignore the rest.
+      // Without the filter this accepts ANY error from the shared worker — and
+      // now that the helpers in OPFS/utils.js are correlated, an unrelated
+      // request's failure would detach us and revoke a blob URL whose write is
+      // still in flight. Symmetric sloppiness before; live cross-talk once
+      // everything around it is correlated.
+      const requestId = nextRequestId()
       return new Promise((resolve, reject) => {
         const listener = (event) => {
-          if (event.data.error) {
-            debug().error('loadFromSource: OPFS write error:', event.data.error)
+          if (event.data.requestId !== requestId) {
+            return
+          }
+          if (event.data.error || event.data.requestFinished) {
+            const message = event.data.error ??
+              `OPFS worker finished ${requestId} without a reply`
+            debug().error('loadFromSource: OPFS write error:', message)
             workerRef.removeEventListener('message', listener)
             // Revoke once the worker is done with the URL. Without this,
             // each load leaked a blob backing — Safari surfaces those as
             // `WebKitBlobResource error 1` lines on every fresh load.
             URL.revokeObjectURL(blobUrl)
-            reject(new Error(event.data.error))
+            reject(new Error(message))
           } else if (event.data.completed && event.data.event === 'write') {
             debug().log('loadFromSource: OPFS write complete')
             workerRef.removeEventListener('message', listener)
@@ -126,7 +140,7 @@ async function writeAndOpen(download, fallbackName, provider, connection, onLoad
         // Write blob URL to OPFS; the worker will fetch the blob and store it
         const parts = blobUrl.split('/')
         const blobName = parts[parts.length - 1]
-        opfsWriteModel(blobUrl, filename, `${blobName}.${ext}`)
+        opfsWriteModel(blobUrl, filename, `${blobName}.${ext}`, requestId)
       })
     }
     URL.revokeObjectURL(blobUrl)
