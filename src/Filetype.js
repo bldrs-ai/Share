@@ -399,12 +399,16 @@ export function classifyStepFamily(header) {
  *
  * Split out of {@link classifyStepFamily} so a caller can tell "this file
  * says STEP" apart from "this file did not say". The classifier folds both
- * into 'ifc': the right default when the answer only picks a filename, and
- * the wrong one for a caller whose false-'ifc' costs more than a false
- * 'step'. `Loader.js#canOpenFromStore` is the second kind — it gates
- * conway's IFC-only store open, where guessing 'ifc' burns a model handle
- * and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it requires a
- * non-null name here before it trusts the classification.
+ * into 'ifc', which is the right default when the answer only picks a
+ * filename and the wrong one for a caller whose false-'ifc' is expensive.
+ *
+ * Both of these answer a *naming* question and neither is a format oracle.
+ * The one caller whose false-'ifc' was expensive — `canOpenFromStore`, gating
+ * conway's IFC-only store open, where guessing 'ifc' burns a model handle and
+ * caches a GLB with no NavTree (bldrs-ai/Share#1776) — no longer asks here.
+ * It asks conway's own `ModelFormatDetector` instead; see
+ * `src/loader/stepFormat.js` for why a scan like this one cannot agree with
+ * that parser, and please don't route a format decision back through it.
  *
  * @param {string} header
  * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'

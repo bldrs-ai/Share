@@ -113,10 +113,14 @@ function makeIfcViewer({streamOpen = false} = {}) {
 }
 
 
-// Part-21 header fixtures. `canOpenFromStore` decides the store path from
-// FILE_SCHEMA, not from the suffix, so these tests need real headers: a body
-// of filler bytes would sniff as "no schema found" and buffer for a reason
-// the test did not intend to exercise.
+// Part-21 header fixtures. `canOpenFromStore` decides the store path by handing
+// conway's own `ModelFormatDetector` the file's first 64 KiB, so these need
+// real headers: filler bytes detect as no format and buffer for a reason the
+// test did not intend to exercise. Note that the trailing `DATA;` and
+// `END-ISO-10303-21;` are load-bearing, not decoration — conway's header
+// parser only reports a schema once it has reached `ENDSEC;` then `DATA;`, so
+// trimming the fixture to the header alone would silently flip every
+// store-path test below to the buffering path.
 /**
  * @param {string} schema the FILE_SCHEMA value, e.g. 'IFC4'
  * @return {string} a minimal ISO-10303-21 header declaring it
@@ -688,9 +692,9 @@ describe('load() error/edge paths with OPFS enabled', () => {
     // conway's 64 KiB sniff window, so this is a corrupt-file path.
     //
     // The entry is PRESENT here but empty — the case a bare "is FILE_SCHEMA in
-    // the header?" guard waves through, since `classifyStepFamily` answers
-    // 'ifc' for anything it cannot parse. The gate requires a parsed schema
-    // name (`Filetype.stepSchemaName`), so this buffers.
+    // the header?" guard waves through. conway's detector matches quoted
+    // entries with `'([^']+)'`, so an empty pair yields no entry and no
+    // format, and this buffers.
     const file = new MockFile('ISO-10303-21;\nHEADER;\nFILE_SCHEMA((\'\'));\nENDSEC;\n')
     const arrayBufferSpy = jest.spyOn(file, 'arrayBuffer')
     getModelFromOPFS.mockReset()
