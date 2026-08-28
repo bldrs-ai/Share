@@ -6,9 +6,10 @@ import {
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 
 
-const {beforeEach, describe} = test
+const {beforeEach} = test
 
 
 // Upper bound on toggles clicked. One click per iteration (see below), so this
@@ -16,9 +17,16 @@ const {beforeEach, describe} = test
 // window of either fixture, small enough that a runaway can't eat the timeout.
 const MAX_EXPAND_CLICKS = 40
 const EXPAND_SETTLE_MS = 150
-// Distinct labels a real hierarchy must beat. The bug this guards produces a
+// Distinct labels a real hierarchy must reach. The bug this guards produces a
 // root whose children repeat the root's own name, so DISTINCT labels — not
 // rows — is the discriminant; see the count assertion for why.
+//
+// 5 is a ceiling, not a loose floor: both fixtures flatten to exactly
+// Bldrs / Build / Every / Thing / Together — 11 rows, 5 distinct labels, all
+// of them mounted at BOTH form factors. So there is no headroom to trade away
+// on the smaller viewport, and no honest way to raise it. Measured in
+// bldrs-ai/Share#1787 by running the suite with this constant set to 99 and
+// reading the counts out of the failure message.
 const MIN_DISTINCT_LABELS = 5
 
 
@@ -68,12 +76,18 @@ async function expandTree(panel: Locator) {
  * Assert the panel shows a real hierarchy rather than the #1776 fallback.
  *
  * Counts DISTINCT `data-node-label` values, not rows. Two reasons rows are the
- * wrong measure: the list is virtualized, so the row count saturates at the
- * viewport (~25-30 at the config's 1280x800) and no threshold above that is
- * even expressible; and the failure being guarded — `Loader.js`'s
+ * wrong measure. First, the failure being guarded — `Loader.js`'s
  * `ifcManager.getSpatialStructure = () => model` fallback walking the GLB
  * scene graph — emits a root whose children carry the root's own name, which
- * is plenty of ROWS and one label.
+ * is plenty of ROWS and one label. Second, the list is virtualized through
+ * `react-window`, so on a large model the row count saturates at whatever the
+ * viewport mounts — and since this suite runs at two viewports (1280x800, and
+ * a 390x844 phone where the panel is a 50vh bottom drawer rather than a
+ * full-height side drawer) no single row threshold would hold at both.
+ *
+ * Neither fixture is large enough for that second reason to bind today: both
+ * flatten to 11 rows and all 11 mount at either size. A label count is what
+ * keeps that from mattering if a fixture ever grows.
  *
  * @param panel locator for the NavTree panel
  */
@@ -110,6 +124,13 @@ async function expectRealHierarchy(panel: Locator) {
  *     bug that captures an empty / one-element tree would surface
  *     here (e.g., `serializeNode`'s recursion stopping early).
  *
+ * Runs at both form factors (bldrs-ai/Share#1787). The cache
+ * round-trip is form-factor blind, but the surface these assertions
+ * read is not — the panel is a full-height side drawer on desktop
+ * and a 50vh bottom drawer on a phone, and it renders through
+ * `react-window`, so what is MOUNTED (and therefore assertable) is a
+ * function of viewport height.
+ *
  * Design: design/new/viewer-replacement.md §3b.iii. The Phase 5a
  * follow-up tracked there ("NavTree on cache-hit GLB") that this
  * spec was tracking. Pairs with the §3c "regression-testing
@@ -117,7 +138,7 @@ async function expectRealHierarchy(panel: Locator) {
  * BLDRS_* payloads will eventually be golden-snapshotted; this
  * spec is the smoke gate that the round-trip is alive at all.
  */
-describe('View 100: NavTree on cache-hit GLB', () => {
+describeMobileAndDesktop('View 100: NavTree on cache-hit GLB', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())

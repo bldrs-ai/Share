@@ -2,6 +2,7 @@ import {expect, test} from '@playwright/test'
 import {setupVirtualPathIntercept, waitForModelReady} from '../tests/e2e/models'
 import {homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
+import {describeMobileAndDesktop} from '../tests/e2e/formFactor'
 
 
 /**
@@ -20,14 +21,16 @@ import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../tests/e2e/glbLogs'
  * both callers to the element path below the file suffix and requires
  * whole-segment-numeric ids.
  *
+ * Runs at both form factors (bldrs-ai/Share#1787). Only the NavTree
+ * assertion below is DOM-bound and so form-factor sensitive; the rest read the
+ * store, which does not know what size the window is.
+ *
  * The scene highlight has no DOM, so the scene-side assertions read the
  * exposed store/viewer (`window.useStore` — exposed for debugging in
  * useStore.js) rather than pixels: the batched selection layer (live batched
  * model) or the merged-path selection subsets (cache-hit model), whichever
  * render path is active.
  */
-const {describe} = test
-
 const MODEL_PATH = '/share/v/gh/bldrs-ai/test-models/main/ifc/openifcmodels/171210AISC_Sculpture_param.ifc'
 // Element path written by selecting plate 'p58' — project root down to the element.
 const ELEMENT_PERMALINK = `${MODEL_PATH}/120010/120020/120023/4998/2867`
@@ -47,7 +50,7 @@ async function permalinkSetup(page: import('@playwright/test').Page) {
   await setupVirtualPathIntercept(page, MODEL_PATH, '')
 }
 
-describe('Element-path permalink on a digit-prefixed filename', () => {
+describeMobileAndDesktop('Element-path permalink on a digit-prefixed filename', () => {
   test('restores selection and keeps the scene highlight', async ({page}) => {
     test.setTimeout(TEST_TIMEOUT_MS)
     await permalinkSetup(page)

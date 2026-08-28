@@ -6,9 +6,10 @@ import {
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
 import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
+import {describeMobileAndDesktop} from '../../tests/e2e/formFactor'
 
 
-const {beforeEach, describe} = test
+const {beforeEach} = test
 
 
 /**
@@ -17,6 +18,11 @@ const {beforeEach, describe} = test
  * `BLDRS_element_properties` extension's full round-trip — capture →
  * GLB cache → reload → lazy decode → Properties panel renders the
  * full IFC entity (not just the slim spatial-tree-node whitelist).
+ *
+ * Runs at both form factors (bldrs-ai/Share#1787): the round-trip
+ * itself is form-factor blind, but `control-button-properties` and
+ * the panel it opens are not — on a phone the panel is a tab in the
+ * bottom drawer (`TabbedPanels`), not a side drawer.
  *
  * Design: design/new/viewer-replacement.md §3b.iii default-on gating;
  * Phase 3 prereq for `conwayDirectIfc` default-on. Pairs with the
@@ -30,7 +36,7 @@ const {beforeEach, describe} = test
  * extension, `model.getItemProperties` from the element-properties
  * extension, `inferModelCapabilities` flips for both).
  */
-describe('View 100: Properties panel on cache-hit GLB', () => {
+describeMobileAndDesktop('View 100: Properties panel on cache-hit GLB', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())

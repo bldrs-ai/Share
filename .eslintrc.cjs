@@ -1,5 +1,14 @@
 /* eslint-disable no-magic-numbers */
 module.exports = {
+  // Stop the config cascade at the repo root. Without this ESLint keeps
+  // walking up, and an agent worktree under `.claude/worktrees/` (this repo's
+  // own convention) sits INSIDE another checkout of this repo: the ancestor
+  // .eslintrc.cjs then loads a second copy of every plugin ("couldn't
+  // determine the plugin ... uniquely") and, because the ignore base moves up
+  // with it, every file under the worktree looks like it lives in a dotfolder
+  // and is "ignored by default". Both make `yarn precommit` unrunnable there.
+  // In a normal checkout nothing sits above the root, so this is a no-op.
+  root: true,
   env: {
     browser: true,
     es2021: true,
