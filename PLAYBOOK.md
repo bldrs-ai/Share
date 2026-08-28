@@ -240,9 +240,25 @@ and exits 1. That failure is at least loud. The danger is what it invites:
 linted, typechecked or tested — the exact gate CLAUDE.md tells you to trust
 instead of running by hand. **Don't.** Either `yarn install` in the worktree
 (which reinstalls `.husky/_`, and a full `node_modules`), or — cheaper, and
-what actually worked here — do the editing in the worktree, export the
-change (`git diff > /tmp/x.patch`), and `git apply` + `git commit` it in the
-main checkout, where the hook is wired.
+what actually worked here — do the editing in the worktree, export the change,
+and `git apply` + `git commit` it in the main checkout, where the hook is
+wired. Stage first and ask for binary, or the export quietly loses work:
+
+```sh
+# in the worktree
+git add -A && git diff --cached --binary > /tmp/x.patch
+# in the main checkout
+git apply /tmp/x.patch && git commit
+```
+
+A plain `git diff` shows tracked modifications only, so a **new** file — a
+module, a spec, a fixture — is simply absent from the patch, with no warning;
+`--binary` is what carries a changed image or model fixture. Measured on a
+scratch worktree: a patch made with plain `git diff` after adding one `.js`
+and one `.png` contained **zero** references to either, while the staged form
+above carried both and applied cleanly in the main checkout. The failure mode
+is the bad kind — the commit looks complete, and the missing work sits in a
+worktree that gets deleted.
 
 **2. Anything resolution-sensitive gives the wrong answer there.** A
 worktree starts with no `node_modules` at all, so the reflex is to symlink

@@ -162,9 +162,15 @@ test.skip('GitHub route (/gh) processes URL correctly', async ({page}) => {
 ```
 
 ```sh
-grep -rn "test\.skip\|describe\.skip\|it\.skip\|\.fixme" src \
-  --include=*.spec.ts --include=*.test.js --include=*.test.jsx --include=*.test.ts
+grep -rn "test\.skip\|describe\.skip\|it\.skip\|\.fixme" src netlify tools \
+  --include=*.test.* --include=*.spec.*
 ```
+
+Cover every test root and extension, not the ones you happen to remember —
+Jest's `roots` are `src`, `netlify` and `__mocks__`, `tools` has its own
+suites, and specs come in `.js`, `.jsx`, `.ts` and `.tsx` (`BotChat.test.tsx`).
+A scan narrower than that reports a clean ratchet while a skip sits in the
+directory it did not look at.
 
 That returned 31 lines when this was written — one is prose mentioning the
 word, so **30 real skips, exactly one of which named an issue** (#956). Read
