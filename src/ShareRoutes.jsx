@@ -120,7 +120,11 @@ function Forward({appPrefix}) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       disablePageReloadApprovalCheck()
-      navWith(navigate, dest)
+      // Pass the router's own location rather than letting navWith fall back
+      // to its `window.location` defaults: under MemoryRouter (tests) and
+      // HashRouter the global and the router disagree, and this effect is
+      // already keyed on the router location, so that is the one to forward.
+      navWith(navigate, dest, {search: location.search, hash: location.hash})
     }
   }, [location, appPrefix, navigate])
 
