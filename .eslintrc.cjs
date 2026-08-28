@@ -1,5 +1,14 @@
 /* eslint-disable no-magic-numbers */
 module.exports = {
+  // Stop the config cascade here. Without it ESLint keeps walking up past the
+  // repo root and merges any ancestor `.eslintrc`, which breaks outright when
+  // the checkout is nested inside another copy of this repo — a `git worktree`
+  // under `.claude/worktrees/`, say: both configs declare the same plugins,
+  // each resolving to its own `node_modules`, and ESLint refuses to run
+  // ("couldn't determine the plugin ... uniquely"), taking `yarn precommit`
+  // and the husky hook with it. A normal flat checkout finds no ancestor
+  // config, so this changes nothing in CI.
+  root: true,
   env: {
     browser: true,
     es2021: true,
