@@ -322,13 +322,21 @@ describe('CoincidenceSet', () => {
     // 32-bit primary means ~0.003 expected primary collisions, so this walks
     // the `number` → `Array` chain rather than only the empty-slot path.
     //
-    // What it does NOT guard is fingerprint *width*. A birthday collision
-    // needs 2^bits ≲ n²/2, so at n = 5,000 this only detects a fingerprint
-    // weakened below ~24 bits total; truncating each of the three streams to
-    // 16 bits still leaves ~37 effective bits and passes here. Width is
-    // argued analytically in `CoincidenceSet`'s doc comment (85 bits →
-    // 4e-15 per load), not pinned by this test — don't read a pass here as
-    // evidence the fingerprint is wide enough.
+    // Two things this does NOT guard, both covered elsewhere:
+    //
+    // 1. The primary-collision chain. At n = 5,000 against a 32-bit primary
+    //    the expected collision count is ~0.003, i.e. this walks the
+    //    empty-slot path essentially every time and never enters the
+    //    `number` → `Array` branch. `separates two placements that collide
+    //    on the primary hash` below exercises that deliberately.
+    // 2. Fingerprint *width*. A birthday collision needs 2^bits ≲ n²/2, so
+    //    at n = 5,000 this only detects a fingerprint weakened below ~24
+    //    bits total; truncating each of the three streams to 16 bits still
+    //    leaves ~37 effective bits and passes here. Width is argued
+    //    analytically in `CoincidenceSet`'s doc comment (85 bits → 4e-15
+    //    per load), not pinned by this test.
+    //
+    // So don't read a pass here as evidence of either property.
     const seen = new CoincidenceSet()
     const count = 5000
     for (let i = 0; i < count; i++) {
@@ -346,6 +354,42 @@ describe('CoincidenceSet', () => {
       expect(seen.add(1000 + (i % 13), 900 + (i % 17), m, RED)).toBe(false)
     }
     expect(seen.size).toBe(count)
+  })
+
+  it('separates two placements that collide on the primary hash', () => {
+    // The chaining branch is what stops a 32-bit primary collision from
+    // silently deleting geometry, and on a 562k-placement load ~37 pairs
+    // collide, so it runs in production every time. Random data will not
+    // reach it (see the note in the 5,000-placement test), so this pair is
+    // CONSTRUCTED to collide.
+    //
+    // How: every step of the primary stream is a bijection on 32 bits
+    // (`imul` by an odd constant, xor, rotate, and `fmix32`). So with the
+    // matrix and colour held fixed, two placements share a primary exactly
+    // when their accumulators agree after word 1, i.e. when
+    //   after0(parentA) ^ geomA === after0(parentB) ^ geomB
+    // where after0(p) = rotl13(imul(FP_SEED_A ^ p, FP_MUL_A)). Solving for
+    // geomB with parentA=1001, geomA=777, parentB=1002 gives 1066869609.
+    //
+    // A consequence worth knowing: because those steps are bijections,
+    // varying a SINGLE word can never collide — a collision needs at least
+    // two words to differ, which is why this pair varies both ids.
+    const seen = new CoincidenceSet()
+    expect(seen.add(1001, 777, mat(), RED)).toBe(true)
+    expect(seen.add(1002, 1066869609, mat(), RED)).toBe(true)
+    // Guard: if the hash constants ever change this pair stops colliding and
+    // the test would keep passing while testing nothing. Assert the collision
+    // really happened — one bucket holding an array — so that silent rot
+    // fails loudly instead. Recompute the pair with the formula above.
+    expect(seen.byPrimary_.size).toBe(1)
+    expect(Array.isArray([...seen.byPrimary_.values()][0])).toBe(true)
+    // Both distinct placements survive...
+    expect(seen.size).toBe(2)
+    // ...and each is still recognised through the chain rather than the
+    // empty-slot path.
+    expect(seen.add(1001, 777, mat(), RED)).toBe(false)
+    expect(seen.add(1002, 1066869609, mat(), RED)).toBe(false)
+    expect(seen.size).toBe(2)
   })
 
   it('forgets everything on clear (what finalize() releases)', () => {
