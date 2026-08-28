@@ -120,10 +120,13 @@ function Forward({appPrefix}) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       disablePageReloadApprovalCheck()
-      // Pass the router's own location rather than letting navWith fall back
-      // to its `window.location` defaults: under MemoryRouter (tests) and
-      // HashRouter the global and the router disagree, and this effect is
-      // already keyed on the router location, so that is the one to forward.
+      // Pass the router's own location rather than letting navWith fall
+      // back to its `window.location` defaults. BrowserRouter keeps the two
+      // in sync, so production behaves the same either way — but under
+      // MemoryRouter the global is jsdom's empty default, and the search
+      // vanishes in the unit test exactly the way this bug dropped it in
+      // the browser. This effect is already keyed on the useLocation()
+      // value, so forward that.
       navWith(navigate, dest, {search: location.search, hash: location.hash})
     }
   }, [location, appPrefix, navigate])
