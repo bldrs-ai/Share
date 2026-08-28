@@ -34,18 +34,33 @@ import {clearOpfs, homepageSetup, setIsReturningUser} from '../tests/e2e/utils'
  * checking, and `tests/e2e/glbLogs.ts` for the `waitForFunction`-vs-
  * `expect.poll` bug that was actually keeping every cache-hit spec red.
  *
- * Three URL flags, none of them optional:
- *  - `batchedMesh` — the cache-MISS load has to BUILD a BatchedMesh, or
- *    `glbExport` never reaches the batched-native branch at all.
- *  - `glbBatched` — the branch itself (and, via `activeArtifactSpec`, the
- *    separate schema slot both loads must agree on).
- *  - `glbVerbose` — `batched writer:` is a verbose line, so the writer-side
- *    assertion below is invisible without it.
- * `glb` needs no mention: `glbBatched` implies it (FeatureFlags'
- * `FEATURE_IMPLICATIONS`).
+ * Two URL flags, and deliberately no third:
+ *  - `glbBatched` — the feature under test: the writer's batched-native
+ *    branch, and (via `activeArtifactSpec`) the separate schema slot both
+ *    loads must agree on. `glb` needs no mention; `glbBatched` implies it
+ *    through FeatureFlags' `FEATURE_IMPLICATIONS`.
+ *  - `glbVerbose` — pure logging, no behavior. `batched writer:` is a
+ *    `glbVerbose` line and it is the only writer-side discriminant between
+ *    the batched-native artifact and the merged bake, so without this flag
+ *    the assertion below can't see the thing it exists to check. Verified as
+ *    a negative control: dropping it fails on exactly that line.
+ *
+ * NOT `batchedMesh`, and that's the point. The cache-MISS load still has to
+ * BUILD a BatchedMesh for `glbExport` to reach the batched-native branch at
+ * all — but the flag is only needed for the *fallback* one-shot
+ * `buildBatchedConwayModel` arm. The incremental demand path above it
+ * (`ShareIfcLoader.js`: `builder.hasContent()` → `assembleBatchedModel`) runs
+ * under `demandGeometry`, which is DEFAULT-ON, and hands back an equally
+ * decorated BatchedMesh with no `?feature=` at all. Confirmed empirically:
+ * this spec passes on both form factors with `batchedMesh` dropped.
+ *
+ * So the only non-default thing in the URL is `glbBatched` itself, which is
+ * what makes this a usable acceptance test for flipping it on — a spec that
+ * needed `batchedMesh` too would be proving the round-trip in a configuration
+ * no shipping user is in.
  */
 const AS1_PATH = '/share/v/gh/bldrs-ai/test-models/main/step/nist/as1-colorless.stp'
-const FLAGS = '?feature=batchedMesh,glbBatched,glbVerbose'
+const FLAGS = '?feature=glbBatched,glbVerbose'
 const TEST_TIMEOUT_MS = 180_000
 const CACHE_TIMEOUT_MS = 60_000
 // Two STEP parses in one test, each behind a Conway wasm boot; the shared
