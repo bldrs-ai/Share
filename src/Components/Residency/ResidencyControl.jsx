@@ -33,7 +33,12 @@ const FULL = 100
 /**
  * ResidencyControl — the model-display popover behind the "eyeball" button.
  *
- * Two sections today, both scoped to the whole model:
+ * Three sections today, all scoped to the whole model, in the order they
+ * render:
+ *   - **Shading** (view-140 S4) — Shaded vs Wireframe. Behind
+ *     `?feature=displayControls`. First because it's the coarsest choice:
+ *     wireframe changes what you're looking at, color only changes how the
+ *     surfaces are tinted.
  *   - **Color** (view-140 S2) — Auto (Share-assigned) vs Source. Auto-coloring
  *     (#1626) repaints colorless STEP/CAD models from a palette and until now
  *     was invisible and irreversible; this is the disclosure + the off switch.
@@ -47,8 +52,9 @@ const FULL = 100
  * design/new/model-display-controls.md §9.5.
  *
  * Each section self-gates, and the button renders only if at least one has
- * something to offer: Color needs a model the palette actually applies to,
- * Residency needs batched instances to evict.
+ * something to offer: Shading needs the flag plus a model with materials,
+ * Color needs a model the palette actually applies to, Residency needs
+ * batched instances to evict.
  *
  * @return {ReactElement|null}
  */
@@ -188,6 +194,31 @@ export default function ResidencyControl() {
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
         <Stack spacing={1} sx={{p: 2, width: '16em'}}>
+          {showShading &&
+            <>
+              <Typography variant='subtitle2'>Shading</Typography>
+              <RadioGroup
+                value={shadingMode}
+                onChange={onShadingMode}
+                data-testid='shading-mode-group'
+              >
+                <FormControlLabel
+                  value={ShadingMode.SHADED}
+                  control={<Radio size='small'/>}
+                  label='Shaded'
+                  data-testid='shading-mode-shaded'
+                />
+                <FormControlLabel
+                  value={ShadingMode.WIREFRAME}
+                  control={<Radio size='small'/>}
+                  label='Wireframe'
+                  data-testid='shading-mode-wireframe'
+                />
+              </RadioGroup>
+            </>}
+
+          {showShading && showColor && <Divider/>}
+
           {/*
             * "Share-assigned" is the whole point of the label — a user
             * looking at a rainbow jet engine has no way to learn the colors
@@ -216,32 +247,7 @@ export default function ResidencyControl() {
               </RadioGroup>
             </>}
 
-          {showColor && showShading && <Divider/>}
-
-          {showShading &&
-            <>
-              <Typography variant='subtitle2'>Shading</Typography>
-              <RadioGroup
-                value={shadingMode}
-                onChange={onShadingMode}
-                data-testid='shading-mode-group'
-              >
-                <FormControlLabel
-                  value={ShadingMode.SHADED}
-                  control={<Radio size='small'/>}
-                  label='Shaded'
-                  data-testid='shading-mode-shaded'
-                />
-                <FormControlLabel
-                  value={ShadingMode.WIREFRAME}
-                  control={<Radio size='small'/>}
-                  label='Wireframe'
-                  data-testid='shading-mode-wireframe'
-                />
-              </RadioGroup>
-            </>}
-
-          {(showColor || showShading) && controller && <Divider/>}
+          {(showShading || showColor) && controller && <Divider/>}
 
           {controller &&
             <>

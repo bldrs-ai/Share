@@ -149,4 +149,17 @@ describe('ResidencyControl shading section', () => {
     fireEvent.click(getByTestId('shading-mode-shaded').querySelector('input'))
     expect(model.material.wireframe).toBe(false)
   })
+
+  it('renders above the color section', async () => {
+    // Ordering is a product decision, not an accident: wireframe changes what
+    // you're looking at, color only tints it, so the coarser choice comes
+    // first. Asserted because a JSX reshuffle would otherwise flip it silently.
+    mockIsFeatureEnabled.mockImplementation((name) => name === 'displayControls')
+    const {getByTestId} = await renderWithModel(colorOnlyModel())
+    fireEvent.click(getByTestId('control-button-residency'))
+    // Siblings, neither containing the other, so compareDocumentPosition is
+    // exactly DOCUMENT_POSITION_FOLLOWING when color comes after shading.
+    expect(getByTestId('shading-mode-group').compareDocumentPosition(getByTestId('color-mode-group')))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
 })
