@@ -223,13 +223,38 @@ const EXPECTED_LOADER_ERRORS = /open failed|is not a function/i
 
 
 /**
- * Every `[conwayDirect]` line a rejection test produced must be one of the
- * failures that test induced. Call from an afterEach.
+ * Every `[conwayDirect]` line a test produced must be one of the failures that
+ * test induced. Call from an afterEach.
+ *
+ * This is a NEGATIVE guard only — it catches an unexpected diagnostic, and an
+ * empty buffer passes it by running zero assertions. That is correct here (most
+ * tests induce no parse failure and should log nothing) but it means this
+ * cannot notice the diagnostic disappearing. {@link expectInducedLoaderError}
+ * is the positive half; the two are not interchangeable.
  */
 function expectOnlyInducedLoaderErrors() {
   for (const {text} of getConwayDirectLogs()) {
     expect(text).toMatch(EXPECTED_LOADER_ERRORS)
   }
+}
+
+
+/**
+ * A `[conwayDirect]` diagnostic was actually captured for this test, and it is
+ * one of the failures the test induced.
+ *
+ * Call from the five tests whose mocked parse throws. Without it the suite has
+ * no assertion that the channel emits at all: `ShareIfcLoader#parse` logs
+ * through `conwayDirectError` and then rethrows, so the rejection these tests
+ * await is raised by the rethrow and satisfied whether or not anything was
+ * logged. Silence the channel — or break the jest capture — and every one of
+ * them stays green while the diagnostic it exists to protect is gone.
+ * (codex, PR #1789.)
+ */
+function expectInducedLoaderError() {
+  const logs = getConwayDirectLogs()
+  expect(logs.length).toBeGreaterThan(0)
+  expect(logs.some(({text}) => EXPECTED_LOADER_ERRORS.test(text))).toBe(true)
 }
 
 
@@ -588,6 +613,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
     expect(arrayBufferSpy).not.toHaveBeenCalled()
     expect(sliceSpy).toHaveBeenCalled()
     expect(onProgress).toHaveBeenCalledWith('Hashing model...')
+    // The parse this test induced also emitted its diagnostic.
+    expectInducedLoaderError()
   })
 
 
@@ -620,6 +647,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
     expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
     expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
     expect(onProgress).not.toHaveBeenCalledWith('Hashing model...')
+    // The parse this test induced also emitted its diagnostic.
+    expectInducedLoaderError()
   })
 
 
@@ -649,6 +678,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
 
     expect(arrayBufferSpy).not.toHaveBeenCalled()
     expect(onProgress).toHaveBeenCalledWith('Hashing model...')
+    // The parse this test induced also emitted its diagnostic.
+    expectInducedLoaderError()
   })
 
 
@@ -682,6 +713,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
 
     expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
     expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
+    // The parse this test induced also emitted its diagnostic.
+    expectInducedLoaderError()
   })
 
 
@@ -706,6 +739,8 @@ describe('load() error/edge paths with OPFS enabled', () => {
 
     expect(arrayBufferSpy).toHaveBeenCalledTimes(1)
     expect(onProgress).toHaveBeenCalledWith('Buffering model bytes...')
+    // The parse this test induced also emitted its diagnostic.
+    expectInducedLoaderError()
   })
 
 
