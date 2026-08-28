@@ -1068,6 +1068,22 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
       if (obj.geometry.boundsTree) {
         return
       }
+      // BatchedMeshes are already done, and the guard above cannot see it.
+      // `BatchedMesh extends Mesh`, so `isMesh` is true and this traversal
+      // reaches the batched-native hydration's meshes (view-140 S9); but
+      // `computeBatchedBoundsTree` stores its PER-GEOMETRY trees on
+      // `mesh.boundsTrees` (plural, on the mesh) — never on
+      // `geometry.boundsTree` — so `decorateBatchMeshes`' build is
+      // invisible here. Without this skip a cache hit builds a second,
+      // full-buffer BVH over the whole concatenated batch geometry and
+      // retains it for the life of the scene, while
+      // `acceleratedBatchedMeshRaycast` reads only `boundsTrees` and never
+      // touches it: pure cache-hit latency + heap on exactly the largest
+      // models. Not a correctness bug (`indirect: true` leaves the index
+      // alone), which is why it went unnoticed until review.
+      if (obj.isBatchedMesh) {
+        return
+      }
       if (typeof obj.geometry.computeBoundsTree !== 'function') {
         return
       }
