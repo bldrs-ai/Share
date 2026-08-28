@@ -15,6 +15,11 @@
 /**
  * Current Bldrs GLB artifact schema version. Bumped on any backwards-
  * incompatible change to the BLDRS_* extension contract or cache-key shape.
+ *
+ * Bumping this ALSO retires the batched-native slot, which is derived from
+ * it (`BLDRS_GLB_BATCHED_SCHEMA_VERSION` below) — deliberately, since that
+ * is the slot most users actually read. Nothing extra to do here; the note
+ * exists so the coupling is visible from where the bump gets written.
  * 0.16.0 — retires artifacts baked in the old coordination frame. conway
  *         1.501.1426 (bldrs-ai/conway#501, issue conway#87) stopped anchoring
  *         `COORDINATE_TO_ORIGIN` on whichever element a file happens to
@@ -164,21 +169,43 @@ export const BLDRS_GLB_SCHEMA_VERSION = '0.16.0'
  * viewer-replacement §3b.v, the `glbBatched` flag — DEFAULT-ON): geometry
  * deduped via `EXT_mesh_gpu_instancing`, per-instance identity + verbatim
  * SOURCE colors in `BLDRS_instance_tables` (replacing the per-triangle
- * `BLDRS_face_ids`), no compression. A separate constant, not a bump of the
- * merged version: the two layouts co-exist behind the flag — flag-on
- * writers/readers use this slot, flag-off ones stay on the merged
- * `BLDRS_GLB_SCHEMA_VERSION` slot above, and neither can ever half-read the
- * other's artifact because the version is part of the FILENAME. That
- * disjointness is what made flipping the flag on safe with no migration: a
- * user's existing merged artifacts simply read as miss and rewrite.
+ * `BLDRS_face_ids`), no compression. A distinct SLOT, but DERIVED from the
+ * merged version rather than an independent literal: the two layouts
+ * co-exist behind the flag — flag-on writers/readers use this slot, flag-off
+ * ones stay on the merged `BLDRS_GLB_SCHEMA_VERSION` slot above, and neither
+ * can ever half-read the other's artifact because the version is part of the
+ * FILENAME. That disjointness is what made flipping the flag on safe with no
+ * migration: a user's existing merged artifacts simply read as miss and
+ * rewrite.
+ *
+ * **Why derived, not its own literal.** Disjointness and INVALIDATION are
+ * different problems, and a separate string only solves the first. Every
+ * bump entry at the top of this file hangs off `BLDRS_GLB_SCHEMA_VERSION`,
+ * and the last two (0.16.0, 0.15.0) are engine-coupled — the class that
+ * applies verbatim to this layout, which bakes world coordinates the same
+ * way (vertex positions plus per-instance TRS accessors). With `glb`,
+ * `demandGeometry` and `glbBatched` all default-on, this is the slot
+ * substantially every user reads. So an independent literal would mean the
+ * documented ritual — bump the version, write the entry — retiring the slot
+ * almost NOBODY reads, while the majority kept serving geometry baked by
+ * the superseded engine: the offset-homepage-logo bug quoted at the top of
+ * this file, with the cache-hit and cache-miss populations swapped, and
+ * just as invisible to local testing. Interpolating removes the decision —
+ * an engine-coupled bump retires both layouts for free. The cost is that an
+ * engine-NEUTRAL merged bump re-parses batched artifacts once too, the same
+ * tradeoff 0.15.0 already accepts for IFC ("the key is format-blind so they
+ * rewrite too").
+ *
+ * Do not re-inline this as a literal; `glbCacheKey.test.js` pins the
+ * coupling and the disjointness together.
+ *
  * The merged layout remains the writer's fallback for models that load
  * merged (or that the batched writer refuses — shear, missing attributes),
  * written to its own slot as before. Note the asymmetry that follows: such a
  * model is never found by a flag-on reader, so it re-parses every load —
  * uncached, never miscached (`glbExport` logs the fallback).
- * 0.15.0-batched — first batched-native layout.
  */
-export const BLDRS_GLB_BATCHED_SCHEMA_VERSION = '0.15.0-batched'
+export const BLDRS_GLB_BATCHED_SCHEMA_VERSION = `${BLDRS_GLB_SCHEMA_VERSION}-batched`
 
 
 /**

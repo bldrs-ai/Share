@@ -318,7 +318,7 @@ Sub-issues, all sharing the epic name per CLAUDE.md §"UI work" / conversational
 | # | Story | Content | Depends on |
 |---|---|---|---|
 | S1 | Source-color preservation (in memory) | `instanceSourceColors` snapshot at assemble time; palette reversible on the live batched path. No UI. **Shipped.** The export/reader half of §1.2b (bake source, re-derive on read) is NOT in S1 — see §1.2's 2026-07-29 decision; it moves to S9. | — |
-| S9 | Display controls on cache reload | Bake source colors into the GLB and light up color + residency on reload — via the `EXT_mesh_gpu_instancing` batched-native cache (§3b.v) so reload returns a `BatchedMesh` and S1/S2/S6 all apply unchanged, rather than a throwaway merged recolor backend. **Landed behind `glbBatched`, default-on since 2026-08-28 (§7.1 has the stored-format safety argument and its two consequences):** S9a writer (`glbBatchedExport` + `BLDRS_instance_tables`, own schema slot `0.15.0-batched`), S9b reader (`instancedGlbToBatchedModel` + the shared `decorateBatchMeshes` core, so cache-hit behavior IS cache-miss behavior), S9c round-trip tests. Risk checks: 1 (schema gate) + 4 (third-party appearance) pinned in `glbCompress.test.js` / `glbBatchedExport.test.js`; 2 (parity) + 3 (determinism) in `glbBatchedRoundTrip.test.js`, which runs writer → real GLTFLoader → hydrate in jest. The MISS→HIT **E2E now runs** (`src/loader/batchedGlbCache.spec.ts`, desktop + mobile) — `OPFS_IS_ENABLED` was flipped true in the playwright build (Share#1783), so the OPFS hop is under CI too. It asserts parity keyed by instance IDENTITY (occurrence path), not by `batchId`: the writer groups instances by (geometry × source color) and the reader re-adds them group by group, so a HIT's batchIds run in artifact-node order where a MISS's run in Conway's emission order. Same instances, same colors, different indices — batchId is not a cross-cache identity and nothing addresses one. *(→ `view-130`; it's the batched-GLB perf item.)* | S2, §3b.v |
+| S9 | Display controls on cache reload | Bake source colors into the GLB and light up color + residency on reload — via the `EXT_mesh_gpu_instancing` batched-native cache (§3b.v) so reload returns a `BatchedMesh` and S1/S2/S6 all apply unchanged, rather than a throwaway merged recolor backend. **Landed behind `glbBatched`, default-on since 2026-08-28 (§7.1 has the stored-format safety argument and its two consequences):** S9a writer (`glbBatchedExport` + `BLDRS_instance_tables`, own schema slot, derived as `` `${BLDRS_GLB_SCHEMA_VERSION}-batched` `` so an engine-coupled bump retires it too), S9b reader (`instancedGlbToBatchedModel` + the shared `decorateBatchMeshes` core, so cache-hit behavior IS cache-miss behavior), S9c round-trip tests. Risk checks: 1 (schema gate) + 4 (third-party appearance) pinned in `glbCompress.test.js` / `glbBatchedExport.test.js`; 2 (parity) + 3 (determinism) in `glbBatchedRoundTrip.test.js`, which runs writer → real GLTFLoader → hydrate in jest. The MISS→HIT **E2E now runs** (`src/loader/batchedGlbCache.spec.ts`, desktop + mobile) — `OPFS_IS_ENABLED` was flipped true in the playwright build (Share#1783), so the OPFS hop is under CI too. It asserts parity keyed by instance IDENTITY (occurrence path), not by `batchId`: the writer groups instances by (geometry × source color) and the reader re-adds them group by group, so a HIT's batchIds run in artifact-node order where a MISS's run in Conway's emission order. Same instances, same colors, different indices — batchId is not a cross-cache identity and nothing addresses one. *(→ `view-130`; it's the batched-GLB perf item.)* | S2, §3b.v |
 | S2 | Color control | Display section in the eyeball popover: Auto (Share-assigned) / Source. Model scope. **Default-on** — makes existing behavior discoverable. | S1 |
 | S3 | Display-override stack | `DisplaySlice` + `DisplayController` + specificity resolution; S2's toggle re-homed onto it. Behind `displayControls` (default-on since 2026-08-28, §7.1). | S2 |
 | S4 | Shading control | Shaded / Wireframe / Shaded+edges. Whole-model material fast-path only. | S3 |
@@ -352,11 +352,23 @@ with a mocked flag.
 so the safety argument is worth stating explicitly rather than assuming:
 
 - Batched artifacts live in their own schema slot
-  (`glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION = '0.15.0-batched'`), and the
-  slot is part of the OPFS **filename**. `glbCompress#activeArtifactSpec` is
-  the single place both the reader (`Loader#tryLoadCachedGlb`) and the writer
-  (`glbExport`) derive it. So a reader can only ever open an artifact written
-  in its own flag state — no direction can half-read the other's bytes.
+  (`glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION`, derived as
+  `` `${BLDRS_GLB_SCHEMA_VERSION}-batched` ``), and the slot is part of the
+  OPFS **filename**. The reader derives it in one place
+  (`glbCompress#activeArtifactSpec`, from `Loader#tryLoadCachedGlb`); the
+  writer (`glbExport`) instead keys on whether it actually produced batched
+  tables. That asymmetry is deliberate and is the stronger guarantee — the
+  written slot is a property of the bytes rather than of flag state, so
+  batched bytes cannot land in a merged slot even if the flag changes
+  between a load and the idle write that follows it. So a reader can only
+  ever open an artifact written in its own layout — no direction can
+  half-read the other's bytes.
+- The batched version is **derived from** the merged one rather than being
+  its own literal, so an engine-coupled schema bump retires both layouts.
+  With `glb`, `demandGeometry` and `glbBatched` all default-on the batched
+  slot is what substantially every user reads; an independent literal would
+  let the documented bump ritual retire only the slot nobody reads. See the
+  comment on the constant for the full argument.
 - Reader-side hydration is additionally *content*-gated
   (`model.userData.bldrsInstanceTables`, `Loader.js`), so even a merged
   artifact reaching a flag-on reader would degrade to a normal merged hit

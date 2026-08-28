@@ -32,8 +32,20 @@ import {glbInfo, glbVerbose} from '../../loader/glbLog'
  * matched by identity, not traversal order. Any mismatch — missing index,
  * duplicate, count disagreement — returns null and the caller keeps the
  * GLTFLoader model as-is: it still RENDERS correctly (three draws the
- * instancing natively); what's lost is only the batched decoration, so
- * fail-soft degrades to "visible but table-less", never to a wrong scene.
+ * instancing natively); what's lost is the batched decoration, so fail-soft
+ * degrades rather than producing a wrong scene. `inferModelCapabilities`
+ * grants the kept model neither `expressIdPicking` nor `batchedPicking` nor
+ * `instancePicking`, so every downstream table consumer is gated off rather
+ * than reading garbage; NavTree and Properties still hydrate from the
+ * spatial-tree / element-properties extensions.
+ *
+ * "Table-less" understates one case, though: on a COLORLESS model the kept
+ * model also misses `applyProductPalette`, so it renders grey where a cache
+ * miss renders palette-colored. That is a visible hit/miss difference, not
+ * just a loss of interaction — worth knowing when triaging "why is this
+ * model grey after a reload". Reaching it requires a corrupt artifact (the
+ * join is total for anything this writer produced), which is why it is
+ * documented rather than defended against.
  */
 
 

@@ -179,7 +179,14 @@ export const flags = [
   //    (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION), and the slot is part
   //    of the OPFS FILENAME, so a reader can only ever open an artifact
   //    written for its own flag state. Neither direction can half-read the
-  //    other. `activeArtifactSpec` is the single place both sides derive it.
+  //    other. The READER derives its slot in one place
+  //    (`glbCompress#activeArtifactSpec`); the WRITER keys off whether it
+  //    actually produced batched tables (`glbExport`), NOT off flag state.
+  //    That asymmetry is deliberate and is the stronger of the two: the
+  //    written slot is a property of the BYTES, so batched bytes cannot
+  //    land in a merged slot even if the flag changes between the load and
+  //    the idle write that follows it. Worst case there is a wasted write,
+  //    never a mis-slotted artifact.
   //  - Existing merged artifacts therefore read as MISS once, re-parse, and
   //    rewrite batched — the same one-time cost as any schema bump. The
   //    stranded merged artifacts are unreferenced but not deleted; OPFS has

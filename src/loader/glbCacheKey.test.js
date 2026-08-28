@@ -1,4 +1,50 @@
-import {BLDRS_GLB_SCHEMA_VERSION, glbArtifactPath, glbCacheKey} from './glbCacheKey'
+import {
+  BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+  BLDRS_GLB_SCHEMA_VERSION,
+  glbArtifactPath,
+  glbCacheKey,
+} from './glbCacheKey'
+
+
+// The batched slot has to satisfy two properties at once, and they pull in
+// opposite directions — hence pinning them together rather than apart.
+//
+// DISJOINT from every merged slot, or a reader half-reads the other layout.
+// DERIVED from the merged version, or the documented bump ritual retires the
+// slot almost nobody reads while the default-on majority keeps serving
+// geometry baked by a superseded engine — the offset-homepage-logo bug in
+// this module's header comment, with the cache-hit/cache-miss populations
+// swapped. Both of the last two bumps (0.16.0, 0.15.0) were exactly that
+// engine-coupled kind, so this is the likely failure, not a hypothetical.
+//
+// Re-inlining the constant as a literal keeps disjointness and silently
+// drops the coupling, which is why the coupling gets its own assertion.
+describe('loader/glbCacheKey — batched slot coupling', () => {
+  it('derives the batched version from the merged one', () => {
+    expect(BLDRS_GLB_BATCHED_SCHEMA_VERSION).toBe(`${BLDRS_GLB_SCHEMA_VERSION}-batched`)
+  })
+
+  it('starts with the merged version, so a merged bump retires it too', () => {
+    // Stated separately from the equality above: that one would still pass
+    // if someone "fixed" a failure by hard-coding today's derived string.
+    expect(BLDRS_GLB_BATCHED_SCHEMA_VERSION.startsWith(BLDRS_GLB_SCHEMA_VERSION)).toBe(true)
+    expect(BLDRS_GLB_BATCHED_SCHEMA_VERSION).not.toBe(BLDRS_GLB_SCHEMA_VERSION)
+  })
+
+  it('stays disjoint from every merged slot, so the layouts cannot alias', () => {
+    const slots = [
+      BLDRS_GLB_SCHEMA_VERSION,
+      `${BLDRS_GLB_SCHEMA_VERSION}-draco`,
+      `${BLDRS_GLB_SCHEMA_VERSION}-meshopt`,
+      BLDRS_GLB_BATCHED_SCHEMA_VERSION,
+    ]
+    expect(new Set(slots).size).toBe(slots.length)
+    // Disjointness is only meaningful at the level that decides a cache
+    // hit — the filename — so assert it there too, not just on the strings.
+    const paths = slots.map((ver) => glbArtifactPath('models/foo.ifc', ver))
+    expect(new Set(paths).size).toBe(paths.length)
+  })
+})
 
 
 describe('loader/glbCacheKey', () => {
