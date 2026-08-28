@@ -17,8 +17,8 @@
 // tables and the geometry agree. With a permuting BVH build this fails
 // (the contrast test proves the default build really does permute, so
 // this pin can't pass vacuously).
-import {BufferAttribute, BufferGeometry, Mesh} from 'three'
-import {computeBoundsTree} from 'three-mesh-bvh'
+import {BatchedMesh, BufferAttribute, BufferGeometry, Mesh, MeshLambertMaterial} from 'three'
+import {computeBatchedBoundsTree, computeBoundsTree} from 'three-mesh-bvh'
 import {restoreCacheHitPicking} from './Loader'
 
 
@@ -129,5 +129,85 @@ describe('Loader/restoreCacheHitPicking — BVH must not permute the index (tria
       expect(mapInst).toBe(instAttr.getX(v0))
       expect(mesh.instanceMap.getParentExpressIdByInstance(mapInst)).toBe(exprAttr.getX(v0))
     }
+  })
+})
+
+
+// The batched-native cache artifact (view-140 S9) hydrates to a BatchedMesh
+// model whose per-geometry BVHs `decorateBatchMeshes` already built. Those
+// live on `mesh.boundsTrees` (plural, on the MESH), while this function's
+// "already has a BVH" guard reads `geometry.boundsTree` — a different
+// property — so the guard cannot see them. Since `BatchedMesh extends Mesh`,
+// `isMesh` is true and the traversal reaches it: without an explicit skip a
+// cache hit builds a SECOND, full-buffer BVH over the whole concatenated
+// batch geometry and retains it for the life of the scene, while
+// `acceleratedBatchedMeshRaycast` consults only `boundsTrees` and never
+// reads it. Cost is latency + heap on the largest cached models, not
+// wrongness — which is why only review caught it.
+describe('Loader/restoreCacheHitPicking — no redundant merged BVH on batched hydration', () => {
+  const originalComputeBoundsTree = BufferGeometry.prototype.computeBoundsTree
+  const originalBatchedComputeBoundsTree = BatchedMesh.prototype.computeBoundsTree
+
+  beforeAll(() => {
+    // Mirror the ShareIfc.js prototype patches, both of them — patching only
+    // BufferGeometry would let the batched build silently no-op and this
+    // test would pass for the wrong reason.
+    BufferGeometry.prototype.computeBoundsTree = computeBoundsTree
+    BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree
+  })
+
+  afterAll(() => {
+    BufferGeometry.prototype.computeBoundsTree = originalComputeBoundsTree
+    BatchedMesh.prototype.computeBoundsTree = originalBatchedComputeBoundsTree
+  })
+
+  /**
+   * A BatchedMesh in the post-hydration state: geometry added, instances
+   * placed, and `computeBoundsTree()` already called — exactly what
+   * `decorateBatchMeshes` leaves behind on a batched-native cache hit.
+   *
+   * @return {BatchedMesh}
+   */
+  function makeHydratedBatchedMesh() {
+    const {geometry} = makePickableGeometry()
+    const vertexCount = geometry.getAttribute('position').count
+    const indexCount = geometry.index.count
+    const batched = new BatchedMesh(2, vertexCount * 2, indexCount * 2, new MeshLambertMaterial())
+    const geometryId = batched.addGeometry(geometry)
+    batched.addInstance(geometryId)
+    batched.computeBoundsTree()
+    return batched
+  }
+
+  it('leaves the per-geometry boundsTrees in place and builds no geometry.boundsTree', () => {
+    const batched = makeHydratedBatchedMesh()
+    // Non-vacuity: the traversal really does reach this object and really
+    // could build on it. If either of these stops holding, the skip is no
+    // longer what prevents the second build and this pin means nothing.
+    expect(batched.isMesh).toBe(true)
+    expect(typeof batched.geometry.computeBoundsTree).toBe('function')
+    expect(batched.geometry.boundsTree).toBeUndefined()
+
+    batched.capabilities = {instancePicking: false}
+    restoreCacheHitPicking(batched, true)
+
+    // The trees decorateBatchMeshes built survive...
+    expect(Array.isArray(batched.boundsTrees)).toBe(true)
+    expect(batched.boundsTrees.filter(Boolean).length).toBeGreaterThan(0)
+    // ...and no redundant merged BVH was built alongside them.
+    expect(batched.geometry.boundsTree).toBeUndefined()
+  })
+
+  it('contrast: a plain Mesh sharing that geometry still gets its BVH', () => {
+    // Proves the skip is narrow — keyed on `isBatchedMesh`, not something
+    // that would also suppress the merged-artifact path this block exists
+    // for (an 85-child-mesh Snowdon cache hit drops to ~1 FPS without it).
+    const {geometry} = makePickableGeometry()
+    const mesh = new Mesh(geometry)
+    mesh.capabilities = {instancePicking: false}
+
+    restoreCacheHitPicking(mesh, true)
+
+    expect(geometry.boundsTree).toBeDefined()
   })
 })

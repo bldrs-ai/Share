@@ -7,6 +7,9 @@ import useStore from '../../store/useStore'
 import {addCameraUrlParams} from '../Camera/CameraControl'
 import {removeCameraUrlParams} from '../Camera/hashState'
 import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/hashState'
+import {HASH_PREFIX_DISPLAY, writeModelDisplayHash} from '../Residency/displayHash'
+import {resolvedAppearance} from '../../viewer/display/DisplayController'
+import {removeHashParams} from '../../utils/location'
 import {gtagEvent} from '../../privacy/analytics'
 import Dialog from '../Dialog'
 import Toggle from '../Toggle'
@@ -21,6 +24,13 @@ import {
  * included in the shared URL and assists in copying the URL to
  * clipboard.
  *
+ * Each toggle owns one hash token: cut planes `cp:`, camera `c:`, and
+ * display settings `d:` (the Display menu's color / shading / residency —
+ * design/new/model-display-controls.md §6). They all follow the same shape:
+ * flip the state AND mutate `window.location` in the handler, because the URL
+ * shown in the TextField and the QR code is read during render and
+ * `window.location` isn't reactive.
+ *
  * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
  * @return {ReactElement}
@@ -30,12 +40,21 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const viewer = useStore((state) => state.viewer)
   const cameraControls = useStore((state) => state.cameraControls)
   const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+  const displayOverrides = useStore((state) => state.displayOverrides)
   const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
+  // Default ON, like the camera: the Display menu's choices are part of "what
+  // the sender was looking at" (model-display-controls §6), and the `#d:`
+  // token is empty for a model nobody has touched, so leaving it on costs
+  // the common share link nothing.
+  const [isDisplayInUrl, setIsDisplayInUrl] = useState(true)
 
   const urlTextFieldRef = createRef()
   const location = useLocation()
+  // What a `#d:` token would carry right now — the Display menu resolved off
+  // the override stack, same source ResidencyControl writes from.
+  const appearance = resolvedAppearance(model, Object.values(displayOverrides))
 
   useEffect(() => {
     if (viewer?.clipper && isDialogDisplayed) {
@@ -51,6 +70,29 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       }
     }
   }, [cameraControls, isCameraInUrl, isCutPlaneActive, isDialogDisplayed, location, model, viewer, viewer?.clipper])
+
+  // Display state (`#d:`) gets its own effect rather than another branch of
+  // the one above, which is gated on `viewer?.clipper` — the clipper has
+  // nothing to do with the Display menu, and a model can carry display
+  // choices long before one exists.
+  useEffect(() => {
+    // Gated on a loaded model, not just an open dialog: ResidencyControl
+    // seeds the override stack from `#d:` when the model loads, so before
+    // that the stack is empty and the resolved appearance is all-defaults.
+    // Writing it would strip an incoming permalink's token before the app
+    // ever read it, and the shared display would be lost on arrival.
+    if (!isDialogDisplayed || !model) {
+      return
+    }
+    if (isDisplayInUrl) {
+      writeModelDisplayHash(window.location, appearance)
+    } else {
+      removeHashParams(window.location, HASH_PREFIX_DISPLAY)
+    }
+    // `appearance` is a fresh object every render; the axis values inside it
+    // are what matter, and they only move when the overrides or the model do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayOverrides, isDialogDisplayed, isDisplayInUrl, model])
 
   // Track when share dialog is opened
   useEffect(() => {
@@ -78,6 +120,24 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     } else {
       setIsCameraInUrl(true)
       addCameraUrlParams(cameraControls)
+    }
+    if (isLinkCopied) {
+      setIsLinkCopied(false)
+    }
+  }
+
+
+  // Mutating the hash here rather than leaving it to the effect above is
+  // load-bearing, exactly as it is for the camera: `window.location` isn't
+  // reactive, so the URL the TextField and the QR code render is read during
+  // the render this setState triggers — which happens before the effect runs.
+  const toggleDisplayIncluded = () => {
+    if (isDisplayInUrl) {
+      setIsDisplayInUrl(false)
+      removeHashParams(window.location, HASH_PREFIX_DISPLAY)
+    } else {
+      setIsDisplayInUrl(true)
+      writeModelDisplayHash(window.location, appearance)
     }
     if (isLinkCopied) {
       setIsLinkCopied(false)
@@ -170,6 +230,18 @@ export default function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               onChange={toggleCameraIncluded}
               checked={isCameraInUrl}
               data-testid='toggle-camera'
+            />
+          </Stack>
+          <Stack
+            direction='row'
+            justifyContent='space-around'
+            alignItems='center'
+          >
+            <Typography>Display settings</Typography>
+            <Toggle
+              onChange={toggleDisplayIncluded}
+              checked={isDisplayInUrl}
+              data-testid='toggle-display'
             />
           </Stack>
         </Stack>

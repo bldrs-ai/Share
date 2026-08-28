@@ -47,12 +47,18 @@ import {
   batchedModelToMergedMesh,
   disposeMergedMesh,
 } from '../viewer/ifc/batchedToMergedMesh'
-import {glbCacheKey} from './glbCacheKey'
+import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, glbCacheKey} from './glbCacheKey'
 import {
   activeGlbCompressionMode,
   compressGlb,
+  isGlbBatchedActive,
   schemaVersionFor,
 } from './glbCompress'
+import {
+  BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
+  buildInstanceTablesExtensionData,
+} from './bldrsInstanceTables'
+import {exportBatchedModelAsInstancedGlb} from './glbBatchedExport'
 import {packGlbChunks} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {injectAndPackInWorker} from './GlbWriterService'
@@ -215,31 +221,62 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // (design/new/viewer-replacement.md §3b.iv). The bake is transient —
     // disposed right after serialisation below.
     const isBatched = modelHasBatchedMesh(model)
-    const exportModel = isBatched ? batchedModelToMergedMesh(model) : model
-    if (isBatched && !exportModel) {
-      glbInfo('writer: skipped (batched model produced no exportable geometry)')
-      return false
-    }
     const filePath = cacheKeyArgs.sourcePath
     const requestedMode = activeGlbCompressionMode()
     glbInfo(
       `writer: ${kindLabel} source, key=${cacheKeyArgs.ns1}/${cacheKeyArgs.ns2}/${cacheKeyArgs.ns3}/` +
       `${filePath} sha=${cacheKeyArgs.sourceHash} requestedCompression=${requestedMode || 'none'}`)
     glbVerbose('writer: cacheKeyArgs =', cacheKeyArgs)
-    if (isBatched) {
-      glbVerbose('writer: baked BatchedMesh model to a merged mesh for export')
+
+    // Batched-NATIVE layout (S9, `glbBatched`, default-on): keep the batch
+    // structure via EXT_mesh_gpu_instancing + per-instance tables instead
+    // of de-instancing into the merged bake. `batchedTables` non-null is
+    // the discriminator for every layout decision below (no face_ids, no
+    // compression, batched schema slot). Fail-soft: a null export (shear,
+    // missing attributes) falls through to the merged path — that artifact
+    // lands in the MERGED slot, so a flag-on reader will simply keep
+    // missing for that model rather than ever reading a wrong layout.
+    let rawBytes
+    let batchedTables = null
+    if (isBatched && isGlbBatchedActive()) {
+      const batchedNative = await exportBatchedModelAsInstancedGlb(model)
+      if (batchedNative) {
+        rawBytes = batchedNative.bytes
+        batchedTables = batchedNative.tableNodes
+        glbVerbose('writer: batched-native export produced', rawBytes.byteLength, 'bytes')
+      } else {
+        // Worth saying out loud now that `glbBatched` is default-on: this
+        // artifact lands in the MERGED slot, which a flag-on reader never
+        // looks in, so this model re-parses on every load. Correct, just
+        // uncached — and this line is the only way to tell that apart from
+        // a cache that is simply cold.
+        glbInfo(
+          'writer: batched-native export declined; falling back to merged bake ' +
+          '(merged slot — a glbBatched reader will keep missing this model)')
+      }
     }
-    const rawBytes = await exportThreeModelAsGlb(exportModel)
-    // The baked mesh is a transient, off-scene copy; free its buffers now
-    // that the bytes are captured (the source batched model is untouched).
-    if (exportModel !== model) {
-      disposeMergedMesh(exportModel)
+
+    if (rawBytes === undefined) {
+      const exportModel = isBatched ? batchedModelToMergedMesh(model) : model
+      if (isBatched && !exportModel) {
+        glbInfo('writer: skipped (batched model produced no exportable geometry)')
+        return false
+      }
+      if (isBatched) {
+        glbVerbose('writer: baked BatchedMesh model to a merged mesh for export')
+      }
+      rawBytes = await exportThreeModelAsGlb(exportModel)
+      // The baked mesh is a transient, off-scene copy; free its buffers now
+      // that the bytes are captured (the source batched model is untouched).
+      if (exportModel !== model) {
+        disposeMergedMesh(exportModel)
+      }
+      if (!rawBytes || rawBytes.byteLength === 0) {
+        glbInfo('writer: skipped (GLTFExporter produced no bytes)')
+        return false
+      }
+      glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
     }
-    if (!rawBytes || rawBytes.byteLength === 0) {
-      glbInfo('writer: skipped (GLTFExporter produced no bytes)')
-      return false
-    }
-    glbVerbose('writer: GLTFExporter produced', rawBytes.byteLength, 'bytes')
     // IFC project title captured at write time — set by
     // IfcViewerAPIExtended.parse from Conway's `statsApi.projectName`
     // (e.g. "Momentum"). Passed to the inject step below so it lands
@@ -279,28 +316,35 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // Sync — parse + array read; no I/O. Safe to run before the
     // parallel async captures below.
     let faceIds = null
-    try {
-      const {json, bin} = parseGlb(rawBytes)
-      faceIds = capturePerTriangleIds(json, bin)
-      if (faceIds) {
-        const primCount = faceIds.perPrimitive.filter((p) => p).length
-        const triTotal = faceIds.perPrimitive.reduce(
-          (n, p) => n + (p?.expressIds?.length ?? 0), 0)
-        glbVerbose(
-          `writer: captured per-triangle IDs from ${primCount} primitive(s) — ` +
-          `${triTotal.toLocaleString()} triangles`)
+    // Per-triangle face_ids are a MERGED-layout concept (identity hung off
+    // the giant vertex slab). The batched-native artifact keeps instances
+    // first-class and carries per-instance identity in
+    // BLDRS_instance_tables instead — capturing face_ids from its bytes
+    // would find no per-vertex `_EXPRESSID` anyway.
+    if (!batchedTables) {
+      try {
+        const {json, bin} = parseGlb(rawBytes)
+        faceIds = capturePerTriangleIds(json, bin)
+        if (faceIds) {
+          const primCount = faceIds.perPrimitive.filter((p) => p).length
+          const triTotal = faceIds.perPrimitive.reduce(
+            (n, p) => n + (p?.expressIds?.length ?? 0), 0)
+          glbVerbose(
+            `writer: captured per-triangle IDs from ${primCount} primitive(s) — ` +
+            `${triTotal.toLocaleString()} triangles`)
+        }
+      } catch (e) {
+        // Intentional: swallow + continue. If parseGlb threw on bytes
+        // we just got from GLTFExporter, we have bigger problems than
+        // face_ids — the cache write itself will catch it. The skip
+        // here also flows downstream: with `faceIds == null`,
+        // `preserveTriangleOrder` stays false, so compressGlb falls
+        // back to the per-vertex-IDs-detected skip (uncompressed
+        // write) rather than running DRACO with corrupted IDs.
+        glbWarn(
+          'writer: parseGlb for face_ids capture threw; ' +
+          'skipping face_ids (DRACO will skip too):', e)
       }
-    } catch (e) {
-      // Intentional: swallow + continue. If parseGlb threw on bytes
-      // we just got from GLTFExporter, we have bigger problems than
-      // face_ids — the cache write itself will catch it. The skip
-      // here also flows downstream: with `faceIds == null`,
-      // `preserveTriangleOrder` stays false, so compressGlb falls
-      // back to the per-vertex-IDs-detected skip (uncompressed
-      // write) rather than running DRACO with corrupted IDs.
-      glbWarn(
-        'writer: parseGlb for face_ids capture threw; ' +
-        'skipping face_ids (DRACO will skip too):', e)
     }
     // STEP per-occurrence identity. The per-triangle arrays above only
     // carry the scalar instance id; the occurrence path (a variable-length
@@ -324,9 +368,9 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       // data and the scene per-occurrence highlight can't restore on cache-hit
       // (the NavTree still can — the spatial tree persists paths separately).
       if (!Array.isArray(occurrencePaths) && isBatched) {
-        const batchedTables = batchedModelOccurrenceTables(model)
-        occurrencePaths = batchedTables.occurrencePaths
-        geometryExpressIds = batchedTables.geometryExpressIds
+        const occurrenceTables = batchedModelOccurrenceTables(model)
+        occurrencePaths = occurrenceTables.occurrencePaths
+        geometryExpressIds = occurrenceTables.geometryExpressIds
       }
       if (Array.isArray(occurrencePaths)) {
         faceIds.occurrencePaths = occurrencePaths
@@ -392,8 +436,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     // uncompressed bytes would mislead a reader running with the same
     // flag (it would expect compressed input on the next load).
     const compressStartMs = Date.now()
-    const {bytes: compressedBytes, mode} = await compressGlb(
-      rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
+    // Batched-native v1 is always uncompressed: DRACO/Meshopt assume the
+    // merged single-primitive layout (and would strip the instancing
+    // extension through gltf-transform's re-serialize). mode stays null so
+    // the container's mode byte matches what activeArtifactSpec's reader
+    // side expects for the batched slot.
+    const {bytes: compressedBytes, mode} = batchedTables ?
+      {bytes: rawBytes, mode: null} :
+      await compressGlb(rawBytes, requestedMode, {preserveTriangleOrder: !!faceIds})
     glbVerbose(`writer: compress phase took ${Date.now() - compressStartMs}ms (mode=${mode || 'none'})`)
     await yieldToBrowser()
     const {spatialTree, elementProperties} = await capturePromise
@@ -426,6 +476,14 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
       {name: BLDRS_SPATIAL_TREE_EXTENSION_NAME, data: spatialTree, compress: true},
       {name: BLDRS_ELEMENT_PROPERTIES_EXTENSION_NAME, precompressed: elementProperties?.compressedBytes},
       {name: BLDRS_FACE_IDS_EXTENSION_NAME, data: faceIdsData, compress: true},
+      // Batched-native only (null data drops out of the inject filter):
+      // per-instance identity + verbatim source colors, node-order-keyed
+      // to the EXT_mesh_gpu_instancing nodes in the same GLB.
+      {
+        name: BLDRS_INSTANCE_TABLES_EXTENSION_NAME,
+        data: batchedTables ? buildInstanceTablesExtensionData(batchedTables) : null,
+        compress: true,
+      },
     ]
     // Scene-level metadata that rides along in the same inject pass
     // — no extra parse/serialize. The project title is stamped twice:
@@ -469,7 +527,11 @@ export async function exportAndCacheGlb({model, kindLabel, cacheKeyArgs, ifcMana
     if (extStats.addedSceneName > 0) {
       glbVerbose(`writer: stamped standard scenes[0].name = "${titleForExtras}"`)
     }
-    const schemaVer = schemaVersionFor(mode)
+    // Batched-native artifacts land in their own schema slot so flag-off
+    // readers never see them (glbCacheKey#BLDRS_GLB_BATCHED_SCHEMA_VERSION).
+    const schemaVer = batchedTables ?
+      BLDRS_GLB_BATCHED_SCHEMA_VERSION :
+      schemaVersionFor(mode)
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     await writeGlbBytesToOPFS(
       packed, key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)

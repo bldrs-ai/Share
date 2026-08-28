@@ -45,7 +45,9 @@ import {ExtBldrsPropertiesPayload} from './ExtBldrsPropertiesPayload'
 import {BLDRS_TITLE_EXTRAS_KEY, exportAndCacheGlb} from './glbExport'
 import glbToThree from './glb'
 import {glbCacheKey} from './glbCacheKey'
-import {activeGlbCompressionMode, activeSchemaVersion} from './glbCompress'
+import {activeArtifactSpec, isGlbBatchedActive} from './glbCompress'
+import {BldrsInstanceTablesReader} from './bldrsInstanceTables'
+import {hydrateBatchedModelFromInstancedGlb} from '../viewer/ifc/instancedGlbToBatchedModel'
 import {isBldrsGlbContainer, unpackGlbContainer} from './glbContainer'
 import {glbInfo, glbVerbose, glbWarn} from './glbLog'
 import {spillModelSource} from './opfsSourceByteStore'
@@ -648,6 +650,25 @@ export async function load(
   // diverge again (an IFC whose windowed open throws and falls back).
   const engineModelID = typeof model.modelID === 'number' ? model.modelID : 0
 
+  // Batched-native artifact hydration (view-140 S9, `glbBatched`, default-on):
+  // GLTFLoader parsed the EXT_mesh_gpu_instancing nodes to InstancedMeshes
+  // and the tables plugin stashed BLDRS_instance_tables on userData —
+  // rebuild the decorated BatchedMesh model the cache-miss path produces,
+  // so highlight / isolate / residency / display controls work on reload.
+  // Fail-soft: a null hydration keeps the GLTFLoader model, which still
+  // renders correctly (three draws the instancing natively) — degraded to
+  // table-less, never wrong. Runs before convertToShareModel so the
+  // hydrated model is what every downstream decoration sees.
+  if (cameFromGlbCache && isGlbBatchedActive() && model?.userData?.bldrsInstanceTables) {
+    const hydrateScene =
+      typeof viewer?.context?.getScene === 'function' ? viewer.context.getScene() : null
+    const hydrated = hydrateBatchedModelFromInstancedGlb(model, {scene: hydrateScene})
+    if (hydrated) {
+      glbInfo('reader: hydrated batched-native artifact to a BatchedMesh model')
+      model = hydrated
+    }
+  }
+
   model.isUploadedFile = isUploadedFile
   // Used for automatic naming, page title and other areas that need a mime type.
   model.mimeType = loader.type
@@ -1045,6 +1066,22 @@ export function restoreCacheHitPicking(model, cameFromGlbCache) {
       // Skip if already has a BVH (defensive — shouldn't happen on
       // cache-hit but won't rebuild if it does).
       if (obj.geometry.boundsTree) {
+        return
+      }
+      // BatchedMeshes are already done, and the guard above cannot see it.
+      // `BatchedMesh extends Mesh`, so `isMesh` is true and this traversal
+      // reaches the batched-native hydration's meshes (view-140 S9); but
+      // `computeBatchedBoundsTree` stores its PER-GEOMETRY trees on
+      // `mesh.boundsTrees` (plural, on the mesh) — never on
+      // `geometry.boundsTree` — so `decorateBatchMeshes`' build is
+      // invisible here. Without this skip a cache hit builds a second,
+      // full-buffer BVH over the whole concatenated batch geometry and
+      // retains it for the life of the scene, while
+      // `acceleratedBatchedMeshRaycast` reads only `boundsTrees` and never
+      // touches it: pure cache-hit latency + heap on exactly the largest
+      // models. Not a correctness bug (`indirect: true` leaves the index
+      // alone), which is why it went unnoticed until review.
+      if (obj.isBatchedMesh) {
         return
       }
       if (typeof obj.geometry.computeBoundsTree !== 'function') {
@@ -1880,6 +1917,7 @@ function newGltfLoader() {
   loader.register((parser) => new BldrsSpatialTreeReader(parser))
   loader.register((parser) => new BldrsElementPropertiesReader(parser))
   loader.register((parser) => new BldrsFaceIdsReader(parser))
+  loader.register((parser) => new BldrsInstanceTablesReader(parser))
   if (isFeatureEnabled('glbDraco')) {
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('/static/js/draco/')
@@ -1954,11 +1992,12 @@ export class NotFoundError extends Error {
  */
 async function tryLoadCachedGlb(cacheKeyArgs) {
   try {
-    // Schema version varies with the active compression flag so a flag-
-    // off reader never picks up a flag-on writer's compressed bytes
-    // (and vice versa). See glbCompress.js#schemaVersionFor.
-    const requestedMode = activeGlbCompressionMode()
-    const schemaVer = activeSchemaVersion()
+    // Schema version varies with the active flag state — compression mode
+    // AND the batched-native layout flag — so a flag-off reader never picks
+    // up a flag-on writer's bytes (and vice versa). One spec helper keeps
+    // this lookup and the writer's key derivation in agreement; see
+    // glbCompress.js#activeArtifactSpec.
+    const {schemaVer, mode: requestedMode} = activeArtifactSpec()
     const key = glbCacheKey({...cacheKeyArgs, schemaVer})
     const exists = await doesFileExistInOPFS(
       key.originalFilePath, key.commitHash, key.owner, key.repo, key.branch)

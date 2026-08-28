@@ -222,6 +222,13 @@ export function inferModelCapabilities(model, opts = {}) {
     if (!obj.isMesh || !obj.geometry?.attributes) {
       return
     }
+    // `> 1`, not `>= 1`, and that is load-bearing rather than a stylistic
+    // off-by-one guard: `convertToShareModel` stamps a synthetic
+    // single-element `Int8Array(1)` expressID on models that have none. A
+    // `>= 1` test would read that placeholder as real per-vertex ids and
+    // promote picking on a model that cannot support it — most visibly on
+    // the batched-native fail-soft path, where the kept GLTFLoader model
+    // would flip from correctly-degraded to confidently-wrong.
     if (obj.geometry.attributes[attrName]?.count > 1) {
       hasPerVertexElementIds = true
     }

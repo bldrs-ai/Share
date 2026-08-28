@@ -27,7 +27,7 @@
 // the encoder modules at module-load time so the cost is zero when the
 // compression flags are off.
 import {isFeatureEnabled} from '../FeatureFlags'
-import {BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
+import {BLDRS_GLB_BATCHED_SCHEMA_VERSION, BLDRS_GLB_SCHEMA_VERSION} from './glbCacheKey'
 import {glbInfo, glbVerbose} from './glbLog'
 import {parseGlb} from './injectGlbExtensions'
 
@@ -83,6 +83,50 @@ export function schemaVersionFor(mode) {
  */
 export function activeSchemaVersion() {
   return schemaVersionFor(activeGlbCompressionMode())
+}
+
+
+/**
+ * Whether the batched-native artifact layout is active
+ * (`glbBatched`, default-on — see FeatureFlags + glbCacheKey for the design),
+ * unless this session opted out via the `disableGlbBatched` off-switch.
+ *
+ * The ONE seam both sides of the cache read this through — reader lookup
+ * (`Loader#tryLoadCachedGlb` → `activeArtifactSpec`), reader hydration
+ * (`Loader.js`) and writer (`glbExport`). Keep it that way: a second
+ * `isFeatureEnabled('glbBatched')` call site is how the two ends start
+ * disagreeing about which slot an artifact lives in.
+ *
+ * @return {boolean}
+ */
+export function isGlbBatchedActive() {
+  return isFeatureEnabled('glbBatched') && !isFeatureEnabled('disableGlbBatched')
+}
+
+
+/**
+ * The (schemaVer, expected compression mode) pair for the artifact slot the
+ * CURRENT flag state reads and writes. One helper on purpose: the reader's
+ * lookup and the writer's key derivation must agree, or a written artifact
+ * is never found (or worse, a mode-mismatch false-miss loops forever).
+ *
+ * Batched-native artifacts are always uncompressed (v1 — DRACO/Meshopt
+ * assume the merged single-primitive layout and its face-ids ordering
+ * dance), so when `glbBatched` is on it takes precedence over the
+ * compression flags: batched slot, mode null. Without it, a reader running
+ * `?feature=glbDraco` would look in the batched slot but demand draco-marked
+ * bytes and miss its own writer's artifact every load. That combination is
+ * now the DEFAULT+opt-in one rather than an exotic pair, since `glbBatched`
+ * ships on: anyone who turns compression on lands here.
+ *
+ * @return {{schemaVer: string, mode: GlbCompressionMode}}
+ */
+export function activeArtifactSpec() {
+  if (isGlbBatchedActive()) {
+    return {schemaVer: BLDRS_GLB_BATCHED_SCHEMA_VERSION, mode: null}
+  }
+  const mode = activeGlbCompressionMode()
+  return {schemaVer: schemaVersionFor(mode), mode}
 }
 
 

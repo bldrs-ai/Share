@@ -92,6 +92,87 @@ function buildOccurrencePathIndex(instanceOccurrencePaths) {
 
 
 /**
+ * Stamp a BatchHandle list's tables onto its meshes — the shared decoration
+ * core for every path that produces a renderable batched model: the one-shot
+ * and incremental Conway-direct builds (via `assembleBatchedModel` below)
+ * and the batched-native GLB cache-hit hydration
+ * (`instancedGlbToBatchedModel`), which arrives with no Conway parser and
+ * only needs this mesh-level decoration. Keeping one function is what makes
+ * cache-hit and cache-miss models behave identically for highlight /
+ * subsets / display controls — parity by construction, not by parallel code.
+ *
+ * Includes the source-color snapshot + colorless-palette pass (S1/S2 of
+ * design/new/model-display-controls.md), so a hydrated model's auto-color
+ * state is RE-DERIVED from the artifact's source colors exactly as a fresh
+ * parse derives it — the determinism the cache round-trip relies on.
+ *
+ * @param {Array} batches BatchHandle list (`{mesh, instanceParents, ...}`)
+ */
+export function decorateBatchMeshes(batches) {
+  // Snapshot the file's own colors before any display override repaints
+  // them. `applyProductPalette` REPLACES entries in `instanceColors` — the
+  // restore table `batchedHighlight` reads — so without this the source
+  // color is unrecoverable and the auto/source toggle has nothing to revert
+  // to (design/new/model-display-controls.md §1.1).
+  //
+  // Unconditional, not gated on the palette firing: call-sites ask for
+  // "source colors" without having to know whether this particular model
+  // happened to get repainted. A shallow copy suffices — the palette swaps
+  // array *elements* rather than mutating the color objects in place.
+  for (const batch of batches) {
+    if (batch.instanceColors) {
+      batch.instanceSourceColors = batch.instanceColors.slice()
+    }
+  }
+
+  // Colorless-model fallback: a STEP/CAD file with no presentation data
+  // comes back entirely default-grey. Repaint each product from a palette
+  // (Onshape-style) so a multi-part assembly is legible. Strictly no-op the
+  // moment any real color is present, so IFC and colored STEP are untouched.
+  // Runs before the pick-table stamp below so the `instanceColors` restore
+  // table `batchedHighlight` reads already carries the palette color.
+  if (isFeatureEnabled('autoColorParts')) {
+    applyProductPalette(batches)
+  }
+
+  // Each batch carries its own pick tables; CadView reads them off the
+  // raycast-hit child (`intersection.object`). `instanceGeometry` feeds
+  // `batchedSubset` (selection / preselection / isolation re-baking).
+  for (const batch of batches) {
+    batch.mesh.instanceParents = batch.instanceParents
+    batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
+    batch.mesh.instanceGeometry = batch.instanceGeometry
+    batch.mesh.instanceColors = batch.instanceColors
+    // The pre-override color table (see the snapshot above). `?? null` keeps
+    // older BatchHandle shapes (tests, external callers) working — consumers
+    // treat a missing table as "no source colors recorded", which the color
+    // toggle reads as "nothing to revert to".
+    batch.mesh.instanceSourceColors = batch.instanceSourceColors ?? null
+    // Per-occurrence identity tables (STEP): solid geometry ids + NAUO
+    // occurrence paths, plus the reverse path→batchIds index ShareViewer's
+    // `getInstanceIdsForOccurrencePath` reads (the NavTree→scene join).
+    // `?? null` keeps older BatchHandle shapes (tests, external callers)
+    // working — consumers treat a missing table as "no occurrence data".
+    batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
+    batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
+    batch.mesh.occurrencePathToBatchIds =
+      buildOccurrencePathIndex(batch.mesh.instanceOccurrencePaths)
+    batch.mesh.computeBoundingBox?.()
+    batch.mesh.computeBoundingSphere?.()
+    // Per-geometry BVH for the batch. `ShareIfc` patches
+    // `BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree`
+    // (+ `raycast = acceleratedRaycast`), so picking on a many-instance
+    // batch resolves through the bounds trees instead of brute force —
+    // and `acceleratedBatchedMeshRaycast` still sets `intersection.batchId`
+    // (validated against three-mesh-bvh r0.9), so the CadView pick branch
+    // is unaffected. Guarded: the method is absent under the Jest `three`
+    // mock and present only in the production prototype patch.
+    batch.mesh.computeBoundsTree?.()
+  }
+}
+
+
+/**
  * Decorate prepared batches into the final batched model — shared by the
  * one-shot path above and the incremental demand-path builder (slice B1,
  * `incrementalBatchedBuilder.js`), which assembles the same BatchHandle
@@ -115,45 +196,7 @@ export function assembleBatchedModel(batches, ifcAPI, modelID, opts = {}) {
     throw new Error('buildBatchedConwayModel: no renderable geometry')
   }
 
-  // Colorless-model fallback: a STEP/CAD file with no presentation data
-  // comes back entirely default-grey. Repaint each product from a palette
-  // (Onshape-style) so a multi-part assembly is legible. Strictly no-op the
-  // moment any real color is present, so IFC and colored STEP are untouched.
-  // Runs before the pick-table stamp below so the `instanceColors` restore
-  // table `batchedHighlight` reads already carries the palette color.
-  if (isFeatureEnabled('autoColorParts')) {
-    applyProductPalette(batches)
-  }
-
-  // Each batch carries its own pick tables; CadView reads them off the
-  // raycast-hit child (`intersection.object`). `instanceGeometry` feeds
-  // `batchedSubset` (selection / preselection / isolation re-baking).
-  for (const batch of batches) {
-    batch.mesh.instanceParents = batch.instanceParents
-    batch.mesh.instanceOccurrenceIds = batch.instanceOccurrenceIds
-    batch.mesh.instanceGeometry = batch.instanceGeometry
-    batch.mesh.instanceColors = batch.instanceColors
-    // Per-occurrence identity tables (STEP): solid geometry ids + NAUO
-    // occurrence paths, plus the reverse path→batchIds index ShareViewer's
-    // `getInstanceIdsForOccurrencePath` reads (the NavTree→scene join).
-    // `?? null` keeps older BatchHandle shapes (tests, external callers)
-    // working — consumers treat a missing table as "no occurrence data".
-    batch.mesh.instanceGeometryIds = batch.instanceGeometryIds ?? null
-    batch.mesh.instanceOccurrencePaths = batch.instanceOccurrencePaths ?? null
-    batch.mesh.occurrencePathToBatchIds =
-      buildOccurrencePathIndex(batch.mesh.instanceOccurrencePaths)
-    batch.mesh.computeBoundingBox?.()
-    batch.mesh.computeBoundingSphere?.()
-    // Per-geometry BVH for the batch. `ShareIfc` patches
-    // `BatchedMesh.prototype.computeBoundsTree = computeBatchedBoundsTree`
-    // (+ `raycast = acceleratedRaycast`), so picking on a many-instance
-    // batch resolves through the bounds trees instead of brute force —
-    // and `acceleratedBatchedMeshRaycast` still sets `intersection.batchId`
-    // (validated against three-mesh-bvh r0.9), so the CadView pick branch
-    // is unaffected. Guarded: the method is absent under the Jest `three`
-    // mock and present only in the production prototype patch.
-    batch.mesh.computeBoundsTree?.()
-  }
+  decorateBatchMeshes(batches)
 
   // Single batch → the BatchedMesh is the model; two → a Group of them.
   // The incremental path passes its scene-installed root instead.
