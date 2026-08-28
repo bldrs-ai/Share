@@ -1,5 +1,6 @@
 import {
   initializeWorker,
+  nextRequestId,
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
@@ -75,12 +76,24 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
       const parts = tmpUrl.split('/')
       const fileNametmpUrl = parts[parts.length - 1]
       if (!testingDisableWebWorker) {
+        // Minted before the listener attaches so it can close over the id.
+        const requestId = nextRequestId()
         // Listener for messages from the worker.  We can't revoke
         // tmpUrl until the worker is done with it, so revoke when the
         // listener detaches (success or error path).
         const listener = (workerEvent) => {
-          if (workerEvent.data.error) {
-            debug().error('Error from worker:', workerEvent.data.error)
+          // Only this request's replies. Without the filter this accepts ANY
+          // error from the shared worker, so once the OPFS/utils.js helpers
+          // became correlated (#1785) an unrelated request's failure would
+          // detach this listener and revoke `tmpUrl` while its own write was
+          // still in flight — the upload then silently never calls onLoad.
+          if (workerEvent.data.requestId !== requestId) {
+            return
+          }
+          if (workerEvent.data.error || workerEvent.data.requestFinished) {
+            const message = workerEvent.data.error ??
+              `OPFS worker finished ${requestId} without a reply`
+            debug().error('Error from worker:', message)
             workerRef.removeEventListener('message', listener)
             URL.revokeObjectURL(tmpUrl)
           } else if (workerEvent.data.completed) {
@@ -104,7 +117,7 @@ export function loadLocalFile(onLoad, testingSkipAutoRemove = false, testingDisa
           throw new Error('Cannot extract filetype from filename')
         }
         const ext = dotParts[dotParts.length - 1]
-        opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`)
+        opfsWriteModel(tmpUrl, filename, `${fileNametmpUrl}.${ext}`, requestId)
       } else {
         URL.revokeObjectURL(tmpUrl)
         onLoad(fileNametmpUrl, lastModifiedUtc, file.name)

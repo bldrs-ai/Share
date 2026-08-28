@@ -238,4 +238,25 @@ describe('OPFSService module', () => {
       previewWindow: 0,
     })
   })
+
+  test('nextRequestId hands out distinct ids', () => {
+    // Distinctness is the whole guarantee: `OPFS/utils.js` uses these to tell
+    // its own reply from a concurrent request's on the shared worker (#1785).
+    const ids = [
+      opfsService.nextRequestId(),
+      opfsService.nextRequestId(),
+      opfsService.nextRequestId(),
+    ]
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  test('a request id posted with a command reaches the worker', () => {
+    const worker = opfsService.initializeWorker()
+    opfsService.opfsWriteBytesByPath(
+      new Uint8Array([1]), 'model.ifc', 'commit123', 'owner', 'repo', 'main', 'opfs-42')
+    expect(worker.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'writeBytesByPath',
+      requestId: 'opfs-42',
+    }))
+  })
 })

@@ -1,10 +1,16 @@
 import {loadFileById, loadFileFromSource} from './loadFromSource'
+import {initializeWorker, nextRequestId} from '../OPFS/OPFSService.js'
+import {checkOPFSAvailability} from '../OPFS/utils'
 import {getBrowser, getProvider} from './registry'
 
 
 jest.mock('./registry')
 jest.mock('../OPFS/utils', () => ({checkOPFSAvailability: jest.fn().mockReturnValue(false)}))
-jest.mock('../OPFS/OPFSService.js', () => ({initializeWorker: jest.fn(), opfsWriteModel: jest.fn()}))
+jest.mock('../OPFS/OPFSService.js', () => ({
+  initializeWorker: jest.fn(),
+  nextRequestId: jest.fn(),
+  opfsWriteModel: jest.fn(),
+}))
 
 
 const FAKE_BLOB_URL = 'blob:http://localhost/fake-blob-uuid'
@@ -139,6 +145,93 @@ describe('loadFromSource', () => {
       await expect(
         loadFileById(mockConnection, 'file-abc', 'model.ifc', jest.fn()),
       ).rejects.toThrow('No provider registered for google-drive')
+    })
+  })
+
+
+  // The OPFS worker is shared per origin, so this listener sees every reply,
+  // not only its own. #1785 correlated the helpers in `OPFS/utils.js`; this
+  // call site posts directly and had no filter, which made it strictly worse
+  // than before — another request's failure detached it and revoked a blob URL
+  // whose write was still in flight, so the upload silently never completed.
+  // (codex, PR #1790.)
+  describe('loadFileById OPFS write correlation', () => {
+    /** @return {object} a worker stub whose messages reach every listener */
+    function makeSharedWorker() {
+      const listeners = []
+      return {
+        addEventListener: (_, fn) => listeners.push(fn),
+        removeEventListener: (_, fn) => {
+          const at = listeners.indexOf(fn)
+          if (at !== -1) {
+            listeners.splice(at, 1)
+          }
+        },
+        deliver: (data) => listeners.slice().forEach((fn) => fn({data})),
+        listenerCount: () => listeners.length,
+      }
+    }
+
+    let worker
+
+    beforeEach(() => {
+      worker = makeSharedWorker()
+      checkOPFSAvailability.mockReturnValue(true)
+      initializeWorker.mockReturnValue(worker)
+      let n = 0
+      // A real incrementing id. The automock returns `undefined` for every
+      // call, which makes every reply match every listener and would let both
+      // tests below pass without the fix.
+      nextRequestId.mockImplementation(() => `opfs-${++n}`)
+      getProvider.mockReturnValue(mockProvider)
+      getBrowser.mockReturnValue(mockBrowser)
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(mockBlob),
+      })
+    })
+
+    afterEach(() => {
+      checkOPFSAvailability.mockReturnValue(false)
+    })
+
+    it('ignores another request\'s error and still completes its own write', async () => {
+      const onLoad = jest.fn()
+      const pending = loadFileById(mockConnection, 'file-abc', 'model.ifc', onLoad)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Somebody else's failure on the shared worker. Pre-fix this rejected
+      // `pending` and revoked our blob URL.
+      worker.deliver({requestId: 'opfs-999', error: 'unrelated failure'})
+      // Our own write then lands.
+      worker.deliver({
+        requestId: 'opfs-1', completed: true, event: 'write', fileName: 'stored.ifc',
+      })
+
+      await expect(pending).resolves.toBeDefined()
+      expect(onLoad).toHaveBeenCalledWith('stored.ifc')
+    })
+
+    it('ignores another request\'s write reply rather than resolving on it', async () => {
+      const onLoad = jest.fn()
+      const pending = loadFileById(mockConnection, 'file-abc', 'model.ifc', onLoad)
+      await Promise.resolve()
+      await Promise.resolve()
+
+      worker.deliver({
+        requestId: 'opfs-999', completed: true, event: 'write', fileName: 'not-ours.ifc',
+      })
+      expect(onLoad).not.toHaveBeenCalled()
+      // Still attached, still waiting for its own reply.
+      expect(worker.listenerCount()).toBe(1)
+
+      worker.deliver({
+        requestId: 'opfs-1', completed: true, event: 'write', fileName: 'stored.ifc',
+      })
+      await expect(pending).resolves.toBeDefined()
+      expect(onLoad).toHaveBeenCalledWith('stored.ifc')
+      expect(worker.listenerCount()).toBe(0)
     })
   })
 })
