@@ -82,6 +82,18 @@ import {markIfOutOfMemory} from '../utils/oom'
 const SCHEDULE_IDLE_TIMEOUT_MS = 5_000
 const LFS_POINTER_PROBE_BYTES = 256
 
+// Matches conway's own `STORE_DETECT_PREFIX_BYTES`
+// (`compat/web-ifc/ifc_api_model_passthrough_factory.js`) — the window its
+// store-backed open sniffs the format in. Reading the same amount means our
+// answer to "will `fromStore` take this?" comes from the same bytes it will
+// look at, rather than from a smaller window that could disagree.
+const STORE_FORMAT_SNIFF_BYTES = 65_536
+
+// The formats `findLoader` routes to conway via `parseIfcWithConway`. All
+// three are ISO-10303-21 part-21 files sharing one loader; only FILE_SCHEMA
+// separates IFC from STEP, so the suffix is not evidence either way.
+const PART21_LOADER_TYPES = new Set(['ifc', 'step', 'stp'])
+
 
 /**
  * @param {Function} fn
@@ -99,16 +111,66 @@ function scheduleIdleWork(fn) {
  * True when Conway can parse an OPFS File through `OpenModelStream`
  * (M1b) so we never allocate a full-source ArrayBuffer.
  *
+ * Decided by the file's own FILE_SCHEMA, because neither `isIfc` nor the
+ * suffix is evidence of the format and both are wrong in a different
+ * direction. Conway's store-backed open is IFC-only
+ * (`IfcApiModelPassthroughFactory.fromStore` returns `undefined` for
+ * AP214/AP203/AP242) and it reserves the model handle before it sniffs:
+ *
+ *   - `isIfc` is true for STEP as well, so it offered STEP files a path
+ *     that always refuses them. That burned handle 0 on a model which
+ *     never opened, and the buffered `OpenModelStreamed` retry parsed as
+ *     handle 1 — misaddressing every Share call site that passes the
+ *     scene-level id 0 (`CadView.jsx#loadModel` pins `model.modelID` to
+ *     it), the GLB writer's spatial-tree and element-properties captures
+ *     among them (#1776).
+ *   - A suffix test is wrong the other way: `findLoader` takes
+ *     `loader.type` from the filename, so an IFC payload named `.step`
+ *     would be denied the windowed parse and buffer its whole source —
+ *     re-introducing on a mislabelled large model exactly the
+ *     hundreds-of-MB allocation M3 removed.
+ *
+ * An absent or unrecognised FILE_SCHEMA buffers rather than gambling: a
+ * wrong "yes" costs a burned handle and a broken cache artifact, a wrong
+ * "no" costs one load's memory win. Within conway's own 64 KiB sniff
+ * window every real part-21 file carries FILE_SCHEMA, so that branch is
+ * a corrupt-or-truncated-file path, not a format we are giving up on.
+ *
  * @param {object} viewer
- * @param {boolean} isIfc
- * @return {boolean}
+ * @param {string} loaderType resolved format tag, i.e. `loader.type`
+ * @param {Blob} file the source handle, sniffed for its part-21 header
+ * @return {Promise<boolean>}
  */
-function canOpenFromStore(viewer, isIfc) {
-  if (!isIfc || isFeatureEnabled('disableStreamOpen')) {
+async function canOpenFromStore(viewer, loaderType, file) {
+  if (!PART21_LOADER_TYPES.has(loaderType) || isFeatureEnabled('disableStreamOpen')) {
     return false
   }
   const ifcAPI = viewer?.IFC?.loader?.ifcManager?.ifcAPI
-  return typeof ifcAPI?.OpenModelStream === 'function'
+  if (typeof ifcAPI?.OpenModelStream !== 'function') {
+    return false
+  }
+  if (file === null || file === undefined || typeof file.slice !== 'function') {
+    return false
+  }
+  try {
+    const head = await file.slice(0, STORE_FORMAT_SNIFF_BYTES).arrayBuffer()
+    // Non-fatal by default, so a multi-byte sequence cut at the slice
+    // boundary — or a mislabelled binary — yields replacement characters
+    // rather than throwing. Both then fail the schema match below and
+    // buffer, which is the outcome we want for bytes we cannot read.
+    const header = new TextDecoder('utf-8').decode(new Uint8Array(head))
+    // Require a schema NAME, not merely a FILE_SCHEMA entry.
+    // `classifyStepFamily` answers 'ifc' whenever it cannot parse one, and
+    // an empty `FILE_SCHEMA(( ))` would otherwise inherit that default and
+    // send an unidentified file down the IFC-only store path.
+    if (Filetype.stepSchemaName(header) === null) {
+      return false
+    }
+    return Filetype.classifyStepFamily(header) === 'ifc'
+  } catch (e) {
+    debug().warn('Loader#canOpenFromStore: header sniff failed; buffering:', e)
+    return false
+  }
 }
 
 
@@ -359,6 +421,14 @@ export async function load(
       // separate JS copy. An OPFS File pins nothing.
       const opfsSourceFile = file
 
+      // One sniff, two decisions: whether to hash the File in slices
+      // instead of buffering it (below) and whether to hand conway the
+      // File itself rather than an ArrayBuffer (further below). Computed
+      // from the SOURCE handle, before any GLB cache hit can swap `file`
+      // for the artifact; the second call site additionally guards on
+      // `cameFromGlbCache` so a hit never takes the store path.
+      const canStreamOpen = await canOpenFromStore(viewer, loader.type, opfsSourceFile)
+
       // Non-GitHub sources have no upstream sha. Hash the parse buffer
       // itself so we do not materialise the file twice (once for SHA-1,
       // once for Conway) — ~860 MB on PSB. sha1Hex only reads; it does
@@ -379,7 +449,7 @@ export async function load(
           // M1b: when Conway can parse from the OPFS File store, hash
           // the File in slices and skip the full-source ArrayBuffer —
           // ~860 MB on PSB. Older engines fall through to buffering.
-          if (canOpenFromStore(viewer, isIfc)) {
+          if (canStreamOpen) {
             onProgress('Hashing model...')
           } else {
             onProgress('Buffering model bytes...')
@@ -420,9 +490,7 @@ export async function load(
         glbExportContext = {kindLabel, cacheKeyArgs, sourceFile: opfsSourceFile}
       }
 
-      if (modelData === undefined &&
-          canOpenFromStore(viewer, isIfc) &&
-          !cameFromGlbCache) {
+      if (modelData === undefined && canStreamOpen && !cameFromGlbCache) {
         const head = await file.slice(0, LFS_POINTER_PROBE_BYTES).arrayBuffer()
         if (looksLikeLfsPointer(head)) {
           modelData = head
@@ -574,6 +642,25 @@ export async function load(
     throw markIfOutOfMemory(e)
   }
 
+  // Conway's handle for THIS parse, latched before the model leaves
+  // `load()`. Two different numbers travel under the name "modelID" and
+  // they are only equal when Conway handed us handle 0:
+  //
+  //   - the scene-level id every ShareViewer/CadView call site passes,
+  //     which `CadView.jsx#loadModel` pins to 0 on the model object
+  //     the moment `load()` resolves (its issue-#91 hack), and
+  //   - Conway's engine handle, which `decorateConwayDirectIfcModel`
+  //     wrote onto the same `model.modelID` property a moment ago.
+  //
+  // The idle GLB writer below runs after that overwrite, so reading
+  // `model.modelID` there yielded the scene id, not the engine handle —
+  // and a capture aimed at a handle Conway never opened comes back
+  // empty, so the artifact cached with no NavTree and no Properties
+  // (#1776). `canOpenFromStore` now keeps the two numbers equal in
+  // practice; latching here keeps the writer correct even when they
+  // diverge again (an IFC whose windowed open throws and falls back).
+  const engineModelID = typeof model.modelID === 'number' ? model.modelID : 0
+
   model.isUploadedFile = isUploadedFile
   // Used for automatic naming, page title and other areas that need a mime type.
   model.mimeType = loader.type
@@ -702,6 +789,7 @@ export async function load(
         kindLabel: glbExportContext.kindLabel,
         cacheKeyArgs: glbExportContext.cacheKeyArgs,
         ifcManager: viewer?.IFC?.loader?.ifcManager ?? null,
+        modelID: engineModelID,
       }).finally(() => {
         useStore.getState().setIsCacheWriteInFlight(false)
         // The writer's property/tree captures were the LAST load-time
@@ -714,7 +802,8 @@ export async function load(
         // model was parsed from. Cache-hit GLB loads never get here
         // (no writer is scheduled) — nothing to spill. Fail-soft: any
         // guard failure keeps the resident buffer (pre-spill behavior).
-        spillModelSource(viewer?.IFC?.loader?.ifcManager?.ifcAPI, 0, glbExportContext.sourceFile)
+        spillModelSource(
+          viewer?.IFC?.loader?.ifcManager?.ifcAPI, engineModelID, glbExportContext.sourceFile)
         // Same safe point, wasm-side twin of the source spill: the
         // scene is built and the GLB written, so nothing reads conway's
         // native geometry again — free it (per-model) so repeated loads
@@ -726,7 +815,7 @@ export async function load(
           if (isFeatureEnabled('demandGeometry') &&
               typeof releaseAPI?.ReleaseModelGeometry === 'function') {
             // eslint-disable-next-line new-cap
-            const released = releaseAPI.ReleaseModelGeometry(0)
+            const released = releaseAPI.ReleaseModelGeometry(engineModelID)
             glbVerbose('writer: native geometry released =', released)
           }
         } catch (e) {

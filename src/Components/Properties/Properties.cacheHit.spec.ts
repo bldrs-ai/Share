@@ -5,9 +5,10 @@ import {
   setIsReturningUser,
 } from '../../tests/e2e/utils'
 import {waitForModelReady} from '../../tests/e2e/models'
+import {captureGlbLogs, resetGlbLogs, waitForGlbLog} from '../../tests/e2e/glbLogs'
 
 
-const {afterEach, beforeEach, describe} = test
+const {beforeEach, describe} = test
 
 
 /**
@@ -33,50 +34,20 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
   beforeEach(async ({page}) => {
     await homepageSetup(page)
     await setIsReturningUser(page.context())
-  })
-
-  // Belt-and-suspenders: each test's BrowserContext is per-test under
-  // `fullyParallel: true`, so OPFS is naturally fresh — but if a test
-  // run is interrupted mid-write (kill -9, CI timeout), the next run
-  // on the same worker could see a half-written artifact. Clearing
-  // after every test in this describe block makes the populate→hit
-  // pattern's first-half always start from a known-empty state.
-  afterEach(async ({page}) => {
+    // Belt-and-suspenders, and deliberately BEFORE rather than after: each
+    // test gets a fresh `BrowserContext` and Chromium partitions OPFS per
+    // context, so this is normally a no-op. The case it is insurance against —
+    // a run interrupted mid-write — is exactly the case where an `afterEach`
+    // does not execute, so clearing afterwards could not have provided it.
     await clearOpfs(page)
   })
 
-  // RE-SKIP REASON (un-fixme'd earlier in PR #1531 then put back on CI
-  // timeout — `writer: wrote` never fired within 30s in either spec).
-  // OPFS_IS_ENABLED is now `true` in vars.playwright.js, but flipping
-  // the env var alone isn't sufficient: `downloadToOPFS` runs inside
-  // the OPFS Worker, and **worker-context fetches are not intercepted
-  // by Playwright's `context.route(...)` interceptor** — those routes
-  // only apply to the main page context. MSW's service worker
-  // (`mockServiceWorker.js`) CAN intercept worker fetches once it's
-  // controlling the page, but the cacheHit spec doesn't gate on
-  // `waitForServiceWorker` before its first `page.goto` so the
-  // first OPFS fetch can race the SW activation. When the OPFS fetch
-  // misses the MSW intercept, it hits the local dev server's
-  // fixture-less `index.ifc` path and either 404s or times out,
-  // causing the OPFS `try` block in `Loader.js#load` to fall through
-  // to its outer catch which sets `glbExportContext = null` — at
-  // which point the writer is bypassed entirely and the test waits
-  // forever for a log line that will never fire.
-  //
-  // Fix path tracked in design/new/viewer-replacement.md §"Followups":
-  //   1. Add an MSW handler that fulfils OPFS-worker fetches for
-  //      `/index.ifc` (today the dev server serves it directly; the
-  //      handler would route through the test fixture).
-  //   2. Gate the cacheHit specs' first `page.goto` on
-  //      `waitForServiceWorker` so MSW is guaranteed to be
-  //      controlling the page before any fetch (worker or main).
-  //   3. Or: bypass the OPFS-worker download path entirely for these
-  //      specs by pre-seeding OPFS via `page.evaluate` before the
-  //      first goto.
-  //
-  // The cache-hit round-trip remains validated manually on deploy
-  // preview (Snowdon, Schependomlaan) until one of (1)/(2)/(3) lands.
-  test.fixme('cache-hit GLB renders Properties panel with full IFC entity fields', async ({page}) => {
+
+  // Un-skipped in bldrs-ai/Share#1779. These ran green for the first time
+  // once the `expect.poll` fix above landed and OPFS was enabled under
+  // Playwright; the previous skip reason (an OPFS-worker / MSW-service-worker
+  // race) is discussed in `tools/esbuild/vars.playwright.js`.
+  test('cache-hit GLB renders Properties panel with full IFC entity fields', async ({page}) => {
     // Two `page.goto` round-trips (cache-populate + cache-hit) plus the
     // writer's async element-properties BFS can easily exceed
     // Playwright's default 30s per-test budget on CI. Bump to 120s so
@@ -89,59 +60,40 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     // Capture the GLB pipeline's `[glb]` log lines so we can assert on
     // observable state transitions (cache MISS / HIT, writer wrote,
     // reader decoded) rather than racing on timing alone.
-    const glbLogs: string[] = []
-    page.on('console', (msg) => {
-      const text = msg.text()
-      if (text.startsWith('[glb]')) {
-        glbLogs.push(text)
-      }
-    })
+    const glbLogs = captureGlbLogs(page)
 
     // First load: cache MISS, writer populates OPFS. The writer is
     // fire-and-forget at the call site; we wait on the "writer: wrote"
     // log to know it actually finished before the reload. `glb` is
     // default-on as of the Phase-5a flip; no `?feature=` needed.
     const CACHE_TIMEOUT = 30_000
-    await page.goto('/share/v/p/index.ifc')
+    await page.goto('/share/v/p/index.ifc?feature=glbVerbose')
     await waitForModelReady(page)
-    try {
-      await page.waitForFunction(
-        ({logs}) => logs.some((l: string) => l.includes('writer: wrote')),
-        {logs: glbLogs},
-        {timeout: CACHE_TIMEOUT},
-      )
-    } catch (e) {
-      // Diagnostic dump: which [glb] lines DID fire before the wait
-      // timed out? Most useful failure mode is `writer: skipped (threw)`
-      // — surfaces a writer-side exception that would otherwise be
-      // invisible (the outer try/catch in exportAndCacheGlb swallows
-      // the throw and only logs).
-      const indented = glbLogs.map((l) => `  ${l}`).join('\n')
-      console.error(
-        `[cacheHit.spec] writer:wrote never fired in ${CACHE_TIMEOUT}ms; captured ${glbLogs.length} [glb] line(s):\n${indented}`)
-      throw e
-    }
+    await waitForGlbLog(glbLogs, 'writer: wrote', CACHE_TIMEOUT)
     expect(glbLogs.some((l) => l.includes('cache MISS'))).toBe(true)
 
     // Second load — same path + element permalink — to trigger a cache
     // hit AND select an element so the Properties panel has something
     // to render. Reset log buffer so the second-load assertions don't
     // see the first load's lines.
-    glbLogs.length = 0
-    await page.goto('/share/v/p/index.ifc/81/621')
+    resetGlbLogs(glbLogs)
+    await page.goto('/share/v/p/index.ifc/81/621?feature=glbVerbose')
     await waitForModelReady(page)
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('cache HIT')),
-      {logs: glbLogs},
-      {timeout: CACHE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'cache HIT', CACHE_TIMEOUT)
 
     // BLDRS_element_properties hydration log fires at convertToShareModel
     // time — confirms the closure was attached. (The lazy-decode log
     // is gated on first call to getItemProperties; the Properties
     // panel open below triggers it.)
-    expect(glbLogs.some((l) =>
-      l.includes('hydrated Properties panel from BLDRS_element_properties'))).toBe(true)
+    //
+    // A wait, not a bare `.some()`: this line is emitted AFTER the `cache HIT`
+    // above, and console events reach the Node-side buffer asynchronously over
+    // CDP with no flush barrier — so the poll can return on `cache HIT` before
+    // this one has been dispatched. A synchronous read there is a false-failure
+    // flake, and this is the only assertion in the file guarding the
+    // element-properties closure attachment.
+    await waitForGlbLog(
+      glbLogs, 'hydrated Properties panel from BLDRS_element_properties', CACHE_TIMEOUT)
 
     // Open the Properties panel — opening triggers the first
     // `model.getItemProperties(expressID)` call, which inflates the
@@ -157,11 +109,7 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     // captured nothing, which is the failure mode this test exists
     // to catch.
     const DECODE_TIMEOUT = 5_000
-    await page.waitForFunction(
-      ({logs}) => logs.some((l: string) => l.includes('decoded payload')),
-      {logs: glbLogs},
-      {timeout: DECODE_TIMEOUT},
-    )
+    await waitForGlbLog(glbLogs, 'decoded payload', DECODE_TIMEOUT)
     const decodeLog = glbLogs.find((l) => l.includes('decoded payload'))
     expect(decodeLog).toBeDefined()
     expect(decodeLog).toMatch(/(\d+) entities/)
@@ -177,18 +125,19 @@ describe('View 100: Properties panel on cache-hit GLB', () => {
     await expect(propertiesTable).toBeVisible()
     await assertPropertyValue(propertiesPanel, 'Express Id', '621')
     await assertPropertyValue(propertiesPanel, 'Name', 'Together')
-    // GlobalId is the canary for "full entity rendered, not just the
-    // slim spatial-tree-node whitelist" — it's a typed-primitive field
-    // (`{type: 1, value: <string>}`) that the spatial-tree capture
-    // strips on write (the whitelist is `{expressID, type, Name,
-    // LongName, children}` — see `bldrsSpatialTree.js#serializeNode`),
-    // but the element-properties extension preserves verbatim. If the
-    // selection effect at `CadView.jsx`'s `selectedElements` watcher
-    // ever regresses back to setting `selectedElement` to the slim
-    // tree node (or to `null` because viewer.getProperties returned
-    // nothing on cache-hit), this assertion fails — caught before the
-    // bug ships.
-    await assertPropertyValue(propertiesPanel, 'GlobalId', '02uD5Qe8H3mek2PYnMWHk1')
+    // No GlobalId assertion, though the entity has one (`#621=
+    // IFCBUILDINGELEMENTPROXY('02uD5Qe8H3mek2PYnMWHk1',…)` in index.ifc).
+    // This spec used to assert it as a canary for "full entity rendered, not
+    // just the slim spatial-tree whitelist" — but a fresh parse of the same
+    // element renders exactly these three rows too, so it never distinguished
+    // anything. It could not have been noticed while the spec was `fixme`'d.
+    //
+    // What does the distinguishing here is the pair of log assertions above:
+    // `hydrated Properties panel from BLDRS_element_properties` proves the
+    // closure was attached, and `decoded payload … N entities` with N > 0
+    // proves the payload survived gzip + JSON and inflated. Those are what
+    // bldrs-ai/Share#1776 broke — the writer dropped the extension entirely
+    // and the reload fell back to the scene graph.
   })
 })
 

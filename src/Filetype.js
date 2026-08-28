@@ -383,11 +383,154 @@ export function analyzeHeaderStr(header) {
  * @return {string} 'ifc' or 'step'
  */
 export function classifyStepFamily(header) {
-  const schemaMatch = header.match(/FILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/i)
-  if (schemaMatch === null) {
+  const schema = stepSchemaName(header)
+  if (schema === null) {
     return 'ifc'
   }
-  return /^IFC/i.test(schemaMatch[1]) ? 'ifc' : 'step'
+  return /^IFC/i.test(schema) ? 'ifc' : 'step'
+}
+
+
+/**
+ * The FILE_SCHEMA value of an ISO-10303-21 header, or null when the entry
+ * is absent from the sniffed window or carries no parseable name — an
+ * empty `FILE_SCHEMA(( ))` / `FILE_SCHEMA(( '' ))`, which is malformed but
+ * does occur in the wild.
+ *
+ * Split out of {@link classifyStepFamily} so a caller can tell "this file
+ * says STEP" apart from "this file did not say". The classifier folds both
+ * into 'ifc': the right default when the answer only picks a filename, and
+ * the wrong one for a caller whose false-'ifc' costs more than a false
+ * 'step'. `Loader.js#canOpenFromStore` is the second kind — it gates
+ * conway's IFC-only store open, where guessing 'ifc' burns a model handle
+ * and caches a GLB with no NavTree (bldrs-ai/Share#1776) — so it requires a
+ * non-null name here before it trusts the classification.
+ *
+ * @param {string} header
+ * @return {string|null} the schema name, e.g. 'IFC4' or 'AUTOMOTIVE_DESIGN'
+ */
+export function stepSchemaName(header) {
+  const section = part21HeaderSection(maskPart21Comments(header))
+  if (section === null) {
+    return null
+  }
+  // LAST match, not first: conway's parser stores header entities in a Map
+  // keyed by name (`step_parser.js:193`), so a header carrying FILE_SCHEMA
+  // twice overwrites and the last one wins. Reading the first would have us
+  // answer from one entity and conway from the other — and on
+  // `FILE_SCHEMA(('IFC4')); FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` that is the
+  // dangerous direction: we say IFC, conway says AP214, and a STEP file goes
+  // down the IFC-only store open (bldrs-ai/Share#1776).
+  const matches = [...section.matchAll(FILE_SCHEMA_VALUE)]
+  return matches.length === 0 ? null : matches[matches.length - 1][1]
+}
+
+
+// `\b` anchors the entity name so the scan cannot start inside a longer
+// identifier. conway parses header records under their exact names and
+// inspects only the `FILE_SCHEMA` key, so `NOT_FILE_SCHEMA(('IFC4'));` is
+// invisible to it — while an unanchored scan reads it as the schema. With
+// last-wins that is the dangerous direction whenever the lookalike follows
+// the real entity: we answer IFC, conway answers AP214. `\b` suffices
+// because `_` is a word character, so there is no boundary inside
+// `NOT_FILE_SCHEMA`.
+const FILE_SCHEMA_VALUE = /\bFILE_SCHEMA\s*\(\s*\(\s*'\s*([A-Za-z0-9_]+)/ig
+
+
+/**
+ * The HEADER section of a Part-21 file, or null when there is none in the
+ * window. Pass comment-masked text.
+ *
+ * Bounding matters because the caller sniffs a fixed 64 KiB prefix, which on
+ * any real model runs well into DATA — where a quoted string is free to
+ * contain something that looks like a header entity. conway reads FILE_SCHEMA
+ * from the parsed HEADER section only, so scanning past ENDSEC could have us
+ * answer IFC from a property value while conway answers AP214 from the real
+ * header. Truncating early (an `ENDSEC;` inside a header string literal, say)
+ * costs at worst a missed schema, which reads as "did not say" and buffers.
+ *
+ * @param {string} masked comment-masked Part-21 text
+ * @return {string|null} the header section's text
+ */
+function part21HeaderSection(masked) {
+  const start = masked.search(/\bHEADER\s*;/i)
+  if (start === -1) {
+    return null
+  }
+  const rest = masked.slice(start)
+  const end = rest.search(/\bENDSEC\s*;/i)
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+
+/**
+ * Blank out ISO-10303-21 `/* ... *``/` comments, leaving string literals
+ * intact, so a text scan sees what conway's parser sees.
+ *
+ * Two failures motivate this, and only masking fixes both. Part-21 permits a
+ * comment anywhere whitespace is allowed and conway's `StepHeaderParser`
+ * consumes one AS whitespace (its `whitespace()` loops on the comment
+ * parser), so:
+ *
+ *   - `FILE_SCHEMA /* note *``/ (('IFC4'))` is IFC to conway. A plain `\s*`
+ *     scan misses it and reports no schema — costing a large IFC its
+ *     windowed parse.
+ *   - `/* FILE_SCHEMA(('IFC4')); *``/ FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));` is
+ *     AP214 to conway. A raw-text scan finds the commented-out entity first
+ *     and reports IFC — the dangerous direction, which sends a STEP file
+ *     down conway's IFC-only store open and burns a model handle
+ *     (bldrs-ai/Share#1776).
+ *
+ * The second is why this masks rather than making the gap pattern
+ * comment-aware: a token can be *inside* a comment, not merely separated by
+ * one, and no amount of tolerance between tokens excludes it.
+ *
+ * String-literal aware, because inside a Part-21 string `/*` is ordinary
+ * text. An apostrophe is escaped by doubling it (`''`), which keeps the
+ * string open. An unterminated comment swallows the rest of the window,
+ * which matches conway's own reading and fails safe: no schema found.
+ *
+ * @param {string} text a Part-21 header window
+ * @return {string} the same text with comment spans replaced by a space
+ */
+function maskPart21Comments(text) {
+  let out = ''
+  let at = 0
+  let inString = false
+  while (at < text.length) {
+    const c = text[at]
+    if (inString) {
+      if (c === `'` && text[at + 1] === `'`) {
+        out += `''`
+        at += 2
+        continue
+      }
+      if (c === `'`) {
+        inString = false
+      }
+      out += c
+      at++
+      continue
+    }
+    if (c === `'`) {
+      inString = true
+      out += c
+      at++
+      continue
+    }
+    if (c === '/' && text[at + 1] === '*') {
+      const end = text.indexOf('*/', at + 2)
+      if (end === -1) {
+        return out
+      }
+      out += ' '
+      at = end + 2
+      continue
+    }
+    out += c
+    at++
+  }
+  return out
 }
 
 

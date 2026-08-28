@@ -7,6 +7,29 @@ specs. Keep it that way.
   factor (`[desktop]` / `[mobile]`) by flipping the viewport width.
 - `models.ts` — `setupVirtualPathIntercept` (serve a repo fixture for a
   `/share/v/gh/...` model URL) and `waitForModelReady`.
+- `loadMeasure.ts` — `measureLoad`: drive a real model load and record
+  first-mesh / load-complete timings, the load report, and CDP CPU
+  metrics as a diffable JSON record. Driven by
+  `src/viewer/loadTiming.spec.ts`; see
+  [design/new/browser-load-measurement.md](../../../design/new/browser-load-measurement.md).
+- `loadProbe.ts` — the in-page probe `loadMeasure` injects, plus
+  `toViewerUrl`/`measureAllowHosts`/`modelBasenameOf`/`urlMatchesModel`/
+  `withFeatures` (what the browser is pointed at, and how its responses are
+  recognized).
+- `loadReport.ts` — parsers for `loadReportLines` (stage / `Total:` /
+  `Preview:`).
+- `networkGuard.ts` — `isBlockedRealNetworkHost`, the decision
+  `utils.blockExternalNetwork` wraps in a `context.route`, plus the host
+  denylist itself.
+- `loadRun.ts` — run-level bookkeeping for a measurement: `summarizeSamples`
+  (statistics over *completed* samples only) and `measureTestTimeoutMs`.
+
+  All four are deliberately free of any Playwright import so they can be
+  unit-tested under Jest (`loadProbe.test.js`, `loadReport.test.js`,
+  `networkGuard.test.js`, `loadRun.test.js`). That is load-bearing, not tidy: importing
+  `@playwright/test` into a module a Jest suite loads brings Playwright's
+  own `expect` along, and every `toEqual` in that suite then dies with
+  `TypeError: this.customTesters is not iterable`.
 - `utils.ts` — `homepageSetup`, returning-user/auth setup, snackbar/grace
   dismissal, and the rest of the page-bootstrap helpers.
 - `homepage.ts`, `workspace.ts` — page-object-ish helpers for those areas.
