@@ -1,4 +1,4 @@
-import {navigateToModel, isTempModelPath, homeModelPath, reloadAfterCacheClear} from './navigate'
+import {navigateToModel, isTempModelPath, homeModelPath, navToDefault, reloadAfterCacheClear} from './navigate'
 
 
 describe('navigateToModel', () => {
@@ -119,6 +119,72 @@ describe('homeModelPath', () => {
       .mockReturnValue({pathname: '/share/v/new/uuid.ifc', search: '?feature=bot'})
     expect(homeModelPath('/share')).toBe(
       '/share/v/p/index.ifc?feature=bot#c:-57.022,131.828,173.3,37.922,22.64,9.136')
+  })
+})
+
+
+describe('navToDefault', () => {
+  const CAMERA_HASH = '#c:-57.022,131.828,173.3,37.922,22.64,9.136'
+  let locationGetter
+
+  afterEach(() => {
+    if (locationGetter) {
+      locationGetter.mockRestore()
+      locationGetter = null
+    }
+  })
+
+  /**
+   * Point `window.location` at a stub for one test.
+   *
+   * @param {string} search e.g. '?feature=bot'
+   * @return {Array<string>} Collector the fake navigate pushes into
+   */
+  function navCallsWithSearch(search) {
+    locationGetter = jest.spyOn(window, 'location', 'get')
+      .mockReturnValue({pathname: '/share', search})
+    const navCalls = []
+    navToDefault((path) => navCalls.push(path), '/share')
+    return navCalls
+  }
+
+  it('navigates to the home model with the default camera', () => {
+    expect(navCallsWithSearch('')).toEqual([`/share/v/p/index.ifc${CAMERA_HASH}`])
+  })
+
+  // The gclid bug (#1784) was this query going missing across a redirect;
+  // this is the last hop in that chain, and feature flags (`?feature=…`)
+  // ride the same query.
+  it('carries the current query string forward', () => {
+    expect(navCallsWithSearch('?gclid=TEST123&feature=bot')).toEqual([
+      `/share/v/p/index.ifc?gclid=TEST123&feature=bot${CAMERA_HASH}`,
+    ])
+  })
+
+  // Guards the removal of `location.query` — not a DOM property, so always
+  // ''. Had it ever resolved, it would have appended a second query here.
+  it('appends exactly one query string', () => {
+    const [path] = navCallsWithSearch('?feature=bot')
+    expect(path.match(/\?/g)).toHaveLength(1)
+  })
+
+  // The camera hash was a ternary on window.innerWidth with two identical
+  // branches. Both form factors must keep producing the same framing.
+  it('uses the same camera on mobile and desktop widths', () => {
+    // jsdom exposes innerWidth as a writable data property, not an
+    // accessor, so jest.spyOn(..., 'get') can't wrap it — assign directly.
+    const realWidth = window.innerWidth
+    try {
+      window.innerWidth = 1280
+      const desktop = navCallsWithSearch('')
+      locationGetter.mockRestore()
+      window.innerWidth = 390
+      const mobile = navCallsWithSearch('')
+      expect(mobile).toEqual(desktop)
+      expect(mobile).toEqual([`/share/v/p/index.ifc${CAMERA_HASH}`])
+    } finally {
+      window.innerWidth = realWidth
+    }
   })
 })
 
