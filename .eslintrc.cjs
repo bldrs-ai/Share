@@ -1,5 +1,18 @@
 /* eslint-disable no-magic-numbers */
 module.exports = {
+  // Stop the config cascade at the repo root. Without this ESLint keeps
+  // walking up the filesystem and merges every ancestor `.eslintrc` it finds,
+  // so anything in a parent directory silently becomes part of this project's
+  // lint config — and a plugin named there that this repo cannot resolve makes
+  // eslint fail outright rather than degrade, taking `yarn precommit` and the
+  // husky hook down with it.
+  //
+  // Normally there is no ancestor config and this is a no-op, which is why it
+  // went unnoticed. It stops being a no-op the moment the checkout is nested
+  // inside another one — a `git worktree` under `.claude/worktrees/` for an
+  // agent session is how it surfaced, three times independently, each time as
+  // an unrunnable commit gate.
+  root: true,
   env: {
     browser: true,
     es2021: true,

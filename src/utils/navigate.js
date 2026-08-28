@@ -18,14 +18,17 @@ export function navToDefault(navigate, appPrefix) {
   // shifted by exactly (+76, 0, +11.4504) — x ∈ [-76, 10] became x ∈ [0, 86]
   // — so this hash was shifted by the same amount. Re-capture it rather than
   // hand-edit it if the model or the frame changes again.
-  const mediaSizeTabletWith = 900
   disablePageReloadApprovalCheck()
-  const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
-  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-    `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136` :
-    `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136`
-  navWith(navigate, defaultPath, {
-    search: location.search,
+  // Desktop and mobile deliberately share one framing. This was a ternary on
+  // window.innerWidth whose two branches held byte-identical strings from the
+  // file's first commit, so every camera re-capture had to hand-edit both
+  // copies in lockstep (318af25) with nothing to catch it if only one changed.
+  // Reintroduce the branch if the two framings ever genuinely diverge.
+  const cameraHash = `#${HASH_PREFIX_CAMERA}:-57.022,131.828,173.3,37.922,22.64,9.136`
+  // `window.location`, spelled out: this is the global, not the router's
+  // location. That distinction is what broke #1784 one level down.
+  navWith(navigate, `${appPrefix}/v/p/index.ifc`, {
+    search: window.location.search,
     hash: cameraHash,
   })
 }
